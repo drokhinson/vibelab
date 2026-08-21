@@ -136,11 +136,11 @@
           <div class="set-card__acct">
             ${badge}
             <div class="set-card__acct-body">
-              <div class="set-card__acct-name">${escape(me.display_name || "")}</div>
+              <div class="set-card__acct-name">${escapeHtml(me.display_name || "")}</div>
               ${me.username ? `
                 <div class="set-card__acct-handle" title="Your username never changes. Buddies can find you with it.">
                   <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>
-                  ${escape(me.username)}
+                  ${escapeHtml(me.username)}
                 </div>` : ""}
             </div>
             <button class="set-card__avatar-btn" type="button"
@@ -201,7 +201,7 @@
           <input id="settings-admin-key" type="password"
                  class="input input-bordered input-sm w-full"
                  placeholder="Admin key" autocomplete="off" required />
-          ${this._adminError ? `<div class="text-error text-xs basis-full">${escape(this._adminError)}</div>` : ""}
+          ${this._adminError ? `<div class="text-error text-xs basis-full">${escapeHtml(this._adminError)}</div>` : ""}
           <div class="flex gap-2 justify-end basis-full">
             <button type="button" class="btn btn-ghost btn-xs" onclick="window.settingsView._closeAdminForm()">Cancel</button>
             <button type="submit" class="btn btn-primary btn-xs" ${this._adminPromoting ? "disabled" : ""}>
@@ -270,7 +270,7 @@
           <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
             <div class="flex items-start justify-between gap-2">
               <div>
-                <div class="set-card__bgg-handle">@${escape(username || "")}</div>
+                <div class="set-card__bgg-handle">@${escapeHtml(username || "")}</div>
                 <div class="set-card__bgg-status set-card__bgg-status--warn">
                   Re-link required — your stored credentials no longer work.
                 </div>
@@ -287,7 +287,7 @@
         body = `
           <div class="set-card__bgg-body">
             <div class="set-card__bgg-info">
-              <div class="set-card__bgg-handle">@${escape(username || "")}</div>
+              <div class="set-card__bgg-handle">@${escapeHtml(username || "")}</div>
               <div class="set-card__bgg-status">
                 <span class="set-card__bgg-status-dot"></span>
                 ${lastDone ? `Last synced ${formatRelative(lastDone)}` : "Not yet synced"}
@@ -317,7 +317,7 @@
         <form class="bgg-link-form mt-3" onsubmit="window.settingsView._submitBggLink(event)">
           <input id="settings-bgg-username" class="input input-bordered input-sm w-full" placeholder="BGG username" autocomplete="username" required />
           <input id="settings-bgg-password" type="password" class="input input-bordered input-sm w-full" placeholder="BGG password" autocomplete="current-password" required />
-          ${this._bggError ? `<div class="text-error text-xs">${escape(this._bggError)}</div>` : ""}
+          ${this._bggError ? `<div class="text-error text-xs">${escapeHtml(this._bggError)}</div>` : ""}
           <div class="flex gap-2 justify-end">
             <button type="button" class="btn btn-ghost btn-xs" onclick="window.settingsView._closeBggLink()">Cancel</button>
             <button type="submit" class="btn btn-primary btn-xs">Link</button>
@@ -588,7 +588,7 @@
       // Surface warm-up / unrecoverable errors as a standalone notice —
       // they short-circuit the normal step log.
       if (!syncing && result && !summary) {
-        return `<div class="bgg-log" style="margin: 0 0.9rem 0.9rem;">${escape(result)}</div>`;
+        return `<div class="bgg-log" style="margin: 0 0.9rem 0.9rem;">${escapeHtml(result)}</div>`;
       }
       if (!syncing && !summary) return "";
 
@@ -639,7 +639,7 @@
       if (summary && missingCount > 0) {
         const names = (b.session_game_names || []).slice(0, 20);
         const remaining = Math.max(0, missingCount - names.length - errored);
-        const bullets = names.map((n) => `<li>${escape(n)}</li>`).join("");
+        const bullets = names.map((n) => `<li>${escapeHtml(n)}</li>`).join("");
         const pendingTail = remaining > 0 && !finished
           ? `<li class="bgg-log__sublist-pending">…${remaining} more queued</li>`
           : "";
@@ -684,11 +684,6 @@
     }
   }
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
   function formatRelative(iso) {
     if (!iso) return "";
     const then = new Date(iso).getTime();

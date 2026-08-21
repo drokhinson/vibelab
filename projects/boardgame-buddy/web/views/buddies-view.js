@@ -120,8 +120,8 @@
                 <li class="search-hit" onclick="window.router.go('profile-other',{userId:'${u.id}'})">
                   <div class="search-hit__placeholder"><i data-lucide="user"></i></div>
                   <div class="search-hit__body">
-                    <div class="search-hit__name">${escape(u.display_name)}</div>
-                    ${u.username ? `<div class="search-hit__meta">@${escape(u.username)}</div>` : ""}
+                    <div class="search-hit__name">${escapeHtml(u.display_name)}</div>
+                    ${u.username ? `<div class="search-hit__meta">@${escapeHtml(u.username)}</div>` : ""}
                   </div>
                   <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();window.buddiesView._request('${u.id}', this)">Add</button>
                 </li>
@@ -137,7 +137,7 @@
                 <li class="buddies-row">
                   ${window.BgbBadge.render({ avatar: r.other_avatar, displayName: r.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
-                    <div class="buddies-row__name">${escape(r.other_display_name)}</div>
+                    <div class="buddies-row__name">${escapeHtml(r.other_display_name)}</div>
                     <div class="buddies-row__when">Requested ${formatDate(r.created_at)}</div>
                   </div>
                   <button class="btn btn-primary btn-xs" onclick="window.buddiesView._accept('${r.id}')">Accept</button>
@@ -156,7 +156,7 @@
                 <li class="buddies-row">
                   ${window.BgbBadge.render({ avatar: r.other_avatar, displayName: r.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
-                    <div class="buddies-row__name">${escape(r.other_display_name)}</div>
+                    <div class="buddies-row__name">${escapeHtml(r.other_display_name)}</div>
                     <div class="buddies-row__when">Awaiting reply</div>
                   </div>
                 </li>
@@ -179,7 +179,7 @@
                 <li class="buddies-row" onclick="window.router.go('profile-other',{userId:'${b.other_user_id}'})">
                   ${window.BgbBadge.render({ avatar: b.other_avatar, displayName: b.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
-                    <div class="buddies-row__name">${escape(b.other_display_name)}</div>
+                    <div class="buddies-row__name">${escapeHtml(b.other_display_name)}</div>
                     <div class="buddies-row__when">${sub}</div>
                   </div>
                   <button class="btn btn-ghost btn-xs bgb-destructive-icon-btn"
@@ -253,7 +253,7 @@
           ${window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm", extraClass: "buddies-row__avatar" })}
           <div class="buddies-row__body">
             <div class="buddies-row__name">
-              ${escape(p.display_name)}
+              ${escapeHtml(p.display_name)}
               <span class="player-type-chip player-type-chip--account">Account</span>
             </div>
             <div class="buddies-row__when">${p.play_count} ${p.play_count === 1 ? "play" : "plays"} together</div>
@@ -270,7 +270,7 @@
           ${window.BgbBadge.render({ avatar: null, displayName: g.display_name, size: "sm", isGhost: true, extraClass: "buddies-row__avatar buddies-row__avatar--ghost" })}
           <div class="buddies-row__body">
             <div class="buddies-row__name">
-              ${escape(g.display_name)}
+              ${escapeHtml(g.display_name)}
               <span class="player-type-chip player-type-chip--custom">Custom</span>
             </div>
             <div class="buddies-row__when">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}${g.last_played_at ? " · last " + formatDate(g.last_played_at) : ""}</div>
@@ -301,7 +301,7 @@
         <div class="buddies-link-panel" onclick="event.stopPropagation()">
           <input id="ghost-link-input"
                  class="input input-bordered input-sm w-full"
-                 placeholder="Search buddies or ghosts to link “${escape(displayName)}”"
+                 placeholder="Search buddies or ghosts to link “${escapeHtml(displayName)}”"
                  autocomplete="off"
                  oninput="window.buddiesView._linkSearchInput(this.value)"
                  value="${escapeAttr(this._linkQuery)}" />
@@ -310,14 +310,14 @@
               ${this._linkResults.map((u) => `
                 <li onclick="window.buddiesView._confirmLink('${jsStr(displayName)}', '${u.id}')">
                   ${window.BgbBadge.render({ avatar: u.avatar, displayName: u.display_name, size: "xs" })}
-                  <span class="buddies-link-results__name">${escape(u.display_name)}</span>
+                  <span class="buddies-link-results__name">${escapeHtml(u.display_name)}</span>
                   <span class="buddies-link-results__chip">Account</span>
                 </li>
               `).join("")}
               ${ghostMatches.map((g) => `
                 <li onclick="window.buddiesView._confirmMerge('${jsStr(displayName)}', '${jsStr(g.display_name)}')">
                   ${window.BgbBadge.render({ avatar: null, displayName: g.display_name, size: "xs", isGhost: true })}
-                  <span class="buddies-link-results__name">${escape(g.display_name)}</span>
+                  <span class="buddies-link-results__name">${escapeHtml(g.display_name)}</span>
                   <span class="buddies-link-results__email">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}</span>
                   <span class="buddies-link-results__chip buddies-link-results__chip--ghost">Ghost</span>
                 </li>
@@ -471,21 +471,6 @@
     }
   }
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
-  // Escape for a JS string literal that lives inside an HTML "…" attribute —
-  // mechanic / ghost display names may contain `'` which the HTML entity
-  // round-trip can't survive.
-  function jsStr(s) {
-    return String(s ?? "")
-      .replace(/\\/g, "\\\\")
-      .replace(/'/g, "\\'")
-      .replace(/\n/g, "\\n");
-  }
   function initials(name) {
     const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();

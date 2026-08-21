@@ -19,12 +19,6 @@
    * @property {(game: any, status: string) => void} [onAdded]
    */
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-
   let _previousFocus = null;
   let _finder = null;
   let _escHandler = null;
@@ -44,11 +38,11 @@
     root.className = "polaroid-popup__backdrop";
     root.innerHTML = `
       <div class="polaroid-popup__card polaroid-popup__card--confirm add-game-modal"
-           role="dialog" aria-modal="true" aria-label="${escape(title)}">
+           role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
         <button class="polaroid-popup__close" aria-label="Close">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
-        <div class="polaroid-popup__title">${escape(title)}</div>
+        <div class="polaroid-popup__title">${escapeHtml(title)}</div>
         <p class="polaroid-popup__body add-game-modal__hint">
           Search your BoardgameBuddy library, or import from BoardGameGeek.
         </p>

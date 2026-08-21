@@ -58,7 +58,7 @@
       this.container.innerHTML = `
         ${this._renderIdRow(me)}
         ${this._renderStats(b)}
-        ${this._error ? `<div class="alert alert-error text-sm mt-3">${escape(this._error)}</div>` : ""}
+        ${this._error ? `<div class="alert alert-error text-sm mt-3">${escapeHtml(this._error)}</div>` : ""}
         ${this._renderCollectionPreview(b)}
         ${this._renderWishlistPreview(b)}
         ${this._renderPlaysPreview(b)}
@@ -81,8 +81,8 @@
         <header class="profile-hub__id">
           ${badge}
           <div class="profile-hub__who">
-            <div class="profile-hub__name font-display">${escape(me.display_name || "")}</div>
-            ${me.username ? `<div class="profile-hub__handle">@${escape(me.username)}</div>` : ""}
+            <div class="profile-hub__name font-display">${escapeHtml(me.display_name || "")}</div>
+            ${me.username ? `<div class="profile-hub__handle">@${escapeHtml(me.username)}</div>` : ""}
           </div>
         </header>
       `;
@@ -114,7 +114,7 @@
             <div class="profile-stat-card__k">Buddies</div>
           </button>
           <button class="profile-stat-card profile-stat-card--fav" ${favClick}>
-            <div class="profile-stat-card__v profile-stat-card__v--text" title="${escapeAttr(favName)}">${escape(favName)}</div>
+            <div class="profile-stat-card__v profile-stat-card__v--text" title="${escapeAttr(favName)}">${escapeHtml(favName)}</div>
             <div class="profile-stat-card__k">Top game</div>
           </button>
         </section>
@@ -205,8 +205,8 @@
         <section class="preview-card ${modifier}">
           <header class="preview-card__head">
             <span class="preview-card__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
-            <h3 class="preview-card__title font-display">${escape(title)}</h3>
-            <span class="preview-card__sub">${escape(sub)}</span>
+            <h3 class="preview-card__title font-display">${escapeHtml(title)}</h3>
+            <span class="preview-card__sub">${escapeHtml(sub)}</span>
             <button class="preview-card__seeall" onclick="window.router.go('${route}')">
               See all <i data-lucide="chevron-right" class="w-3 h-3"></i>
             </button>
@@ -223,7 +223,7 @@
         <div class="preview-card__cover" ${click} title="${escapeAttr(g.name || "")}">
           ${g.thumbnail_url
             ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />`
-            : `<div class="preview-card__cover-fallback">${escape((g.name || "?").slice(0, 14))}</div>`}
+            : `<div class="preview-card__cover-fallback">${escapeHtml((g.name || "?").slice(0, 14))}</div>`}
         </div>
       `;
     }
@@ -246,7 +246,7 @@
             : `<div class="preview-card__play-thumb preview-card__play-thumb--placeholder"><i data-lucide="dice-6" class="w-4 h-4"></i></div>`}
           <div class="preview-card__play-info">
             <div class="preview-card__play-name">
-              ${escape(p.game_name || "")}
+              ${escapeHtml(p.game_name || "")}
               ${youWon ? `<span class="preview-card__play-won"><i data-lucide="trophy" class="w-3 h-3"></i> Won</span>` : ""}
             </div>
             ${playerCount > 0 ? `<div class="preview-card__play-meta">${playerCount} ${playerCount === 1 ? "player" : "players"}</div>` : ""}
@@ -257,12 +257,6 @@
     }
   }
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
   function initialsOf(name) {
     const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();

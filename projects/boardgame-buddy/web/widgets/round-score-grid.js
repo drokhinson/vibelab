@@ -86,7 +86,7 @@
                   <td class="${colRead(p) ? "scoring-col--read" : ""}">
                     ${colEditable(p)
                       ? renderEditableCell(getCell(p, r), i, r, host, showSign)
-                      : `<span class="scoring-cell scoring-cell--read" data-score-cell="${i}-${r}">${escape(getCell(p, r))}</span>`}
+                      : `<span class="scoring-cell scoring-cell--read" data-score-cell="${i}-${r}">${escapeHtml(getCell(p, r))}</span>`}
                   </td>
                 `).join("")}
               </tr>
@@ -138,7 +138,7 @@
     if (mode === "coop") {
       return `<td class="${tdClass}">
         <div class="scoring-total-cell">
-          <span class="scoring-total${negClass}">${escape(total)}</span>
+          <span class="scoring-total${negClass}">${escapeHtml(total)}</span>
         </div>
       </td>`;
     }
@@ -151,7 +151,7 @@
               <i data-lucide="${p.is_winner ? "trophy" : "circle"}" class="w-4 h-4"></i>
             </button>`
           : (p.is_winner ? `<i data-lucide="trophy" class="w-4 h-4"></i>` : "")}
-        <span class="scoring-total${negClass}">${escape(total)}</span>
+        <span class="scoring-total${negClass}">${escapeHtml(total)}</span>
       </div>
     </td>`;
   }
@@ -172,7 +172,7 @@
   function renderHeadBadge(p) {
     if (!window.BgbBadge || typeof window.BgbBadge.render !== "function") {
       // Fallback if user-badge.js failed to load — show the raw initials.
-      return escape(initialsFor(p));
+      return escapeHtml(initialsFor(p));
     }
     const me = window.store && window.store.get && window.store.get("user");
     return window.BgbBadge.render({
@@ -195,7 +195,7 @@
     return `<button type="button" class="scoring-head__toggle" title="${escapeAttr(name)}"
               onclick="this.closest('.scoring-head').classList.toggle('is-named')">
               <span class="scoring-head__bubble">${badgeHtml}</span>
-              <span class="scoring-head__name">${escape(name)}</span>
+              <span class="scoring-head__name">${escapeHtml(name)}</span>
             </button>`;
   }
 
@@ -205,13 +205,6 @@
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return (parts[0] || "?").slice(0, 2).toUpperCase();
   }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
 
   // ── Score value helpers (shared by every grid host) ──────────────────────
   // Cells are stored as STRINGS ("", "-", "-5", "12") so a leading minus and
@@ -270,7 +263,6 @@
   };
 
   window.renderRoundGrid = renderRoundGrid;
-  window.renderScoringHead = renderScoringHead;
   window.sanitizeRoundScore = sanitizeRoundScore;
   window.parseRoundScore = parseRoundScore;
   window.nextSignToggle = nextSignToggle;

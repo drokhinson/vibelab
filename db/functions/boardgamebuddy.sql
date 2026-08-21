@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 2026-08-20 (042 play-write RPCs)
+-- Last updated: migration 045 (one visibility rule for play stats)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,10 @@
 -- bgb_dormant_collection(uid UUID, days_since INT DEFAULT 60, lim INT DEFAULT 5)
 --   → TABLE (game_id UUID, last_played_at DATE)
 --   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--               db/migrations/boardgamebuddy/045_participated_play_stats.sql
+--                 (was joining plays on p.user_id = uid only, so a game the
+--                  user played but a buddy logged read as "never played" and
+--                  got nudged at them; now counts participated plays)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Owned games this user hasn't played in N days; powers the
 --               "Featured from your collection" Feed card.
@@ -73,15 +77,18 @@
 --   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Friends-of-friends candidates not yet connected, ranked by
---               mutual count. Powers the Feed's "Suggested buddies" card.
+--               mutual count. Powers the Feed's "Suggested buddies" card. (The standalone
+--               GET /suggestions/buddies endpoint was removed as uncalled;
+--               feed_service still calls this for the embedded rail.)
 
 -- bgb_distinct_mechanics()
 --   → TABLE (mechanic TEXT)
 --   Defined in: db/migrations/boardgamebuddy/019_perf_indexes.sql
---   Called by:  shared-backend/routes/boardgame_buddy/game_routes.py
---   Purpose:    Sorted distinct mechanic strings across the games catalog.
---               Backs the /games/mechanics endpoint without a full table
---               scan + Python aggregation.
+--   Called by:  (nothing — GET /games/mechanics, its only caller, was removed
+--               as uncalled. Kept because the mechanics filter is a plausible
+--               near-term feature and the function is free to keep.)
+--   Purpose:    Sorted distinct mechanic strings across the games catalog,
+--               without a full table scan + Python aggregation.
 
 -- bgb_game_detail_bundle(game_uuid UUID, viewer UUID, plays_limit INT DEFAULT 5)
 --   → JSONB
@@ -106,6 +113,11 @@
 --               (buddy + buddy-request blocks now emit `other_avatar` JSONB
 --               instead of `other_avatar_url` TEXT, following the
 --               avatar_url → avatar rename on boardgamebuddy_profiles)
+--               db/migrations/boardgamebuddy/045_participated_play_stats.sql
+--                 (played-shelf play_count reached play_players with a
+--                  LEFT JOIN then COUNT(*), so a play the user logged was
+--                  counted once per participant — a 4-player play read as
+--                  4 plays. Now EXISTS, matching bgb_play_stats.)
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)
 --   Purpose:    Single round-trip Profile Self / Profile Other payload.
@@ -231,15 +243,20 @@
 --     or {"error": "game_not_found"}
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
 --   Defined in: db/migrations/boardgamebuddy/042_write_rpcs.sql
+--               db/migrations/boardgamebuddy/044_cleanup.sql
+--                 (stops writing plays.game_image_url / game_play_mode, which
+--                  044 drops; stops writing the boardgamebuddy_buddies roster,
+--                  whose only reader — GET /plays/filter-options — was removed;
+--                  stops emitting the always-null buddy_id key on each player)
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
 --               bgb_finalize_session
 --   Purpose:    One-call play write: resolves the game, inserts the play with
---               its denormalized game_* columns (migration 020), bulk-writes
---               play_players + play_expansions + the legacy buddies roster,
---               and returns the hydrated response. Replaced the 6 sequential
---               PostgREST calls log_play fanned out — including a read-back
---               of the expansion rows it had just inserted.
+--               its surviving denormalized game_* columns (migration 020),
+--               bulk-writes play_players + play_expansions, and returns the
+--               hydrated response. Replaced the 6 sequential PostgREST calls
+--               log_play fanned out — including a read-back of the expansion
+--               rows it had just inserted.
 
 -- bgb_finalize_session(p_host UUID, p_code TEXT, p_payload JSONB)
 --   → JSONB (PlayResponse, via bgb_log_play) or {"error": "not_found" |
@@ -261,8 +278,9 @@
 --   → JSONB { plays: [models.PlayResponse-shaped...], total }
 --   Defined in: db/migrations/boardgamebuddy/039_perf_rpcs_and_indexes.sql
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
---               (list_plays — GET /plays; get_game_plays — GET /games/{id}/plays
---               with p_own_only=true)
+--               (list_plays — GET /plays). The second caller, GET
+--               /games/{id}/plays, was removed as uncalled; that data now
+--               rides on /games/{id}/bundle.
 --   Purpose:    One-call History page. Visibility = plays the target logged
 --               plus plays where they appear as a participant. Filters
 --               (game / buddy participant / free-text over game_name +
@@ -275,7 +293,11 @@
 --   → JSONB [ { game_id, play_count, last_played_at } ... ]
 --   Defined in: db/migrations/boardgamebuddy/039_perf_rpcs_and_indexes.sql
 --   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
---               (_play_stats — GET /collection, GET /collection/shelf)
+--               (_play_stats — GET /collection AND GET /collection/grid, both
+--               shelves). Also services/game_service.py (recently_played —
+--               GET /games/recently-played + the /bootstrap seed).
+--               This is the reference implementation of the visibility rule;
+--               migration 045 aligned the last two surfaces onto it.
 --   Purpose:    Per-game play_count / last_played_at via SQL GROUP BY over
 --               the viewer's visible plays (own + participant). Replaced
 --               _plays_visible_to_user + _index_plays, which shipped every

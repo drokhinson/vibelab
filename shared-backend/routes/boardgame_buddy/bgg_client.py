@@ -448,25 +448,7 @@ def store_user_credentials(
     }).eq("id", user_id).execute()
 
 
-def has_stored_credentials(profile_row: dict) -> bool:
-    """True when the profile has a linked username AND an encrypted password."""
-    return bool(profile_row.get("bgg_username")) and bool(profile_row.get("bgg_password_enc"))
 
-
-# Re-export for callers that import from bgg_client to keep their import surface narrow.
-__all__ = [
-    "BGG_API_BASE",
-    "BGG_API_TOKEN",
-    "BGG_USER_AGENT",
-    "BggWarmUpError",
-    "clear_user_session",
-    "fetch_bgg",
-    "fetch_bgg_as_user",
-    "has_stored_credentials",
-    "normalize_image_url",
-    "parse_bgg_xml",
-    "store_user_credentials",
-]
 
 
 def parse_bgg_xml(body: str, *, context: str) -> ET.Element:

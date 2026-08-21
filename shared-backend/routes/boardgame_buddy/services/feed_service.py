@@ -22,7 +22,7 @@ from ..models import (
     SuggestedBuddiesResponse,
 )
 from ..constants import PlayMode
-from ._helpers import fetch_games_by_ids, fetch_profiles_by_ids, game_summary_from_row
+from ._helpers import fetch_games_by_ids, fetch_profiles_by_ids
 
 
 def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:

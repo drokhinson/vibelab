@@ -10,11 +10,8 @@
 
   /* Game-specific theming (set dynamically in game-detail.js) */
   --game-accent: #6B3FA0;
-  --game-accent-light: #6B3FA022;
 
   /* Layout */
-  --app-max-width: 512px;
-  --app-padding:   0;
   --bgb-nav-height: 64px;
 
   /* Typography — cozy-modern pairing
@@ -24,9 +21,6 @@
   --font-display: 'Crimson Text', Georgia, serif;
 
   /* Cozy-modern accents (warm-spectrum replacements for cool blues / neutrals) */
-  --warm-taupe:        #8B7355;        /* used for guide-side hints */
-  --warm-taupe-soft:   rgba(139,115,85,0.32);
-  --warm-taupe-strong: rgba(139,115,85,0.55);
   --rust:              #A65D2C;        /* danger/destructive accents */
   --rust-soft:         rgba(166,93,44,0.28);
   --rust-strong:       rgba(166,93,44,0.85);
@@ -85,11 +79,6 @@ body {
   to   { opacity: 1; }
 }
 
-.animate-fadeUp {
-  animation: fadeUp 200ms ease both;
-  animation-delay: calc(var(--i, 0) * 40ms);
-}
-
 /* ── Card hover lift + warm border ──────────────────────────────────────────── */
 .card {
   border: 1px solid rgba(200, 155, 40, 0.25);
@@ -100,30 +89,7 @@ body {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
-/* ── Guide text styling ──────────────────────────────────────────────────────── */
-.guide-text h3,
-.guide-text h4 {
-  color: oklch(var(--bc));
-}
-
-.guide-text {
-  line-height: 1.65;
-}
-
-.guide-text li {
-  margin-bottom: 0.5rem;
-}
-
-.guide-text p:not(:last-child) {
-  margin-bottom: 0.75rem;
-}
-
-.guide-text strong {
-  color: oklch(var(--bc));
-}
-
 /* Search-highlight inside chapter content */
-.guide-text mark,
 .scroll-panel mark {
   background: rgba(201, 146, 42, 0.42);
   color: inherit;
@@ -159,17 +125,6 @@ body {
 }
 .scroll-panel::before { top: -6px; }
 .scroll-panel::after  { bottom: -6px; }
-
-/* Readable dark-on-tan overrides inside the scroll */
-.scroll-panel .guide-text,
-.scroll-panel .guide-text strong,
-.scroll-panel .guide-text h3,
-.scroll-panel .guide-text h4 {
-  color: #2B1D0A;
-}
-.scroll-panel .collapse-title {
-  color: #2B1D0A;
-}
 .scroll-panel .scroll-chapter {
   background: rgba(255, 250, 235, 0.55);
   border: 1px solid rgba(139, 111, 60, 0.3);
@@ -473,26 +428,6 @@ body {
   opacity: 1;
   transform: none;
   transition: none;
-}
-
-/* Source-game pill on pool rows (only rendered when Browse is showing
-   base + expansions). The leading dot matches the expansion's color so the
-   row pairs visually with the scroll's chapter dots. */
-.chapter-add__pool-source {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 1px 7px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
-  font-weight: 500;
-}
-.chapter-add__pool-source-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--exp-color, var(--accent));
-  flex-shrink: 0;
 }
 
 /* Target-game selector on the Create tab. Pill-style chips, one per game
@@ -1357,326 +1292,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: #e7e3db;
 }
 
-/* ── Sticky guide sub-header (back / search / chapter-type pills) ─────────── */
-/* Always-on-screen affordances for one-handed lookup — sits inside
-   #game-detail-content above the scroll-panel and rides scroll. */
-.guide-controls {
-  position: sticky;
-  top: 0;
-  z-index: 12;
-  margin: -0.5rem -1rem 0;             /* bleed past parent .px-4 padding */
-  padding: 0.5rem 0.75rem 0.4rem;
-  background: oklch(var(--b1) / 0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(201, 146, 42, 0.25);
-}
-.guide-controls__row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.4rem;
-}
-.guide-controls__back {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
-  color: #F5E9D0;
-  cursor: pointer;
-  border: none;
-  transition: background 120ms ease;
-}
-.guide-controls__back:hover  { background: rgba(0, 0, 0, 0.55); }
-.guide-controls__back:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.guide-controls__title {
-  flex: 1;
-  font-family: var(--font-display);
-  font-size: 1rem;
-  font-weight: 700;
-  color: oklch(var(--bc));
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.guide-controls__expand-all {
-  flex-shrink: 0;
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(201, 146, 42, 0.18);
-  color: var(--accent);
-  border: 1px solid rgba(201, 146, 42, 0.35);
-  cursor: pointer;
-}
-.guide-search {
-  width: 100%;
-  height: 40px;
-  border-radius: 999px;
-  background: oklch(var(--b3));
-  border: 1px solid rgba(201, 146, 42, 0.3);
-  color: oklch(var(--bc));
-  padding: 0 14px;
-  font-family: inherit;
-  font-size: 0.9rem;
-}
-.guide-search::placeholder { color: oklch(var(--bc) / 0.5); }
-.guide-search:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-  border-color: var(--accent);
-}
-.guide-pill-row {
-  display: flex;
-  gap: 0.4rem;
-  overflow-x: auto;
-  padding: 0.25rem 0 0.35rem;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.guide-pill-row::-webkit-scrollbar { display: none; }
-.guide-pill {
-  flex-shrink: 0;
-  font-family: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 6px 14px;
-  min-height: 32px;
-  border-radius: 999px;
-  background: oklch(var(--b3));
-  color: oklch(var(--bc) / 0.78);
-  border: 1px solid rgba(201, 146, 42, 0.25);
-  cursor: pointer;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
-}
-.guide-pill:hover { color: oklch(var(--bc)); }
-.guide-pill[aria-pressed="true"] {
-  background: var(--accent);
-  color: #1a0e02;
-  border-color: var(--accent);
-}
-.guide-pill__count {
-  font-size: 0.68rem;
-  font-weight: 500;
-  opacity: 0.7;
-}
-.guide-pill[aria-pressed="true"] .guide-pill__count { opacity: 0.85; }
-
-/* When a chapter is filtered out by type or search, the row is fully hidden. */
-.swipe-row[hidden] { display: none !important; }
-
-/* "No results" message inside guide search */
-.guide-empty {
-  text-align: center;
-  padding: 1rem 0.5rem;
-  font-size: 0.85rem;
-  color: #6B4A1A;
-  opacity: 0.75;
-}
-
-/* ── Rulebook card ──────────────────────────────────────────────────────────── */
-.rulebook-card {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, rgba(201, 146, 42, 0.14), rgba(201, 146, 42, 0.05));
-  border: 1px solid rgba(201, 146, 42, 0.35);
-  border-radius: 6px;
-  color: oklch(var(--bc));
-  text-decoration: none;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-}
-.rulebook-card:hover {
-  transform: translateY(-1px);
-  border-color: var(--game-accent);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
-}
-.rulebook-card [data-lucide]:first-child { color: var(--game-accent); }
-.rulebook-card__text { flex: 1; min-width: 0; }
-.rulebook-card__title {
-  font-weight: 600;
-  font-size: 0.95rem;
-  line-height: 1.2;
-}
-.rulebook-card__sub {
-  font-size: 0.75rem;
-  opacity: 0.65;
-  margin-top: 2px;
-}
-
-/* ── Log-a-Play floating action button ──────────────────────────────────────── */
-.fab-log-play {
-  position: fixed;
-  right: max(20px, env(safe-area-inset-right));
-  bottom: calc(88px + env(safe-area-inset-bottom));   /* clears btm-nav + iOS chrome */
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--game-accent);
-  color: #fff;
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.5),
-    0 0 14px color-mix(in srgb, var(--game-accent) 40%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 40;
-  transition: transform 120ms ease, box-shadow 120ms ease;
-}
-.fab-log-play:hover  { transform: translateY(-2px); }
-.fab-log-play:active { transform: translateY(0); }
-.fab-log-play:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-/* "Active session" pulse — the FAB color shifts to brass while a draft
-   session is in progress so the user knows the bubble is one tap away. */
-.fab-log-play--active {
-  background: var(--accent);
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.5),
-    0 0 18px color-mix(in srgb, var(--accent) 60%, transparent);
-}
-
-/* ── Browse: floating import button ─────────────────────────────────────── */
-.fab-import {
-  position: fixed;
-  right: max(20px, env(safe-area-inset-right));
-  bottom: calc(88px + env(safe-area-inset-bottom));
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: oklch(var(--p));
-  color: oklch(var(--pc));
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 38;
-  transition: transform 120ms ease, box-shadow 120ms ease;
-}
-.fab-import:hover  { transform: translateY(-2px); }
-.fab-import:active { transform: translateY(0); }
-.fab-import:focus-visible {
-  outline: 2px solid oklch(var(--p));
-  outline-offset: 3px;
-}
-
-/* ── Live session bubble (overlay panel above the FAB) ──────────────────── */
-.session-backdrop {
-  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
-  z-index: 39; backdrop-filter: blur(2px);
-}
-.session-panel {
-  position: fixed;
-  right: max(12px, env(safe-area-inset-right));
-  left:  max(12px, env(safe-area-inset-left));
-  bottom: calc(156px + env(safe-area-inset-bottom));    /* clears btm-nav + FAB + iOS chrome */
-  max-width: 488px;
-  margin-left: auto; margin-right: auto;
-  max-height: 72vh; overflow-y: auto;
-  background: oklch(var(--b2));
-  border: 1px solid rgba(201, 146, 42, 0.35);
-  border-radius: 14px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
-  z-index: 41; padding: 14px;
-  animation: fadeUp 180ms ease both;
-}
-/* Keyboard up: the nav + FAB clearance is behind the keyboard, so re-anchor to
-   the keyboard's top edge and cap against the visible viewport instead of 72vh
-   (which measures the full screen). See ui/viewport-lock.js. */
-:root.bgb-kb-open .session-panel {
-  bottom: calc(var(--bgb-kb-inset, 0px) + 12px);
-  max-height: calc(var(--bgb-vv-h, 100dvh) - 24px);
-}
-
-.session-grid {
-  width: auto;
-  border-collapse: collapse;
-}
-.session-grid th,
-.session-grid td {
-  border: 1px solid rgba(201, 146, 42, 0.18);
-  padding: 6px 8px;                              /* was 4 6 — looser tap area */
-  text-align: center;
-  font-size: 0.85rem;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-.session-grid thead th { background: rgba(201, 146, 42, 0.18); }   /* was 0.06 — visible header */
-.session-grid thead th:first-child,
-.session-grid tbody th:first-child,
-.session-grid tfoot th:first-child {
-  min-width: 56px;
-}
-.session-grid thead th:not(:first-child) {
-  min-width: 56px;
-}
-.session-grid tbody td input[type="number"] {
-  width: 64px;
-  height: 40px;                                  /* was implicit ~28px — touch-OK */
-  text-align: center;
-  padding: 4px 6px;
-  font-size: 0.95rem;
-}
-.session-grid input { min-width: 0; }
-.session-grid tfoot td {
-  font-weight: 700;
-  background: rgba(201, 146, 42, 0.18);          /* was 0.10 — visible footer */
-}
-.session-grid .winner-cell {
-  color: var(--accent);
-}
-.player-header-btn {
-  font-weight: 700;
-  font-size: 0.85rem;
-  background: transparent;
-  border: none;
-  padding: 6px 10px;                             /* was 2 4 — 32px-tall touch zone */
-  min-height: 32px;
-  cursor: pointer;
-  color: inherit;
-  border-radius: 4px;
-}
-.player-header-btn:hover {
-  background: rgba(201, 146, 42, 0.12);
-  text-decoration: underline;
-}
-
-/* ── Line clamp ──────────────────────────────────────────────────────────────── */
-.line-clamp-1 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-}
-.line-clamp-2 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
 /* ── Bottom nav — flush full-width strip + raised Create button ─────────────── */
 /* The nav stretches edge-to-edge along the bottom of the viewport, flush
    to all three edges. Content above it sits inside #app, which reserves
@@ -1807,15 +1422,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   flex-shrink: 0;
 }
 
-/* ── Loading screen ──────────────────────────────────────────────────────────── */
-.loading-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-}
-
 /* ── Toast positioning ───────────────────────────────────────────────────────── */
 .toast {
   z-index: 100;
@@ -1828,28 +1434,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   word-break: break-word;
 }
 
-/* ── Guide sections (grouping by chapter_type) ─────────────────────────────── */
-.guide-section + .guide-section { margin-top: 0.85rem; }
-.guide-section__title {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: var(--font-display);
-  font-size: 1rem;                /* was 0.875rem — bumped for scannability */
-  font-weight: 700;               /* was 800 — Crimson 700 reads cleaner */
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--accent);
-  padding: 0.1rem 0 0.3rem 0;
-  margin: 0 0.25rem 0.35rem;
-  border-bottom: 1px solid rgba(201, 146, 42, 0.55);
-}
-.scroll-panel .guide-section__title {
-  color: #3B2414;                 /* darker ink → ≥5.5:1 on tan parchment */
-  border-bottom-color: rgba(107, 74, 26, 0.55);
-}
-.scroll-panel .guide-section__title [data-lucide] { color: #3B2414; }
-
 /* ── Expansion source dot (matches the toggle row's color) ──────────────── */
 .expansion-dot {
   display: inline-block;
@@ -1857,247 +1441,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   height: 0.55rem;
   border-radius: 9999px;
   box-shadow: 0 0 0 1px rgba(255, 250, 235, 0.85);
-}
-.expansion-dot--lg { width: 0.75rem; height: 0.75rem; }
-
-/* ── Expansions panel (above the scroll, below the toolbar) ─────────────── */
-.expansions-panel {
-  border: 1px solid rgba(201, 146, 42, 0.28);
-  background: oklch(var(--b2));
-  border-radius: 8px;
-  padding: 0.6rem 0.75rem;
-}
-.expansions-panel__title {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--accent);
-  margin-bottom: 0.4rem;
-}
-.expansions-panel__list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.expansions-row {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.4rem 0.25rem;
-  min-height: 44px;
-  cursor: pointer;
-  border-radius: 4px;
-}
-.expansions-row:hover { background: rgba(201, 146, 42, 0.08); }
-.expansions-row__name {
-  flex: 1;
-  font-size: 0.9rem;
-  font-weight: 500;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.expansions-row__count {
-  font-size: 0.7rem;
-  opacity: 0.55;
-  flex-shrink: 0;
-}
-
-/* Grey-when-off, gold-when-on toggle for expansion rows. White thumb in both
-   states keeps the on/off contrast obvious; the colored .expansion-dot beside
-   the name still identifies which expansion the row represents. */
-.expansion-toggle {
-  --tglbg: #ffffff;
-  background-color: var(--warm-gray-mid);
-  border-color: var(--warm-gray-mid);
-}
-.expansion-toggle:checked,
-.expansion-toggle[checked="checked"] {
-  background-color: var(--accent-hover);   /* darker brass for AA contrast */
-  border-color: var(--accent-hover);
-}
-
-/* ── Guide chapter swipe ──────────────────────────────────────────────────── */
-.swipe-row {
-  position: relative;
-  overflow: hidden;
-  border-radius: 3px;
-  touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.swipe-row .swipe-target {
-  position: relative;
-  z-index: 2;
-  will-change: transform;
-}
-
-.swipe-row .swipe-action {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 40%;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0 1rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #fff;
-  z-index: 1;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.swipe-row .swipe-action--edit {
-  left: 0;
-  justify-content: flex-start;
-  background: linear-gradient(90deg, rgba(139,115,85,0.95) 0%, rgba(139,115,85,0.78) 60%, rgba(139,115,85,0) 100%);
-}
-.swipe-row .swipe-action--hide {
-  right: 0;
-  justify-content: flex-end;
-  background: linear-gradient(90deg, rgba(166,93,44,0) 0%, rgba(166,93,44,0.85) 40%, rgba(166,93,44,0.95) 100%);
-}
-.swipe-row.swiping-right .swipe-action--edit,
-.swipe-row.swiping-left  .swipe-action--hide {
-  opacity: 1;
-}
-
-/* ── BGG attribution: header corner logo ────────────────────────────────────
-   Required by BGG XML API Terms of Use. Sits in the top-right of the sticky
-   header beneath the profile + logout controls. Logo-only — the official
-   BGG mark contains its own legible "Powered by BGG" text. */
-.bgg-attribution-link {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 4px;
-  opacity: 0.85;
-  transition: opacity 0.15s ease;
-}
-.bgg-attribution-link:hover,
-.bgg-attribution-link:focus-visible {
-  opacity: 1;
-}
-.bgg-attribution-link img {
-  display: block;
-  height: 18px;
-  width: auto;
-}
-.bgg-attribution-fallback {
-  display: inline-block;
-  font-size: 0.6875rem; /* 11px — fallback only; real logo carries the text */
-  font-weight: 600;
-  color: oklch(var(--bc) / 0.7);
-  white-space: nowrap;
-}
-.bgg-attribution-link:hover .bgg-attribution-fallback,
-.bgg-attribution-link:focus-visible .bgg-attribution-fallback {
-  color: var(--accent);
-}
-
-/* ── BGG attribution: profile "Data Sources" card ───────────────────────── */
-.bgg-attribution-card {
-  margin-top: 1.25rem;
-  padding: 1rem 1.25rem;
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.75rem;
-  background: oklch(var(--b1) / 0.6);
-  text-align: center;
-}
-.bgg-attribution-card h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: oklch(var(--bc) / 0.7);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.bgg-attribution-card p {
-  margin: 0 0 0.875rem;
-  font-size: 0.875rem;
-  color: oklch(var(--bc) / 0.85);
-  line-height: 1.45;
-}
-.bgg-attribution-card p a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.bgg-attribution-card__logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 10px;
-  border-radius: 0.5rem;
-}
-.bgg-attribution-card__logo:hover {
-  background: oklch(var(--b2) / 0.5);
-}
-.bgg-attribution-card__logo img {
-  height: 40px;
-  width: auto;
-}
-.bgg-attribution-card__fallback {
-  display: inline-block;
-  font-weight: 700;
-  font-size: 1rem;
-  color: var(--accent);
-  padding: 8px 4px;
-}
-
-
-/* ── Session photo slot ─────────────────────────────────────────────────────── */
-.session-photo-picker {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.75rem;
-  border: 1px dashed oklch(var(--bc) / 0.3);
-  border-radius: 0.5rem;
-  font-size: 0.8rem;
-  cursor: pointer;
-  background: oklch(var(--b2) / 0.6);
-}
-.session-photo-picker:hover {
-  background: oklch(var(--b2));
-  border-color: var(--accent);
-}
-.session-photo-preview {
-  position: relative;
-  display: inline-block;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  max-width: 100%;
-}
-.session-photo-preview img {
-  display: block;
-  max-width: 220px;
-  max-height: 160px;
-  width: auto;
-  height: auto;
-  object-fit: cover;
-  border-radius: 0.5rem;
-}
-.session-photo-remove {
-  position: absolute;
-  top: 0.25rem;
-  right: 0.25rem;
-}
-
-/* ── Play detail view ──────────────────────────────────────────────────────── */
-.play-photo {
-  display: block;
-  width: 100%;
-  max-height: 360px;
-  object-fit: cover;
-  border-radius: 1rem;
 }
 
 /* ── Global app header ────────────────────────────────────────────────────── */
@@ -2214,26 +1557,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   content: ""; flex: 1; border-top: 1px solid oklch(var(--b3));
 }
 .auth-divider span { padding: 0 12px; }
-
-/* ── Feed ─────────────────────────────────────────────────────────────────── */
-.feed-topbar {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.25rem 0 0.75rem;
-}
-.feed-search-pill {
-  flex: 1;
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.6rem 1rem;
-  border-radius: 999px;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  color: oklch(var(--bc) / 0.7);
-  font-size: 0.9rem; text-align: left; cursor: pointer;
-}
-.feed-search-pill:hover { border-color: var(--accent); color: oklch(var(--bc)); }
-.feed-avatar-btn {
-  background: transparent; border: none; cursor: pointer; padding: 0;
-}
 .feed-cards { display: flex; flex-direction: column; gap: 1rem; }
 .feed-empty {
   text-align: center; padding: 2.5rem 1rem;
@@ -2336,9 +1659,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-session__scroll > .play-card--strip:nth-child(4n+2) { transform: rotate( 0.8deg); }
 .play-session__scroll > .play-card--strip:nth-child(4n+3) { transform: rotate(-0.4deg); }
 .play-session__scroll > .play-card--strip:nth-child(4n)   { transform: rotate( 1.2deg); }
-.no-tilt .play-card,
-.no-tilt .play-card--single,
-.no-tilt .play-session__scroll > .play-card--strip { transform: none; }
 
 /* Single-play sessions: the lone polaroid sits flat and centered. The
    rail's horizontal scroll + scroll-snap don't apply when there's only
@@ -2546,9 +1866,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 700;
   flex-shrink: 0;
 }
-.play-card__back-winners {
-  display: none;             /* winner already highlighted in the player list */
-}
 .play-card__back-players {
   list-style: none; margin: 0; padding: 0;
   display: flex; flex-direction: column; gap: 6px;
@@ -2616,11 +1933,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      background is the winner indicator, so no leading crown that would
      shove the winner's name a glyph-width to the right. */
 }
-.play-card__back-player-link {
-  color: inherit;
-  cursor: pointer;
-}
-.play-card__back-player-link:hover { text-decoration: underline; }
 .play-card__back-player-score {
   font-family: var(--font-score);
   font-weight: 700;
@@ -2832,71 +2144,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .user-badge.buddy-tile__avatar .user-badge__initials { font-size: 20px; }
 .buddy-tile__name { font-size: 0.85rem; font-weight: 600; line-height: 1.2; color: var(--polaroid-ink); }
 .buddy-tile__mutual { font-size: 0.72rem; color: var(--polaroid-muted); margin-top: 0.15rem; }
-
-/* ── Profile ──────────────────────────────────────────────────────────────── */
-.profile-header {
-  display: flex; flex-direction: column; align-items: center;
-  text-align: center; padding: 1.5rem 0 1rem;
-  border-bottom: 1px solid oklch(var(--b3));
-}
-/* Compact row variant — avatar dot on the left, name (editable) on the
-   right, action buttons on the next line. Replaces the centered avatar +
-   name stack. */
-.profile-header--row {
-  flex-direction: column; align-items: stretch; text-align: left;
-  padding: 0.85rem 0 0.75rem;
-  gap: 0.5rem;
-}
-.profile-id { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
-.user-badge.profile-id__avatar { width: 48px; height: 48px; }
-.user-badge.profile-id__avatar .user-badge__initials { font-size: 18px; }
-.profile-id__text { flex: 1; min-width: 0; }
-.profile-id__name-row {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  cursor: pointer; max-width: 100%;
-}
-.profile-id__name {
-  font-size: 1.4rem; font-weight: 700; line-height: 1.1;
-  margin: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 100%;
-}
-.profile-id__edit { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
-.profile-id__edit input { min-width: 0; flex: 1; }
-/* Username handle is a self-contained pill under the display name —
-   reads as a bubble (so the "this can't be edited" cue is visual
-   rather than a literal "readonly" tag). */
-.profile-id__handle {
-  display: inline-flex; align-items: center; gap: 0.25rem;
-  margin-top: 0.35rem;
-  padding: 0.2rem 0.6rem 0.2rem 0.45rem;
-  border-radius: 999px;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  color: oklch(var(--bc) / 0.78);
-  font-size: 0.78rem;
-  line-height: 1;
-  font-variant: tabular-nums;
-  cursor: default;
-}
-.profile-id__handle-value { font-weight: 600; letter-spacing: 0.01em; }
-.profile-header__actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-.profile-header--row .profile-header__actions { justify-content: flex-start; }
-
-/* ── BGG link / sync card ─────────────────────────────────────────────── */
-.bgg-section-mark { height: 14px; vertical-align: middle; margin-right: 0.2rem; }
-.bgg-card {
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.6rem;
-  padding: 0.65rem 0.75rem;
-}
-.bgg-card__row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
-.bgg-card__handle {
-  font-family: var(--font-display);
-  font-size: 1.05rem; font-weight: 700;
-  color: var(--accent);
-}
 .bgg-link-form { display: flex; flex-direction: column; gap: 0.4rem; }
 
 /* BGG sync log. Sits inside .bgg-card as the live readout while the
@@ -2973,59 +2220,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-cream-screen .bgg-log__step--idle .bgg-log__body { color: var(--polaroid-muted, #8B7E68); }
 .bgb-cream-screen .bgg-log__sublist { color: var(--polaroid-muted, #8B7E68); }
 .bgb-cream-screen .bgg-log__footer { color: var(--polaroid-muted, #8B7E68); }
-
-/* ── Profile tabs ─────────────────────────────────────────────────────────── */
-.profile-tabs {
-  display: flex; gap: 0.25rem;
-  margin: 0.75rem 0 0.5rem;
-  border-bottom: 1px solid oklch(var(--b3));
-}
-.profile-tab {
-  flex: 1;
-  padding: 0.5rem 0.4rem;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: oklch(var(--bc) / 0.7);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.profile-tab:hover { color: oklch(var(--bc)); }
-.profile-tab.is-active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-.profile-tab-body { padding-top: 0.5rem; }
 .profile-panel { display: flex; flex-direction: column; gap: 0.55rem; }
 .profile-panel__controls {
   display: flex; align-items: center; gap: 0.4rem;
   margin-bottom: 0.5rem;
-}
-.profile-panel__subtitle {
-  font-size: 0.72rem; opacity: 0.6;
-  margin: -0.15rem 0 0.1rem;
-}
-
-/* ── Settings sections ────────────────────────────────────────────────────── */
-.settings-section {
-  padding: 0.85rem 0;
-  border-bottom: 1px solid oklch(var(--b3));
-}
-.settings-section:last-of-type { border-bottom: none; }
-.settings-section__header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-.settings-section__title {
-  font-weight: 600; font-size: 0.95rem;
-  display: inline-flex; align-items: center; gap: 0.3rem;
-}
-.settings-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-.settings-account-admin { margin-top: 0.6rem; }
-.settings-admin-form {
-  display: flex; flex-direction: column; gap: 0.4rem;
-  margin-top: 0.6rem;
 }
 .settings-logout {
   display: flex; justify-content: center;
@@ -3066,30 +2264,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   max-width: 30ch;
   margin: 0;
 }
-.profile-stats { padding: 1rem 0; border-bottom: 1px solid oklch(var(--b3)); }
-.profile-stats__grid {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;
-}
 .profile-stat { text-align: center; }
-.profile-stat__value { font-family: var(--font-display); font-size: 1.5rem; line-height: 1; font-weight: 700; color: var(--accent); }
-.profile-stat__label { font-size: 0.72rem; opacity: 0.65; margin-top: 0.15rem; }
-/* Favorite-game tile holds a name string rather than a number; shrink to fit
-   the column and clamp to one line. */
-.profile-stat__value--text {
-  font-size: 0.9rem;
-  line-height: 1.1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-.profile-stat--fav { cursor: pointer; }
-.profile-stat--fav:hover .profile-stat__value--text { text-decoration: underline; }
-.profile-section { padding: 1rem 0; border-bottom: 1px solid oklch(var(--b3)); }
-.profile-section__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-.profile-section__header h3 { font-weight: 600; font-size: 0.95rem; display: inline-flex; align-items: center; gap: 0.35rem; }
 .profile-empty { text-align: center; padding: 1.5rem; opacity: 0.6; font-size: 0.9rem; }
-.profile-empty--sm { padding: 0.85rem; font-size: 0.8rem; }
 .profile-collection-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
 }
@@ -3118,64 +2294,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   animation: search-results-spin 720ms linear infinite;
   z-index: 2;
 }
-
-/* Owned-collection header — matches the wishlist + played shelves below
-   so the three sections read as a vertical stack with consistent chrome.
-   `align-items: baseline` keeps the count's text baseline-aligned with
-   the title text across all three shelves. */
-.profile-collection__head {
-  display: flex; align-items: baseline; gap: 0.5rem;
-  margin-bottom: 0.55rem;
-}
-.profile-collection__title {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  font-weight: 600; font-size: 0.95rem;
-}
-.profile-collection__count {
-  font-size: 0.78rem; opacity: 0.6;
-}
-
-/* Wishlist sits below the owned collection grid as a secondary shelf with
-   its own header + count + pager. Same tile grid, smaller page size — the
-   visual rhythm makes the two shelves distinct without two separate views. */
-.profile-wishlist {
-  margin-top: 1.1rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid oklch(var(--b3));
-}
-.profile-wishlist__head {
-  display: flex; align-items: baseline; gap: 0.5rem;
-  margin-bottom: 0.55rem;
-}
-.profile-wishlist__title {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  font-weight: 600; font-size: 0.95rem;
-  color: var(--accent);
-}
-.profile-wishlist__count {
-  font-size: 0.78rem; opacity: 0.6;
-}
-
-/* Played-not-owned shelf — same secondary-shelf treatment as wishlist but
-   with the muted body-foreground colour for the title so it reads as a
-   neutral history section rather than competing with the wishlist accent. */
-.profile-played {
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid oklch(var(--b3));
-}
-.profile-played__head {
-  display: flex; align-items: baseline; gap: 0.5rem;
-  margin-bottom: 0.55rem;
-}
-.profile-played__title {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  font-weight: 600; font-size: 0.95rem;
-  opacity: 0.85;
-}
-.profile-played__count {
-  font-size: 0.78rem; opacity: 0.6;
-}
 .collection-tile {
   background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
   border-radius: 0.6rem; overflow: hidden; cursor: pointer; padding: 0;
@@ -3185,81 +2303,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .collection-tile__name { padding: 0.3rem 0.4rem; font-size: 0.75rem; font-weight: 600; line-height: 1.15; text-align: left; }
 
 .recent-plays { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-.recent-plays__row { border-radius: 0.55rem; }
-.recent-plays__row-inner {
-  display: flex; align-items: center; gap: 0.55rem;
-  padding: 0.55rem 0.6rem;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.55rem;
-  cursor: pointer;
-}
-.recent-plays__row:hover .recent-plays__row-inner { border-color: var(--accent); }
-/* The thumb sits inside a relatively-positioned wrapper so the corner
-   status banner can overlay it. The image keeps its own click target
-   (opens game-detail) — the row-inner cursor would suggest "open play"
-   instead. */
-.recent-plays__thumb {
-  position: relative;
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-}
-.recent-plays__row img {
-  width: 44px; height: 44px; object-fit: cover;
-  border-radius: 0.4rem;
-  cursor: pointer;
-}
-.recent-plays__placeholder { width: 44px; height: 44px; border-radius: 0.4rem; display: grid; place-items: center; background: oklch(var(--b3)); }
-/* Corner banner on the 44px thumb. The compact status tag is 1.5rem
-   square at default — too big for a 44px image — so shrink it here. */
-.recent-plays__status {
-  position: absolute;
-  top: -3px; right: -3px;
-  z-index: 2;
-}
-.recent-plays__status .status-tag--compact {
-  width: 1.1rem; height: 1.1rem;
-  border: 2px solid oklch(var(--b2));
-}
-.recent-plays__status .status-tag--compact i { width: 0.6rem; height: 0.6rem; }
-.recent-plays__body { flex: 1; min-width: 0; }
-.recent-plays__top {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem;
-}
-.recent-plays__game {
-  font-weight: 600; font-size: 0.92rem;
-  min-width: 0; flex: 1;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.recent-plays__date {
-  font-size: 0.72rem; opacity: 0.6; white-space: nowrap;
-}
-.recent-plays__sub {
-  font-size: 0.74rem; opacity: 0.7;
-  display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem;
-  margin-top: 0.15rem;
-}
-.recent-plays__winner {
-  display: inline-flex; align-items: center; gap: 0.2rem;
-  color: var(--accent);
-  font-weight: 600;
-  opacity: 1;
-}
 
 /* ── Play detail page ─────────────────────────────────────────────────────── */
 .play-detail { display: flex; flex-direction: column; gap: 0.75rem; padding-top: 0.5rem; }
 .play-detail__crumb { cursor: pointer; flex: 1; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .play-detail__crumb:hover { color: var(--accent); }
-.play-detail__photo {
-  width: 100%;
-  max-height: 360px;
-  object-fit: contain;
-  background: oklch(var(--b3));
-  border-radius: 0.75rem;
-  display: block;
-}
 .play-detail__meta {
   display: flex; flex-direction: column; gap: 0.4rem;
   padding: 0.65rem 0.75rem;
@@ -3275,7 +2324,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-detail__game-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
 .play-detail__game-name { font-weight: 600; font-size: 0.95rem; }
 .play-detail__game-when { font-size: 0.78rem; opacity: 0.7; }
-.play-detail__logger { font-size: 0.78rem; opacity: 0.7; }
 
 .play-detail__section { padding-top: 0.25rem; }
 .play-detail__section-title {
@@ -3324,17 +2372,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* ── Session viewer (joiner-side read-only lobby) ───────────────────────────── */
 .session-viewer { display: flex; flex-direction: column; gap: 0.85rem; }
-.session-viewer__game {
-  padding: 0.55rem 0.65rem;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.6rem;
-}
-.session-viewer__thumb-placeholder {
-  display: flex; align-items: center; justify-content: center;
-  background: oklch(var(--b3));
-  color: oklch(var(--bc) / 0.55);
-}
 .session-viewer__status {
   display: flex; align-items: center; gap: 0.45rem;
   padding: 0.55rem 0.7rem;
@@ -3342,10 +2379,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: oklch(var(--b2));
   border: 1px solid oklch(var(--b3));
   font-size: 0.85rem;
-}
-.session-viewer__status--finalized {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 .session-viewer__status--abandoned {
   border-color: var(--rust);
@@ -3355,12 +2388,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: inline-flex; align-items: center; gap: 0.2rem;
   font-size: 0.7rem; font-weight: 600;
   color: var(--accent);
-}
-.session-viewer__refresh {
-  display: flex; align-items: center; justify-content: center; gap: 0.3rem;
-  font-size: 0.72rem;
-  opacity: 0.55;
-  padding-top: 0.25rem;
 }
 .session-viewer__guide-mount { margin-top: 0.25rem; }
 
@@ -3480,46 +2507,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   min-height: 44px; height: 44px;
   padding-inline: 0.75rem;
 }
-.search-form {
-  position: relative; flex: 1;
-  display: flex; align-items: center;
-}
-.search-form__icon { position: absolute; left: 0.85rem; opacity: 0.6; pointer-events: none; }
-.search-form__input {
-  width: 100%; background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 999px;
-  padding: 0.75rem 2.25rem 0.75rem 2.4rem;
-  font-size: 0.95rem;
-  min-height: 44px;
-}
-.search-form__clear {
-  position: absolute; right: 0.5rem;
-  background: transparent; border: none; cursor: pointer; padding: 0.1rem;
-  color: oklch(var(--bc) / 0.6);
-}
-.search-results { padding-top: 0.75rem; position: relative; }
-/* Re-fetch in flight with results already on screen — dim the list and pop
-   a spinner so the user gets feedback that their filter / search applied. */
-.search-results.is-reloading .search-list {
-  opacity: 0.4;
-  pointer-events: none;
-  transition: opacity 120ms ease;
-}
-.search-results.is-reloading::after {
-  content: "";
-  position: absolute;
-  top: 0.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 28px;
-  height: 28px;
-  border: 3px solid oklch(var(--bc) / 0.15);
-  border-top-color: oklch(var(--p));
-  border-radius: 50%;
-  animation: search-results-spin 720ms linear infinite;
-  z-index: 2;
-}
 @keyframes search-results-spin {
   to { transform: translateX(-50%) rotate(360deg); }
 }
@@ -3532,10 +2519,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: var(--accent); color: #1a0d00;
   font-size: 0.62rem; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center;
-}
-.search-meta {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0.4rem 0;
 }
 .search-filters {
   margin: 0.5rem 0 0.85rem;
@@ -3562,11 +2545,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .filter-chip-row {
   display: flex; gap: 0.35rem; flex-wrap: wrap;
 }
-.filter-chip-row--scroll {
-  flex-wrap: nowrap; overflow-x: auto;
-  padding-bottom: 0.25rem;
-  scrollbar-width: thin;
-}
 .filter-chip {
   padding: 0.4rem 0.85rem;
   border-radius: 999px;
@@ -3583,13 +2561,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: #1a0d00;
   border-color: var(--accent);
   font-weight: 600;
-}
-
-/* ── Pagination ───────────────────────────────────────────────────────────── */
-.search-pager {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: 0.75rem; padding: 0.5rem 0;
-  border-top: 1px solid oklch(var(--b3));
 }
 
 /* Fixed pager footer for Collection / Wishlist views.
@@ -3641,16 +2612,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .profile-collection-grid.is-paginated {
   padding-bottom: calc(60px + 12px);
 }
-
-.search-pick-banner {
-  display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.45rem 0.6rem;
-  margin-bottom: 0.5rem;
-  background: var(--accent);
-  color: #1a0d00;
-  border-radius: 0.5rem;
-  font-size: 0.78rem; font-weight: 600;
-}
 .search-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
 .search-hit {
   position: relative;
@@ -3667,64 +2628,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .search-hit__body { flex: 1; min-width: 0; }
 .search-hit__name { font-weight: 600; font-size: 0.92rem; line-height: 1.2; }
 .search-hit__meta { font-size: 0.76rem; opacity: 0.6; margin-top: 0.1rem; }
-/* Expand toggle on parent rows that have expansion sub-rows in the
-   current results — vertical stack: count on top, chevron icon below.
-   Same column footprint as a placeholder spacer (used on plain parent
-   rows) so the body column stays aligned across rows. */
-.search-hit__expand-toggle {
-  flex-shrink: 0;
-  width: 1.6rem;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 0.05rem;
-  background: transparent;
-  border: none;
-  border-radius: 0.35rem;
-  color: oklch(var(--bc));
-  cursor: pointer;
-  padding: 0.15rem 0.1rem;
-  opacity: 0.75;
-}
-.search-hit__expand-toggle:hover { opacity: 1; background: oklch(var(--b3)); }
-.search-hit__expand-toggle--placeholder { pointer-events: none; opacity: 0; padding: 0; }
-.search-hit__expand-count {
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 1;
-}
-/* Coloured-dot bullet on indented sub-rows. Replaces the previous
-   left-border rail — same `--exp-color` semantics (per-expansion colour
-   when stored, otherwise the accent) but rendered as a small disc in
-   the leading column so the indent reads as a bulleted list. */
-.search-hit--child {
-  margin-left: 1.75rem;
-  background: oklch(var(--b1));
-  padding: 0.45rem 0.55rem;
-}
-.search-hit--child img,
-.search-hit--child .search-hit__placeholder { width: 36px; height: 36px; }
-.search-hit__exp-dot {
-  flex-shrink: 0;
-  width: 0.55rem; height: 0.55rem;
-  border-radius: 999px;
-  background: var(--exp-color, var(--accent));
-  align-self: center;
-}
-.search-extend { display: flex; justify-content: center; padding: 0.75rem 0 1rem; }
-.search-bgg-section { margin-top: 1.2rem; }
-.search-bgg-heading { font-size: 0.85rem; font-weight: 600; opacity: 0.75; margin: 0 0 0.4rem; }
-.search-hit--bgg { opacity: 0.95; }
-.search-empty { padding: 2rem 1rem; text-align: center; }
-.search-empty button { margin-top: 0.75rem; }
-
-/* ── Status badges ────────────────────────────────────────────────────────── */
-.status-badge {
-  display: inline-flex; align-items: center; gap: 0.25rem;
-  padding: 0.15rem 0.4rem;
-  border-radius: 999px;
-  font-size: 0.7rem; font-weight: 600; text-transform: capitalize;
-}
-.status-badge--owned    { background: oklch(0.55 0.15 130 / 0.2); color: oklch(0.85 0.15 130); }
-.status-badge--wishlist { background: oklch(0.55 0.15 60 / 0.25);  color: oklch(0.85 0.15 60); }
 
 /* ── Unified status tag (every game tile) ─────────────────────────────────── */
 .status-tag {
@@ -3768,6 +2671,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .status-tag--compact i { width: 0.85rem; height: 0.85rem; }
 .status-tag--compact .status-tag__label { display: none; }
+/* --compact zeroes the padding to make a real circle, but --add re-declares
+   `padding: 0.18rem 0.4rem` further down at the same specificity and wins on
+   source order. That left the "+" chip with 6.4px of horizontal padding
+   against 2.88px vertical inside a fixed 24px box, squeezing the icon's grid
+   track narrower than the icon and pushing it ~2.4px right of centre — the
+   only status chip that looked off-centre. Compact is a shape modifier, so
+   it has to beat every colour variant regardless of order. */
+.status-tag--compact.status-tag--add { padding: 0; }
 .status-tag__label { font-weight: 600; }
 
 /* Fully-opaque tag backgrounds so a tag overlaid on a photo / box art
@@ -3865,201 +2776,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .hot-game-tile { position: relative; }
 .hot-game-tile .status-tag { position: absolute; top: 4px; right: 4px; z-index: 2; }
 .expansion-list__row .status-tag { margin-left: auto; }
-
-/* ── Log play view ────────────────────────────────────────────────────────── */
-.log-play__topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding-bottom: 0.5rem; border-bottom: 1px solid oklch(var(--b3));
-}
-.log-play__title { font-size: 1.15rem; margin: 0; }
-.log-play__tabs {
-  display: flex; gap: 0.35rem; padding: 0.5rem 0;
-  border-bottom: 1px solid oklch(var(--b3));
-}
-.log-play__tab {
-  flex: 1; padding: 0.4rem 0.5rem;
-  background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
-  border-radius: 0.5rem; font-size: 0.85rem;
-  cursor: pointer;
-}
-.log-play__tab.is-active { background: var(--accent); color: #1a0d00; border-color: var(--accent); }
-.log-play__section { padding: 0.75rem 0; }
-.log-play__label { display: block; font-size: 0.78rem; opacity: 0.7; margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.log-play__game {
-  display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.5rem; background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
-  border-radius: 0.5rem;
-}
-.log-play__game img { width: 44px; height: 44px; object-fit: cover; border-radius: 0.35rem; }
-.log-play__game-name { flex: 1; font-weight: 600; }
-.log-play__rulebook {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  margin-top: 0.35rem; font-size: 0.8rem; color: var(--accent);
-}
-
-/* Centered Rulebook CTA inside the in-play Reference guide section. The
-   external-link icon signals that tapping leaves the app to open the PDF. */
-.log-play__rulebook-row {
-  display: flex; justify-content: center; margin-bottom: 0.6rem;
-}
-.log-play__rulebook-cta {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-}
-
-/* Expansions picker rows reuse the existing .expansion-list styling but get
-   a checkmark/plus toggle on the right that reflects ps.expansionIds. */
-.log-play__exp-list { margin-top: 0.4rem; }
-.log-play__exp-row.is-active {
-  border-color: var(--exp-color, var(--accent));
-  background: rgba(255, 255, 255, 0.02);
-}
-.log-play__exp-toggle {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px;
-  border-radius: 999px;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  color: oklch(var(--bc));
-  opacity: 0.65;
-  margin-left: auto;
-}
-.log-play__exp-toggle--on {
-  background: var(--exp-color, var(--accent));
-  border-color: var(--exp-color, var(--accent));
-  color: #1a0d00;
-  opacity: 1;
-}
-
-/* In-play guide section: tighten label spacing so the rulebook button
-   reads as part of the section, not as a floating chip. */
-.log-play__section--guide .log-play__label { margin-bottom: 0.55rem; }
-.log-play__players { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
-.log-play__player {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.4rem 0.55rem;
-  background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
-  border-radius: 0.45rem;
-}
-.log-play__player-name { flex: 1; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.log-play__player-init,
-.log-play__player-team {
-  width: 3.2rem;
-  padding: 0.25rem 0.4rem;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.35rem;
-  text-align: center;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.log-play__player-team { width: 4rem; text-transform: none; letter-spacing: 0; }
-.log-play__player-init:focus,
-.log-play__player-team:focus { outline: none; border-color: var(--accent); }
-.log-play__player-add {
-  display: flex; gap: 0.35rem; margin-top: 0.5rem;
-  align-items: flex-start;
-}
-.log-play__buddy-combo { position: relative; flex: 1; min-width: 0; }
-.log-play__buddy-dropdown {
-  position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 30;
-  margin: 0; padding: 0.25rem; list-style: none;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.5rem;
-  box-shadow: 0 8px 24px oklch(0 0 0 / 0.45);
-  max-height: 240px; overflow-y: auto;
-}
-.log-play__buddy-dropdown-item {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 0.35rem;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-.log-play__buddy-dropdown-item:hover { background: oklch(var(--b3)); }
-.log-play__buddy-dropdown-name { font-weight: 500; }
-.log-play__save { padding-top: 1rem; }
-
-/* ── Session invite block ─────────────────────────────────────────────────
-   Sits at the top of the Players section. Idle: explainer + "Generate code"
-   button. Active: large readable code so other players can read it across
-   the table, with an × to end the session. */
-.session-invite {
-  display: flex; align-items: center; gap: 0.7rem;
-  padding: 0.65rem 0.8rem;
-  margin-bottom: 0.6rem;
-  border-radius: 0.6rem;
-  border: 1px dashed oklch(var(--b3));
-  background: oklch(var(--b2));
-  transition: background 0.15s, border-color 0.15s;
-}
-.session-invite__icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  width: 32px; height: 32px;
-  border-radius: 999px;
-  background: oklch(var(--b3));
-  color: var(--accent);
-}
-.session-invite__body {
-  flex: 1;
-  display: flex; flex-direction: column; gap: 0.15rem;
-  min-width: 0;
-}
-.session-invite__title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: oklch(var(--bc));
-}
-.session-invite__hint {
-  font-size: 0.75rem;
-  opacity: 0.7;
-  line-height: 1.3;
-}
-.session-invite__action {
-  flex-shrink: 0;
-}
-
-.session-invite--active {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  color: #1a1208;
-  align-items: center;
-}
-.session-invite--active .session-invite__icon {
-  background: rgba(26, 18, 8, 0.15);
-  color: #1a1208;
-}
-.session-invite--active .session-invite__title {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #1a1208;
-  opacity: 0.75;
-}
-.session-invite__code {
-  font-family: var(--font-display);
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  line-height: 1.1;
-  color: #1a1208;
-}
-.session-invite__end {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 2rem; height: 2rem;
-  background: rgba(26, 18, 8, 0.12);
-  border: none;
-  border-radius: 999px;
-  color: #1a1208;
-  cursor: pointer;
-  padding: 0;
-  transition: background 0.15s;
-}
-.session-invite__end:hover { background: rgba(26, 18, 8, 0.22); }
-.log-play__topbar--center { justify-content: center; }
 
 /* ── Scoring rounds table ─────────────────────────────────────────────────── */
 .scoring-table-wrap {
@@ -4257,32 +2973,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--accent);
 }
 
-/* ── Photo picker ─────────────────────────────────────────────────────────── */
-.log-play__photo-pick {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.85rem 0.75rem;
-  background: oklch(var(--b2));
-  border: 1px dashed oklch(var(--b3));
-  border-radius: 0.55rem;
-  cursor: pointer;
-  font-size: 0.88rem;
-  color: oklch(var(--bc) / 0.8);
-}
-.log-play__photo-pick:hover { border-color: var(--accent); color: var(--accent); }
-.log-play__photo {
-  position: relative;
-  border-radius: 0.55rem;
-  overflow: hidden;
-}
-.log-play__photo img {
-  display: block; width: 100%; max-height: 320px; object-fit: cover;
-}
-.log-play__photo-remove {
-  position: absolute; top: 6px; right: 6px;
-  background: oklch(var(--b1) / 0.7);
-  backdrop-filter: blur(6px);
-}
-
 /* ── Buddies view ─────────────────────────────────────────────────────────── */
 .buddies-search { padding: 0.5rem 0; }
 .buddies-section { padding: 0.75rem 0; border-top: 1px solid oklch(var(--b3)); }
@@ -4291,24 +2981,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    lines. Subsequent sections still divide cleanly from each other. */
 .buddies-search + .buddies-section { border-top: none; padding-top: 0.25rem; }
 .buddies-section h3 { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
-/* Section header row: title left, manual refresh button right. The
-   refresh icon animates while a refetch is in flight (driven by the
-   `animate-spin` Tailwind utility toggled in markup). */
-.buddies-section__head {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-.buddies-section__head h3 { margin-bottom: 0; }
-.buddies-section__refresh { padding: 0.25rem 0.45rem; }
-.buddies-pager {
-  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-.buddies-pager__label {
-  font-size: 0.75rem; opacity: 0.7;
-  font-variant-numeric: tabular-nums;
-  min-width: 2.5rem; text-align: center;
-}
 .buddies-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .buddies-row {
   display: flex; align-items: center; gap: 0.6rem;
@@ -4330,11 +3002,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--rust-strong);
 }
 .bgb-destructive-icon-btn:hover i { color: var(--rust-strong); }
-.buddies-subsection-label {
-  font-size: 0.72rem; font-weight: 600; opacity: 0.55;
-  text-transform: uppercase; letter-spacing: 0.05em;
-  margin: 0.5rem 0 0.35rem;
-}
 .player-type-chip {
   display: inline-block;
   margin-left: 0.4rem;
@@ -4414,44 +3081,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-muted, #8B7E68);
   text-align: center;
 }
-
-/* ── Game detail ──────────────────────────────────────────────────────────── */
-.game-detail__hero {
-  position: relative;
-  height: 220px; overflow: hidden;
-  margin: -1rem -1rem 0;
-  /* Box-art sits centered at its natural aspect; the gutters fill with the
-     image's sampled edge colour (`--hero-edge`, set by JS after the image
-     loads). Pre-sample we fall back to the per-game accent so the banner
-     still reads as tied to the game instead of a generic grey. */
-  display: flex; align-items: stretch; justify-content: center;
-  background: var(--hero-edge, var(--game-accent, oklch(var(--b3))));
-}
 .game-detail__back {
   position: absolute; top: 0.6rem; left: 0.6rem; z-index: 2;
   background: oklch(var(--b1) / 0.5); backdrop-filter: blur(8px);
 }
-.game-detail__hero-img {
-  height: 100%; width: auto; display: block;
-  /* Very-wide landscape art still gets cropped horizontally — the banner's
-     overflow: hidden keeps the centered region in view. */
-  max-width: none;
-}
-.game-detail__hero-veil {
-  position: absolute; inset: 0;
-  background: linear-gradient(to bottom, transparent 30%, oklch(var(--b1)) 100%);
-}
 .game-detail__body { padding-top: 0.5rem; }
 .game-detail__name { font-size: 1.85rem; margin: 0; line-height: 1.1; color: var(--game-accent); }
 .game-detail__meta { display: flex; gap: 0.6rem; font-size: 0.85rem; opacity: 0.75; margin: 0.35rem 0 0.75rem; }
-/* Status tag overlays the top-right of the hero image as a corner banner
-   so it shares the same affordance as collection / search / recent-plays
-   tiles. Picker still opens on tap. */
-.game-detail__hero-status {
-  position: absolute;
-  top: 0.6rem; right: 0.6rem;
-  z-index: 2;
-}
 .game-detail__actions {
   display: flex; align-items: stretch; gap: 0.4rem; flex-wrap: wrap;
   margin-bottom: 1rem;
@@ -4524,13 +3160,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 0.95rem;
   margin: 0 0 0.6rem;
 }
-.game-detail__meta-chip {
-  display: inline-flex; align-items: center; gap: 0.25rem;
-  padding: 0.1rem 0.45rem; border-radius: 999px;
-  background: oklch(var(--b3));
-  font-size: 0.7rem; font-weight: 600;
-  color: var(--game-accent, var(--accent));
-}
 .game-detail__base-link {
   display: inline-flex; align-items: center; gap: 0.4rem;
   padding: 0.3rem 0.6rem;
@@ -4575,7 +3204,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .expansion-list__body { flex: 1; min-width: 0; }
 .expansion-list__name { font-weight: 600; font-size: 0.9rem; }
-.expansion-list__meta { font-size: 0.7rem; opacity: 0.6; }
 
 /* ── Game detail polaroid cover ────────────────────────────────────────────
    Replaces the legacy hero banner with a tilted cream polaroid frame that
@@ -4605,7 +3233,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-ink);
 }
 .game-detail__polaroid:hover { transform: rotate(0deg) scale(1.02); }
-.no-tilt .game-detail__polaroid { transform: none; }
 .game-detail__polaroid-photo {
   width: 100%;
   aspect-ratio: 4 / 5;
@@ -4726,7 +3353,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
     0 14px 28px -6px rgba(0, 0, 0, 0.55),
     0 3px 6px rgba(0, 0, 0, 0.22);
 }
-.no-tilt .expansion-polaroid { transform: none; }
 .expansion-polaroid__photo {
   position: relative;
   width: 100%;
@@ -4783,20 +3409,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0 -1rem;
   padding: 14px 1rem 18px;
 }
-
-/* ── Misc ─────────────────────────────────────────────────────────────────── */
-.bgg-attribution-card {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.75rem;
-  font-size: 0.85rem;
-}
-.bgg-attribution-card h3 { font-weight: 600; margin-bottom: 0.35rem; }
-.bgg-attribution-card a { color: var(--accent); text-decoration: underline; }
-.bgg-attribution-card__logo { display: block; margin-top: 0.5rem; }
-.bgg-attribution-card__logo img { max-height: 36px; }
 
 /* ── Cascade play flow (Gather → Play → Settle Up) ───────────────────────── */
 /* Three-screen guided log-play flow. Each cascade-screen is a top-level
@@ -5040,27 +3652,6 @@ main[data-view="session-viewer"].hidden {
   align-items: center;
   gap: 12px;
 }
-.cascade-invite__join {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 14px;
-  min-height: 44px;
-  border-radius: 999px;
-  background: transparent;
-  border: 1px solid var(--polaroid-line);
-  color: var(--polaroid-ink);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
-}
-.cascade-invite__join:hover {
-  background: var(--polaroid-accent);
-  color: #fff;
-  border-color: var(--polaroid-accent);
-}
 .cascade-invite__icon {
   width: 36px;
   height: 36px;
@@ -5084,10 +3675,6 @@ main[data-view="session-viewer"].hidden {
   font-size: 22px;
   letter-spacing: 0.18em;
   color: var(--polaroid-accent);
-}
-.cascade-invite__hint {
-  font-size: 11px;
-  color: var(--polaroid-muted);
 }
 
 /* Game pick row inside Gather */
@@ -5575,7 +4162,6 @@ main[data-view="session-viewer"].hidden {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .polaroid-popup__close {
   position: absolute;
   top: -14px;
@@ -6403,7 +4989,6 @@ main[data-view="session-viewer"].hidden {
   flex-direction: column;
 }
 .lp-find-grid .game-polaroid { transform: none; }
-.no-tilt .game-polaroid { transform: none; }
 .game-polaroid:hover {
   transform: translateY(-2px);
   box-shadow: 0 1px 1px rgba(0,0,0,0.04),
@@ -6600,15 +5185,6 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-muted);
 }
 
-/* Tighten the play-detail photo when it renders inside the popup
-   (the page version assumes full-width). */
-.play-detail-popup__card .play-detail__photo {
-  max-height: 38dvh;
-  width: 100%;
-  object-fit: cover;
-  border-radius: 10px;
-}
-
 /* Polaroid theme overrides for play-detail content inside the popup.
    The shared .play-detail__* surfaces default to DaisyUI's dark base
    palette (oklch(var(--b2/b3))). Inside the cream popup card those
@@ -6635,7 +5211,6 @@ main[data-view="session-viewer"].hidden {
   color: #C9922A;
 }
 .play-detail-popup__card .play-detail__game-when,
-.play-detail-popup__card .play-detail__logger,
 .play-detail-popup__card .play-detail__edit-photo-pick-hint {
   color: var(--polaroid-ink-soft);
   opacity: 1;
@@ -7653,7 +6228,6 @@ main[data-view="session-viewer"].hidden {
 
 /* Empty-state and pager captions */
 .bgb-cream-screen .profile-empty { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
-.bgb-cream-screen .search-pager .text-xs,
 .bgb-cream-screen .opacity-60 { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
 
 /* Settings: section labels + BGG attribution footer */

@@ -174,7 +174,7 @@
       let titleHtml;
       if (other && p && p.display_name) {
         const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm" });
-        titleHtml = `${badge}<span class="spoke-head__title-text">${escape(p.display_name)}'s collection</span>`;
+        titleHtml = `${badge}<span class="spoke-head__title-text">${escapeHtml(p.display_name)}'s collection</span>`;
       } else {
         titleHtml = `<span class="spoke-head__title-text">Collection</span>`;
       }
@@ -292,7 +292,7 @@
     _renderBody(hasPager = false) {
       const mode = this._mode;
       if (this._error[mode]) {
-        return `<div class="alert alert-error text-sm">${escape(this._error[mode])}</div>`;
+        return `<div class="alert alert-error text-sm">${escapeHtml(this._error[mode])}</div>`;
       }
       const items = this._items[mode] || [];
       if (this._loading[mode] && items.length === 0) {
@@ -309,7 +309,7 @@
         } else {
           empty = isSearchingOrFiltering ? "No played-not-owned matches." : "No played-but-uncollected games.";
         }
-        return `<div class="profile-empty">${escape(empty)}</div>`;
+        return `<div class="profile-empty">${escapeHtml(empty)}</div>`;
       }
       const reloading = this._loading[mode] ? "is-reloading" : "";
       const paginated = hasPager ? "is-paginated" : "";
@@ -334,7 +334,7 @@
           ${g.thumbnail_url
             ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="" loading="lazy" />`
             : `<div class="collection-tile__placeholder"><i data-lucide="dice-6"></i></div>`}
-          <div class="collection-tile__name">${escape(g.name || "Unknown")}</div>
+          <div class="collection-tile__name">${escapeHtml(g.name || "Unknown")}</div>
           ${window.renderExpansionBadge(expCount, { context: "total" })}
         </div>
       `;
@@ -467,13 +467,6 @@
       this._loadMode(this._mode);
     }
   }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escape(s); }
 
   window.CollectionView = CollectionView;
 })();

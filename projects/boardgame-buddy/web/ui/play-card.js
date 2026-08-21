@@ -466,18 +466,6 @@
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  function escapeHtml(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  function escapeAttr(s) { return escapeHtml(s); }
-
-  // For values interpolated into single-quoted JS strings inside onclick="".
-  function jsStr(s) {
-    return String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-  }
-
   // Used to build a CSS attribute selector — UUIDs are safe but the helper
   // keeps the selector robust if a non-UUID id ever flows through.
   function cssEscape(s) {

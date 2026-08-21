@@ -166,8 +166,8 @@
             <div class="cascade-chooser__resume-body">
               <span class="cascade-chooser__resume-title">Resume hosting?</span>
               <span class="cascade-chooser__resume-meta">
-                ${game ? escape(game.name) : "Game in progress"}
-                · code ${escape(ps.code)}
+                ${game ? escapeHtml(game.name) : "Game in progress"}
+                · code ${escapeHtml(ps.code)}
               </span>
             </div>
             <div class="cascade-chooser__resume-actions">
@@ -271,7 +271,7 @@
 
     _renderGrid() {
       if (this._error) {
-        return `<div class="alert alert-error">${escape(this._error)}</div>`;
+        return `<div class="alert alert-error">${escapeHtml(this._error)}</div>`;
       }
       if (this._loading && this._games.length === 0) {
         return `<div class="lp-find-loading">${window.buddyLoader({ size: 72 })}</div>`;
@@ -408,21 +408,6 @@
       window.store.set("activePlay", null);
       this.render();
     }
-  }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-  // Escape for a JS string literal that lives inside an HTML "…" attribute.
-  // Browsers decode HTML entities before the JS parser sees the value, so we
-  // can't rely on &#39; — we need backslash escapes that survive that step.
-  function jsStr(s) {
-    return String(s ?? "")
-      .replace(/\\/g, "\\\\")
-      .replace(/'/g, "\\'")
-      .replace(/\n/g, "\\n");
   }
 
   window.LogPlayView = LogPlayView;

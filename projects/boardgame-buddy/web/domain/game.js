@@ -7,13 +7,6 @@
       Object.assign(this, raw || {});
     }
 
-    static fromRaw(raw) { return new Game(raw || {}); }
-
-    static async fetch(id) {
-      const raw = await window.api.get(`/games/${id}`);
-      return new Game(raw);
-    }
-
     /**
      * Single-call Game Detail bundle. Returns the raw JSON from
      * /games/{id}/bundle: { game, base_game, viewer_status, recent_plays,

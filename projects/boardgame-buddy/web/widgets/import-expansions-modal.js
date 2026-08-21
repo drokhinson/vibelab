@@ -43,12 +43,6 @@
    *   successful import with the new ExpansionListItem.
    */
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-
   let _previousFocus = null;
   let _escHandler = null;
   let _opts = null;
@@ -92,13 +86,13 @@
         </ul>`,
       error: (msg) => `
         <div class="import-exp-modal__state">
-          <p class="import-exp-modal__state-text">${escape(msg)}</p>
+          <p class="import-exp-modal__state-text">${escapeHtml(msg)}</p>
           <button type="button" class="btn btn-sm import-exp-modal__retry"
                   data-exp-action="retry">Retry</button>
         </div>`,
       empty: (text) => `
         <div class="import-exp-modal__state">
-          <p class="import-exp-modal__state-text">${escape(text)}</p>
+          <p class="import-exp-modal__state-text">${escapeHtml(text)}</p>
         </div>`,
     };
   }
@@ -119,12 +113,12 @@
   /** Escape `text`, wrapping the first case-insensitive hit on `q` in a <mark>. */
   function _highlight(text, q) {
     const raw = String(text ?? "");
-    if (!q) return escape(raw);
+    if (!q) return escapeHtml(raw);
     const i = raw.toLowerCase().indexOf(q.toLowerCase());
-    if (i < 0) return escape(raw);
-    return escape(raw.slice(0, i))
-      + `<mark class="import-exp-row__hl">${escape(raw.slice(i, i + q.length))}</mark>`
-      + escape(raw.slice(i + q.length));
+    if (i < 0) return escapeHtml(raw);
+    return escapeHtml(raw.slice(0, i))
+      + `<mark class="import-exp-row__hl">${escapeHtml(raw.slice(i, i + q.length))}</mark>`
+      + escapeHtml(raw.slice(i + q.length));
   }
 
   /** @param {ExpansionCandidate[]} list */
@@ -134,12 +128,12 @@
         ${list.map((e) => `
           <li class="import-exp-row" data-exp-row="${e.bgg_id}">
             <span class="import-exp-row__body">
-              <span class="import-exp-row__name" title="${escape(e.full_name || e.name)}">${_highlight(e.name, _query)}</span>
+              <span class="import-exp-row__name" title="${escapeHtml(e.full_name || e.name)}">${_highlight(e.name, _query)}</span>
               <span class="import-exp-row__error" hidden></span>
             </span>
             <button type="button" class="import-exp-row__add"
                     data-exp-action="import" data-exp-bgg-id="${e.bgg_id}"
-                    aria-label="Import ${escape(e.name)}">
+                    aria-label="Import ${escapeHtml(e.name)}">
               <i data-lucide="plus" class="w-4 h-4"></i>
             </button>
           </li>
@@ -286,7 +280,7 @@
         <div class="polaroid-popup__title">Import expansions</div>
         <p class="polaroid-popup__body import-exp-modal__hint">
           ${opts.gameName
-            ? `Expansions BoardGameGeek lists for <strong>${escape(opts.gameName)}</strong>.`
+            ? `Expansions BoardGameGeek lists for <strong>${escapeHtml(opts.gameName)}</strong>.`
             : "Expansions BoardGameGeek lists for this game."}
         </p>
         <div class="game-finder import-exp-search" hidden>

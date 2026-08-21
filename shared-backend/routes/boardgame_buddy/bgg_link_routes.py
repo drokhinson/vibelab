@@ -34,7 +34,6 @@ from db import get_supabase
 from . import router
 from .game_routes import (
     COLLECTION_DENORM_GAME_FIELDS,
-    PLAY_DENORM_GAME_FIELDS,
     collection_denormalized_from_game,
     play_denormalized_from_game,
 )
@@ -54,7 +53,6 @@ from .models import (
     BggLinkResponse,
     BggSyncStatus,
     BggSyncSummary,
-    MessageResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -144,14 +142,13 @@ def _materialize_play(
     game: dict,
     play_payload: dict,
 ) -> None:
-    """Insert a play + buddies + play_players from a BGG-derived payload.
+    """Insert a play + its play_players from a BGG-derived payload.
 
     `game` is the full row returned by _existing_game_map or
     import_game_from_bgg; its denormalized fields land on the play row inline.
 
     Dedups on (user_id, bgg_play_id): if a row with this BGG play id already
-    exists for this user we skip re-inserting and don't touch its buddies.
-    Mirrors the buddy upsert pattern used by play_routes.log_play.
+    exists for this user we skip re-inserting and don't touch its players.
     """
     bgg_play_id = play_payload.get("bgg_play_id")
 
@@ -186,13 +183,8 @@ def _materialize_play(
         name = (player.get("name") or "").strip()
         if not name:
             continue
-        # Keep the legacy buddies roster populated (admin tools still read it)
-        # but write the play_players row through the new columns from
-        # migration 009 so we don't touch the dropped buddy_id (migration 013).
-        sb.table("boardgamebuddy_buddies").upsert(
-            {"owner_id": user_id, "name": name},
-            on_conflict="owner_id,name",
-        ).execute()
+        # Write through the migration-009 columns so we don't touch the
+        # dropped buddy_id (migration 013).
         sb.table("boardgamebuddy_play_players").insert({
             "play_id": play_id,
             "player_display_name": name,
@@ -383,8 +375,7 @@ async def _process_pending_imports(user_id: str) -> None:
     """Drain pending imports for one user, importing each missing game once.
 
     Runs as a FastAPI BackgroundTask. State lives in the DB so a process
-    restart is safe — the next call to /bgg/sync (or the manual
-    /bgg/sync/process-pending fallback) picks up where we left off.
+    restart is safe — the next call to /bgg/sync picks up where we left off.
     """
     sb = get_supabase()
 
@@ -758,23 +749,6 @@ async def sync_bgg(
     return summary
 
 
-@router.post(
-    "/bgg/sync/process-pending",
-    response_model=MessageResponse,
-    status_code=200,
-    summary="Drain pending BGG imports (manual fallback)",
-)
-async def process_pending(
-    user: CurrentUser = Depends(get_current_user),
-) -> MessageResponse:
-    """Manually trigger the pending-imports worker for the current user.
-
-    Useful as a fallback when a previous sync's BackgroundTask was cut short
-    by a process restart. Idempotent: state is in the DB so re-running just
-    picks up the queue.
-    """
-    await _process_pending_imports(user.user_id)
-    return MessageResponse(message="Pending imports processed")
 
 
 @router.get(

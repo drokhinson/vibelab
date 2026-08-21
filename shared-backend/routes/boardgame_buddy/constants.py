@@ -68,11 +68,6 @@ class FeedCardKind(StrEnum):
     FEATURED_FROM_COLLECTION = "featured_from_collection"
 
 
-# Short-code session codes use Crockford base32 (no I, L, O, U to avoid OCR /
-# voice ambiguity). 5 chars → 32^5 ≈ 33M codes; service layer retries on
-# collision so absolute uniqueness only matters within currently-open sessions.
-PLAY_SESSION_CODE_ALPHABET: str = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-PLAY_SESSION_CODE_LENGTH: int = 5
 
 
 class CollectionSort(StrEnum):
@@ -120,18 +115,6 @@ def derive_play_mode(mechanics: list[str] | None) -> PlayMode:
     return PlayMode.COMPETITIVE
 
 
-# Default theme colors by primary category (fallback when game has no theme_color)
-CATEGORY_COLORS: dict[str, str] = {
-    "Strategy": "#8B6914",
-    "Card Game": "#2E5A3C",
-    "Party": "#D4457D",
-    "Family": "#4A90D9",
-    "War": "#6B3A3A",
-    "Abstract": "#555555",
-    "Thematic": "#7B3FA0",
-    "Economic": "#B8860B",
-    "default": "#6C63FF",
-}
 
 # Cycle through this palette when auto-assigning a color to a newly imported
 # expansion. Index = number of existing expansions on the same base game,

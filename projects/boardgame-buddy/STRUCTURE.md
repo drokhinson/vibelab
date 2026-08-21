@@ -73,7 +73,7 @@ Linked to Supabase Auth `auth.users`.
 | display_name | TEXT | |
 | avatar_url | TEXT | nullable |
 | is_admin | BOOLEAN | default false; granted via `POST /profile/become-admin` with the shared admin key |
-| bgg_username | TEXT | nullable; linked BoardGameGeek username (migration 062). Unique when non-null. |
+| bgg_username | TEXT | nullable; linked BoardGameGeek username (folded into 001_baseline). Unique when non-null. |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_collections
@@ -86,21 +86,33 @@ Linked to Supabase Auth `auth.users`.
 | added_at | TIMESTAMPTZ | |
 | UNIQUE(user_id, game_id) | | |
 
+### boardgamebuddy_buddy_edges
+The mutual friendship graph (migration 008). One row per pair, stored
+canonically as `(user_a, user_b)` with `user_a < user_b` so a pair can never
+have two rows. `requested_by` records who sent the request, which is what makes
+an incoming request distinguishable from an outgoing one.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| user_a | UUID FK | → profiles; always the lower UUID of the pair |
+| user_b | UUID FK | → profiles |
+| status | TEXT | `pending` / `accepted` |
+| requested_by | UUID FK | → profiles; the sender |
+| created_at | TIMESTAMPTZ | |
+| accepted_at | TIMESTAMPTZ | nullable; set when the recipient accepts |
+
 ### boardgamebuddy_buddies
-A buddy is a person you've played with — auto-created on play log by name.
-Free-text by default; can be linked to a real BoardgameBuddy account, at which
-point the linked profile's display name is shown everywhere and the linked user
-sees those plays in their own log. Linking is one-way and consolidates: linking
-a second buddy of yours to the same account merges into the first.
+**Ghost players only.** This was the original one-way buddy table; migration 013
+dropped its `linked_user_id` and friendship moved to `boardgamebuddy_buddy_edges`.
+What remains is a per-owner roster of free-text names for people who played but
+do not have an account.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | UUID PK | |
 | owner_id | UUID FK | → profiles |
-| name | TEXT | typed name; rewritten to linked profile's display_name on link |
-| linked_user_id | UUID FK | nullable → profiles |
+| name | TEXT | typed name |
 | created_at | TIMESTAMPTZ | |
 | UNIQUE(owner_id, name) | | |
-| UNIQUE(owner_id, linked_user_id) WHERE linked_user_id IS NOT NULL | | one linked row per (owner, target) |
 
 ### boardgamebuddy_plays
 | Column | Type | Notes |
@@ -110,16 +122,37 @@ a second buddy of yours to the same account merges into the first.
 | game_id | UUID FK | → games |
 | played_at | DATE | |
 | notes | TEXT | nullable |
-| bgg_play_id | BIGINT | nullable; set when the row was imported from BGG (migration 062). Unique per (user_id, bgg_play_id) — re-running BGG sync is idempotent. |
+| bgg_play_id | BIGINT | nullable; set when the row was imported from BGG. Unique per (user_id, bgg_play_id) — re-running BGG sync is idempotent. |
+| photo_url | TEXT | nullable; Storage URL for the play photo |
+| play_mode | TEXT | `competitive` / `coop` / `team` — what the user actually played, which may differ from the game's intrinsic mode |
+| game_name | TEXT | denormalized off games (migration 020) so play lists are a single-table read |
+| game_thumbnail_url | TEXT | denormalized off games |
 | created_at | TIMESTAMPTZ | |
 
+Migration 020 also cached `game_image_url` and `game_play_mode` here; migration
+044 dropped both after finding nothing ever read them off a play row.
+
 ### boardgamebuddy_play_players
+One row per participant in a play. Since migration 009 a participant is either a
+real account (`player_user_id`) or a free-text label (`player_display_name`);
+migration 013 dropped the old `buddy_id` reference.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | UUID PK | |
 | play_id | UUID FK | → plays |
-| buddy_id | UUID FK | → buddies |
+| player_user_id | UUID FK | nullable → profiles; set for account players |
+| player_display_name | TEXT | nullable; the typed label for ghost players |
 | is_winner | BOOLEAN | |
+| score | INTEGER | nullable final score |
+| round_scores | JSONB | nullable per-round totals (migration 028) |
+
+### boardgamebuddy_play_expansions
+Which expansions were in play for a given play.
+| Column | Type | Notes |
+|--------|------|-------|
+| play_id | UUID FK | → plays |
+| expansion_game_id | UUID FK | → games (a row with is_expansion=true) |
+| PRIMARY KEY (play_id, expansion_game_id) | | |
 
 ### boardgamebuddy_play_sessions
 Short-code lobby state for the cascading play-flow. The host's device opens
@@ -214,16 +247,19 @@ the report).
 | UNIQUE(chapter_id, reporter_id) | | one report per user per chapter |
 
 ### boardgamebuddy_user_expansions
-Per-user expansion toggle from the previous design. Retained but unused
-by the new chapter system; each game (including expansions) has its own
-guide. Drop in a follow-up.
-
-### boardgamebuddy_guides (legacy)
-Flat guide table from the initial prototype. Retained as a historical
-no-op; drop in a follow-up.
+Per-user "this expansion is switched on for me" toggle. **Live** — do not drop.
+An earlier note here called it unused; it is not. `expansion_routes` writes and
+deletes rows through the toggle endpoint and reads them back, and
+`bgb_game_detail_bundle` joins it to carry the viewer's toggle state onto the
+game-detail response.
+| Column | Type | Notes |
+|--------|------|-------|
+| user_id | UUID FK | → profiles |
+| expansion_game_id | UUID FK | → games (a row with is_expansion=true) |
+| PRIMARY KEY (user_id, expansion_game_id) | | presence = enabled |
 
 ### boardgamebuddy_bgg_pending_imports
-Staging queue for BGG syncs (migration 062). When a user's collection or play
+Staging queue for BGG syncs (folded into 001_baseline). When a user's collection or play
 references a `bgg_id` we don't yet have in `boardgamebuddy_games`, the desired
 write is persisted here and a background worker drains the queue after fetching
 each missing game from the BGG XML API.
@@ -235,7 +271,7 @@ each missing game from the BGG XML API.
 | kind | TEXT | `collection` or `play` |
 | payload | JSONB | collection: `{status}`. play: `{bgg_play_id, played_at, notes, players[]}`. |
 | status | TEXT | `pending` / `done` / `error` |
-| error_message | TEXT | populated when status='error' |
+| error_message | TEXT | populated when status='error'; written for diagnostics, not surfaced in the UI yet |
 | attempts | INT | retry count; promotes to `error` after 3 |
 | created_at / completed_at | TIMESTAMPTZ | |
 | UNIQUE(user_id, bgg_id, kind) WHERE status='pending' | | one pending row per (user, game, kind) |
@@ -246,11 +282,11 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/health`
 - `GET /api/v1/boardgame_buddy/games` — paginated, search, filter. Supports `players`, `playtime_min/max`, `mechanics` (AND logic), and `owned_only=true` (requires bearer token; intersected with the caller's `boardgamebuddy_collections` rows where `status='owned'`)
 - `GET /api/v1/boardgame_buddy/games/{game_id}` — detail (includes derived `bgg_url`)
-- `GET /api/v1/boardgame_buddy/games/search-bgg?query=` — proxy BGG API
-- `GET /api/v1/boardgame_buddy/games/lookup-by-bgg/{bgg_id}` — null-or-`GameSummary`; the import preview uses this to label a bundle as "new game" vs "existing game"
+- `GET /api/v1/boardgame_buddy/games/{game_id}/bundle` — single-call Game Detail: the game, its base game, the viewer's collection status, recent plays and expansions in one `bgb_game_detail_bundle` RPC. Supersedes the separate status / plays / expansions fetches.
 - `GET /api/v1/boardgame_buddy/games/{game_id}/chapter-pool` — browse the pool of existing chapters for a game. Each row carries `popularity` (count of users who have it) and `in_my_guide` (whether the caller has it). Sorted by `popularity DESC, created_at DESC`. Supports `?q=` (title+content ILIKE), `?chapter_type=`, and `?expansion_ids=a,b,c` (comma-separated game UUIDs to merge into the pool — each merged row carries `source_game_id` / `source_game_name` / `source_color` so the FE can render colored dots tying chapters to their expansion). Auth optional — anon callers always see `in_my_guide=false`.
 - `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise. Each item includes the expansion's `rulebook_url`.
 - `GET /api/v1/boardgame_buddy/games/{base_id}/expansions/available` — expansions BGG links to this base game that BgB hasn't imported yet. Backs the "Import expansions" popup: already-imported bgg_ids are filtered out and each `name` has the base game's name stripped off the front ("Catan: Cities & Knights" → "Cities & Knights"), with BGG's original string kept in `full_name`. 400 when the target is itself an expansion.
+- `POST /api/v1/boardgame_buddy/games/import-bgg/{bgg_id}` — import one game from BGG into the catalog by its BGG id. Idempotent; returns the existing row when already present.
 - `POST /api/v1/boardgame_buddy/games/{base_id}/expansions/import/{bgg_id}` — import one expansion into the catalog and pin `base_game_bgg_id` to this base game (BGG keeps only the first inbound link, which can point at a different base). Idempotent; returns the `ExpansionListItem`. Catalog-only — does not touch the caller's collection.
 - `GET /api/v1/boardgame_buddy/chapter-types` — chapter type lookup
 
@@ -260,6 +296,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/profile`
 - `POST /api/v1/boardgame_buddy/profile`
 - `POST /api/v1/boardgame_buddy/profile/become-admin` — body `{admin_key}`; sets `is_admin=true` if the key matches `ADMIN_API_KEY`
+- `GET /api/v1/boardgame_buddy/profile/bundle` — single-call Profile view: stats + all three shelves + recent plays + the buddy lists and status/expansion-count caches the FE would otherwise fetch separately. One `bgb_profile_bundle` RPC.
 - `GET /api/v1/boardgame_buddy/profiles/search?q=` — search other users by display name (returns id, display_name, email) for buddy linking
 - `DELETE /api/v1/boardgame_buddy/profile` — delete current user's account and data
 - `GET /api/v1/boardgame_buddy/collection` — flat list (legacy shape, list[CollectionItem])
@@ -269,9 +306,10 @@ each missing game from the BGG XML API.
 - `PATCH /api/v1/boardgame_buddy/collection/{game_id}`
 - `DELETE /api/v1/boardgame_buddy/collection/{game_id}`
 - `GET /api/v1/boardgame_buddy/plays` — paginated plays the target user logged + participated in. Each play includes `is_own`, `logged_by_id`, `logged_by_name`. Supports `page`, `per_page`, `game_id`, `buddy_id` (treated as a player_user_id filter post-migration-009), `search` (free-text match on game name OR any player's display name), and `user_id` (target user; defaults to the viewer — profiles are public).
-- `POST /api/v1/boardgame_buddy/plays` — one round trip: the whole write (play row + players + expansions + legacy buddies roster) happens inside the `bgb_log_play` RPC (migration 042).
+- `POST /api/v1/boardgame_buddy/plays` — one round trip: the whole write (play row + players + expansions) happens inside the `bgb_log_play` RPC (migration 042). Migration 044 dropped its legacy buddies-roster insert — the only reader of that roster was `GET /plays/filter-options`, which was removed as uncalled.
 - `PUT /api/v1/boardgame_buddy/plays/{play_id}` — **full replacement** of the play: deletes and re-inserts every player and expansion row. Used by the play-edit screen. Do not reach for it to change one field.
 - `PATCH /api/v1/boardgame_buddy/plays/{play_id}/photo` — body `{photo_url}`; owner-only, writes just that column in a single statement (ownership is the WHERE clause, so a missing play and someone else's are both 404). This is what the log-play flow uses to attach a photo — routing that through the PUT above cost twelve round trips and recreated every player row to set one string.
+- `POST /api/v1/boardgame_buddy/plays/photo` — multipart upload of a play photo to Storage, returning the URL. Used by the play-flow wrap-up card, which uploads in parallel with the finalize and attaches afterwards.
 - `DELETE /api/v1/boardgame_buddy/plays/{play_id}` — only the original logger can delete
 - `POST /api/v1/boardgame_buddy/plays/{play_id}/leave` — a non-owner participant self-removes from a play they didn't take part in. Turns their `player_user_id` row into a ghost (nulls the id, keeps `player_display_name`) instead of deleting the play — the owner keeps it and sees them as a named ghost; the play drops out of the leaver's history/played-with. 400 if the caller owns the play (use edit/delete), 404 if they aren't a player in it.
 - `GET /api/v1/boardgame_buddy/buddies` — accepted mutual edges only (mutual graph, migration 008). Returns `BuddyEdgeResponse[]`
@@ -284,10 +322,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/ghost-players` — free-text nicknames the viewer recorded in plays without an account, grouped with play counts + last-played date
 - `POST /api/v1/boardgame_buddy/ghost-players/link` — promote a ghost nickname to a real account (body `{display_name, target_user_id}`); stamps player_user_id on every matching play_players row the viewer logged
 - `POST /api/v1/boardgame_buddy/ghost-players/merge` — collapse two ghost spellings into one (body `{source_display_name, target_display_name}`); renames every matching ghost row the viewer logged so duplicates appear as a single ghost
-- `GET /api/v1/boardgame_buddy/feed?cursor=&limit=20` — Strava-style mixed feed (plays + hot games + suggested buddies + featured-from-collection). Cursor-paginated via `created_at`.
-- `GET /api/v1/boardgame_buddy/hot-games?window_days=7` — most-played games in window
-- `GET /api/v1/boardgame_buddy/suggestions/buddies` — friends-of-friends candidates
-- `GET /api/v1/boardgame_buddy/suggestions/featured-from-collection` — dormant owned games
+- `GET /api/v1/boardgame_buddy/feed?cursor=&limit=20` — Strava-style mixed feed (plays + hot games + suggested buddies + featured-from-collection). Cursor-paginated via `created_at`. The three rails are composed into this response by `feed_service.build_feed_page`; they have no standalone endpoints.
 - `GET /api/v1/boardgame_buddy/users/me/stats` — Strava-style aggregate stats for the current user
 - `GET /api/v1/boardgame_buddy/users/{user_id}/stats` — same shape for any user (profiles are public)
 - `GET /api/v1/boardgame_buddy/users/{user_id}/profile` — public profile + buddy-relation flags
@@ -303,11 +338,10 @@ each missing game from the BGG XML API.
 - `DELETE /api/v1/boardgame_buddy/sessions/{code}` — host abandons a session
 - `POST /api/v1/boardgame_buddy/sessions/{code}/finalize` — write a play row from the session. Merges per-player live-scoring rows from `boardgamebuddy_play_session_scores` into the player payload (authed players only; guests keep host-typed scores).
 - Session create/join/get/joinable (and every session endpoint's response payload) are single Postgres RPCs as of migrations 036-038 (`bgb_create_session` / `bgb_join_session` / `bgb_get_session` / `bgb_joinable_sessions` / `bgb_session_bundle`) — previously 4-6 sequential PostgREST round trips per request, which made host/join taps, the 2s lobby poll, and the Join chooser crawl at cross-region RTTs. See `db/functions/boardgamebuddy.sql`.
-- Migration 039 extends the same treatment to the other hot reads: `GET /plays` + `GET /games/{id}/plays` → `bgb_plays_page` (was 8-11 round trips with Python-side pagination over the full history), Closet play stats → `bgb_play_stats` (SQL GROUP BY instead of shipping every play row), `GET /bgg/sync/status` → `bgb_bgg_sync_status` (poll target, was up to 7 round trips). Play-player writes are bulked (2 statements per play regardless of player count), `/played-with` resolves buddy relations from one edges query, and pg_trgm GIN indexes back the per-keystroke name searches.
+- Migration 039 extends the same treatment to the other hot reads: `GET /plays` → `bgb_plays_page` (was 8-11 round trips with Python-side pagination over the full history), Closet play stats → `bgb_play_stats` (SQL GROUP BY instead of shipping every play row), `GET /bgg/sync/status` → `bgb_bgg_sync_status` (poll target, was up to 7 round trips). Play-player writes are bulked (2 statements per play regardless of player count), `/played-with` resolves buddy relations from one edges query, and pg_trgm GIN indexes back the per-keystroke name searches.
 - `POST /api/v1/boardgame_buddy/bgg/link` — body `{username, password}`; logs into BGG via `POST /login/api/v1`, stores the username + Fernet-encrypted password (`BGG_CREDENTIAL_KEY`) and the returned SessionID/bggusername/bggpassword cookies on the profile. A successful login is also our existence check (BGG returns 401 for both bad passwords and unknown handles, surfaced as a 400 to the client). Returns `{bgg_username}`.
 - `DELETE /api/v1/boardgame_buddy/bgg/link` — clear `bgg_username` plus all stored credentials/cookies. Already-imported collection/plays remain in place.
-- `POST /api/v1/boardgame_buddy/bgg/sync` — pull collection (`own=1`, `wishlist=1`, `wanttoplay=1`, `showprivate=1`) and plays (paginated) from BGG. Per-user calls go through `fetch_bgg_as_user`, which sends the stored cookies so BGG evaluates the request AS the linked user — that's what unlocks the `<privateinfo>` block (purchase price, private comment, acquisition date, …) which we mirror onto `boardgamebuddy_collections.bgg_*` columns. BGG `own→owned`; `wishlist` and `wanttoplay` both map to `'wishlist'`. Games we already have are written immediately (collections upsert on `(user_id, game_id)`; plays dedup on `(user_id, bgg_play_id)`). Games we don't have go into `boardgamebuddy_bgg_pending_imports` (the `payload.private` carries the private fields through to materialization) and a `BackgroundTasks` worker drains the queue (~1.5s between BGG calls). At the start of every sync the handler stamps `profiles.bgg_last_sync_started_at` so the status endpoint can compute session-scoped progress. Returns `{bgg_username, collection_imported, collection_pending, plays_imported, plays_pending, unique_games_to_import, warm_up_retry_pending}`. Players from BGG plays are upserted as buddies on `(owner_id, name)` using the same path as `POST /plays`. If the stored password no longer works, returns 409 — the FE surfaces a "re-link required" banner.
-- `POST /api/v1/boardgame_buddy/bgg/sync/process-pending` — manual fallback to drain the pending queue (e.g. after a process restart cut a BackgroundTask short). Idempotent.
+- `POST /api/v1/boardgame_buddy/bgg/sync` — pull collection (`own=1`, `wishlist=1`, `wanttoplay=1`, `showprivate=1`) and plays (paginated) from BGG. Per-user calls go through `fetch_bgg_as_user`, which sends the stored cookies so BGG evaluates the request AS the linked user — that's what unlocks the `<privateinfo>` block (purchase price, private comment, acquisition date, …) which we mirror onto `boardgamebuddy_collections.bgg_*` columns. BGG `own→owned`; `wishlist` and `wanttoplay` both map to `'wishlist'`. Games we already have are written immediately (collections upsert on `(user_id, game_id)`; plays dedup on `(user_id, bgg_play_id)`). Games we don't have go into `boardgamebuddy_bgg_pending_imports` (the `payload.private` carries the private fields through to materialization) and a `BackgroundTasks` worker drains the queue (~1.5s between BGG calls). At the start of every sync the handler stamps `profiles.bgg_last_sync_started_at` so the status endpoint can compute session-scoped progress. Returns `{bgg_username, collection_imported, collection_pending, plays_imported, plays_pending, unique_games_to_import, warm_up_retry_pending}`. If the stored password no longer works, returns 409 — the FE surfaces a "re-link required" banner.
 - `GET /api/v1/boardgame_buddy/bgg/sync/status` — `{bgg_username, auth_state, pending_count, errored_count, last_completed_at, session_started_at, session_total, session_done, session_errored}`. `auth_state` is `unlinked` / `linked` / `relink_required`; the session_* counts are scoped to the most recent sync (rows with `created_at >= profiles.bgg_last_sync_started_at`) and counted in distinct BGG ids so they line up with the per-game `/thing` calls the worker makes. The Settings BGG card polls this every 2s while `session_done + session_errored < session_total` to drive an "Importing X of Y" progress bar.
 - `POST /api/v1/boardgame_buddy/games/{game_id}/chapters` — create a brand-new chapter (type + title + markdown) and auto-add to the creator's guide
 - `PATCH /api/v1/boardgame_buddy/chapters/{chapter_id}` — edit own chapter (creator-only)
@@ -316,8 +350,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/games/{game_id}/my-chapters` — chapters the caller has added to their guide for this game (empty list when none). Supports `?expansion_ids=a,b,c` to also merge in chapters from the listed expansions in one round-trip; each row carries `source_game_id` / `source_game_name` / `source_color` for FE colored-dot rendering.
 - `POST /api/v1/boardgame_buddy/games/{game_id}/my-chapters` — body `{chapter_id}`; add an existing pool chapter to my guide (idempotent)
 - `DELETE /api/v1/boardgame_buddy/games/{game_id}/my-chapters/{chapter_id}` — remove from my guide (does NOT delete the chapter)
-- `POST /api/v1/boardgame_buddy/games/{base_id}/expansions/{expansion_id}/toggle` — body `{is_enabled}`; per-user expansion toggle (currently a no-op for the reference guide; the toggle table is retained but the chapter system no longer reads it)
-- `PATCH /api/v1/boardgame_buddy/games/admin/{game_id}/expansion-color` — *admin-only* override the auto-assigned `expansion_color`
+- `POST /api/v1/boardgame_buddy/games/{base_id}/expansions/{expansion_id}/toggle` — body `{is_enabled}`; per-user expansion toggle. Read back by this module's expansion list and joined into `bgb_game_detail_bundle`; the chapter system does not consume it
 - `GET /api/v1/boardgame_buddy/admin/chapter-reports?status=open|resolved` — *admin-only* list chapter moderation reports
 - `POST /api/v1/boardgame_buddy/admin/chapter-reports/{report_id}/resolve` — *admin-only* mark a report resolved with no further action
 - `GET  /api/v1/boardgame_buddy/games/admin/missing-images` — *admin-only* list of games whose `image_url` or `thumbnail_url` is NULL

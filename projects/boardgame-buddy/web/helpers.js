@@ -22,22 +22,10 @@
   }
 })();
 
-function bggImg(url) {
-  if (!url) return null;
-  if (url.startsWith("//")) return "https:" + url;
-  return url;
-}
-
 function computeInitials(name) {
   const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   return (parts[0] || "?").slice(0, 2).toUpperCase();
-}
-
-function playerRange(min, max) {
-  if (!min && !max) return "";
-  if (min === max) return `${min}P`;
-  return `${min || "?"}–${max || "?"}P`;
 }
 
 // Drop a leading base-game name from an expansion's name, for surfaces where
@@ -63,19 +51,27 @@ function stripBaseGameName(name, baseName) {
   return stripped || raw;
 }
 
-function formatTime(minutes) {
-  if (!minutes) return "";
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h}h${m}m` : `${h}h`;
-}
-
 function formatDate(dateStr) {
   if (!dateStr) return "";
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short", day: "numeric", year: "numeric",
   });
+}
+
+// HTML-escape for any untrusted text interpolated into a template literal.
+// Every module used to carry its own copy of this; they all delegate here now
+// so the escaping rules live in exactly one place.
+const ESCAPE_MAP = {
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+};
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ESCAPE_MAP[c]);
+}
+
+// Same escaping, named for the attribute-value case so call sites read as
+// intended. Quotes are already covered, so one implementation serves both.
+function escapeAttr(s) {
+  return escapeHtml(s);
 }
 
 // JS-string escape for safely embedding text inside inline onclicks

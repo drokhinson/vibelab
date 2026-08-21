@@ -154,16 +154,12 @@ export const api = {
 
   // ── Feed ───────────────────────────────────────────────────────────────
   feed: ({ cursor, limit = 20 } = {}) => get('/feed', { cursor, limit }),
-  hotGames: ({ windowDays = 7, limit = 10 } = {}) =>
     get('/hot-games', { window_days: windowDays, limit }),
-  suggestedBuddies: ({ limit = 10 } = {}) => get('/suggestions/buddies', { limit }),
-  featuredFromCollection: ({ daysSince = 60, limit = 5 } = {}) =>
     get('/suggestions/featured-from-collection', { days_since: daysSince, limit }),
 
   // ── Search ─────────────────────────────────────────────────────────────
   search: (q, { includeBgg = false, limit = 20 } = {}) =>
     get('/search', { q, limit, include_bgg: includeBgg ? 'true' : 'false' }),
-  searchBgg: (query, { includeExpansions = true } = {}) =>
     get('/games/search-bgg', { query, include_expansions: includeExpansions ? 'true' : 'false' }),
 
   // ── Games ──────────────────────────────────────────────────────────────
@@ -172,10 +168,6 @@ export const api = {
   gameBundle: (id, { playsLimit = 5 } = {}) => get(`/games/${id}/bundle`, { plays_limit: playsLimit }),
   recentlyPlayedGames: ({ limit = 6 } = {}) => get('/games/recently-played', { limit }),
   importBgg: (bggId) => post(`/games/import-bgg/${bggId}`),
-  lookupByBgg: (bggId) => get(`/games/lookup-by-bgg/${bggId}`),
-  gameMechanics: () => get('/games/mechanics'),
-  gamePlays: (gameId) => get(`/games/${gameId}/plays`),
-  gamePlayCount: (gameId) => get(`/games/${gameId}/play-count`),
 
   // ── Expansions ─────────────────────────────────────────────────────────
   expansions: (baseId) => get(`/games/${baseId}/expansions`),
@@ -185,7 +177,6 @@ export const api = {
   // ── Collection ─────────────────────────────────────────────────────────
   collection: (status) => get('/collection', { status }),
   collectionGrid: (params = {}) => get('/collection/grid', params),
-  collectionShelf: (params = {}) => get('/collection/shelf', params),
   addToCollection: (gameId, status) => post('/collection', { game_id: gameId, status }),
   updateCollection: (gameId, status) => patch(`/collection/${gameId}`, { status }),
   removeFromCollection: (gameId) => del(`/collection/${gameId}`),
@@ -193,7 +184,10 @@ export const api = {
   // ── Plays ──────────────────────────────────────────────────────────────
   plays: (params = {}) => get('/plays', params),
   play: (id) => get(`/plays/${id}`),
-  playFilterOptions: () => get('/plays/filter-options'),
+  // No screen calls these three yet: native only writes plays by finalizing a
+  // session (PlayFlowScreen), so there is no standalone log / edit / delete
+  // flow the way the web app has. Kept because that is a feature gap to close,
+  // not dead code — the endpoints are live.
   createPlay: (payload) => post('/plays', payload),
   updatePlay: (id, payload) => put(`/plays/${id}`, payload),
   deletePlay: (id) => del(`/plays/${id}`),
@@ -214,9 +208,7 @@ export const api = {
   unfriend: (edgeId) => del(`/buddies/${edgeId}`),
   playedWith: () => get('/played-with'),
   ghostPlayers: () => get('/ghost-players'),
-  linkGhost: (displayName, targetUserId) =>
     post('/ghost-players/link', { display_name: displayName, target_user_id: targetUserId }),
-  mergeGhosts: (sourceDisplayName, targetDisplayName) =>
     post('/ghost-players/merge', { source_display_name: sourceDisplayName, target_display_name: targetDisplayName }),
 
   // ── Sessions (live host/join) ─────────────────────────────────────────
@@ -226,7 +218,6 @@ export const api = {
   joinSession: (code, displayName) => post(`/sessions/${code}/join`, { display_name: displayName || null }),
   addParticipant: (code, { userId, displayName }) =>
     post(`/sessions/${code}/participants`, { user_id: userId || null, display_name: displayName }),
-  removeParticipant: (code, participantId) => del(`/sessions/${code}/participants/${participantId}`),
   updateSession: (code, gameId) => patch(`/sessions/${code}`, { game_id: gameId || null }),
   updateSessionPhase: (code, phase) => patch(`/sessions/${code}/phase`, { phase }),
   abandonSession: (code) => del(`/sessions/${code}`),
@@ -241,7 +232,6 @@ export const api = {
   createChapter: (gameId, payload) => post(`/games/${gameId}/chapters`, payload),
   addChapter: (gameId, chapterId) => post(`/games/${gameId}/my-chapters`, { chapter_id: chapterId }),
   removeChapter: (gameId, chapterId) => del(`/games/${gameId}/my-chapters/${chapterId}`),
-  updateChapter: (chapterId, payload) => patch(`/chapters/${chapterId}`, payload),
   deleteChapter: (chapterId) => del(`/chapters/${chapterId}`),
   reportChapter: (chapterId, reason) => post(`/chapters/${chapterId}/report`, { reason: reason || null }),
 
@@ -250,12 +240,10 @@ export const api = {
   bggLink: (username, password) => post('/bgg/link', { username, password }),
   bggUnlink: () => del('/bgg/link'),
   bggSync: () => post('/bgg/sync', {}),
-  bggProcessPending: () => post('/bgg/sync/process-pending', {}),
 
   // ── Admin ──────────────────────────────────────────────────────────────
   adminChapterReports: (status = 'open') => get('/admin/chapter-reports', { status }),
   adminResolveReport: (reportId) => post(`/admin/chapter-reports/${reportId}/resolve`),
 };
 
-export const BASE_API_URL = BASE_URL;
 export default api;

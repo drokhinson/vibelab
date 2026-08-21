@@ -185,11 +185,11 @@
       return `
         <li class="admin-reports__row">
           <div class="admin-reports__meta">
-            <span class="admin-reports__game">${escape(g.name)}</span>
+            <span class="admin-reports__game">${escapeHtml(g.name)}</span>
             ${g.bgg_id ? `<span class="admin-reports__type">BGG ${g.bgg_id}</span>` : `<span class="admin-reports__type">no bgg_id</span>`}
             ${g.year_published ? `<span class="admin-reports__date">${g.year_published}</span>` : ""}
           </div>
-          <div class="admin-reports__preview">${escape(label)}</div>
+          <div class="admin-reports__preview">${escapeHtml(label)}</div>
           <div class="admin-reports__footer">
             <span class="admin-reports__reporter">${g.bgg_id ? "" : "No BGG id — refresh disabled."}</span>
             <div class="admin-reports__actions">
@@ -225,16 +225,16 @@
       return `
         <li class="admin-reports__row">
           <div class="admin-reports__meta">
-            <span class="admin-reports__game">${escape(r.game_name)}</span>
-            <span class="admin-reports__type">${escape(r.chapter_type_label || r.chapter_type)}</span>
-            <span class="admin-reports__date" title="${escape(r.created_at)}">${formatDate(r.created_at)}</span>
+            <span class="admin-reports__game">${escapeHtml(r.game_name)}</span>
+            <span class="admin-reports__type">${escapeHtml(r.chapter_type_label || r.chapter_type)}</span>
+            <span class="admin-reports__date" title="${escapeHtml(r.created_at)}">${formatDate(r.created_at)}</span>
           </div>
-          <div class="admin-reports__title">${escape(r.chapter_title)}</div>
-          <div class="admin-reports__preview">${escape(r.chapter_content_preview)}</div>
-          ${r.reason ? `<div class="admin-reports__reason"><strong>Reason:</strong> ${escape(r.reason)}</div>` : ""}
+          <div class="admin-reports__title">${escapeHtml(r.chapter_title)}</div>
+          <div class="admin-reports__preview">${escapeHtml(r.chapter_content_preview)}</div>
+          ${r.reason ? `<div class="admin-reports__reason"><strong>Reason:</strong> ${escapeHtml(r.reason)}</div>` : ""}
           <div class="admin-reports__footer">
             <span class="admin-reports__reporter">
-              Reported by ${escape(r.reporter_name || "(unknown)")}
+              Reported by ${escapeHtml(r.reporter_name || "(unknown)")}
             </span>
             ${open ? `
               <div class="admin-reports__actions">
@@ -285,12 +285,6 @@
         showToast(e.message || "Failed to delete chapter", "error");
       }
     }
-  }
-
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
   }
 
   window.AdminView = AdminView;

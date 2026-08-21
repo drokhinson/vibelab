@@ -8,44 +8,38 @@ opens with data on first paint.
 from supabase import Client
 
 from ..models import GameSummary
+from ._helpers import game_select_clause
 
 
 def recently_played(sb: Client, viewer_id: str, limit: int = 6) -> list[GameSummary]:
-    """Distinct games the viewer has plays for, sorted by latest played_at DESC.
+    """Distinct games the viewer has plays for, most recent first.
 
-    Caps the play scan at the 200 most recent rows — enough to surface all
-    distinct games for any realistic user without paying for a full scan.
+    "Has plays for" is the same rule every other play-derived surface uses:
+    plays the viewer logged, OR plays someone else logged that list the viewer
+    as a player. Reads through bgb_play_stats (migration 039), which already
+    aggregates that in SQL and returns one row per game with its last_played_at.
+
+    This used to scan the viewer's 200 most recent OWN play rows and de-dupe in
+    Python, which both missed games a buddy logged them into and could truncate
+    a heavy BGG-synced history before reaching `limit` distinct games.
     """
-    plays = (
-        sb.table("boardgamebuddy_plays")
-        .select("game_id, played_at")
-        .eq("user_id", viewer_id)
-        .order("played_at", desc=True)
-        .limit(200)
+    stats = (
+        sb.rpc("bgb_play_stats", {"p_viewer": viewer_id, "p_game_ids": None})
         .execute()
         .data
         or []
     )
-    seen: set[str] = set()
-    ordered_ids: list[str] = []
-    for p in plays:
-        gid = p["game_id"]
-        if gid in seen:
-            continue
-        seen.add(gid)
-        ordered_ids.append(gid)
-        if len(ordered_ids) >= limit:
-            break
+    ranked = sorted(
+        (r for r in stats if r.get("last_played_at")),
+        key=lambda r: r["last_played_at"],
+        reverse=True,
+    )
+    ordered_ids = [r["game_id"] for r in ranked[:limit]]
     if not ordered_ids:
         return []
     rows = (
         sb.table("boardgamebuddy_games")
-        .select(
-            "id, bgg_id, name, year_published, min_players, max_players, "
-            "playing_time, thumbnail_url, image_url, theme_color, "
-            "is_expansion, base_game_bgg_id, expansion_color, rulebook_url, "
-            "play_mode"
-        )
+        .select(game_select_clause())
         .in_("id", ordered_ids)
         .execute()
         .data

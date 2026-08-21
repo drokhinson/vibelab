@@ -257,7 +257,7 @@
         <section class="play-session${isSingle ? " play-session--single" : ""}">
           <header class="play-session__header">
             <span class="play-session__title">${title}</span>
-            <span class="play-session__date">${escape(dateLabel)}</span>
+            <span class="play-session__date">${escapeHtml(dateLabel)}</span>
           </header>
           <div class="play-session__scroll">${cards}</div>
         </section>
@@ -276,7 +276,7 @@
             : `<div class="hot-game-tile__placeholder"><i data-lucide="dice-6"></i></div>`
           }
           <div class="hot-game-tile__body">
-            <div class="hot-game-tile__name">${escape(entry.game.name)}</div>
+            <div class="hot-game-tile__name">${escapeHtml(entry.game.name)}</div>
             <div class="hot-game-tile__plays">${entry.play_count} plays</div>
           </div>
           ${window.renderExpansionBadge(expCount)}
@@ -299,7 +299,7 @@
                onclick="window.router.go('profile-other',{userId:'${s.user_id}'})">
             ${window.BgbBadge.render({ avatar: s.avatar, displayName: s.display_name, size: "md", extraClass: "buddy-tile__avatar" })}
           </div>
-          <div class="buddy-tile__name">${escape(s.display_name)}</div>
+          <div class="buddy-tile__name">${escapeHtml(s.display_name)}</div>
           <div class="buddy-tile__mutual">${s.mutual_count} mutual</div>
           <button class="btn btn-xs btn-primary mt-1"
                   onclick="window.feedView._addBuddy('${s.user_id}', this)">Add</button>
@@ -327,7 +327,7 @@
             : `<div class="hot-game-tile__placeholder"><i data-lucide="dice-6"></i></div>`
           }
           <div class="hot-game-tile__body">
-            <div class="hot-game-tile__name">${escape(entry.game.name)}</div>
+            <div class="hot-game-tile__name">${escapeHtml(entry.game.name)}</div>
             <div class="hot-game-tile__plays">${entry.last_played_at ? "Last: " + formatDate(entry.last_played_at) : "Never played"}</div>
           </div>
           ${window.renderExpansionBadge(expCount)}
@@ -432,7 +432,7 @@
           ),
         }];
       } else {
-        tokens = [{ isViewer: false, html: escape("Someone") }];
+        tokens = [{ isViewer: false, html: escapeHtml("Someone") }];
       }
     }
     // Float "You" to the front.
@@ -453,7 +453,7 @@
     // count games. The session header is the only place either appears
     // now that the card front dropped its "User played Game" line.
     const trailing = gameNameForSingle
-      ? `played ${escape(gameNameForSingle)}`
+      ? `played ${escapeHtml(gameNameForSingle)}`
       : `played ${gameCount} games`;
     return `${who} ${trailing}`;
   }
@@ -468,8 +468,8 @@
     const label = isViewer ? "You" : (participant.display_name || "Someone");
     const route = isViewer
       ? `window.router.go('profile-self')`
-      : `window.router.go('profile-other',{userId:'${escape(participant.user_id)}'})`;
-    return `<a class="play-session__name" onclick="event.stopPropagation(); ${route}">${escape(label)}</a>`;
+      : `window.router.go('profile-other',{userId:'${escapeHtml(participant.user_id)}'})`;
+    return `<a class="play-session__name" onclick="event.stopPropagation(); ${route}">${escapeHtml(label)}</a>`;
   }
 
   function formatSessionDate(iso) {
@@ -492,11 +492,6 @@
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
-  function escape(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
   function initialsOf(name) {
     const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
