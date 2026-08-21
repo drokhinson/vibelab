@@ -114,7 +114,6 @@
       // returns null for unknown names and go() skips pushState in that case.
       return [
         { name: "auth",                pattern: /^\/auth\/?$/,                    build: () => "/auth" },
-        { name: "join-session",        pattern: /^\/join\/?$/,                    build: () => "/join" },
         { name: "reference-guide-add", pattern: /^\/game\/([^/]+)\/chapters\/?$/,
           consume: ["gameId"],
           extract: (m) => ({ gameId: decodeURIComponent(m[1]) }),
@@ -126,7 +125,11 @@
         { name: "session-viewer",
           consume: ["code"],
           build: (p) => p.code ? `/play/${encodeURIComponent(p.code)}` : "/play" },
-        { name: "log-play",            pattern: /^\/play\/?$/,                    build: () => "/play" },
+        // /join is the retired standalone Join screen — its code entry and
+        // active-session list are the bottom half of the Play tab now. Kept as
+        // an alias so shared links and bookmarks still land somewhere sane.
+        { name: "log-play",            pattern: /^\/(play|join)\/?$/,             build: () => "/play" },
+        { name: "game-explorer",       pattern: /^\/games\/?$/,                   build: () => "/games" },
         { name: "game-detail",         pattern: /^\/game\/([^/]+)\/?$/,
           consume: ["gameId"],
           extract: (m) => ({ gameId: decodeURIComponent(m[1]) }),

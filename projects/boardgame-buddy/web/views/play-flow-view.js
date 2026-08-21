@@ -584,7 +584,7 @@
       // as spectators, so the lobby is effectively always "open"). Settle
       // Up drops it — the game is over.
       // Prefer the live lobby's code; on first paint after a reopen (cold
-      // reload, nav back, or join-session "Reopen" path) the persisted
+      // reload, nav back, or the join panel's "Reopen" path) the persisted
       // draft already carries the same code, so fall back to it instead
       // of flashing "— — — — —" until _ensureLobbyOpen resolves.
       const code = (this._lobby && this._lobby.code) || (this._ps && this._ps.code) || null;

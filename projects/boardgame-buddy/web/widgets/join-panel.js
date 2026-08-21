@@ -1,37 +1,65 @@
-// views/join-session-view.js — Session select for non-hosts.
+// widgets/join-panel.js — Join-a-session panel (code entry + active sessions).
 //
-// Shows a 5-char code input and a list of joinable sessions: ones where
-// the viewer is already a participant (rejoin after disconnect) OR where
-// the host is one of the viewer's accepted buddies. Polls every 10s so
-// new sessions appear without a refresh.
+// The bottom half of the Play tab. Shows a 5-char code input and a list of
+// joinable sessions: ones where the viewer is already a participant (rejoin
+// after a disconnect) OR where the host is one of the viewer's accepted
+// buddies. Polls every 10s so new sessions appear without a refresh.
+//
+// Lifted out of the old views/join-session-view.js when Join moved from a
+// standalone /join screen onto the Play tab. It's a widget rather than a view
+// because it shares a screen with the host chooser: it owns a host element and
+// repaints only that, so a poll tick never rebuilds the cards above it or
+// wipes a half-typed code (see .claude/rules/web-frontend.md, "re-render
+// surgically, not the whole screen").
+//
+// Used by:
+//   - views/log-play-view.js (Play tab, Join section)
+//
+// Single instance, hoisted to window.joinPanel in init.js so the inline
+// onclick handlers below can find it.
 
 (function () {
   const POLL_MS = 10000;
 
-  class JoinSessionView extends window.View {
+  class JoinPanel {
     constructor() {
-      super("join-session");
+      this._host = null;
       this._sessions = null;
       this._loading = false;
       this._error = null;
       this._joining = false;
       this._joinCode = "";
       this._pollHandle = null;
+      this._onVisibility = () => {
+        if (!document.hidden) this._pollTick();
+      };
     }
 
-    async onMount() {
-      // The poll skips its ticks while the tab is hidden — fire one
-      // immediate catch-up tick when it becomes visible again. Auto-removed
-      // on unmount via listenDom.
-      this.listenDom("visibilitychange", () => {
-        if (!document.hidden) this._pollTick();
-      });
-      await this._load();
+    // Mount into `hostEl` and start polling. Idempotent for the same element
+    // so a caller re-render that left the host in place doesn't restart the
+    // poll; the Play tab's full render() replaces the host, in which case we
+    // repaint into the new one while keeping session list + typed code.
+    mount(hostEl) {
+      if (!hostEl) return;
+      if (this._host === hostEl) {
+        this.render();
+        return;
+      }
+      const first = this._host == null;
+      this._host = hostEl;
+      this.render();
+      if (!first) return;
+      // The poll skips its ticks while the tab is hidden — fire one immediate
+      // catch-up tick when it becomes visible again.
+      document.addEventListener("visibilitychange", this._onVisibility);
+      this._load();
       this._startPolling();
     }
 
-    async onUnmount() {
+    unmount() {
       this._stopPolling();
+      document.removeEventListener("visibilitychange", this._onVisibility);
+      this._host = null;
     }
 
     async _load() {
@@ -56,9 +84,9 @@
     }
 
     async _pollTick() {
-      // Hidden tab: skip the fetch — the visibilitychange listener (onMount)
-      // fires one catch-up tick the moment the tab is visible again.
-      if (document.hidden) return;
+      // Not on screen, or hidden tab: skip the fetch — the visibilitychange
+      // listener fires one catch-up tick the moment the tab is visible again.
+      if (!this._host || document.hidden) return;
       try {
         const resp = await window.PlaySession.listJoinable();
         const next = (resp && resp.sessions) || [];
@@ -90,16 +118,16 @@
     }
 
     render() {
+      const el = this._host;
+      if (!el) return;
       const sessions = this._sessions || [];
-      this.container.innerHTML = `
-        <header class="cascade-back-row">
-          <button class="btn btn-ghost btn-sm" onclick="window.router.back('log-play')">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-          </button>
-          <h1 class="font-display cascade-back-row__title">Join a game</h1>
-          <span></span>
-        </header>
+      // A poll tick can land mid-typing. Nothing above survives innerHTML, so
+      // snapshot the caret and put it back once the new markup is in.
+      const active = document.activeElement;
+      const hadFocus = !!(active && active.id === "join-code-input");
+      const caret = hadFocus ? active.selectionStart : null;
 
+      el.innerHTML = `
         <section class="cascade-card">
           <label class="cascade-card__label">Enter a host's code</label>
           <div class="cascade-join__code-row">
@@ -109,10 +137,10 @@
                    maxlength="5"
                    autocapitalize="characters"
                    value="${escapeAttr(this._joinCode)}"
-                   oninput="window.joinSessionView._joinCode = this.value.toUpperCase();" />
+                   oninput="window.joinPanel._joinCode = this.value.toUpperCase();" />
             <button class="btn btn-primary"
                     ${this._joining ? "disabled" : ""}
-                    onclick="window.joinSessionView._joinByCode()">
+                    onclick="window.joinPanel._joinByCode()">
               ${this._joining ? "Joining…" : "Join"}
             </button>
           </div>
@@ -121,12 +149,12 @@
 
         <section class="cascade-join__list-wrap">
           <div class="cascade-join__list-head">
-            <h2 class="cascade-join__list-title">Active sessions</h2>
+            <h3 class="cascade-join__list-title">Active sessions</h3>
             <button class="cascade-join__refresh"
                     aria-label="Refresh active sessions"
                     title="Refresh"
                     ${this._loading ? "disabled" : ""}
-                    onclick="window.joinSessionView._load()">
+                    onclick="window.joinPanel._load()">
               <i data-lucide="refresh-cw" class="w-4 h-4 ${this._loading ? "cascade-join__refresh-spin" : ""}"></i>
             </button>
           </div>
@@ -139,7 +167,15 @@
                  </ul>`}
         </section>
       `;
-      this.refreshIcons();
+      if (window.lucide) window.lucide.createIcons({ root: el });
+
+      if (hadFocus) {
+        const input = document.getElementById("join-code-input");
+        if (input) {
+          input.focus();
+          try { input.setSelectionRange(caret, caret); } catch (_) {}
+        }
+      }
     }
 
     _renderEmpty() {
@@ -166,7 +202,7 @@
       if (s.is_host_buddy && !s.is_participant) badges.push(`<span class="cascade-join__badge">Buddy</span>`);
       return `
         <li class="cascade-card cascade-join__row"
-            onclick="window.joinSessionView._joinSession('${escapeAttr(s.code)}')">
+            onclick="window.joinPanel._joinSession('${escapeAttr(s.code)}')">
           ${thumb}
           <div class="cascade-join__row-body">
             <div class="cascade-join__row-top">
@@ -183,7 +219,7 @@
             ${badges.length ? `<div class="cascade-join__row-badges">${badges.join("")}</div>` : ""}
           </div>
           <button type="button" class="btn btn-primary cascade-join__row-action"
-                  onclick="event.stopPropagation(); window.joinSessionView._joinSession('${escapeAttr(s.code)}')">
+                  onclick="event.stopPropagation(); window.joinPanel._joinSession('${escapeAttr(s.code)}')">
             ${spectate ? "Spectate" : "Join"}
           </button>
         </li>
@@ -235,5 +271,5 @@
     }
   }
 
-  window.JoinSessionView = JoinSessionView;
+  window.JoinPanel = JoinPanel;
 })();

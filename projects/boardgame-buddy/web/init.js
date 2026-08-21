@@ -14,7 +14,7 @@
   window.feedView        = new window.FeedView();
   window.logPlayView     = new window.LogPlayView();
   window.playFlowView    = new window.PlayFlowView();
-  window.joinSessionView = new window.JoinSessionView();
+  window.gameExplorerView = new window.GameExplorerView();
   window.gameDetailView  = new window.GameDetailView();
   window.referenceGuideAddView = new window.ReferenceGuideAddView();
   window.profileSelfView = new window.ProfileSelfView();
@@ -27,12 +27,17 @@
   window.settingsView    = new window.SettingsView();
   window.adminView       = new window.AdminView();
 
+  // Widget singleton — the Play tab's Join half. Hoisted here (rather than
+  // owned by LogPlayView) so its inline onclick handlers resolve the same way
+  // every view instance does.
+  window.joinPanel       = new window.JoinPanel();
+
   window.router.register("splash",        window.splashView);
   window.router.register("auth",          window.authView);
   window.router.register("feed",          window.feedView);
   window.router.register("log-play",      window.logPlayView);
   window.router.register("play-flow",     window.playFlowView);
-  window.router.register("join-session",  window.joinSessionView);
+  window.router.register("game-explorer", window.gameExplorerView);
   window.router.register("game-detail",   window.gameDetailView);
   window.router.register("reference-guide-add", window.referenceGuideAddView);
   window.router.register("profile-self",  window.profileSelfView);
