@@ -3966,14 +3966,15 @@ main[data-view="session-viewer"].hidden {
   border-color: var(--polaroid-line);
 }
 
-/* ── Host/Join chooser ───────────────────────────────────────────────────── */
+/* ── Play chooser ────────────────────────────────────────────────────────── */
 .cascade-chooser__header { padding: 12px 4px 18px; text-align: center; }
 .cascade-chooser__header h1 {
+  /* No lead paragraph under it any more, so the header's own 18px bottom
+     padding carries the gap to the cards — no margin needed here. */
   font-size: 28px;
-  margin: 0 0 6px;
+  margin: 0;
   color: oklch(var(--bc));
 }
-.cascade-chooser__lead { font-size: 13px; opacity: 0.7; }
 .cascade-chooser__resume {
   background: var(--polaroid-bg);
   color: var(--polaroid-ink);
