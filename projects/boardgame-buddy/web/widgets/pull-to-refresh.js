@@ -43,6 +43,23 @@
 // top was reached rather than from where the finger landed: _touchMove
 // re-baselines while the document is still scrolled, so flinging to the top
 // and continuing to drag raises the control, exactly as it would natively.
+//
+// HOW TO TEST A CHANGE IN HERE
+// ----------------------------
+// With the gesture that breaks it, which is not the obvious one. A clean
+// upward drag exercises none of this: dy <= 0 on the very first move, so the
+// state machine bails before it can do anything wrong, and the page scrolls no
+// matter how broken the widget is. The gesture that matters is the one a thumb
+// actually makes — roll ~25px DOWN as it lands, then flick up — started at
+// scrollTop 0, which is where the feed opens.
+//
+// That distinction is not academic. Measured in headless Chrome against the
+// real feed: on the build that first shipped this widget, a clean flick from
+// the top scrolled 315px while the same flick preceded by a 25px roll scrolled
+// 0px, from every touch point on the screen. Two fixes were verified green
+// against that build because both harnesses only ever drove a clean drag. If a
+// change here is "verified" and the number for a settle-then-flick from the top
+// is missing, it has not been verified.
 
 (function () {
   const MAX_PULL = 96;        // hard stop for the drag, in px
