@@ -719,7 +719,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 600;
 }
 
-/* Title row: large titlefield + Import-.md upload button. */
+/* Title row. Kept as a flex row (the field is its only child today) so the
+   titlefield's flex:1 still resolves and a future sibling drops in cleanly. */
 .chapter-edit__titlerow {
   display: flex;
   gap: 0.5rem;
@@ -744,23 +745,78 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: oklch(var(--b1));
 }
 
+/* Draft-source row (create mode only): Import .md | Generate with AI.
+   Sits below the type pills because Generate needs a chapter type before it
+   can do anything. Equal halves, mirroring the Write/Preview segmented
+   control below it. */
+.chapter-edit__genrow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.chapter-edit__genrow > * { flex: 1; }
+
 .chapter-edit__import {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  justify-content: center;
+  gap: 0.35rem;
+  /* min-height, not a fixed height: this used to inherit its size from the
+     title row's align-items:stretch, and now has to hold a 44px tap target
+     on its own. */
+  min-height: 44px;
   padding: 0 12px;
   background: transparent;
   border: 1.5px dashed rgba(201, 146, 42, 0.55);
   border-radius: 11px;
   color: var(--accent);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
   white-space: nowrap;
 }
 .chapter-edit__import:hover { background: rgba(201, 146, 42, 0.1); }
+.chapter-edit__import:active { transform: scale(0.97); }
 .chapter-edit__import input[type="file"] { display: none; }
+
+/* The AI draft button reads as the more prominent of the two — solid gold
+   wash against Import's dashed outline. */
+.chapter-edit__genbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  padding: 0 12px;
+  background: rgba(201, 146, 42, 0.16);
+  border: 1.5px solid var(--accent);
+  border-radius: 11px;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
+  white-space: nowrap;
+}
+.chapter-edit__genbtn:hover:not(:disabled) {
+  background: rgba(201, 146, 42, 0.28);
+  border-color: var(--accent-hover);
+}
+.chapter-edit__genbtn:active:not(:disabled) { transform: scale(0.97); }
+/* Greyed out until a chapter type is picked — matches the disabled Save
+   button, which is blocked on the same condition. */
+.chapter-edit__genbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* Pending state: the label already reads "Generating…", so the pulse just
+   signals liveness without needing a spinner element. */
+.chapter-edit__genbtn--busy { animation: chapterGenPulse 1.4s ease-in-out infinite; }
+@keyframes chapterGenPulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.85; }
+}
 
 /* Horizontal type-pill scroller (replaces the cramped 6-up grid). */
 .chapter-edit__typescroll {
