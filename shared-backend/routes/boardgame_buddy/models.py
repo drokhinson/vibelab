@@ -383,6 +383,21 @@ class ChapterCreate(BaseModel):
     layout: str = "text"
 
 
+class ChapterGenerateRequest(BaseModel):
+    """Ask the AI to draft a chapter of this type for the game in the path."""
+
+    chapter_type: str
+
+
+class ChapterGenerateResponse(BaseModel):
+    """A draft only — the editor fills its form with this and the user reviews,
+    edits, and saves. Nothing is persisted by the generate call itself."""
+
+    chapter_type: str
+    title: str
+    content: str
+
+
 class ChapterUpdate(BaseModel):
     chapter_type: Optional[str] = None
     title: Optional[str] = None

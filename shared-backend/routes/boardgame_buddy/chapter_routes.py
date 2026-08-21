@@ -7,11 +7,13 @@ game and add the ones they want. No curated defaults, no review queue
 — moderation is reactive via per-chapter reports.
 """
 
+import logging
 from typing import Any, Optional
 
 from fastapi import Depends, Header, HTTPException, Path, Query, Response
 
 from db import get_supabase
+from gemini import GeminiError
 
 from . import router
 from .dependencies import (
@@ -23,6 +25,8 @@ from .dependencies import (
 from .models import (
     AddChapterRequest,
     ChapterCreate,
+    ChapterGenerateRequest,
+    ChapterGenerateResponse,
     ChapterPoolItem,
     ChapterReportCreate,
     ChapterReportResponse,
@@ -32,6 +36,9 @@ from .models import (
     MessageResponse,
     MyGuideChapterResponse,
 )
+from .services import chapter_ai
+
+logger = logging.getLogger(__name__)
 
 
 _CHAPTER_SELECT = (
@@ -138,6 +145,22 @@ def _validate_chapter_type(sb, chapter_type: str) -> None:
     )
     if not row.data:
         raise HTTPException(status_code=400, detail="Unknown chapter type")
+
+
+def _chapter_type_label(sb, chapter_type: str) -> str:
+    """Validate the chapter type and return its human label in one round-trip.
+
+    The AI prompt wants "Tips & Tricks", not the `tips` slug.
+    """
+    row = (
+        sb.table("boardgamebuddy_chapter_types")
+        .select("id, label")
+        .eq("id", chapter_type)
+        .execute()
+    )
+    if not row.data:
+        raise HTTPException(status_code=400, detail="Unknown chapter type")
+    return row.data[0].get("label") or chapter_type
 
 
 @router.get(
@@ -305,6 +328,56 @@ async def create_chapter(
     return MyGuideChapterResponse(
         **base.model_dump(),
         added_at=added_at or base.updated_at,
+    )
+
+
+@router.post(
+    "/games/{game_id}/chapters/generate",
+    response_model=ChapterGenerateResponse,
+    status_code=200,
+    summary="Draft a chapter with AI",
+)
+async def generate_chapter(
+    body: ChapterGenerateRequest,
+    game_id: str = Path(..., description="Game UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> ChapterGenerateResponse:
+    """Draft a chapter of the given type for the given game — returned for the user to review, not saved."""
+    sb = get_supabase()
+
+    game = (
+        sb.table("boardgamebuddy_games")
+        .select("id, name, year_published, description")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not game.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    row = game.data[0]
+
+    label = _chapter_type_label(sb, body.chapter_type)
+
+    try:
+        title, content = await chapter_ai.generate_chapter(
+            game_name=row.get("name") or "",
+            game_year=row.get("year_published"),
+            game_description=row.get("description"),
+            chapter_type_id=body.chapter_type,
+            chapter_type_label=label,
+        )
+    except GeminiError as exc:
+        # The underlying reason (missing key, safety block, model drift) is in
+        # the api_logs row; the user just needs to know to try again.
+        logger.warning("chapter generation failed for game %s: %s", game_id, exc)
+        raise HTTPException(
+            status_code=502,
+            detail="Couldn't draft a chapter right now — try again in a moment.",
+        ) from exc
+
+    return ChapterGenerateResponse(
+        chapter_type=body.chapter_type,
+        title=title,
+        content=content,
     )
 
 
