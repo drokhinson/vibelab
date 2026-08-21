@@ -1658,76 +1658,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .feed-load-more { display: flex; justify-content: center; padding: 1rem 0; }
 
-/* ── Pull-to-refresh (feed) ───────────────────────────────────────────────
-   Driven by widgets/pull-to-refresh.js: the view container carries the
-   translateY, this indicator rides along on top of it. It's fixed to the
-   viewport and appended to <body> — a transformed ancestor would turn
-   `fixed` into `absolute`, and the view repaints by replacing innerHTML,
-   which would delete a node living inside the container. */
-:root.bgb-ptr-lock,
-:root.bgb-ptr-lock body {
-  /* This rule is the whole of the widget's claim on the gesture — every
-     listener in widgets/pull-to-refresh.js is passive and none of them calls
-     preventDefault, so the browser keeps the scroll and the feed scrolls
-     normally everywhere, always.
-
-     `none` rather than `contain`: contain stops the drag chaining outward
-     (which is what suppresses Chrome Android's own pull-to-refresh) but still
-     lets the document bounce locally, and on iOS that bounce is the same
-     downward motion the pull is already drawing — the content would travel
-     twice. none stops both, leaving a still page for the pull to draw on.
-
-     Applied only while a widget is attached, so the cascade flow (see the
-     play-flow note below) keeps the native behaviour. */
-  overscroll-behavior-y: none;
-}
-
-.bgb-ptr {
-  position: fixed;
-  top: 6px;                 /* the global header is ~52px tall; the pull slides the mark clear of it */
-  left: 50%;
-  z-index: 25;              /* under .bgb-global-header (30) — it emerges from behind it */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  pointer-events: none;
-  transform: translate(-50%, 0);
-  will-change: transform, opacity;
-}
-/* The mark is the bouncing-buddy app icon — it carries its own dark rounded
-   plate and its own <animateTransform> bounce, so it needs no container
-   chrome of its own. It grows into place as the pull approaches the
-   threshold; --ptr-p (0 → 1) is written by the widget on every move. */
-.bgb-ptr__mark {
-  display: block;
-  width: 38px;
-  height: 38px;
-  border-radius: 18%;
-  box-shadow: 0 6px 16px rgb(0 0 0 / 0.45);
-  transform: scale(calc(0.6 + 0.4 * var(--ptr-p, 0)));
-  transition: transform 120ms ease;
-}
-.bgb-ptr[data-state="ready"] .bgb-ptr__mark,
-.bgb-ptr[data-state="busy"] .bgb-ptr__mark,
-.bgb-ptr[data-state="done"] .bgb-ptr__mark { transform: scale(1); }
-.bgb-ptr__mark img { width: 100%; height: 100%; display: block; border-radius: inherit; }
-/* Result flash ("2 new plays" / "You're up to date"). Only this half gets a
-   pill — it's text on the feed background and needs the plate. */
-.bgb-ptr__label {
-  display: none;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.3);
-  font-size: 11.5px;
-  font-weight: 600;
-  color: oklch(var(--bc) / 0.8);
-  white-space: nowrap;
-}
-.bgb-ptr--labeled .bgb-ptr__label { display: block; }
-
 /* Bouncing-buddy loader — used in place of "Loading…" text wherever a
    view is waiting on data. The mark itself animates via SVG <animateTransform>
    so we only style the surround. */
@@ -2280,8 +2210,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      week / Buddies you may know / Time to revisit tiles. It swallows nothing
      today only because the tiles fit inside the padding, leaving
      scrollHeight == clientHeight; a taller tile would have put a gesture trap
-     across those rails. .play-session__scroll and .expansion-reel were given
-     the honest value already; this rail was missed. */
+     across those rails. See the note on .play-session__scroll. */
   overflow-y: hidden;
   scrollbar-width: none; padding: 2px 2px 6px;
   -webkit-overflow-scrolling: touch;
