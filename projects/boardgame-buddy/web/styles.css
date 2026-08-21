@@ -1417,6 +1417,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   padding-bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
 }
 
+/* Flat rectangular tab bar — square corners, edge-to-edge, nothing
+   protruding above the top edge. Three equal-width tabs; the active one is
+   marked by a gold top rule plus gold icon/label, so the bar's silhouette
+   stays a clean rectangle. */
 .bgb-nav {
   position: fixed;
   bottom: 0;
@@ -1427,28 +1431,27 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   height: var(--bgb-nav-height);
   padding-bottom: env(safe-area-inset-bottom);
   border-radius: 0;
-  background: linear-gradient(180deg, #33240F 0%, #1E1308 100%);
-  box-shadow:
-    0 -2px 16px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(245, 220, 142, 0.12),
-    inset 0 0 0 1px rgba(205, 162, 63, 0.18);
+  background: #241809;
+  border-top: 1px solid rgba(205, 162, 63, 0.22);
+  box-shadow: 0 -1px 12px rgba(0, 0, 0, 0.3);
   display: flex;
-  align-items: center;
-  justify-content: space-around;
+  align-items: stretch;
   z-index: 40;
 }
 
 .bgb-nav__tab {
-  flex: 1;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  gap: 4px;
+  position: relative;
   color: rgba(247, 239, 220, 0.55);
   cursor: pointer;
-  padding: 8px 0;
-  border-radius: 16px;
-  margin: 0 14px;
+  padding: 0;
+  border-radius: 0;
+  margin: 0;
   min-height: 44px;
   background: transparent;
   border: none;
@@ -1457,59 +1460,38 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-nav__tab:hover { color: rgba(247, 239, 220, 0.85); }
 .bgb-nav__tab.active {
   color: #F5DC8E;
-  background: rgba(205, 162, 63, 0.14);
+  background: rgba(205, 162, 63, 0.08);
 }
-.bgb-nav__tab.active .bgb-nav__ico svg,
-.bgb-nav__tab.active .bgb-nav__ico i {
-  filter: drop-shadow(0 0 6px rgba(232, 200, 104, 0.45));
+/* Active marker: a 2px gold rule flush with the bar's top edge. Keeps the
+   indicator inside the rectangle instead of floating a pill on top of it. */
+.bgb-nav__tab.active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent, #CDA23F);
 }
 .bgb-nav__ico { display: inline-flex; align-items: center; justify-content: center; }
 .bgb-nav__label { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
 
-.bgb-nav__create {
-  flex: 0 0 auto;
-  width: 60px;
-  height: 60px;
-  margin: 0 6px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 40% 32%, #F5DC8E 0%, #CDA23F 45%, #A87C22 100%);
-  box-shadow:
-    0 6px 16px rgba(168, 124, 34, 0.5),
-    0 0 0 5px oklch(var(--b1)),
-    inset 0 2px 3px rgba(255, 255, 255, 0.5),
-    inset 0 -3px 5px rgba(110, 78, 18, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Play stays the primary action — a gold-filled icon chip rather than a
+   raised disc, so it reads as the CTA without breaking the bar's edge. */
+.bgb-nav__tab--play .bgb-nav__ico {
+  width: 40px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #E8C868 0%, #CDA23F 100%);
   color: #2A1B0E;
-  cursor: pointer;
-  transform: translateY(-16px);
-  position: relative;
-  border: none;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.2s ease;
+  transition: filter 0.18s ease;
 }
-.bgb-nav__create:active { transform: translateY(-16px) scale(0.94); }
-.bgb-nav__create.active {
-  box-shadow:
-    0 8px 22px rgba(232, 200, 104, 0.55),
-    0 0 0 5px oklch(var(--b1)),
-    inset 0 2px 3px rgba(255, 255, 255, 0.6),
-    inset 0 -3px 5px rgba(110, 78, 18, 0.55);
-}
-.bgb-nav__create-ico {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #2A1B0E;
-}
-.bgb-nav__create-label {
-  position: absolute;
-  bottom: -18px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #E8C868;
-  letter-spacing: 0.02em;
+.bgb-nav__tab--play .bgb-nav__ico svg,
+.bgb-nav__tab--play .bgb-nav__ico i { color: #2A1B0E; }
+.bgb-nav__tab--play:hover .bgb-nav__ico { filter: brightness(1.08); }
+.bgb-nav__tab--play:active .bgb-nav__ico { filter: brightness(0.94); }
+.bgb-nav__tab--play.active .bgb-nav__ico {
+  box-shadow: 0 0 0 2px rgba(245, 220, 142, 0.35);
 }
 
 /* ── Tabs — warm gold active state ──────────────────────────────────────────── */
@@ -1560,48 +1542,25 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid oklch(var(--b3));
 }
-.bgb-global-header {
-  /* Compute the title + BGG-mark stack height once so the BGB logo can use
-     it directly. Title is 1.2rem at line-height 1.1 (≈ 1.32rem), the BGG
-     mark image is 12px tall, plus a 2px breathing gap. */
-  --bgb-brand-stack: calc(1.32rem + 14px);
-}
 .bgb-global-header__brand {
   display: flex; align-items: center; gap: 0.55rem;
   text-decoration: none; color: oklch(var(--bc));
   cursor: pointer; min-width: 0;
 }
 .bgb-global-header__logo {
-  /* Square: same height as the title + BGG-mark stack so the logo visually
-     spans both lines. align-self/stretch on <img> tends to lose to the
-     image's intrinsic dimensions, so explicit values are more reliable. */
-  height: var(--bgb-brand-stack);
-  width: var(--bgb-brand-stack);
+  /* Square, sized to match the avatar button on the opposite end so the two
+     ends of the header row balance. */
+  height: 36px;
+  width: 36px;
   border-radius: 0.5rem;
   flex-shrink: 0;
   object-fit: cover;
-}
-.bgb-global-header__text {
-  display: flex; flex-direction: column;
-  align-items: flex-end;   /* push the BGG mark to the right edge */
-  line-height: 1.05; min-width: 0;
 }
 .bgb-global-header__title {
   font-size: 1.2rem; font-weight: 700;
   color: var(--accent);
   white-space: nowrap;
   line-height: 1.1;
-}
-.bgb-global-header__bgg {
-  /* The BGG mark already reads "Powered by BoardGameGeek" so no surrounding
-     copy — just the image, small, right-aligned with the title. */
-  display: inline-block;
-  margin-top: 1px;
-}
-.bgb-global-header__bgg img {
-  height: 12px;
-  width: auto;
-  display: block;
 }
 .bgb-global-header__avatar {
   background: transparent; border: none; padding: 0;
@@ -2672,10 +2631,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* Fixed pager footer for Collection / Wishlist views.
    Docked flush against the top of the bottom tab nav and spans the
-   viewport edge-to-edge. The raised .bgb-nav__create gold disc renders
-   on top (nav z-index 40 > pager 35) and pokes up through the bottom
-   of the strip; the centered "Page N of M" sits above the disc's
-   16px intrusion so the label stays readable. */
+   viewport edge-to-edge. Nothing from the nav protrudes into this strip,
+   so the centered "Page N of M" sits on a clear background. */
 .spoke-pager-footer {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
@@ -3689,9 +3646,8 @@ main[data-view="session-viewer"].hidden {
      column pushes the wrapper to the section's end; the cascade-screen
      `padding-bottom` (--cascade-bottom-pad) is calibrated to the same
      28px value so the natural release point lands exactly on the
-     sticky line — no visible jump. 28px clears the Play disc
-     (translateY -16px above the 64px nav, so disc top sits ~30px
-     above the nav row's vertical center). */
+     sticky line — no visible jump. The 28px is breathing room above
+     the flat nav bar's top edge. */
   position: sticky;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 28px);
   margin-top: auto;
