@@ -725,6 +725,7 @@
       const grid = window.renderRoundGrid(ps.players, "playFlowView", {
         editable: true,
         playMode: mode,
+        headerNames: true,
         showSign: window.RoundGridSign.enabled(),
         getCellValue: (p, r) => this._cellValue(p, r),
         getPlayerTotal: (p) => this._playerTotal(p),
