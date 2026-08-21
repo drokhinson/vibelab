@@ -4073,6 +4073,20 @@ main[data-view="session-viewer"].hidden {
   align-items: center;
   justify-content: center;
 }
+/* "Another Round" carries the last game's box art in the icon slot instead
+   of a Lucide glyph — the accent fill would show through around the photo,
+   so drop it. Only applied when there IS art; without it the slot keeps the
+   accent square its white dice-6 fallback needs for contrast. */
+.cascade-chooser__card-icon--photo {
+  background: var(--polaroid-line);
+  overflow: hidden;
+}
+.cascade-chooser__card-icon--photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .cascade-chooser__card-title {
   font-family: var(--font-polaroid);
   font-weight: 700;
@@ -4082,6 +4096,15 @@ main[data-view="session-viewer"].hidden {
   font-size: 12.5px;
   color: var(--polaroid-muted);
   line-height: 1.35;
+}
+/* A full table's worth of names has to stop somewhere — two lines, then
+   ellipsis, so a 6-player roster can't stretch the card past its siblings. */
+.cascade-chooser__card-body--players {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 /* ── Join Session view ───────────────────────────────────────────────────── */

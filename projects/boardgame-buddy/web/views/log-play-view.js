@@ -42,6 +42,9 @@
       this._loading = false;
       this._error = null;
       this._scopeAutoSwitched = false;
+      // Most recent play (own or participated), from the profile bundle.
+      // Backs the "Another Round" chooser card; null hides that card.
+      this._lastPlay = null;
       // Per-game owned/wishlist/played status map. Populated from
       // Collection.myStatusMap() on mount; patched live by status-changed
       // CustomEvents fired from the status-picker.
@@ -74,12 +77,17 @@
         else this._collectionMap[gameId] = status;
         this.render();
       });
+      // Sync peek first so the "Another Round" card is in the very first
+      // paint rather than popping in and shoving the grid down. Bootstrap
+      // warms this bundle at login, so it's normally a hit.
+      this._lastPlay = this._recentPlayFrom(window.Profile.cachedBundle());
       try {
         this._collectionMap = (await window.Collection.myStatusMap()) || {};
       } catch (_) {
         this._collectionMap = {};
       }
       this.render();
+      this._refreshLastPlay();
       await this._loadGames();
       // Honor `focus=find` query param from the Profile FAB → scroll the
       // section into view after the first render completes.
@@ -144,15 +152,24 @@
       return n;
     }
 
-    render() {
+    // The persisted draft, but only when it's still worth resuming (open
+    // lobby, not finalized/abandoned). Drives the resume banner, and gates
+    // the overwrite confirm in _anotherRound().
+    _resumableSession() {
       const ps = window.PlaySession.load();
-      const resumable =
+      const ok =
         ps &&
         ps.isActive() &&
         ps.code &&
         ps.phase &&
         ps.phase !== "finalized" &&
         ps.phase !== "abandoned";
+      return ok ? ps : null;
+    }
+
+    render() {
+      const ps = this._resumableSession();
+      const resumable = !!ps;
       const game = resumable ? ps.gameSnapshot : null;
 
       this.container.innerHTML = `
@@ -201,6 +218,8 @@
             <span class="cascade-chooser__card-title">Join a game</span>
             <span class="cascade-chooser__card-body">Enter a code or join a buddy.</span>
           </button>
+
+          ${this._renderAnotherRoundCard()}
         </div>
 
         <hr class="lp-divider" />
@@ -381,6 +400,102 @@
       if (ps.code) {
         window.PlaySession.updateLobby(ps.code, { gameId: g.id }).catch(() => {});
       }
+      window.router.go("play-flow");
+    }
+
+    // ── Another Round ──────────────────────────────────────────────────────
+
+    _recentPlayFrom(bundle) {
+      const plays = bundle && bundle.recent_plays;
+      return (Array.isArray(plays) && plays[0]) || null;
+    }
+
+    // SWR refresh behind the sync peek in onMount. Only re-renders when the
+    // top play actually changed, so the usual cache hit costs nothing.
+    async _refreshLastPlay() {
+      let next = null;
+      try {
+        next = this._recentPlayFrom(await window.Profile.bundle());
+      } catch (_) {
+        return;
+      }
+      const before = this._lastPlay && this._lastPlay.id;
+      if ((next && next.id) === before) return;
+      this._lastPlay = next;
+      // Fire-and-forget, so it can land after the user has navigated away —
+      // don't paint into a container this view no longer owns. onMount's
+      // sync peek picks the refreshed value up on the next visit.
+      if (!this._mounted) return;
+      this.render();
+    }
+
+    // Third chooser card: replay the last game with the same table. Only
+    // rendered when there IS a last play — a brand-new account still sees
+    // just Host and Join. The 48px slot carries the game's box art rather
+    // than a Lucide glyph; renderGamePolaroid() is deliberately not reused
+    // here, it's a full grid tile (big photo + caption + status badge), not
+    // an avatar-sized mark.
+    _renderAnotherRoundCard() {
+      const p = this._lastPlay;
+      if (!p || !p.game_id) return "";
+      const names = (p.players || []).map((x) => x.name).filter(Boolean);
+      const art = p.game_thumbnail;
+      return `
+        <button class="cascade-chooser__card cascade-chooser__card--again"
+                onclick="window.logPlayView._anotherRound()">
+          <span class="cascade-chooser__card-icon${art ? " cascade-chooser__card-icon--photo" : ""}">
+            ${art
+              ? `<img src="${escapeHtml(art)}" alt="" loading="lazy" />`
+              : `<i data-lucide="dice-6" class="w-7 h-7"></i>`}
+          </span>
+          <span class="cascade-chooser__card-title">Another Round</span>
+          <span class="cascade-chooser__card-body cascade-chooser__card-body--players">
+            ${names.length ? escapeHtml(names.join(", ")) : "Same game, fresh scores."}
+          </span>
+        </button>
+      `;
+    }
+
+    // Stages the previous game + roster into a fresh draft and drops the
+    // user on Gather, exactly like the wrap-up card's "Another round?".
+    // Same staging contract as _pickFromGrid(): PlayFlowView.onMount() reads
+    // PlaySession.load() from localStorage, so persist() before navigating.
+    async _anotherRound() {
+      const p = this._lastPlay;
+      if (!p) return;
+
+      // A new round replaces the persisted draft, so an in-progress session
+      // has to be closed out deliberately — same gate and same remote
+      // abandon as _discard().
+      const open = this._resumableSession();
+      if (open) {
+        const ok = await window.PolaroidPopup.confirm({
+          title: "Start a new round?",
+          body: "Your session in progress will be abandoned and its lobby closed.",
+          confirmLabel: "Start new round",
+          cancelLabel: "Keep playing",
+        });
+        if (!ok) return;
+        if (open.code) {
+          try {
+            await window.PlaySession.advancePhase(open.code, "abandoned");
+          } catch (_) {}
+        }
+        open.clear();
+      }
+
+      // rulebook_url / is_expansion aren't on a play row. Bootstrap warms the
+      // game bundle for owned games, so this is usually a free sync hit; when
+      // it misses the guide link just resolves later in the host flow.
+      const cached = window.bgbCache && window.bgbCache.get("game.bundle", p.game_id);
+      const seed = window.PlaySession.seedFromPlayRow(p, (cached && cached.game) || {});
+      if (!seed) return;
+
+      const ps = new window.PlaySession({ ...seed, phase: "gather" });
+      ps.persist();
+      window.store.set("activePlay", ps);
+      // Same reference-guide warm-up the grid picker does.
+      window.Chapter.prefetchMyChapters(ps.gameId);
       window.router.go("play-flow");
     }
 

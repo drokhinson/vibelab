@@ -51,6 +51,19 @@
       );
     },
 
+    /**
+     * Synchronous peek at an already-cached bundle (or null). Mirrors
+     * Game.cachedSearch() — lets a view paint from the copy bootstrap warmed
+     * at login instead of popping content in after the SWR round-trip.
+     */
+    cachedBundle(targetUserId) {
+      if (!window.bgbCache) return null;
+      const me = window.store.get("user");
+      const viewerId = me && me.id;
+      if (!viewerId) return null;
+      return window.bgbCache.get(NS, _key(viewerId, targetUserId)) || null;
+    },
+
     /** Invalidate the bundle for one (viewer, target) pair, or all when omitted. */
     invalidate(targetUserId) {
       if (targetUserId == null) {
