@@ -1462,12 +1462,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: #F5DC8E;
   background: rgba(205, 162, 63, 0.08);
 }
-/* Active marker: a 2px gold rule flush with the bar's top edge. Keeps the
-   indicator inside the rectangle instead of floating a pill on top of it. */
+/* Active marker: a 2px gold rule underlining the selected tab. Keeps the
+   indicator inside the rectangle instead of floating a pill on top of it.
+   Anchored to the tab's own bottom edge, which sits above the bar's
+   env(safe-area-inset-bottom) padding — so on a device with a home
+   indicator the rule underlines the label rather than stranding itself
+   at the bottom of the inset gap. */
 .bgb-nav__tab.active::before {
   content: "";
   position: absolute;
-  top: 0;
+  bottom: 0;
   left: 0;
   right: 0;
   height: 2px;
