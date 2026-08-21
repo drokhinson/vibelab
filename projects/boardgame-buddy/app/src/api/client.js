@@ -127,8 +127,11 @@ function csv(ids) {
   return ids && ids.length ? ids.join(',') : undefined;
 }
 
+// Every method here has a call site. A wrapper with no caller is how a route
+// that no longer exists stays invisible until it 404s in someone's hands, so
+// prune rather than keep "just in case" — and there is deliberately no `raw`
+// escape hatch, because a route reachable outside this list can't be audited.
 export const api = {
-  raw: { get, post, put, patch, del },
   formatErrorDetail,
 
   // ── Bootstrap ──────────────────────────────────────────────────────────
@@ -145,24 +148,15 @@ export const api = {
   becomeAdmin: (admin_key) => post('/profile/become-admin', { admin_key }),
   searchProfiles: (q) => get('/profiles/search', { q }),
   publicProfile: (userId) => get(`/users/${userId}/profile`),
-  profileBundle: (targetUserId, { colPerPage = 12, playsPerPage = 10 } = {}) =>
-    get('/profile/bundle', {
-      target_user_id: targetUserId || undefined,
-      col_per_page: colPerPage,
-      plays_per_page: playsPerPage,
-    }),
 
   // ── Stats ──────────────────────────────────────────────────────────────
   myStats: () => get('/users/me/stats'),
   userStats: (userId) => get(`/users/${userId}/stats`),
 
   // ── Feed ───────────────────────────────────────────────────────────────
+  // The hot-games / suggested-buddies / featured-from-collection rails are
+  // embedded in this response; they have no standalone endpoints.
   feed: ({ cursor, limit = 20 } = {}) => get('/feed', { cursor, limit }),
-  hotGames: ({ windowDays = 7, limit = 10 } = {}) =>
-    get('/hot-games', { window_days: windowDays, limit }),
-  suggestedBuddies: ({ limit = 10 } = {}) => get('/suggestions/buddies', { limit }),
-  featuredFromCollection: ({ daysSince = 60, limit = 5 } = {}) =>
-    get('/suggestions/featured-from-collection', { days_since: daysSince, limit }),
 
   // ── Search ─────────────────────────────────────────────────────────────
   // Expansions are excluded from every source by default (migration 041) —
@@ -174,19 +168,15 @@ export const api = {
       include_bgg: includeBgg ? 'true' : 'false',
       include_expansions: includeExpansions ? 'true' : 'false',
     }),
-  searchBgg: (query, { includeExpansions = true } = {}) =>
-    get('/games/search-bgg', { query, include_expansions: includeExpansions ? 'true' : 'false' }),
 
   // ── Games ──────────────────────────────────────────────────────────────
-  games: (params = {}) => get('/games', params),
-  game: (id) => get(`/games/${id}`),
+  // Game Detail reads the bundle, which carries the game, its expansions and
+  // its recent plays — hence no plain /games/{id}, /plays or /play-count here.
   gameBundle: (id, { playsLimit = 5 } = {}) => get(`/games/${id}/bundle`, { plays_limit: playsLimit }),
   recentlyPlayedGames: ({ limit = 6 } = {}) => get('/games/recently-played', { limit }),
+  // Idempotent: returns the pre-existing row when the bgg_id is already in
+  // the catalog, so no lookup-first round trip.
   importBgg: (bggId) => post(`/games/import-bgg/${bggId}`),
-  lookupByBgg: (bggId) => get(`/games/lookup-by-bgg/${bggId}`),
-  gameMechanics: () => get('/games/mechanics'),
-  gamePlays: (gameId) => get(`/games/${gameId}/plays`),
-  gamePlayCount: (gameId) => get(`/games/${gameId}/play-count`),
 
   // ── Expansions ─────────────────────────────────────────────────────────
   expansions: (baseId) => get(`/games/${baseId}/expansions`),
@@ -201,7 +191,6 @@ export const api = {
   // ── Collection ─────────────────────────────────────────────────────────
   collection: (status) => get('/collection', { status }),
   collectionGrid: (params = {}) => get('/collection/grid', params),
-  collectionShelf: (params = {}) => get('/collection/shelf', params),
   addToCollection: (gameId, status) => post('/collection', { game_id: gameId, status }),
   updateCollection: (gameId, status) => patch(`/collection/${gameId}`, { status }),
   removeFromCollection: (gameId) => del(`/collection/${gameId}`),
@@ -209,7 +198,6 @@ export const api = {
   // ── Plays ──────────────────────────────────────────────────────────────
   plays: (params = {}) => get('/plays', params),
   play: (id) => get(`/plays/${id}`),
-  playFilterOptions: () => get('/plays/filter-options'),
   createPlay: (payload) => post('/plays', payload),
   updatePlay: (id, payload) => put(`/plays/${id}`, payload),
   // Writes just the one column. Attaching through updatePlay instead is a
@@ -250,7 +238,6 @@ export const api = {
   removeParticipant: (code, participantId) => del(`/sessions/${code}/participants/${participantId}`),
   updateSession: (code, gameId) => patch(`/sessions/${code}`, { game_id: gameId || null }),
   updateSessionPhase: (code, phase) => patch(`/sessions/${code}/phase`, { phase }),
-  abandonSession: (code) => del(`/sessions/${code}`),
   finalizeSession: (code, payload) => post(`/sessions/${code}/finalize`, payload),
 
   // ── Chapters (reference guide) ─────────────────────────────────────────
@@ -259,19 +246,15 @@ export const api = {
     get(`/games/${gameId}/chapter-pool`, { q, chapter_type: chapterType, expansion_ids: csv(expansionIds) }),
   myChapters: (gameId, { expansionIds } = {}) =>
     get(`/games/${gameId}/my-chapters`, { expansion_ids: csv(expansionIds) }),
-  createChapter: (gameId, payload) => post(`/games/${gameId}/chapters`, payload),
   addChapter: (gameId, chapterId) => post(`/games/${gameId}/my-chapters`, { chapter_id: chapterId }),
   removeChapter: (gameId, chapterId) => del(`/games/${gameId}/my-chapters/${chapterId}`),
-  updateChapter: (chapterId, payload) => patch(`/chapters/${chapterId}`, payload),
   deleteChapter: (chapterId) => del(`/chapters/${chapterId}`),
-  reportChapter: (chapterId, reason) => post(`/chapters/${chapterId}/report`, { reason: reason || null }),
 
   // ── BGG sync ───────────────────────────────────────────────────────────
   bggStatus: () => get('/bgg/sync/status'),
   bggLink: (username, password) => post('/bgg/link', { username, password }),
   bggUnlink: () => del('/bgg/link'),
   bggSync: () => post('/bgg/sync', {}),
-  bggProcessPending: () => post('/bgg/sync/process-pending', {}),
 
   // ── Admin ──────────────────────────────────────────────────────────────
   adminChapterReports: (status = 'open') => get('/admin/chapter-reports', { status }),
@@ -281,9 +264,5 @@ export const api = {
   adminRefreshAllImages: () => post('/games/refresh-images'),
   adminSetRulebookUrl: (gameId, rulebookUrl) =>
     patch(`/games/admin/${gameId}/rulebook-url`, { rulebook_url: rulebookUrl || null }),
-  adminSetExpansionColor: (gameId, color) =>
-    patch(`/games/admin/${gameId}/expansion-color`, { color }),
 };
-
-export const BASE_API_URL = BASE_URL;
 export default api;

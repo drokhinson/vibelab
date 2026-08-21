@@ -10,6 +10,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = 'bgb.activeSession';
 
+// The cascade's ordered phases. PlayFlowScreen indexes into this for the
+// pager and the back button, so it lives with the draft rather than in the
+// screen — one list, not two that can disagree.
 export const PHASES = ['gather', 'play', 'settle'];
 
 export function emptyDraft() {
@@ -51,31 +54,4 @@ export async function saveDraft(draft) {
 
 export async function clearDraft() {
   try { await AsyncStorage.removeItem(KEY); } catch {}
-}
-
-// Build the PlayCreate payload the backend expects from a draft + the live
-// score map (host-typed + Realtime joiner cells merged).
-export function toPlayPayload(draft, { scoresByUser } = {}) {
-  const players = (draft.players || []).map((p) => {
-    const roundScores = p.round_scores || (p.user_id && scoresByUser ? scoresByUser[p.user_id] : null);
-    const total = Array.isArray(roundScores)
-      ? roundScores.reduce((s, v) => s + (Number(v) || 0), 0)
-      : p.score;
-    return {
-      name: p.name,
-      user_id: p.user_id || null,
-      is_winner: !!p.is_winner,
-      score: total != null && total !== '' ? Number(total) : null,
-      round_scores: Array.isArray(roundScores) ? roundScores : null,
-    };
-  });
-  return {
-    game_id: draft.game?.id,
-    played_at: new Date().toISOString().slice(0, 10),
-    players,
-    notes: draft.notes || null,
-    photo_url: draft.photoUrl || null,
-    expansion_ids: draft.expansionIds || [],
-    play_mode: draft.playMode || null,
-  };
 }

@@ -16,11 +16,11 @@ import { showPolaroid, updatePolaroid } from '../components/PolaroidPopup';
 import { attachPhoto } from './play/playSave';
 import { useAppActions, useAppState } from '../store/AppContext';
 import usePlaySession from './play/usePlaySession';
+import { PHASES } from '../models/playSession';
 import GatherStep from './play/GatherStep';
 import PlayStep from './play/PlayStep';
 import SettleStep from './play/SettleStep';
 
-const PHASES = ['gather', 'play', 'settle'];
 const TITLES = { gather: 'Gather', play: 'Play', settle: 'Settle Up' };
 
 export default function PlayFlowScreen({ navigation, route }) {

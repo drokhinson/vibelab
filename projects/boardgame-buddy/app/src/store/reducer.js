@@ -45,7 +45,6 @@ export function reducer(state, action) {
         feedCursor: p.feed_cursor || null,
         myCollectionMap: pb.status_map || state.myCollectionMap,
         stats: pb.stats || state.stats,
-        profileBundle: p.profile_bundle || state.profileBundle,
         gameBundles: stale ? bundles : { ...state.gameBundles, ...bundles },
         // `?? state` not `|| []` — an absent key must not wipe the seeds the
         // offline path restored from AsyncStorage.

@@ -22,7 +22,6 @@ export const COLORS = {
   textMuted: '#8B8275',
 
   // Warm spectrum accents.
-  warmTaupe: '#8B7355',
   rust: '#A65D2C', // destructive
   rustText: '#E07A5F',
 
@@ -53,15 +52,6 @@ export function gameAccent(game) {
   return game.theme_color || game.expansion_color || '#6B3FA0';
 }
 
-// Translucent wash of a hex color — used for tinted backgrounds behind a
-// game's accent. alpha is a 0-1 float.
-export function withAlpha(hex, alpha) {
-  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
-    .toString(16)
-    .padStart(2, '0');
-  return `${hex}${a}`;
-}
-
 export const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
 export const RADII = { sm: 8, md: 12, lg: 16, xl: 22, pill: 999 };
@@ -76,13 +66,6 @@ export const FONT_SIZES = {
   jumbo: 34,
 };
 
-export const FONT_WEIGHTS = {
-  regular: '400',
-  medium: '500',
-  semibold: '600',
-  bold: '700',
-};
-
 // Font family map → @expo-google-fonts names loaded in MainApp.
 //   sans     = Poppins        (UI chrome, buttons, body)
 //   display  = Crimson Text   (page/game/profile titles, stat values)
@@ -94,7 +77,6 @@ export const FONTS = {
   sansSemibold: 'Poppins_600SemiBold',
   sansBold: 'Poppins_700Bold',
   display: 'CrimsonText_600SemiBold',
-  displayRegular: 'CrimsonText_400Regular',
   displayBold: 'CrimsonText_700Bold',
   polaroid: 'Fraunces_600SemiBold',
   polaroidItalic: 'Fraunces_400Regular_Italic',
@@ -142,4 +124,4 @@ export const SHADOWS = {
   },
 };
 
-export default { COLORS, SPACING, RADII, FONT_SIZES, FONT_WEIGHTS, FONTS, MOTION, SHADOWS, gameAccent, withAlpha };
+export default { COLORS, SPACING, RADII, FONT_SIZES, FONTS, MOTION, SHADOWS, gameAccent };

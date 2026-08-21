@@ -18,7 +18,6 @@ export const initialState = {
   feedLoading: false,
   myCollectionMap: {}, // gameId -> 'owned' | 'wishlist' | 'played'
   stats: null,
-  profileBundle: null,
   gameBundles: {}, // gameId -> { bundle, at } (TTL-stamped)
   recentlyPlayedGames: [], // host game-picker seed
   playPartners: { accounts: [], ghosts: [], recent: [] }, // host player-picker seed
