@@ -8,8 +8,8 @@ from ..models import GameSummary
 from ..constants import PlayMode
 
 
-# The JSONB-returning RPCs (migrations 036/037/042) signal gate failures with
-# {"error": "<code>"} instead of raising, so a caller gets one round trip
+# The JSONB-returning RPCs (migrations 036/037/042/046) signal gate failures
+# with {"error": "<code>"} instead of raising, so a caller gets one round trip
 # either way. This maps those codes onto the HTTP statuses the routes have
 # always returned.
 RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
@@ -19,6 +19,16 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "code_allocation_failed": (503, "Could not allocate session code"),
     "forbidden": (403, "Only the host can finalize"),
     "game_not_found": (404, "Game not found"),
+    # Migration 046's host writes. `host_only` is separate from `forbidden`
+    # rather than a reuse: forbidden's detail is finalize-specific, and
+    # widening it would change bgb_finalize_session's message for no reason.
+    "host_only": (403, "Only the host can update the session"),
+    "roster_locked": (409, "Roster is locked once Play starts"),
+    "participant_not_found": (404, "Participant not found"),
+    "cannot_remove_host": (400, "Cannot remove the host"),
+    "display_name_required": (400, "display_name is required"),
+    # `invalid_transition` is deliberately absent: its detail is dynamic
+    # (from/to), so update_phase composes and raises that one itself.
 }
 
 

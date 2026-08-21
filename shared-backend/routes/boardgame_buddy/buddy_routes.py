@@ -23,6 +23,7 @@ from .models import (
     GhostPlayer,
     MessageResponse,
     PlayedWithUser,
+    PlayPartnersResponse,
 )
 from .services import buddy_service, played_with_service
 
@@ -109,6 +110,23 @@ async def delete_buddy_edge(
     """Remove an accepted mutual edge. Either party can call this."""
     buddy_service.unfriend(get_supabase(), user.user_id, edge_id)
     return MessageResponse(message="Unfriended")
+
+
+@router.get(
+    "/play-partners",
+    response_model=PlayPartnersResponse,
+    status_code=200,
+    summary="Buddies + ghosts + played-with in one call (Gather player picker)",
+)
+async def list_play_partners(
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayPartnersResponse:
+    """The three lists the Gather player picker renders, from one RPC.
+
+    The picker used to open all three of the endpoints below in parallel:
+    three requests, twelve DB round trips, three profile lookups for auth.
+    """
+    return played_with_service.fetch_play_partners(get_supabase(), user.user_id)
 
 
 @router.get(

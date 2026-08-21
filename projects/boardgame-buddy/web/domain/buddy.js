@@ -47,24 +47,26 @@
 
     // Combined preload for the gather-player picker. Accounts (accepted buddy
     // edges), ghosts (free-text players the user has logged before), and
-    // recent played-with (real accounts ordered by shared-play count) all
-    // fetched in parallel. SWR-cached: 5min fresh, 30min stale. The picker
-    // dropdown serves from this cache so it opens with zero round-trips
-    // after first hit.
+    // recent played-with (real accounts ordered by shared-play count) in one
+    // call — GET /play-partners is a single bgb_play_partners RPC. This used
+    // to be three parallel requests, each paying its own auth lookup and its
+    // own query fan-out. SWR-cached: 5min fresh, 30min stale, so the picker
+    // dropdown opens with zero round-trips after the first hit.
     static allBuddies() {
       return window.bgbCache.swr(
         CACHE_NS,
         ALL_KEY,
         async () => {
-          const [accounts, ghosts, recent] = await Promise.all([
-            Buddy.list().catch(() => []),
-            Buddy.ghostPlayers().catch(() => []),
-            Buddy.playedWith().catch(() => []),
-          ]);
+          let data;
+          try {
+            data = await window.api.get("/play-partners");
+          } catch (_) {
+            data = null;
+          }
           return {
-            accounts: accounts || [],
-            ghosts: ghosts || [],
-            recent: recent || [],
+            accounts: (data && data.accounts) || [],
+            ghosts: (data && data.ghosts) || [],
+            recent: (data && data.recent) || [],
           };
         },
         { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS },

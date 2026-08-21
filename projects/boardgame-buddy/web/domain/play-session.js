@@ -11,6 +11,23 @@
 (function () {
   const LS_KEY = "bgb_play_session_v1";
 
+  // ── Lobby prefetch channel ─────────────────────────────────────────────────
+  //
+  // POST /sessions used to fire from PlayFlowView.onMount, i.e. only after the
+  // router had swapped views and the Gather screen had painted — so the invite
+  // card sat on its "— — — — —" placeholder for a whole round trip. The mint
+  // is now kicked off in the tap handler instead and parked here; the record
+  // outlives the view swap because producer (chooser) and consumer (play flow)
+  // are different views.
+  //
+  // Module-level and single-slot on purpose: a host may only ever have one
+  // open session (bgb_create_session abandons their others), so holding two
+  // would mean the second silently killed the first.
+  let _prefetch = null;   // { promise, gameId, startedAt }
+  // Past this, assume the user wandered off and the lobby is stale enough that
+  // minting fresh is safer than adopting it.
+  const PREFETCH_MAX_AGE_MS = 30 * 1000;
+
   class PlaySession {
     constructor(initial = {}) {
       this.gameId       = initial.gameId || null;
@@ -131,6 +148,47 @@
       return session;
     }
 
+    /**
+     * Start minting a lobby NOW, before the user has navigated. Call from the
+     * tap handler; PlayFlowView consumes it in _ensureLobbyOpen().
+     *
+     * CAUTION: this is a real write. bgb_create_session abandons every other
+     * open session this host owns, so never call it while the user has a
+     * resumable session — that would close the very lobby they're resuming.
+     */
+    static prefetchLobby({ gameId = null } = {}) {
+      PlaySession.discardPrefetchedLobby();
+      const promise = PlaySession.openLobby({ gameId });
+      // The consumer may never arrive (user backs out), so own the rejection
+      // here — an unhandled one would surface as a console error.
+      promise.catch(() => {});
+      _prefetch = { promise, gameId, startedAt: Date.now() };
+      return promise;
+    }
+
+    /**
+     * One-shot consume. Returns the in-flight (or settled) promise, or null
+     * when there's nothing usable — in which case the caller mints normally.
+     * A record past PREFETCH_MAX_AGE_MS is abandoned rather than adopted.
+     */
+    static takePrefetchedLobby() {
+      const rec = _prefetch;
+      _prefetch = null;
+      if (!rec) return null;
+      if (Date.now() - rec.startedAt > PREFETCH_MAX_AGE_MS) {
+        _abandonMinted(rec);
+        return null;
+      }
+      return rec.promise;
+    }
+
+    /** Drop an unconsumed prefetch and close the lobby it opened. */
+    static discardPrefetchedLobby() {
+      const rec = _prefetch;
+      _prefetch = null;
+      if (rec) _abandonMinted(rec);
+    }
+
     static async joinLobby(code, { displayName } = {}) {
       return window.api.post(`/sessions/${code}/join`, {
         display_name: displayName || null,
@@ -203,6 +261,15 @@
         play_mode: this.playMode || null,
       };
     }
+  }
+
+  // Best-effort cleanup of a lobby nobody entered, so it never shows up in a
+  // buddy's Join chooser. Belt and braces: even if this fails, the row carries
+  // an expires_at and the host's next create abandons it anyway.
+  function _abandonMinted(rec) {
+    rec.promise
+      .then((s) => (s && s.code ? window.api.del(`/sessions/${s.code}`) : null))
+      .catch(() => {});
   }
 
   function rollupScore(p) {

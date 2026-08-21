@@ -90,6 +90,10 @@
       : "play-card--single";
     const flippedAttr = s.flipped ? " is-flipped" : "";
 
+    // The caption's one-row vs two-row layout is a character-count guess at
+    // this point (see renderFront) — re-measure it once this markup lands.
+    scheduleCaptionFit();
+
     return `
       <article class="play-card ${variantClass}${flippedAttr}"
                data-play-id="${escapeAttr(card.play_id)}"
@@ -165,8 +169,9 @@
     //
     // Long winners ("Wolfgang Theresa, britt.michaela, …") get bumped onto
     // their own row below the title where they scroll horizontally inside
-    // the polaroid frame. Threshold is text-only; the photo onload pass
-    // can later flip the class if the rendered text actually overflows.
+    // the polaroid frame. This threshold is a character-count guess so the
+    // first paint is close; `fitCaption` re-measures after paint and is the
+    // authority on which layout the caption ends up in.
     const winnerText = stripTags(winnerBlock);
     const longThreshold = variant === "strip" ? 18 : 28;
     const wrapClass = winnerText.length > longThreshold ? " has-long-meta" : "";
@@ -373,7 +378,48 @@
     if (article && article.classList.contains("play-card--strip")) {
       article.classList.toggle("is-portrait", orient === "portrait");
       article.classList.toggle("is-landscape", orient === "landscape");
+      // Orientation just changed the card's width — the caption may no
+      // longer fit on one row (or may finally fit again).
+      scheduleCaptionFit();
     }
+  }
+
+  // ── Caption fit ─────────────────────────────────────────────────────────────
+  //
+  // The caption is a single row (game name left, winner right) until it stops
+  // fitting, at which point `.has-long-meta` drops the winner onto its own
+  // full-width scroll lane. `renderFront` guesses from the winner's character
+  // count so the first paint is already close, but the true answer depends on
+  // the rendered font and the card's final width (strip cards resize once the
+  // photo's orientation is known), so we re-measure after paint and correct
+  // the guess. Without this, a short winner ("You", "Julia") sitting next to a
+  // long game title used to get clipped mid-glyph at the polaroid's edge.
+  let captionFitQueued = false;
+
+  function scheduleCaptionFit() {
+    if (captionFitQueued || typeof requestAnimationFrame !== "function") return;
+    captionFitQueued = true;
+    requestAnimationFrame(() => {
+      captionFitQueued = false;
+      document.querySelectorAll(".play-card__caption").forEach(fitCaption);
+    });
+  }
+
+  // Always measure from the unwrapped state: the wrapped layout never
+  // overflows, so measuring it as-is would latch two rows forever. Reading
+  // with the class off makes the decision idempotent.
+  function fitCaption(caption) {
+    if (!caption.clientWidth) return;   // hidden view — keep the render guess
+    caption.classList.remove("has-long-meta");
+    const overflows = caption.scrollWidth > caption.clientWidth + 1;
+    caption.classList.toggle("has-long-meta", overflows);
+  }
+
+  window.addEventListener("resize", scheduleCaptionFit);
+  // Polaroid captions are measured in a webfont; a fallback-font measurement
+  // taken before it loads can pick the wrong layout.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(scheduleCaptionFit).catch(() => {});
   }
 
   // ── Single-card re-render (preserves feed scroll) ───────────────────────────

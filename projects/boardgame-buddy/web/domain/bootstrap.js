@@ -121,6 +121,10 @@
       const me = window.store.get("user");
       const ps = [];
       if (window.Feed && window.Feed.refreshFirstPage) ps.push(window.Feed.refreshFirstPage());
+      // The profile bundle is what refreshes the last-play seed behind the
+      // Play tab's "Another Round" card. It's a swr(), so this no-ops inside
+      // the fresh window and only costs a request when it's actually stale.
+      if (window.Profile && window.Profile.bundle) ps.push(window.Profile.bundle().catch(() => {}));
       if (me && window.Stats && window.Stats.for) ps.push(window.Stats.for(me.id).catch(() => {}));
       if (window.Collection && window.Collection.myStatusMap) {
         ps.push(window.Collection.myStatusMap().catch(() => {}));
@@ -133,6 +137,10 @@
       const cache = window.bgbCache;
       const me = payload.current_user;
       const viewerId = me && me.id;
+      const pbRecent = payload.profile_bundle
+        && Array.isArray(payload.profile_bundle.recent_plays)
+        ? payload.profile_bundle.recent_plays
+        : null;
 
       // Profile bundle — keyed viewer|viewer per Profile.bundle() convention.
       if (viewerId && payload.profile_bundle) {
@@ -203,6 +211,15 @@
           payload.play_partners,
           { freshTtl: TTLS.hostSeed.fresh, staleTtl: TTLS.hostSeed.stale },
         );
+      }
+
+      // Last play → the Play tab's "Another Round" card. Its own long-lived
+      // namespace rather than a read through profile_bundle, because that
+      // bundle is DELETED after every save (Play.invalidateDeps) and expires
+      // after 60s — so the card's sync peek used to miss on nearly every
+      // visit and pop in after the network came back.
+      if (pbRecent && window.Play && window.Play.rememberLastPlay) {
+        window.Play.rememberLastPlay(pbRecent[0] || null);
       }
 
       // Collection: route through the existing seedFromBundle hook so the

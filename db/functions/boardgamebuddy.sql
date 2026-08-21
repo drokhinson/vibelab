@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 045 (one visibility rule for play stats)
+-- Last updated: migration 047 (one RPC for the Gather player picker)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -190,8 +190,10 @@
 --   Purpose:    One-call lobby open: abandons the host's stale open sessions,
 --               allocates a unique 5-char Crockford code (≤6 retries against
 --               the partial unique index on (code) WHERE status='open'),
---               seats the host as participant #1. Code alphabet/length
---               mirror constants.py — keep in step.
+--               seats the host as participant #1. The code alphabet and
+--               length live only here — 036/038's comments point at
+--               PLAY_SESSION_CODE_ALPHABET / _LENGTH in constants.py, which
+--               no longer exist.
 
 -- bgb_get_session(p_code TEXT)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired"}
@@ -341,3 +343,91 @@
 --               p_include_expansions defaults to false: expansions aren't
 --               pickable as a session's main game and live in the base game's
 --               expansion section instead.
+
+-- bgb_session_gate(p_code TEXT, p_host UUID, p_require_gather BOOLEAN DEFAULT FALSE)
+--   → JSONB {'session_id', 'host_user_id', 'game_id', 'phase'} or
+--     {"error": "not_found" | "expired" | "host_only" | "roster_locked"}
+--   Defined in: db/migrations/boardgamebuddy/046_session_write_rpcs.sql
+--   Called by:  (SQL-internal only) the five host-write RPCs below
+--   Purpose:    Shared open/expiry/host/phase gate, a one-for-one port of
+--               session_service._fetch_open_session plus each write's own
+--               checks. The expiry path sets `status` only, not `phase`,
+--               matching that helper and bgb_get_session. Deliberately NOT
+--               retrofitted onto bgb_get_session / bgb_join_session: those sit
+--               on the 2s poll path and 046 carries no behavior change there.
+
+-- bgb_add_participant(p_host UUID, p_code TEXT, p_user UUID, p_display_name TEXT)
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
+--     "host_only" | "roster_locked" | "display_name_required"}
+--   Defined in: db/migrations/boardgamebuddy/046_session_write_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (add_participant — POST /sessions/{code}/participants)
+--   Purpose:    Host-seats a buddy (p_user set) or ghost (p_user NULL) in one
+--               call where the service took four. Dedup mirrors
+--               bgb_join_session — by user_id, or case-insensitively by
+--               trimmed display_name — riding the two partial unique indexes,
+--               with unique_violation swallowed so a double-tap is an
+--               idempotent success rather than a 500.
+
+-- bgb_remove_participant(p_host UUID, p_code TEXT, p_participant UUID)
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
+--     "host_only" | "roster_locked" | "participant_not_found" |
+--     "cannot_remove_host"}
+--   Defined in: db/migrations/boardgamebuddy/046_session_write_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (remove_participant — DELETE /sessions/{code}/participants/{id})
+--   Purpose:    Gather-only roster removal, 4 round trips → 1. The host can't
+--               be removed this way; abandoning ends a session.
+
+-- bgb_update_session_game(p_host UUID, p_code TEXT, p_game UUID)
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
+--     "host_only"}
+--   Defined in: db/migrations/boardgamebuddy/046_session_write_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (update_session_game — PATCH /sessions/{code})
+--   Purpose:    Change or clear the lobby's game so joiners see the pick on
+--               their next poll. Idempotent (skips the write when unchanged)
+--               and allowed in any open phase, not just Gather — the host
+--               flow's picker relies on that. p_game NULL clears the pick.
+
+-- bgb_advance_phase(p_host UUID, p_code TEXT, p_phase TEXT, p_transitions JSONB)
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
+--     "host_only"} or {"error": "invalid_transition", "from": …, "to": …}
+--   Defined in: db/migrations/boardgamebuddy/046_session_write_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (update_phase — PATCH /sessions/{code}/phase)
+--   Purpose:    Move the Gather → Play → Settle cursor. p_transitions is
+--               ALLOWED_PHASE_TRANSITIONS serialized by the service rather
+--               than a copy of the table in SQL, so constants.py stays the
+--               single source of truth; the service composes the dynamic 400
+--               from the from/to keys. Re-asserting the current phase is a
+--               no-op; 'abandoned' also flips `status`.
+
+-- bgb_abandon_session(p_host UUID, p_code TEXT)
+--   → JSONB {"ok": true} or {"error": "not_found" | "expired" | "host_only"}
+--   Defined in: db/migrations/boardgamebuddy/046_session_write_rpcs.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (abandon_session — DELETE /sessions/{code})
+--   Purpose:    Close an open lobby. Retiring this last Python-side gate let
+--               session_service drop _fetch_open_session and _build_response
+--               entirely — every path through that module is now one RPC.
+
+-- bgb_play_partners(p_viewer UUID)
+--   → JSONB { "accounts": [BuddyEdgeResponse…], "ghosts": [GhostPlayer…],
+--             "recent": [PlayedWithUser…] }
+--   Defined in: db/migrations/boardgamebuddy/047_play_partners_rpc.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/played_with_service.py
+--               (fetch_play_partners — GET /play-partners; fetch_played_with
+--                and fetch_ghost_players slice their list off the same call),
+--               plus bootstrap_routes.get_bootstrap's play_partners block.
+--               GET /buddies keeps buddy_service.list_accepted_buddies: the
+--               Buddies screen would otherwise compute ghosts and played-with
+--               counts it never renders.
+--   Purpose:    The Gather player picker in one call. Replaced twelve round
+--               trips across three endpoints — including a pass that pulled
+--               every play id the viewer touches into Python to count them in
+--               a dict (unbounded after a BGG sync). Two asymmetries are
+--               deliberate ports, not oversights: `recent` spans plays the
+--               viewer logged OR appears in, while `ghosts` covers only plays
+--               they logged; and ghost grouping is case-sensitive on the
+--               trimmed name, matching the Python dict key.

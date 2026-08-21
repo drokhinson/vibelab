@@ -63,6 +63,19 @@
       return r.status;
     }
 
+    /**
+     * Synchronous peek at the cached status map (or null). Lets a view paint
+     * its status pills on the first frame instead of awaiting /collection —
+     * the store slot normally wins, this covers a store reset with a warm
+     * cache. Stale-tolerant on purpose: a pill that's a few minutes old beats
+     * a blank screen, and myStatusMap() is what corrects it.
+     */
+    static cachedStatusMap() {
+      if (!window.bgbCache) return null;
+      const entry = window.bgbCache.peek(NS, COMBINED_KEY);
+      return (entry && entry.status) || null;
+    }
+
     static async myExpansionCountByBaseBggId(opts = {}) {
       const r = await _ensure(opts);
       return r.expCount;

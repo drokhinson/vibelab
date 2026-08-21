@@ -19,13 +19,23 @@
     return `${viewerId}|${targetId || viewerId}`;
   }
 
-  function _fetch(target, viewerId, colPerPage, playsPerPage) {
+  async function _fetch(target, viewerId, colPerPage, playsPerPage) {
     const params = new URLSearchParams({
       col_per_page: String(colPerPage),
       plays_per_page: String(playsPerPage),
     });
     if (target !== viewerId) params.set("target_user_id", target);
-    return window.api.get(`/profile/bundle?${params.toString()}`);
+    const payload = await window.api.get(`/profile/bundle?${params.toString()}`);
+    // Own bundle → refresh the durable last-play seed the Play tab paints
+    // "Another Round" from. This is the choke point every refresh path goes
+    // through, so plays logged on another device (or finalized joiner-side)
+    // land here too. `recent_plays` present-but-empty is meaningful: the
+    // viewer has no plays left, so the seed is cleared rather than left stale.
+    if (target === viewerId && payload && Array.isArray(payload.recent_plays)
+        && window.Play && window.Play.rememberLastPlay) {
+      window.Play.rememberLastPlay(payload.recent_plays[0] || null);
+    }
+    return payload;
   }
 
   const Profile = {
@@ -61,7 +71,10 @@
       const me = window.store.get("user");
       const viewerId = me && me.id;
       if (!viewerId) return null;
-      return window.bgbCache.get(NS, _key(viewerId, targetUserId)) || null;
+      // peek(), not get(): get() is fresh-window-only, and this namespace goes
+      // stale after 60s — so the "paint from what bootstrap warmed" promise
+      // above silently stopped holding a minute after login.
+      return window.bgbCache.peek(NS, _key(viewerId, targetUserId)) || null;
     },
 
     /** Invalidate the bundle for one (viewer, target) pair, or all when omitted. */
