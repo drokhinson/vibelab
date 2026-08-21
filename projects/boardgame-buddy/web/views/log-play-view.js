@@ -2,7 +2,7 @@
 //
 // Two halves on a single screen, split by a divider:
 //   • Top (Host): "Host a game" heading, an optional "Resume hosting?" banner,
-//     then three cards — Host a game / Another Round / Game Explorer.
+//     then three cards — New session / Another Round / Game Explorer.
 //   • Bottom (Join): the JoinPanel widget — a 5-char code input and the list
 //     of active sessions the user can join or spectate.
 //
@@ -119,8 +119,8 @@
           <span class="cascade-chooser__card-icon">
             <i data-lucide="dice-6" class="w-7 h-7"></i>
           </span>
-          <span class="cascade-chooser__card-title">Host a game</span>
-          <span class="cascade-chooser__card-body">Open a session, log a play.</span>
+          <span class="cascade-chooser__card-title">New session</span>
+          <span class="cascade-chooser__card-body">Open a lobby, pick your game on Gather.</span>
         </button>
 
         ${this._renderAnotherRoundCard()}
@@ -149,7 +149,7 @@
     // offering — before _ensureLobbyOpen ever got to revalidate it. It also
     // guards the draft clear below for the same reason.
     //
-    // "Host a game" always opens Gather with an empty game slot: a stale draft
+    // "New session" always opens Gather with an empty game slot: a stale draft
     // from an earlier explorer pick must not silently decide tonight's game.
     // Picking a game is the Game Explorer card's job.
     _host() {
@@ -214,10 +214,10 @@
     }
 
     // Middle host card: replay the last game with the same table. Sits between
-    // Host and Game Explorer — a repeat of last night's game is the more
-    // likely tap than browsing for a new one. Only rendered when there IS a
-    // last play, so a brand-new account sees just Host and Game Explorer,
-    // adjacent. The 48px slot carries the game's box art rather than a Lucide
+    // New session and Game Explorer — a repeat of last night's game is the
+    // more likely tap than browsing for a new one. Only rendered when there IS
+    // a last play, so a brand-new account sees just New session and Game
+    // Explorer, adjacent. The 48px slot carries the game's box art rather than a Lucide
     // glyph; renderGamePolaroid() is deliberately not reused here, it's a full
     // grid tile (big photo + caption + status badge), not an avatar-sized mark.
     _renderAnotherRoundCard() {
