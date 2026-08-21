@@ -848,7 +848,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .chapter-edit__typescroll,
 .chapter-edit__genrow,
 .chapter-edit__titlerow,
-.chapter-edit__seg {
+.chapter-edit__seg,
+.chapter-edit__write {
   flex-shrink: 0;
 }
 
@@ -991,9 +992,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* Themed rendered preview — matches the parchment-scroll look so creators
-   see exactly how their chapter will read inside the guide. */
+   see exactly how their chapter will read inside the guide.
+   flex-shrink:0 is load-bearing: this is a child of the column-flex
+   .chapter-edit__scroll, and the explicit min-height below *replaces* the
+   automatic minimum size (min-height:auto → min-content) that would otherwise
+   stop flexbox squashing it. Without the refusal, a chapter taller than the
+   remaining scroller space shrank the box toward 220px while overflow:visible
+   kept painting the text past the bottom edge — the cream card stopped short
+   and the rules spilled out below it. */
 .chapter-edit__preview {
   min-height: 220px;
+  flex-shrink: 0;
   padding: 16px 18px;
   background: linear-gradient(160deg, var(--polaroid-bg, #FFFBF1), var(--polaroid-bg-soft, #F5EEDC));
   border-radius: 16px;
