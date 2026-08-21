@@ -1666,11 +1666,20 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    which would delete a node living inside the container. */
 :root.bgb-ptr-lock,
 :root.bgb-ptr-lock body {
-  /* Take the gesture away from the browser's own pull-to-refresh while a
-     view is handling it. Only applied for as long as the widget is
-     attached, so the cascade flow (see the play-flow note below) keeps the
-     native one. */
-  overscroll-behavior-y: contain;
+  /* This rule is the whole of the widget's claim on the gesture — every
+     listener in widgets/pull-to-refresh.js is passive and none of them calls
+     preventDefault, so the browser keeps the scroll and the feed scrolls
+     normally everywhere, always.
+
+     `none` rather than `contain`: contain stops the drag chaining outward
+     (which is what suppresses Chrome Android's own pull-to-refresh) but still
+     lets the document bounce locally, and on iOS that bounce is the same
+     downward motion the pull is already drawing — the content would travel
+     twice. none stops both, leaving a still page for the pull to draw on.
+
+     Applied only while a widget is attached, so the cascade flow (see the
+     play-flow note below) keeps the native behaviour. */
+  overscroll-behavior-y: none;
 }
 
 .bgb-ptr {
@@ -2222,7 +2231,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: flex;
   gap: 16px;
   overflow-x: auto;
-  overflow-y: visible;
+  /* NOT `visible`: beside a scrollable overflow-x, `visible` computes to
+     `auto` (CSS Overflow 3 §3), so asking for it silently produced a rail
+     that scrolls VERTICALLY too — a scroll container sitting over most of the
+     feed, ready to swallow a vertical drag the moment a tilted card outgrew
+     the padding below. The tilt is kept off the edges by that padding, not by
+     the overflow value, so state the honest one. */
+  overflow-y: hidden;
   padding: 14px 20px 18px;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
@@ -3483,7 +3498,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: flex;
   gap: 13px;
   overflow-x: auto;
-  overflow-y: visible;
+  /* `visible` computes to `auto` here — see the note on .play-session__scroll.
+     The reel's padding is what keeps its tiles off the edges. */
+  overflow-y: hidden;
   padding: 6px 1rem 12px;
   margin: 0 -1rem;
   scroll-snap-type: x proximity;
