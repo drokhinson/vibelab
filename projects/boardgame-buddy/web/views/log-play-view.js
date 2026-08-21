@@ -2,15 +2,15 @@
 // browse section.
 //
 // Two halves on a single screen:
-//   • Top: Host or Join chooser (with optional Resume banner) and a short
-//     prompt at the top: "Know your Game? Join or host a session."
+//   • Top: Host / Another Round / Join chooser (with optional Resume
+//     banner) under a "Let's play" heading.
 //   • Bottom: divider + "Find a Game that fits" — a simplified game browser
 //     (My Collection ↔ All BgB Games toggle, players / playtime / game-type
 //     filters) rendering a paginated 3×3 grid of Polaroid-style cards.
 //     Tapping a card stages the pick in the active PlaySession and jumps
 //     into the Gather screen of the host flow.
 //
-// Routes here from the bottom-nav Play disc, the Profile "+ Add Game" FAB
+// Routes here from the bottom-nav Play tab, the Profile "+ Add Game" FAB
 // (passes `focus=find` to scroll to the section), and the Gather screen's
 // inline picker when the user opts to browse instead.
 
@@ -174,8 +174,7 @@
 
       this.container.innerHTML = `
         <header class="cascade-chooser__header">
-          <h1 class="font-display">Know your Game?</h1>
-          <p class="cascade-chooser__lead">Join or host a session.</p>
+          <h1 class="font-display">Let's play</h1>
         </header>
 
         ${resumable ? `
@@ -210,6 +209,8 @@
             <span class="cascade-chooser__card-body">Open a session, log a play.</span>
           </button>
 
+          ${this._renderAnotherRoundCard()}
+
           <button class="cascade-chooser__card cascade-chooser__card--join"
                   onclick="window.router.go('join-session')">
             <span class="cascade-chooser__card-icon">
@@ -218,8 +219,6 @@
             <span class="cascade-chooser__card-title">Join a game</span>
             <span class="cascade-chooser__card-body">Enter a code or join a buddy.</span>
           </button>
-
-          ${this._renderAnotherRoundCard()}
         </div>
 
         <hr class="lp-divider" />
@@ -429,9 +428,11 @@
       this.render();
     }
 
-    // Third chooser card: replay the last game with the same table. Only
-    // rendered when there IS a last play — a brand-new account still sees
-    // just Host and Join. The 48px slot carries the game's box art rather
+    // Middle chooser card: replay the last game with the same table. Sits
+    // between Host and Join — a repeat of last night's game is the more
+    // likely tap than entering someone else's code. Only rendered when
+    // there IS a last play, so a brand-new account still sees just Host
+    // and Join, adjacent. The 48px slot carries the game's box art rather
     // than a Lucide glyph; renderGamePolaroid() is deliberately not reused
     // here, it's a full grid tile (big photo + caption + status badge), not
     // an avatar-sized mark.
