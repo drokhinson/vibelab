@@ -2,6 +2,11 @@
 // JSDoc type contracts for the high-traffic API shapes (typed-js rule).
 // Sourced from shared-backend/routes/boardgame_buddy/models.py. Editor-only —
 // nothing here ships at runtime beyond the empty export.
+//
+// These are the response shapes, field-for-field. When a typedef and the
+// Pydantic model disagree, the typedef is what misleads the next reader into
+// writing a field read that always yields undefined — so correct it here in
+// the same change that touches the endpoint.
 
 /**
  * @typedef {Object} GameSummary
@@ -18,71 +23,81 @@
  * @property {boolean} is_expansion
  * @property {number|null} base_game_bgg_id
  * @property {string|null} expansion_color
- * @property {string|null} play_mode  // 'competitive' | 'cooperative' | 'team'
+ * @property {string|null} rulebook_url
+ * @property {import('../domain/playMode').PlayModeValue} play_mode
+ * @property {string|null} bgg_url  computed from bgg_id
  * @property {number} expansion_count
  *   Expansions the CATALOG holds for this base game (not the viewer's owned
- *   ones). Populated only by GET /collection/grid — treat 0 as "not computed
- *   yet" rather than "none", since the bootstrap seed doesn't carry it.
+ *   ones). Attached only by the list endpoints that call
+ *   _attach_expansion_counts — /collection/grid and the two browse endpoints
+ *   in game_routes — so treat 0 as "not computed" rather than "none".
  */
 
 /**
  * @typedef {Object} PlayPlayer
- * @property {string|null} player_user_id
- * @property {string} player_display_name
+ *   PlayPlayerResponse. Note `user_id`/`name`, NOT player_user_id /
+ *   player_display_name — those are the play_players COLUMN names, and they
+ *   don't reach the client.
+ * @property {string|null} user_id  null for ghost players
+ * @property {string} name
+ * @property {Object|null} avatar
  * @property {boolean} is_winner
  * @property {number|null} score
- * @property {number[]|null} round_scores
+ * @property {Array<number|null>|null} round_scores  null for ≤1-round plays
  */
 
 /**
  * @typedef {Object} Play
+ *   PlayResponse. There is no game_image_url here — the column was dropped;
+ *   only the feed cards (from bgb_feed_plays) carry one, via the games join.
  * @property {string} id
- * @property {string} user_id
  * @property {string} game_id
+ * @property {string} game_name
+ * @property {string|null} game_thumbnail
  * @property {string} played_at   // date
  * @property {string|null} notes
- * @property {string|null} photo_url
- * @property {string|null} play_mode
- * @property {string|null} game_name
- * @property {string|null} game_thumbnail_url
- * @property {string|null} game_image_url
  * @property {PlayPlayer[]} players
- * @property {GameSummary[]} [expansions]
+ * @property {string|null} photo_url
+ * @property {GameSummary[]} expansions
+ * @property {string} created_at
+ * @property {import('../domain/playMode').PlayModeValue} play_mode
+ * @property {string} logged_by_id
+ * @property {string} logged_by_name
+ * @property {boolean} is_own  false when the viewer appears via a linked buddy
  */
 
 /**
  * @typedef {Object} FeedPage
  * @property {Array<Object>} cards  // heterogeneous: play cards + rail cards
- * @property {string|null} next_cursor
+ * @property {string|null} next_cursor  round-tripped back as ?cursor=
  */
 
 /**
  * @typedef {Object} Profile
  * @property {string} id
  * @property {string} display_name
- * @property {string} username
+ * @property {string} username  stable handle; readonly in the FE
  * @property {Object|null} avatar
  * @property {boolean} is_admin
+ * @property {boolean} needs_setup  cleared by the first successful POST /profile
+ * @property {string} created_at
  */
 
 /**
- * @typedef {Object} CollectionItem
+ * @typedef {Object} CollectionItem  one shelf row from GET /collection
+ *   The game is NESTED, not flattened into game_* fields. (The
+ *   boardgamebuddy_collections table does carry denormalized game_* columns,
+ *   but this endpoint joins boardgamebuddy_games instead and never selects
+ *   them — see collection_routes._TILE_GAME_FIELDS for exactly which columns
+ *   come back populated.)
  * @property {string} id
  * @property {string} game_id
- * @property {'owned'|'wishlist'} status
+ * @property {'owned'|'wishlist'|'played'} status
  * @property {string} added_at
- * @property {string|null} game_name
- * @property {string|null} game_thumbnail_url
- * @property {number|null} game_year_published
- * @property {number|null} game_min_players
- * @property {number|null} game_max_players
- * @property {number|null} game_playing_time
- * @property {boolean|null} game_is_expansion
- * @property {number|null} game_base_game_bgg_id
- * @property {string|null} game_expansion_color
- * @property {string|null} game_play_mode
- * @property {number|null} game_bgg_id
- * @property {string|null} game_theme_color
+ * @property {string|null} last_played_at
+ * @property {number} play_count
+ * @property {GameSummary} game
+ * @property {CollectionItem[]} expansions  owned expansions of this base game
  */
 
 /**
@@ -91,6 +106,7 @@
  * @property {string|null} user_id
  * @property {string} display_name
  * @property {string} joined_at
+ * @property {Object|null} avatar
  */
 
 /**
@@ -102,8 +118,10 @@
  * @property {'open'|'finalized'|'abandoned'} status
  * @property {'gather'|'play'|'settle'|'finalized'|'abandoned'} phase
  * @property {string|null} finalized_play_id
+ * @property {GameSummary|null} game
  * @property {SessionParticipant[]} participants
- * @property {GameSummary|null} [game]
+ * @property {string} created_at
+ * @property {string} expires_at
  */
 
 /**
@@ -123,25 +141,34 @@
  * @property {number} bgg_id
  * @property {string} name       base game's name stripped off the front
  * @property {string} full_name  BGG's original string
- * @property {string} [bgg_url]
+ * @property {string} bgg_url
  */
 
 /**
- * @typedef {Object} Chapter
+ * @typedef {Object} Chapter  ChapterResponse; pool rows add `popularity`
  * @property {string} id
  * @property {string} game_id
  * @property {string} chapter_type
+ * @property {string|null} chapter_type_label
+ * @property {string|null} chapter_type_icon
+ * @property {number} chapter_type_order
  * @property {string} title
+ * @property {string} layout
  * @property {string} content
- * @property {string} created_by
- * @property {number} [popularity]
+ * @property {string|null} created_by
+ * @property {string|null} created_by_name
+ * @property {string} updated_at
+ * @property {string|null} source_game_id   set when a response mixes base + expansion chapters
+ * @property {string|null} source_game_name
+ * @property {string|null} source_color     null for base games
+ * @property {number} [popularity]          pool rows only
  */
 
 /**
  * @typedef {Object} BootstrapPayload  GET /bootstrap
  * @property {number} bootstrap_version  mismatch with EXPECTED → wipe caches
  * @property {Object|null} current_user
- * @property {Object|null} profile_bundle
+ * @property {Object|null} profile_bundle  { status_map, stats }
  * @property {FeedPage|null} feed_first_page
  * @property {string|null} feed_cursor
  * @property {GameSummary[]} recently_played_games
