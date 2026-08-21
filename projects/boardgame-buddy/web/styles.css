@@ -836,6 +836,22 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   50%      { opacity: 0.85; }
 }
 
+/* The scroller's fixed-height rows must hold their natural height and let the
+   scroller scroll — otherwise flexbox shrinks them to fit and their contents
+   spill out under the next row.
+   .chapter-edit__typescroll is the trap: overflow-x:auto makes it a scroll
+   container, and a scroll container's automatic minimum size is 0 rather than
+   min-content. Every other row refuses to shrink past its text, so the pill row
+   is the one child flexbox *can* shrink — it absorbed the entire overflow
+   (30px of pills squeezed into 10px) and the Import/Generate row painted over
+   the remains. */
+.chapter-edit__typescroll,
+.chapter-edit__genrow,
+.chapter-edit__titlerow,
+.chapter-edit__seg {
+  flex-shrink: 0;
+}
+
 /* Horizontal type-pill scroller (replaces the cramped 6-up grid). */
 .chapter-edit__typescroll {
   display: flex;
