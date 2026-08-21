@@ -294,7 +294,8 @@ projects/boardgame-buddy/web/
 ├── widgets/                ← Composite stateful widgets (see §6)
 │   ├── reference-guide-scroll.js   → ReferenceGuideScroll class (Chapter rendering)
 │   ├── round-score-grid.js          → renderRoundGrid (Session scoring)
-│   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
+│   ├── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
+│   └── pull-to-refresh.js           → BgbPullToRefresh.attach (feed pull gesture)
 │
 ├── views/                  ← One file per screen / route (17 total)
 │   ├── feed-view.js, log-play-view.js, play-flow-view.js, …

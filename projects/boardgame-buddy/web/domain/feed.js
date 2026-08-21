@@ -32,10 +32,13 @@
       );
     }
 
-    // Drop the cached first page and re-fetch it. Two callers, both wanting
-    // the new page warm before the user looks at it: the tab-focus warm
-    // refresh, and any play mutation (save, delete) that just changed what
-    // the first page should contain. Safe to fire-and-forget — a read that
+    // Drop the cached first page and re-fetch it. Three callers: the
+    // tab-focus warm refresh and any play mutation (save, delete) that just
+    // changed what the first page should contain, both of which only want
+    // the page warm before the user looks at it; and the feed's
+    // pull-to-refresh, which awaits the result and diffs it against the list
+    // on screen. Either way the cache ends up holding what came back. Safe
+    // to fire-and-forget for the first two — a read that
     // arrives mid-flight joins the same request through bgbCache's
     // single-flight map rather than opening a second one.
     static async refreshFirstPage() {
