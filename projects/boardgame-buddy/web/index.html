@@ -44,18 +44,10 @@
     <header data-auth-only class="hidden bgb-global-header">
       <a class="bgb-global-header__brand" onclick="window.router.go('feed')">
         <img src="assets/brand/bgb-logo.svg" alt="" class="bgb-global-header__logo" />
-        <div class="bgb-global-header__text">
-          <span class="bgb-global-header__title font-display">Boardgame Buddy</span>
-          <!-- The BGG mark already reads "Powered by BoardGameGeek" — no
-               additional text needed. It sits flush-right against the title
-               so its right edge lines up with the wordmark. -->
-          <a class="bgb-global-header__bgg" href="https://boardgamegeek.com"
-             target="_blank" rel="noopener noreferrer"
-             onclick="event.stopPropagation()"
-             aria-label="Powered by BoardGameGeek">
-            <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek" />
-          </a>
-        </div>
+        <!-- BGG attribution lives on the Settings screen
+             (settings-view.js#_renderBggAttribution), not here — the header
+             stays a clean logo + wordmark lockup. -->
+        <span class="bgb-global-header__title font-display">Boardgame Buddy</span>
       </a>
       <button class="bgb-global-header__avatar" title="Settings"
               onclick="window.router.go('settings')">
@@ -97,12 +89,12 @@
     <div id="toast" class="toast toast-end toast-top hidden z-50"></div>
   </div>
 
-  <!-- Bottom nav: floating bar + raised Create button.
-       Feed and Profile are flanking tabs; Play is a raised gold disc that
-       reads as the primary CTA. data-nav is the destination on tap;
-       data-nav-views (when present) is a comma-separated list of view
-       names that keep this tab marked active — so the Play button stays
-       lit throughout play-flow, the join chooser, and the joiner's
+  <!-- Bottom nav: a flat, edge-to-edge rectangular bar with three equal
+       tabs. Play carries a gold icon chip so it still reads as the primary
+       action, but nothing breaks the bar's rectangle. data-nav is the
+       destination on tap; data-nav-views (when present) is a comma-separated
+       list of view names that keep this tab marked active — so the Play tab
+       stays lit throughout play-flow, the join chooser, and the joiner's
        session-viewer mirror. -->
   <nav class="hidden bgb-nav" data-auth-only>
     <button class="bgb-nav__tab" data-nav="feed">
@@ -111,12 +103,12 @@
       </span>
       <span class="bgb-nav__label">Feed</span>
     </button>
-    <button class="bgb-nav__create" data-nav="log-play"
+    <button class="bgb-nav__tab bgb-nav__tab--play" data-nav="log-play"
             data-nav-views="play-flow,log-play,join-session,session-viewer">
-      <span class="bgb-nav__create-ico">
-        <i data-lucide="dices" class="w-7 h-7"></i>
+      <span class="bgb-nav__ico">
+        <i data-lucide="dices" class="w-5 h-5"></i>
       </span>
-      <span class="bgb-nav__create-label">Play</span>
+      <span class="bgb-nav__label">Play</span>
     </button>
     <button class="bgb-nav__tab" data-nav="profile-self"
             data-nav-views="profile-self,collection,wishlist,plays,buddies,settings">
