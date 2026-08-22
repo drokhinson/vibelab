@@ -3793,6 +3793,13 @@ main[data-view="session-viewer"].hidden {
   letter-spacing: 0.18em;
   color: var(--polaroid-accent);
 }
+/* The code mints in the background while the host is free to move on, so the
+   placeholder has to read as "coming" rather than "broken". Reuses the
+   import-expansions skeleton pulse instead of introducing a second animation. */
+.cascade-invite__code.is-pending {
+  color: var(--polaroid-muted);
+  animation: importExpPulse 1.2s ease-in-out infinite;
+}
 
 /* Game pick row inside Gather */
 .cascade-game {

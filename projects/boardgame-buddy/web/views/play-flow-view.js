@@ -35,6 +35,7 @@
       this._ghosts = [];
       this._recent = [];
       this._lobby = null;
+      this._lobbyPromise = null;
       this._expansions = [];
       this._expansionsLoadedFor = null;
       this._expansionsOpen = false;
@@ -185,7 +186,14 @@
         return combined;
       })();
       const expansionsPromise = this._loadExpansionsIfNeeded();
-      const lobbyPromise = this._ensureLobbyOpen();
+      // The session code is the one thing the Gather screen visibly lacks, so
+      // it gets its own repaint rather than riding the slowest of the three
+      // preloads — a slow buddy fetch used to leave the invite card showing
+      // "— — — — —" long after the code had arrived.
+      const lobbyPromise = this._lobbyReady().then(() => {
+        this.render();
+        this._startLobbyPoll();
+      });
       await Promise.all([this._buddyPreloadPromise, expansionsPromise, lobbyPromise]);
 
       this.render();
@@ -193,7 +201,6 @@
       // does this on every paint (the poll-driven re-renders would yank
       // scroll back continuously), so do it here once on mount instead.
       this._scrollToCurrentPhase();
-      this._startLobbyPoll();
       await this._startLiveScores();
       if (this._guideWidget) this._guideWidget.refresh();
     }
@@ -246,7 +253,41 @@
       return (this._lobby && this._lobby.code) || null;
     }
 
+    /**
+     * Resolves to this run's lobby code, minting one if we don't have it yet.
+     *
+     * Single-flight on purpose: now that Continue no longer waits for the code
+     * (see render()), _advancePhase can want the lobby at the same moment
+     * onMount is already opening it, and a second _ensureLobbyOpen() would POST
+     * /sessions twice — minting a lobby whose stale-abandon sweep closes the
+     * first one out from under the host.
+     *
+     * Resolves null when there is no lobby to be had: offline, or the mint
+     * failed (in which case _ensureLobbyOpen has already set _error).
+     */
+    _lobbyReady() {
+      const code = this._liveLobbyCode();
+      if (code) return Promise.resolve(code);
+      if (!this._lobbyPromise) {
+        this._lobbyPromise = this._ensureLobbyOpen()
+          .catch(() => {})
+          .then(() => {
+            this._lobbyPromise = null;
+            return this._liveLobbyCode();
+          });
+      }
+      return this._lobbyPromise;
+    }
+
     async _ensureLobbyOpen() {
+      // Token the phase the host is on right now. Continue no longer waits for
+      // the lobby, so they can be on Play by the time this resolves — and both
+      // branches below otherwise adopt the server's phase wholesale, which
+      // would yank them back to Gather (a freshly minted lobby is always
+      // 'gather'). _advancePhase bumps _phaseSeq before its optimistic paint,
+      // so a changed token means exactly "the host moved on, don't touch it";
+      // its own PATCH carries the real phase to the server a moment later.
+      const phaseSeq = this._phaseSeq;
       // Offline: no lobby, no code, no network. The cascade runs entirely off
       // the localStorage draft and the bgbCache seeds bootstrap warmed, and
       // Save queues to the outbox. Nothing here is a degraded lobby — there
@@ -279,7 +320,7 @@
             this._lobby = s;
             this._ps.sessionId = s.id;
             this._ps.hostUserId = s.host_user_id;
-            this._ps.phase = s.phase;
+            if (phaseSeq === this._phaseSeq) this._ps.phase = s.phase;
             this._ps.persist();
             this._syncUrlToCode();
             this._reconcileGameToLobby();
@@ -329,7 +370,7 @@
         this._ps.code = session.code;
         this._ps.sessionId = session.id;
         this._ps.hostUserId = session.host_user_id;
-        this._ps.phase = session.phase || "gather";
+        if (phaseSeq === this._phaseSeq) this._ps.phase = session.phase || "gather";
         this._ps.persist();
         this._syncUrlToCode();
         this._reconcileGameToLobby();
@@ -539,11 +580,14 @@
           ${this._renderScreenHeader("Gather", 1, false)}
           ${this._renderGather()}
           ${this._renderContinue("Continue to Play", () => "_advanceToPlay()", {
-            // Online, Continue waits on the lobby: advancing the phase is a
-            // PATCH against a code we may not hold yet. Offline the phase is
-            // local, so a game pick is the only prerequisite — gating on a
-            // lobby that will never exist would wedge the cascade on Gather.
-            disabled: !this._ps.gameId || (!this._isOffline() && !this._liveLobbyCode()),
+            // Deliberately NOT gated on the lobby. Minting a code is a
+            // multi-second round-trip (Railway → Supabase → bgb_create_session)
+            // and nothing on the Play screen needs it, so making the host watch
+            // a greyed-out button for it was pure dead time. _advancePhase
+            // paints the transition immediately and parks its PATCH on
+            // _lobbyReady() instead. A game pick is the only real prerequisite;
+            // _advanceToPlay still checks the roster.
+            disabled: !this._ps.gameId,
           })}
         </section>
 
@@ -697,7 +741,8 @@
           </span>
           <div class="cascade-invite__body">
             <span class="cascade-invite__title">Session code</span>
-            <span class="cascade-invite__code">${escapeHtml(code || "— — — — —")}</span>
+            <span class="cascade-invite__code ${code ? "" : "is-pending"}">${escapeHtml(code || "— — — — —")}</span>
+            ${code ? "" : `<span class="cascade-invite__hint">Getting your code…</span>`}
           </div>
         </section>
       `;
@@ -1090,11 +1135,6 @@
         this._scrollToCurrentPhase();
         return;
       }
-      if (!this._lobby || !this._lobby.code) {
-        this._error = "Session not ready yet.";
-        this.render();
-        return;
-      }
       // Optimistic: flip the phase locally and repaint immediately so the
       // user sees the section transition without waiting on the server
       // round-trip. The PATCH happens in the background; on failure we
@@ -1112,7 +1152,22 @@
       this._scrollToCurrentPhase();
       this._pendingPhase++;
       try {
-        const updated = await window.PlaySession.advancePhase(this._lobby.code, next);
+        // The lobby may still be minting — Continue is live from the first
+        // frame now, so the host can reach this screen before POST /sessions
+        // resolves. The cascade has already moved; this PATCH only catches the
+        // server (and joiners' read-only mirrors) up, whenever it can.
+        const code = this._liveLobbyCode() || (await this._lobbyReady());
+        // Superseded while we waited. Bail BEFORE the PATCH, not just before
+        // the reconcile: a Continue → back → Continue burst issued while the
+        // code was in flight would otherwise fire three writes for one state.
+        if (seq !== this._phaseSeq) return;
+        // No lobby this run — offline, or the mint failed and _ensureLobbyOpen
+        // has already surfaced that error. The phase stays local: the draft is
+        // complete on its own and _runSave falls back to Play.create for a
+        // codeless session, so rolling the host back would strand them for
+        // nothing.
+        if (!code) return;
+        const updated = await window.PlaySession.advancePhase(code, next);
         if (seq !== this._phaseSeq) return; // a newer phase change owns the state now
         this._lobby = updated;
         if (updated.phase && updated.phase !== this._ps.phase) {
@@ -2448,7 +2503,13 @@
       // Skipped offline: the request can only fail, and _ensureLobbyOpen will
       // discard the record rather than consume it — leaving prefetchLobby's
       // single slot holding a rejected promise for the next real host tap.
-      if (!(window.BgbNet && window.BgbNet.isOffline())) {
+      //
+      // Re-latch connectivity for the new run. _offline otherwise carries over
+      // from the session that just finished, and a stale `true` would make
+      // _advancePhase skip its PATCH for a host who walked back into signal
+      // between rounds.
+      this._offline = !!(window.BgbNet && window.BgbNet.isOffline());
+      if (!this._offline) {
         window.PlaySession.prefetchLobby({ gameId: seed.gameId });
       }
 
@@ -2462,6 +2523,9 @@
       }
       this._liveScores = null;
       this._lobby = null;
+      // Drop the finished session's in-flight open so _lobbyReady() can't hand
+      // the new round a promise that resolves to the old lobby's code.
+      this._lobbyPromise = null;
       this._prefetchedLobby = null;
       this._cardId = null;
 
@@ -2495,10 +2559,17 @@
       // _ps.code is null, so this takes the create branch: POST /sessions
       // with the game already attached, then replaces the URL with the new
       // /play/{code}.
-      await this._ensureLobbyOpen();
-      await this._syncRosterToLobby();
+      await this._lobbyReady();
+      // Repaint and arm the poll the moment the code exists. The roster sync
+      // below is deliberately NOT awaited: it is one POST per carried-over
+      // player, and making the invite card wait on all of them held the screen
+      // stale for round-trips it never needed. Each _pushParticipantToBackend
+      // already toasts and rolls its own row back on failure, and the poll
+      // backfills participant_id within ~2s — the same fire-and-forget
+      // contract _addPlayer uses.
       this.render();
       this._startLobbyPoll();
+      this._syncRosterToLobby();
       await this._startLiveScores();
       if (this._guideWidget) this._guideWidget.refresh();
     }
