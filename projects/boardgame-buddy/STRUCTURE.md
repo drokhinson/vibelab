@@ -76,14 +76,37 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
   on the card, and a network failure settles to "Saved on this phone" because the outbox owns it.
   **Another round?** reseeds a new session with the same game/expansions/mode/roster (teams kept,
   scores reset) under a new code and pushes the roster as participants.
+- **Connectivity** (`app/src/offline/net.js`): one app-wide answer to "are we offline?",
+  the native port of `web/domain/net.js`. Automatic — there is no switch. A completed HTTP
+  response of any status proves reachability and outranks everything; failing that, **two
+  consecutive** network failures flip the app offline (two, because one request can fail for
+  reasons unrelated to the link). `api/client.js` records the evidence in one place
+  (`_trackedFetch`), so this and the app's "an error without `.status` means the network died"
+  convention are two views of one fact. `OfflineBanner` (Feed + Play) shows the state and
+  offers the app's only active probe, `GET /health`. `net.js` is a strict leaf — the client
+  reports into it, so the probe and the reconnect handler are injected by `AppContext`. Going
+  offline gates new behaviour only: it never signs the user out, abandons a lobby, or re-mints
+  a session code.
 - **Offline play recording** (`app/src/offline/playOutbox.js`): when the lobby can't be opened
   (network failure), the cascade runs as an **offline table** — phases flip locally, ghost
   players + persisted host seeds, no invite code — and Save queues the play (photo copied to
   a stable file via `expo-file-system`) in an AsyncStorage outbox. The outbox auto-flushes on
-  sign-in and app foreground (finalize the original lobby when it still exists, else plain
-  `POST /plays`, then photo attach); `PendingUploadsBar` on Feed + Play shows the queue with
-  retry/discard. Network failures retry silently; server rejections surface per-play. A cached
-  profile + host seeds make this work from an offline cold start.
+  sign-in, app foreground, and the offline→online edge (finalize the original lobby when it
+  still exists, else plain `POST /plays`, then photo attach); `PendingUploadsBar` on Feed +
+  Play shows the queue with retry/discard. Network failures retry silently; server rejections
+  surface per-play. A cached profile + host seeds make this work from an offline cold start.
+  Two invariants that are easy to break:
+  - **Every queued play carries a `client_key`** (migration 048), minted once at enqueue and
+    re-sent on every attempt, so a lost response returns the original play instead of writing
+    a duplicate. Mint it per *entry*, never per attempt. Both upload paths carry it —
+    `bgb_finalize_session` delegates to `bgb_log_play`, so the lobby path inherits the guard,
+    and `session_routes.finalize_session` resolves the `{"duplicate": true, "id": …}` envelope
+    the same way `play_routes.log_play` does. Live saves stay keyless on purpose: two identical
+    live POSTs legitimately mean two plays.
+  - **The queue survives sign-out.** Entries are scoped to the account that recorded them and
+    the flush filters on it, rather than being wiped — a queued play is a game somebody
+    actually played, and an expired token must not destroy it. It also stops a shared device
+    from filing one user's play into another's history.
 - **Play cascade** (`app/src/screens/play/`): `PlayFlowScreen` hosts a non-swipeable pager over
   Gather → Play → Settle; `usePlaySession` owns the draft, 2s lobby poll, LiveScores channel and
   the `_phaseSeq`-guarded optimistic phase machine (ported from `web/views/play-flow-view.js`).
@@ -211,7 +234,7 @@ do not have an account.
 | play_mode | TEXT | `competitive` / `coop` / `team` — what the user actually played, which may differ from the game's intrinsic mode |
 | game_name | TEXT | denormalized off games (migration 020) so play lists are a single-table read |
 | game_thumbnail_url | TEXT | denormalized off games |
-| client_key | UUID | nullable; idempotency key for offline-queued plays (migration 048). Partial-unique per (user_id, client_key). NULL for every live write — two identical online POSTs legitimately mean two plays. |
+| client_key | UUID | nullable; idempotency key for offline-queued plays (migration 048), set by the web and native outboxes and re-sent on every retry. Partial-unique per (user_id, client_key); `bgb_log_play` returns the existing row rather than writing a second, so a lost response can't duplicate a game. NULL for every live write — two identical online POSTs legitimately mean two plays. |
 | created_at | TIMESTAMPTZ | |
 
 Migration 020 also cached `game_image_url` and `game_play_mode` here; migration
