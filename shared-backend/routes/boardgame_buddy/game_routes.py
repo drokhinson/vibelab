@@ -1,5 +1,6 @@
 """Game catalog endpoints — browse, search, detail, BGG proxy."""
 
+import asyncio
 import logging
 import xml.etree.ElementTree as ET
 from typing import Optional
@@ -165,6 +166,15 @@ async def list_games(
             "so the created_at order stays consistent across pages."
         ),
     ),
+    include_expansion_counts: bool = Query(
+        True,
+        description=(
+            "Fill game.expansion_count on each row. Costs a second DB round "
+            "trip per page, so callers that don't render the badge (the game "
+            "explorer's polaroid grid) should pass false. Defaults true so the "
+            "response contract is unchanged for anyone who doesn't opt out."
+        ),
+    ),
     bgg_ids: Optional[str] = Query(
         None,
         description=(
@@ -251,11 +261,18 @@ async def list_games(
     # across paginated calls.
     if players is not None and prioritize_exact_players:
         query = query.order("max_players", desc=False)
-    query = query.order("created_at", desc=True)
-    result = query.range(offset, offset + per_page - 1).execute()
+    # `id` is the tiebreaker, and it is load-bearing rather than cosmetic:
+    # created_at is nullable (001_baseline.sql:60) and bulk BGG imports insert
+    # inside one transaction, where now() is the TRANSACTION timestamp — so
+    # ties are normal, and without a deterministic second key paginated calls
+    # could repeat or skip games between pages.
+    query = query.order("created_at", desc=True).order("id", desc=True)
+    query = query.range(offset, offset + per_page - 1)
+    result = await asyncio.to_thread(query.execute)
 
     games = [GameSummary(**g) for g in (result.data or [])]
-    _attach_expansion_counts(sb, games)
+    if include_expansion_counts:
+        await asyncio.to_thread(_attach_expansion_counts, sb, games)
     total = result.count or 0
 
     return GameListResponse(games=games, total=total, page=page, per_page=per_page)
