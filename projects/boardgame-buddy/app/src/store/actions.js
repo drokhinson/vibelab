@@ -9,7 +9,6 @@ import { signInWithGoogleOAuth } from '../auth/oauth';
 import { ACTIONS as A } from './initialState';
 import cache from './cache';
 import { applyLocalStatus, refreshCollection } from '../offline/collectionStore';
-import { clearOutbox } from '../offline/playOutbox';
 
 // Offline cold-start keys: the cached profile unlocks the Play/Profile tabs
 // when the profile fetch can't reach the server; the host seeds keep Gather's
@@ -55,7 +54,8 @@ export function buildActions(dispatch, stateRef) {
     async signOut() {
       if (supabase) await supabase.auth.signOut();
       cache.invalidate('');
-      clearOutbox();
+      // Queued plays are NOT cleared — see playOutbox.clearOutbox. They belong
+      // to the account that recorded them and upload when it signs back in.
       AsyncStorage.multiRemove([PROFILE_CACHE_KEY, HOST_SEEDS_KEY]).catch(() => {});
       dispatch({ type: A.CLEAR_AUTH });
     },

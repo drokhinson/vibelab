@@ -66,13 +66,15 @@ export async function attachPhoto(uploadPromise, playId) {
 /**
  * @param {Object} draft
  * @param {string|null} lobbyCode
- * @param {{rounds: number, resolvedScore: Function, snap?: Object}} opts
+ * @param {{rounds: number, resolvedScore: Function, snap?: Object,
+ *          userId?: string|null}} opts
  *   `snap` carries the memoized upload promise across a Retry so the photo
- *   bytes aren't pushed twice.
+ *   bytes aren't pushed twice. `userId` stamps the outbox entry on the queued
+ *   path so only its owner ever flushes it.
  * @returns {Promise<{ok: boolean, error?: string, playId?: string|null,
  *                    uploadPromise?: Promise<any>|null, queued?: boolean}>}
  */
-export async function savePlay(draft, lobbyCode, { rounds, resolvedScore, snap }) {
+export async function savePlay(draft, lobbyCode, { rounds, resolvedScore, snap, userId }) {
   const payload = buildPlayPayload(draft, { rounds, resolvedScore });
 
   // Start the upload alongside the save rather than after it. Cached on the
@@ -101,6 +103,9 @@ export async function savePlay(draft, lobbyCode, { rounds, resolvedScore, snap }
     const winner = draft.players.find((p) => p.is_winner) || null;
     await enqueuePlay({
       payload,
+      // Whose play this is. Without it the flush can't tell one account's
+      // queue from another's on a shared device.
+      userId: userId || null,
       code: lobbyCode || null,
       photoUri,
       gameSnapshot: draft.game

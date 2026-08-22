@@ -32,6 +32,7 @@ const PHOTO_DIR = `${FileSystem.documentDirectory || ''}bgb-outbox/`;
  * @typedef {Object} PendingPlay
  * @property {string} localId
  * @property {string} clientKey     uuid, also carried on payload.client_key
+ * @property {string|null} userId   account that recorded it; only they flush it
  * @property {Object} payload       PlayCreate body (photo_url always null)
  * @property {string|null} code     lobby code if the session was opened online
  * @property {string|null} photoUri persisted copy under PHOTO_DIR
@@ -67,9 +68,15 @@ export function subscribeOutbox(fn) {
   return () => _listeners.delete(fn);
 }
 
-/** Synchronous snapshot for render. */
-export function listPending() {
-  return _items;
+/**
+ * Synchronous snapshot for render. Pass the signed-in account id to see only
+ * that user's queue — which is what every UI surface wants, since a play
+ * belongs to whoever recorded it.
+ * @param {string|null} [userId]
+ */
+export function listPending(userId) {
+  if (!userId) return _items;
+  return _items.filter((i) => !i.userId || i.userId === userId);
 }
 
 export async function hydrateOutbox() {
@@ -121,8 +128,10 @@ async function _deletePhoto(uri) {
 }
 
 /**
- * @param {Omit<PendingPlay, 'localId'|'createdAt'|'attempts'|'lastError'>} item
  * @returns {Promise<PendingPlay>}
+ * @param {Omit<PendingPlay, 'localId'|'clientKey'|'createdAt'|'attempts'|'lastError'>} item
+ *   `userId` is the account recording the play — required for the flush to
+ *   ever pick it up again.
  */
 export async function enqueuePlay(item) {
   await hydrateOutbox();
@@ -191,15 +200,23 @@ async function _uploadItem(item) {
 /**
  * Serial flush. Network error stops the run (still offline); a server
  * rejection records lastError on the item and moves on.
+ *
+ * Scoped to one account: POST /plays writes under whoever's token is attached,
+ * so flushing a housemate's queued play while you're signed in would file
+ * their game into your history. Entries predating userId have no owner
+ * recorded and are flushed by whoever is signed in — the old behaviour, and
+ * the only answer available for them.
+ * @param {string|null} [userId]
  * @returns {Promise<{flushed: Array<{localId:string, gameId:string|null}>, remaining: number}>}
  */
-export async function flushOutbox() {
+export async function flushOutbox(userId) {
   await hydrateOutbox();
-  if (_inFlight || _items.length === 0) return { flushed: [], remaining: _items.length };
+  const mine = listPending(userId);
+  if (_inFlight || mine.length === 0) return { flushed: [], remaining: mine.length };
   _inFlight = true;
   const flushed = [];
   try {
-    for (const item of [..._items]) {
+    for (const item of mine) {
       try {
         await _uploadItem(item);
         await _deletePhoto(item.photoUri);
@@ -221,10 +238,16 @@ export async function flushOutbox() {
   } finally {
     _inFlight = false;
   }
-  return { flushed, remaining: _items.length };
+  return { flushed, remaining: listPending(userId).length };
 }
 
-/** Wipe on sign-out — queued plays belong to the signed-in account. */
+/**
+ * Wipe the whole queue, photos included. NOT called on sign-out: a queued play
+ * is a game somebody actually played, and signing out — or being signed out by
+ * an expired token — must not destroy it. The queue is scoped by account
+ * instead (see flushOutbox), so it survives until its owner comes back and it
+ * uploads. This exists for an explicit "clear everything" and for tests.
+ */
 export async function clearOutbox() {
   await hydrateOutbox();
   for (const item of _items) await _deletePhoto(item.photoUri);

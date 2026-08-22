@@ -465,6 +465,7 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
         rounds: snap.rounds,
         resolvedScore,
         snap,
+        userId: me?.id || null,
       });
       if (!result.ok) {
         setSaving(false);
@@ -480,7 +481,7 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
       setSaving(false);
       return { ...result, game: snap.game, winner: snap.winner, photoUrl: snap.photoUrl };
     },
-    [resolvedScore],
+    [resolvedScore, me?.id],
   );
 
   /**

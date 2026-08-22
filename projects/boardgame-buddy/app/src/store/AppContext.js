@@ -19,7 +19,7 @@ import { reducer, EXPECTED_BOOTSTRAP_VERSION } from './reducer';
 import cache from './cache';
 import { buildActions, normUser, PROFILE_CACHE_KEY, HOST_SEEDS_KEY } from './actions';
 import { hydrateCollection, refreshCollection, clearCollection } from '../offline/collectionStore';
-import { clearOutbox, flushOutbox, hydrateOutbox } from '../offline/playOutbox';
+import { flushOutbox, hydrateOutbox } from '../offline/playOutbox';
 import * as net from '../offline/net';
 
 const StateContext = createContext(initialState);
@@ -136,7 +136,9 @@ export function AppProvider({ children }) {
       dispatch({ type: A.SET_SESSION, session });
       if (event === 'SIGNED_OUT') {
         clearCollection();
-        clearOutbox();
+        // The outbox deliberately survives: a queued play is a game somebody
+        // actually played, and an expired token must not destroy it. Entries
+        // are account-scoped, so they wait for their owner.
         AsyncStorage.multiRemove([PROFILE_CACHE_KEY, HOST_SEEDS_KEY]).catch(() => {});
         dispatch({ type: A.CLEAR_AUTH });
       } else {
@@ -159,7 +161,7 @@ export function AppProvider({ children }) {
     if (!flushUserId) return undefined;
     const runFlush = async () => {
       try {
-        const { flushed } = await flushOutbox();
+        const { flushed } = await flushOutbox(flushUserId);
         for (const f of flushed) actions.afterPlaySaved(f.gameId);
       } catch {}
     };

@@ -11,22 +11,27 @@ import { COLORS, RADII, SPACING } from '../theme';
 import { Row, Text } from '../ui';
 import { confirm } from './ConfirmModal';
 import { discardPlay, flushOutbox, listPending, subscribeOutbox } from '../offline/playOutbox';
-import { useAppActions } from '../store/AppContext';
+import { useAppActions, useAppState } from '../store/AppContext';
 
 export default function PendingUploadsBar({ style }) {
   const actions = useAppActions();
-  const [items, setItems] = useState(listPending());
+  const { currentUser } = useAppState();
+  const meId = currentUser?.id || null;
+  // Only this account's queue — a housemate's pending plays are theirs to
+  // see and theirs to upload.
+  const [items, setItems] = useState(() => listPending(meId));
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => subscribeOutbox((next) => setItems([...next])), []);
+  useEffect(() => subscribeOutbox(() => setItems(listPending(meId))), [meId]);
+  useEffect(() => setItems(listPending(meId)), [meId]);
 
   if (!items.length) return null;
   const hasError = items.some((i) => i.lastError);
 
   async function retry() {
     setBusy(true);
-    const { flushed } = await flushOutbox();
+    const { flushed } = await flushOutbox(meId);
     for (const f of flushed) actions.afterPlaySaved(f.gameId);
     setBusy(false);
   }
