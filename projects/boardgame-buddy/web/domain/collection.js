@@ -35,21 +35,16 @@
   }
 
   async function _fetch() {
-    const data = await window.api.get("/collection");
-    const items = Array.isArray(data) ? data : ((data && data.items) || []);
-    const status = {};
-    const expCount = {};
-    for (const it of items) {
-      if (it.status === "owned" || it.status === "wishlist" || it.status === "played") {
-        status[it.game_id] = it.status;
-      }
-      // Count owned expansions per base BGG id so any tile rendered for
-      // a base game can surface how many expansions the user has.
-      const g = it.game;
-      if (it.status === "owned" && g && g.is_expansion && g.base_game_bgg_id) {
-        expCount[g.base_game_bgg_id] = (expCount[g.base_game_bgg_id] || 0) + 1;
-      }
-    }
+    // /collection/status-map is one bounded round trip. This used to read
+    // GET /collection, which costs three UNBOUNDED ones — the whole collection
+    // with a games join, play stats over the viewer's entire visible history
+    // (which grows with their buddies' logging, not just their own), then an
+    // IN-query to hydrate played-not-owned games — and then discarded
+    // everything except the two dicts below. At a 60s fresh window that read
+    // re-fired roughly once a minute of active navigation.
+    const data = await window.api.get("/collection/status-map");
+    const status = (data && data.status_map) || {};
+    const expCount = (data && data.expansion_counts) || {};
     window.store.set("myCollectionMap", status);
     return { status, expCount };
   }

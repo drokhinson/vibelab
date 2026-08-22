@@ -478,14 +478,27 @@ async def delete_play(
     play_id: str = Path(..., description="Play UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Delete a play log entry."""
-    sb = get_supabase()
+    """Delete a play log entry.
 
-    # Delete play players first (cascade should handle this, but be explicit)
-    sb.table("boardgamebuddy_play_players").delete().eq("play_id", play_id).execute()
-    sb.table("boardgamebuddy_plays").delete().eq("id", play_id).eq(
-        "user_id", user.user_id
-    ).execute()
+    Ownership rides in the WHERE clause, so a missing play and someone else's
+    both report 404 rather than reporting success for a delete that did
+    nothing. There is deliberately no separate play_players delete:
+    play_players.play_id is ON DELETE CASCADE (001_baseline.sql:190), and the
+    explicit version this replaces was scoped by play_id ALONE — any signed-in
+    user could strip every player, winner and score off anyone's play, and the
+    endpoint still answered 200. RLS is not a backstop here; the backend holds
+    the service-role key.
+    """
+    res = (
+        get_supabase()
+        .table("boardgamebuddy_plays")
+        .delete()
+        .eq("id", play_id)
+        .eq("user_id", user.user_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Play not found")
 
     return MessageResponse(message="Play deleted")
 

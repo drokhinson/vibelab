@@ -14,6 +14,7 @@ from .models import (
     CollectionItem,
     CollectionPageResponse,
     CollectionShelfResponse,
+    CollectionStatusMapResponse,
     CollectionUpdate,
     GameSummary,
     MessageResponse,
@@ -28,16 +29,18 @@ from .game_routes import (
 from .services._helpers import game_select_clause
 
 
-# Narrower than game_select_clause(): /collection renders plain tiles, so it
-# skips the rulebook and full-size-image columns the grid and detail surfaces
-# need. is_expansion / base_game_bgg_id ARE included: domain/collection.js
-# derives its owned-expansions-per-base-game map from this payload, and
-# without them that map came back empty every time the client cache expired
-# past its stale window and refetched here instead of being seeded from the
-# profile bundle.
+# Deliberately narrower than game_select_clause(): /collection renders plain
+# tiles, so it skips the expansion, rulebook and full-size-image columns the
+# grid and detail surfaces need.
+#
+# The web client no longer reads this endpoint at all — it derives its status
+# map and expansion counts from /collection/status-map, which is one bounded
+# round trip instead of three unbounded ones. What remains here serves the
+# native app, whose only consumer (app/src/store/AppContext.js:262) reads
+# `status` and `game_id`.
 _TILE_GAME_FIELDS = (
     "id, bgg_id, name, year_published, min_players, max_players, "
-    "playing_time, thumbnail_url, theme_color, is_expansion, base_game_bgg_id"
+    "playing_time, thumbnail_url, theme_color"
 )
 
 
@@ -286,6 +289,34 @@ def _passes_grid_filters(
     if play_mode is not None and game.get("play_mode") != play_mode:
         return False
     return True
+
+
+@router.get(
+    "/collection/status-map",
+    response_model=CollectionStatusMapResponse,
+    status_code=200,
+    summary="Viewer's game->status map and owned-expansion counts",
+)
+async def collection_status_map(
+    user: CurrentUser = Depends(get_current_user),
+) -> CollectionStatusMapResponse:
+    """The status pills and expansion badges, in one DB round trip.
+
+    The web client used to derive these from GET /collection, which costs three
+    unbounded round trips — the whole collection with a games join, play stats
+    over the viewer's entire visible history, then an IN-query to hydrate
+    played-not-owned games — and then threw away everything except these two
+    dicts. That read re-fires roughly once a minute of active navigation.
+
+    GET /collection is unchanged: the native app consumes its row shape.
+    """
+    data = get_supabase().rpc(
+        "bgb_collection_status_map", {"p_viewer": user.user_id}
+    ).execute().data or {}
+    return CollectionStatusMapResponse(
+        status_map=data.get("status_map") or {},
+        expansion_counts={str(k): int(v) for k, v in (data.get("expansion_counts") or {}).items()},
+    )
 
 
 # ── Whole-shelf read (client-side paging) ─────────────────────────────────────

@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 049 (whole-shelf read for client-side collection paging)
+-- Last updated: migration 050 (ghost link/merge in one statement; collection status map)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -469,3 +469,46 @@
 --               definition, so no denormalized columns exist for them.
 --   NOTE:       /collection/grid is deliberately still live — the native app
 --               (app/src/api/client.js) and the web game explorer page against it.
+
+-- bgb_link_ghost(p_viewer UUID, p_display_name TEXT, p_target UUID)
+--   → JSONB { "updated": INT } | { "error": "not_found" }
+--   Defined in: db/migrations/boardgamebuddy/050_ghost_rpcs_and_status_map.sql
+--   Called by:  services/played_with_service.link_ghost (POST /ghost-players/link)
+--   Purpose:    Stamp a real account onto every ghost row matching a name in
+--               the viewer's own plays. Replaces a SELECT of EVERY play id the
+--               viewer owns, pulled into Python and handed back as a PostgREST
+--               `in_` filter — which rides in the query string, so a few
+--               hundred plays made a multi-KB URL and a few thousand failed
+--               outright (414). Same "pull every play id into Python" pass 047
+--               removed from /play-partners. PostgREST cannot put a subquery in
+--               an UPDATE's WHERE, hence SQL. 3 round trips → 1.
+
+-- bgb_merge_ghosts(p_viewer UUID, p_source TEXT, p_target TEXT)
+--   → JSONB { "updated": INT }
+--   Defined in: db/migrations/boardgamebuddy/050_ghost_rpcs_and_status_map.sql
+--   Called by:  services/played_with_service.merge_ghosts (POST /ghost-players/merge)
+--   Purpose:    Collapse two spellings of one ghost. Same query-string cliff as
+--               bgb_link_ghost. 2 round trips → 1. Name validation (blank,
+--               identical) stays in Python and still short-circuits with no DB
+--               call at all.
+
+-- bgb_collection_status_map(p_viewer UUID)
+--   → JSONB { "status_map": {game_id: status}, "expansion_counts": {base_bgg_id: n} }
+--   Defined in: db/migrations/boardgamebuddy/050_ghost_rpcs_and_status_map.sql
+--   Called by:  collection_routes.collection_status_map (GET /collection/status-map),
+--               which web/domain/collection.js reads for status pills and
+--               expansion badges.
+--   Purpose:    The two dicts the web client actually needs. It used to derive
+--               them from GET /collection: three UNBOUNDED round trips (whole
+--               collection + games join; bgb_play_stats over the viewer's
+--               entire visible play history; an IN-query to hydrate
+--               played-not-owned games) of which everything but these two dicts
+--               was discarded — including the play stats that were round trip
+--               2's only purpose. At a 60s fresh window it re-fired about once
+--               a minute of active navigation. Round trip 2 grew with the
+--               viewer's TOTAL VISIBLE plays, i.e. with their buddies' logging
+--               too. Reads the denormalized game_* columns (020), so no games
+--               join; the played branch uses the participated-in visibility
+--               rule shared with bgb_play_stats (039/045).
+--   NOTE:       GET /collection is deliberately unchanged — the native app
+--               consumes its row shape (app/src/store/AppContext.js:262).

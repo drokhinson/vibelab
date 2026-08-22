@@ -67,35 +67,18 @@ def link_ghost(
     if target_user_id == viewer_id:
         raise HTTPException(status_code=400, detail="Cannot link a ghost to yourself")
 
-    target = (
-        sb.table("boardgamebuddy_profiles")
-        .select("id")
-        .eq("id", target_user_id)
-        .execute()
-    )
-    if not target.data:
+    # One statement (migration 050). This used to SELECT every play id the
+    # viewer owns and hand the list back as a PostgREST `in_` filter — which
+    # rides in the query string, so a few thousand plays produced a URL that
+    # failed outright rather than merely slowly.
+    data = sb.rpc("bgb_link_ghost", {
+        "p_viewer": viewer_id,
+        "p_display_name": display_name.strip(),
+        "p_target": target_user_id,
+    }).execute().data or {}
+    if data.get("error") == "not_found":
         raise HTTPException(status_code=404, detail="Target user not found")
-
-    own = (
-        sb.table("boardgamebuddy_plays")
-        .select("id")
-        .eq("user_id", viewer_id)
-        .execute()
-    )
-    play_ids = [r["id"] for r in own.data or []]
-    if not play_ids:
-        return 0
-
-    # ilike with no wildcards == case-insensitive exact match.
-    res = (
-        sb.table("boardgamebuddy_play_players")
-        .update({"player_user_id": target_user_id})
-        .in_("play_id", play_ids)
-        .ilike("player_display_name", display_name)
-        .is_("player_user_id", "null")
-        .execute()
-    )
-    return len(res.data or [])
+    return int(data.get("updated") or 0)
 
 
 def ghost_out_of_play(
@@ -155,22 +138,10 @@ def merge_ghosts(
     if src.lower() == tgt.lower():
         raise HTTPException(status_code=400, detail="Source and target ghost must differ")
 
-    own = (
-        sb.table("boardgamebuddy_plays")
-        .select("id")
-        .eq("user_id", viewer_id)
-        .execute()
-    )
-    play_ids = [r["id"] for r in own.data or []]
-    if not play_ids:
-        return 0
-
-    res = (
-        sb.table("boardgamebuddy_play_players")
-        .update({"player_display_name": tgt})
-        .in_("play_id", play_ids)
-        .ilike("player_display_name", src)
-        .is_("player_user_id", "null")
-        .execute()
-    )
-    return len(res.data or [])
+    # One statement (migration 050) — same query-string cliff as link_ghost.
+    data = sb.rpc("bgb_merge_ghosts", {
+        "p_viewer": viewer_id,
+        "p_source": src,
+        "p_target": tgt,
+    }).execute().data or {}
+    return int(data.get("updated") or 0)
