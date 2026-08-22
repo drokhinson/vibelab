@@ -433,7 +433,7 @@
               <li class="play-detail__edit-player">
                 <span class="play-detail__edit-player-name">${escapeHtml(pl.name)}</span>
                 ${hasRoundGrid(d.players, "roundScores")
-                  ? `<span class="play-detail__edit-score-readout">${escapeHtml(sumRounds(pl.roundScores))}</span>`
+                  ? `<span class="play-detail__edit-score-readout">${escapeHtml(playerTotal(pl, d.players))}</span>`
                   : `<input type="number" class="input input-bordered input-sm play-detail__edit-score"
                             placeholder="Score"
                             value="${escapeAttr(pl.score)}"
@@ -533,6 +533,9 @@
   function removePlayer(i) {
     if (!state.draft) return;
     state.draft.players.splice(i, 1);
+    // Dropping the player who had the longest column shrinks the grid, so the
+    // remaining totals are over a different number of rounds now.
+    resyncScores(state.draft.players);
     render();
   }
 
@@ -546,7 +549,7 @@
     // Sanitized string ("-5") so a leading minus survives; null for empty.
     const clean = window.sanitizeRoundScore(value);
     player.roundScores[r] = clean === "" ? null : clean;
-    player.score = String(sumRounds(player.roundScores));
+    resyncScores(state.draft.players);
     autoSelectWinners();
     render();
   }
@@ -559,7 +562,7 @@
     const cur = player.roundScores[r] == null ? "" : String(player.roundScores[r]);
     const next = window.nextSignToggle(cur);
     player.roundScores[r] = next === "" ? null : next;
-    player.score = String(sumRounds(player.roundScores));
+    resyncScores(state.draft.players);
     autoSelectWinners();
     render();
     const el = document.getElementById(`rg-PlayDetailPopup-${i}-${r}`);
@@ -572,20 +575,20 @@
   }
   function addRound() {
     if (!state.draft) return;
-    for (const p of state.draft.players) {
-      if (!Array.isArray(p.roundScores)) p.roundScores = [];
-      p.roundScores.push(null);
-    }
+    normalizeRounds(state.draft.players);
+    for (const p of state.draft.players) p.roundScores.push(null);
+    resyncScores(state.draft.players);
     render();
   }
   function removeRoundAt(r) {
     if (!state.draft) return;
-    for (const p of state.draft.players) {
-      if (Array.isArray(p.roundScores) && r >= 0 && r < p.roundScores.length) {
-        p.roundScores.splice(r, 1);
-      }
-      p.score = String(sumRounds(p.roundScores));
-    }
+    // Normalize first so the splice lands on every column. Skipping the ones
+    // whose array didn't reach `r` is what let the columns drift to different
+    // lengths in the first place.
+    const n = normalizeRounds(state.draft.players);
+    if (!(r >= 0 && r < n)) return;
+    for (const p of state.draft.players) p.roundScores.splice(r, 1);
+    resyncScores(state.draft.players);
     // When the grid empties out (or drops to a single round), clear the
     // arrays entirely so the save path lands round_scores=NULL again and
     // the "Track per-round scores" affordance re-appears.
@@ -614,8 +617,8 @@
         ? existing[0]
         : (p.score === "" || p.score == null ? null : Number(p.score));
       p.roundScores = [initial, null];
-      p.score = String(sumRounds(p.roundScores));
     }
+    resyncScores(state.draft.players);
     render();
   }
 
@@ -625,15 +628,49 @@
   // still toggle winners manually via the trophy / Won checkbox.
   function autoSelectWinners() {
     if (!state.draft) return;
-    const totals = state.draft.players.map((p) => sumRounds(p.roundScores));
+    const totals = state.draft.players.map((p) => playerTotal(p, state.draft.players));
     if (totals.every((t) => t === 0)) return;
     const max = Math.max(...totals);
     state.draft.players.forEach((p, i) => { p.is_winner = totals[i] === max; });
   }
 
-  function sumRounds(rs) {
-    if (!Array.isArray(rs)) return 0;
-    return rs.reduce((a, b) => a + (Number(b) || 0), 0);
+  // A player's total, summed over the grid's round count — NOT over that
+  // player's own array length. The grid renders max(length) rows for every
+  // column, so a short array must count its missing rounds as blanks rather
+  // than silently shortening the sum. Delegates to the widget's helper so the
+  // readout beside a player's name and the Total under their column are the
+  // same number, computed once.
+  function playerTotal(player, players) {
+    const roster = players || (state.draft && state.draft.players) || [];
+    return window.roundGridTotal(player, window.roundGridRoundCount(roster));
+  }
+
+  // Pad every player's roundScores out to the grid's round count so an edit
+  // can't leave the columns at different lengths. Mirrors play-flow-view's
+  // _normalizeRoundArrays.
+  function normalizeRounds(players) {
+    const n = window.roundGridRoundCount(players);
+    for (const p of players) {
+      if (!Array.isArray(p.roundScores)) p.roundScores = [];
+      for (let r = 0; r < n; r++) {
+        if (!(r in p.roundScores)) p.roundScores[r] = null;
+      }
+    }
+    return n;
+  }
+
+  // Re-derive every player's `score` from their rounds. Called after any
+  // structural change to the grid (add/remove round, add/remove player), so
+  // `score` never survives as a stale total from a previous shape.
+  //
+  // No-ops when there is no grid: on the simple-score path `score` is what the
+  // author typed, and zeroing it out because there are no rounds to add up
+  // would be its own kind of wrong maths.
+  function resyncScores(players) {
+    const n = normalizeRounds(players);
+    if (n === 0) return n;
+    for (const p of players) p.score = String(playerTotal(p, players));
+    return n;
   }
 
   function addPlayer() {
@@ -649,10 +686,7 @@
     if (!dupe) {
       // Match the existing rounds shape so the new row aligns with the
       // grid (nulls fill the columns that other players already have).
-      const existingRounds = Math.max(
-        0,
-        ...state.draft.players.map((p) => (p.roundScores || []).length)
-      );
+      const existingRounds = window.roundGridRoundCount(state.draft.players);
       state.draft.players.push({
         name,
         is_winner: false,
@@ -784,6 +818,10 @@
     // derived from the sum of their rounds, ignoring any stale value
     // left over from before the author opted into rounds.
     const gridActive = hasRoundGrid(state.draft.players, "roundScores");
+    // Square the columns up before serializing: `score` is summed over the
+    // grid's round count, so `round_scores` has to be that long too or the
+    // saved play would carry a total its own breakdown doesn't add up to.
+    const gridRounds = gridActive ? normalizeRounds(state.draft.players) : 0;
     const payload = {
       played_at: state.draft.played_at,
       notes: state.draft.notes || null,
@@ -792,11 +830,11 @@
       play_mode: state.draft.play_mode || null,
       players: state.draft.players.map((p) => {
         const rs = Array.isArray(p.roundScores) ? p.roundScores : [];
-        const round_scores = gridActive && rs.length > 1
-          ? rs.map((v) => window.parseRoundScore(v))
+        const round_scores = gridActive && gridRounds > 1
+          ? rs.slice(0, gridRounds).map((v) => window.parseRoundScore(v))
           : null;
         const score = gridActive
-          ? sumRounds(rs)
+          ? playerTotal(p, state.draft.players)
           : (p.score === "" || p.score == null ? null : Number(p.score));
         return {
           name: p.name,

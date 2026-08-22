@@ -28,13 +28,21 @@
 //                     play-flow-view overlay live realtime scores when a
 //                     player has a real user_id. Defaults to reading from
 //                     player.roundScores.
-//   getPlayerTotal  — optional `(player) → number`. Same idea — play-flow
-//                     overlays live totals from realtime.
 //   headerNames     — start each column header on the player's name rather
 //                     than the colored bubble. The live play screens (host +
 //                     joiner mirror) pass true because names are what you
 //                     scan mid-game; the play-detail popup leaves it off.
 //                     Either way tapping a header flips that column.
+//
+// There is deliberately NO total resolver. The Total row is ALWAYS the sum of
+// the very cells this render just emitted — same getCellValue, same round
+// range — so "the column doesn't add up" is not a state the grid can reach.
+// Consumers that patch the totals row in place must call the exported
+// window.roundGridTotal() with the same arguments; anything that recomputes a
+// total its own way is a bug waiting to happen (it was: hosts summed each
+// player's own roundScores array while the grid rendered the longest array's
+// worth of rows, so a short array silently dropped visible cells from its
+// total, and a total refresh awaited a network write that could hang).
 
 (function () {
   function renderRoundGrid(players, host, opts) {
@@ -44,7 +52,6 @@
     const showSign = !!o.showSign;
     const headerNames = !!o.headerNames;
     const getCell = o.getCellValue || defaultCellValue;
-    const getTotal = o.getPlayerTotal || defaultPlayerTotal;
     const safePlayers = Array.isArray(players) ? players : [];
     // Viewer mode (joiner's read-only mirror): exactly one column — the
     // current user's — stays editable, every other column renders greyed-out
@@ -58,10 +65,10 @@
     const colRead = (p) => viewerMode && !colEditable(p);
     // Joiner sizes its grid from the live-scores round count, not from each
     // player's local roundScores array (which it doesn't have).
-    const roundCount =
-      o.roundCount != null
-        ? o.roundCount
-        : Math.max(0, ...safePlayers.map((p) => (p.roundScores || []).length));
+    const roundCount = roundGridRoundCount(safePlayers, o.roundCount);
+    // One total implementation, fed the same resolver and the same round
+    // range the rows below were built from.
+    const getTotal = (p) => roundGridTotal(p, roundCount, getCell);
 
     return `
       <div class="scoring-table-wrap">
@@ -135,6 +142,9 @@
     </div>`;
   }
 
+  // Exported as window.renderRoundGridTotalsCell for hosts that repaint the
+  // totals row in place between full renders — same markup, same classes, so a
+  // patched row can't drift from a freshly rendered one.
   function renderTotalsCell(p, i, mode, total, host, showWinner, readClass) {
     // Co-op: the whole table wins or loses together, no per-player trophy.
     const negClass = Number(total) < 0 ? " is-neg" : "";
@@ -167,8 +177,30 @@
     return v == null || v === "" ? "" : String(v);
   }
 
-  function defaultPlayerTotal(player) {
-    return (player.roundScores || []).reduce((a, b) => a + (Number(b) || 0), 0);
+  // How many round rows a player set renders. `explicit` (opts.roundCount)
+  // wins when the caller knows the count from somewhere other than the local
+  // arrays — the joiner sizes its mirror from live-scores round indexes.
+  // Otherwise it's the longest roundScores array, which is what the grid has
+  // always rendered; the point of exporting it is that totals are now summed
+  // over exactly this many rounds too.
+  function roundGridRoundCount(players, explicit) {
+    if (explicit != null) return Math.max(0, Number(explicit) || 0);
+    const safe = Array.isArray(players) ? players : [];
+    return Math.max(0, ...safe.map((p) => ((p && p.roundScores) || []).length));
+  }
+
+  // The one true column total: the sum of the cells the grid shows for this
+  // player. `getCell` must be the same resolver passed to renderRoundGrid and
+  // `roundCount` the same count, or the number under the column stops meaning
+  // "the cells above me, added up".
+  function roundGridTotal(player, roundCount, getCell) {
+    const resolve = typeof getCell === "function" ? getCell : defaultCellValue;
+    const n = Math.max(0, Number(roundCount) || 0);
+    let total = 0;
+    for (let r = 0; r < n; r++) {
+      total += parseRoundScore(resolve(player, r)) || 0;
+    }
+    return total;
   }
 
   // Column-header badge. Renders the player's colored bubble but FORCES
@@ -271,6 +303,9 @@
   };
 
   window.renderRoundGrid = renderRoundGrid;
+  window.renderRoundGridTotalsCell = renderTotalsCell;
+  window.roundGridRoundCount = roundGridRoundCount;
+  window.roundGridTotal = roundGridTotal;
   window.sanitizeRoundScore = sanitizeRoundScore;
   window.parseRoundScore = parseRoundScore;
   window.nextSignToggle = nextSignToggle;

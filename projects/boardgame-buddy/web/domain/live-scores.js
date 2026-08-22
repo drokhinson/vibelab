@@ -11,6 +11,7 @@
 //   const off = ls.subscribe(() => render());
 //   ls.setMyScore(roundIndex, value);              // any joiner
 //   ls.setAnyScore(userId, roundIndex, value);     // host only
+//   ls.removeRoundAt(roundIndex);                  // host only
 //   await ls.stop();
 //
 // Cell lookups are keyed (player_user_id, round_index). Guest joiners
@@ -37,6 +38,11 @@
       this._listeners = new Set();
       // Map<player_user_id, Map<round_index, score>>
       this._byPlayer = new Map();
+      // Optimistic writes that haven't been confirmed by the table yet, keyed
+      // "<player>|<round>". refresh() rebuilds _byPlayer from what the table
+      // returns, so without this an in-flight keystroke would blink back to
+      // its old value on the next poll tick.
+      this._pending = new Map();
     }
 
     async start() {
@@ -82,6 +88,7 @@
       this._channel = null;
       this._listeners.clear();
       this._byPlayer.clear();
+      this._pending.clear();
     }
 
     /**
@@ -93,11 +100,29 @@
     async refresh() {
       if (!window.supabaseClient || !this.sessionId) return;
       try {
-        const { data } = await window.supabaseClient
+        const { data, error } = await window.supabaseClient
           .from("boardgamebuddy_play_session_scores")
           .select("session_id, player_user_id, round_index, score")
           .eq("session_id", this.sessionId);
-        for (const row of data || []) this._ingest(row);
+        // A failed read leaves the cached map alone — better a slightly stale
+        // grid than an empty one.
+        if (error) throw error;
+        // REPLACE the map rather than merging into it. Merging meant a row the
+        // host deleted (a removed round) lived on in the cache forever, so
+        // totalFor() and maxRound() kept counting a round that was no longer
+        // on anyone's grid.
+        const next = new Map();
+        for (const row of data || []) this._ingestInto(next, row);
+        // Re-apply writes still in flight — the table hasn't seen them yet.
+        for (const [key, score] of this._pending) {
+          const sep = key.lastIndexOf("|");
+          this._ingestInto(next, {
+            player_user_id: key.slice(0, sep),
+            round_index: Number(key.slice(sep + 1)),
+            score,
+          });
+        }
+        this._byPlayer = next;
       } catch (_) {
         // Best-effort; the Realtime subscription will catch us up otherwise.
       }
@@ -105,27 +130,75 @@
     }
 
     /**
-     * Host-only. Delete every score row at a round index for this session so
-     * a round the host removed disappears from joiners' grids (the joiner
-     * sizes its grid from the highest round_index it has seen). Mirrors the
-     * null placeholder the host writes on add-round.
+     * Host-only. Remove a round: drop every score row at `roundIndex` and pull
+     * the rounds after it down one slot, mirroring the Array.splice the host
+     * just did to its local roundScores.
+     *
+     * Deleting the index without shifting was a silent data corruption: rows
+     * stayed keyed to their original round_index while the grid re-numbered
+     * around the gap, so every cell below the removed round rendered the
+     * round above it — and the Total, being the sum of those cells, went with
+     * them. The joiner's mirror (which sizes itself from the highest
+     * round_index it has seen) kept a phantom trailing round too.
+     *
      * @param {number} roundIndex
      */
-    async deleteRound(roundIndex) {
+    async removeRoundAt(roundIndex) {
       if (!this.isHost) throw new Error("Only the host can remove a round");
       const idx = Number(roundIndex);
-      // Drop locally first so maxRound() updates immediately, then persist.
-      for (const m of this._byPlayer.values()) m.delete(idx);
+      if (!Number.isFinite(idx) || idx < 0) return;
+      // Shift locally first so maxRound() and every total update immediately,
+      // then reconcile the table.
+      for (const [playerId, m] of this._byPlayer) {
+        const shifted = new Map();
+        for (const [r, v] of m) {
+          if (r === idx) continue;
+          shifted.set(r > idx ? r - 1 : r, v);
+        }
+        this._byPlayer.set(playerId, shifted);
+      }
+      // Pending writes are re-applied by refresh(), so they need the same
+      // shift or they'd resurrect the pre-removal numbering.
+      const pending = new Map();
+      for (const [key, score] of this._pending) {
+        const sep = key.lastIndexOf("|");
+        const r = Number(key.slice(sep + 1));
+        if (r === idx) continue;
+        pending.set(`${key.slice(0, sep)}|${r > idx ? r - 1 : r}`, score);
+      }
+      this._pending = pending;
       this._emit();
       if (!window.supabaseClient || !this.sessionId) return;
       try {
-        await window.supabaseClient
-          .from("boardgamebuddy_play_session_scores")
+        // Delete the whole tail and rewrite it from the shifted map. A
+        // per-row UPDATE ladder would collide with the
+        // (session_id, player_user_id, round_index) unique index partway
+        // through; dropping the tail first cannot.
+        const from = () =>
+          window.supabaseClient.from("boardgamebuddy_play_session_scores");
+        await from()
           .delete()
           .eq("session_id", this.sessionId)
-          .eq("round_index", idx);
+          .gte("round_index", idx);
+        const rows = [];
+        for (const [playerId, m] of this._byPlayer) {
+          for (const [r, score] of m) {
+            if (r < idx) continue;
+            rows.push({
+              session_id: this.sessionId,
+              player_user_id: playerId,
+              round_index: r,
+              score: score == null ? null : score,
+            });
+          }
+        }
+        if (rows.length) {
+          await from().upsert(rows, {
+            onConflict: "session_id,player_user_id,round_index",
+          });
+        }
       } catch (_) {
-        // Best-effort; a stale row will be re-read on the next refresh.
+        // Best-effort; the next refresh() re-reads the table wholesale.
       }
     }
 
@@ -147,14 +220,26 @@
     }
 
     /**
-     * Sum of all round scores for a player (live-scoring path only).
-     * Returns 0 for an unknown player.
+     * Sum of a player's round scores (live-scoring path only). Returns 0 for
+     * an unknown player.
+     *
+     * Pass `roundCount` wherever the number is shown next to a grid: rounds at
+     * or beyond it aren't on screen, and summing them is how a total ends up
+     * larger than the cells above it. Callers rendering the shared grid should
+     * prefer window.roundGridTotal(), which sums the painted cells directly.
+     *
+     * @param {string} playerUserId
+     * @param {number} [roundCount] when given, only rounds [0, roundCount) count.
      */
-    totalFor(playerUserId) {
+    totalFor(playerUserId, roundCount) {
       const m = this._byPlayer.get(playerUserId);
       if (!m) return 0;
+      const n = roundCount == null ? null : Number(roundCount);
       let total = 0;
-      for (const v of m.values()) total += Number(v) || 0;
+      for (const [r, v] of m) {
+        if (n != null && (r < 0 || r >= n)) continue;
+        total += Number(v) || 0;
+      }
       return total;
     }
 
@@ -200,6 +285,8 @@
         round_index: roundIndex,
         score: numeric,
       });
+      const key = `${playerUserId}|${Number(roundIndex)}`;
+      this._pending.set(key, numeric);
       this._emit();
       const row = {
         session_id: this.sessionId,
@@ -207,19 +294,34 @@
         round_index: roundIndex,
         score: numeric,
       };
+      const settle = () => {
+        // Only clear if this is still the newest write for the cell — a later
+        // keystroke has already replaced the entry and owns it now.
+        if (this._pending.get(key) === numeric) this._pending.delete(key);
+      };
       return window.supabaseClient
         .from("boardgamebuddy_play_session_scores")
         .upsert(row, {
           onConflict: "session_id,player_user_id,round_index",
-        });
+        })
+        .then(
+          (res) => { settle(); return res; },
+          (err) => { settle(); throw err; }
+        );
     }
 
     _ingest(row) {
+      this._ingestInto(this._byPlayer, row);
+    }
+
+    // Same ingest, into a caller-supplied map — refresh() builds a fresh one
+    // so a wholesale re-read drops rows that no longer exist in the table.
+    _ingestInto(byPlayer, row) {
       if (!row || !row.player_user_id || row.round_index == null) return;
-      let m = this._byPlayer.get(row.player_user_id);
+      let m = byPlayer.get(row.player_user_id);
       if (!m) {
         m = new Map();
-        this._byPlayer.set(row.player_user_id, m);
+        byPlayer.set(row.player_user_id, m);
       }
       m.set(Number(row.round_index), row.score == null ? null : Number(row.score));
     }

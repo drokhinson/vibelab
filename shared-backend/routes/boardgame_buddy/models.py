@@ -2,7 +2,14 @@
 
 from datetime import date, datetime
 from typing import Any, Literal, Optional, Union
-from pydantic import UUID4, BaseModel, Field, SecretStr, computed_field
+from pydantic import (
+    UUID4,
+    BaseModel,
+    Field,
+    SecretStr,
+    computed_field,
+    model_validator,
+)
 
 from .constants import (
     BggAuthState,
@@ -293,9 +300,26 @@ class PlayerEntry(BaseModel):
     user_id: Optional[str] = None
     # Per-round score breakdown (migration 028). Only sent when more than
     # one round was tracked — the FE drops it for ≤1-round plays so the
-    # column stays NULL for the simple-score path. `score` above is still
-    # authoritative for the final total.
+    # column stays NULL for the simple-score path.
     round_scores: Optional[list[Optional[int]]] = None
+
+    @model_validator(mode="after")
+    def _score_matches_rounds(self) -> "PlayerEntry":
+        """When a round breakdown is present, `score` IS its sum.
+
+        A play whose total disagrees with the rounds printed underneath it is
+        the single most confidence-destroying thing this app can show, and the
+        client is not the place to guarantee it: a dropped realtime write, a
+        column left at a stale length, or an older build all used to land a
+        total that its own round_scores didn't add up to. Every write path
+        (POST /plays, PATCH /plays/{id} and the lobby finalize, which dumps
+        this model into the RPC payload) goes through here, so the invariant
+        holds for all of them. Rounds that came in NULL count as zero — that's
+        a round nobody scored in, which is what the grid shows too.
+        """
+        if self.round_scores:
+            self.score = sum(v or 0 for v in self.round_scores)
+        return self
 
 
 class PlayExpansionRef(BaseModel):
