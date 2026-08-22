@@ -246,6 +246,26 @@ class CollectionPageResponse(BaseModel):
     per_page: int
 
 
+class CollectionShelfResponse(BaseModel):
+    """A whole collection shelf in one response, for client-side paging.
+
+    Deliberately carries no page/per_page/search/filter fields: the client
+    caches one entry per (target, status) and derives every page, filter and
+    search from it locally. Adding a filter parameter here would multiply the
+    cache keys and defeat the point — /collection/grid remains the paginated,
+    server-filtered endpoint for callers that need one.
+    """
+
+    items: list[CollectionItem]
+    total: int
+    # True when the shelf is larger than the requested limit, so `items` is a
+    # prefix rather than the whole shelf. The web client falls back to the
+    # server-side grid for search/filter when this is set, rather than
+    # silently searching a truncated list.
+    truncated: bool = False
+    generated_at: datetime
+
+
 # ── Plays ─────────────────────────────────────────────────────────────────────
 
 class PlayerEntry(BaseModel):

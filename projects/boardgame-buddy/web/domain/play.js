@@ -119,6 +119,10 @@
     // fetch. Callers that want the new page warm before the user gets there
     // (the host save flow) follow up with Feed.refreshFirstPage().
     if (window.bgbCache) window.bgbCache.delete("feed", "first");
+    // last_played_at / play_count are the collection shelf's sort key.
+    if (window.Collection && window.Collection.invalidateShelves) {
+      window.Collection.invalidateShelves();
+    }
     if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
     window.store.invalidate("feed");
   }
