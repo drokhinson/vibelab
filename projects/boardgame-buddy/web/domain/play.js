@@ -15,18 +15,51 @@
   const LAST_FRESH_TTL_MS = 24 * 60 * 60 * 1000;
   const LAST_STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+  // Paged /plays reads. This was the only domain call with no cache wrapper at
+  // all, so every Plays mount, every debounced search keystroke and every
+  // return visit re-fetched pages the client had already seen — backspacing
+  // through a search re-issued queries that were already answered.
+  const LIST_NS = "play.list";
+  const LIST_FRESH_TTL_MS = 60 * 1000;
+  const LIST_STALE_TTL_MS = 5 * 60 * 1000;
+
+  function _listKey({ gameId, buddyId, search, userId, page, perPage }) {
+    return [userId || "me", gameId || "", buddyId || "", search || "", page, perPage].join("|");
+  }
+
   class Play {
     constructor(raw) { Object.assign(this, raw || {}); }
 
-    static list({ gameId, buddyId, search, userId, page = 1, perPage = 20 } = {}) {
-      return window.api.get("/plays", {
-        game_id: gameId,
-        buddy_id: buddyId,
-        user_id: userId || undefined,
-        search: search || undefined,
-        page,
-        per_page: perPage,
-      });
+    static list(opts = {}) {
+      const { gameId, buddyId, search, userId, page = 1, perPage = 20 } = opts;
+      const key = _listKey({ gameId, buddyId, search, userId, page, perPage });
+      return window.bgbCache.swr(
+        LIST_NS,
+        key,
+        () => window.api.get("/plays", {
+          game_id: gameId,
+          buddy_id: buddyId,
+          user_id: userId || undefined,
+          search: search || undefined,
+          page,
+          per_page: perPage,
+        }),
+        { freshTtl: LIST_FRESH_TTL_MS, staleTtl: LIST_STALE_TTL_MS },
+      );
+    }
+
+    /**
+     * Synchronous stale-tolerant peek at a cached page, so the Plays spoke can
+     * paint in its first frame instead of awaiting. peek(), not get(): a page a
+     * couple of minutes old beats a spinner, and list() is what corrects it.
+     */
+    static cachedList(opts = {}) {
+      if (!window.bgbCache) return null;
+      const { gameId, buddyId, search, userId, page = 1, perPage = 20 } = opts;
+      return window.bgbCache.peek(
+        LIST_NS,
+        _listKey({ gameId, buddyId, search, userId, page, perPage }),
+      );
     }
 
     static get(id) { return window.api.get(`/plays/${id}`); }
@@ -119,6 +152,10 @@
     // fetch. Callers that want the new page warm before the user gets there
     // (the host save flow) follow up with Feed.refreshFirstPage().
     if (window.bgbCache) window.bgbCache.delete("feed", "first");
+    // Every cached /plays page can contain the row that just changed, and the
+    // paging is offset-based, so a single insert shifts every page after it.
+    // Namespace-wide is the only correct scope.
+    if (window.bgbCache) window.bgbCache.clear(LIST_NS);
     // last_played_at / play_count are the collection shelf's sort key.
     if (window.Collection && window.Collection.invalidateShelves) {
       window.Collection.invalidateShelves();

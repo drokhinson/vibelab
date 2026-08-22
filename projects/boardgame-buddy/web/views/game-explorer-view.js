@@ -13,6 +13,11 @@
 (function () {
   const PER_PAGE = 9;
 
+  // Catalog pages: viewer-independent, changes only when a game is imported.
+  const CATALOG_NS = "game.explorer";
+  const CATALOG_FRESH_TTL_MS = 3 * 60 * 1000;
+  const CATALOG_STALE_TTL_MS = 30 * 60 * 1000;
+
   // Playtime preset bubbles. Inclusive min/max — matches the backend filter
   // (`gte(min) / lte(max)`), so a 60-min game shows up in both the "30–60"
   // and "60–90" buckets. Acceptable for a filter UI.
@@ -24,14 +29,18 @@
     { id: "o120",   label: "2+ hours",  min: 120,  max: null },
   ];
 
-  function isActiveBucket(b, f) {
-    return f.playtimeMin === b.min && f.playtimeMax === b.max;
-  }
+  // Same predicate the collection spokes use. The bucket bounds here are
+  // identical to ShelfFilter.PLAYTIME_BUCKETS; only the labels are shorter,
+  // because this grid is tighter.
+  const isActiveBucket = window.ShelfFilter.isActiveBucket;
 
   class GameExplorerView extends window.View {
     constructor() {
       super("game-explorer");
       this._filters = this._emptyFilters();
+      // Monotonic: a load resolving after a newer one (rapid scope/filter
+      // taps) must not write its result back.
+      this._loadSeq = 0;
       this._page = 1;
       this._games = [];
       this._total = 0;
@@ -105,48 +114,113 @@
       this._loadGames();
     }
 
+    /** The filter set, in the shape ShelfFilter understands. */
+    _filterSpec() {
+      const f = this._filters;
+      return {
+        search: null,
+        players: f.players,
+        playtimeMin: f.playtimeMin,
+        playtimeMax: f.playtimeMax,
+        playMode: f.playMode,
+        excludeExpansions: true,
+      };
+    }
+
+    _queryString() {
+      const qs = new URLSearchParams();
+      qs.set("page", String(this._page));
+      qs.set("per_page", String(PER_PAGE));
+      qs.set("exclude_expansions", "true");
+      if (this._filters.players) qs.set("players", String(this._filters.players));
+      if (this._filters.playtimeMin != null) qs.set("playtime_min", String(this._filters.playtimeMin));
+      if (this._filters.playtimeMax != null) qs.set("playtime_max", String(this._filters.playtimeMax));
+      if (this._filters.playMode) qs.set("play_mode", this._filters.playMode);
+      return qs.toString();
+    }
+
+    /**
+     * Every mount, scope toggle, filter chip and page turn — including Prev —
+     * used to be its own uncached round trip. The "mine" scope is just the
+     * owned shelf, which bootstrap already warms, so it pages locally through
+     * ShelfFilter; the catalog scope is cached per query instead.
+     */
     async _loadGames() {
+      const seq = ++this._loadSeq;
       this._loading = true;
       this._error = null;
       this.render();
       try {
-        const qs = new URLSearchParams();
-        qs.set("page", String(this._page));
-        qs.set("per_page", String(PER_PAGE));
-        qs.set("exclude_expansions", "true");
-        if (this._filters.players) qs.set("players", String(this._filters.players));
-        if (this._filters.playtimeMin != null) qs.set("playtime_min", String(this._filters.playtimeMin));
-        if (this._filters.playtimeMax != null) qs.set("playtime_max", String(this._filters.playtimeMax));
-        if (this._filters.playMode) qs.set("play_mode", this._filters.playMode);
-
-        if (this._filters.scope === "mine") {
-          qs.set("status", "owned");
-          qs.set("sort", "added_at");
-          const data = await window.api.get("/collection/grid?" + qs.toString());
-          this._games = (data && data.items ? data.items.map((it) => it.game) : []);
-          this._total = (data && data.total) || 0;
-          // Auto-switch to "All BgB Games" when the user has nothing owned
-          // matching their filters — only on first load (avoid an infinite
-          // toggle loop if the catalog scope also returns nothing).
-          if (this._total === 0 && !this._scopeAutoSwitched && this._activeFilterCount() === 0) {
-            this._scopeAutoSwitched = true;
-            this._filters.scope = "all";
-            await this._loadGames();
-            return;
-          }
-        } else {
-          const data = await window.api.get("/games?" + qs.toString());
-          this._games = (data && data.games) || [];
-          this._total = (data && data.total) || 0;
-        }
+        if (this._filters.scope === "mine") await this._loadMine(seq);
+        else await this._loadAll(seq);
       } catch (e) {
+        if (seq !== this._loadSeq) return;
         this._error = e.message || "Failed to load games";
         this._games = [];
         this._total = 0;
       } finally {
-        this._loading = false;
-        this.render();
+        if (seq === this._loadSeq) {
+          this._loading = false;
+          this.render();
+        }
       }
+    }
+
+    async _loadMine(seq) {
+      const me = window.store.get("user");
+      const shelf = await window.Collection.shelf((me && me.id) || "me", "owned");
+      if (seq !== this._loadSeq) return;
+
+      if (shelf.truncated) {
+        // Bigger than the shelf endpoint's row cap — narrowing an incomplete
+        // copy would silently miss games, so let the server page it.
+        await this._loadMineFromServer(seq);
+        return;
+      }
+
+      const filtered = window.ShelfFilter.filterShelf(shelf.items, this._filterSpec());
+      // This grid orders by when the game was added, not when it was last
+      // played (the shelf's own order), so it re-sorts. added_at is NOT NULL,
+      // so a plain descending string compare is the whole ordering — none of
+      // the NULLS-LAST subtlety the collection spokes deliberately avoid.
+      filtered.sort((a, b) => String(b.added_at || "").localeCompare(String(a.added_at || "")));
+
+      const paged = window.ShelfFilter.pageOf(filtered, this._page, PER_PAGE);
+      this._page = paged.page;
+      this._games = paged.rows.map((it) => it.game);
+      this._total = paged.total;
+
+      // Auto-switch to the catalog when the user owns nothing matching — only
+      // on an unfiltered first load, so the two scopes can't ping-pong.
+      if (this._total === 0 && !this._scopeAutoSwitched && this._activeFilterCount() === 0) {
+        this._scopeAutoSwitched = true;
+        this._filters.scope = "all";
+        await this._loadGames();
+      }
+    }
+
+    /** Server-paged fallback, only for shelves past the endpoint's row cap. */
+    async _loadMineFromServer(seq) {
+      const qs = this._queryString() + "&status=owned&sort=added_at";
+      const data = await window.api.get("/collection/grid?" + qs);
+      if (seq !== this._loadSeq) return;
+      this._games = (data && data.items ? data.items.map((it) => it.game) : []);
+      this._total = (data && data.total) || 0;
+    }
+
+    async _loadAll(seq) {
+      const qs = this._queryString();
+      // The catalog is viewer-independent and changes only on import, so a
+      // short window makes page-back and filter-toggle-back free.
+      const data = await window.bgbCache.swr(
+        CATALOG_NS,
+        qs,
+        () => window.api.get("/games?" + qs),
+        { freshTtl: CATALOG_FRESH_TTL_MS, staleTtl: CATALOG_STALE_TTL_MS },
+      );
+      if (seq !== this._loadSeq) return;
+      this._games = (data && data.games) || [];
+      this._total = (data && data.total) || 0;
     }
 
     _activeFilterCount() {

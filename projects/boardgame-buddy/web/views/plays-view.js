@@ -47,7 +47,7 @@
       this._resetState();
       this._targetUserId = (this.params && this.params.userId) || null;
       if (this._isOther()) {
-        this._loading = true;
+        if (!this._hydrateFromCache()) this._loading = true;
         this.render();
         window.User.fetch(this._targetUserId)
           .then((p) => { this._targetProfile = p; this.render(); })
@@ -55,25 +55,48 @@
         await this._load({ reset: true });
         return;
       }
-      const seed = window.store.get("profileBundle");
-      if (seed) {
-        this._plays = seed.recent_plays || [];
-        this._total = seed.recent_plays_total || 0;
-        this._statusMap = seed.status_map || {};
-        this._loaded = true;
-      } else {
-        this._loading = true;
-      }
+      this._hydrateFromCache();
       this.render();
+      // Inside the cache's fresh window this resolves with no network call.
       await this._load({ reset: true });
     }
 
+    /**
+     * Paint page 1 from whatever is already known, before awaiting anything:
+     * the cached /plays page first, then the profile bundle's recent_plays.
+     * Survives a hard reload, because bgbCache writes through to localStorage.
+     */
+    _hydrateFromCache() {
+      const cached = window.Play.cachedList({
+        page: 1,
+        perPage: PER_PAGE,
+        search: this._query || null,
+        userId: this._isOther() ? this._targetUserId : undefined,
+      });
+      if (cached && Array.isArray(cached.plays)) {
+        this._plays = cached.plays;
+        this._total = cached.total || cached.plays.length;
+        this._loaded = true;
+        return true;
+      }
+      if (this._isOther()) return false;
+      const seed = window.store.get("profileBundle");
+      if (!seed) return false;
+      this._plays = seed.recent_plays || [];
+      this._total = seed.recent_plays_total || 0;
+      this._statusMap = seed.status_map || {};
+      this._loaded = true;
+      return true;
+    }
+
     renderLoading() {
-      this.container.innerHTML = `
-        ${this._renderHead()}
-        <div class="p-4 grid place-items-center">${window.buddyLoader({ size: 64 })}</div>
-      `;
-      this.refreshIcons();
+      // Runs BEFORE onMount, so read the route params here rather than
+      // trusting instance fields — this view is a singleton and
+      // _targetUserId still holds the PREVIOUS mount's target.
+      this._resetState();
+      this._targetUserId = (this.params && this.params.userId) || null;
+      if (!this._hydrateFromCache()) this._loading = true;
+      this.render();
     }
 
     render() {
@@ -257,6 +280,8 @@
     _onSearchInput(value) {
       this._query = value;
       clearTimeout(this._searchTimer);
+      // Still a server query (search is not local for plays), but repeats —
+      // backspacing through a term — now come back from cache.
       this._searchTimer = setTimeout(() => this._load({ reset: true }), 300);
     }
   }
