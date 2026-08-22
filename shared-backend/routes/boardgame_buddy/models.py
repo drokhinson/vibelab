@@ -246,6 +246,20 @@ class CollectionPageResponse(BaseModel):
     per_page: int
 
 
+class CollectionStatusMapResponse(BaseModel):
+    """The two small dicts the web client actually needs from a collection read.
+
+    GET /collection returns every row with its game embedded, which cost three
+    unbounded round trips to produce; the only consumer read four fields off it
+    and discarded the rest. This is that consumer's actual contract.
+    """
+
+    # game_id (UUID string) -> "owned" | "wishlist" | "played"
+    status_map: dict[str, str] = Field(default_factory=dict)
+    # base game's bgg_id (as a string key) -> count of expansions the viewer owns
+    expansion_counts: dict[str, int] = Field(default_factory=dict)
+
+
 class CollectionShelfResponse(BaseModel):
     """A whole collection shelf in one response, for client-side paging.
 
