@@ -15,6 +15,7 @@ import GameTile from '../components/GameTile';
 import BuddyRow from '../components/BuddyRow';
 import EmptyState from '../components/EmptyState';
 import PendingUploadsBar from '../components/PendingUploadsBar';
+import OfflineBanner from '../components/OfflineBanner';
 import PlayDetailPopup from '../widgets/PlayDetailPopup';
 
 export default function FeedScreen({ navigation }) {
@@ -51,6 +52,7 @@ export default function FeedScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Header navigation={navigation} />
+      <OfflineBanner style={styles.pendingBar} />
       <PendingUploadsBar style={styles.pendingBar} />
       <FlatList
         data={cards}

@@ -5,6 +5,7 @@
 // client organized by domain namespace.
 
 import { supabase } from '../auth/supabase';
+import * as net from '../offline/net';
 
 const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
 const PREFIX = '/api/v1/boardgame_buddy';
@@ -70,13 +71,31 @@ function _buildUrl(path, query) {
   return url;
 }
 
+// The one place connectivity evidence is recorded. A completed response —
+// ANY status — proves the link works, so a 404 or a 500 counts as success
+// here; only a fetch rejection is a network failure. That keeps offline/net.js
+// and the "error without .status means the network died" convention the rest
+// of the app already follows as two views of the same fact, rather than two
+// definitions that can disagree.
+async function _trackedFetch(url, init) {
+  let res;
+  try {
+    res = await fetch(url, init);
+  } catch (e) {
+    net.noteFailure();
+    throw e;
+  }
+  net.noteSuccess();
+  return res;
+}
+
 async function _request(method, path, { body, query, headers, _retried } = {}) {
   const init = { method, headers: { ...(await _authHeader()), ...(headers || {}) } };
   if (body !== undefined) {
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(_buildUrl(path, query), init);
+  const res = await _trackedFetch(_buildUrl(path, query), init);
   if (!res.ok) {
     if (res.status === 401 && !_retried && (await _refreshSession())) {
       return _request(method, path, { body, query, headers, _retried: true });
@@ -98,7 +117,7 @@ async function _request(method, path, { body, query, headers, _retried } = {}) {
 
 // Multipart upload (play photo). In RN the file part is { uri, name, type }.
 async function _upload(path, formData, _retried) {
-  const res = await fetch(BASE_URL + PREFIX + path, {
+  const res = await _trackedFetch(BASE_URL + PREFIX + path, {
     method: 'POST',
     headers: await _authHeader(),
     body: formData,
@@ -133,6 +152,12 @@ function csv(ids) {
 // escape hatch, because a route reachable outside this list can't be audited.
 export const api = {
   formatErrorDetail,
+
+  // ── Connectivity ───────────────────────────────────────────────────────
+  // Unauthenticated and trivial, so a failure can only mean the link. This is
+  // what offline/net.js probes when the user taps "Try again"; every project
+  // has one (.claude/rules/backend-python.md).
+  health: () => get('/health'),
 
   // ── Bootstrap ──────────────────────────────────────────────────────────
   bootstrap: () => get('/bootstrap'),

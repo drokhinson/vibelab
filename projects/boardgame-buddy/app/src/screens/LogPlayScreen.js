@@ -11,6 +11,7 @@ import { COLORS, RADII, SPACING } from '../theme';
 import { Button, Card, Row, Screen, Text } from '../ui';
 import EmptyState from '../components/EmptyState';
 import PendingUploadsBar from '../components/PendingUploadsBar';
+import OfflineBanner from '../components/OfflineBanner';
 import SessionCard from '../components/SessionCard';
 import GameFinder from '../widgets/GameFinder';
 import { confirm } from '../components/ConfirmModal';
@@ -77,6 +78,7 @@ export default function LogPlayScreen({ navigation }) {
         Play
       </Text>
 
+      <OfflineBanner style={{ marginTop: SPACING.sm }} />
       <PendingUploadsBar style={{ marginTop: SPACING.sm }} />
 
       {draft ? (

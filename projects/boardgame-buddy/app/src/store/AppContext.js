@@ -20,6 +20,7 @@ import cache from './cache';
 import { buildActions, normUser, PROFILE_CACHE_KEY, HOST_SEEDS_KEY } from './actions';
 import { hydrateCollection, refreshCollection, clearCollection } from '../offline/collectionStore';
 import { clearOutbox, flushOutbox, hydrateOutbox } from '../offline/playOutbox';
+import * as net from '../offline/net';
 
 const StateContext = createContext(initialState);
 const DispatchContext = createContext(null);
@@ -163,10 +164,26 @@ export function AppProvider({ children }) {
       } catch {}
     };
     runFlush();
+    // This is the composition root: net.js is a leaf that knows how to count
+    // evidence but not how to check or what to do about it, so both halves get
+    // wired here. The reconnect edge is the trigger the app was missing — it
+    // used to drain only on sign-in and foreground, so signal returning while
+    // the user sat on the Feed left the queue parked.
+    net.setProbe(() => api.health());
+    net.onReconnect(runFlush);
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') runFlush();
+      if (s === 'active') {
+        // Whatever we learned before the phone went in a pocket is stale; let
+        // the next real request re-decide rather than showing the banner over
+        // a connection that came back while we weren't looking.
+        net.resetEvidence();
+        runFlush();
+      }
     });
-    return () => sub?.remove?.();
+    return () => {
+      sub?.remove?.();
+      net.onReconnect(null);
+    };
   }, [flushUserId, actions]);
 
   // Bootstrap seed: once currentUser lands, one GET /bootstrap warms first
