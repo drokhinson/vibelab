@@ -114,6 +114,19 @@ def _upsert_collection_row(
     BGG's <privateinfo>). Keys missing from BGG come through as None so
     re-syncing after BGG-side deletion still nulls our copy.
     """
+    sb.table("boardgamebuddy_collections").upsert(
+        _collection_payload(user_id, game, status, private),
+        on_conflict="user_id,game_id",
+    ).execute()
+
+
+def _collection_payload(
+    user_id: str,
+    game: dict,
+    status: str,
+    private: Optional[dict] = None,
+) -> dict:
+    """The row _upsert_collection_row writes. Shared with the batch path."""
     payload: dict = {
         "user_id": user_id,
         "game_id": game["id"],
@@ -130,10 +143,7 @@ def _upsert_collection_row(
             "bgg_inventory_location": private.get("inventory_location"),
             "bgg_quantity": private.get("quantity"),
         })
-    sb.table("boardgamebuddy_collections").upsert(
-        payload,
-        on_conflict="user_id,game_id",
-    ).execute()
+    return payload
 
 
 def _materialize_play(
@@ -165,31 +175,47 @@ def _materialize_play(
 
     play_result = (
         sb.table("boardgamebuddy_plays")
-        .insert({
-            "user_id": user_id,
-            "game_id": game["id"],
-            "played_at": play_payload["played_at"],
-            "notes": play_payload.get("notes"),
-            "bgg_play_id": bgg_play_id,
-            **play_denormalized_from_game(game),
-        })
+        .insert(_play_row(user_id, game, play_payload))
         .execute()
     )
     if not play_result.data:
         return
     play_id = play_result.data[0]["id"]
 
+    rows = _player_rows(play_id, play_payload)
+    if rows:
+        sb.table("boardgamebuddy_play_players").insert(rows).execute()
+
+
+def _play_row(user_id: str, game: dict, play_payload: dict) -> dict:
+    """The boardgamebuddy_plays row for one BGG play. Shared with the batch path."""
+    return {
+        "user_id": user_id,
+        "game_id": game["id"],
+        "played_at": play_payload["played_at"],
+        "notes": play_payload.get("notes"),
+        "bgg_play_id": play_payload.get("bgg_play_id"),
+        **play_denormalized_from_game(game),
+    }
+
+
+def _player_rows(play_id: str, play_payload: dict) -> list[dict]:
+    """play_players rows for one play, skipping blank names.
+
+    Writes through the migration-009 columns so we don't touch the dropped
+    buddy_id (migration 013).
+    """
+    out: list[dict] = []
     for player in play_payload.get("players") or []:
         name = (player.get("name") or "").strip()
         if not name:
             continue
-        # Write through the migration-009 columns so we don't touch the
-        # dropped buddy_id (migration 013).
-        sb.table("boardgamebuddy_play_players").insert({
+        out.append({
             "play_id": play_id,
             "player_display_name": name,
             "is_winner": bool(player.get("is_winner")),
-        }).execute()
+        })
+    return out
 
 
 def _queue_pending(
@@ -201,18 +227,141 @@ def _queue_pending(
 ) -> None:
     """Queue a row for the background worker. Idempotent on (user, bgg_id, kind, status='pending')."""
     sb.table("boardgamebuddy_bgg_pending_imports").upsert(
-        {
-            "user_id": user_id,
-            "bgg_id": bgg_id,
-            "kind": kind,
-            "payload": payload,
-            "status": "pending",
-            "attempts": 0,
-            "error_message": None,
-            "completed_at": None,
-        },
+        _pending_payload(user_id, bgg_id, kind, payload),
         on_conflict="user_id,bgg_id,kind",
     ).execute()
+
+
+def _pending_payload(user_id: str, bgg_id: int, kind: str, payload: dict) -> dict:
+    """The row _queue_pending writes. Shared with the batch path."""
+    return {
+        "user_id": user_id,
+        "bgg_id": bgg_id,
+        "kind": kind,
+        "payload": payload,
+        "status": "pending",
+        "attempts": 0,
+        "error_message": None,
+        "completed_at": None,
+    }
+
+
+# ── Batched sync writers ─────────────────────────────────────────────────────
+# A first sync used to write one row at a time: one upsert per collection game,
+# and per play a dedup SELECT, an INSERT, then one INSERT per player. A
+# 300-game / 800-play / 4-player account came to roughly 5,100 sequential
+# PostgREST calls in a single request — and because the Supabase client is
+# synchronous, every one of them blocked the worker's event loop for every
+# other user of the backend, not just for the syncing one.
+#
+# These write the same rows in a handful of statements. play_routes'
+# _write_play_players already did exactly this for the log-a-play path; the
+# BGG path simply never got the same treatment.
+
+# Chunk size for bulk writes and for `in_` filters. PostgREST puts filters in
+# the query string, so an unchunked `in_` over a few thousand ids is a
+# multi-kilobyte URL that eventually trips a 414.
+_BATCH = 500
+
+
+def _chunked(seq: list, size: int = _BATCH):
+    for i in range(0, len(seq), size):
+        yield seq[i:i + size]
+
+
+def _upsert_collection_rows(sb: Client, user_id: str, items: list[tuple]) -> int:
+    """Bulk-upsert collection rows. `items` is [(game_row, status, private)]."""
+    rows = [_collection_payload(user_id, game, status, private)
+            for game, status, private in items]
+    if not rows:
+        return 0
+    # Later duplicates win, matching the per-row loop's last-write-wins order.
+    # Doing this here rather than in the DB keeps one statement per chunk:
+    # Postgres rejects an ON CONFLICT batch that hits the same key twice.
+    deduped = {(r["user_id"], r["game_id"]): r for r in rows}
+    for chunk in _chunked(list(deduped.values())):
+        sb.table("boardgamebuddy_collections").upsert(
+            chunk, on_conflict="user_id,game_id"
+        ).execute()
+    return len(rows)
+
+
+def _queue_pending_rows(sb: Client, user_id: str, items: list[tuple]) -> int:
+    """Bulk-upsert pending-import rows. `items` is [(bgg_id, kind, payload)]."""
+    rows = [_pending_payload(user_id, bgg_id, kind, payload)
+            for bgg_id, kind, payload in items]
+    if not rows:
+        return 0
+    deduped = {(r["user_id"], r["bgg_id"], r["kind"]): r for r in rows}
+    for chunk in _chunked(list(deduped.values())):
+        sb.table("boardgamebuddy_bgg_pending_imports").upsert(
+            chunk, on_conflict="user_id,bgg_id,kind"
+        ).execute()
+    return len(rows)
+
+
+def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
+    """Bulk-insert plays + their players. `items` is [(game_row, play_payload)].
+
+    Dedup is one batched SELECT against the partial UNIQUE on
+    (user_id, bgg_play_id) (001_baseline.sql:169-171) instead of a probe per
+    play. Rows the account already has are skipped without touching their
+    players, exactly as the per-play path did.
+
+    Plays with no bgg_play_id can't be matched back to their inserted id by
+    key, so they fall through to the single-row path. BGG always supplies one,
+    so this is a guard rather than a code path we expect to take.
+    """
+    keyed: dict[int, tuple] = {}
+    unkeyed: list[tuple] = []
+    for game, payload in items:
+        bgg_play_id = payload.get("bgg_play_id")
+        if bgg_play_id is None:
+            unkeyed.append((game, payload))
+        else:
+            # BGG can repeat a play id across pages; last one wins.
+            keyed[bgg_play_id] = (game, payload)
+
+    for game, payload in unkeyed:
+        _materialize_play(sb, user_id, game, payload)
+
+    if not keyed:
+        return
+
+    already: set = set()
+    for chunk in _chunked(sorted(keyed)):
+        res = (
+            sb.table("boardgamebuddy_plays")
+            .select("bgg_play_id")
+            .eq("user_id", user_id)
+            .in_("bgg_play_id", chunk)
+            .execute()
+        )
+        already.update(r["bgg_play_id"] for r in (res.data or []))
+
+    fresh = [(bgg_play_id, keyed[bgg_play_id]) for bgg_play_id in sorted(keyed)
+             if bgg_play_id not in already]
+    if not fresh:
+        return
+
+    player_rows: list[dict] = []
+    for chunk in _chunked(fresh):
+        inserted = (
+            sb.table("boardgamebuddy_plays")
+            .insert([_play_row(user_id, game, payload) for _, (game, payload) in chunk])
+            .execute()
+        )
+        # Map inserted ids back by bgg_play_id, NOT by array position —
+        # Postgres does not promise INSERT ... RETURNING preserves input order.
+        by_bgg = {r.get("bgg_play_id"): r["id"] for r in (inserted.data or [])}
+        for bgg_play_id, (_game, payload) in chunk:
+            play_id = by_bgg.get(bgg_play_id)
+            if play_id is None:
+                continue
+            player_rows.extend(_player_rows(play_id, payload))
+
+    for chunk in _chunked(player_rows):
+        sb.table("boardgamebuddy_play_players").insert(chunk).execute()
 
 
 # ── BGG XML parsing ──────────────────────────────────────────────────────────
@@ -419,8 +568,40 @@ async def _process_pending_imports(user_id: str) -> None:
                 await asyncio.sleep(_WORKER_THROTTLE_SECONDS)
                 continue
 
-            # Materialize each pending row for this game. game_row already
-            # carries the denormalized fields we need to land on dependents.
+            # Materialize the whole group in bulk first. A single unimported
+            # game can carry dozens of pending play rows — one per logged play
+            # — and writing those one at a time is the same N+1 the first-sync
+            # path had. On any failure we fall back to the per-row loop below,
+            # so one bad row still fails alone instead of failing its group.
+            group_done = False
+            try:
+                _upsert_collection_rows(sb, user_id, [
+                    (game_row, r["payload"]["status"], r["payload"].get("private"))
+                    for r in group if r["kind"] == "collection"
+                ])
+                _materialize_plays(sb, user_id, [
+                    (game_row, r["payload"]) for r in group if r["kind"] == "play"
+                ])
+                for chunk in _chunked([r["id"] for r in group]):
+                    sb.table("boardgamebuddy_bgg_pending_imports").update({
+                        "status": "done",
+                        "error_message": None,
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    }).in_("id", chunk).execute()
+                group_done = True
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "BGG worker: bulk materialize failed user=%s bgg_id=%s, "
+                    "retrying row-by-row: %s", user_id, bgg_id, exc,
+                )
+
+            if group_done:
+                await asyncio.sleep(_WORKER_THROTTLE_SECONDS)
+                continue
+
+            # Per-row fallback. Both writers are idempotent — collections
+            # upsert on (user_id, game_id) and plays dedup on bgg_play_id — so
+            # replaying rows the bulk attempt already landed is safe.
             for row in group:
                 try:
                     if row["kind"] == "collection":
@@ -573,9 +754,14 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
     # timestamp to compute session-scoped progress totals. The FE polls that
     # endpoint to drive an "Imported X of Y" progress bar.
     sync_started_at = datetime.now(timezone.utc)
-    sb.table("boardgamebuddy_profiles").update(
-        {"bgg_last_sync_started_at": sync_started_at.isoformat()}
-    ).eq("id", user_id).execute()
+    # Every Supabase call here is the SYNCHRONOUS client, so anything not
+    # pushed to a thread blocks the worker's event loop for every other
+    # in-flight request — see bootstrap_routes.py:56-63.
+    await asyncio.to_thread(
+        lambda: sb.table("boardgamebuddy_profiles").update(
+            {"bgg_last_sync_started_at": sync_started_at.isoformat()}
+        ).eq("id", user_id).execute()
+    )
 
     collection_rows, coll_warm_up = await _fetch_collection_batched(user_id, username)
 
@@ -589,26 +775,21 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
 
     # Resolve known bgg_ids in two batched queries.
     all_bgg_ids = {bid for bid, _, _ in collection_rows} | {p["bgg_id"] for p in play_rows}
-    known = _existing_game_map(sb, sorted(all_bgg_ids))
+    known = await asyncio.to_thread(_existing_game_map, sb, sorted(all_bgg_ids))
 
-    # Materialize collection.
-    coll_imported = 0
-    coll_pending = 0
+    # Sort each row into "we know this game" or "queue it for the worker",
+    # then write each bucket in bulk. The per-row loops this replaces cost one
+    # round trip per collection game and 2+players per play.
+    coll_known: list[tuple] = []
+    pending: list[tuple] = []
     for bgg_id, status, private in collection_rows:
         game_row = known.get(bgg_id)
         if game_row is not None:
-            _upsert_collection_row(sb, user_id, game_row, status, private)
-            coll_imported += 1
+            coll_known.append((game_row, status, private))
         else:
-            _queue_pending(
-                sb, user_id, bgg_id, "collection",
-                {"status": status, "private": private},
-            )
-            coll_pending += 1
+            pending.append((bgg_id, "collection", {"status": status, "private": private}))
 
-    # Materialize plays.
-    plays_imported = 0
-    plays_pending = 0
+    plays_known: list[tuple] = []
     for play in play_rows:
         bgg_id = play["bgg_id"]
         play_payload = {
@@ -619,11 +800,23 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
         }
         game_row = known.get(bgg_id)
         if game_row is not None:
-            _materialize_play(sb, user_id, game_row, play_payload)
-            plays_imported += 1
+            plays_known.append((game_row, play_payload))
         else:
-            _queue_pending(sb, user_id, bgg_id, "play", play_payload)
-            plays_pending += 1
+            pending.append((bgg_id, "play", play_payload))
+
+    # Counts stay row-based, not statement-based, so the summary the FE renders
+    # means the same thing it did before.
+    coll_imported = len(coll_known)
+    plays_imported = len(plays_known)
+    coll_pending = sum(1 for _, kind, _ in pending if kind == "collection")
+    plays_pending = sum(1 for _, kind, _ in pending if kind == "play")
+
+    def _apply_writes() -> None:
+        _upsert_collection_rows(sb, user_id, coll_known)
+        _materialize_plays(sb, user_id, plays_known)
+        _queue_pending_rows(sb, user_id, pending)
+
+    await asyncio.to_thread(_apply_writes)
 
     total = coll_imported + coll_pending + plays_imported + plays_pending
     warm_up_retry_pending = (coll_warm_up or plays_warm_up) and total == 0
