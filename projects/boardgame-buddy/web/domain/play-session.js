@@ -272,10 +272,14 @@
       .catch(() => {});
   }
 
+  // A player's recorded total. When rounds were tracked it is the sum of the
+  // grid — computed by the same helper the scoring table renders its Total
+  // with (widgets/round-score-grid.js), so the number saved to the play is the
+  // number the host was looking at when they hit Save.
   function rollupScore(p) {
     const rs = p && p.roundScores;
     if (Array.isArray(rs) && rs.length > 0) {
-      return rs.reduce((a, b) => a + (Number(b) || 0), 0);
+      return window.roundGridTotal(p, rs.length);
     }
     return p && p.score != null ? p.score : null;
   }

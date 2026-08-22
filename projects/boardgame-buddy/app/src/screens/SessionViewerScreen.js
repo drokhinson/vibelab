@@ -127,7 +127,7 @@ export default function SessionViewerScreen({ navigation, route }) {
               players={players}
               rounds={rounds}
               getCell={(pi, ri) => live.getScore(players[pi].user_id, ri)}
-              getTotal={(pi) => live.totalFor(players[pi].user_id)}
+              getTotal={(pi) => live.totalFor(players[pi].user_id, rounds)}
               canEditColumn={(pi) => players[pi].user_id === me.id}
               onSetCell={(pi, ri, v) => { if (players[pi].user_id === me.id) live.setMyScore(ri, v).catch(() => {}); }}
               editable

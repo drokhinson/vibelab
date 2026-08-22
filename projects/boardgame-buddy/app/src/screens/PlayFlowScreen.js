@@ -177,11 +177,40 @@ export default function PlayFlowScreen({ navigation, route }) {
     const v = scores[p.key] && scores[p.key][roundIdx];
     return v == null ? null : v;
   }
+  // Sum only the rounds the grid is actually showing. Summing every key in the
+  // column meant a round the host removed kept counting toward the total while
+  // its cell was gone from the table — a total that doesn't add up to the
+  // numbers above it. Mirrors window.roundGridTotal on the web.
   function getTotal(playerIdx) {
     const p = players[playerIdx];
     const col = scores[p.key] || {};
-    return Object.values(col).reduce((s, v) => s + (Number(v) || 0), 0);
+    let total = 0;
+    for (let r = 0; r < rounds; r++) total += Number(col[r]) || 0;
+    return total;
   }
+  // Drop the last round AND the cells that lived in it, so the value can't sit
+  // in state counting toward a total for a column nobody can see (and can't
+  // reappear if the host adds a round back).
+  function removeLastRound() {
+    if (rounds <= 1) return;
+    const gone = rounds - 1;
+    setRounds(gone);
+    setScores((prev) => {
+      const next = {};
+      for (const [key, col] of Object.entries(prev)) {
+        const kept = { ...col };
+        delete kept[gone];
+        next[key] = kept;
+      }
+      return next;
+    });
+    // Delete the round's live rows so it disappears from joiners' mirrors.
+    // Writing NULLs would leave the rows behind, and the subscribe handler
+    // below (setRounds(max(r, live.maxRound() + 1))) would grow the grid
+    // straight back to the round just removed.
+    if (liveRef.current) liveRef.current.removeRoundAt(gone).catch(() => {});
+  }
+
   function toggleWinner(playerIdx) {
     setPlayers((prev) => prev.map((p, i) => (i === playerIdx ? { ...p, is_winner: !p.is_winner } : p)));
   }
@@ -270,7 +299,7 @@ export default function PlayFlowScreen({ navigation, route }) {
               isWinner={(i) => players[i].is_winner}
               onSetCell={setCell}
               onAddRound={() => setRounds((r) => r + 1)}
-              onRemoveRound={() => setRounds((r) => Math.max(1, r - 1))}
+              onRemoveRound={removeLastRound}
               onToggleWinner={toggleWinner}
             />
             {game ? (

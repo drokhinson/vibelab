@@ -362,8 +362,7 @@
         for (let r = 0; r < this._renderedRounds; r++) {
           const el = this.container.querySelector(`.scoring-table [data-score-cell="${i}-${r}"]`);
           if (!el || el === focused) continue;
-          const live = this._liveScores ? this._liveScores.getScore(p.user_id, r) : null;
-          const text = live == null ? "" : String(live);
+          const text = this._cellValue(p, r);
           if (el.tagName === "INPUT") {
             if (el.value !== text) el.value = text;
           } else if (el.textContent !== text) {
@@ -431,7 +430,7 @@
       let bestTotal = -Infinity;
       for (const p of parts) {
         if (!p.user_id) continue;
-        const t = this._liveScores.totalFor(p.user_id);
+        const t = this._liveScores.totalFor(p.user_id, this._renderedRounds);
         if (t > bestTotal) {
           bestTotal = t;
           best = p.display_name;
@@ -656,11 +655,7 @@
         roundCount: rounds,
         headerNames: true,
         showSign: false,
-        getCellValue: (p, r) => {
-          const v = this._liveScores ? this._liveScores.getScore(p.user_id, r) : null;
-          return v == null ? "" : String(v);
-        },
-        getPlayerTotal: (p) => (this._liveScores ? this._liveScores.totalFor(p.user_id) : 0),
+        getCellValue: (p, r) => this._cellValue(p, r),
       });
       return `
         <section class="cascade-card cascade-card--scoring">
@@ -670,10 +665,25 @@
       `;
     }
 
+    // The joiner has no local roundScores — every cell it shows comes from the
+    // live-scores overlay. One resolver, used by the grid render, the in-place
+    // cell patch and the totals patch alike.
+    _cellValue(player, roundIndex) {
+      const v = this._liveScores
+        ? this._liveScores.getScore(player.user_id, roundIndex)
+        : null;
+      return v == null ? "" : String(v);
+    }
+
     // Patch the per-player totals in place by column index. The totals row is
     // rendered by the shared widget (one .scoring-total span per participant,
     // in order), so we just refresh the numbers without rebuilding the row —
     // keeping the read/grey column classes the widget set on first paint.
+    //
+    // Summed through window.roundGridTotal over _renderedRounds — the same
+    // helper and the same round range the widget used — so the patched number
+    // still equals the cells above it. totalFor() alone would have counted
+    // rounds outside the rendered grid.
     _refreshTotalsCells() {
       if (!this._session) return;
       const totals = this.container.querySelectorAll(".scoring-total-row .scoring-total");
@@ -682,7 +692,11 @@
       participants.forEach((p, i) => {
         const span = totals[i];
         if (!span) return;
-        const v = this._liveScores ? this._liveScores.totalFor(p.user_id) : 0;
+        const v = window.roundGridTotal(
+          { user_id: p.user_id },
+          this._renderedRounds,
+          (pl, r) => this._cellValue(pl, r)
+        );
         const text = String(v);
         if (span.textContent !== text) span.textContent = text;
       });

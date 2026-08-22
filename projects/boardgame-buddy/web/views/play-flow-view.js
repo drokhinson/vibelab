@@ -469,6 +469,11 @@
               user_id: part.user_id || null,
               avatar: part.avatar || null,
               participant_id: part.id,
+              // Same-length array as everyone else, exactly like _addPlayer.
+              // Promoted joiners used to arrive with no roundScores at all,
+              // which is how a column ended up showing more cells than its
+              // Total counted.
+              roundScores: Array(this._maxRoundCount()).fill(null),
             });
             byName.set(key, this._ps.players.length - 1);
             playersChanged = true;
@@ -530,9 +535,12 @@
     _patchScoringCells() {
       const focused = this.container.querySelector("input.scoring-cell:focus");
       const players = this._ps.players;
+      // The grid renders max(roundScores.length) rows for EVERY column, so
+      // patch that many cells per player — a per-player length would leave a
+      // short column's live cells frozen at whatever they last rendered as.
+      const n = this._maxRoundCount();
       for (let i = 0; i < players.length; i++) {
         const p = players[i];
-        const n = (p.roundScores || []).length;
         for (let r = 0; r < n; r++) {
           const input = this.container.querySelector(`input[data-score-cell="${i}-${r}"]`);
           if (!input || input === focused) continue;
@@ -885,13 +893,16 @@
       // cascade-card wrapper + co-op outcome bar above it, and supply the
       // live-overlay resolvers so realtime joiner scores still win over
       // the local cache.
+      // Every player carries a dense roundScores array of the same length
+      // before we render, so the grid's round count, the cells it paints and
+      // the totals it sums are all the same size for every column.
+      if (this._normalizeRoundArrays()) ps.persist();
       const grid = window.renderRoundGrid(ps.players, "playFlowView", {
         editable: true,
         playMode: mode,
         headerNames: true,
         showSign: window.RoundGridSign.enabled(),
         getCellValue: (p, r) => this._cellValue(p, r),
-        getPlayerTotal: (p) => this._playerTotal(p),
       });
       return `
         <section class="cascade-card cascade-card--scoring">
@@ -939,6 +950,7 @@
       const cur = p.roundScores[roundIndex] == null ? "" : String(p.roundScores[roundIndex]);
       const next = window.nextSignToggle(cur);
       p.roundScores[roundIndex] = next === "" ? null : next;
+      this._normalizeRoundArrays();
       this._ps.persist();
       if (this._liveScores && p.user_id) {
         this._liveScores
@@ -967,37 +979,48 @@
       return v == null ? "" : String(v);
     }
 
+    // Sum the same per-round resolved values the grid renders, over the same
+    // round range, through the same helper the widget itself uses — so the
+    // Total is the visible cells added up, by construction.
+    //
+    // This used to stop at `player.roundScores.length` while the grid rendered
+    // `max(length)` rows. A player whose array was short (a joiner promoted by
+    // the lobby poll arrived with no array at all) showed six live cells under
+    // a total that counted two of them. _normalizeRoundArrays() now keeps the
+    // arrays in step as well, but the total no longer depends on it.
     _playerTotal(player) {
-      // Sum the same per-round resolved values the grid renders, so the
-      // Total always equals the sum of the visible cells. roundScores.length
-      // is the authoritative round count: _addRound pushes a null for every
-      // player before any cell is editable, so every live-written round index
-      // has a matching local slot.
-      const n = (player.roundScores || []).length;
-      let total = 0;
-      for (let r = 0; r < n; r++) total += Number(this._resolvedScore(player, r)) || 0;
-      return total;
+      return window.roundGridTotal(
+        player,
+        this._maxRoundCount(),
+        (p, r) => this._cellValue(p, r)
+      );
     }
 
-    _renderTotalsCell(p, i, mode, total) {
-      const negClass = Number(total) < 0 ? " is-neg" : "";
-      if (mode === "coop") {
-        return `<td class="${p.is_winner ? "scoring-total-cell--winner" : ""}">
-          <div class="scoring-total-cell">
-            <span class="scoring-total${negClass}">${total}</span>
-          </div>
-        </td>`;
+    // Materialize what the grid is showing into the draft: every cell becomes
+    // the resolved (live-overlaid) value and `score` becomes the column total.
+    // After this, `roundScores` IS the scoreboard, so every downstream sum —
+    // toPlayCreate, the saved play, the play-detail popup — reads the same
+    // numbers the host saw. Called once on Save.
+    _commitResolvedScores() {
+      const n = this._maxRoundCount();
+      if (n === 0) return;
+      this._normalizeRoundArrays();
+      for (const p of this._ps.players) {
+        for (let r = 0; r < n; r++) {
+          const v = this._resolvedScore(p, r);
+          p.roundScores[r] = v == null ? null : String(v);
+        }
+        p.score = this._playerTotal(p);
       }
-      return `<td class="${p.is_winner ? "scoring-total-cell--winner" : ""}">
-        <div class="scoring-total-cell">
-          <button class="scoring-winner-btn ${p.is_winner ? "is-winner" : ""}"
-                  title="${p.is_winner ? "Winner" : "Mark as winner"}"
-                  onclick="window.playFlowView._toggleWinner(${i})">
-            <i data-lucide="${p.is_winner ? "trophy" : "circle"}" class="w-4 h-4"></i>
-          </button>
-          <span class="scoring-total${negClass}">${total}</span>
-        </div>
-      </td>`;
+      this._ps.persist();
+    }
+
+    // Delegates to the grid widget's own totals-cell renderer. This used to be
+    // a hand-copied duplicate of it, which is how a patched row and a freshly
+    // rendered one get to disagree — the same failure mode this change is
+    // about, one level up.
+    _renderTotalsCell(p, i, mode, total) {
+      return window.renderRoundGridTotalsCell(p, i, mode, total, "playFlowView", true, "");
     }
 
     _renderCoopOutcome() {
@@ -1368,7 +1391,7 @@
         (p) => (p.name || "").toLowerCase() === (name || "").toLowerCase()
       );
       if (!exists) {
-        const currentRounds = Math.max(0, ...this._ps.players.map((p) => (p.roundScores || []).length));
+        const currentRounds = this._maxRoundCount();
         this._ps.players.push({
           name,
           is_winner: false,
@@ -1487,10 +1510,8 @@
     // ── Scoring rounds ──────────────────────────────────────────────────────
 
     _addRound() {
-      for (const p of this._ps.players) {
-        if (!Array.isArray(p.roundScores)) p.roundScores = [];
-        p.roundScores.push(null);
-      }
+      this._normalizeRoundArrays();
+      for (const p of this._ps.players) p.roundScores.push(null);
       this._ps.persist();
       this._autoSelectWinners();
       // Surface the new (still empty) round to joiners. Their grid is sized
@@ -1508,30 +1529,54 @@
     }
 
     // Highest roundScores length across players — the authoritative round
-    // count after _addRound pushes a null to every player.
+    // count, and exactly the number of rows the grid renders.
     _maxRoundCount() {
-      return Math.max(0, ...this._ps.players.map((p) => (p.roundScores || []).length));
+      return window.roundGridRoundCount(this._ps.players);
+    }
+
+    // Give every player a dense roundScores array of exactly _maxRoundCount()
+    // entries. Three paths used to leave columns at different lengths — the
+    // lobby poll pushing a promoted joiner with no array, _setRoundScore
+    // writing a sparse index into a short one, and _removeRoundAt skipping
+    // players whose array didn't reach the removed round — and every one of
+    // them showed up as a column whose cells and Total disagreed.
+    _normalizeRoundArrays() {
+      const players = (this._ps && this._ps.players) || [];
+      const n = this._maxRoundCount();
+      let changed = false;
+      for (const p of players) {
+        if (!Array.isArray(p.roundScores)) {
+          p.roundScores = [];
+          changed = true;
+        }
+        for (let r = 0; r < n; r++) {
+          // `in` (not == null) so an existing null stays null and only real
+          // holes — including a sparse array's — get filled.
+          if (!(r in p.roundScores)) {
+            p.roundScores[r] = null;
+            changed = true;
+          }
+        }
+      }
+      return changed;
     }
 
     _removeRoundAt(r) {
-      let removed = false;
-      for (const p of this._ps.players) {
-        if (Array.isArray(p.roundScores) && r >= 0 && r < p.roundScores.length) {
-          p.roundScores.splice(r, 1);
-          removed = true;
-        }
-      }
-      if (removed) {
-        this._ps.persist();
-        this._autoSelectWinners();
-        // Drop the round's live rows too so it disappears from joiners'
-        // grids (counterpart to the placeholder written on _addRound).
-        if (this._liveScores) this._liveScores.deleteRound(r).catch(() => {});
-        this.render();
-      }
+      const n = this._maxRoundCount();
+      if (!(r >= 0 && r < n)) return;
+      this._normalizeRoundArrays();
+      for (const p of this._ps.players) p.roundScores.splice(r, 1);
+      this._ps.persist();
+      this._autoSelectWinners();
+      // Live rows are keyed by round_index, so deleting index r on its own
+      // would leave every later round one slot too high: each cell below the
+      // removed row would render the round above it, and the Total with it.
+      // removeRoundAt shifts the tail down to match the splice above.
+      if (this._liveScores) this._liveScores.removeRoundAt(r).catch(() => {});
+      this.render();
     }
 
-    async _setRoundScore(playerIndex, roundIndex, value) {
+    _setRoundScore(playerIndex, roundIndex, value) {
       const p = this._ps.players[playerIndex];
       if (!p) return;
       if (!Array.isArray(p.roundScores)) p.roundScores = [];
@@ -1539,6 +1584,7 @@
       // for an empty cell. A lone "-" is kept until digits arrive.
       const clean = window.sanitizeRoundScore(value);
       p.roundScores[roundIndex] = clean === "" ? null : clean;
+      this._normalizeRoundArrays();
       // The text input doesn't auto-reject stray characters the way type=number
       // did — write the sanitized value back when they differ (e.g. a pasted
       // letter), preserving the caret.
@@ -1549,15 +1595,25 @@
         try { input.setSelectionRange(pos, pos); } catch (_) {}
       }
       this._ps.persist();
+      // Repaint the Total from local state FIRST and never wait on the
+      // network. This method is an oninput handler: awaiting the live-scores
+      // upsert before refreshing meant that on a flaky connection (or with
+      // the request simply hung) the cell showed the digit the host had just
+      // typed while the Total below it still showed the sum from before it —
+      // the "sometimes the maths is wrong" report. The mirror below is
+      // fire-and-forget; LiveScores applies it to its own map optimistically
+      // and the Realtime echo reconciles later.
+      this._autoSelectWinners();
+      this._refreshTotalsCells();
       // Mirror authed-player edits into the live-scores table so joiners
       // see the host's override. Guest players stay local-only.
       if (this._liveScores && p.user_id) {
         try {
-          await this._liveScores.setAnyScore(p.user_id, roundIndex, window.parseRoundScore(clean));
+          this._liveScores
+            .setAnyScore(p.user_id, roundIndex, window.parseRoundScore(clean))
+            .catch(() => {});
         } catch (_) {}
       }
-      this._autoSelectWinners();
-      this._refreshTotalsCells();
     }
 
     _refreshTotalsCells() {
@@ -2178,6 +2234,13 @@
         return;
       }
       if (this._saving) return;
+
+      // Fold the live overlay into the draft before the payload is built.
+      // toPlayCreate() sums roundScores, and a joiner's own cells only ever
+      // lived in the live-scores table — without this the play was recorded
+      // with those rounds blank, so the saved score didn't match the grid the
+      // host had just been looking at.
+      this._commitResolvedScores();
 
       // Snapshot everything the write and the next round need BEFORE the
       // draft is cleared (on success) or recycled (Another round?), and

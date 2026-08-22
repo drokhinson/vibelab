@@ -272,6 +272,7 @@
 --   → JSONB (PlayResponse, via bgb_log_play) or {"error": "not_found" |
 --     "expired" | "forbidden" | "game_not_found"}
 --   Defined in: db/migrations/boardgamebuddy/042_write_rpcs.sql
+--               (body replaced by 052_finalize_score_matches_rounds.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (finalize_session — POST /sessions/{code}/finalize)
 --   Purpose:    One-call wrap-up: open/expiry/host gates, overlays joiners'
@@ -281,6 +282,13 @@
 --               round-trip Python chain — the host's Save used to block on
 --               all of it. A failed write (game_not_found) leaves the session
 --               open so the host can retry.
+--               Since 052 the overlay is a FALLBACK, not an override: a player
+--               whose payload entry carries a round_scores array keeps the
+--               score derived from it (the client sends the resolved grid, and
+--               PlayerEntry re-derives score from round_scores), and NULL
+--               placeholder rows no longer count as live scoring. Both were
+--               ways the saved total stopped matching the rounds printed
+--               under it.
 
 -- bgb_plays_page(p_target UUID, p_page INT DEFAULT 1, p_per_page INT DEFAULT 20,
 --                p_game UUID DEFAULT NULL, p_buddy UUID DEFAULT NULL,
