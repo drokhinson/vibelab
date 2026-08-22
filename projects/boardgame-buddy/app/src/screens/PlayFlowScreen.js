@@ -68,6 +68,14 @@ export default function PlayFlowScreen({ navigation, route }) {
     navigation.goBack();
   }
 
+  // The wrap-up card's two destinations, defined once. The success paths below
+  // have to restore goToFeed explicitly: they clear the failure path's dismiss
+  // override, and a bare `onDismiss: null` would take the feed navigation with
+  // it, leaving "Go to feed" closing the card onto a spent Settle Up screen.
+  const goToFeed = () => navigation.navigate('Home', { screen: 'FeedTab' });
+  // Backing out means "done with this game", not "show me the feed".
+  const goToPlayTab = () => navigation.navigate('Home', { screen: 'PlayTab' });
+
   // Persist the play behind the wrap-up card. Never awaited by the tap
   // handler — the card is already up, and it carries the save's state.
   async function runSaveBehindCard(snap, cardId) {
@@ -98,7 +106,7 @@ export default function PlayFlowScreen({ navigation, route }) {
         {
           saving: false,
           error: null,
-          onDismiss: null,
+          onDismiss: goToFeed,
           caption: 'Saved on this phone — uploads when you’re back online.',
         },
         cardId,
@@ -110,7 +118,7 @@ export default function PlayFlowScreen({ navigation, route }) {
     // already contains this play.
     actions.afterPlaySaved(result.game?.id);
     actions.refreshHostSeeds();
-    updatePolaroid({ saving: false, error: null, onDismiss: null }, cardId);
+    updatePolaroid({ saving: false, error: null, onDismiss: goToFeed }, cardId);
 
     // Unblocked on the play landing, not on the photo — the photo has always
     // been best-effort, and it only ever cost the host time to wait on it.
@@ -145,7 +153,8 @@ export default function PlayFlowScreen({ navigation, route }) {
         photoUrl: snap.photoUrl || snap.game?.image_url || snap.game?.thumbnail_url || null,
         saving: true,
         onAnotherRound: () => session.startAnotherRound(seed),
-        onDismiss: () => navigation.navigate('Home', { screen: 'FeedTab' }),
+        onDismiss: goToFeed,
+        onClose: goToPlayTab,
       });
       runSaveBehindCard(snap, cardId);
     }

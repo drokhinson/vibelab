@@ -9,6 +9,12 @@
 // without that guard a slow save could repaint the card belonging to the
 // NEXT round.
 //
+// Two exits, two destinations. The primary CTA and a backdrop tap route to
+// the feed — that's "show me the play I just saved". The hardware back button
+// is the back-out gesture and means "I'm done with this game", so it drops the
+// user on the Play tab instead. (Web draws a corner X for the same split; on
+// native the system back IS that affordance, so we don't add chrome for it.)
+//
 // While `saving` the card is modal: no close affordance, inert backdrop, and
 // the primary CTA spins. A failed photo becomes a `warning` line ON the card
 // rather than a second modal — this popup is a singleton, so an alert() would
@@ -37,7 +43,11 @@ let _update = null;
  * @property {string|null} [warning]  advisory line (e.g. photo didn't land)
  * @property {() => void} [onAnotherRound]
  * @property {() => void} [onRetry]
- * @property {() => void} [onDismiss] overrides the default dismiss behavior
+ * @property {() => void} [onDismiss] where the backdrop tap and the primary
+ *   CTA go
+ * @property {() => void} [onClose] where the hardware back button goes. Falls
+ *   back to onDismiss, so a caller that only sets one keeps a single exit
+ *   destination rather than silently getting two.
  */
 
 /**
@@ -95,6 +105,13 @@ export default function PolaroidHost() {
     setCfg(null);
     if (onDismiss) onDismiss();
   };
+  // Hardware back — see the two-exits note at the top of this file.
+  const backOut = () => {
+    if (saving) return;
+    const fn = cfg.onClose || cfg.onDismiss;
+    setCfg(null);
+    if (fn) fn();
+  };
 
   const primaryLabel = saving ? 'Saving…' : cfg.error ? 'Retry' : cfg.buttonLabel || 'Go to feed';
   const primaryIcon = saving ? undefined : cfg.error ? RotateCcw : ArrowRight;
@@ -108,7 +125,7 @@ export default function PolaroidHost() {
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={close}>
+    <Modal visible transparent animationType="fade" onRequestClose={backOut}>
       <Pressable style={styles.backdrop} onPress={close}>
         <Animated.View style={cardStyle}>
           <Pressable style={styles.card} onPress={() => {}}>

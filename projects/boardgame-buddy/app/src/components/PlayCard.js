@@ -171,9 +171,12 @@ const styles = StyleSheet.create({
   photoImg: { width: '100%', height: 180 },
   photoPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   caption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, paddingHorizontal: 2, gap: 8 },
-  captionNameWrap: { flex: 1 },
+  // flex:1 alone lets a long winner name collapse the title to nothing (RN
+  // children default to flexShrink:0, so the winner never gives ground). The
+  // floor keeps the game readable; the winner is capped in winRow instead.
+  captionNameWrap: { flex: 1, minWidth: 64 },
   captionName: { fontFamily: FONTS.polaroid, color: COLORS.polaroidInk, fontSize: 15 },
-  winRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  winRow: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 1 },
   win: { fontFamily: FONTS.sansSemibold, color: COLORS.polaroidAccent, fontSize: 13 },
   winLoss: { fontFamily: FONTS.polaroidItalic, color: COLORS.polaroidMuted, fontSize: 13, fontStyle: 'italic' },
 

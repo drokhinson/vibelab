@@ -189,9 +189,11 @@ function PlayRow({ play, onPress }) {
         </Text>
       </View>
       {winner ? (
-        <Row gap={3}>
+        <Row gap={3} style={styles.winnerCell}>
           <Star size={12} color={COLORS.accent} fill={COLORS.accent} />
-          <Text variant="caption" color={COLORS.textSoft} numberOfLines={1} style={{ maxWidth: 90 }}>
+          {/* No width cap: the winner is the short half of the row and must
+              read in full. The game name above is the shrinkable one. */}
+          <Text variant="caption" color={COLORS.textSoft} numberOfLines={1}>
             {winner.name}
           </Text>
         </Row>
@@ -261,6 +263,9 @@ const styles = StyleSheet.create({
     minHeight: 64,
   },
   thumb: { width: 48, height: 48, borderRadius: RADII.sm },
+  // Caps the winner at half the row so a very long name can't squeeze the
+  // game name out entirely; short names like "You" are unaffected.
+  winnerCell: { flexShrink: 1, maxWidth: '45%' },
   optChip: {
     paddingHorizontal: SPACING.md,
     paddingVertical: 7,

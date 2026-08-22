@@ -3,10 +3,10 @@
 // code, and see buddies' joinable live sessions.
 
 import React, { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Dices, RotateCcw, Ticket, X } from 'lucide-react-native';
+import { Dices, Repeat2, RotateCcw, Ticket, X } from 'lucide-react-native';
 import { COLORS, RADII, SPACING } from '../theme';
 import { Button, Card, Row, Screen, Text } from '../ui';
 import EmptyState from '../components/EmptyState';
@@ -17,13 +17,15 @@ import GameFinder from '../widgets/GameFinder';
 import { confirm } from '../components/ConfirmModal';
 import { useAppActions, useAppState } from '../store/AppContext';
 import api from '../api/client';
-import { loadDraft, clearDraft } from '../models/playSession';
+import { loadDraft, clearDraft, saveDraft, draftFromPlayRow } from '../models/playSession';
 
 export default function LogPlayScreen({ navigation }) {
-  const { currentUser } = useAppState();
+  const { currentUser, gameBundles } = useAppState();
   const actions = useAppActions();
   const [draft, setDraft] = useState(null);
   const [joinable, setJoinable] = useState([]);
+  // The most recent play this account logged — backs the Another Round card.
+  const [lastPlay, setLastPlay] = useState(null);
 
   // Refresh the resume banner + joinable list on every focus — both change
   // outside this screen (sessions expire, buddies start games).
@@ -34,6 +36,10 @@ export default function LogPlayScreen({ navigation }) {
         loadDraft().then((d) => alive && setDraft(d));
         api.joinableSessions().then(
           (r) => alive && setJoinable(r?.sessions || []),
+          () => {},
+        );
+        api.plays({ page: 1, per_page: 1 }).then(
+          (r) => alive && setLastPlay((r?.plays || [])[0] || null),
           () => {},
         );
         actions.refreshHostSeeds();
@@ -70,6 +76,34 @@ export default function LogPlayScreen({ navigation }) {
     if (draft?.code) api.updateSessionPhase(draft.code, 'abandoned').catch(() => {});
     await clearDraft();
     setDraft(null);
+  }
+
+  // Stage the previous game + roster into a fresh draft and drop the host on
+  // Gather — the same destination the wrap-up card's "Another round?" reaches,
+  // for the host who dismissed that card and came back later.
+  async function anotherRound() {
+    if (!lastPlay?.game_id) return;
+    if (draft) {
+      // A new round replaces the persisted draft, so an in-progress session
+      // has to be closed out deliberately — same gate as discardDraft.
+      const ok = await confirm({
+        title: 'Start a new round?',
+        body: 'Your session in progress will be abandoned and its lobby closed.',
+        confirmLabel: 'Start new round',
+        cancelLabel: 'Keep playing',
+      });
+      if (!ok) return;
+      if (draft.code) api.updateSessionPhase(draft.code, 'abandoned').catch(() => {});
+    }
+    // A play row doesn't carry rulebook_url / is_expansion / theme_color.
+    // Bootstrap warms the bundle for owned games, so this is usually a free
+    // sync hit; on a miss the host flow resolves them later.
+    const cachedGame = gameBundles[lastPlay.game_id]?.bundle?.game || null;
+    const next = draftFromPlayRow(lastPlay, cachedGame);
+    if (!next) return;
+    await saveDraft(next);
+    setDraft(next);
+    navigation.navigate('PlayFlow', {});
   }
 
   return (
@@ -120,6 +154,26 @@ export default function LogPlayScreen({ navigation }) {
           <Button label="Join" variant="secondary" size="sm" onPress={() => navigation.navigate('JoinSession')} />
         </Row>
       </Card>
+
+      {lastPlay?.game_id ? (
+        <Card pad="md" style={{ marginTop: SPACING.sm }}>
+          <Row gap="md">
+            {lastPlay.game_thumbnail ? (
+              <Image source={{ uri: lastPlay.game_thumbnail }} style={{ width: 34, height: 34, borderRadius: RADII.sm }} />
+            ) : (
+              <Repeat2 size={22} color={COLORS.accent} />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text variant="heading">Another round</Text>
+              <Text variant="caption" numberOfLines={1}>
+                {(lastPlay.players || []).map((p) => p.name).filter(Boolean).join(', ') ||
+                  `${lastPlay.game_name} — same game, fresh scores.`}
+              </Text>
+            </View>
+            <Button label="Set up" variant="secondary" size="sm" onPress={anotherRound} />
+          </Row>
+        </Card>
+      ) : null}
 
       {joinable.length > 0 ? (
         <View style={{ marginTop: SPACING.lg }}>
