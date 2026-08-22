@@ -9,11 +9,20 @@
 // a network failure — the flush stops and retries later. An error WITH a 4xx
 // status is a server rejection — the item is kept with `lastError` so the
 // user can see why and discard it; the flush continues to the next item.
+//
+// Retry safety comes from `client_key` (migration 048): ONE uuid minted per
+// queued play at enqueue time and re-sent on every attempt, so a lost response
+// — the request landed, the reply didn't — returns the original play instead
+// of writing a second one. Minting per ATTEMPT instead would be the same bug
+// with extra steps, which is why the key lives on the entry, not in the
+// upload call. Both upload paths carry it: bgb_finalize_session calls
+// bgb_log_play, so the lobby path inherits the same guard.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // expo-file-system top-level export changed shape in SDK 54 — the /legacy
 // subpath keeps documentDirectory/copyAsync/deleteAsync (sauceboss pattern).
 import * as FileSystem from 'expo-file-system/legacy';
+import { randomUUID } from 'expo-crypto';
 import api from '../api/client';
 
 const KEY = 'bgb:playOutbox:v1';
@@ -22,6 +31,7 @@ const PHOTO_DIR = `${FileSystem.documentDirectory || ''}bgb-outbox/`;
 /**
  * @typedef {Object} PendingPlay
  * @property {string} localId
+ * @property {string} clientKey     uuid, also carried on payload.client_key
  * @property {Object} payload       PlayCreate body (photo_url always null)
  * @property {string|null} code     lobby code if the session was opened online
  * @property {string|null} photoUri persisted copy under PHOTO_DIR
@@ -70,7 +80,17 @@ export async function hydrateOutbox() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        _items = parsed;
+        // Entries queued before client_key existed have never been uploaded,
+        // so stamping one now is safe and makes their FIRST attempt keyed —
+        // which is all idempotency needs, since only retries can duplicate.
+        let migrated = false;
+        _items = parsed.map((it) => {
+          if (it && it.clientKey) return it;
+          migrated = true;
+          const clientKey = randomUUID();
+          return { ...it, clientKey, payload: { ...(it?.payload || {}), client_key: clientKey } };
+        });
+        if (migrated) _persist();
         _emit();
       }
     }
@@ -106,12 +126,18 @@ async function _deletePhoto(uri) {
  */
 export async function enqueuePlay(item) {
   await hydrateOutbox();
+  // Crypto-backed, not Math.random(): two devices flushing into the same
+  // account must not be able to collide on a key, since a collision would
+  // silently drop the second play as a "duplicate".
+  const clientKey = randomUUID();
   const pending = {
     localId: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     createdAt: new Date().toISOString(),
     attempts: 0,
     lastError: null,
     ...item,
+    clientKey,
+    payload: { ...(item.payload || {}), client_key: clientKey },
   };
   _items = [..._items, pending];
   await _persist();

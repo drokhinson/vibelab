@@ -67,6 +67,23 @@
  */
 
 /**
+ * @typedef {Object} PlayCreate  the POST /plays body (also POST /sessions/{code}/finalize)
+ * @property {string} game_id
+ * @property {string} played_at   // date
+ * @property {Array<Object>} players
+ * @property {string|null} notes
+ * @property {string|null} photo_url
+ * @property {string[]} expansion_ids
+ * @property {import('../domain/playMode').PlayModeValue} play_mode
+ * @property {string} [client_key]
+ *   Idempotency key (migration 048). Set ONLY by the offline outbox, which
+ *   mints one uuid per queued play and re-sends it on every attempt, so a
+ *   retry after a lost response returns the original play instead of writing
+ *   a second. Live saves omit it on purpose: two identical live POSTs
+ *   legitimately mean two plays.
+ */
+
+/**
  * @typedef {Object} FeedPage
  * @property {Array<Object>} cards  // heterogeneous: play cards + rail cards
  * @property {string|null} next_cursor  round-tripped back as ?cursor=
