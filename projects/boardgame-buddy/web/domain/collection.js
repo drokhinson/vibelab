@@ -13,6 +13,27 @@
   const FRESH_TTL_MS = 60 * 1000;
   const STALE_TTL_MS = 5 * 60 * 1000;
 
+  // Whole-shelf cache, one entry per (target, status). Separate namespace from
+  // the status map above so the two invalidate independently and so
+  // bgbCache.clear() can drop every shelf at once after a mutation.
+  //
+  // The viewer is NOT part of the key — bindUser() already scopes localStorage
+  // per signed-in user. The target IS, so bouncing between two people's
+  // collections is free on the second visit.
+  //
+  // No search/filter dimension by design: the whole point is one entry per
+  // shelf, with every page, filter and search derived from it client-side.
+  const SHELF_NS = "collection.shelf";
+  const SHELF_FRESH_TTL_MS = 60 * 1000;
+  const SHELF_STALE_TTL_MS = 5 * 60 * 1000;
+  // Matches _SHELF_DEFAULT_LIMIT on the endpoint. A shelf past this comes back
+  // truncated and the caller falls back to the paginated grid.
+  const SHELF_LIMIT = 1000;
+
+  function _shelfKey(targetUserId, status) {
+    return `${targetUserId || "me"}|${status}`;
+  }
+
   async function _fetch() {
     const data = await window.api.get("/collection");
     const items = Array.isArray(data) ? data : ((data && data.items) || []);
@@ -81,9 +102,70 @@
       return r.expCount;
     }
 
+    /**
+     * A whole collection shelf, cached. Callers page, filter and search this
+     * locally via window.ShelfFilter rather than re-fetching per page.
+     *
+     * @param {string} targetUserId
+     * @param {"owned"|"wishlist"|"played"} status
+     * @param {{force?: boolean}} [opts]
+     * @returns {Promise<{items: any[], total: number, truncated: boolean}>}
+     */
+    static shelf(targetUserId, status, { force = false } = {}) {
+      const key = _shelfKey(targetUserId, status);
+      if (force) window.bgbCache.delete(SHELF_NS, key);
+      return window.bgbCache.swr(
+        SHELF_NS,
+        key,
+        async () => {
+          const qs = new URLSearchParams({
+            status,
+            exclude_expansions: "true",
+            limit: String(SHELF_LIMIT),
+          });
+          const me = window.store.get("user");
+          if (targetUserId && me && targetUserId !== me.id) {
+            qs.set("user_id", targetUserId);
+          }
+          const data = await window.api.get(`/collection/shelf?${qs.toString()}`);
+          return {
+            items: (data && data.items) || [],
+            total: (data && data.total) || 0,
+            truncated: !!(data && data.truncated),
+          };
+        },
+        { freshTtl: SHELF_FRESH_TTL_MS, staleTtl: SHELF_STALE_TTL_MS },
+      );
+    }
+
+    /**
+     * Synchronous stale-tolerant peek at a cached shelf, so a view can paint
+     * page 1 in its first frame instead of awaiting the network. peek(), not
+     * get(): a shelf a couple of minutes old beats a spinner, and shelf() is
+     * what corrects it. Returns null on a miss.
+     */
+    static cachedShelf(targetUserId, status) {
+      if (!window.bgbCache) return null;
+      return window.bgbCache.peek(SHELF_NS, _shelfKey(targetUserId, status));
+    }
+
+    /**
+     * Drop every cached shelf. Deliberately namespace-wide rather than
+     * per-key: an add lands on owned OR wishlist, a status change moves a game
+     * BETWEEN shelves, and removing an owned game can make it reappear on the
+     * played shelf — so no single key covers a mutation. clear() also cancels
+     * in-flight fetches in the namespace, so a request issued before the
+     * mutation can't write itself back in.
+     */
+    static invalidateShelves() {
+      if (window.bgbCache) window.bgbCache.clear(SHELF_NS);
+    }
+
     static invalidateMyStatusMap() {
       window.bgbCache.delete(NS, COMBINED_KEY);
       window.store.invalidate("myCollectionMap");
+      // Every cached shelf embeds the rows this mutation just changed.
+      Collection.invalidateShelves();
       // The Profile bundle embeds the status map + every shelf's count — any
       // collection mutation invalidates both numbers, so clear the bundle
       // cache too. Game.detailBundle caches viewer_status alongside the game

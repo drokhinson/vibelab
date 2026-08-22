@@ -177,6 +177,7 @@
       window.router.go("feed");
     }
     warmGameBundlesWhenIdle();
+    warmOwnedShelfWhenIdle();
   }
 
   // The per-owned-game detail bundles are no longer part of /bootstrap (they're
@@ -186,6 +187,20 @@
     if (!window.Bootstrap || !window.Bootstrap.warmGameBundles) return;
     const kick = () => window.Bootstrap.warmGameBundles().catch(() => {});
     if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 3000 });
+    else setTimeout(kick, 0);
+  }
+
+  // The Collection spoke pages entirely off one cached shelf, so warming it
+  // here makes even the session's FIRST visit zero-network. Rides the same
+  // idle slot as the game bundles; no-ops inside the cache's fresh window.
+  function warmOwnedShelfWhenIdle() {
+    if (!window.Collection || !window.Collection.shelf) return;
+    const kick = () => {
+      const me = window.store.get("user");
+      if (!me || !me.id) return;
+      window.Collection.shelf(me.id, "owned").catch(() => {});
+    };
+    if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 5000 });
     else setTimeout(kick, 0);
   }
 

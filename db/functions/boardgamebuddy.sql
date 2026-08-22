@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 047 (one RPC for the Gather player picker)
+-- Last updated: migration 049 (whole-shelf read for client-side collection paging)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -439,3 +439,33 @@
 --               viewer logged OR appears in, while `ghosts` covers only plays
 --               they logged; and ghost grouping is case-sensitive on the
 --               trimmed name, matching the Python dict key.
+
+-- bgb_collection_shelf(viewer UUID, target UUID, p_status TEXT DEFAULT 'owned',
+--                      p_exclude_expansions BOOLEAN DEFAULT true,
+--                      p_limit INT DEFAULT 1000)
+--   → JSONB { "items": [CollectionItem…], "total": BIGINT, "truncated": BOOLEAN }
+--   Defined in: db/migrations/boardgamebuddy/049_collection_shelf.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
+--               (GET /collection/shelf), which the web Collection and Wishlist
+--               spokes call once per shelf via domain/collection.js.
+--   Purpose:    A whole shelf in ONE round trip so the client can paginate,
+--               filter and search locally. /collection/grid materialized the
+--               entire shelf on every request and sliced it in Python, so page
+--               9 cost what page 1 cost — ~1s per page turn. Three round trips
+--               collapse to one here: the shelf reads the denormalized
+--               c.game_* columns (020) instead of joining boardgamebuddy_games,
+--               play stats fold in as a LATERAL (same visibility rule as
+--               bgb_play_stats — logged-by OR participated-in), and
+--               expansion_count is computed in SQL rather than a follow-up
+--               IN-query, so the badge is right on the first cached paint.
+--               Ordering matches /collection/grid's default so the client can
+--               slice without re-sorting: owned/played by last_played_at DESC
+--               NULLS LAST then added_at DESC, wishlist by added_at DESC.
+--               `truncated` marks a shelf larger than p_limit; the client then
+--               falls back to /collection/grid for search/filter rather than
+--               narrowing an incomplete list. Wishlist is self-only, matching
+--               bgb_profile_bundle. The 'played' branch DOES join
+--               boardgamebuddy_games — those games have no collection row by
+--               definition, so no denormalized columns exist for them.
+--   NOTE:       /collection/grid is deliberately still live — the native app
+--               (app/src/api/client.js) and the web game explorer page against it.

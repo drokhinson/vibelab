@@ -1,5 +1,6 @@
 """User collection endpoints — closet / played / wishlist."""
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, Path, Query, HTTPException
@@ -12,6 +13,7 @@ from .models import (
     CollectionAdd,
     CollectionItem,
     CollectionPageResponse,
+    CollectionShelfResponse,
     CollectionUpdate,
     GameSummary,
     MessageResponse,
@@ -26,12 +28,16 @@ from .game_routes import (
 from .services._helpers import game_select_clause
 
 
-# Deliberately narrower than game_select_clause(): /collection renders plain
-# tiles, so it skips the expansion, rulebook and full-size-image columns the
-# grid and detail surfaces need.
+# Narrower than game_select_clause(): /collection renders plain tiles, so it
+# skips the rulebook and full-size-image columns the grid and detail surfaces
+# need. is_expansion / base_game_bgg_id ARE included: domain/collection.js
+# derives its owned-expansions-per-base-game map from this payload, and
+# without them that map came back empty every time the client cache expired
+# past its stale window and refetched here instead of being seeded from the
+# profile bundle.
 _TILE_GAME_FIELDS = (
     "id, bgg_id, name, year_published, min_players, max_players, "
-    "playing_time, thumbnail_url, theme_color"
+    "playing_time, thumbnail_url, theme_color, is_expansion, base_game_bgg_id"
 )
 
 
@@ -280,6 +286,82 @@ def _passes_grid_filters(
     if play_mode is not None and game.get("play_mode") != play_mode:
         return False
     return True
+
+
+# ── Whole-shelf read (client-side paging) ─────────────────────────────────────
+# /collection/grid materializes the entire shelf on every request and slices it
+# in Python, so a page turn costs the same as a first load — ~1s on mobile. The
+# web client instead pulls a shelf once through this endpoint, caches it, and
+# derives every page, filter and search locally. One DB round trip, down from
+# the grid's two (owned/wishlist) or three (played).
+#
+# /collection/grid is deliberately left untouched: the native app
+# (app/src/api/client.js) and the game explorer still page against it.
+
+_SHELF_DEFAULT_LIMIT = 1000
+_SHELF_MAX_LIMIT = 5000
+
+
+@router.get(
+    "/collection/shelf",
+    response_model=CollectionShelfResponse,
+    status_code=200,
+    summary="Whole collection shelf in one response (for client-side paging)",
+)
+async def collection_shelf(
+    status: CollectionStatus = Query(
+        CollectionStatus.OWNED,
+        description=(
+            "Which shelf to return — owned (default), wishlist, or played "
+            "(games the user has plays for but does not own / wishlist). "
+            "Wishlist is only returned to its owner."
+        ),
+    ),
+    exclude_expansions: bool = Query(
+        True,
+        description="When true (default) expansions are hidden — surfaced separately on the Profile.",
+    ),
+    limit: int = Query(
+        _SHELF_DEFAULT_LIMIT,
+        ge=1,
+        le=_SHELF_MAX_LIMIT,
+        description=(
+            "Hard row cap. When the shelf is larger, `items` is a prefix and "
+            "`truncated` is true so the caller can fall back to /collection/grid."
+        ),
+    ),
+    user_id: Optional[str] = Query(
+        None,
+        description="Target user (profiles are public); defaults to the viewer.",
+    ),
+    user: CurrentUser = Depends(get_current_user),
+) -> CollectionShelfResponse:
+    """One shelf, whole, pre-sorted — so the client can page without refetching.
+
+    Ordering matches /collection/grid's default so the caller can slice
+    directly: owned/played by last_played DESC NULLS LAST then added_at DESC,
+    wishlist by added_at DESC. No search/filter parameters by design — they
+    would multiply the client's cache keys, and every filter the grid applies
+    is a pure function of fields already on each returned row.
+    """
+    result = get_supabase().rpc(
+        "bgb_collection_shelf",
+        {
+            "viewer": user.user_id,
+            "target": user_id or user.user_id,
+            "p_status": status.value,
+            "p_exclude_expansions": exclude_expansions,
+            "p_limit": limit,
+        },
+    ).execute()
+
+    data = result.data or {}
+    return CollectionShelfResponse(
+        items=[CollectionItem(**row) for row in (data.get("items") or [])],
+        total=data.get("total") or 0,
+        truncated=bool(data.get("truncated")),
+        generated_at=datetime.now(timezone.utc),
+    )
 
 
 @router.get(

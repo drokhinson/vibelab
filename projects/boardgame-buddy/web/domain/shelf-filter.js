@@ -1,0 +1,115 @@
+// @ts-check
+// domain/shelf-filter.js — client-side twin of the server's collection-grid
+// filtering, plus the shared playtime buckets and a page slicer.
+//
+// The Profile games list used to ask /collection/grid for every page, filter
+// tap and debounced keystroke. It now pulls a whole shelf once (see
+// Collection.shelf) and derives pages locally, which means these predicates
+// have to agree with the backend exactly. `_passesShelfFilters` is a
+// line-for-line port of `_passes_grid_filters`
+// (shared-backend/routes/boardgame_buddy/collection_routes.py:254-282) and
+// must be kept in step with it — three behaviours look like bugs and are not:
+//
+//   1. Search is a plain case-insensitive SUBSTRING test, not prefix or fuzzy.
+//   2. The `players < 6` guard: the "6+" chip deliberately skips the
+//      min_players check, so a 7-player-minimum game still matches "6+".
+//   3. `playing_time || 0` means a game with no playtime recorded PASSES a
+//      playtime_max filter but FAILS a playtime_min one.
+//
+// Both collection-view and wishlist-view call this, so the two spokes cannot
+// drift apart the way their duplicated PLAYTIME_BUCKETS arrays did.
+
+(function () {
+  /**
+   * @typedef {Object} ShelfFilters
+   * @property {string|null} [search]       Case-insensitive substring of the game name.
+   * @property {number|null} [players]      Player count the game must seat.
+   * @property {number|null} [playtimeMin]
+   * @property {number|null} [playtimeMax]
+   * @property {string|null} [playMode]     "competitive" | "coop" | "team"
+   * @property {boolean} [excludeExpansions] Defaults to true, matching the endpoint.
+   */
+
+  const PLAYTIME_BUCKETS = [
+    { id: "u30",   label: "< 30 min",   min: null, max: 29 },
+    { id: "30-60", label: "30–60 min",  min: 30,   max: 60 },
+    { id: "60-90", label: "60–90 min",  min: 60,   max: 90 },
+    { id: "90-120",label: "90–120 min", min: 90,   max: 120 },
+    { id: "o120",  label: "2+ hours",   min: 120,  max: null },
+  ];
+
+  /** @param {{min:number|null,max:number|null}} b @param {{playtimeMin:number|null,playtimeMax:number|null}} f */
+  function isActiveBucket(b, f) {
+    return f.playtimeMin === b.min && f.playtimeMax === b.max;
+  }
+
+  /**
+   * Does one game row survive the active filters?
+   * @param {any} game  A CollectionItem.game payload.
+   * @param {ShelfFilters} f
+   * @returns {boolean}
+   */
+  function passesShelfFilters(game, f) {
+    if (!game) return false;
+    const excludeExpansions = f.excludeExpansions !== false;
+    if (excludeExpansions && game.is_expansion) return false;
+
+    const name = (game.name || "").toLowerCase();
+    // Substring, not prefix — mirrors `search.lower() not in name`. An empty
+    // string is falsy on both sides, so a cleared search box filters nothing.
+    if (f.search && !name.includes(String(f.search).toLowerCase())) return false;
+
+    if (f.players != null) {
+      const mn = game.min_players;
+      const mx = game.max_players;
+      if (mx != null && mx < f.players) return false;
+      // Intentional: at 6+ the chip means "at least this many", so a game
+      // that requires more players than the chip still qualifies.
+      if (f.players < 6 && mn != null && mn > f.players) return false;
+    }
+
+    // A null/0 playing_time collapses to 0 — passes a max filter, fails a min.
+    const pt = game.playing_time || 0;
+    if (f.playtimeMin != null && pt < f.playtimeMin) return false;
+    if (f.playtimeMax != null && pt > f.playtimeMax) return false;
+
+    if (f.playMode != null && game.play_mode !== f.playMode) return false;
+    return true;
+  }
+
+  /**
+   * Filter a shelf, preserving order. The server returns the shelf already
+   * sorted (last_played DESC NULLS LAST, then added_at DESC; wishlist by
+   * added_at DESC) and filters only remove rows, so the caller must NOT
+   * re-sort — reimplementing that NULLS-LAST tie-break in JS would be a
+   * pointless equivalence risk.
+   * @param {any[]} items @param {ShelfFilters} f @returns {any[]}
+   */
+  function filterShelf(items, f) {
+    if (!Array.isArray(items)) return [];
+    return items.filter((it) => passesShelfFilters(it && it.game, f));
+  }
+
+  /**
+   * One page out of an already-filtered list. Clamps the page into range so a
+   * filter change that shrinks the list can't strand the user on a blank page.
+   * @param {any[]} items @param {number} page 1-based @param {number} perPage
+   * @returns {{ rows: any[], page: number, totalPages: number, total: number }}
+   */
+  function pageOf(items, page, perPage) {
+    const list = Array.isArray(items) ? items : [];
+    const total = list.length;
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    const safePage = Math.min(Math.max(1, page | 0 || 1), totalPages);
+    const offset = (safePage - 1) * perPage;
+    return { rows: list.slice(offset, offset + perPage), page: safePage, totalPages, total };
+  }
+
+  window.ShelfFilter = {
+    PLAYTIME_BUCKETS,
+    isActiveBucket,
+    passesShelfFilters,
+    filterShelf,
+    pageOf,
+  };
+})();

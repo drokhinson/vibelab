@@ -3,34 +3,35 @@
 // Mirrors collection-view but pins status='wishlist' and drops the toggle.
 // "+ Add" button in the header opens the AddGameModal for searching the
 // BgB library or importing from BGG.
+//
+// Data lives in ShelfController (domain/shelf-controller.js) — the same
+// fetch-once-and-page-locally model collection-view uses, so the two spokes
+// can no longer drift apart the way their duplicated filter code did.
 
 (function () {
   const PER_PAGE = 12;
+  const MODE = "wishlist";
 
-  const PLAYTIME_BUCKETS = [
-    { id: "u30",   label: "< 30 min",   min: null, max: 29 },
-    { id: "30-60", label: "30–60 min",  min: 30,   max: 60 },
-    { id: "60-90", label: "60–90 min",  min: 60,   max: 90 },
-    { id: "90-120",label: "90–120 min", min: 90,   max: 120 },
-    { id: "o120",  label: "2+ hours",   min: 120,  max: null },
-  ];
-  function isActiveBucket(b, f) {
-    return f.playtimeMin === b.min && f.playtimeMax === b.max;
-  }
+  const PLAYTIME_BUCKETS = window.ShelfFilter.PLAYTIME_BUCKETS;
+  const isActiveBucket = window.ShelfFilter.isActiveBucket;
 
   class WishlistView extends window.View {
     constructor() {
       super("wishlist");
-      this._items = [];
-      this._total = 0;
-      this._page = 1;
-      this._loading = false;
-      this._error = null;
-      this._query = "";
-      this._filters = { players: null, playtimeMin: null, playtimeMax: null, playMode: null };
+      this.ctl = new window.ShelfController({
+        modes: [MODE],
+        perPage: PER_PAGE,
+        target: () => this._shelfTarget(),
+        onChange: () => this.render(),
+      });
       this._filtersOpen = false;
-      this._searchTimer = null;
       this._statusMap = {};
+      this._lastSig = null;
+    }
+
+    _shelfTarget() {
+      const me = window.store.get("user");
+      return (me && me.id) || "me";
     }
 
     async onMount() {
@@ -41,41 +42,75 @@
         if (!gameId) return;
         if (status == null) delete this._statusMap[gameId];
         else this._statusMap[gameId] = status;
+        this.ctl.spliceGame(gameId, status);
+        this.ctl.deriveAll();
         this.render();
       });
-      const seed = window.store.get("profileBundle");
-      if (seed) {
-        this._items = seed.wishlist_page || [];
-        this._total = seed.wishlist_total || 0;
-        this._statusMap = seed.status_map || {};
-      } else {
-        this._loading = true;
-      }
+      this._hydrateFromCache();
       this.render();
-      await Promise.all([this._load(), this._refreshMaps()]);
+      await Promise.all([this.ctl.load(MODE), this._refreshMaps()]);
+    }
+
+    /** Paint page 1 from cache in the first frame; bundle seed as fallback. */
+    _hydrateFromCache() {
+      if (this.ctl.hydrate(MODE)) return true;
+      const seed = window.store.get("profileBundle");
+      if (!seed) return false;
+      this._statusMap = seed.status_map || this._statusMap;
+      return this.ctl.seedPartial(MODE, seed.wishlist_page, seed.wishlist_total);
     }
 
     renderLoading() {
-      this.container.innerHTML = `
-        ${this._renderHead()}
-        <div class="p-4 grid place-items-center">${window.buddyLoader({ size: 64 })}</div>
-      `;
-      this.refreshIcons();
+      this._hydrateFromCache();
+      this.render();
+    }
+
+    async _refreshMaps() {
+      try {
+        this._statusMap = (await window.Collection.myStatusMap()) || {};
+      } catch (_) {}
+      if (!this._mounted) return;
+      this.render();
+    }
+
+    // ── Painting ──────────────────────────────────────────────────────────────
+    _structuralSig() {
+      return this.ctl.isColdLoad(MODE) ? "cold" : "warm";
     }
 
     render() {
+      this.ctl.derive(MODE);
+      const sig = this._structuralSig();
+      if (sig !== this._lastSig || !this.container.querySelector("#wishlist-grid-host")) {
+        this._renderShell();
+        this._lastSig = sig;
+        return;
+      }
+      this._paintCounts();
+      this._paintFilters();
+      this._paintPage();
+    }
+
+    _renderShell() {
       const active = document.activeElement;
       const activeId = active && active.id;
       const caret = active && active.selectionStart;
 
-      const totalPages = Math.max(1, Math.ceil(this._total / PER_PAGE));
-      const hasPager = totalPages > 1;
+      if (this.ctl.isColdLoad(MODE)) {
+        this.container.innerHTML = `
+          ${this._renderHead()}
+          <div class="p-4 grid place-items-center">${window.buddyLoader({ size: 64 })}</div>
+        `;
+        this.refreshIcons();
+        return;
+      }
+
       this.container.innerHTML = `
         ${this._renderHead()}
         ${this._renderControls()}
-        ${this._filtersOpen ? this._renderFilters() : ""}
-        ${this._renderBody(hasPager)}
-        ${this._renderPager()}
+        <div id="wishlist-filters-host">${this._filtersOpen ? this._renderFilters() : ""}</div>
+        <div id="wishlist-grid-host">${this._renderBody(this._hasPager())}</div>
+        <div id="wishlist-pager-host">${this._renderPager()}</div>
       `;
       this.refreshIcons();
 
@@ -90,14 +125,51 @@
       }
     }
 
+    _hasPager() {
+      return this.ctl.totalPages(MODE) > 1;
+    }
+
+    /** The page-turn path: two subtree writes, no shell teardown. */
+    _paintPage() {
+      const grid = this.container.querySelector("#wishlist-grid-host");
+      const pager = this.container.querySelector("#wishlist-pager-host");
+      if (!grid || !pager) return;
+      grid.innerHTML = this._renderBody(this._hasPager());
+      pager.innerHTML = this._renderPager();
+      this.refreshIcons(grid);
+      this.refreshIcons(pager);
+    }
+
+    _paintCounts() {
+      const total = this.ctl.total[MODE];
+      const head = this.container.querySelector(".spoke-head__count");
+      if (head) head.textContent = `${total} game${total === 1 ? "" : "s"}`;
+    }
+
+    _paintFilters() {
+      const host = this.container.querySelector("#wishlist-filters-host");
+      if (host) {
+        host.innerHTML = this._filtersOpen ? this._renderFilters() : "";
+        this.refreshIcons(host);
+      }
+      const btn = this.container.querySelector("#wishlist-filter-btn");
+      if (!btn) return;
+      const n = this.ctl.activeFilterCount();
+      const badge = btn.querySelector(".search-filter-badge");
+      if (n > 0 && badge) badge.textContent = String(n);
+      else if (n > 0) btn.insertAdjacentHTML("beforeend", `<span class="search-filter-badge">${n}</span>`);
+      else if (badge) badge.remove();
+    }
+
     _renderHead() {
+      const total = this.ctl.total[MODE];
       return `
         <header class="spoke-head">
           <button class="spoke-head__back" onclick="window.router.go('profile-self')" aria-label="Back to profile">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="spoke-head__title font-display">Wishlist</h2>
-          <span class="spoke-head__count">${this._total} game${this._total === 1 ? "" : "s"}</span>
+          <span class="spoke-head__count">${total} game${total === 1 ? "" : "s"}</span>
           <button class="spoke-head__add btn btn-primary btn-sm"
                   onclick="window.wishlistView._openAddGame()"
                   aria-label="Add a game to your wishlist">
@@ -110,21 +182,21 @@
     _openAddGame() {
       window.AddGameModal.open({
         status: "wishlist",
-        onAdded: () => { this._load(); },
+        onAdded: () => { this.ctl.load(MODE, { force: true }); },
       });
     }
 
     _renderControls() {
-      const activeFilters = this._activeFilterCount();
+      const activeFilters = this.ctl.activeFilterCount();
       return `
         <div class="profile-panel__controls">
           <input id="wishlist-search-input"
                  class="input input-bordered flex-1 min-w-0"
                  placeholder="Search your wishlist by name"
                  autocomplete="off"
-                 value="${escapeAttr(this._query)}"
+                 value="${escapeAttr(this.ctl.query)}"
                  oninput="window.wishlistView._onSearchInput(this.value)" />
-          <button class="btn btn-ghost relative" title="Filters"
+          <button id="wishlist-filter-btn" class="btn btn-ghost relative" title="Filters"
                   onclick="window.wishlistView._toggleFilters()">
             <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
             ${activeFilters > 0 ? `<span class="search-filter-badge">${activeFilters}</span>` : ""}
@@ -134,7 +206,7 @@
     }
 
     _renderFilters() {
-      const f = this._filters;
+      const f = this.ctl.filters;
       const playerChip = (n) => `
         <button class="filter-chip ${f.players === n ? "is-active" : ""}"
                 onclick="window.wishlistView._setFilter('players', ${f.players === n ? "null" : n})">
@@ -172,7 +244,7 @@
               ${modeChip("team", "Teams")}
             </div>
           </div>
-          ${this._activeFilterCount() > 0
+          ${this.ctl.activeFilterCount() > 0
             ? `<div class="search-filters__footer">
                 <button class="btn btn-ghost btn-xs" onclick="window.wishlistView._clearFilters()">Clear filters</button>
               </div>`
@@ -182,21 +254,22 @@
     }
 
     _renderBody(hasPager = false) {
-      if (this._error) {
-        return `<div class="alert alert-error text-sm">${escapeHtml(this._error)}</div>`;
+      if (this.ctl.error[MODE]) {
+        return `<div class="alert alert-error text-sm">${escapeHtml(this.ctl.error[MODE])}</div>`;
       }
-      if (this._loading && this._items.length === 0) {
+      const items = this.ctl.items[MODE] || [];
+      if (this.ctl.isPending(MODE) && items.length === 0) {
         return window.buddyLoader({ size: 88 });
       }
-      if (this._items.length === 0) {
-        const isSearchingOrFiltering = this._query || this._activeFilterCount() > 0;
+      if (items.length === 0) {
+        const isSearchingOrFiltering = this.ctl.isNarrowing();
         return `<div class="profile-empty">${isSearchingOrFiltering ? "No wishlist matches." : "Wishlist is empty — tap the + Add button to add a game."}</div>`;
       }
-      const reloading = this._loading ? "is-reloading" : "";
+      const reloading = this.ctl.loading[MODE] ? "is-reloading" : "";
       const paginated = hasPager ? "is-paginated" : "";
       return `
         <div class="profile-collection-grid ${reloading} ${paginated}">
-          ${this._items.map((it) => this._renderTile(it)).join("")}
+          ${items.map((it) => this._renderTile(it)).join("")}
         </div>
       `;
     }
@@ -204,7 +277,7 @@
     _renderTile(item) {
       const g = item.game || {};
       const status = this._statusMap[g.id] || item.status || null;
-      // Catalog-wide count off the grid row — see collection-view._renderTile.
+      // Catalog-wide count off the shelf row — see collection-view._renderTile.
       const expCount = g.expansion_count || 0;
       return `
         <div class="collection-tile" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})">
@@ -219,18 +292,19 @@
     }
 
     _renderPager() {
-      const totalPages = Math.max(1, Math.ceil(this._total / PER_PAGE));
+      const totalPages = this.ctl.totalPages(MODE);
       if (totalPages <= 1) return "";
+      const page = this.ctl.page[MODE];
       return `
         <nav class="spoke-pager-footer" aria-label="Wishlist pagination">
-          <button class="btn btn-primary spoke-pager-footer__btn" ${this._page <= 1 ? "disabled" : ""}
-                  onclick="window.wishlistView._goPage(${this._page - 1})"
+          <button class="btn btn-primary spoke-pager-footer__btn" ${page <= 1 ? "disabled" : ""}
+                  onclick="window.wishlistView._goPage(${page - 1})"
                   aria-label="Previous page">
             <i data-lucide="chevron-left" class="w-4 h-4"></i><span>Prev</span>
           </button>
-          <span class="spoke-pager-footer__page">Page ${this._page} of ${totalPages}</span>
-          <button class="btn btn-primary spoke-pager-footer__btn" ${this._page >= totalPages ? "disabled" : ""}
-                  onclick="window.wishlistView._goPage(${this._page + 1})"
+          <span class="spoke-pager-footer__page">Page ${page} of ${totalPages}</span>
+          <button class="btn btn-primary spoke-pager-footer__btn" ${page >= totalPages ? "disabled" : ""}
+                  onclick="window.wishlistView._goPage(${page + 1})"
                   aria-label="Next page">
             <span>Next</span><i data-lucide="chevron-right" class="w-4 h-4"></i>
           </button>
@@ -238,81 +312,22 @@
       `;
     }
 
-    _buildQuery() {
-      const qs = new URLSearchParams({
-        status: "wishlist",
-        page: String(this._page),
-        per_page: String(PER_PAGE),
-        exclude_expansions: "true",
-      });
-      if (this._query) qs.set("search", this._query);
-      const f = this._filters;
-      if (f.players) qs.set("players", String(f.players));
-      if (f.playtimeMin != null) qs.set("playtime_min", String(f.playtimeMin));
-      if (f.playtimeMax != null) qs.set("playtime_max", String(f.playtimeMax));
-      if (f.playMode) qs.set("play_mode", f.playMode);
-      return qs.toString();
+    // ── Handlers ──────────────────────────────────────────────────────────────
+    _onSearchInput(value) { this.ctl.onSearchInput(value, MODE); }
+    _setFilter(key, value) { this.ctl.setFilter(key, value, MODE); }
+    _clearFilters() { this.ctl.clearFilters(MODE); }
+    _setPlaytimeBucket(id) { this.ctl.setPlaytimeBucket(id, MODE); }
+    _toggleFilters() {
+      this._filtersOpen = !this._filtersOpen;
+      this._paintFilters();
     }
-
-    async _load() {
-      this._loading = true;
-      this._error = null;
-      this.render();
-      try {
-        const data = await window.api.get("/collection/grid?" + this._buildQuery());
-        this._items = (data && data.items) || [];
-        this._total = (data && data.total) || 0;
-      } catch (e) {
-        this._error = e.message || "Failed to load";
-        this._items = [];
-        this._total = 0;
-      } finally {
-        this._loading = false;
-        this.render();
+    _goPage(n) {
+      // Zero network: derive the page, then rewrite just the grid and pager.
+      if (this.ctl.goPage(n, MODE)) {
+        this._paintPage();
+        this._paintCounts();
       }
     }
-
-    async _refreshMaps() {
-      try {
-        this._statusMap = (await window.Collection.myStatusMap()) || {};
-      } catch (_) {}
-      this.render();
-    }
-
-    _onSearchInput(value) {
-      this._query = value;
-      clearTimeout(this._searchTimer);
-      this._searchTimer = setTimeout(() => { this._page = 1; this._load(); }, 300);
-    }
-    _setFilter(key, value) {
-      this._filters[key] = value;
-      this._page = 1;
-      this._load();
-    }
-    _clearFilters() {
-      this._filters = { players: null, playtimeMin: null, playtimeMax: null, playMode: null };
-      this._page = 1;
-      this._load();
-    }
-    _setPlaytimeBucket(id) {
-      const f = this._filters;
-      const cur = PLAYTIME_BUCKETS.find((b) => isActiveBucket(b, f));
-      const next = (cur && cur.id === id) ? null : PLAYTIME_BUCKETS.find((b) => b.id === id);
-      f.playtimeMin = next ? next.min : null;
-      f.playtimeMax = next ? next.max : null;
-      this._page = 1;
-      this._load();
-    }
-    _toggleFilters() { this._filtersOpen = !this._filtersOpen; this.render(); }
-    _activeFilterCount() {
-      const f = this._filters;
-      let n = 0;
-      if (f.players) n++;
-      if (f.playtimeMin != null || f.playtimeMax != null) n++;
-      if (f.playMode) n++;
-      return n;
-    }
-    _goPage(n) { this._page = n; this._load(); }
   }
 
   window.WishlistView = WishlistView;
