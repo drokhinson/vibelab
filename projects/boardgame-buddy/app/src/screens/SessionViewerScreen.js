@@ -1,7 +1,8 @@
 // SessionViewerScreen — the joiner's live mirror of a session. The phase
-// follows the host via Realtime (+ poll safety net); the joiner edits only
-// their own scoring column. Finalize → winner polaroid splash → Feed;
-// abandoned → notice → back to the Play tab.
+// follows the host via Realtime (+ poll safety net) and the scoreboard is
+// VIEW-ONLY: since migration 053 the host types every cell and everybody else
+// watches. Finalize → winner polaroid splash → Feed; abandoned → notice →
+// back to the Play tab.
 
 import React, { useCallback } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -67,8 +68,12 @@ export default function SessionViewerScreen({ navigation, route }) {
     );
   }
 
+  // Keyed by participant row, not account: since migration 053 that's what
+  // live cells are keyed by, and it's what puts a guest on the same footing as
+  // an account holder rather than leaving them off the board.
   const players = (session.participants || []).map((p) => ({
-    key: p.user_id || p.id,
+    key: p.id,
+    participant_id: p.id,
     name: p.display_name,
     user_id: p.user_id || null,
     avatar: p.avatar || null,
@@ -118,18 +123,14 @@ export default function SessionViewerScreen({ navigation, route }) {
                 </Text>
               </View>
             ) : (
-              <Text variant="small">Type your own scores — the host sees them live.</Text>
+              <Text variant="small">View only — the host is keeping score.</Text>
             )}
             <RoundScoreGrid
               players={players}
               rounds={rounds}
-              getCell={(pi, ri) => live.getScore(players[pi].user_id, ri)}
-              getTotal={(pi) => live.totalFor(players[pi].user_id)}
-              canEditColumn={(pi) => phase === 'play' && !!me && players[pi].user_id === me.id}
-              onSetCell={(pi, ri, v) => {
-                if (me && players[pi].user_id === me.id) live.setMyScore(ri, v).catch(() => {});
-              }}
-              editable={phase === 'play'}
+              getCell={(pi, ri) => live.getScore(players[pi].participant_id, ri)}
+              getTotal={(pi) => live.totalFor(players[pi].participant_id, rounds)}
+              editable={false}
             />
             {session.game ? <ReferenceGuideScroll gameId={session.game.id} /> : null}
           </View>

@@ -83,7 +83,7 @@ export default function useSessionWatch({ code, me, onFinalized, onAbandoned }) 
   useEffect(() => {
     if ((phase !== 'play' && phase !== 'settle') || !session?.id) return undefined;
     if (liveRef.current) return undefined;
-    const live = new LiveScores({ sessionId: session.id, isHost: false, currentUserId: me?.id || null });
+    const live = new LiveScores({ sessionId: session.id, isHost: false });
     liveRef.current = live;
     let off = null;
     live.start().then(() => {

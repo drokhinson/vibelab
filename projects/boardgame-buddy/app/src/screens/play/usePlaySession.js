@@ -42,30 +42,40 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
   }, []);
 
   // ── Score resolution ────────────────────────────────────────────────────
+  // Live cells are keyed by PARTICIPANT row, not account (migration 053) —
+  // which is what lets a guest's column stream. A player without a
+  // participant_id yet (offline table, or the poll hasn't matched them) simply
+  // reads from the local draft.
   const resolvedScore = useCallback((player, roundIndex) => {
-    if (liveRef.current && player.user_id) {
-      const live = liveRef.current.getScore(player.user_id, roundIndex);
+    if (liveRef.current && player.participant_id) {
+      const live = liveRef.current.getScore(player.participant_id, roundIndex);
       if (live != null) return live;
     }
     const local = player.round_scores && player.round_scores[roundIndex];
     return parseRoundScore(local);
   }, []);
 
-  const playerTotal = useCallback(
-    (player) => {
-      const n = (player.round_scores || []).length;
-      let total = 0;
-      for (let r = 0; r < n; r++) total += Number(resolvedScore(player, r)) || 0;
-      return total;
-    },
-    [resolvedScore],
-  );
-
+  // The grid's width: the longest column. Declared before playerTotal because
+  // that bounds its sum by it.
   const maxRoundCount = useCallback(() => {
     const d = draftRef.current;
     if (!d || !d.players.length) return 0;
     return Math.max(0, ...d.players.map((p) => (p.round_scores || []).length));
   }, []);
+
+  // Sum only the rounds the grid is showing. A column shorter than the grid
+  // contributes nothing for the missing rounds — which keeps the Total equal
+  // to the cells above it even when the live overlay still holds a round the
+  // host has removed (migration 052's subject).
+  const playerTotal = useCallback(
+    (player) => {
+      const n = maxRoundCount();
+      let total = 0;
+      for (let r = 0; r < n; r++) total += Number(resolvedScore(player, r)) || 0;
+      return total;
+    },
+    [resolvedScore, maxRoundCount],
+  );
 
   const runAutoWinners = useCallback(() => {
     const d = draftRef.current;
@@ -184,15 +194,26 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
   const startLiveScores = useCallback(async () => {
     const d = draftRef.current;
     if (liveRef.current || !d?.sessionId) return;
-    const live = new LiveScores({ sessionId: d.sessionId, isHost: true, currentUserId: me?.id || null });
+    const live = new LiveScores({ sessionId: d.sessionId, isHost: true });
     liveRef.current = live;
     await live.start();
+    // Publish the grid this device is actually showing. start() only READ the
+    // table, and a resumed draft (or one whose participant_ids landed after
+    // the cells were typed) holds scores the table has never seen. Spectators
+    // are read-only now, so nobody else would ever fill those gaps in.
+    live
+      .syncGrid(
+        (d.players || [])
+          .filter((p) => p.participant_id)
+          .map((p) => ({ participant_id: p.participant_id, roundScores: p.round_scores || [] })),
+      )
+      .catch(() => {});
     live.subscribe(() => {
       runAutoWinners();
       repaint();
     });
     repaint();
-  }, [me?.id, repaint, runAutoWinners]);
+  }, [repaint, runAutoWinners]);
 
   // ── Boot ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -268,15 +289,23 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
           avatar,
         }),
       );
-      // Account players also join the lobby so their live-score column works.
-      if (user_id && d.code) {
+      // EVERY player joins the lobby, guests included. Since migration 053 a
+      // participant row is what live scores are keyed by, so a guest without
+      // one has a column no spectator ever sees. (The local row above is
+      // already committed either way — a player the host typed belongs to the
+      // play; the roster row is only for spectators.)
+      if (d.code) {
         api
-          .addParticipant(d.code, { userId: user_id, displayName: clean })
+          .addParticipant(d.code, { userId: user_id || null, displayName: clean })
           .then((updated) => {
             lobbyRef.current = updated;
-            const part = (updated.participants || []).find((p) => p.user_id === user_id);
+            const part = (updated.participants || []).find((p) =>
+              user_id
+                ? p.user_id === user_id
+                : !p.user_id && (p.display_name || '').toLowerCase() === clean.toLowerCase(),
+            );
             if (part) mutate((dd) => {
-              const row = dd.players.find((p) => p.user_id === user_id);
+              const row = dd.players.find((p) => p.name.toLowerCase() === clean.toLowerCase());
               if (row) row.participant_id = part.id;
             });
           })
@@ -318,8 +347,8 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
       });
       // Mirror authed-player edits into live scores so joiners see the
       // host's override. Ghosts stay local-only.
-      if (liveRef.current && p.user_id) {
-        liveRef.current.setAnyScore(p.user_id, roundIndex, parseRoundScore(clean)).catch(() => {});
+      if (liveRef.current && p.participant_id) {
+        liveRef.current.setAnyScore(p.participant_id, roundIndex, parseRoundScore(clean)).catch(() => {});
       }
       runAutoWinners();
     },
@@ -342,6 +371,10 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
           if (Array.isArray(p.round_scores) && r >= 0 && r < p.round_scores.length) p.round_scores.splice(r, 1);
         }
       });
+      // Delete the round's live rows too. Spectators size their grid from
+      // maxRound(), so leaving them behind keeps the removed round on screen
+      // for everyone else — and the next poll would grow it back here.
+      if (liveRef.current) liveRef.current.removeRoundAt(r).catch(() => {});
       runAutoWinners();
     },
     [mutate, runAutoWinners],

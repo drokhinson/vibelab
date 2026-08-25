@@ -1,19 +1,26 @@
-// liveScores — Realtime per-player live scores during the Play phase. Wraps a
-// Supabase channel on boardgamebuddy_play_session_scores. Writes go straight to
-// the table via the anon key; RLS (migration 026) enforces that joiners can
-// only touch their own column and the host can override anyone in their session.
-// Ported verbatim from web/domain/live-scores.js (window.supabaseClient → ESM).
+// liveScores — Realtime live scores during the Play phase. Wraps a Supabase
+// channel on boardgamebuddy_play_session_scores. The host's device writes
+// straight to the table via the anon key and everybody else reads; RLS
+// (migration 053) enforces that only the host of the session can write, and
+// only while phase='play'.
+//
+// Cells are keyed (participant_id, round_index) — the roster row, not the
+// account — which is what lets a GUEST's column stream too. Before 053 the
+// table was keyed by player_user_id, so a guest was unrepresentable and their
+// column never reached anyone else's screen.
+//
+// Ported from web/domain/live-scores.js (window.supabaseClient → ESM); keep
+// the two in step.
 
 import { supabase } from '../auth/supabase';
 
 export default class LiveScores {
-  constructor({ sessionId, isHost, currentUserId }) {
+  constructor({ sessionId, isHost }) {
     this.sessionId = sessionId;
     this.isHost = !!isHost;
-    this.currentUserId = currentUserId;
     this._channel = null;
     this._listeners = new Set();
-    this._byPlayer = new Map(); // Map<player_user_id, Map<round_index, score>>
+    this._byPlayer = new Map(); // Map<participant_id, Map<round_index, score>>
   }
 
   async start() {
@@ -21,7 +28,7 @@ export default class LiveScores {
     try {
       const { data } = await supabase
         .from('boardgamebuddy_play_session_scores')
-        .select('session_id, player_user_id, round_index, score')
+        .select('session_id, participant_id, round_index, score')
         .eq('session_id', this.sessionId);
       for (const row of data || []) this._ingest(row);
     } catch {}
@@ -56,18 +63,28 @@ export default class LiveScores {
     return () => this._listeners.delete(fn);
   }
 
-  getScore(playerUserId, roundIndex) {
-    const m = this._byPlayer.get(playerUserId);
+  getScore(participantId, roundIndex) {
+    const m = this._byPlayer.get(participantId);
     if (!m) return null;
     const v = m.get(roundIndex);
     return v == null ? null : v;
   }
 
-  totalFor(playerUserId) {
-    const m = this._byPlayer.get(playerUserId);
+  /**
+   * Sum a column, bounded to the rounds the grid is actually showing. Pass
+   * roundCount wherever a total sits under a grid: a round the host removed can
+   * still have rows in flight, and summing them is how a total ends up bigger
+   * than the cells above it (migration 052's whole subject).
+   */
+  totalFor(participantId, roundCount) {
+    const m = this._byPlayer.get(participantId);
     if (!m) return 0;
+    const n = roundCount == null ? null : Number(roundCount);
     let total = 0;
-    for (const v of m.values()) total += Number(v) || 0;
+    for (const [r, v] of m) {
+      if (n != null && (r < 0 || r >= n)) continue;
+      total += Number(v) || 0;
+    }
     return total;
   }
 
@@ -79,38 +96,96 @@ export default class LiveScores {
     return max;
   }
 
-  async setMyScore(roundIndex, value) {
-    if (!this.currentUserId) throw new Error('Not signed in');
-    return this._upsert(this.currentUserId, roundIndex, value);
-  }
-
-  async setAnyScore(playerUserId, roundIndex, value) {
-    if (!this.isHost) throw new Error('Only the host can override scores');
-    return this._upsert(playerUserId, roundIndex, value);
-  }
-
-  async _upsert(playerUserId, roundIndex, value) {
-    const numeric = value === '' || value == null || Number.isNaN(Number(value)) ? null : Number(value);
-    this._ingest({ player_user_id: playerUserId, round_index: roundIndex, score: numeric });
+  /**
+   * Host-only. Delete every score row at or after a round index so the round
+   * really disappears from spectators' grids. Writing NULLs instead would leave
+   * the rows in place, and maxRound() — which spectators size their grid from —
+   * would keep the round alive and grow the host's grid straight back.
+   *
+   * Migration 053 granted DELETE for the first time; before it this call 403'd
+   * into the catch below, which is why a removed round used to linger on every
+   * spectator's screen as a phantom trailing column.
+   */
+  async removeRoundAt(roundIndex) {
+    if (!this.isHost) throw new Error('Only the host can remove a round');
+    const idx = Number(roundIndex);
+    if (!Number.isFinite(idx) || idx < 0) return;
+    for (const m of this._byPlayer.values()) {
+      for (const r of [...m.keys()]) if (r >= idx) m.delete(r);
+    }
     this._emit();
-    const row = { session_id: this.sessionId, player_user_id: playerUserId, round_index: roundIndex, score: numeric };
-    return supabase.from('boardgamebuddy_play_session_scores').upsert(row, { onConflict: 'session_id,player_user_id,round_index' });
+    if (!supabase || !this.sessionId) return;
+    try {
+      await supabase
+        .from('boardgamebuddy_play_session_scores')
+        .delete()
+        .eq('session_id', this.sessionId)
+        .gte('round_index', idx);
+    } catch {}
+  }
+
+  async setAnyScore(participantId, roundIndex, value) {
+    if (!this.isHost) throw new Error('Only the host can score');
+    return this._upsert(participantId, roundIndex, value);
+  }
+
+  /**
+   * Host-only. Publish the host's whole grid in one write, on entering Play.
+   * setAnyScore mirrors each cell as it's typed, but a resumed draft (or a row
+   * whose participant_id landed late) can hold cells the table has never seen,
+   * and spectators can no longer fill in the gaps themselves. For a single
+   * writer the local draft is by definition the newer copy, so it wins.
+   * @param {Array<{participant_id: string, roundScores: Array<any>}>} players
+   */
+  async syncGrid(players) {
+    if (!this.isHost) throw new Error('Only the host can score');
+    if (!supabase || !this.sessionId) return;
+    const rows = [];
+    for (const p of players || []) {
+      if (!p || !p.participant_id) continue;
+      const scores = Array.isArray(p.roundScores) ? p.roundScores : [];
+      for (let r = 0; r < scores.length; r++) {
+        const numeric = _numeric(scores[r]);
+        this._ingest({ participant_id: p.participant_id, round_index: r, score: numeric });
+        rows.push({ session_id: this.sessionId, participant_id: p.participant_id, round_index: r, score: numeric });
+      }
+    }
+    if (!rows.length) return;
+    this._emit();
+    try {
+      await supabase
+        .from('boardgamebuddy_play_session_scores')
+        .upsert(rows, { onConflict: 'session_id,participant_id,round_index' });
+    } catch {}
+  }
+
+  async _upsert(participantId, roundIndex, value) {
+    const numeric = _numeric(value);
+    this._ingest({ participant_id: participantId, round_index: roundIndex, score: numeric });
+    this._emit();
+    const row = { session_id: this.sessionId, participant_id: participantId, round_index: roundIndex, score: numeric };
+    return supabase.from('boardgamebuddy_play_session_scores').upsert(row, { onConflict: 'session_id,participant_id,round_index' });
   }
 
   _ingest(row) {
-    if (!row || !row.player_user_id || row.round_index == null) return;
-    let m = this._byPlayer.get(row.player_user_id);
-    if (!m) { m = new Map(); this._byPlayer.set(row.player_user_id, m); }
+    if (!row || !row.participant_id || row.round_index == null) return;
+    let m = this._byPlayer.get(row.participant_id);
+    if (!m) { m = new Map(); this._byPlayer.set(row.participant_id, m); }
     m.set(Number(row.round_index), row.score == null ? null : Number(row.score));
   }
 
   _forget(row) {
-    if (!row || !row.player_user_id) return;
-    const m = this._byPlayer.get(row.player_user_id);
+    if (!row || !row.participant_id) return;
+    const m = this._byPlayer.get(row.participant_id);
     if (m) m.delete(Number(row.round_index));
   }
 
   _emit() {
     for (const fn of this._listeners) { try { fn(); } catch {} }
   }
+}
+
+// "" / null / a half-typed "-" are all "no score yet", not zero.
+function _numeric(value) {
+  return value === '' || value == null || Number.isNaN(Number(value)) ? null : Number(value);
 }
