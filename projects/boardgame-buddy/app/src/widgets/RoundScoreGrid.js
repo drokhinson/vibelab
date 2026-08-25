@@ -1,7 +1,12 @@
 // RoundScoreGrid — rounds × players scoring table. Column headers are UserBadges
-// (forceInitials). Cells are editable text inputs when `editable`. Real prop
-// callbacks replace the web widget's string-handler contract. Used by PlayFlow
-// (Play phase), SessionViewer (own column editable), PlayDetailPopup (read-only).
+// (forceInitials). Real prop callbacks replace the web widget's string-handler
+// contract.
+//
+// `editable` picks between the grid's two modes and there is no third: every
+// cell is a text input with the host controls, or every cell is a number with
+// none. Used by PlayFlow (editable), SessionViewer and PlayDetailPopup (both
+// read-only). SessionViewer used to keep the viewer's own column editable via
+// a per-column gate; the host is the only person who scores now.
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
@@ -31,8 +36,7 @@ function nextSignToggle(v) {
  * @param {(playerIdx:number, roundIdx:number)=>string|number|null} props.getCell
  * @param {(playerIdx:number)=>number} props.getTotal
  * @param {(playerIdx:number)=>boolean} [props.isWinner]
- * @param {(playerIdx:number)=>boolean} [props.canEditColumn] gate per-column edit (joiner = own only)
- * @param {(playerIdx:number, roundIdx:number, value:string)=>void} props.onSetCell
+ * @param {(playerIdx:number, roundIdx:number, value:string)=>void} [props.onSetCell] required when editable
  * @param {() => void} [props.onAddRound]
  * @param {(roundIdx:number)=>void} [props.onRemoveRound]
  * @param {(playerIdx:number)=>void} [props.onToggleWinner]
@@ -44,7 +48,6 @@ export default function RoundScoreGrid({
   getCell,
   getTotal,
   isWinner,
-  canEditColumn,
   onSetCell,
   onAddRound,
   onRemoveRound,
@@ -111,12 +114,11 @@ export default function RoundScoreGrid({
                 ) : null}
               </View>
               {players.map((p, pi) => {
-                const colEditable = editable && (!canEditColumn || canEditColumn(pi));
                 const val = getCell(pi, ri);
                 const isNeg = val != null && String(val).charAt(0) === '-';
                 return (
                   <View key={p.key || pi} style={styles.cell}>
-                    {colEditable ? (
+                    {editable ? (
                       <View style={styles.cellRow}>
                         {showSign ? (
                           <Pressable
