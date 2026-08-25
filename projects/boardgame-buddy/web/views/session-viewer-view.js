@@ -38,6 +38,8 @@
       this._liveOff = null;
       this._phaseOff = null;
       this._popupShown = false;
+      // One feed re-pull per session watched — see _handlePhaseSideEffects.
+      this._feedRefreshed = false;
       // Poll-gating state: tick counter for the play/settle fallback cadence
       // and the timestamp of the last Realtime event (phase change or live
       // score). While Realtime is flowing, the fallback fetches are skipped.
@@ -49,6 +51,7 @@
     async onMount() {
       this._code = this._extractCode(this.params);
       this._popupShown = false;
+      this._feedRefreshed = false;
       if (!this._code) {
         this._error = "No session code provided";
         this.render();
@@ -78,6 +81,7 @@
       this._code = next;
       this._session = null;
       this._popupShown = false;
+      this._feedRefreshed = false;
       await this._load();
       this._scrollToCurrentPhase(this._session && this._session.phase);
       this._startPolling();
@@ -350,6 +354,16 @@
     _handlePhaseSideEffects(session) {
       if (!session) return;
       if (session.status === "finalized" || session.phase === "finalized") {
+        // The host's play is on the server now, and it belongs on this
+        // viewer's feed too — but nothing on this device wrote it, so their
+        // cached first page has no idea. Re-pull it here, behind the wrap-up
+        // card, so closing that card lands on a feed that already carries the
+        // game they just watched. Fire-and-forget and once only: the poll
+        // stops right below, but a late tick must not restart the request.
+        if (!this._feedRefreshed && window.Feed) {
+          this._feedRefreshed = true;
+          window.Feed.refreshFirstPage().catch(() => {});
+        }
         // Once the host saves the play, swap the popup (if open) to a
         // "View play" CTA and leave the user on the cascade mirror until
         // they dismiss. If the popup never opened (e.g. they refreshed

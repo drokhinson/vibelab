@@ -1,16 +1,19 @@
 // ui/polaroid-popup.js — Wrap-up splash polaroid. A medium cream card lands
 // in the middle of the screen showing the game thumbnail + winner with a
-// close (X) in the top-right. The X backs out to the Play tab; the primary
-// CTA and a backdrop tap route to the feed. Getting the just-saved play into
-// that feed is the save path's job — play-flow's _runSave() re-pulls the
-// first page the moment the write lands.
+// close (X) in the top-right. Every exit from the card — the X, a backdrop
+// tap — lands on the feed, so "I'm done here" has exactly one destination.
+// Getting the just-finalized play into that feed is the caller's job, done
+// behind the still-up card: play-flow's _runSave() re-pulls the first page
+// the moment the write lands, session-viewer when it sees phase=finalized.
 //
 // Two callers, one card:
 //   • Non-host joiners (session-viewer) get the plain X-only splash.
 //   • The host (play-flow) shows it the instant they hit Save, while the
 //     write runs behind it — so the card also carries the save state
-//     (`saving` / `error` / `warning`) on its primary CTA and the host-only
-//     "Another round?" action.
+//     (`saving` / `error` / `warning`) and the host-only "Another round?"
+//     action. It shows exactly one bottom button at a time: the state CTA
+//     while the write is in flight or has failed, then "Another round?"
+//     once the play has landed. Going to the feed is the X's job.
 
 // @ts-check
 
@@ -28,20 +31,21 @@
    * @property {string=} playId — when present, the splash adds a "View play"
    *           CTA that opens the in-place play-detail popup. Set by the
    *           phase=finalized handler.
-   * @property {boolean=} saving — the play is still being written. The
-   *           primary CTA shows a spinner + "Saving…", "Another round?" is
-   *           disabled, and the card can't be dismissed (no X, inert
-   *           backdrop) so nobody walks away mid-write.
+   * @property {boolean=} saving — the play is still being written. The lone
+   *           bottom button is a disabled spinner + "Saving…" ("Another
+   *           round?" isn't offered yet), and the card can't be dismissed
+   *           (no X, inert backdrop) so nobody walks away mid-write.
    * @property {string=} error — the background save failed. Renders under
-   *           the winner pill and swaps the primary CTA to "Retry".
+   *           the winner pill and swaps the lone bottom button to "Retry".
    * @property {string=} warning — muted advisory line (e.g. the photo
    *           upload failed but the play itself saved).
    * @property {() => void=} onDismiss — override the default feed redirect
-   *           used by the backdrop tap and the primary CTA.
-   * @property {() => void=} onClose — override what the corner X does. By
-   *           default the X routes to the Play tab (`log-play`) instead of
-   *           the feed; when unset but `onDismiss` is, the X follows
-   *           `onDismiss`.
+   *           used by the backdrop tap and the corner X.
+   * @property {() => void=} onClose — override what the corner X does on its
+   *           own. Rarely needed: with neither handler set the X takes the
+   *           same feed redirect as every other exit, and when only
+   *           `onDismiss` is set the X follows it, so a caller that redirects
+   *           dismissal keeps one consistent destination.
    * @property {(() => void)=} onAnotherRound — host-only. When set the card
    *           renders an "Another round?" button that re-seeds a fresh
    *           session with the same game / expansions / players.
@@ -135,15 +139,14 @@
         if (typeof opts.onAnotherRound === "function") opts.onAnotherRound();
       });
     }
-    const feedBtn = root.querySelector(".polaroid-popup__feed");
-    if (feedBtn) {
-      feedBtn.addEventListener("click", () => {
-        if (feedBtn.disabled) return;
-        if (opts.error && typeof opts.onRetry === "function") {
-          opts.onRetry();
-          return;
-        }
-        handleDismiss(opts);
+    // The save-state slot: only rendered while the write is in flight
+    // (disabled "Saving…") or has failed, so the one thing it can do is
+    // re-fire the save.
+    const retryBtn = root.querySelector(".polaroid-popup__retry");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", () => {
+        if (retryBtn.disabled) return;
+        if (typeof opts.onRetry === "function") opts.onRetry();
       });
     }
   }
@@ -156,11 +159,12 @@
   }
 
   /**
-   * The X in the card's corner. Distinct from the rest of the dismiss paths:
-   * closing the wrap-up card means "I'm done with this game", so it drops the
-   * user back on the Play tab rather than the feed. `onClose` overrides it;
-   * absent that it falls back to `onDismiss` so a caller that only overrides
-   * dismissal keeps one consistent destination for every exit.
+   * The X in the card's corner — the wrap-up card's primary exit now that
+   * the bottom button is "Another round?". It takes the same feed redirect
+   * as a backdrop tap. `onClose` overrides it; absent that it falls back to
+   * `onDismiss` so a caller that only overrides dismissal (play-flow on a
+   * failed save, which sends the host back to Settle Up rather than off to
+   * a feed missing their play) keeps one destination for every exit.
    */
   function handleClose(opts) {
     if (opts && typeof opts.onClose === "function") {
@@ -168,13 +172,7 @@
       try { opts.onClose(); } catch (_) {}
       return;
     }
-    if (opts && typeof opts.onDismiss === "function") {
-      handleDismiss(opts);
-      return;
-    }
-    dismiss();
-    try { window.store.invalidate("feed"); } catch (_) {}
-    window.router.go("log-play");
+    handleDismiss(opts);
   }
 
   function handleDismiss(opts) {
@@ -183,6 +181,18 @@
       try { opts.onDismiss(); } catch (_) {}
       return;
     }
+    goToFeed();
+  }
+
+  /**
+   * The one exit. Deliberately does NOT call Feed.refreshFirstPage() itself:
+   * that drops the cached first page, so a card that re-pulled on the way out
+   * would hand the user a skeleton instead of the feed. Both callers refresh
+   * behind the still-up card instead — play-flow's _runSave() the moment the
+   * write lands, session-viewer the moment the host finalizes — so by the
+   * time this runs the new page is already warm.
+   */
+  function goToFeed() {
     try { window.store.invalidate("feed"); } catch (_) {}
     window.router.go("feed");
   }
@@ -217,28 +227,35 @@
       : "";
     // The host's wrap-up card carries the save state; the joiner's splash
     // (session-viewer) passes none of these and keeps its X-only chrome.
+    //
+    // One button, three states. While the write is in flight or has failed
+    // the slot belongs to the save itself ("Saving…" / "Retry") — offering
+    // "Another round?" there would only be a disabled button asking to be
+    // tapped. Once the play has landed the slot is "Another round?", and
+    // leaving for the feed is the corner X's job.
     const hasActions = !!(opts.onAnotherRound || opts.saving || opts.error);
+    const pending = !!(opts.saving || opts.error);
     const actions = hasActions ? `
       <div class="polaroid-popup__actions polaroid-popup__actions--wrap">
-        ${opts.onAnotherRound ? `
-          <button class="polaroid-popup__another btn btn-ghost btn-sm"
-                  ${opts.saving || opts.error ? "disabled" : ""}>
+        ${pending ? `
+          <button class="polaroid-popup__retry btn btn-primary btn-sm"
+                  ${opts.saving ? "disabled" : ""}>
+            ${opts.saving
+              ? `<span class="loading loading-spinner loading-xs"></span><span>Saving…</span>`
+              : `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Retry</span>`}
+          </button>
+        ` : ""}
+        ${!pending && opts.onAnotherRound ? `
+          <button class="polaroid-popup__another btn btn-primary btn-sm">
             <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
             <span>Another round?</span>
           </button>
         ` : ""}
-        <button class="polaroid-popup__feed btn btn-primary btn-sm"
-                ${opts.saving ? "disabled" : ""}>
-          ${opts.saving
-            ? `<span class="loading loading-spinner loading-xs"></span><span>Saving…</span>`
-            : opts.error
-              ? `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Retry</span>`
-              : `<span>Go to feed</span><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>`}
-        </button>
       </div>
     ` : "";
-    // No escape hatch while a write is in flight — the primary CTA is the
-    // only affordance until the save resolves one way or the other.
+    // No escape hatch while a write is in flight — the disabled "Saving…"
+    // button is the only affordance until the save resolves one way or the
+    // other.
     const closeBtn = opts.saving ? "" : `
       <button class="polaroid-popup__close" aria-label="Close">
         <i data-lucide="x" class="w-4 h-4"></i>
