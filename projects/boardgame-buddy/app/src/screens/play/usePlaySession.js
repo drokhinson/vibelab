@@ -18,7 +18,7 @@ import { sanitizeRoundScore, parseRoundScore, autoSelectWinners } from '../../do
 import { isCoop, normalizePlayMode } from '../../domain/playMode';
 import { savePlay } from './playSave';
 
-export default function usePlaySession({ me, initialCode, initialGame }) {
+export default function usePlaySession({ me, initialCode, initialGame, fresh }) {
   const draftRef = useRef(null);
   const lobbyRef = useRef(null);
   const liveRef = useRef(null);
@@ -31,6 +31,9 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  // The server refused to mint a lobby. Surfaced on the invite card, not as a
+  // cascade-wide error — the host can still play and record.
+  const [lobbyFailed, setLobbyFailed] = useState(false);
 
   const draft = draftRef.current;
 
@@ -98,13 +101,18 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
   const ensureLobbyOpen = useCallback(async () => {
     const d = draftRef.current;
     if (d.code) {
+      const seq = phaseSeqRef.current;
       try {
         const s = await api.session(d.code);
         if (s && s.status === 'open' && s.phase && s.phase !== 'abandoned') {
           lobbyRef.current = s;
           d.sessionId = s.id;
           d.hostUserId = s.host_user_id;
-          d.phase = s.phase;
+          // Only adopt the server's phase if the host hasn't moved while this
+          // was in flight. A lobby is always born in 'gather', so without the
+          // token a mint that lands after the host tapped Continue would yank
+          // them straight back off Play.
+          if (phaseSeqRef.current === seq) d.phase = s.phase;
           persist();
           reconcileGameToLobby();
           return;
@@ -136,11 +144,16 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
       d.hostUserId = session.host_user_id;
       d.phase = session.phase || 'gather';
       d.offlineTable = false;
+      setLobbyFailed(false);
       persist();
       reconcileGameToLobby();
     } catch (e) {
       if (e && e.status != null) {
-        setError(e.message || 'Could not start a session');
+        // A refused mint is not a refused game. The host keeps the whole
+        // cascade and records the play; they just don't get a code to share,
+        // which the invite card says quietly rather than as a red alert over
+        // everything.
+        setLobbyFailed(true);
         return;
       }
       // Network failure — run as an OFFLINE TABLE: no code, no live scores,
@@ -221,6 +234,11 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     (async () => {
       let d = await loadDraft();
       if (initialCode && d?.code !== initialCode) d = null; // deep link to a different session
+      // "Host a game" always starts a new one. Without this the previous run's
+      // draft is silently resumed — including its finished session's code, so
+      // every write goes to a lobby the server has already closed. Resume is
+      // the one path that continues a session, and it says so.
+      if (fresh) d = null;
       if (!d) d = emptyDraft();
       if (!d.game && initialGame) d.game = initialGame;
       if (!d.players.length && me) {
@@ -400,13 +418,10 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
   const advancePhase = useCallback(
     async (next) => {
       const d = draftRef.current;
-      // Offline table (or no lobby yet): the phase is local-only. Nobody is
-      // following it server-side, so just flip and go.
+      // No lobby to mirror into — an offline table, or a code that hasn't
+      // landed yet. Either way the phase is local and the host moves on: the
+      // session is what lets others watch, not what lets them play.
       if (d.offlineTable || !lobbyRef.current?.code) {
-        if (!d.offlineTable && !lobbyRef.current?.code) {
-          setError('Session not ready yet.');
-          return false;
-        }
         setError(null);
         d.phase = next;
         persist();
@@ -414,7 +429,6 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
         return true;
       }
       setError(null);
-      const prevPhase = d.phase;
       const seq = ++phaseSeqRef.current;
       d.phase = next;
       persist();
@@ -431,18 +445,13 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
         }
         if (next === 'play') startLiveScores();
         return true;
-      } catch (e) {
-        if (seq !== phaseSeqRef.current) return true;
-        if (e && e.status == null) {
-          // Dead link mid-game must not trap the host on a screen: keep the
-          // optimistic flip. The save path falls back to the outbox anyway.
-          return true;
-        }
-        d.phase = prevPhase;
-        persist();
-        setError(e.message || 'Could not advance to the next screen');
-        repaint();
-        return false;
+      } catch {
+        // The phase the host is looking at is the truth; the lobby only
+        // mirrors it. Rolling them back onto a screen they've left — for a
+        // dead link OR a server refusal — is the one outcome that costs them
+        // the game, and the save path falls back to the outbox regardless.
+        // A lobby that's genuinely gone gets replaced by withLobby.
+        return true;
       } finally {
         pendingPhaseRef.current--;
       }
@@ -608,6 +617,7 @@ export default function usePlaySession({ me, initialCode, initialGame }) {
     draft,
     lobby: lobbyRef.current,
     live: liveRef.current,
+    lobbyFailed,
     setError,
     mutate,
     pickGame,

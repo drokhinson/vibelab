@@ -30,6 +30,7 @@ export default function GatherStep({ session, navigation }) {
   const importRef = useRef(null);
 
   const game = draft?.game;
+  const code = lobby?.code || draft?.code || null;
 
   const visibleExpansions = useMemo(
     () =>
@@ -125,24 +126,34 @@ export default function GatherStep({ session, navigation }) {
       ) : (
         <Card pad="md">
           <Row justify="space-between">
-            <View>
+            <View style={{ flex: 1 }}>
               <Text variant="caption">INVITE CODE</Text>
-              <Text variant="scoreBig" color={COLORS.accent} style={{ letterSpacing: 4, fontSize: 26 }}>
-                {lobby?.code || draft.code || '·····'}
-              </Text>
+              {code ? (
+                <Text variant="scoreBig" color={COLORS.accent} style={{ letterSpacing: 4, fontSize: 26 }}>
+                  {code}
+                </Text>
+              ) : (
+                // The host can walk past this — Continue only needs a game — so
+                // the placeholder has to read as pending, not broken.
+                <Text variant="scoreBig" color={COLORS.textMuted} style={{ letterSpacing: 2, fontSize: 18 }}>
+                  {session.lobbyFailed ? 'No session code' : 'Getting your code…'}
+                </Text>
+              )}
             </View>
-            <Pressable
-              style={styles.shareBtn}
-              onPress={() =>
-                Share.share({ message: `Join my game on Boardgame Buddy — code ${lobby?.code || draft.code}` }).catch(() => {})
-              }
-              hitSlop={6}
-            >
-              <Share2 size={18} color={COLORS.accent} />
-            </Pressable>
+            {code ? (
+              <Pressable
+                style={styles.shareBtn}
+                onPress={() => Share.share({ message: `Join my game on Boardgame Buddy — code ${code}` }).catch(() => {})}
+                hitSlop={6}
+              >
+                <Share2 size={18} color={COLORS.accent} />
+              </Pressable>
+            ) : null}
           </Row>
           <Text variant="caption" style={{ marginTop: 4 }}>
-            Buddies can join from the Play tab and type their own scores.
+            {session.lobbyFailed
+              ? "Couldn't open a table this time — you can still play and record it, just not be joined."
+              : 'Buddies can join from the Play tab and follow your scores live.'}
           </Text>
         </Card>
       )}

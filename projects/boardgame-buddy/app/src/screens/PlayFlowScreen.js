@@ -34,6 +34,7 @@ export default function PlayFlowScreen({ navigation, route }) {
     me: currentUser,
     initialCode: route.params?.code || null,
     initialGame: route.params?.game || null,
+    fresh: !!route.params?.fresh,
   });
   const { ready, draft, error, saving } = session;
   const phase = draft?.phase && PHASES.includes(draft.phase) ? draft.phase : 'gather';
@@ -169,8 +170,11 @@ export default function PlayFlowScreen({ navigation, route }) {
   }
 
   const ctaLabel = phase === 'gather' ? 'Continue to Play' : phase === 'play' ? 'Wrap up' : saving ? 'Saving…' : 'Save play';
-  const ctaDisabled =
-    phase === 'gather' ? !draft.game?.id || (!session.lobby?.code && !draft.offlineTable) : false;
+  // A game pick is the only prerequisite. Gating this on the session code made
+  // the host stare at a greyed-out Continue while POST /sessions went to
+  // Railway and back — and the code isn't needed to play, only to be joined.
+  // advancePhase flips locally and lets the lobby catch up.
+  const ctaDisabled = phase === 'gather' ? !draft.game?.id : false;
 
   return (
     <View style={[styles.safe, { paddingTop: insets.top }]}>

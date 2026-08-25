@@ -140,7 +140,10 @@ export default function LogPlayScreen({ navigation }) {
             <Text variant="heading">Host a game night</Text>
             <Text variant="caption">Open a table, share the code, score live.</Text>
           </View>
-          <Button label="Host" size="sm" onPress={() => navigation.navigate('PlayFlow', {})} />
+          {/* Always a NEW session — Resume above is the only thing that
+              continues one. Reusing the draft here handed the host the
+              previous game's code, so every write went to a closed lobby. */}
+          <Button label="Host" size="sm" onPress={() => navigation.navigate('PlayFlow', { fresh: true })} />
         </Row>
       </Card>
 
@@ -198,7 +201,7 @@ export default function LogPlayScreen({ navigation }) {
         <GameFinder
           includeRecentlyPlayed
           placeholder="Search your shelf — works offline"
-          onPick={(game) => navigation.navigate('PlayFlow', { game })}
+          onPick={(game) => navigation.navigate('PlayFlow', { game, fresh: true })}
         />
       </View>
     </Screen>
