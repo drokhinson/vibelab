@@ -448,20 +448,34 @@
           const byName = new Map(
             this._ps.players.map((p, i) => [(p.name || "").toLowerCase(), i])
           );
+          // Account players are matched on user_id first. Names are the only
+          // handle a guest has, but for someone with an account they're a
+          // weaker key than the id we already hold — and participant_id is
+          // now what live scoring is mirrored under (migration 053), so a
+          // row that fails to acquire one has its column stop streaming to
+          // spectators, not just lose its DELETE affordance.
+          const byUserId = new Map(
+            this._ps.players
+              .map((p, i) => [p.user_id, i])
+              .filter(([id]) => !!id)
+          );
           for (const part of nextParts) {
             const key = (part.display_name || "").toLowerCase();
-            if (!key) continue;
-            if (byName.has(key)) {
+            const idx = part.user_id != null && byUserId.has(part.user_id)
+              ? byUserId.get(part.user_id)
+              : (key && byName.has(key) ? byName.get(key) : undefined);
+            if (idx !== undefined) {
               // Backfill participant_id onto an existing local row (e.g. one
               // the host added optimistically before the backend round-trip
               // completed) so _removePlayer can issue a DELETE later.
-              const existing = this._ps.players[byName.get(key)];
+              const existing = this._ps.players[idx];
               if (existing && !existing.participant_id) {
                 existing.participant_id = part.id;
                 playersChanged = true;
               }
               continue;
             }
+            if (!key) continue;
             this._ps.players.push({
               name: part.display_name,
               is_winner: false,
@@ -476,6 +490,7 @@
               roundScores: Array(this._maxRoundCount()).fill(null),
             });
             byName.set(key, this._ps.players.length - 1);
+            if (part.user_id) byUserId.set(part.user_id, this._ps.players.length - 1);
             playersChanged = true;
           }
           if (playersChanged) this._ps.persist();
@@ -513,20 +528,24 @@
       // is in would retry forever in the background.
       if (this._isOffline()) return;
       if (this._liveScores || !this._ps.sessionId) return;
-      const me = window.store.get("user");
       this._liveScores = new window.LiveScores({
         sessionId: this._ps.sessionId,
         isHost: true,
-        currentUserId: me ? me.id : null,
       });
       await this._liveScores.start();
       this._liveOff = this._liveScores.subscribe(() => this._onLiveScoresChange());
+      // Publish the grid the host is actually looking at. start() only read
+      // the table; a resumed draft (or a row whose participant_id landed late)
+      // can hold cells the table has never seen, and spectators are read-only
+      // now, so nobody else would ever fill them in. Fire-and-forget — the
+      // host's screen already shows this state.
+      this._liveScores.syncGrid(this._ps.players).catch(() => {});
     }
 
     // A live-scores tick (Realtime echo or poll refresh): patch the per-round
-    // cells AND the totals so a joiner's edit shows up in the matching cell on
-    // the host's grid — not just in the Total. The cell the host is currently
-    // editing is skipped so their caret/keystrokes survive the echo.
+    // cells AND the totals. The host is the only writer, so these are normally
+    // echoes of the host's own edits; the cell the host is currently editing is
+    // skipped so their caret/keystrokes survive the round trip.
     _onLiveScoresChange() {
       this._patchScoringCells();
       this._refreshTotalsCells();
@@ -952,9 +971,9 @@
       p.roundScores[roundIndex] = next === "" ? null : next;
       this._normalizeRoundArrays();
       this._ps.persist();
-      if (this._liveScores && p.user_id) {
+      if (this._liveScores && p.participant_id) {
         this._liveScores
-          .setAnyScore(p.user_id, roundIndex, window.parseRoundScore(next))
+          .setAnyScore(p.participant_id, roundIndex, window.parseRoundScore(next))
           .catch(() => {});
       }
       this._autoSelectWinners();
@@ -962,12 +981,13 @@
     }
 
     // Resolved score for one (player, round) cell: the live-scoring overlay
-    // (Realtime) wins for authed players, else the local roundScores value.
-    // Returns number|null. Both the cell renderer and the column total go
-    // through this so the displayed cells and the Total can never disagree.
+    // (Realtime) wins for players with a participant row, else the local
+    // roundScores value. Returns number|null. Both the cell renderer and the
+    // column total go through this so the displayed cells and the Total can
+    // never disagree.
     _resolvedScore(player, roundIndex) {
-      if (this._liveScores && player.user_id) {
-        const live = this._liveScores.getScore(player.user_id, roundIndex);
+      if (this._liveScores && player.participant_id) {
+        const live = this._liveScores.getScore(player.participant_id, roundIndex);
         if (live != null) return live;
       }
       const local = player.roundScores && player.roundScores[roundIndex];
@@ -1020,7 +1040,7 @@
     // rendered one get to disagree — the same failure mode this change is
     // about, one level up.
     _renderTotalsCell(p, i, mode, total) {
-      return window.renderRoundGridTotalsCell(p, i, mode, total, "playFlowView", true, "");
+      return window.renderRoundGridTotalsCell(p, i, mode, total, "playFlowView", true);
     }
 
     _renderCoopOutcome() {
@@ -1514,15 +1534,18 @@
       for (const p of this._ps.players) p.roundScores.push(null);
       this._ps.persist();
       this._autoSelectWinners();
-      // Surface the new (still empty) round to joiners. Their grid is sized
-      // from the highest round_index seen in live scores, so without a row
-      // an empty round is invisible to them. Write a null placeholder on the
-      // host's own column; the Realtime echo grows maxRound() everywhere.
+      // Surface the new (still empty) round to spectators. Their grid is sized
+      // from the highest round_index seen in live scores, so without a row an
+      // empty round is invisible to them. Write a null placeholder on the
+      // first player who has a participant row; the Realtime echo grows
+      // maxRound() everywhere.
       if (this._liveScores) {
-        const me = window.store.get("user");
+        const anchor = this._ps.players.find((p) => p.participant_id);
         const newIndex = this._maxRoundCount() - 1;
-        if (me && newIndex >= 0) {
-          this._liveScores.setAnyScore(me.id, newIndex, null).catch(() => {});
+        if (anchor && newIndex >= 0) {
+          this._liveScores
+            .setAnyScore(anchor.participant_id, newIndex, null)
+            .catch(() => {});
         }
       }
       this.render();
@@ -1605,12 +1628,14 @@
       // and the Realtime echo reconciles later.
       this._autoSelectWinners();
       this._refreshTotalsCells();
-      // Mirror authed-player edits into the live-scores table so joiners
-      // see the host's override. Guest players stay local-only.
-      if (this._liveScores && p.user_id) {
+      // Mirror the edit into the live-scores table so spectators see it. Keyed
+      // by participant, not by user, so a GUEST's column streams too — under
+      // host-only scoring nobody else can fill one in, and a permanently blank
+      // column on the spectator's grid is just a hole in the scoreboard.
+      if (this._liveScores && p.participant_id) {
         try {
           this._liveScores
-            .setAnyScore(p.user_id, roundIndex, window.parseRoundScore(clean))
+            .setAnyScore(p.participant_id, roundIndex, window.parseRoundScore(clean))
             .catch(() => {});
         } catch (_) {}
       }

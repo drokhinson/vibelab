@@ -2508,6 +2508,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--accent);
 }
 .session-viewer__guide-mount { margin-top: 0.25rem; }
+/* Sits under the "Scoring" label on the spectator's mirror. The grid there is
+   deliberately chrome-free, so this one line is what says the missing inputs
+   are the design rather than something that failed to load. */
+.session-viewer__scoring-hint {
+  margin: -0.15rem 0 0.4rem;
+  font-size: 0.72rem;
+  color: var(--polaroid-muted);
+}
 
 /* Edit mode */
 .play-detail--edit .play-detail__game-info { gap: 0.35rem; }
@@ -4409,32 +4417,30 @@ main[data-view="session-viewer"].hidden {
   border-color: var(--polaroid-line);
 }
 
-/* Read-only scoring cell on the joiner's grid. Shares the .scoring-cell box
-   (min-width, padding, border, radius) so a read-only column lines up exactly
-   with the editable input column beside it. min-height keeps an empty cell
-   from collapsing, and right alignment matches the editable input. */
+/* A cell on a grid you're reading rather than typing in — the spectator's
+   mirror and the play-detail popup's view mode.
+   It deliberately does NOT carry .scoring-cell: the border, fill and radius
+   there are input chrome, and a table full of boxes nobody can type in reads
+   as a different, boxier component than the host's grid. What it does keep is
+   that box's METRICS (padding, min-width, min-height, right alignment, score
+   font) so a read-only grid lines up column-for-column with an editable one
+   and the two read as the same table. min-height stops an empty cell from
+   collapsing the row. */
 .scoring-cell--read {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   box-sizing: border-box;
   width: 100%;
-  /* Match the wrapped editable input (.scoring-cell-wrap .scoring-cell) so a
-     read-only column is exactly as wide as the editable one beside it. */
   min-width: 2.4rem;
   min-height: 1.85rem;
+  padding: 0.25rem 0.4rem;
   text-align: right;
   font-family: var(--font-score);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
   color: var(--polaroid-ink);
-  opacity: 0.85;
 }
-
-/* Other players' columns on the joiner's grid are read-only — grey the whole
-   column (header + cells + total) so it's clear only your own column is
-   editable. The header bubble keeps its own color (it's the player identity). */
-.scoring-col--read { background: rgba(120, 113, 100, 0.10); }
-.scoring-col--read .scoring-cell--read,
-.scoring-col--read .scoring-total { color: var(--polaroid-muted); opacity: 0.7; }
 
 /* Scoring table inside a cream polaroid card — recolor to fit the
    parchment surface (the legacy version sat on the dark page bg). */

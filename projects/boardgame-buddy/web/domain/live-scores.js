@@ -1,22 +1,24 @@
 // domain/live-scores.js — Realtime per-player live scores during Play.
 //
 // Wraps a Supabase Realtime channel on boardgamebuddy_play_session_scores.
-// Writes go straight to the table via the anon key — RLS (migration 026)
-// enforces that authed joiners can only touch their own column and the
-// host can override anyone's row in their own session.
+// The host's browser writes straight to the table via the anon key and
+// everybody else reads — RLS (migration 053) enforces that only the host of
+// the session can write, and only while phase='play'.
 //
 // Lifecycle:
-//   const ls = new LiveScores({ sessionId, isHost, currentUserId });
-//   await ls.start();        // backfill + subscribe
+//   const ls = new LiveScores({ sessionId, isHost });
+//   await ls.start();                                  // backfill + subscribe
 //   const off = ls.subscribe(() => render());
-//   ls.setMyScore(roundIndex, value);              // any joiner
-//   ls.setAnyScore(userId, roundIndex, value);     // host only
-//   ls.removeRoundAt(roundIndex);                  // host only
+//   ls.setAnyScore(participantId, roundIndex, value);   // host only
+//   ls.syncGrid(players);                               // host only
+//   ls.removeRoundAt(roundIndex);                       // host only
 //   await ls.stop();
 //
-// Cell lookups are keyed (player_user_id, round_index). Guest joiners
-// (no user_id) are NOT represented here; the host types their scores
-// locally and they're merged on finalize.
+// Cell lookups are keyed (participant_id, round_index) — the roster row, not
+// the account. That is what lets a GUEST's column stream: a guest has a
+// participant row like anyone else but no user_id, so a user-keyed table
+// could never carry their scores and spectators watched their column sit
+// empty all game.
 
 // @ts-check
 
@@ -24,24 +26,23 @@
   /**
    * @typedef {Object} ScoreRow
    * @property {string}  session_id
-   * @property {string}  player_user_id
+   * @property {string}  participant_id
    * @property {number}  round_index
    * @property {number?} score
    */
 
   class LiveScores {
-    constructor({ sessionId, isHost, currentUserId }) {
+    constructor({ sessionId, isHost }) {
       this.sessionId = sessionId;
       this.isHost = !!isHost;
-      this.currentUserId = currentUserId;
       this._channel = null;
       this._listeners = new Set();
-      // Map<player_user_id, Map<round_index, score>>
+      // Map<participant_id, Map<round_index, score>>
       this._byPlayer = new Map();
       // Optimistic writes that haven't been confirmed by the table yet, keyed
-      // "<player>|<round>". refresh() rebuilds _byPlayer from what the table
-      // returns, so without this an in-flight keystroke would blink back to
-      // its old value on the next poll tick.
+      // "<participant>|<round>". refresh() rebuilds _byPlayer from what the
+      // table returns, so without this an in-flight keystroke would blink back
+      // to its old value on the next poll tick.
       this._pending = new Map();
     }
 
@@ -102,7 +103,7 @@
       try {
         const { data, error } = await window.supabaseClient
           .from("boardgamebuddy_play_session_scores")
-          .select("session_id, player_user_id, round_index, score")
+          .select("session_id, participant_id, round_index, score")
           .eq("session_id", this.sessionId);
         // A failed read leaves the cached map alone — better a slightly stale
         // grid than an empty one.
@@ -117,7 +118,7 @@
         for (const [key, score] of this._pending) {
           const sep = key.lastIndexOf("|");
           this._ingestInto(next, {
-            player_user_id: key.slice(0, sep),
+            participant_id: key.slice(0, sep),
             round_index: Number(key.slice(sep + 1)),
             score,
           });
@@ -172,7 +173,7 @@
       try {
         // Delete the whole tail and rewrite it from the shifted map. A
         // per-row UPDATE ladder would collide with the
-        // (session_id, player_user_id, round_index) unique index partway
+        // (session_id, participant_id, round_index) unique index partway
         // through; dropping the tail first cannot.
         const from = () =>
           window.supabaseClient.from("boardgamebuddy_play_session_scores");
@@ -181,12 +182,12 @@
           .eq("session_id", this.sessionId)
           .gte("round_index", idx);
         const rows = [];
-        for (const [playerId, m] of this._byPlayer) {
+        for (const [participantId, m] of this._byPlayer) {
           for (const [r, score] of m) {
             if (r < idx) continue;
             rows.push({
               session_id: this.sessionId,
-              player_user_id: playerId,
+              participant_id: participantId,
               round_index: r,
               score: score == null ? null : score,
             });
@@ -194,7 +195,7 @@
         }
         if (rows.length) {
           await from().upsert(rows, {
-            onConflict: "session_id,player_user_id,round_index",
+            onConflict: "session_id,participant_id,round_index",
           });
         }
       } catch (_) {
@@ -212,8 +213,8 @@
       return () => this._listeners.delete(fn);
     }
 
-    getScore(playerUserId, roundIndex) {
-      const m = this._byPlayer.get(playerUserId);
+    getScore(participantId, roundIndex) {
+      const m = this._byPlayer.get(participantId);
       if (!m) return null;
       const v = m.get(roundIndex);
       return v == null ? null : v;
@@ -228,11 +229,11 @@
      * larger than the cells above it. Callers rendering the shared grid should
      * prefer window.roundGridTotal(), which sums the painted cells directly.
      *
-     * @param {string} playerUserId
+     * @param {string} participantId
      * @param {number} [roundCount] when given, only rounds [0, roundCount) count.
      */
-    totalFor(playerUserId, roundCount) {
-      const m = this._byPlayer.get(playerUserId);
+    totalFor(participantId, roundCount) {
+      const m = this._byPlayer.get(participantId);
       if (!m) return 0;
       const n = roundCount == null ? null : Number(roundCount);
       let total = 0;
@@ -245,7 +246,7 @@
 
     /**
      * Highest round_index seen across all players in this session. Used
-     * by the joiner's grid to size its rows without round-count metadata
+     * by the spectator's grid to size its rows without round-count metadata
      * from the host. Returns -1 if nothing has been written yet.
      */
     maxRound() {
@@ -258,21 +259,66 @@
       return max;
     }
 
-    async setMyScore(roundIndex, value) {
-      if (!this.currentUserId) {
-        throw new Error("Not signed in");
-      }
-      return this._upsert(this.currentUserId, roundIndex, value);
-    }
-
-    async setAnyScore(playerUserId, roundIndex, value) {
+    async setAnyScore(participantId, roundIndex, value) {
       if (!this.isHost) {
-        throw new Error("Only the host can override scores");
+        throw new Error("Only the host can score");
       }
-      return this._upsert(playerUserId, roundIndex, value);
+      return this._upsert(participantId, roundIndex, value);
     }
 
-    async _upsert(playerUserId, roundIndex, value) {
+    /**
+     * Host-only. Publish the host's WHOLE grid in one write.
+     *
+     * setAnyScore mirrors a cell as the host types it, which covers the steady
+     * state but not the moment spectators start watching. Two ways the table
+     * can be behind the host's screen at that point:
+     *
+     *   1. A resumed draft. The host reloads mid-game and localStorage hands
+     *      back a full grid; nothing re-publishes it.
+     *   2. A player row whose participant_id arrived late (the 2s lobby poll
+     *      backfills it), so cells typed before it landed had no key to
+     *      mirror under.
+     *
+     * Either way a spectator would be missing scores the host can plainly see.
+     * Called once on entering Play, after the initial backfill: for a single
+     * writer the host's local draft is by definition the newer copy, so it
+     * wins. One upsert for the whole grid rather than one per player.
+     *
+     * @param {Array<{participant_id?: string, roundScores?: Array<string|number|null>}>} players
+     */
+    async syncGrid(players) {
+      if (!this.isHost) throw new Error("Only the host can score");
+      if (!window.supabaseClient || !this.sessionId) return;
+      const rows = [];
+      for (const p of players || []) {
+        if (!p || !p.participant_id) continue;
+        const scores = Array.isArray(p.roundScores) ? p.roundScores : [];
+        for (let r = 0; r < scores.length; r++) {
+          const numeric = window.parseRoundScore(scores[r]);
+          // Ingest locally too, so the host's own totals and maxRound() agree
+          // with what we just published.
+          this._ingest({ participant_id: p.participant_id, round_index: r, score: numeric });
+          rows.push({
+            session_id: this.sessionId,
+            participant_id: p.participant_id,
+            round_index: r,
+            score: numeric,
+          });
+        }
+      }
+      if (!rows.length) return;
+      this._emit();
+      try {
+        await window.supabaseClient
+          .from("boardgamebuddy_play_session_scores")
+          .upsert(rows, { onConflict: "session_id,participant_id,round_index" });
+      } catch (_) {
+        // Best-effort, exactly like every other mirror write — the next
+        // keystroke or refresh() reconciles.
+      }
+    }
+
+    async _upsert(participantId, roundIndex, value) {
       const numeric =
         value === "" || value == null || Number.isNaN(Number(value))
           ? null
@@ -281,16 +327,16 @@
       // slow network — the Realtime echo will arrive a moment later and
       // overwrite with the same value.
       this._ingest({
-        player_user_id: playerUserId,
+        participant_id: participantId,
         round_index: roundIndex,
         score: numeric,
       });
-      const key = `${playerUserId}|${Number(roundIndex)}`;
+      const key = `${participantId}|${Number(roundIndex)}`;
       this._pending.set(key, numeric);
       this._emit();
       const row = {
         session_id: this.sessionId,
-        player_user_id: playerUserId,
+        participant_id: participantId,
         round_index: roundIndex,
         score: numeric,
       };
@@ -302,7 +348,7 @@
       return window.supabaseClient
         .from("boardgamebuddy_play_session_scores")
         .upsert(row, {
-          onConflict: "session_id,player_user_id,round_index",
+          onConflict: "session_id,participant_id,round_index",
         })
         .then(
           (res) => { settle(); return res; },
@@ -317,18 +363,18 @@
     // Same ingest, into a caller-supplied map — refresh() builds a fresh one
     // so a wholesale re-read drops rows that no longer exist in the table.
     _ingestInto(byPlayer, row) {
-      if (!row || !row.player_user_id || row.round_index == null) return;
-      let m = byPlayer.get(row.player_user_id);
+      if (!row || !row.participant_id || row.round_index == null) return;
+      let m = byPlayer.get(row.participant_id);
       if (!m) {
         m = new Map();
-        byPlayer.set(row.player_user_id, m);
+        byPlayer.set(row.participant_id, m);
       }
       m.set(Number(row.round_index), row.score == null ? null : Number(row.score));
     }
 
     _forget(row) {
-      if (!row || !row.player_user_id) return;
-      const m = this._byPlayer.get(row.player_user_id);
+      if (!row || !row.participant_id) return;
+      const m = this._byPlayer.get(row.participant_id);
       if (m) m.delete(Number(row.round_index));
     }
 
