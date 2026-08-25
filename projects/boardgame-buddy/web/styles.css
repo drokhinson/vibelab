@@ -4385,9 +4385,10 @@ main[data-view="session-viewer"].hidden {
 }
 .polaroid-popup__view { margin-top: 10px; color: var(--polaroid-ink); }
 
-/* Host wrap-up card only: the save runs behind the card, so the primary CTA
-   spins as "Saving…" and settles into "Go to feed" (or "Retry" on failure).
-   The joiner splash renders none of this. */
+/* Host wrap-up card only: the save runs behind the card, so the lone bottom
+   button spins as "Saving…" and settles into "Another round?" (or "Retry" on
+   failure — the X is the way out to the feed). The joiner splash renders none
+   of this. */
 .polaroid-popup__error {
   margin-top: 10px;
   font-size: 12px;
@@ -4401,27 +4402,32 @@ main[data-view="session-viewer"].hidden {
   line-height: 1.35;
   color: var(--polaroid-muted);
 }
-.polaroid-popup__actions--wrap {
+/* Doubled class so this beats the base `.polaroid-popup__actions` rule (same
+   single-class specificity, later in the file) that right-aligns the
+   confirm/alert footers. The wrap-up card carries one full-width CTA, not a
+   pair of dialog buttons. */
+.polaroid-popup__actions.polaroid-popup__actions--wrap {
   margin-top: 14px;
   flex-wrap: wrap;
   justify-content: center;
 }
-/* ≥44px hit area on both actions (WCAG 2.5.5) — DaisyUI's btn-sm is 32px. */
+/* ≥44px hit area on the action (WCAG 2.5.5) — DaisyUI's btn-sm is 32px. */
 .polaroid-popup__actions--wrap .btn {
+  flex: 1 1 auto;
   min-height: 44px;
   height: auto;
   gap: 6px;
 }
-/* Scoped through .polaroid-popup__actions so these win over the shared
-   `.polaroid-popup__actions .btn-primary` / `.btn-ghost` rules further down
-   the file (same specificity, later in source order). */
+/* Scoped through .polaroid-popup__actions so this wins over the shared
+   `.polaroid-popup__actions .btn-primary` rule further down the file (same
+   specificity, later in source order). Only "Saving…" is ever rendered
+   disabled today; the selector covers both action classes so the card can't
+   flash a live-looking orange button in a state that ignores taps. */
 .polaroid-popup__actions .polaroid-popup__another:disabled,
-.polaroid-popup__actions .polaroid-popup__feed:disabled {
+.polaroid-popup__actions .polaroid-popup__retry:disabled {
   color: var(--polaroid-muted);
   opacity: 0.65;
   cursor: default;
-}
-.polaroid-popup__actions .polaroid-popup__feed:disabled {
   background: var(--polaroid-line);
   border-color: var(--polaroid-line);
 }

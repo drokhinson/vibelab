@@ -2574,9 +2574,9 @@
     // ── Save ───────────────────────────────────────────────────────────────
 
     // Card first, write behind it. The wrap-up splash goes up in the same
-    // frame as the tap and carries the save state on its primary CTA
-    // (spinner → "Go to feed", or "Retry" if the write failed), so the host
-    // never watches a disabled button wait on a round-trip.
+    // frame as the tap and carries the save state on its bottom button
+    // (spinner → "Another round?", or "Retry" if the write failed), so the
+    // host never watches a disabled button wait on a round-trip.
     _save() {
       if (!this._ps.gameId) {
         this._error = "Pick a game first.";
@@ -2618,8 +2618,9 @@
         return;
       }
       // Same wrap-up splash non-host joiners get, plus the host-only save
-      // state + "Another round?" CTA. Default dismiss handler routes to /feed
-      // (which _runSave has already re-pulled by then).
+      // state + "Another round?" CTA. Leaving for the feed is the card's
+      // corner X, on the popup's default dismiss handler (/feed, which
+      // _runSave has already re-pulled by then).
       this._cardId = window.PolaroidPopup.show({
         headline: "Well played!",
         gameName: game.name || "Game over",
@@ -2723,7 +2724,8 @@
           if (popup) {
             // Closing a failed card must NOT take the default feed redirect —
             // the draft is still intact behind it, so drop the host back onto
-            // Settle Up with the error surfaced there instead.
+            // Settle Up with the error surfaced there instead. handleClose()
+            // falls back to onDismiss, so this covers the X too.
             popup.update({
               saving: false,
               error: msg,
@@ -2776,11 +2778,11 @@
       this._saving = false;
       // The play is on the server — the draft has done its job. Note we do
       // NOT render() after this: the card covers the view, and every exit
-      // from it (Go to feed, X, Another round?) paints on its own.
+      // from it (X, Another round?) paints on its own.
       this._ps.clear();
       window.store.set("activePlay", null);
       // Re-pull the feed's first page NOW, behind the still-up wrap-up card,
-      // so "Go to feed" lands on a feed that already contains this play.
+      // so the X lands on a feed that already contains this play.
       // store.invalidate("feed") used to sit here and did nothing for this —
       // it only re-fires subscribers with the unchanged value. Fire-and-forget:
       // if the host taps through before it settles, Feed.fetchPage() joins the
@@ -2797,14 +2799,14 @@
       if (window.Game && window.Game.recentlyPlayed) window.Game.recentlyPlayed(6).catch(() => {});
 
       // Unblock the card here, on the play landing — not on the photo. The
-      // photo has always been best-effort, so making Go to feed / Another
-      // round? wait on it only ever cost the host time.
+      // photo has always been best-effort, so making the X / Another round?
+      // wait on it only ever cost the host time.
       //
-      // Deliberately no `playId` — the saved card is two CTAs, "Another round?"
-      // and "Go to feed", and nothing else. The play is one tap away on the
-      // feed the host is already being sent to, so a third "View play" button
-      // only crowded the wrap-up. (The joiner splash in session-viewer still
-      // sets playId; that card has no other affordance.)
+      // Deliberately no `playId` — the saved card is one CTA, "Another
+      // round?", and the corner X out to the feed. The play is one tap away
+      // on that feed, so a "View play" button only crowded the wrap-up. (The
+      // joiner splash in session-viewer still sets playId; that card has no
+      // other affordance.)
       if (popup) {
         popup.update({
           saving: false,
