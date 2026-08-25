@@ -25,17 +25,38 @@
 
 
 -- ── 1. Re-key boardgamebuddy_play_session_scores by participant ──────────────
+-- Migration 026's write policy has `player_user_id = auth.uid()` in its USING
+-- and WITH CHECK clauses, which makes it a dependent object of the column this
+-- section drops. Postgres refuses the DROP COLUMN while it exists, so the
+-- policy has to go first — section 2 recreates it host-only.
+DROP POLICY IF EXISTS bgb_session_scores_write
+  ON public.boardgamebuddy_play_session_scores;
+
 ALTER TABLE public.boardgamebuddy_play_session_scores
   ADD COLUMN IF NOT EXISTS participant_id UUID
     REFERENCES public.boardgamebuddy_play_session_participants(id)
     ON DELETE CASCADE;
 
-UPDATE public.boardgamebuddy_play_session_scores sc
-   SET participant_id = p.id
-  FROM public.boardgamebuddy_play_session_participants p
- WHERE p.session_id = sc.session_id
-   AND p.user_id    = sc.player_user_id
-   AND sc.participant_id IS NULL;
+-- Guarded so the migration can be re-run after a partial apply: on a second
+-- pass player_user_id is already gone and this statement would fail to parse
+-- against the new shape.
+DO $backfill$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name   = 'boardgamebuddy_play_session_scores'
+       AND column_name  = 'player_user_id'
+  ) THEN
+    UPDATE public.boardgamebuddy_play_session_scores sc
+       SET participant_id = p.id
+      FROM public.boardgamebuddy_play_session_participants p
+     WHERE p.session_id = sc.session_id
+       AND p.user_id    = sc.player_user_id
+       AND sc.participant_id IS NULL;
+  END IF;
+END
+$backfill$;
 
 -- A score row whose participant row is gone cannot be re-keyed. Sessions carry
 -- a 2h expires_at and these rows only live for the duration of one Play phase,
@@ -60,11 +81,11 @@ ALTER TABLE public.boardgamebuddy_play_session_scores
 
 -- ── 2. RLS: writes are host-only ─────────────────────────────────────────────
 -- Replaces the two-principal policy from migration 026, which also allowed
--- `player_user_id = auth.uid()`. Still gated on phase='play' — after the host
--- advances to 'settle' the live grid freezes so late writes can't race the
--- finalize. bgb_session_scores_select (host OR participant) is unchanged.
-DROP POLICY IF EXISTS bgb_session_scores_write
-  ON public.boardgamebuddy_play_session_scores;
+-- `player_user_id = auth.uid()` — dropped up in section 1, because the column
+-- drop there could not proceed while it referenced it. Still gated on
+-- phase='play': after the host advances to 'settle' the live grid freezes so
+-- late writes can't race the finalize. bgb_session_scores_select (host OR
+-- participant) is unchanged.
 CREATE POLICY bgb_session_scores_write ON public.boardgamebuddy_play_session_scores
   FOR ALL TO authenticated
   USING (
