@@ -6817,3 +6817,160 @@ main[data-view="session-viewer"].hidden {
   min-height: 44px;
   color: var(--rust);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PWA install prompt (ui/install-prompt.js)
+
+   Docked flush above the bottom tab nav using the same anchor as
+   .spoke-pager-footer / .chapter-add__fab, and pinned to the app's 480px
+   column the way .btm-nav is so it never spans a desktop viewport. Warm
+   polaroid surface so it reads as part of the app, not browser chrome.
+   z-index 35: above content, below .bgb-nav (40), toasts (45) and modals (90+).
+   ───────────────────────────────────────────────────────────────────────────── */
+.bgb-install {
+  position: fixed;
+  bottom: calc(var(--bgb-nav-height, 64px) + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  z-index: 35;
+  box-sizing: border-box;
+  padding: 0.6rem 0.85rem;
+  background: var(--polaroid-bg, #FFFBF1);
+  border-top: 1px solid var(--polaroid-line, #DAC9A4);
+  box-shadow:
+    0 -6px 18px rgba(58, 42, 8, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  animation: bgbInstallUp 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes bgbInstallUp {
+  from { opacity: 0; transform: translate(-50%, 14px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.bgb-install--leaving {
+  animation: bgbInstallDown 200ms ease-in both;
+  pointer-events: none;
+}
+@keyframes bgbInstallDown {
+  from { opacity: 1; transform: translate(-50%, 0); }
+  to   { opacity: 0; transform: translate(-50%, 14px); }
+}
+
+/* Both rows reserve the right gutter the absolutely-positioned close sits in. */
+.bgb-install__row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding-right: 40px;
+}
+
+.bgb-install__logo {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(58, 42, 8, 0.28);
+}
+
+.bgb-install__share {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin: 0 9px;
+  color: var(--polaroid-ink-soft, #4A3F2F);
+}
+
+/* min-width:0 lets the ellipsis actually kick in inside the flex row. */
+.bgb-install__body { flex: 1; min-width: 0; }
+
+/* Wraps rather than ellipsising: at 320px (iPhone SE) the logo, CTA and close
+   leave the text ~115px, and "Take Buddy w…" loses the sentence. Two lines
+   there, one line from 360px up. */
+.bgb-install__title {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.25;
+  color: var(--polaroid-ink, #1D1812);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Wraps to at most two lines so the copy degrades gracefully on a 320px
+   iPhone SE instead of being cut mid-word by an ellipsis. */
+.bgb-install__sub {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  color: var(--polaroid-muted, #8B7E68);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.bgb-install__sub b { font-weight: 700; color: var(--polaroid-ink-soft, #4A3F2F); }
+
+/* Gold CTA — same radial treatment as .chapter-add__fab. */
+.bgb-install__cta {
+  flex: none;
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: radial-gradient(120% 140% at 30% 20%, #F0C662, var(--accent) 55%, var(--accent-hover));
+  color: #3a2a08;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 0.86rem;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(201, 146, 42, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition: transform 120ms ease, filter 140ms ease;
+}
+.bgb-install__cta:hover { filter: brightness(1.06); }
+.bgb-install__cta:active { transform: scale(0.97); }
+
+/* 44x44 hit area per the tap-target rule, even though the glyph is 16px. */
+.bgb-install__close {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--polaroid-muted, #8B7E68);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 140ms ease, background 140ms ease;
+}
+.bgb-install__close:hover {
+  color: var(--polaroid-ink, #1D1812);
+  background: rgba(58, 42, 8, 0.07);
+}
+
+/* Sub-360px: the title has usually taken a second line by here, so hold the
+   sub to one and keep the strip from eating a quarter of a short screen. */
+@media (max-width: 359px) {
+  .bgb-install__sub { -webkit-line-clamp: 1; line-clamp: 1; }
+  .bgb-install__cta { padding: 9px 13px; font-size: 0.82rem; }
+  .bgb-install__row { gap: 0.55rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bgb-install,
+  .bgb-install--leaving { animation: none; }
+  .bgb-install__cta { transition: none; }
+}

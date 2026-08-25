@@ -511,6 +511,11 @@
     // from booting — losing the offline shell is a degradation, not a failure.
     try { navigator.serviceWorker?.register("/sw.js").catch(() => {}); } catch (_) {}
 
+    // Offer the install once the shell is up. The component owns its own
+    // gating (phone viewport, signed in, not already installed, settle delay)
+    // and no-ops on browsers that never report the app as installable.
+    if (window.BgbInstallPrompt) window.BgbInstallPrompt.init();
+
     if (window.api) window.api.trackEvent("page_view");
   });
 })();
