@@ -295,15 +295,18 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_participants (
 );
 ALTER TABLE public.boardgamebuddy_play_session_participants ENABLE ROW LEVEL SECURITY;
 
--- Per-player, per-round live scores during the Play phase (migration 026).
--- Browser writes directly via anon key; RLS limits each row to (host of the
--- session) OR (player_user_id = auth.uid()), and only while phase='play'.
+-- Per-participant, per-round live scores during the Play phase (migration 026;
+-- re-keyed from player_user_id to participant_id by migration 053). The host's
+-- browser writes directly via anon key and everybody else reads: RLS limits
+-- writes to the host of the session, and only while phase='play'. Keying by
+-- participant rather than user is what lets a guest's column stream too —
+-- guests have a roster row but no account.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_scores (
   session_id     UUID NOT NULL REFERENCES public.boardgamebuddy_play_sessions(id) ON DELETE CASCADE,
-  player_user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  participant_id UUID NOT NULL REFERENCES public.boardgamebuddy_play_session_participants(id) ON DELETE CASCADE,
   round_index    SMALLINT NOT NULL CHECK (round_index >= 0 AND round_index < 64),
   score          INTEGER,
-  PRIMARY KEY (session_id, player_user_id, round_index)
+  PRIMARY KEY (session_id, participant_id, round_index)
 );
 ALTER TABLE public.boardgamebuddy_play_session_scores ENABLE ROW LEVEL SECURITY;
 
@@ -459,13 +462,18 @@ CREATE INDEX IF NOT EXISTS idx_bgb_pending_imports_user_created
 --   bgb_play_sessions_select   ON boardgamebuddy_play_sessions
 --   bgb_session_scores_select  ON boardgamebuddy_play_session_scores
 --   bgb_session_scores_write   ON boardgamebuddy_play_session_scores
+--                              (narrowed to host-only by migration 053)
 
 -- Data API grants (migration 034). Required for the two tables the frontend
 -- reaches directly through supabase-js; RLS authorises the rows, but the
 -- table-level grant is what makes them visible to PostgREST at all.
 --   GRANT SELECT               ON boardgamebuddy_play_sessions       TO authenticated;
---   GRANT SELECT, INSERT, UPDATE, DELETE
+--   GRANT SELECT, INSERT, UPDATE
 --                              ON boardgamebuddy_play_session_scores TO authenticated;
+--   GRANT DELETE               ON boardgamebuddy_play_session_scores TO authenticated;
+--                              (migration 053 — removeRoundAt() deletes the
+--                               round tail and rewrites it; 034 never granted
+--                               DELETE, so that half silently 403'd)
 
 -- Project role grants. Every migration issues
 --   GRANT SELECT ON public.boardgamebuddy_<table> TO boardgamebuddy_role;

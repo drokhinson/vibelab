@@ -1,7 +1,8 @@
 // PlayFlowScreen — the host's live play cascade: Gather → Play → Settle. Picks
 // a game, gathers players (buddies / ghosts / recent + manual), runs live
-// round-by-round scoring (Supabase Realtime so joiners see + edit their own
-// column), then settles (photo + notes + winners) and finalizes into a Play.
+// round-by-round scoring (Supabase Realtime, one-way: this device is the only
+// writer and everyone else mirrors it), then settles (photo + notes + winners)
+// and finalizes into a Play.
 // Ported from web/views/play-flow-view.js. Race guards (phase seq, poll gate)
 // carried over from .claude/rules/web-frontend.md.
 
@@ -81,23 +82,60 @@ export default function PlayFlowScreen({ navigation, route }) {
     return () => clearInterval(id);
   }, [code]);
 
+  // ── Backfill participant_id from the lobby poll ────────────────────────────
+  // Live scores are keyed by participant row, not by account (migration 053),
+  // so a local player row without one has its column stop streaming. Match on
+  // user_id where there is one and fall back to the display name, which is the
+  // only handle a guest has. Mirrors the web host's poll (play-flow-view.js).
+  useEffect(() => {
+    const parts = (session && session.participants) || [];
+    if (!parts.length) return;
+    setPlayers((prev) => {
+      let changed = false;
+      const next = prev.map((p) => {
+        if (p.participant_id) return p;
+        const hit =
+          (p.user_id && parts.find((x) => x.user_id === p.user_id)) ||
+          parts.find(
+            (x) => !x.user_id && (x.display_name || '').toLowerCase() === (p.name || '').toLowerCase(),
+          );
+        if (!hit) return p;
+        changed = true;
+        return { ...p, participant_id: hit.id };
+      });
+      return changed ? next : prev;
+    });
+  }, [session]);
+
   // ── Live scores during Play phase ──────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'play' || !session) return undefined;
-    const live = new LiveScores({ sessionId: session.id, isHost: true, currentUserId: me.id });
+    const live = new LiveScores({ sessionId: session.id, isHost: true });
     liveRef.current = live;
     let off = null;
     live.start().then(() => {
+      // Publish the grid this device is actually showing. start() only read the
+      // table, and a resumed draft can hold cells it has never seen — spectators
+      // are read-only, so nobody else would ever fill them in.
+      live.syncGrid(
+        players
+          .filter((p) => p.participant_id)
+          .map((p) => ({
+            participant_id: p.participant_id,
+            roundScores: Array.from({ length: rounds }, (_, r) => (scores[p.key] || {})[r] ?? null),
+          })),
+      ).catch(() => {});
       off = live.subscribe(() => {
-        // Merge joiner cells into local score map for user-linked players.
+        // Reconcile the local score map against the table (normally our own
+        // echoes — this device is the only writer).
         setScores((prev) => {
           const next = { ...prev };
           players.forEach((p) => {
-            if (!p.user_id) return;
+            if (!p.participant_id) return;
             const max = live.maxRound();
             const col = { ...(next[p.key] || {}) };
             for (let r = 0; r <= max; r++) {
-              const v = live.getScore(p.user_id, r);
+              const v = live.getScore(p.participant_id, r);
               if (v != null) col[r] = v;
             }
             next[p.key] = col;
@@ -154,7 +192,11 @@ export default function PlayFlowScreen({ navigation, route }) {
       if (p.user_id && prev.some((x) => x.user_id === p.user_id)) return prev;
       return [...prev, { key: p.user_id || `ghost-${p.name}-${prev.length}`, name: p.name, user_id: p.user_id || null, avatar: p.avatar || null, is_winner: false }];
     });
-    if (p.user_id) api.addParticipant(code, { userId: p.user_id, displayName: p.name }).catch(() => {});
+    // Guests get pushed too (user_id null). They used to stay local-only, which
+    // left them without a participant row — and since migration 053 that row is
+    // what their live scores are keyed by, so a guest's column would never
+    // reach a spectator's grid.
+    api.addParticipant(code, { userId: p.user_id || null, displayName: p.name }).catch(() => {});
   }
   function addGhost() {
     const name = ghostName.trim();
@@ -169,8 +211,11 @@ export default function PlayFlowScreen({ navigation, route }) {
   function setCell(playerIdx, roundIdx, value) {
     const p = players[playerIdx];
     setScores((prev) => ({ ...prev, [p.key]: { ...(prev[p.key] || {}), [roundIdx]: value } }));
-    // Push user-linked scores to Realtime so joiners see the host's edits.
-    if (p.user_id && liveRef.current) liveRef.current.setAnyScore(p.user_id, roundIdx, value).catch(() => {});
+    // Mirror to Realtime so spectators see the host's edits. Keyed by
+    // participant, so a guest's column streams like anyone else's.
+    if (p.participant_id && liveRef.current) {
+      liveRef.current.setAnyScore(p.participant_id, roundIdx, value).catch(() => {});
+    }
   }
   function getCell(playerIdx, roundIdx) {
     const p = players[playerIdx];
@@ -188,6 +233,19 @@ export default function PlayFlowScreen({ navigation, route }) {
     for (let r = 0; r < rounds; r++) total += Number(col[r]) || 0;
     return total;
   }
+  // Add a round, and write a NULL placeholder row for it so spectators see it.
+  // Their grid is sized from the highest round_index in the table, so an empty
+  // new round is otherwise invisible to them — it used to appear only once
+  // somebody typed in it, and now nobody but the host can.
+  function addRound() {
+    const added = rounds; // 0-indexed: the new row's index
+    setRounds((r) => r + 1);
+    const anchor = players.find((p) => p.participant_id);
+    if (anchor && liveRef.current) {
+      liveRef.current.setAnyScore(anchor.participant_id, added, null).catch(() => {});
+    }
+  }
+
   // Drop the last round AND the cells that lived in it, so the value can't sit
   // in state counting toward a total for a column nobody can see (and can't
   // reappear if the host adds a round back).
@@ -298,7 +356,7 @@ export default function PlayFlowScreen({ navigation, route }) {
               getTotal={getTotal}
               isWinner={(i) => players[i].is_winner}
               onSetCell={setCell}
-              onAddRound={() => setRounds((r) => r + 1)}
+              onAddRound={addRound}
               onRemoveRound={removeLastRound}
               onToggleWinner={toggleWinner}
             />

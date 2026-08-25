@@ -36,6 +36,16 @@
       this._recent = [];
       this._lobby = null;
       this._lobbyPromise = null;
+      // In-flight lobby heal, so N writes failing at once mint ONE replacement.
+      this._healPromise = null;
+      // True when _lobby was fabricated from the draft to ride out a blip
+      // rather than confirmed by the server. _lobbyReady() re-validates one of
+      // these instead of short-circuiting on it.
+      this._lobbyProvisional = false;
+      // Set when a dead lobby was swapped for a fresh one mid-run, so the
+      // invite card can say the code the host already shared is no longer the
+      // one to share.
+      this._codeReplaced = false;
       this._expansions = [];
       this._expansionsLoadedFor = null;
       this._expansionsOpen = false;
@@ -86,6 +96,16 @@
       // second render() once it lands.
       const existing = window.PlaySession.load();
       this._ps = existing || new window.PlaySession();
+      // Drop the previous run's lobby unless it still addresses the run we are
+      // about to start. This view is a singleton, so without this a finished
+      // session's code survives into the next one and _lobbyReady() short-
+      // circuits on it forever — see _resetRunState(). After a finalize
+      // _ps.code is null, so a stale _lobby can never match and gets dropped;
+      // a refresh in place keeps its lobby and pays no extra round trip.
+      const keepCode = (this.params && this.params.code) || this._ps.code || null;
+      if (!this._lobby || !keepCode || this._lobby.code !== keepCode) {
+        this._resetRunState();
+      }
       // Deep-link entry: URL was /play/{code}. If the localStorage draft is
       // for a different code (or empty), adopt the URL's code so
       // _ensureLobbyOpen fetches the right lobby. If the current user turns
@@ -228,6 +248,54 @@
     // ── Lobby + phase ────────────────────────────────────────────────────────
 
     /**
+     * Tear down everything that belonged to the PREVIOUS run of the cascade.
+     *
+     * This view is a singleton (init.js), so every field on it outlives the
+     * session it was set for. `_lobby` in particular used to survive a
+     * finalize: the host saved, went back to the Play tab, tapped Host a game,
+     * and _lobbyReady() short-circuited on the finished session's code — so
+     * _ensureLobbyOpen() never ran, the freshly prefetched lobby was never
+     * consumed, and every write went to a session the server had already
+     * closed. The invite card showed a code that could not be joined and
+     * Continue bounced off a 404.
+     *
+     * Called from _startAnotherRound (which has always done this inline) and,
+     * conditionally, from onMount.
+     */
+    _resetRunState() {
+      // Live wiring — mirrors onUnmount.
+      this._stopLobbyPoll();
+      if (this._liveOff) { try { this._liveOff(); } catch (_) {} }
+      this._liveOff = null;
+      if (this._liveScores) {
+        const live = this._liveScores;
+        Promise.resolve().then(() => live.stop()).catch(() => {});
+      }
+      this._liveScores = null;
+      this._lobby = null;
+      this._lobbyProvisional = false;
+      // Drop any in-flight open so _lobbyReady() can't hand the new run a
+      // promise that resolves to the old lobby's code.
+      this._lobbyPromise = null;
+      this._healPromise = null;
+      this._prefetchedLobby = null;
+      this._cardId = null;
+      this._codeReplaced = false;
+      if (this._codeReplacedTimer) {
+        clearTimeout(this._codeReplacedTimer);
+        this._codeReplacedTimer = null;
+      }
+
+      // Reset the async guards so an in-flight call from the finished session
+      // can't reconcile into the new one.
+      this._phaseSeq++;
+      this._pendingPhase = 0;
+      this._pendingDeletes = 0;
+      this._saving = false;
+      this._error = null;
+    }
+
+    /**
      * Whether this run of the cascade is lobby-less.
      *
      * Latched at mount rather than read live, because every guard downstream
@@ -263,11 +331,17 @@
      * first one out from under the host.
      *
      * Resolves null when there is no lobby to be had: offline, or the mint
-     * failed (in which case _ensureLobbyOpen has already set _error).
+     * failed. That is a normal outcome, not an error — the cascade runs fine
+     * without one (see _withLobby).
+     *
+     * A PROVISIONAL lobby doesn't short-circuit. Those are fabricated from the
+     * draft by _ensureLobbyOpen to ride out a blip, and short-circuiting on one
+     * latched a code that may since have been closed: the fabrication would
+     * outlive the blip and never be re-checked.
      */
     _lobbyReady() {
       const code = this._liveLobbyCode();
-      if (code) return Promise.resolve(code);
+      if (code && !this._lobbyProvisional) return Promise.resolve(code);
       if (!this._lobbyPromise) {
         this._lobbyPromise = this._ensureLobbyOpen()
           .catch(() => {})
@@ -279,6 +353,182 @@
       return this._lobbyPromise;
     }
 
+    /**
+     * Does this error mean the lobby itself is gone, as opposed to this one
+     * write being refused?
+     *
+     * Only 404 and 410. Every session endpoint gates on `status = 'open'`
+     * (bgb_session_gate), so a finalized, abandoned or expired session answers
+     * `not_found` → 404 or `expired` → 410 whatever you asked it to do. That is
+     * the same test _ensureLobbyOpen has always used.
+     *
+     * Deliberately NOT the other 4xx, even though they also come from
+     * services/_helpers.py's session map. 409 `roster_locked` means the roster
+     * froze when Play started and 400 `invalid_transition` means the move
+     * itself was wrong — both come from a perfectly healthy lobby, and healing
+     * on one would abandon it (bgb_create_session closes the host's other open
+     * sessions) to no purpose. Same for err.offline / status 0 and any 5xx:
+     * those are blips, and re-minting on a hiccup would kill a live session and
+     * hand the table a code nobody has.
+     */
+    _isLobbyGone(e) {
+      const status = e && e.status;
+      return status === 404 || status === 410;
+    }
+
+    /**
+     * Run a write against this run's lobby code, healing a dead lobby rather
+     * than reporting it.
+     *
+     * The live session is a nice-to-have; recording the play is not. So when
+     * the server says the lobby is gone, the answer is a new lobby and a
+     * carry-on — never an error the host has to clear before they can keep
+     * playing. Resolves the write's result, or null when there was no lobby to
+     * write to (offline, mint failed, or the retry also failed).
+     *
+     * @param {(code: string) => Promise<any>} fn
+     */
+    async _withLobby(fn) {
+      let code = this._liveLobbyCode() || (await this._lobbyReady());
+      if (!code) return null;
+      try {
+        return await fn(code);
+      } catch (e) {
+        if (!this._isLobbyGone(e)) return null;
+      }
+      // Definitively gone — heal and try once against the replacement.
+      code = await this._healLobby(code);
+      if (!code) return null;
+      try {
+        return await fn(code);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    /**
+     * Replace a lobby the server has disowned. Resolves the new code, or null.
+     *
+     * Single-flight, and that is the whole point. _syncRosterToLobby pushes its
+     * players with a Promise.all, so a dead lobby fails N writes at the same
+     * instant; without this each one would drop the lobby and mint its own
+     * replacement, and since bgb_create_session abandons the host's other open
+     * sessions, every mint would kill the one before it. The host would end up
+     * on a code that had already been abandoned by its own successor.
+     */
+    _healLobby(deadCode) {
+      if (this._healPromise) return this._healPromise;
+      this._healPromise = (async () => {
+        // Someone else already healed while we were queued behind them.
+        const current = this._liveLobbyCode();
+        if (current && current !== deadCode) return current;
+        // Drop the draft's copy too, so _ensureLobbyOpen takes its create
+        // branch instead of re-validating the corpse.
+        this._lobby = null;
+        this._lobbyProvisional = false;
+        this._lobbyPromise = null;
+        this._ps.code = null;
+        this._ps.sessionId = null;
+        this._ps.persist();
+        const next = await this._lobbyReady();
+        if (next && next !== deadCode) {
+          // The code the host may already have read out to the table is dead.
+          // Carry the roster and the live wiring over, say so on the invite
+          // card, and don't interrupt them for it.
+          this._onLobbyReplaced();
+          this.render();
+        }
+        return next;
+      })();
+      this._healPromise.catch(() => {}).then(() => { this._healPromise = null; });
+      return this._healPromise;
+    }
+
+    /**
+     * A fresh lobby replaced a dead one mid-run. Everything keyed to the old
+     * session has to follow it across:
+     *
+     *   - participant_id on each local player points at the dead lobby's roster
+     *     rows, and _syncRosterToLobby skips anyone who already has one — so
+     *     without clearing them the new lobby would stay empty and spectators
+     *     would see a game with no players.
+     *   - the live-scores channel is subscribed to the old session id.
+     *
+     * The host's own draft is untouched. None of this is load-bearing for the
+     * play they are recording; it only restores the live mirror.
+     */
+    _onLobbyReplaced() {
+      this._noteCodeReplaced();
+      for (const p of this._ps.players || []) p.participant_id = null;
+      this._ps.persist();
+      // Tear the old channel down now; it is subscribed to a session id that
+      // no longer means anything.
+      const hadLiveScores = !!this._liveScores;
+      if (hadLiveScores) {
+        const live = this._liveScores;
+        if (this._liveOff) { try { this._liveOff(); } catch (_) {} }
+        this._liveOff = null;
+        this._liveScores = null;
+        Promise.resolve().then(() => live.stop()).catch(() => {});
+      }
+      // Order matters, and all three steps are best-effort:
+      //   1. roster — participants are Gather-only, and the replacement is born
+      //      in gather, so this has to land before the phase moves off it;
+      //   2. phase — otherwise the new lobby sits in gather while the host
+      //      plays, and anyone joining on the new code watches a lobby that
+      //      never starts;
+      //   3. live scores — RLS only accepts score writes while phase='play',
+      //      so re-subscribing before step 2 would have its first mirror
+      //      rejected.
+      this._syncRosterToLobby()
+        .catch(() => {})
+        .then(() => this._replayPhaseToLobby())
+        .then(() => { if (hadLiveScores) return this._startLiveScores(); })
+        .catch(() => {});
+    }
+
+    /**
+     * Walk a freshly minted lobby up to the phase the host is actually on.
+     *
+     * A replacement is always born in `gather`, so a lobby minted mid-game
+     * would sit there while the host played — and anyone who joined on the new
+     * code would land on the Gather mirror watching a lobby that never starts.
+     * bgb_advance_phase validates transitions (gather → play → settle), so this
+     * steps rather than jumping.
+     *
+     * Best-effort and sequential: if a step fails the lobby is simply behind,
+     * which costs spectators their live view and costs the host nothing.
+     */
+    async _replayPhaseToLobby() {
+      const order = ["gather", "play", "settle"];
+      const target = order.indexOf(this._ps.phase);
+      if (target <= 0) return;
+      const code = this._liveLobbyCode();
+      if (!code) return;
+      for (let i = 1; i <= target; i++) {
+        if (this._liveLobbyCode() !== code) return; // healed again underneath us
+        try {
+          await window.PlaySession.advancePhase(code, order[i]);
+        } catch (_) {
+          return;
+        }
+      }
+    }
+
+    // Flag the invite card that the code changed under the host, and clear the
+    // flag a few seconds later. Deliberately not a toast or a modal: this can
+    // fire while they are typing in the scoring grid.
+    _noteCodeReplaced() {
+      this._codeReplaced = true;
+      if (this._codeReplacedTimer) clearTimeout(this._codeReplacedTimer);
+      this._codeReplacedTimer = setTimeout(() => {
+        this._codeReplaced = false;
+        this._codeReplacedTimer = null;
+        const card = this.container && this.container.querySelector(".cascade-invite__replaced");
+        if (card) card.remove();
+      }, 8000);
+    }
+
     async _ensureLobbyOpen() {
       // Token the phase the host is on right now. Continue no longer waits for
       // the lobby, so they can be on Play by the time this resolves — and both
@@ -288,6 +538,12 @@
       // so a changed token means exactly "the host moved on, don't touch it";
       // its own PATCH carries the real phase to the server a moment later.
       const phaseSeq = this._phaseSeq;
+      // The code we were on before this call, if any. If we end up minting a
+      // different one, the host is holding a code that no longer works and
+      // everything keyed to the old session has to follow — see
+      // _onLobbyReplaced. (_healLobby clears _ps.code before calling in, so
+      // this is null on that path and the notice fires there instead of twice.)
+      const priorCode = this._ps.code || null;
       // Offline: no lobby, no code, no network. The cascade runs entirely off
       // the localStorage draft and the bgbCache seeds bootstrap warmed, and
       // Save queues to the outbox. Nothing here is a degraded lobby — there
@@ -318,6 +574,7 @@
             : await window.PlaySession.fetchLobby(this._ps.code);
           if (s && s.status === "open" && s.phase && s.phase !== "abandoned") {
             this._lobby = s;
+            this._lobbyProvisional = false;
             this._ps.sessionId = s.id;
             this._ps.hostUserId = s.host_user_id;
             if (phaseSeq === this._phaseSeq) this._ps.phase = s.phase;
@@ -335,8 +592,11 @@
           // abandon the real session and force the host to re-navigate. Keep
           // the persisted code, render from the draft, and let the 2s poll
           // (backed by the API's 401 refresh-retry) reconnect.
-          const gone = e && (e.status === 404 || e.status === 410);
-          if (!gone) {
+          if (!this._isLobbyGone(e)) {
+            // Provisional: assumed, not confirmed. _lobbyReady() re-validates
+            // rather than short-circuiting, so the assumption can't outlive the
+            // blip that produced it.
+            this._lobbyProvisional = true;
             this._lobby = {
               code: this._ps.code,
               id: this._ps.sessionId,
@@ -367,6 +627,7 @@
           session = await window.PlaySession.openLobby({ gameId: this._ps.gameId });
         }
         this._lobby = session;
+        this._lobbyProvisional = false;
         this._ps.code = session.code;
         this._ps.sessionId = session.id;
         this._ps.hostUserId = session.host_user_id;
@@ -374,8 +635,16 @@
         this._ps.persist();
         this._syncUrlToCode();
         this._reconcileGameToLobby();
-      } catch (e) {
-        this._error = e.message || "Could not start a session";
+        if (priorCode && session.code !== priorCode) this._onLobbyReplaced();
+      } catch (_) {
+        // No lobby this run. That is a degraded live session, not a broken
+        // play: the cascade runs off the draft and Save falls back to
+        // Play.create for a codeless session. The invite card says so quietly
+        // (see _renderInviteCard) — a red alert over the cascade would tell the
+        // host something is wrong with the thing they came here to do, and
+        // nothing is.
+        this._lobby = null;
+        this._lobbyProvisional = false;
       }
     }
 
@@ -389,11 +658,12 @@
     // or nothing picked yet).
     _reconcileGameToLobby() {
       const ps = this._ps;
-      if (!ps || !ps.code || !ps.gameId) return;
+      if (!ps || !ps.gameId) return;
       if (this._lobby && this._lobby.game_id === ps.gameId) return;
-      window.PlaySession.updateLobby(ps.code, { gameId: ps.gameId })
-        .then(() => { if (this._lobby) this._lobby.game_id = ps.gameId; })
-        .catch(() => {});
+      this._withLobby((code) =>
+        window.PlaySession.updateLobby(code, { gameId: ps.gameId })
+          .then((r) => { if (this._lobby) this._lobby.game_id = ps.gameId; return r; })
+      );
     }
 
     // Once we know the lobby code, rewrite the address bar from /play to
@@ -448,20 +718,34 @@
           const byName = new Map(
             this._ps.players.map((p, i) => [(p.name || "").toLowerCase(), i])
           );
+          // Account players are matched on user_id first. Names are the only
+          // handle a guest has, but for someone with an account they're a
+          // weaker key than the id we already hold — and participant_id is
+          // now what live scoring is mirrored under (migration 053), so a
+          // row that fails to acquire one has its column stop streaming to
+          // spectators, not just lose its DELETE affordance.
+          const byUserId = new Map(
+            this._ps.players
+              .map((p, i) => [p.user_id, i])
+              .filter(([id]) => !!id)
+          );
           for (const part of nextParts) {
             const key = (part.display_name || "").toLowerCase();
-            if (!key) continue;
-            if (byName.has(key)) {
+            const idx = part.user_id != null && byUserId.has(part.user_id)
+              ? byUserId.get(part.user_id)
+              : (key && byName.has(key) ? byName.get(key) : undefined);
+            if (idx !== undefined) {
               // Backfill participant_id onto an existing local row (e.g. one
               // the host added optimistically before the backend round-trip
               // completed) so _removePlayer can issue a DELETE later.
-              const existing = this._ps.players[byName.get(key)];
+              const existing = this._ps.players[idx];
               if (existing && !existing.participant_id) {
                 existing.participant_id = part.id;
                 playersChanged = true;
               }
               continue;
             }
+            if (!key) continue;
             this._ps.players.push({
               name: part.display_name,
               is_winner: false,
@@ -476,6 +760,7 @@
               roundScores: Array(this._maxRoundCount()).fill(null),
             });
             byName.set(key, this._ps.players.length - 1);
+            if (part.user_id) byUserId.set(part.user_id, this._ps.players.length - 1);
             playersChanged = true;
           }
           if (playersChanged) this._ps.persist();
@@ -488,7 +773,20 @@
         // Gather, when new joiners get auto-promoted to player rows).
         // Patch just that subtree — scroll position survives.
         if (playersChanged) this._refreshPlayersList();
-      } catch (_) {}
+      } catch (e) {
+        // A dead lobby 404s here every 2s. Swallowing that forever left the
+        // invite card advertising a code nobody could join for the rest of the
+        // game. Drop it so the next lobby write mints a replacement; a blip
+        // (offline / 5xx) is still swallowed, because re-minting on one would
+        // abandon a session that is merely unreachable.
+        if (this._isLobbyGone(e)) {
+          const dead = this._liveLobbyCode();
+          this._stopLobbyPoll();
+          const code = await this._healLobby(dead);
+          this.render();
+          if (code) this._startLobbyPoll();
+        }
+      }
     }
 
     _refreshPlayersList() {
@@ -513,22 +811,37 @@
       // is in would retry forever in the background.
       if (this._isOffline()) return;
       if (this._liveScores || !this._ps.sessionId) return;
-      const me = window.store.get("user");
       this._liveScores = new window.LiveScores({
         sessionId: this._ps.sessionId,
         isHost: true,
-        currentUserId: me ? me.id : null,
       });
       await this._liveScores.start();
       this._liveOff = this._liveScores.subscribe(() => this._onLiveScoresChange());
+      // Publish the grid the host is actually looking at. start() only read
+      // the table; a resumed draft (or a row whose participant_id landed late)
+      // can hold cells the table has never seen, and spectators are read-only
+      // now, so nobody else would ever fill them in. Fire-and-forget — the
+      // host's screen already shows this state.
+      this._liveScores.syncGrid(this._ps.players).catch(() => {});
     }
 
     // A live-scores tick (Realtime echo or poll refresh): patch the per-round
-    // cells AND the totals so a joiner's edit shows up in the matching cell on
-    // the host's grid — not just in the Total. The cell the host is currently
-    // editing is skipped so their caret/keystrokes survive the echo.
+    // cells, re-pick the leader, then repaint the totals. The host is the only
+    // writer, so these are normally echoes of the host's own edits; the cell
+    // the host is currently editing is skipped so their caret/keystrokes
+    // survive the round trip.
+    //
+    // _autoSelectWinners() belongs HERE, not only at the typing sites. Totals
+    // resolve through the live overlay (_resolvedScore), so this tick is the
+    // moment a cell's value actually becomes current — every path that changes
+    // a number ends up here, and the crown has to be re-derived from the same
+    // numbers the totals row is about to show. It used to be re-derived only
+    // where the host typed, and always one keystroke before the overlay caught
+    // up, so a player who overtook the leader kept showing the old crown until
+    // the next keystroke nudged it.
     _onLiveScoresChange() {
       this._patchScoringCells();
+      this._autoSelectWinners();
       this._refreshTotalsCells();
     }
 
@@ -742,6 +1055,25 @@
       // draft already carries the same code, so fall back to it instead
       // of flashing "— — — — —" until _ensureLobbyOpen resolves.
       const code = (this._lobby && this._lobby.code) || (this._ps && this._ps.code) || null;
+      // No lobby and nothing in flight: the mint failed. Say what that costs —
+      // nothing about the play itself — rather than leaving the placeholder
+      // pulsing for a code that isn't coming.
+      const failed = !code && !this._lobbyPromise;
+      if (failed) {
+        return `
+          <section class="cascade-card cascade-card--invite">
+            <span class="cascade-invite__icon">
+              <i data-lucide="wifi-off" class="w-4 h-4"></i>
+            </span>
+            <div class="cascade-invite__body">
+              <span class="cascade-invite__title">No session code</span>
+              <span class="cascade-invite__hint">
+                Couldn't start a live session, so there's nothing to join. Scoring and saving work as normal.
+              </span>
+            </div>
+          </section>
+        `;
+      }
       return `
         <section class="cascade-card cascade-card--invite">
           <span class="cascade-invite__icon">
@@ -751,6 +1083,9 @@
             <span class="cascade-invite__title">Session code</span>
             <span class="cascade-invite__code ${code ? "" : "is-pending"}">${escapeHtml(code || "— — — — —")}</span>
             ${code ? "" : `<span class="cascade-invite__hint">Getting your code…</span>`}
+            ${code && this._codeReplaced
+              ? `<span class="cascade-invite__hint cascade-invite__replaced">New code — share it again</span>`
+              : ""}
           </div>
         </section>
       `;
@@ -952,9 +1287,9 @@
       p.roundScores[roundIndex] = next === "" ? null : next;
       this._normalizeRoundArrays();
       this._ps.persist();
-      if (this._liveScores && p.user_id) {
+      if (this._liveScores && p.participant_id) {
         this._liveScores
-          .setAnyScore(p.user_id, roundIndex, window.parseRoundScore(next))
+          .setAnyScore(p.participant_id, roundIndex, window.parseRoundScore(next))
           .catch(() => {});
       }
       this._autoSelectWinners();
@@ -962,12 +1297,13 @@
     }
 
     // Resolved score for one (player, round) cell: the live-scoring overlay
-    // (Realtime) wins for authed players, else the local roundScores value.
-    // Returns number|null. Both the cell renderer and the column total go
-    // through this so the displayed cells and the Total can never disagree.
+    // (Realtime) wins for players with a participant row, else the local
+    // roundScores value. Returns number|null. Both the cell renderer and the
+    // column total go through this so the displayed cells and the Total can
+    // never disagree.
     _resolvedScore(player, roundIndex) {
-      if (this._liveScores && player.user_id) {
-        const live = this._liveScores.getScore(player.user_id, roundIndex);
+      if (this._liveScores && player.participant_id) {
+        const live = this._liveScores.getScore(player.participant_id, roundIndex);
         if (live != null) return live;
       }
       const local = player.roundScores && player.roundScores[roundIndex];
@@ -1020,7 +1356,7 @@
     // rendered one get to disagree — the same failure mode this change is
     // about, one level up.
     _renderTotalsCell(p, i, mode, total) {
-      return window.renderRoundGridTotalsCell(p, i, mode, total, "playFlowView", true, "");
+      return window.renderRoundGridTotalsCell(p, i, mode, total, "playFlowView", true);
     }
 
     _renderCoopOutcome() {
@@ -1158,12 +1494,10 @@
         this._scrollToCurrentPhase();
         return;
       }
-      // Optimistic: flip the phase locally and repaint immediately so the
-      // user sees the section transition without waiting on the server
-      // round-trip. The PATCH happens in the background; on failure we
-      // surface the error and roll the phase back. This also keeps the
-      // Continue/Wrap-up/back-arrow taps feeling instant on a slow link.
-      const prevPhase = this._ps.phase;
+      // Flip the phase locally and repaint immediately so the user sees the
+      // section transition without waiting on the server. The PATCH happens in
+      // the background and never reverses this: the local phase is the truth
+      // the host is looking at, and the lobby is a mirror of it.
       // Token this invocation. If the user navigates again before our PATCH
       // resolves, a newer call bumps _phaseSeq past `seq` and we must NOT
       // reconcile against this (now-stale) response — otherwise an older
@@ -1175,37 +1509,34 @@
       this._scrollToCurrentPhase();
       this._pendingPhase++;
       try {
-        // The lobby may still be minting — Continue is live from the first
-        // frame now, so the host can reach this screen before POST /sessions
-        // resolves. The cascade has already moved; this PATCH only catches the
-        // server (and joiners' read-only mirrors) up, whenever it can.
-        const code = this._liveLobbyCode() || (await this._lobbyReady());
-        // Superseded while we waited. Bail BEFORE the PATCH, not just before
-        // the reconcile: a Continue → back → Continue burst issued while the
-        // code was in flight would otherwise fire three writes for one state.
-        if (seq !== this._phaseSeq) return;
-        // No lobby this run — offline, or the mint failed and _ensureLobbyOpen
-        // has already surfaced that error. The phase stays local: the draft is
-        // complete on its own and _runSave falls back to Play.create for a
-        // codeless session, so rolling the host back would strand them for
-        // nothing.
-        if (!code) return;
-        const updated = await window.PlaySession.advancePhase(code, next);
-        if (seq !== this._phaseSeq) return; // a newer phase change owns the state now
-        this._lobby = updated;
-        if (updated.phase && updated.phase !== this._ps.phase) {
-          // Server overrode (shouldn't normally happen). Sync local view.
-          this._ps.phase = updated.phase;
-          this._ps.persist();
-          this.render();
-        }
-      } catch (e) {
-        if (seq !== this._phaseSeq) return; // superseded — let the newer call own state
-        this._ps.phase = prevPhase;
-        this._ps.persist();
-        this._error = e.message || "Could not advance to the next screen";
-        this.render();
-        this._scrollToCurrentPhase();
+        // The cascade has ALREADY moved — the phase above is local truth and
+        // the draft is complete on its own. This PATCH only catches the server
+        // (and spectators' read-only mirrors) up, whenever it can.
+        //
+        // So there is nothing here to roll back. A missing lobby, a dead one,
+        // a blip: all three mean the same thing, which is that the live session
+        // is behind. _withLobby mints a replacement when the lobby is
+        // definitively gone and resolves null when it can't; either way the
+        // host keeps playing. Bouncing them back to Gather with "Session not
+        // found" — which is what this used to do — blocked the one thing that
+        // has to work.
+        await this._withLobby(async (code) => {
+          // Superseded while we waited for the code. Bail BEFORE the PATCH: a
+          // Continue → back → Continue burst issued while the code was in
+          // flight would otherwise fire three writes for one state.
+          if (seq !== this._phaseSeq) return null;
+          const updated = await window.PlaySession.advancePhase(code, next);
+          if (seq !== this._phaseSeq) return updated; // a newer change owns the state
+          this._lobby = updated;
+          this._lobbyProvisional = false;
+          if (updated.phase && updated.phase !== this._ps.phase) {
+            // Server overrode (shouldn't normally happen). Sync local view.
+            this._ps.phase = updated.phase;
+            this._ps.persist();
+            this.render();
+          }
+          return updated;
+        });
       } finally {
         this._pendingPhase--;
       }
@@ -1280,10 +1611,7 @@
       // ps.code: a draft resumed offline still carries the code of a lobby
       // this run never opened, and pushing to it would be a doomed request
       // against a session with nobody in it.
-      const code = this._liveLobbyCode();
-      if (code) {
-        window.PlaySession.updateLobby(code, { gameId: null }).catch(() => {});
-      }
+      this._withLobby((code) => window.PlaySession.updateLobby(code, { gameId: null }));
       this.render();
       // Focus the freshly-mounted finder input so the user lands ready to
       // type their next pick — no extra tap to refocus.
@@ -1310,10 +1638,7 @@
       window.Chapter.prefetchMyChapters(game.id);
       // Push the pick to the lobby so joiners' read-only mirrors swap too.
       // Live lobby only — see _clearGamePick for why not ps.code.
-      const code = this._liveLobbyCode();
-      if (code) {
-        window.PlaySession.updateLobby(code, { gameId: game.id }).catch(() => {});
-      }
+      this._withLobby((code) => window.PlaySession.updateLobby(code, { gameId: game.id }));
       // The finder + dropdown unmount once a game is picked — the user
       // changes the pick by tapping the chip's × (which clears state and
       // re-mounts the search input). The widget's unmount() invalidates
@@ -1401,36 +1726,31 @@
           roundScores: Array(currentRounds).fill(null),
         });
         this._ps.persist();
-        // Sync to the backend participants table so other joiners see this
+        // Sync to the backend participants table so spectators see this
         // player. Fire-and-forget — _lobbyPoll will reconcile within ~2s and
-        // backfill participant_id onto the local row. On hard failure, drop
-        // the local row and toast so the host knows nothing was added.
+        // backfill participant_id onto the local row.
         this._pushParticipantToBackend(name, user_id);
       }
       this._closeBuddyDropdown();
       this.render();
     }
 
+    // Mirror a player the host just added into the lobby roster.
+    //
+    // The local row is NOT rolled back when this fails. A player the host typed
+    // is part of the play they are recording; the roster row only exists so
+    // spectators can see them. Deleting someone out of the host's own roster
+    // because a lobby write 404'd — which is what this used to do, with a toast
+    // blaming the session — took a failure in the nice-to-have and spent it on
+    // the must-have. _withLobby re-mints a dead lobby and retries, and
+    // _syncRosterToLobby re-pushes the roster whenever a new lobby is opened.
     async _pushParticipantToBackend(name, userId) {
-      if (!this._lobby || !this._lobby.code) return;
-      try {
-        await window.PlaySession.addParticipant(this._lobby.code, {
+      await this._withLobby((code) =>
+        window.PlaySession.addParticipant(code, {
           userId: userId || null,
           displayName: name,
-        });
-      } catch (e) {
-        // Roll back the optimistic local push so the host's UI doesn't
-        // show a phantom row that no joiner can see.
-        const idx = this._ps.players.findIndex(
-          (p) => (p.name || "").toLowerCase() === (name || "").toLowerCase()
-        );
-        if (idx >= 0) {
-          this._ps.players.splice(idx, 1);
-          this._ps.persist();
-          this.render();
-        }
-        if (window.showToast) window.showToast(`Couldn't add ${name}: ${e.message || "network error"}`, "error");
-      }
+        })
+      );
     }
 
     // Lookup helper used by the buddy autocomplete dropdown: resolves the
@@ -1461,14 +1781,15 @@
       this._autoSelectWinners();
       this.render();
       // If the row had been confirmed by the backend (carries a
-      // participant_id from _lobbyPoll), tell the server to drop it too.
-      if (removed && removed.participant_id && this._lobby && this._lobby.code) {
+      // participant_id from _lobbyPoll), tell the server to drop it too. No
+      // toast on failure: the player is already gone from the host's roster and
+      // therefore from the play, which is what the tap meant. A stale name left
+      // in a spectator's lobby list isn't worth interrupting the host over.
+      if (removed && removed.participant_id) {
         this._pendingDeletes++;
-        window.PlaySession.removeParticipant(this._lobby.code, removed.participant_id)
-          .catch((e) => {
-            if (window.showToast) window.showToast(`Couldn't remove ${removed.name}: ${e.message || "network error"}`, "error");
-          })
-          .finally(() => { this._pendingDeletes--; });
+        this._withLobby((code) =>
+          window.PlaySession.removeParticipant(code, removed.participant_id)
+        ).finally(() => { this._pendingDeletes--; });
       }
     }
 
@@ -1514,15 +1835,18 @@
       for (const p of this._ps.players) p.roundScores.push(null);
       this._ps.persist();
       this._autoSelectWinners();
-      // Surface the new (still empty) round to joiners. Their grid is sized
-      // from the highest round_index seen in live scores, so without a row
-      // an empty round is invisible to them. Write a null placeholder on the
-      // host's own column; the Realtime echo grows maxRound() everywhere.
+      // Surface the new (still empty) round to spectators. Their grid is sized
+      // from the highest round_index seen in live scores, so without a row an
+      // empty round is invisible to them. Write a null placeholder on the
+      // first player who has a participant row; the Realtime echo grows
+      // maxRound() everywhere.
       if (this._liveScores) {
-        const me = window.store.get("user");
+        const anchor = this._ps.players.find((p) => p.participant_id);
         const newIndex = this._maxRoundCount() - 1;
-        if (me && newIndex >= 0) {
-          this._liveScores.setAnyScore(me.id, newIndex, null).catch(() => {});
+        if (anchor && newIndex >= 0) {
+          this._liveScores
+            .setAnyScore(anchor.participant_id, newIndex, null)
+            .catch(() => {});
         }
       }
       this.render();
@@ -1567,12 +1891,18 @@
       this._normalizeRoundArrays();
       for (const p of this._ps.players) p.roundScores.splice(r, 1);
       this._ps.persist();
-      this._autoSelectWinners();
       // Live rows are keyed by round_index, so deleting index r on its own
       // would leave every later round one slot too high: each cell below the
       // removed row would render the round above it, and the Total with it.
       // removeRoundAt shifts the tail down to match the splice above.
+      //
+      // Shift before re-picking the winner, for the same reason _setRoundScore
+      // mirrors before repainting: totals resolve through the overlay, so a
+      // crown derived from the un-shifted one is derived from the wrong grid.
+      // (The shift and its emit are synchronous; only the delete behind them
+      // is async.)
       if (this._liveScores) this._liveScores.removeRoundAt(r).catch(() => {});
+      this._autoSelectWinners();
       this.render();
     }
 
@@ -1595,25 +1925,34 @@
         try { input.setSelectionRange(pos, pos); } catch (_) {}
       }
       this._ps.persist();
-      // Repaint the Total from local state FIRST and never wait on the
-      // network. This method is an oninput handler: awaiting the live-scores
-      // upsert before refreshing meant that on a flaky connection (or with
-      // the request simply hung) the cell showed the digit the host had just
-      // typed while the Total below it still showed the sum from before it —
-      // the "sometimes the maths is wrong" report. The mirror below is
-      // fire-and-forget; LiveScores applies it to its own map optimistically
-      // and the Realtime echo reconciles later.
-      this._autoSelectWinners();
-      this._refreshTotalsCells();
-      // Mirror authed-player edits into the live-scores table so joiners
-      // see the host's override. Guest players stay local-only.
-      if (this._liveScores && p.user_id) {
+      // Mirror the edit into the live-scores table so spectators see it. Keyed
+      // by participant, not by user, so a GUEST's column streams too — under
+      // host-only scoring nobody else can fill one in, and a permanently blank
+      // column on the spectator's grid is just a hole in the scoreboard.
+      //
+      // This has to run BEFORE the repaint below, and it does not wait on the
+      // network to do so: setAnyScore applies the value to the overlay and
+      // emits synchronously, and only the upsert behind it is async. Ordering
+      // it after the repaint is what made the crown lag. Totals and winners
+      // both resolve through _resolvedScore, which prefers the overlay, so
+      // repainting first read the digit typed BEFORE this one — the totals row
+      // got a second, corrected pass from the emit, but the winner did not and
+      // stayed a keystroke behind.
+      if (this._liveScores && p.participant_id) {
         try {
           this._liveScores
-            .setAnyScore(p.user_id, roundIndex, window.parseRoundScore(clean))
+            .setAnyScore(p.participant_id, roundIndex, window.parseRoundScore(clean))
             .catch(() => {});
         } catch (_) {}
       }
+      // Never wait on the network to repaint. This method is an oninput
+      // handler: awaiting the live-scores upsert before refreshing meant that
+      // on a flaky connection (or with the request simply hung) the cell showed
+      // the digit the host had just typed while the Total below it still showed
+      // the sum from before it — the "sometimes the maths is wrong" report.
+      // The write above is fire-and-forget; the Realtime echo reconciles later.
+      this._autoSelectWinners();
+      this._refreshTotalsCells();
     }
 
     _refreshTotalsCells() {
@@ -1628,12 +1967,23 @@
       this.refreshIcons();
     }
 
+    // Re-derive the crown from the totals the grid is showing. Called from
+    // _onLiveScoresChange, so it runs on every change to a number rather than
+    // only where one is typed.
+    //
+    // Persists only when the answer actually moved: on a live-scores tick this
+    // is usually the echo of an edit whose winner we already settled, and a
+    // localStorage write per Realtime event is a cost with nothing to show for
+    // it.
     _autoSelectWinners() {
       const ps = this._ps;
       if (!ps || !ps.players || ps.players.length === 0) return;
       if (this._resolvePlayMode() === "coop") return;
       const totals = ps.players.map((p) => this._playerTotal(p));
+      // An untouched grid is every column on zero. Crowning the whole table
+      // there would be noise, not a result — leave it to the first real score.
       if (totals.every((t) => t === 0)) return;
+      let next;
       if (this._resolvePlayMode() === "team") {
         const groupKey = (p, i) => {
           const tag = (p.team || "").trim().toLowerCase();
@@ -1645,13 +1995,13 @@
           groupTotals.set(key, (groupTotals.get(key) || 0) + totals[i]);
         });
         const max = Math.max(...groupTotals.values());
-        ps.players.forEach((p, i) => {
-          p.is_winner = groupTotals.get(groupKey(p, i)) === max;
-        });
+        next = ps.players.map((p, i) => groupTotals.get(groupKey(p, i)) === max);
       } else {
         const max = Math.max(...totals);
-        ps.players.forEach((p, i) => { p.is_winner = totals[i] === max; });
+        next = totals.map((t) => t === max);
       }
+      if (ps.players.every((p, i) => !!p.is_winner === next[i])) return;
+      ps.players.forEach((p, i) => { p.is_winner = next[i]; });
       ps.persist();
     }
 
@@ -2336,9 +2686,22 @@
           this._queuePlay(snap);
           queued = true;
         } else {
-          saved = snap.lobbyCode
-            ? await window.PlaySession.finalizeLobby(snap.lobbyCode, snap.payload)
-            : await window.Play.create(snap.payload);
+          // Finalizing through the lobby is the nice path — it marks the
+          // session finished so spectators get their wrap-up card. But the play
+          // itself doesn't need a lobby, and a dead code must not cost the host
+          // their game: fall back to a plain Play.create, which records exactly
+          // the same play. (No _withLobby here — re-minting a session just to
+          // finalize it would be theatre.)
+          if (snap.lobbyCode) {
+            try {
+              saved = await window.PlaySession.finalizeLobby(snap.lobbyCode, snap.payload);
+            } catch (e) {
+              if (!this._isLobbyGone(e)) throw e;
+              saved = await window.Play.create(snap.payload);
+            }
+          } else {
+            saved = await window.Play.create(snap.payload);
+          }
         }
       } catch (e) {
         // The link died between the tap and the request. Queueing beats
@@ -2576,29 +2939,7 @@
         window.PlaySession.prefetchLobby({ gameId: seed.gameId });
       }
 
-      // Tear down the finished session's live wiring — mirrors onUnmount.
-      this._stopLobbyPoll();
-      if (this._liveOff) { try { this._liveOff(); } catch (_) {} }
-      this._liveOff = null;
-      if (this._liveScores) {
-        const live = this._liveScores;
-        Promise.resolve().then(() => live.stop()).catch(() => {});
-      }
-      this._liveScores = null;
-      this._lobby = null;
-      // Drop the finished session's in-flight open so _lobbyReady() can't hand
-      // the new round a promise that resolves to the old lobby's code.
-      this._lobbyPromise = null;
-      this._prefetchedLobby = null;
-      this._cardId = null;
-
-      // Reset the async guards so an in-flight call from the finished
-      // session can't reconcile into the new one.
-      this._phaseSeq++;
-      this._pendingPhase = 0;
-      this._pendingDeletes = 0;
-      this._saving = false;
-      this._error = null;
+      this._resetRunState();
       this._expansionsOpen = false;
 
       const ps = new window.PlaySession({
@@ -2627,9 +2968,8 @@
       // below is deliberately NOT awaited: it is one POST per carried-over
       // player, and making the invite card wait on all of them held the screen
       // stale for round-trips it never needed. Each _pushParticipantToBackend
-      // already toasts and rolls its own row back on failure, and the poll
-      // backfills participant_id within ~2s — the same fire-and-forget
-      // contract _addPlayer uses.
+      // is best-effort, and the poll backfills participant_id within ~2s —
+      // the same fire-and-forget contract _addPlayer uses.
       this.render();
       this._startLobbyPoll();
       this._syncRosterToLobby();
@@ -2641,8 +2981,8 @@
      * Push the carried-over roster into a freshly opened lobby. POST
      * /sessions seats only the host, so everyone else needs an explicit
      * participant row before joiners can see them. Parallel — rosters are a
-     * handful of rows — and each push already toasts + rolls the local row
-     * back on failure.
+     * handful of rows — and each push is best-effort by design: a roster row
+     * that doesn't land costs spectators a name, not the host their play.
      */
     async _syncRosterToLobby() {
       if (!this._lobby || !this._lobby.code) return;

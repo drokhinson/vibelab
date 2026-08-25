@@ -67,7 +67,7 @@ export default function SessionViewerScreen({ navigation, route }) {
   // Live scores once playing.
   useEffect(() => {
     if (phase !== 'play' || !session) return undefined;
-    const live = new LiveScores({ sessionId: session.id, isHost: false, currentUserId: me.id });
+    const live = new LiveScores({ sessionId: session.id, isHost: false });
     liveRef.current = live;
     let off = null;
     live.start().then(() => {
@@ -90,9 +90,12 @@ export default function SessionViewerScreen({ navigation, route }) {
   }
 
   const participants = session.participants || [];
-  // Build players list from participants; the viewer's own column is editable.
+  // Build the players list from participants. Nothing here is editable — the
+  // host is the only person who scores (migration 053) — and cells are keyed
+  // by participant id, so guests appear on the same footing as accounts.
   const players = participants.map((p) => ({
-    key: p.user_id || p.id,
+    key: p.id,
+    participant_id: p.id,
     name: p.display_name,
     user_id: p.user_id || null,
     avatar: p.avatar || null,
@@ -122,15 +125,13 @@ export default function SessionViewerScreen({ navigation, route }) {
 
         {phase === 'play' && live ? (
           <View style={styles.section}>
-            <Text style={styles.hint}>Enter your own scores — the host sees them live.</Text>
+            <Text style={styles.hint}>View only — the host is keeping score.</Text>
             <RoundScoreGrid
               players={players}
               rounds={rounds}
-              getCell={(pi, ri) => live.getScore(players[pi].user_id, ri)}
-              getTotal={(pi) => live.totalFor(players[pi].user_id, rounds)}
-              canEditColumn={(pi) => players[pi].user_id === me.id}
-              onSetCell={(pi, ri, v) => { if (players[pi].user_id === me.id) live.setMyScore(ri, v).catch(() => {}); }}
-              editable
+              getCell={(pi, ri) => live.getScore(players[pi].participant_id, ri)}
+              getTotal={(pi) => live.totalFor(players[pi].participant_id, rounds)}
+              editable={false}
             />
             {session.game ? <ReferenceGuideScroll gameId={session.game.id} gameName={session.game.name} /> : null}
           </View>

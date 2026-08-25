@@ -3,9 +3,15 @@
 // Mirrors the host's Gather → Play → Settle Up cascade in read-only mode.
 // The joiner doesn't see Continue buttons — they auto-scroll forward as
 // the host advances the phase via Realtime (SessionPhase channel). During
-// the Play phase they can edit ONLY their own scoring column (LiveScores
-// channel + RLS), and when the host moves to Settle Up they get a polaroid
-// popup announcing the wrap-up.
+// the Play phase they watch the host's scoreboard stream in over the
+// LiveScores channel, and when the host moves to Settle Up they get a
+// polaroid popup announcing the wrap-up.
+//
+// Nothing on this screen is editable. Joiners used to own their own column
+// in the grid; the host is the only person who scores now (RLS enforces it
+// as of migration 053), which is what lets this view be a plain mirror —
+// no per-column edit mode, no caret to preserve across a repaint, no write
+// path at all.
 //
 // Polling stays around as a Realtime fallback: every 10–30s we re-fetch
 // the lobby so a missed Realtime event doesn't leave the joiner stuck.
@@ -219,9 +225,8 @@
       if (!s) return;
 
       // Lobby (Gather screen) — re-render the whole Gather body. Handles
-      // empty-state ↔ populated transitions cleanly (single CSS selector
-      // can't catch both shapes) and there's nothing focusable here for the
-      // joiner, so a sub-section innerHTML swap has no visible side effects.
+      // empty-state ↔ populated transitions cleanly (a single CSS selector
+      // can't catch both shapes).
       const gatherScreen = this.container.querySelector("#screen-gather");
       if (gatherScreen) {
         gatherScreen.innerHTML = `
@@ -230,36 +235,18 @@
         `;
       }
 
-      // Play screen — re-render the scoring + guide section while preserving
-      // the user's focused input + cursor (the scoring table includes the
-      // joiner's own editable score column). Re-render the whole Play body
-      // because the scoring card's class set varies between the empty state
-      // and the populated state, so a single CSS selector isn't reliable.
+      // Play screen — re-render the whole Play body, because the scoring
+      // card's class set varies between the empty state and the populated
+      // state, so a single CSS selector isn't reliable. Nothing here is
+      // focusable, so the swap has no visible side effects.
       const playScreen = this.container.querySelector("#screen-play");
       const phase = s.phase || "gather";
       if (playScreen && (phase === "play" || phase === "settle")) {
-        const focused = this.container.querySelector("input.scoring-cell:focus");
-        const snap = focused
-          ? {
-              cell: focused.getAttribute("data-score-cell"),
-              selStart: focused.selectionStart,
-              selEnd: focused.selectionEnd,
-            }
-          : null;
         playScreen.innerHTML = `
           ${this._renderHeaderRow("Play", 2, this._headerHint(phase))}
           ${this._renderPlay(s)}
         `;
         this._mountReferenceGuide(s);
-        if (snap && snap.cell) {
-          const restored = this.container.querySelector(
-            `input.scoring-cell[data-score-cell="${snap.cell}"]`
-          );
-          if (restored) {
-            restored.focus();
-            try { restored.setSelectionRange(snap.selStart, snap.selEnd); } catch (_) {}
-          }
-        }
       }
 
       this.refreshIcons();
@@ -295,11 +282,9 @@
       if (this._liveScores) return;
       if (!this._session || !this._session.id) return;
       if (this._session.phase !== "play") return;
-      const me = window.store.get("user");
       this._liveScores = new window.LiveScores({
         sessionId: this._session.id,
         isHost: false,
-        currentUserId: me ? me.id : null,
       });
       await this._liveScores.start();
       this._liveOff = this._liveScores.subscribe(() => {
@@ -330,44 +315,27 @@
     }
 
     // Re-render just the scoring card (cheaper than a full cascade render and
-    // doesn't yank scroll). Preserves the joiner's focused score input + caret
-    // across the swap, mirroring the snapshot pattern in _patchParticipants.
+    // doesn't yank scroll).
     _refreshScoringSection() {
       const sec = this.container.querySelector(".cascade-card--scoring");
       if (!sec || !this._session) return;
-      const focused = this.container.querySelector("input.scoring-cell:focus");
-      const snap = focused
-        ? { cell: focused.getAttribute("data-score-cell"), selStart: focused.selectionStart, selEnd: focused.selectionEnd }
-        : null;
       sec.outerHTML = this._renderViewerScoring(this._session);
       this.refreshIcons();
-      if (snap && snap.cell) {
-        const restored = this.container.querySelector(`input.scoring-cell[data-score-cell="${snap.cell}"]`);
-        if (restored) {
-          restored.focus();
-          try { restored.setSelectionRange(snap.selStart, snap.selEnd); } catch (_) {}
-        }
-      }
     }
 
-    // Patch every per-round cell value in place from the live-scores overlay,
-    // skipping the input the joiner is currently editing (so their caret and
-    // in-progress digits survive the Realtime echo). The widget keys cells by
-    // data-score-cell="i-r" where i is the column (participant) index.
+    // Patch every per-round cell value in place from the live-scores overlay.
+    // The widget keys cells by data-score-cell="i-r" where i is the column
+    // (participant) index, so the two stay in step as long as the render and
+    // the patch walk the same participants array.
     _patchScoringCells() {
       if (!this._session) return;
-      const focused = this.container.querySelector("input.scoring-cell:focus");
       const participants = this._session.participants || [];
       participants.forEach((p, i) => {
         for (let r = 0; r < this._renderedRounds; r++) {
           const el = this.container.querySelector(`.scoring-table [data-score-cell="${i}-${r}"]`);
-          if (!el || el === focused) continue;
-          const text = this._cellValue(p, r);
-          if (el.tagName === "INPUT") {
-            if (el.value !== text) el.value = text;
-          } else if (el.textContent !== text) {
-            el.textContent = text;
-          }
+          if (!el) continue;
+          const text = this._cellValue({ participant_id: p.id }, r);
+          if (el.textContent !== text) el.textContent = text;
         }
       });
     }
@@ -421,16 +389,17 @@
 
     _guessWinnerName(session) {
       // The host's grid hasn't been finalized yet (settle isn't finalized),
-      // so we don't have a server-side winner. Use the highest live total
-      // among authed participants as a best-guess; the popup updates with
-      // the real saved play once phase=finalized arrives.
+      // so we don't have a server-side winner. Use the highest live total as
+      // a best-guess; the popup updates with the real saved play once
+      // phase=finalized arrives. Guests are in the running now that scores
+      // are keyed by participant — skipping them used to hand the win to
+      // whoever came second.
       if (!this._liveScores || !session) return null;
       const parts = session.participants || [];
       let best = null;
       let bestTotal = -Infinity;
       for (const p of parts) {
-        if (!p.user_id) continue;
-        const t = this._liveScores.totalFor(p.user_id, this._renderedRounds);
+        const t = this._liveScores.totalFor(p.id, this._renderedRounds);
         if (t > bestTotal) {
           bestTotal = t;
           best = p.display_name;
@@ -621,19 +590,18 @@
       `;
     }
 
-    // Render the joiner's scoreboard through the SAME shared widget the host
-    // uses (widgets/round-score-grid.js) so the grid looks identical — only
-    // the joiner's own column is editable; every other column renders greyed
-    // out and read-only via the widget's viewer mode. Ghost (guest) players
-    // appear too, but their scores aren't synced so their cells stay blank.
+    // Render the scoreboard through the SAME shared widget the host uses
+    // (widgets/round-score-grid.js), in its read-only mode — same columns,
+    // same score font, same round labels, same Total row, just without the
+    // input chrome and the host's add/remove/winner controls. Guests are in
+    // here on equal terms: live scores are keyed by participant rather than
+    // by account (migration 053), so a guest's column streams like anyone's.
     _renderViewerScoring(s) {
       const participants = s.participants || [];
       if (participants.length === 0) {
         return `<section class="cascade-card"><p class="text-sm opacity-70">No players yet — scores will appear once players join.</p></section>`;
       }
-      const me = window.store.get("user");
-      const myId = me && me.id;
-      // Round count is unknown to the joiner — fall back to the maximum
+      // Round count is unknown to the spectator — fall back to the maximum
       // round_index we've seen in live scores so far, defaulting to 1. The
       // host writes a null placeholder row on _addRound (play-flow-view.js)
       // so an empty new round still grows maxRound() here.
@@ -646,31 +614,32 @@
       // come from the live-scores overlay, not local roundScores.
       const players = participants.map((p) => ({
         name: p.display_name,
+        participant_id: p.id,
         user_id: p.user_id,
         avatar: p.avatar,
         roundScores: [],
       }));
       const grid = window.renderRoundGrid(players, "sessionViewerView", {
-        editableColumnId: myId,
+        editable: false,
         roundCount: rounds,
         headerNames: true,
-        showSign: false,
         getCellValue: (p, r) => this._cellValue(p, r),
       });
       return `
         <section class="cascade-card cascade-card--scoring">
           <label class="cascade-card__label">Scoring</label>
+          <p class="session-viewer__scoring-hint">View only — the host is keeping score.</p>
           ${grid}
         </section>
       `;
     }
 
-    // The joiner has no local roundScores — every cell it shows comes from the
-    // live-scores overlay. One resolver, used by the grid render, the in-place
-    // cell patch and the totals patch alike.
+    // The spectator has no local roundScores — every cell it shows comes from
+    // the live-scores overlay. One resolver, used by the grid render, the
+    // in-place cell patch and the totals patch alike.
     _cellValue(player, roundIndex) {
       const v = this._liveScores
-        ? this._liveScores.getScore(player.user_id, roundIndex)
+        ? this._liveScores.getScore(player.participant_id, roundIndex)
         : null;
       return v == null ? "" : String(v);
     }
@@ -693,39 +662,13 @@
         const span = totals[i];
         if (!span) return;
         const v = window.roundGridTotal(
-          { user_id: p.user_id },
+          { participant_id: p.id },
           this._renderedRounds,
           (pl, r) => this._cellValue(pl, r)
         );
         const text = String(v);
         if (span.textContent !== text) span.textContent = text;
       });
-    }
-
-    // The shared grid's editable cell calls window.sessionViewerView._setRoundScore.
-    // Only the joiner's own column is editable, so every call maps to "my" score.
-    _setRoundScore(playerIndex, roundIndex, value) {
-      const clean = window.sanitizeRoundScore(value);
-      // The text input doesn't auto-reject stray characters — write the
-      // sanitized value back when they differ (e.g. a pasted letter),
-      // preserving the caret. Mirrors play-flow-view._setRoundScore.
-      const input = this.container.querySelector(`input[data-score-cell="${playerIndex}-${roundIndex}"]`);
-      if (input && input.value !== clean) {
-        const pos = input.selectionStart;
-        input.value = clean;
-        try { input.setSelectionRange(pos, pos); } catch (_) {}
-      }
-      this._setMyScore(roundIndex, clean);
-    }
-
-    async _setMyScore(roundIndex, value) {
-      if (!this._liveScores) return;
-      try {
-        await this._liveScores.setMyScore(Number(roundIndex), value);
-      } catch (e) {
-        this._error = e.message || "Couldn't save score";
-        this.render();
-      }
     }
 
     // ── Section: Settle (placeholder until popup appears) ───────────────────
@@ -785,12 +728,6 @@
         this._guideWidget.setExpansionMeta(expansionMeta);
       }
     }
-  }
-
-  function initialsOf(name) {
-    const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
-    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return (parts[0] || "?").slice(0, 2).toUpperCase();
   }
 
   window.SessionViewerView = SessionViewerView;

@@ -272,23 +272,26 @@
 --   → JSONB (PlayResponse, via bgb_log_play) or {"error": "not_found" |
 --     "expired" | "forbidden" | "game_not_found"}
 --   Defined in: db/migrations/boardgamebuddy/042_write_rpcs.sql
---               (body replaced by 052_finalize_score_matches_rounds.sql)
+--               (body replaced by 052_finalize_score_matches_rounds.sql, then
+--                again by 053_host_only_live_scores.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (finalize_session — POST /sessions/{code}/finalize)
---   Purpose:    One-call wrap-up: open/expiry/host gates, overlays joiners'
---               live per-round totals onto the host's player list (matched by
---               user_id; guests keep their host-typed scores), calls
---               bgb_log_play, marks the session finalized. Replaced a 10
---               round-trip Python chain — the host's Save used to block on
---               all of it. A failed write (game_not_found) leaves the session
---               open so the host can retry.
---               Since 052 the overlay is a FALLBACK, not an override: a player
---               whose payload entry carries a round_scores array keeps the
---               score derived from it (the client sends the resolved grid, and
---               PlayerEntry re-derives score from round_scores), and NULL
---               placeholder rows no longer count as live scoring. Both were
---               ways the saved total stopped matching the rounds printed
---               under it.
+--   Purpose:    One-call wrap-up: open/expiry/host gates, calls bgb_log_play,
+--               marks the session finalized. Replaced a 10 round-trip Python
+--               chain — the host's Save used to block on all of it. A failed
+--               write (game_not_found) leaves the session open so the host can
+--               retry.
+--               It no longer touches boardgamebuddy_play_session_scores at
+--               all. 042 overlaid the joiners' live per-round totals onto the
+--               host's player list and 052 narrowed that to a fallback for
+--               players whose payload carried no round breakdown; migration
+--               053 made the host the only person who can write a score, so
+--               the payload IS the grid the host was looking at
+--               (play-flow-view._commitResolvedScores folds the live overlay
+--               into the draft before building it, and PlayerEntry re-derives
+--               score from round_scores). An overlay could now only ever
+--               disagree with the payload — which is exactly the class of bug
+--               052 was written to fix.
 
 -- bgb_plays_page(p_target UUID, p_page INT DEFAULT 1, p_per_page INT DEFAULT 20,
 --                p_game UUID DEFAULT NULL, p_buddy UUID DEFAULT NULL,

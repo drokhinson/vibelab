@@ -17,10 +17,21 @@
 //
 // Each consumer implements these with identical signatures.
 //
+// The grid has exactly two modes, and `editable` picks between them:
+//
+//   editable: true  — every cell is an input and the host controls (add round,
+//                     remove round, winner trophy) render. The host's live
+//                     grid and the play-detail popup's edit mode.
+//   editable: false — every cell is a static number and no controls render.
+//                     The spectator's mirror and the popup's view mode.
+//
+// There used to be a third, per-column mode (`editableColumnId`) for the
+// spectator, back when a joiner owned their own column. The host is the only
+// person who scores now, so a grid is either yours to type in or it isn't.
+//
 // Opts:
 //   editable        — when false, cells render as static spans, "Add round"
-//                     and remove buttons are hidden. Used by the popup's
-//                     read-only view mode.
+//                     and remove buttons are hidden.
 //   playMode        — "competitive" | "team" | "coop". Co-op hides the
 //                     per-player trophy button (the whole table wins or
 //                     loses together).
@@ -53,18 +64,8 @@
     const headerNames = !!o.headerNames;
     const getCell = o.getCellValue || defaultCellValue;
     const safePlayers = Array.isArray(players) ? players : [];
-    // Viewer mode (joiner's read-only mirror): exactly one column — the
-    // current user's — stays editable, every other column renders greyed-out
-    // read-only cells and the host-only controls (add/remove round, winner
-    // trophy) are hidden. The host grid leaves editableColumnId unset and
-    // keeps its all-editable behavior.
-    const viewerMode = !!o.editableColumnId;
-    const showControls = editable && !viewerMode;
-    const colEditable = (p) =>
-      viewerMode ? !!(p.user_id && p.user_id === o.editableColumnId) : editable;
-    const colRead = (p) => viewerMode && !colEditable(p);
-    // Joiner sizes its grid from the live-scores round count, not from each
-    // player's local roundScores array (which it doesn't have).
+    // Spectators size their grid from the live-scores round count, not from
+    // each player's local roundScores array (which they don't have).
     const roundCount = roundGridRoundCount(safePlayers, o.roundCount);
     // One total implementation, fed the same resolver and the same round
     // range the rows below were built from.
@@ -77,7 +78,7 @@
             <tr>
               <th></th>
               ${safePlayers.map((p) => `
-                <th class="scoring-head${headerNames ? " is-named" : ""}${colRead(p) ? " scoring-col--read" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
+                <th class="scoring-head${headerNames ? " is-named" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
               `).join("")}
             </tr>
           </thead>
@@ -86,7 +87,7 @@
               <tr>
                 <th class="scoring-round-th">
                   <span class="scoring-round-label">
-                    ${showControls ? `
+                    ${editable ? `
                       <button class="scoring-round-remove" title="Remove round"
                               onclick="window.${host}._removeRoundAt(${r})">
                         <i data-lucide="x" class="w-3 h-3"></i>
@@ -96,22 +97,22 @@
                   </span>
                 </th>
                 ${safePlayers.map((p, i) => `
-                  <td class="${colRead(p) ? "scoring-col--read" : ""}">
-                    ${colEditable(p)
+                  <td>
+                    ${editable
                       ? renderEditableCell(getCell(p, r), i, r, host, showSign)
-                      : `<span class="scoring-cell scoring-cell--read" data-score-cell="${i}-${r}">${escapeHtml(getCell(p, r))}</span>`}
+                      : `<span class="scoring-cell--read" data-score-cell="${i}-${r}">${escapeHtml(getCell(p, r))}</span>`}
                   </td>
                 `).join("")}
               </tr>
             `).join("")}
             <tr class="scoring-total-row">
               <th>Total</th>
-              ${safePlayers.map((p, i) => renderTotalsCell(p, i, mode, getTotal(p), host, showControls, colRead(p) ? "scoring-col--read" : "")).join("")}
+              ${safePlayers.map((p, i) => renderTotalsCell(p, i, mode, getTotal(p), host, editable)).join("")}
             </tr>
           </tbody>
         </table>
       </div>
-      ${showControls ? `
+      ${editable ? `
         <div class="flex gap-2 mt-1">
           <button class="btn btn-ghost btn-xs" onclick="window.${host}._addRound()">
             <i data-lucide="plus" class="w-3.5 h-3.5"></i> Round
@@ -145,12 +146,10 @@
   // Exported as window.renderRoundGridTotalsCell for hosts that repaint the
   // totals row in place between full renders — same markup, same classes, so a
   // patched row can't drift from a freshly rendered one.
-  function renderTotalsCell(p, i, mode, total, host, showWinner, readClass) {
+  function renderTotalsCell(p, i, mode, total, host, showWinner) {
     // Co-op: the whole table wins or loses together, no per-player trophy.
     const negClass = Number(total) < 0 ? " is-neg" : "";
-    const tdClass = [p.is_winner ? "scoring-total-cell--winner" : "", readClass || ""]
-      .filter(Boolean)
-      .join(" ");
+    const tdClass = p.is_winner ? "scoring-total-cell--winner" : "";
     if (mode === "coop") {
       return `<td class="${tdClass}">
         <div class="scoring-total-cell">
