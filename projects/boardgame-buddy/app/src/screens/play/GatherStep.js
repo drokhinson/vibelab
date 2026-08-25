@@ -54,6 +54,14 @@ export default function GatherStep({ session, navigation }) {
     }
   }, [game?.id, game?.is_expansion]);
 
+  // The "New code" line is a nudge, not a state the host has to dismiss.
+  useEffect(() => {
+    if (!session.codeReplaced) return undefined;
+    const t = setTimeout(() => session.dismissCodeReplaced(), 6000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.codeReplaced]);
+
   useEffect(() => {
     // A filter typed for the previous pick would silently hide everything.
     // Reset it on a game change only — an import must leave it alone.
@@ -150,10 +158,16 @@ export default function GatherStep({ session, navigation }) {
               </Pressable>
             ) : null}
           </Row>
-          <Text variant="caption" style={{ marginTop: 4 }}>
+          <Text
+            variant="caption"
+            style={{ marginTop: 4 }}
+            color={session.codeReplaced ? COLORS.accent : undefined}
+          >
             {session.lobbyFailed
               ? "Couldn't open a table this time — you can still play and record it, just not be joined."
-              : 'Buddies can join from the Play tab and follow your scores live.'}
+              : session.codeReplaced
+                ? 'New code — share it again.'
+                : 'Buddies can join from the Play tab and follow your scores live.'}
           </Text>
         </Card>
       )}

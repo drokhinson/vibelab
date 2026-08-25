@@ -13,10 +13,15 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import api from '../../api/client';
 import LiveScores from '../../realtime/liveScores';
-import { emptyDraft, loadDraft, saveDraft, clearDraft } from '../../models/playSession';
+import { emptyDraft, loadDraft, saveDraft, clearDraft, PHASES as PHASE_ORDER } from '../../models/playSession';
 import { sanitizeRoundScore, parseRoundScore, autoSelectWinners } from '../../domain/scoring';
 import { isCoop, normalizePlayMode } from '../../domain/playMode';
 import { savePlay } from './playSave';
+
+/** Definitively gone — not a blip. See withLobby for why the line is here. */
+function isLobbyGone(e) {
+  return !!e && (e.status === 404 || e.status === 410);
+}
 
 export default function usePlaySession({ me, initialCode, initialGame, fresh }) {
   const draftRef = useRef(null);
@@ -34,6 +39,10 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
   // The server refused to mint a lobby. Surfaced on the invite card, not as a
   // cascade-wide error — the host can still play and record.
   const [lobbyFailed, setLobbyFailed] = useState(false);
+  // The code the host may already have read out to the table changed under
+  // them. A line on the invite card, never a modal — this can fire while
+  // they're typing in the scoring grid.
+  const [codeReplaced, setCodeReplaced] = useState(false);
 
   const draft = draftRef.current;
 
@@ -87,15 +96,19 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
   }, [playerTotal, persist]);
 
   // ── Lobby ───────────────────────────────────────────────────────────────
+  // Late-bound so the healing layer can be defined after the things it drives
+  // (the roster push and the phase replay) without a circular useCallback.
+  const withLobbyRef = useRef(null);
+  const onLobbyReplacedRef = useRef(null);
+  const healPromiseRef = useRef(null);
+
   const reconcileGameToLobby = useCallback(() => {
     const d = draftRef.current;
     if (!d?.code || !d.game?.id) return;
     if (lobbyRef.current?.game_id === d.game.id) return;
-    api.updateSession(d.code, d.game.id)
-      .then(() => {
-        if (lobbyRef.current) lobbyRef.current.game_id = d.game.id;
-      })
-      .catch(() => {});
+    withLobbyRef.current?.((code) => api.updateSession(code, d.game.id)).then((ok) => {
+      if (ok && lobbyRef.current) lobbyRef.current.game_id = d.game.id;
+    });
   }, []);
 
   const ensureLobbyOpen = useCallback(async () => {
@@ -163,13 +176,86 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
     }
   }, [persist, reconcileGameToLobby]);
 
+  /**
+   * Replace a lobby the server has disowned. Resolves the new code, or null.
+   *
+   * Single-flight, and that is the whole point: a roster push fails N writes at
+   * the same instant, and bgb_create_session abandons the host's other open
+   * sessions — so N independent mints would each kill the one before it and
+   * leave the host on a code its own successor had already abandoned.
+   */
+  const healLobby = useCallback(
+    (deadCode) => {
+      if (healPromiseRef.current) return healPromiseRef.current;
+      healPromiseRef.current = (async () => {
+        // Someone else already healed while we were queued behind them.
+        const current = lobbyRef.current?.code || null;
+        if (current && current !== deadCode) return current;
+        const d = draftRef.current;
+        lobbyRef.current = null;
+        if (d) {
+          // Drop the draft's copy too, so ensureLobbyOpen takes its create
+          // branch instead of re-validating the corpse.
+          d.code = null;
+          d.sessionId = null;
+          persist();
+        }
+        await ensureLobbyOpen();
+        const next = lobbyRef.current?.code || null;
+        if (next && next !== deadCode) onLobbyReplacedRef.current?.();
+        return next;
+      })();
+      healPromiseRef.current.catch(() => {}).then(() => {
+        healPromiseRef.current = null;
+      });
+      return healPromiseRef.current;
+    },
+    [persist, ensureLobbyOpen],
+  );
+
+  /**
+   * Run a write against this run's lobby, healing a dead lobby rather than
+   * reporting it. Resolves the write's result, or null when there was no lobby
+   * to write to (offline, mint failed, or the retry failed too).
+   *
+   * Only 404/410 count as gone. A 5xx or a network error is a blip, and
+   * re-minting on a hiccup abandons a live session and hands the table a code
+   * nobody has. 409 roster_locked and 400 invalid_transition are deliberately
+   * NOT definitive either — they come from a perfectly healthy lobby.
+   *
+   * @param {(code: string) => Promise<any>} fn
+   */
+  const withLobby = useCallback(
+    async (fn) => {
+      let code = lobbyRef.current?.code || null;
+      if (!code) return null;
+      try {
+        return await fn(code);
+      } catch (e) {
+        if (!isLobbyGone(e)) return null;
+      }
+      code = await healLobby(code);
+      if (!code) return null;
+      try {
+        return await fn(code);
+      } catch {
+        return null;
+      }
+    },
+    [healLobby],
+  );
+  withLobbyRef.current = withLobby;
+
   const lobbyPollTick = useCallback(async () => {
     const d = draftRef.current;
     if (!lobbyRef.current || !d) return;
     if (d.phase !== 'gather') return;
     if (pendingDeletesRef.current > 0 || pendingPhaseRef.current > 0) return;
     try {
-      const next = await api.session(lobbyRef.current.code);
+      // Through withLobby so a lobby that died under the host self-heals
+      // instead of this 404ing in silence every two seconds forever.
+      const next = await withLobbyRef.current?.((code) => api.session(code));
+      if (!next) return;
       lobbyRef.current = next;
       let playersChanged = false;
       const byName = new Map(d.players.map((p, i) => [(p.name || '').toLowerCase(), i]));
@@ -313,9 +399,9 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
       // already committed either way — a player the host typed belongs to the
       // play; the roster row is only for spectators.)
       if (d.code) {
-        api
-          .addParticipant(d.code, { userId: user_id || null, displayName: clean })
+        withLobby((code) => api.addParticipant(code, { userId: user_id || null, displayName: clean }))
           .then((updated) => {
+            if (!updated) return;
             lobbyRef.current = updated;
             const part = (updated.participants || []).find((p) =>
               user_id
@@ -326,11 +412,10 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
               const row = dd.players.find((p) => p.name.toLowerCase() === clean.toLowerCase());
               if (row) row.participant_id = part.id;
             });
-          })
-          .catch(() => {});
+          });
       }
     },
-    [mutate, maxRoundCount],
+    [mutate, maxRoundCount, withLobby],
   );
 
   const removePlayer = useCallback(
@@ -341,15 +426,12 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
       mutate((dd) => dd.players.splice(index, 1));
       if (p.participant_id && d.code) {
         pendingDeletesRef.current++;
-        api
-          .removeParticipant(d.code, p.participant_id)
-          .catch(() => {})
-          .finally(() => {
-            pendingDeletesRef.current--;
-          });
+        withLobby((code) => api.removeParticipant(code, p.participant_id)).finally(() => {
+          pendingDeletesRef.current--;
+        });
       }
     },
-    [mutate],
+    [mutate, withLobby],
   );
 
   // ── Scoring (Play) ──────────────────────────────────────────────────────
@@ -435,8 +517,9 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
       repaint();
       pendingPhaseRef.current++;
       try {
-        const updated = await api.updateSessionPhase(lobbyRef.current.code, next);
+        const updated = await withLobby((code) => api.updateSessionPhase(code, next));
         if (seq !== phaseSeqRef.current) return true; // newer change owns state
+        if (!updated) return true; // lobby is behind; the host is not
         lobbyRef.current = updated;
         if (updated.phase && updated.phase !== d.phase) {
           d.phase = updated.phase;
@@ -456,8 +539,61 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
         pendingPhaseRef.current--;
       }
     },
-    [persist, repaint, startLiveScores],
+    [persist, repaint, startLiveScores, withLobby],
   );
+
+  /**
+   * A fresh lobby replaced a dead one mid-run. Everything keyed to the old
+   * session has to follow it across, and none of it is load-bearing for the
+   * play the host is recording — this only restores the live mirror.
+   */
+  const onLobbyReplaced = useCallback(() => {
+    const d = draftRef.current;
+    if (!d) return;
+    // participant_id on each local player points at the DEAD lobby's roster
+    // rows, and the push below skips anyone who already has one — so without
+    // clearing them the new lobby stays empty and spectators see a game with
+    // no players.
+    for (const p of d.players || []) p.participant_id = null;
+    persist();
+
+    // The old channel is subscribed to a session id that means nothing now.
+    const live = liveRef.current;
+    const hadLive = !!live;
+    liveRef.current = null;
+    if (live) Promise.resolve().then(() => live.stop()).catch(() => {});
+
+    setCodeReplaced(true);
+    repaint();
+
+    // Order matters, and all three are best-effort:
+    //   1. roster — participants are Gather-only, and a replacement is born in
+    //      gather, so this has to land before the phase moves off it;
+    //   2. phase — otherwise the new lobby sits in gather while the host
+    //      plays, and anyone joining on the new code watches a lobby that
+    //      never starts;
+    //   3. live scores — RLS only accepts score writes while phase='play', so
+    //      re-subscribing before step 2 would have its first mirror rejected.
+    (async () => {
+      const code = lobbyRef.current?.code;
+      if (!code) return;
+      await Promise.all(
+        (d.players || [])
+          .filter((p) => !p.participant_id && !(me && p.user_id === me.id))
+          .map((p) => api.addParticipant(code, { userId: p.user_id || null, displayName: p.name }).catch(() => {})),
+      );
+      // bgb_advance_phase validates transitions, so walk rather than jump.
+      const target = d.phase || 'gather';
+      for (const step of PHASE_ORDER) {
+        if (step === 'gather') continue;
+        await api.updateSessionPhase(code, step).catch(() => {});
+        if (step === target) break;
+      }
+      if (hadLive && d.phase === 'play') await startLiveScores();
+      repaint();
+    })().catch(() => {});
+  }, [me, persist, repaint, startLiveScores]);
+  onLobbyReplacedRef.current = onLobbyReplaced;
 
   const abandon = useCallback(async () => {
     // Tear down locally FIRST — a slow or hung PATCH must not strand the
@@ -618,6 +754,8 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
     lobby: lobbyRef.current,
     live: liveRef.current,
     lobbyFailed,
+    codeReplaced,
+    dismissCodeReplaced: () => setCodeReplaced(false),
     setError,
     mutate,
     pickGame,
