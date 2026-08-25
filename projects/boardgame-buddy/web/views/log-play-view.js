@@ -228,27 +228,32 @@
     // following them. By the time Gather renders, the code is usually already
     // in hand.
     //
-    // The resumable-session guard is load-bearing, not defensive:
-    // bgb_create_session abandons every other open session this host owns, so
-    // minting speculatively here would close the lobby the resume banner is
-    // offering — before _ensureLobbyOpen ever got to revalidate it. It also
-    // guards the draft clear below for the same reason.
+    // "Host a game" is a NEW game, always: fresh draft, fresh session code,
+    // empty game slot. Continuing an existing session is what the "Resume
+    // hosting?" banner directly above these cards is for — and it is the only
+    // thing that does it.
     //
-    // "Host a game" always opens Gather with an empty game slot: a stale draft
-    // from an earlier explorer pick must not silently decide tonight's game.
-    // Picking a game is the Game Explorer card's job.
+    // This used to skip the clear whenever a resumable draft existed, so a host
+    // who tapped Host with one lying around silently landed back in the old
+    // session, code and all. The guard was there because bgb_create_session
+    // abandons every other open session this host owns, and minting here would
+    // close the lobby the banner was offering. That is now the intended
+    // outcome: starting a new play ends the previous one, the same way
+    // "Another Round" already abandons deliberately.
+    //
+    // The empty game slot is deliberate too — a stale draft from an earlier
+    // explorer pick must not silently decide tonight's game. Picking a game is
+    // the Game Explorer card's job.
     _host() {
-      if (!this._resumableSession()) {
-        const stale = window.PlaySession.load();
-        if (stale) stale.clear();
-        window.store.set("activePlay", null);
-        // Offline the mint can only fail, and failing isn't the worst of it:
-        // prefetchLobby parks its promise in a single module-level slot that
-        // PlayFlowView never consumes offline, so the rejected record would
-        // still be sitting there for the next real host tap to adopt.
-        if (!(window.BgbNet && window.BgbNet.isOffline())) {
-          window.PlaySession.prefetchLobby({ gameId: null });
-        }
+      const stale = window.PlaySession.load();
+      if (stale) stale.clear();
+      window.store.set("activePlay", null);
+      // Offline the mint can only fail, and failing isn't the worst of it:
+      // prefetchLobby parks its promise in a single module-level slot that
+      // PlayFlowView never consumes offline, so the rejected record would
+      // still be sitting there for the next real host tap to adopt.
+      if (!(window.BgbNet && window.BgbNet.isOffline())) {
+        window.PlaySession.prefetchLobby({ gameId: null });
       }
       window.router.go("play-flow");
     }

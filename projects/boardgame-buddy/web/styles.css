@@ -3808,6 +3808,15 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-muted);
   animation: importExpPulse 1.2s ease-in-out infinite;
 }
+/* Shown for a few seconds after a dead session was swapped for a fresh one, so
+   the host knows the code they already read out to the table is no longer the
+   one to share. Deliberately a line on the card rather than a toast or a modal:
+   the swap can happen while they're typing in the scoring grid, and nothing
+   about it needs their attention right now. */
+.cascade-invite__replaced {
+  color: var(--polaroid-accent);
+  font-weight: 600;
+}
 
 /* Game pick row inside Gather */
 .cascade-game {
