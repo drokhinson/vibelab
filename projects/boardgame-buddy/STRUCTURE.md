@@ -111,11 +111,29 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
   Gather → Play → Settle; `usePlaySession` owns the draft, 2s lobby poll, LiveScores channel and
   the `_phaseSeq`-guarded optimistic phase machine (ported from `web/views/play-flow-view.js`).
   Joiners: `SessionRouter` (host/joiner hop on `/play/:code`), `SessionViewerScreen` +
-  `useSessionWatch` (Realtime phase + poll safety net, own-column score editing, winner splash).
+  `useSessionWatch` (Realtime phase + poll safety net, **view-only** scoreboard, winner splash).
 - **Realtime** (`app/src/realtime/`): `liveScores`, `sessionPhase` (Supabase channels);
-  draft model in `app/src/models/playSession.js` (AsyncStorage-persisted).
+  draft model in `app/src/models/playSession.js` (AsyncStorage-persisted). Live cells are keyed
+  by **participant row, not account** (migration 053) — which is what lets a guest's column
+  stream — so `addPlayer` pushes *every* player to the lobby, guests included. `RoundScoreGrid`
+  has exactly two modes, editable or not; there is no per-column gate any more. Entering Play
+  calls `syncGrid()` to publish the host's whole grid, since a resumed draft can hold cells the
+  table has never seen and spectators can no longer fill the gaps in themselves. Removing a
+  round `DELETE`s its rows — writing NULLs leaves them behind and `maxRound()`, which spectators
+  size their grid from, grows the round straight back.
+- **The lobby never blocks the host** (`usePlaySession`): recording the play is the must-have,
+  the live session is not. Continue needs only a game pick; the phase flips locally and the
+  lobby catches up; a refused mint is a line on the invite card rather than an error over the
+  cascade; and **Host a game always starts a fresh session** (Resume is the one path that
+  continues one — reusing the draft handed the host a closed lobby's code). Every session write
+  goes through `withLobby()`, which on a *definitive* 404/410 mints a replacement and retries
+  once. `healLobby()` is single-flight because `bgb_create_session` abandons the host's other
+  open sessions, so parallel mints would each kill the one before it. `onLobbyReplaced()` then
+  clears the stale `participant_id`s, re-pushes the roster, walks the new lobby up to the host's
+  phase and restarts live scores — in that order, since participants are Gather-only and RLS
+  only accepts score writes while `phase='play'`.
 - **API client** (`app/src/api/client.js`): 401 refresh-retry, multipart photo upload, and one
-  wrapper per endpoint the app actually calls — 66 of the backend's 75 routes, with no `raw`
+  wrapper per endpoint the app actually calls — 67 of the backend's 79 routes, with no `raw`
   escape hatch, so `grep` over this file is a complete inventory of what native can reach.
   Response typedefs live in `app/src/api/types.js` and are kept field-for-field with
   `shared-backend/routes/boardgame_buddy/models.py`. The photo attaches via
