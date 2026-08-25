@@ -1,10 +1,10 @@
 # BoardgameBuddy — STRUCTURE.md
 
 > AI development context document. Keep this up-to-date as the project evolves.
-> Last updated: 2026-08-21 (Play tab split into Host on top / Join on the bottom: the host cards become Host a game / Another Round / Game Explorer, the retired standalone `/join` screen's code entry + active-session list move inline as the `JoinPanel` widget, and the game browser moves out to its own `/games` Game Explorer screen)
+> Last updated: 2026-08-25 (the host is the only person who scores: joiners and spectators get a read-only mirror of the host's grid, live scores are keyed by participant so guest columns stream too, and `bgb_finalize_session` stops overlaying them onto the host's payload — migration 053)
 
 ## What It Does
-A Strava-style log for board game plays. The home view is a chronological feed of plays from the user and their accepted buddies, interspersed with "hot games this week", suggested buddies, and dormant games from the user's own collection. Logging a play is a guided three-screen cascade — Gather → Play → Settle Up — that walks the host through the play and mirrors read-only to non-host joiners (who can score their own column live). The Play tab is split in two: hosting on top (host a game, replay the last one, or browse the Game Explorer) and joining on the bottom (enter a short code, or pick a live session hosted by a buddy). Hosting also works with no connectivity at all — the cascade runs from cache, the play queues on the device, and it uploads on the next online session. That switches itself on and off with the device's connection; there is nothing to toggle. Profiles are fully public and show a Strava-style stats strip + collection grid. The reference-guide system is fully user-driven: each user builds their own per-game guide by adding "chapters" — either creating new ones or browsing the community pool. The pool sorts by popularity. Reports on offensive chapters route to admin review.
+A Strava-style log for board game plays. The home view is a chronological feed of plays from the user and their accepted buddies, interspersed with "hot games this week", suggested buddies, and dormant games from the user's own collection. Logging a play is a guided three-screen cascade — Gather → Play → Settle Up — that walks the host through the play and mirrors read-only to everyone else (the host is the only person who scores; joiners and spectators watch the grid update live). The Play tab is split in two: hosting on top (host a game, replay the last one, or browse the Game Explorer) and joining on the bottom (enter a short code, or pick a live session hosted by a buddy). Hosting also works with no connectivity at all — the cascade runs from cache, the play queues on the device, and it uploads on the next online session. That switches itself on and off with the device's connection; there is nothing to toggle. Profiles are fully public and show a Strava-style stats strip + collection grid. The reference-guide system is fully user-driven: each user builds their own per-game guide by adding "chapters" — either creating new ones or browsing the community pool. The pool sorts by popularity. Reports on offensive chapters route to admin review.
 
 Logging a play also surfaces the reference guide in-line: once a game is picked, a collapsed Expansions section lets the player toggle which expansions are active for this session, and a Reference guide section appears below Scoring with a centered Rulebook button + the parchment scroll merging chapters from the base game and every active expansion (each tagged with a colored dot matching the expansion's identity color). Adding chapters from this in-play scroll routes through the same Browse/Create UI, with each chapter saved against its source game's pool so it propagates automatically the next time the user opens the guide.
 
@@ -183,18 +183,25 @@ Roster for an open session — populated as players join.
 | joined_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_play_session_scores
-Per-player, per-round live scores during the Play phase (migration 026).
-Browser writes directly via Supabase Realtime + RLS — only the host of the
-session or the player themselves can write, and only while phase=play.
-Merged into the canonical play on finalize.
+Per-participant, per-round live scores during the Play phase (migration 026;
+re-keyed by migration 053). **One-way broadcast:** the host's browser writes
+directly via Supabase Realtime + RLS and everybody else reads. Only the host
+of the session can write, and only while phase=play.
+
+Keyed by **participant**, not by user. A guest has a roster row but no
+account, so a user-keyed table could never carry their cells and spectators
+watched a guest's column sit blank all game — which stopped being tolerable
+once the host became the only person who could fill one in.
+
+Not read on finalize: the host's payload is the grid (see
+`POST /sessions/{code}/finalize`).
 | Column | Type | Notes |
 |--------|------|-------|
 | session_id | UUID FK | → play_sessions |
-| player_user_id | UUID FK | → profiles (authed players only — guests stay local) |
+| participant_id | UUID FK | → play_session_participants (guests included) |
 | round_index | SMALLINT | 0-indexed, capped at 64 |
 | score | INTEGER | nullable (blank cell) |
-| updated_at | TIMESTAMPTZ | |
-| PK (session_id, player_user_id, round_index) | | |
+| PK (session_id, participant_id, round_index) | | |
 
 ### boardgamebuddy_chapter_types (lookup)
 | Column | Type | Notes |
@@ -340,7 +347,7 @@ each missing game from the BGG XML API.
 - `POST /api/v1/boardgame_buddy/sessions/{code}/participants` — host-only. Adds a buddy (with `user_id`) or a ghost (name-only, `user_id=null`) to the lobby roster so joiners see the player. Gather-only.
 - `DELETE /api/v1/boardgame_buddy/sessions/{code}/participants/{participant_id}` — host-only. Removes a participant from the lobby roster. Refuses to remove the host themselves. Gather-only.
 - `DELETE /api/v1/boardgame_buddy/sessions/{code}` — host abandons a session
-- `POST /api/v1/boardgame_buddy/sessions/{code}/finalize` — write a play row from the session. Merges per-player live-scoring rows from `boardgamebuddy_play_session_scores` into the player payload as a **fallback**: a player whose payload entry carries a `round_scores` array keeps the score derived from it (the client sends the resolved grid), guests keep host-typed scores, and NULL placeholder rows don't count as live scoring. Overriding a payload's own round breakdown with a separate SUM was how a saved play ended up with a total its rounds didn't add up to — see migration 052.
+- `POST /api/v1/boardgame_buddy/sessions/{code}/finalize` — write a play row from the session. **The host's payload is the grid** and the RPC writes it verbatim; it does not read `boardgamebuddy_play_session_scores` at all (migration 053). It used to overlay live per-round totals onto the payload — 042 as an override, 052 narrowed to a fallback — to recover cells joiners had authored that the host's draft had never seen. Host-only scoring makes that case impossible, and `play-flow-view._commitResolvedScores` already folds the live overlay into the draft before building the payload, so an overlay could now only ever disagree with it: exactly the "saved total doesn't match its own rounds" bug 052 was written to fix.
 - Session create/join/get/joinable (and every session endpoint's response payload) are single Postgres RPCs as of migrations 036-038 (`bgb_create_session` / `bgb_join_session` / `bgb_get_session` / `bgb_joinable_sessions` / `bgb_session_bundle`) — previously 4-6 sequential PostgREST round trips per request, which made host/join taps, the 2s lobby poll, and the joinable-sessions list crawl at cross-region RTTs. See `db/functions/boardgamebuddy.sql`.
 - Migration 039 extends the same treatment to the other hot reads: `GET /plays` → `bgb_plays_page` (was 8-11 round trips with Python-side pagination over the full history), Closet play stats → `bgb_play_stats` (SQL GROUP BY instead of shipping every play row), `GET /bgg/sync/status` → `bgb_bgg_sync_status` (poll target, was up to 7 round trips). Play-player writes are bulked (2 statements per play regardless of player count), `/played-with` resolves buddy relations from one edges query, and pg_trgm GIN indexes back the per-keystroke name searches.
 - `POST /api/v1/boardgame_buddy/bgg/link` — body `{username, password}`; logs into BGG via `POST /login/api/v1`, stores the username + Fernet-encrypted password (`BGG_CREDENTIAL_KEY`) and the returned SessionID/bggusername/bggpassword cookies on the profile. A successful login is also our existence check (BGG returns 401 for both bad passwords and unknown handles, surfaced as a 400 to the client). Returns `{bgg_username}`.
@@ -403,7 +410,13 @@ Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
    The Join half is the `JoinPanel` widget: a 5-char code input plus a 10s-polled list of active sessions where the user is a participant or the host is a buddy (sessions past Gather are labelled **Spectate**).
    The Log a play cascade has three snap-scroll screens:
    - **Gather** — pick a game, set game type (competitive/team/co-op), manage the player list. A session code opens on entry and is shown at the top of the screen; other phones can join via code while the host is on Gather. Joiners stream into the player list via polling.
-   - **Play** — full-width reference guide on top, scoring grid below. Host has full grid access (add rounds, override winners). Authenticated joiners see the same grid in read-only mode except for their own column, which they can edit live. Per-cell edits stream both ways via Supabase Realtime against `boardgamebuddy_play_session_scores`. Scores may be negative; a "± Negative" header toggle (default off, remembered) reveals per-cell +/− sign buttons for keyboards that lack a minus key.
+   - **Play** — full-width reference guide on top, scoring grid below. **The host is the only person who scores.** They have full grid access (add rounds, override winners) and every cell they touch streams one-way to everybody else via Supabase Realtime against `boardgamebuddy_play_session_scores`; joiners and spectators get the same grid, read-only, and cannot write at all (RLS enforces it — migration 053). Guests are on the table like anyone else: scores are keyed by participant row rather than by account, so a guest's column streams too. Scores may be negative; a "± Negative" header toggle (default off, remembered) reveals per-cell +/− sign buttons for keyboards that lack a minus key.
+
+     Joiners used to own their own column. Collapsing that to host-only removed the whole reconciliation problem it created — the per-column edit mode in the grid widget, the caret-preservation dance on every repaint of the mirror, the two-principal RLS policy, and the finalize-time merge of "what the host typed" against "what joiners streamed in" that migration 052 existed to un-break.
+
+     The read-only grid is the same widget in its other mode: same columns, same score font, same round labels, same Total row, minus the input chrome. Read cells carry `.scoring-cell--read` and deliberately **not** `.scoring-cell` — the border/fill/radius there is input chrome, and a table of boxes nobody can type in reads as a different component.
+
+     **Known gap:** a user who joins *after* Gather gets no row in `boardgamebuddy_play_session_participants` (`bgb_join_session`), and `bgb_session_scores_select` is scoped to host-or-participant — so a late spectator's grid stays blank. Pre-existing. The fix is to fold a `scores` array into the (already unauthenticated, code-as-token) `GET /sessions/{code}` response and seed `LiveScores` from it, not to broaden the RLS SELECT policy — an unfiltered `select *` would then dump every open session's scores.
 
      **The Total row is the visible cells, added up — always.** `widgets/round-score-grid.js` owns the one implementation (`window.roundGridTotal`), summing the same `getCellValue` resolver over the same round count it just rendered; there is no "total resolver" opt for a caller to supply its own arithmetic, and any surface that repaints the totals row between renders (the host grid, the joiner's mirror, the play-detail popup) calls that same helper. Two rules keep it honest upstream: every player carries a dense `roundScores` array of the grid's full length (`_normalizeRoundArrays`), and a typed edit repaints the total from local state *before* mirroring to Realtime, never awaiting the write. On Save the host folds the live overlay into its own draft (`_commitResolvedScores`) so the recorded play is the grid that was on screen, and `PlayerEntry` on the backend re-derives `score` from `round_scores` whenever a breakdown is present.
    - **Settle Up** — host only. Optional photo upload + "Key moments" notes textarea (reuses the play's `notes` column), then Save. Save calls `/sessions/{code}/finalize` which merges live scores into the canonical play and marks the session finalized.
