@@ -543,11 +543,22 @@
     }
 
     // A live-scores tick (Realtime echo or poll refresh): patch the per-round
-    // cells AND the totals. The host is the only writer, so these are normally
-    // echoes of the host's own edits; the cell the host is currently editing is
-    // skipped so their caret/keystrokes survive the round trip.
+    // cells, re-pick the leader, then repaint the totals. The host is the only
+    // writer, so these are normally echoes of the host's own edits; the cell
+    // the host is currently editing is skipped so their caret/keystrokes
+    // survive the round trip.
+    //
+    // _autoSelectWinners() belongs HERE, not only at the typing sites. Totals
+    // resolve through the live overlay (_resolvedScore), so this tick is the
+    // moment a cell's value actually becomes current — every path that changes
+    // a number ends up here, and the crown has to be re-derived from the same
+    // numbers the totals row is about to show. It used to be re-derived only
+    // where the host typed, and always one keystroke before the overlay caught
+    // up, so a player who overtook the leader kept showing the old crown until
+    // the next keystroke nudged it.
     _onLiveScoresChange() {
       this._patchScoringCells();
+      this._autoSelectWinners();
       this._refreshTotalsCells();
     }
 
@@ -1590,12 +1601,18 @@
       this._normalizeRoundArrays();
       for (const p of this._ps.players) p.roundScores.splice(r, 1);
       this._ps.persist();
-      this._autoSelectWinners();
       // Live rows are keyed by round_index, so deleting index r on its own
       // would leave every later round one slot too high: each cell below the
       // removed row would render the round above it, and the Total with it.
       // removeRoundAt shifts the tail down to match the splice above.
+      //
+      // Shift before re-picking the winner, for the same reason _setRoundScore
+      // mirrors before repainting: totals resolve through the overlay, so a
+      // crown derived from the un-shifted one is derived from the wrong grid.
+      // (The shift and its emit are synchronous; only the delete behind them
+      // is async.)
       if (this._liveScores) this._liveScores.removeRoundAt(r).catch(() => {});
+      this._autoSelectWinners();
       this.render();
     }
 
@@ -1618,20 +1635,19 @@
         try { input.setSelectionRange(pos, pos); } catch (_) {}
       }
       this._ps.persist();
-      // Repaint the Total from local state FIRST and never wait on the
-      // network. This method is an oninput handler: awaiting the live-scores
-      // upsert before refreshing meant that on a flaky connection (or with
-      // the request simply hung) the cell showed the digit the host had just
-      // typed while the Total below it still showed the sum from before it —
-      // the "sometimes the maths is wrong" report. The mirror below is
-      // fire-and-forget; LiveScores applies it to its own map optimistically
-      // and the Realtime echo reconciles later.
-      this._autoSelectWinners();
-      this._refreshTotalsCells();
       // Mirror the edit into the live-scores table so spectators see it. Keyed
       // by participant, not by user, so a GUEST's column streams too — under
       // host-only scoring nobody else can fill one in, and a permanently blank
       // column on the spectator's grid is just a hole in the scoreboard.
+      //
+      // This has to run BEFORE the repaint below, and it does not wait on the
+      // network to do so: setAnyScore applies the value to the overlay and
+      // emits synchronously, and only the upsert behind it is async. Ordering
+      // it after the repaint is what made the crown lag. Totals and winners
+      // both resolve through _resolvedScore, which prefers the overlay, so
+      // repainting first read the digit typed BEFORE this one — the totals row
+      // got a second, corrected pass from the emit, but the winner did not and
+      // stayed a keystroke behind.
       if (this._liveScores && p.participant_id) {
         try {
           this._liveScores
@@ -1639,6 +1655,14 @@
             .catch(() => {});
         } catch (_) {}
       }
+      // Never wait on the network to repaint. This method is an oninput
+      // handler: awaiting the live-scores upsert before refreshing meant that
+      // on a flaky connection (or with the request simply hung) the cell showed
+      // the digit the host had just typed while the Total below it still showed
+      // the sum from before it — the "sometimes the maths is wrong" report.
+      // The write above is fire-and-forget; the Realtime echo reconciles later.
+      this._autoSelectWinners();
+      this._refreshTotalsCells();
     }
 
     _refreshTotalsCells() {
@@ -1653,12 +1677,23 @@
       this.refreshIcons();
     }
 
+    // Re-derive the crown from the totals the grid is showing. Called from
+    // _onLiveScoresChange, so it runs on every change to a number rather than
+    // only where one is typed.
+    //
+    // Persists only when the answer actually moved: on a live-scores tick this
+    // is usually the echo of an edit whose winner we already settled, and a
+    // localStorage write per Realtime event is a cost with nothing to show for
+    // it.
     _autoSelectWinners() {
       const ps = this._ps;
       if (!ps || !ps.players || ps.players.length === 0) return;
       if (this._resolvePlayMode() === "coop") return;
       const totals = ps.players.map((p) => this._playerTotal(p));
+      // An untouched grid is every column on zero. Crowning the whole table
+      // there would be noise, not a result — leave it to the first real score.
       if (totals.every((t) => t === 0)) return;
+      let next;
       if (this._resolvePlayMode() === "team") {
         const groupKey = (p, i) => {
           const tag = (p.team || "").trim().toLowerCase();
@@ -1670,13 +1705,13 @@
           groupTotals.set(key, (groupTotals.get(key) || 0) + totals[i]);
         });
         const max = Math.max(...groupTotals.values());
-        ps.players.forEach((p, i) => {
-          p.is_winner = groupTotals.get(groupKey(p, i)) === max;
-        });
+        next = ps.players.map((p, i) => groupTotals.get(groupKey(p, i)) === max);
       } else {
         const max = Math.max(...totals);
-        ps.players.forEach((p, i) => { p.is_winner = totals[i] === max; });
+        next = totals.map((t) => t === max);
       }
+      if (ps.players.every((p, i) => !!p.is_winner === next[i])) return;
+      ps.players.forEach((p, i) => { p.is_winner = next[i]; });
       ps.persist();
     }
 
