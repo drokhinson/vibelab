@@ -1780,7 +1780,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   flex-shrink: 0;
 }
 .play-card__photo::after {
-  /* Subtle bottom-edge darkening so a corner badge or status pill has a
+  /* Subtle bottom-edge darkening so the game-thumbnail corner badge has a
      consistent surface even on bright photos. */
   content: "";
   position: absolute;
@@ -1795,21 +1795,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: block;
 }
 
-/* Status overlay — bottom-right of the photo by default. When a game
-   thumbnail badge is also present, the pill nests inside the badge so the
-   "owned/played" state stays anchored to the game, not the user's snapshot. */
+/* Status overlay — always the top-right of the photo, on every play card,
+   with or without an image. Matches .collection-tile / .hot-game-tile /
+   .game-polaroid__status / .plays-list__status so the owned/played chip is
+   in the same corner everywhere. The bottom-right is the game-thumbnail
+   badge's corner. */
 .play-card__status-overlay {
   position: absolute;
   right: 6px;
-  bottom: 6px;
-  z-index: 3;
-}
-/* On cards with a user-uploaded session photo the game-thumbnail badge
-   owns the bottom-right corner — so the status pill moves up to the
-   top-right of the photo. */
-.play-card__status-overlay.is-top {
   top: 6px;
-  bottom: auto;
+  z-index: 3;
 }
 .play-card__game-overlay {
   position: absolute;
