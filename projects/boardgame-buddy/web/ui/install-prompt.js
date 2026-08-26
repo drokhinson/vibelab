@@ -21,9 +21,13 @@
   // anything over the UI.
   const SETTLE_MS = 3000;
 
-  // Full-attention flows with their own bottom-docked CTAs that this banner
-  // would sit on top of (.cascade-cta-wrap), plus the pre-auth screens.
-  const SUPPRESSED_ROUTES = ["splash", "auth", "play-flow", "session-viewer"];
+  // The banner lives on the feed and nowhere else — it's the app's browsing
+  // surface, so a nudge there is least in the way of what someone came to do.
+  // An allowlist also means splash, auth and the play-flow cascade (which has
+  // its own bottom-docked CTAs) are excluded for free. The Feed tab maps to
+  // exactly one route: its nav button carries no data-nav-views, unlike Play
+  // and Profile.
+  const ALLOWED_ROUTES = ["feed"];
 
   // `beforeinstallprompt` is single-use and is NOT replayed, so it has to be
   // captured at file scope — Chrome routinely fires it before auth resolves
@@ -69,13 +73,7 @@
 
   function _routeAllows() {
     const r = window.store && window.store.get("currentRoute");
-    return !!r && !SUPPRESSED_ROUTES.includes(r.name);
-  }
-
-  // PolaroidPopup backdrops outrank us on z-index anyway, so this only stops
-  // the banner animating in *behind* an open modal.
-  function _modalOpen() {
-    return !!document.querySelector(".polaroid-popup__backdrop, dialog[open]");
+    return !!r && ALLOWED_ROUTES.includes(r.name);
   }
 
   // Every gate that must hold for the banner to be on screen.
