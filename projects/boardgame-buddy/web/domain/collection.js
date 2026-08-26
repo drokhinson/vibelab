@@ -42,7 +42,16 @@
     // IN-query to hydrate played-not-owned games — and then discarded
     // everything except the two dicts below. At a 60s fresh window that read
     // re-fired roughly once a minute of active navigation.
-    const data = await window.api.get("/collection/status-map");
+    let data;
+    try {
+      data = await window.api.get("/collection/status-map");
+    } catch (e) {
+      // Readers hide their status corner while the map is unknown (null). A
+      // failed fetch has to end that wait, or an owned game shows no state at
+      // all for the rest of the session — degrade to the "+" instead.
+      if (window.store.get("myCollectionMap") == null) window.store.set("myCollectionMap", {});
+      throw e;
+    }
     const status = (data && data.status_map) || {};
     const expCount = (data && data.expansion_counts) || {};
     window.store.set("myCollectionMap", status);
@@ -56,7 +65,15 @@
       COMBINED_KEY,
       _fetch,
       { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS },
-    );
+    ).then((r) => {
+      // Publish on every resolve, cache hits included. _fetch only runs on a
+      // miss or a background revalidate, so without this a warm cache left the
+      // store's map null and every play card rendered as "status unknown"
+      // until the next network read landed. store.set no-ops when the object
+      // identity is unchanged, so a cache hit costs one comparison.
+      if (r && r.status) window.store.set("myCollectionMap", r.status);
+      return r;
+    });
   }
 
   class Collection {

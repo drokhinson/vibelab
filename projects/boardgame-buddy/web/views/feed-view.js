@@ -14,9 +14,31 @@
       this._page = null;
       this._loading = false;
       this._error = null;
+      // False until the viewer's collection map is known either way — see
+      // onMount. Gates the status corner on every game tile in the feed.
+      this._statusReady = false;
     }
 
     async onMount() {
+      this._statusMap = {};
+      this._expansionCounts = {};
+      // Feed pages paint from cache on the first frame, well before a network
+      // round trip could land. Seed the status map from what bootstrap warmed
+      // so returning viewers get real "Owned"/"Played" corners in that same
+      // frame; when there's nothing warm, `_statusReady` stays false and the
+      // corners render empty rather than showing a "+" that later flips to
+      // "Owned" — which reads as "you don't have this, add it".
+      const warmStatus = window.Collection.cachedStatusMap && window.Collection.cachedStatusMap();
+      if (warmStatus) {
+        this._statusMap = warmStatus;
+        this._statusReady = true;
+        // Play cards read the store copy directly (ui/play-card.js), so
+        // publish it too. Set before the listeners below are bound: this is a
+        // seed, not a change worth re-entering _refreshCollectionData for.
+        window.store.set("myCollectionMap", warmStatus);
+      } else {
+        this._statusReady = false;
+      }
       this.listen("feed", () => this.render());
       this.listen("myCollectionMap", () => this._refreshCollectionData());
       this.listenDom("status-changed", (e) => {
@@ -27,8 +49,6 @@
         this.render();
       });
       this.listenDom("play-changed", (e) => this._onPlayChanged(e.detail || {}));
-      this._statusMap = {};
-      this._expansionCounts = {};
       this._refreshCollectionData();
       await this._load({ initial: true });
       this._installScrollObserver();
@@ -42,7 +62,12 @@
         ]);
         this._statusMap = status || {};
         this._expansionCounts = exp || {};
-      } catch (_) {}
+      } catch (_) {
+        // Nothing to show is only right while the answer is still coming. A
+        // failed fetch means it isn't — fall back to the "+" so the viewer can
+        // still add games.
+      }
+      this._statusReady = true;
       this.render();
     }
 
@@ -270,7 +295,7 @@
         const expCount = entry.game.bgg_id ? (this._expansionCounts[entry.game.bgg_id] || 0) : 0;
         return `
         <div class="hot-game-tile" onclick="window.router.go('game-detail',{gameId:'${entry.game.id}',gameName:'${jsStr(entry.game.name || '')}'})">
-          ${window.renderStatusTag(entry.game.id, status, { size: "xs" })}
+          ${window.renderStatusTag(entry.game.id, status, { size: "xs", pending: !this._statusReady })}
           ${entry.game.thumbnail_url
             ? `<img src="${entry.game.thumbnail_url}" alt="" loading="lazy" />`
             : `<div class="hot-game-tile__placeholder"><i data-lucide="dice-6"></i></div>`
@@ -321,7 +346,7 @@
         const expCount = entry.game.bgg_id ? (this._expansionCounts[entry.game.bgg_id] || 0) : 0;
         return `
         <div class="hot-game-tile" onclick="window.router.go('game-detail',{gameId:'${entry.game.id}',gameName:'${jsStr(entry.game.name || '')}'})">
-          ${window.renderStatusTag(entry.game.id, status, { size: "xs" })}
+          ${window.renderStatusTag(entry.game.id, status, { size: "xs", pending: !this._statusReady })}
           ${entry.game.thumbnail_url
             ? `<img src="${entry.game.thumbnail_url}" alt="" loading="lazy" />`
             : `<div class="hot-game-tile__placeholder"><i data-lucide="dice-6"></i></div>`

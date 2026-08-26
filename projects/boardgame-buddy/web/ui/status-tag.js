@@ -25,7 +25,7 @@
    * Build the HTML for a tile's status tag.
    * @param {string} gameId
    * @param {("owned"|"wishlist"|"played"|null|undefined)} status
-   * @param {{ size?: "sm"|"xs" }} [opts]
+   * @param {{ size?: "sm"|"xs", pending?: boolean }} [opts]
    */
   /**
    * Tiny chip surfaced bottom-right on a game tile to call out how many
@@ -71,6 +71,13 @@
         </button>
       `;
     }
+    // The viewer's collection map hasn't landed yet, so "no relationship" is
+    // a guess, not a fact. Render nothing instead of the "+", which reads as
+    // "you don't own this" and nudges people to re-add a game they already
+    // have. Callers set `pending` while their status map is in flight and
+    // re-render once it resolves; every tile the tag sits in positions it
+    // absolutely, so the empty string costs no layout.
+    if (opts.pending) return "";
     // No collection relationship — render the + that opens the picker.
     // Callers can pass opts.addLabel to inline a text label next to the
     // plus (e.g. "Add to collection" on the game-detail action row). The
