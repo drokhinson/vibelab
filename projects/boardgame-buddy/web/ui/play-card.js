@@ -134,21 +134,20 @@
     const statusMap = (window.store && window.store.get && window.store.get("myCollectionMap")) || null;
     const statusPending = !statusMap;
     const gameStatus = (g.id && statusMap && statusMap[g.id]) || null;
-    // Status pill placement:
-    //  - User uploaded a session photo → pin to TOP-right of the photo so
-    //    it doesn't pile up against the game-thumbnail badge in the bottom
-    //    corner.
-    //  - No session photo (game art fills the slot) → keep at bottom-right
-    //    as before.
-    const statusTopClass = hasUserPhoto ? " is-top" : "";
+    // Status pill placement: always the TOP-right corner of the photo slot,
+    // whether the card shows a user-uploaded session photo, the game art, or
+    // nothing at all. Every other game tile in the app (collection, wishlist,
+    // hot-games rail, find-a-game polaroid, plays list) pins it there too, so
+    // the affordance sits in one predictable spot. The bottom-right corner is
+    // left to the game-thumbnail badge.
     const statusOverlayHtml = g.id
-      ? `<span class="play-card__status-overlay${statusTopClass}" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true, pending: statusPending })}</span>`
+      ? `<span class="play-card__status-overlay" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true, pending: statusPending })}</span>`
       : "";
 
     // Game thumbnail badge: only appears when the user uploaded their own
-    // session photo (otherwise the game image IS the photo slot). The status
-    // pill is no longer nested inside the badge — they live as siblings on
-    // the photo so the pill stays anchored to its bottom-right home.
+    // session photo (otherwise the game image IS the photo slot). It sits in
+    // the bottom-right corner as a sibling of the status pill, which owns the
+    // top-right.
     const badgeHtml = (hasUserPhoto && gameThumb)
       ? `<div class="play-card__game-overlay" data-no-flip onclick="${gameNav}">
            <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
