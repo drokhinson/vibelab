@@ -9,6 +9,10 @@
         session: null,        // Supabase auth session
         user: null,           // CurrentUser shape from /profile
         feed: null,           // FeedPageResponse (most recent first-page fetch)
+        // gameId → status. null = not loaded yet, which readers must NOT paint
+        // as "owns nothing"; {} = loaded and the viewer has nothing. See
+        // domain/collection.js.
+        myCollectionMap: null,
         feedCursor: null,     // ISO timestamp of next page (null = none)
         feedLoading: false,
         activePlay: null,     // PlaySession serialized form (see play-session.js)
@@ -60,6 +64,7 @@
         feed: null,
         feedCursor: null,
         feedLoading: false,
+        myCollectionMap: null,
         activePlay: null,
         search: null,
         currentView: "splash",

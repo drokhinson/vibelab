@@ -128,8 +128,12 @@
     // uploaded their own photo — otherwise the game art *is* the hero.
     const hasUserPhoto = !!card.photo_url;
     const gameThumb = g.thumbnail_url || g.image_url || "";
-    const statusMap = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
-    const gameStatus = (g.id && statusMap[g.id]) || null;
+    // null/undefined = the viewer's collection hasn't loaded yet; `{}` means
+    // loaded and they own nothing. Only the latter earns a "+" — see
+    // domain/collection.js and the `pending` branch in ui/status-tag.js.
+    const statusMap = (window.store && window.store.get && window.store.get("myCollectionMap")) || null;
+    const statusPending = !statusMap;
+    const gameStatus = (g.id && statusMap && statusMap[g.id]) || null;
     // Status pill placement:
     //  - User uploaded a session photo → pin to TOP-right of the photo so
     //    it doesn't pile up against the game-thumbnail badge in the bottom
@@ -138,7 +142,7 @@
     //    as before.
     const statusTopClass = hasUserPhoto ? " is-top" : "";
     const statusOverlayHtml = g.id
-      ? `<span class="play-card__status-overlay${statusTopClass}" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true })}</span>`
+      ? `<span class="play-card__status-overlay${statusTopClass}" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true, pending: statusPending })}</span>`
       : "";
 
     // Game thumbnail badge: only appears when the user uploaded their own
