@@ -86,6 +86,18 @@
       // The background save passes it back to update() so a late response
       // can only repaint its own card.
       this._cardId = null;
+      // Monotonic token for save runs, bumped by _resetRunState. Paired with
+      // the PlaySession the run's snapshot was built from, it answers "has the
+      // host moved on?" — see _isStaleSave. The wrap-up card is dismissible
+      // from frame one now, so a write can resolve two screens later.
+      this._saveSeq = 0;
+      // Resolves when the CURRENT save's write settles — success, failure or
+      // queued — and deliberately not when _runSave returns, which is after the
+      // best-effort photo attach. Gates the next round's POST /sessions.
+      this._savePromise = null;
+      // A promise the next _ensureLobbyOpen must wait behind. Set by
+      // _startAnotherRound AFTER _resetRunState, which nulls it.
+      this._lobbyGate = null;
     }
 
     async onMount() {
@@ -291,6 +303,13 @@
       this._phaseSeq++;
       this._pendingPhase = 0;
       this._pendingDeletes = 0;
+      // _phaseSeq's sibling for the save path: a write that resolves after this
+      // must not clear the draft, null activePlay, or re-disable the Save button
+      // of the run that replaced it. See _isStaleSave.
+      this._saveSeq++;
+      // Nulled here so a plain onMount reset can't inherit the previous run's
+      // gate; _startAnotherRound deliberately sets it AFTER calling this.
+      this._lobbyGate = null;
       this._saving = false;
       this._error = null;
     }
@@ -374,6 +393,22 @@
     _isLobbyGone(e) {
       const status = e && e.status;
       return status === 404 || status === 410;
+    }
+
+    /**
+     * Has the host moved on from the run this save belongs to?
+     *
+     * Two tests, because they catch different things. `snap.ps !== this._ps` is
+     * the one that matters: _startAnotherRound installs a brand-new
+     * PlaySession, so a late `this._ps.clear()` would wipe the NEXT round's
+     * roster and its draft. `snap.seq !== this._saveSeq` covers a reset that
+     * happened to reuse an instance (onMount's conditional _resetRunState),
+     * where identity alone would still say "current".
+     *
+     * @param {{ps: any, seq: number}} snap
+     */
+    _isStaleSave(snap) {
+      return snap.ps !== this._ps || snap.seq !== this._saveSeq;
     }
 
     /**

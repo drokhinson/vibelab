@@ -76,6 +76,21 @@
       try { localStorage.setItem(LS_KEY, JSON.stringify(snapshot)); } catch (_) {}
     }
 
+    /**
+     * Drop the on-disk copy WITHOUT touching the in-memory draft.
+     *
+     * Save is the one moment the two have to diverge. The host commits, the
+     * wrap-up card goes up dismissible, and they can be back on the Play tab
+     * before the write lands — where LogPlayView._resumableSession() reads this
+     * key and would offer to resume the game they just saved (the draft's phase
+     * at Save time is `settle`, not `finalized`). So the disk copy retires at
+     * the tap; the in-memory draft lives until the write settles, because a
+     * failure still has to leave a complete Settle Up behind the card.
+     */
+    unpersist() {
+      try { localStorage.removeItem(LS_KEY); } catch (_) {}
+    }
+
     clear() {
       this.gameId = null;
       this.gameSnapshot = null;
