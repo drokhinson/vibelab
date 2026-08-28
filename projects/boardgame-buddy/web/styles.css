@@ -79,6 +79,7 @@
   --glow: radial-gradient(ellipse 130% 55% at 50% -6%,
           rgba(224, 169, 74, 0.20), transparent 62%);
   --tex-opacity: 0.04;
+  --emboss-opacity: 0.16;
 
   --nav-bg:   #241809;
   --auth-bg:  #2D1A0A;
@@ -130,6 +131,7 @@
   --glow: radial-gradient(ellipse 130% 55% at 50% -6%,
           rgba(224, 169, 74, 0.26), transparent 62%);
   --tex-opacity: 0.035;
+  --emboss-opacity: 0.07;
 
   --nav-bg:  #FFFBF2;
   --auth-bg: #F2E7D2;
@@ -4163,7 +4165,7 @@ main[data-view="session-viewer"].hidden {
   border-color: var(--polaroid-line);
 }
 
-/* ── Play tab, Host half — heading, resume banner, chooser cards ─────────── */
+/* ── Play tab, Host half — heading + the option-card list ───────────────── */
 .cascade-chooser__header { padding: 12px 4px 18px; text-align: center; }
 .cascade-chooser__header h1 {
   /* No lead paragraph under it any more, so the header's own 18px bottom
@@ -4173,76 +4175,11 @@ main[data-view="session-viewer"].hidden {
   color: oklch(var(--bc));
 }
 
-.cascade-chooser__cards {
+.lp-opts {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   padding-bottom: 24px;
-}
-.cascade-chooser__card {
-  background: var(--polaroid-bg);
-  color: var(--polaroid-ink);
-  border: 1px solid var(--polaroid-line);
-  border-radius: 14px;
-  padding: 18px 16px;
-  text-align: left;
-  display: grid;
-  grid-template-columns: 48px 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 14px;
-  row-gap: 4px;
-  box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.45),
-              0 2px 4px rgba(0, 0, 0, 0.18);
-  transition: transform 140ms ease, box-shadow 140ms ease;
-  cursor: pointer;
-}
-.cascade-chooser__card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 36px -14px rgba(0, 0, 0, 0.5);
-}
-.cascade-chooser__card-icon {
-  grid-row: 1 / span 2;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--accent);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-/* "Another Round" carries the last game's box art in the icon slot instead
-   of a Lucide glyph — the accent fill would show through around the photo,
-   so drop it. Only applied when there IS art; without it the slot keeps the
-   accent square its white dice-6 fallback needs for contrast. */
-.cascade-chooser__card-icon--photo {
-  background: var(--polaroid-line);
-  overflow: hidden;
-}
-.cascade-chooser__card-icon--photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.cascade-chooser__card-title {
-  font-family: var(--font-polaroid);
-  font-weight: 700;
-  font-size: 17px;
-}
-.cascade-chooser__card-body {
-  font-size: 12.5px;
-  color: var(--polaroid-muted);
-  line-height: 1.35;
-}
-/* A full table's worth of names has to stop somewhere — two lines, then
-   ellipsis, so a 6-player roster can't stretch the card past its siblings. */
-.cascade-chooser__card-body--players {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
 }
 
 /* ── Play tab, Join half — JoinPanel (code entry + active sessions) ──────── */
@@ -7124,190 +7061,165 @@ main[data-view="session-viewer"].hidden {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Play tab — lid + quiet list
-   Hosting is the primary action; the other two are secondary. Rendering all
-   three as identical rows asserted they were peers, which read as templated.
+   Play tab — the option list (views/log-play-view.js)
+
+   Every option the screen offers is the same box: same radius, same 44px
+   mark slot, same title/sub type scale, same ~68px height. This replaces
+   three parallel families (.lp-lid, .lp-quiet__row, .lp-stub) that each
+   invented their own radius, shadow, border colour and palette — the screen
+   read as three unrelated components stacked rather than a list of peers.
+
+   Hierarchy is carried by surface weight ONLY:
+     .lp-opt          secondary — flat raised surface (Another round, Explorer)
+     .lp-opt--host    primary   — amber wash + die emboss
+     .lp-opt--live    live      — terracotta wash; the one card that is not
+                                  a navigation, so it carries real buttons
+
+   Nothing here depends on the page ground, unlike the ticket notches this
+   replaces (they were `background: oklch(var(--b1))` circles pinned at a
+   hard-coded `right: 88px`, which also forced Discard/Resume onto their own
+   row — the buttons could not sit on the wrong side of the tear line).
    ══════════════════════════════════════════════════════════════════════════ */
-.lp-lid {
+.lp-opt {
   position: relative;
   overflow: hidden;
-  width: 100%;
-  text-align: left;
-  display: block;
-  cursor: pointer;
-  font-family: inherit;
-  color: var(--ink);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
-  padding: 22px 20px;
-  box-shadow: var(--sh-3);
-  background: linear-gradient(150deg,
-              color-mix(in srgb, var(--accent) 20%, var(--bg-1)) 0%,
-              var(--bg-1) 62%);
-  transition: transform 200ms var(--ease), box-shadow 200ms var(--ease);
-}
-.lp-lid:hover { transform: translateY(-3px); }
-.lp-lid:active { transform: scale(0.99); }
-.lp-lid__emboss {
-  position: absolute;
-  right: -14px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 120px;
-  height: 120px;
-  color: var(--accent);
-  opacity: 0.16;
-  pointer-events: none;
-}
-.lp-lid__emboss img { width: 100%; height: 100%; display: block; }
-.lp-lid__kicker {
-  display: block;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 5px;
-}
-.lp-lid__title {
-  display: block;
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
-}
-.lp-lid__sub {
-  display: block;
-  font-size: 12.5px;
-  color: var(--ink-muted);
-  margin-top: 5px;
-  max-width: 74%;
-  line-height: 1.4;
-}
-
-.lp-quiet { display: flex; flex-direction: column; margin-top: var(--s-2); }
-.lp-quiet__row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 44px 1fr;
   align-items: center;
   gap: var(--s-3);
   width: 100%;
-  min-height: 56px;               /* ≥44px tap target */
-  padding: 12px 2px;
-  background: none;
-  border: none;
-  border-top: 1px solid var(--line);
-  cursor: pointer;
+  min-height: 68px;
+  padding: 12px 14px;
+  text-align: left;
   font-family: inherit;
   color: var(--ink);
-  text-align: left;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+  cursor: pointer;
+  transition: transform 160ms var(--ease), border-color 160ms var(--ease);
 }
-.lp-quiet__row:last-child { border-bottom: 1px solid var(--line); }
-.lp-quiet__row:hover .lp-quiet__title { color: var(--accent); }
-.lp-quiet__art {
-  width: 38px; height: 38px;
+.lp-opt:hover { transform: translateY(-1px); border-color: var(--line-strong); }
+.lp-opt:active { transform: scale(0.995); }
+.lp-opt:hover .lp-opt__title { color: var(--accent); }
+
+/* Box art or a chrome icon, always the same slot — so the text columns of
+   every row line up. (The old quiet rows only had an art slot on "Another
+   round", so Game explorer's title sat 50px to its left.) */
+.lp-opt__mark {
+  width: 44px; height: 44px;
   border-radius: var(--r-sm);
   object-fit: cover;
   flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
 }
-.lp-quiet__body { flex: 1; min-width: 0; display: block; }
-.lp-quiet__title {
-  display: block;
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  transition: color 160ms var(--ease);
-}
-.lp-quiet__sub {
-  display: block;
-  font-size: 11.5px;
-  color: var(--ink-muted);
-  margin-top: 1px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.lp-quiet__go {
-  font-family: var(--font-score);
-  font-size: 11px;
-  color: var(--ink-faint);
-  letter-spacing: 0.08em;
-  flex-shrink: 0;
-}
+.lp-opt__mark--icon { background: var(--accent-quiet); color: var(--accent); }
 
-/* ── Resume: a ticket stub, not a system alert ──────────────────────────────
-   A left accent bar is the stock alert component. This reads as a stub torn
-   off a pad: perforation, punched notches, code set like a ticket number.
-   Both action buttons are unchanged — they already existed. */
-.lp-stub {
-  position: relative;
-  background: var(--polaroid-bg);
-  color: var(--polaroid-ink);
-  border: 1px solid var(--card-border);
-  border-radius: var(--r-md);
-  box-shadow: var(--sh-3);
-  margin-bottom: var(--s-4);
-}
-.lp-stub__top { display: flex; align-items: stretch; }
-.lp-stub__art {
-  width: 64px;
-  flex-shrink: 0;
-  object-fit: cover;
-  align-self: stretch;
-  border-radius: var(--r-md) 0 0 0;
-}
-.lp-stub__body {
-  flex: 1; min-width: 0;
-  padding: 12px 14px;
-  display: flex; flex-direction: column; justify-content: center; gap: 2px;
-}
-.lp-stub__eyebrow {
+.lp-opt__body { min-width: 0; display: block; }
+.lp-opt__eyebrow {
+  display: block;
   font-size: 9px; font-weight: 700;
   letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--polaroid-accent);
+  color: var(--win);
+  margin-bottom: 2px;
 }
-.lp-stub__title {
+.lp-opt__title {
+  display: block;
   font-family: var(--font-display);
-  font-size: 18px; font-weight: 700; letter-spacing: -0.02em;
+  font-size: 16px; font-weight: 700; letter-spacing: -0.02em;
+  line-height: 1.15;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: color 160ms var(--ease);
+}
+.lp-opt__sub {
+  display: block;
+  font-size: 11.5px; color: var(--ink-muted);
+  margin-top: 2px; line-height: 1.35;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.lp-stub__meta { font-size: 11.5px; color: var(--polaroid-muted); }
-.lp-stub__perf {
-  width: 0;
-  border-left: 2px dashed var(--polaroid-line);
-  margin: 10px 0;
-}
-.lp-stub__code {
-  flex-shrink: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 2px;
-  padding: 0 13px;
-}
-.lp-stub__code b {
+/* Session code inside the live card's meta line. */
+.lp-opt__code {
   font-family: var(--font-score);
-  font-size: 14px; font-weight: 700; letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink);
 }
-.lp-stub__code span {
-  font-size: 8px; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--polaroid-muted);
+
+/* ── Primary weight: Host a game ───────────────────────────────────────── */
+.lp-opt--host {
+  background: linear-gradient(150deg,
+              color-mix(in srgb, var(--accent) 20%, var(--bg-1)) 0%,
+              var(--bg-1) 62%);
+  border-color: var(--line-strong);
+  box-shadow: var(--sh-2);
 }
-/* notches punched out of the top and bottom edges at the perforation line */
-.lp-stub::before,
-.lp-stub::after {
-  content: "";
+.lp-opt--host .lp-opt__mark--icon { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.lp-opt__emboss {
   position: absolute;
-  right: 88px;
-  width: 13px; height: 13px;
-  border-radius: 50%;
-  background: oklch(var(--b1));
-  z-index: 2;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 76px; height: 76px;
+  opacity: var(--emboss-opacity);
+  pointer-events: none;
 }
-.lp-stub::before { top: -6.5px; }
-.lp-stub::after  { bottom: -6.5px; }
-.lp-stub__actions {
-  display: flex; gap: var(--s-2);
-  justify-content: flex-end;
-  padding: 0 13px 12px;
+.lp-opt__emboss img { width: 100%; height: 100%; display: block; }
+
+/* ── Live weight: the session in progress ──────────────────────────────── */
+.lp-opt--live {
+  grid-template-columns: 44px 1fr auto;
+  background: linear-gradient(150deg,
+              color-mix(in srgb, var(--win) 16%, var(--bg-1)) 0%,
+              var(--bg-1) 70%);
+  border-color: color-mix(in srgb, var(--win) 38%, transparent);
+  cursor: default;
 }
+.lp-opt--live:hover { transform: none; border-color: color-mix(in srgb, var(--win) 38%, transparent); }
+.lp-opt--live:hover .lp-opt__title { color: inherit; }
+
+/* Inline actions. Deliberately not DaisyUI `btn-sm`, which is 32px tall and
+   under the 44px tap target .claude/rules/web-frontend.md requires — these
+   are 40px with a padded hit area, and 8px clear of each other. */
+.lp-opt__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-shrink: 0;
+}
+.lp-opt__resume,
+.lp-opt__discard {
+  position: relative;
+  height: 40px;
+  border-radius: var(--r-sm);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+}
+.lp-opt__resume::before,
+.lp-opt__discard::before { content: ""; position: absolute; inset: -2px; }
+.lp-opt__resume {
+  padding: 0 13px;
+  font-size: 13.5px;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--nav-bg);
+  border: none;
+}
+.lp-opt__resume:hover { background: var(--accent-hover); }
+.lp-opt__discard {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  color: var(--ink-muted);
+}
+.lp-opt__discard:hover { color: var(--rust); }
 
 /* ══════════════════════════════════════════════════════════════════════════
    Header upload indicator
