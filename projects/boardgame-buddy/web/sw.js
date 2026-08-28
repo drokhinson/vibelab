@@ -204,7 +204,32 @@ async function precache() {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   }));
 
-  await Promise.all(Array.from(urls).map((u) => precacheOne(cache, u)));
+  await pooled(Array.from(urls), (u) => precacheOne(cache, u));
+}
+
+/**
+ * Run `fn` over `items` a few at a time instead of all at once.
+ *
+ * The shell is ~60 files and every one is fetched with `cache: "reload"`, so
+ * an unbounded Promise.all is a 60-request burst — issued, on a first-ever
+ * install, at the same moment the page it belongs to is fetching /bootstrap
+ * and the feed over the same radio. The user is staring at a loader while the
+ * app races itself for bandwidth. Nothing here is urgent (the precache only
+ * matters on the NEXT launch), so it gives way.
+ *
+ * Rejection semantics match Promise.all deliberately: precacheOne throws on a
+ * missing file, and install must still fail loudly rather than cache a partial
+ * shell. Workers already in flight when one rejects are left to settle.
+ */
+async function pooled(items, fn, limit = 6) {
+  const queue = items.slice();
+  const workers = [];
+  for (let i = 0; i < Math.min(limit, queue.length); i++) {
+    workers.push((async () => {
+      while (queue.length) await fn(queue.shift());
+    })());
+  }
+  await Promise.all(workers);
 }
 
 /**

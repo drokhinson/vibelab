@@ -151,6 +151,38 @@
     return !!window.store.get("user");
   }
 
+  // How long the splash is allowed to be the whole app.
+  //
+  // Everything that moves us off it is asynchronous and off-device: Supabase
+  // reading (and often refreshing) the stored session, then /bootstrap. Both
+  // can stall rather than fail — the first launch of the installed PWA on iOS
+  // is where this actually bites — and the splash has no bottom nav, so a
+  // stall there leaves the user with a loader and nothing to tap. api.js now
+  // puts a deadline on our own calls; this covers the leg we don't own
+  // (supabase-js does its own fetching) and any future one.
+  const BOOT_WATCHDOG_MS = 12000;
+
+  // Fall forward off the splash rather than sit on it.
+  //
+  // With a session in hand we route exactly as a normal boot would: the
+  // destination view paints its own skeleton, the nav is there, and the
+  // still-in-flight /bootstrap reconciles whenever it lands. With nothing in
+  // hand there is no honest answer but the auth screen — it is at least
+  // interactive, it carries the offline banner, and it is not a dead end: this
+  // path never sets _bootRouted, so an auth callback arriving late still
+  // routes the user forward on its own.
+  function bootWatchdog() {
+    if (_bootRouted) return;
+    if (window.store.get("currentView") !== "splash") return;
+    if (window.session) {
+      console.warn("Boot watchdog: session in hand but never routed — going anyway.");
+      routeAfterBoot();
+      return;
+    }
+    console.warn("Boot watchdog: auth never resolved — falling back to /auth.");
+    window.router.go("auth");
+  }
+
   // Boot navigation happens exactly once per signed-in session. Supabase fires
   // onAuthStateChange more than once at boot (INITIAL_SESSION, then often
   // TOKEN_REFRESHED) and each invocation is an un-serialized async function, so
@@ -518,12 +550,24 @@
     // Views refresh their own subtree via View.refreshIcons() from here on.
     window.BgbIcons.render();
     initSupabase();
+    setTimeout(bootWatchdog, BOOT_WATCHDOG_MS);
 
     // Register the app-shell worker. Wrapped defensively (same idiom as
     // travel-scrapbook): unsupported browsers, private modes and insecure
     // origins all throw or reject here, and none of them should stop the app
     // from booting — losing the offline shell is a degradation, not a failure.
-    try { navigator.serviceWorker?.register("/sw.js").catch(() => {}); } catch (_) {}
+    //
+    // Deferred to `load` rather than fired here: a first-ever registration
+    // installs the worker, and install precaches the entire shell. Kicking
+    // that off alongside the boot's own /bootstrap means the two compete for
+    // the connection on exactly the launch where the app has nothing cached to
+    // fall back on. The shell is only needed on the NEXT launch, so it can
+    // wait for the page to finish loading.
+    const registerWorker = () => {
+      try { navigator.serviceWorker?.register("/sw.js").catch(() => {}); } catch (_) {}
+    };
+    if (document.readyState === "complete") registerWorker();
+    else window.addEventListener("load", registerWorker, { once: true });
 
     // Offer the install once the shell is up. The component owns its own
     // gating (phone viewport, signed in, not already installed, settle delay)

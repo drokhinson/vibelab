@@ -45,6 +45,9 @@
         this._statusReady = false;
       }
       this.listen("feed", () => this.render());
+      // Connectivity coming back is the moment a failed first load is worth
+      // repeating; _retryInitial no-ops unless we're actually still empty.
+      this.listen("offline", (offline) => { if (!offline) this._retryInitial(); });
       this.listen("myCollectionMap", () => this._refreshCollectionData());
       this.listenDom("status-changed", (e) => {
         const { gameId, status } = e.detail || {};
@@ -237,6 +240,16 @@
         this.container.innerHTML = this._renderSkeleton();
         return;
       }
+      // Nothing loaded AND the load failed. Handled before the normal path
+      // because that one falls through to _renderEmpty(), which says "your
+      // feed is quiet" — the one reading a failed fetch must never produce:
+      // it is wrong, it looks permanent, and it leaves the viewer no way to
+      // ask again short of relaunching the app.
+      if (!this._page && this._error) {
+        this.container.innerHTML = this._renderLoadError();
+        this.refreshIcons();
+        return;
+      }
       const rawCards = (this._page && this._page.cards) || [];
       // Collapse runs of same-day, same-buddy-set plays into a session card.
       // Run on every render so cross-page boundaries fold naturally when new
@@ -278,6 +291,29 @@
       // The sentinel div is replaced on every render — re-observe the
       // new node so infinite scroll keeps firing.
       this._observeSentinel();
+    }
+
+    _renderLoadError() {
+      return `
+        <div class="feed-empty">
+          <img src="assets/illustrations/bgb-loading.svg" alt="" style="width:120px;height:120px;opacity:.4" />
+          <h3 class="text-lg font-semibold mt-3">Couldn't load your feed</h3>
+          <p class="text-sm opacity-70 mt-1">${escapeHtml(this._error)}</p>
+          <button class="btn btn-primary btn-sm mt-3"
+                  onclick="window.feedView._retryInitial()">Try again</button>
+        </div>
+      `;
+    }
+
+    /**
+     * Re-run the first load. Bound to the error state's button and to the
+     * `offline` subscription in onMount, so a feed that failed while the user
+     * was in a dead zone fills itself in when the signal returns rather than
+     * waiting for a tab-switch the user has no reason to make.
+     */
+    _retryInitial() {
+      if (this._loading || this._page) return;
+      this._load({ initial: true });
     }
 
     _renderEmpty() {

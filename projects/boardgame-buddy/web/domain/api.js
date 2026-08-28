@@ -5,6 +5,24 @@
   const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || "http://localhost:8000";
   const PREFIX = "/api/v1/boardgame_buddy";
 
+  // Every request carries a deadline.
+  //
+  // A network error rejects fetch() promptly and the app recovers; a STALLED
+  // request never settles at all, and no browser imposes a timeout worth
+  // waiting for. That is not theoretical here: reported from the field, an
+  // iPhone's first launch of the freshly-installed PWA "sat on a loading
+  // screen forever, until I clicked one of the menu buttons below". Every
+  // first-paint call is awaited — the boot's /bootstrap, the feed's first
+  // page — so one stalled request is the whole app, with no error, no retry
+  // and (on the splash) not even a nav bar to escape with. The tap that
+  // "fixed" it just started a different request on a different connection.
+  //
+  // 15s is well past a healthy p99 (including a cold Railway dyno) and well
+  // short of "forever". Uploads get their own budget — a play photo over
+  // cellular legitimately takes longer than any JSON call ever should.
+  const REQUEST_TIMEOUT_MS = 15000;
+  const UPLOAD_TIMEOUT_MS = 60000;
+
   class Api {
     constructor() {
       this.base = API_BASE;
@@ -59,6 +77,12 @@
      * now returns a CORS-bearing 500, so the overlap is rare, but `err.offline`
      * is a heuristic and BgbNet treats it as one (two strikes, not one).
      *
+     * A deadline abort (see _send) lands in the same branch and is normalized
+     * the same way, plus `err.timeout = true`. A link on which requests never
+     * complete IS offline as far as this app is concerned — the outbox keys
+     * every play on a client_key, so re-queueing a write that may have landed
+     * is de-duplicated server-side rather than double-written.
+     *
      * @param {string} url
      * @param {RequestInit} init
      * @returns {Promise<Response>}
@@ -69,8 +93,12 @@
         res = await fetch(url, init);
       } catch (e) {
         if (window.BgbNet) window.BgbNet.noteFailure();
-        const err = new Error("You appear to be offline.");
+        const timedOut = !!e && (e.name === "AbortError" || e.name === "TimeoutError");
+        const err = new Error(timedOut
+          ? "The server took too long to respond."
+          : "You appear to be offline.");
         err.offline = true;
+        err.timeout = timedOut;
         err.status = 0;
         err.cause = e;
         throw err;
@@ -80,7 +108,30 @@
       return res;
     }
 
-    async _request(method, path, { body, query, headers, raw, _retried } = {}) {
+    /**
+     * _fetch() under a deadline that stays armed until the caller releases it.
+     *
+     * Headers arriving is not the same as the request being done: the body
+     * read is a second chance to stall, so the abort timer covers both and the
+     * caller clears it once it has finished with the response.
+     *
+     * @param {string} url
+     * @param {RequestInit} init
+     * @param {number} timeoutMs
+     * @returns {Promise<[Response, () => void]>} the response and its release fn
+     */
+    _send(url, init, timeoutMs) {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), timeoutMs);
+      const release = () => clearTimeout(timer);
+      return this._fetch(url, { ...init, signal: ctl.signal }).then(
+        (res) => [res, release],
+        (e) => { release(); throw e; },
+      );
+    }
+
+    async _request(method, path, opts = {}) {
+      const { body, query, headers, raw, _retried, _stalled } = opts;
       const url = new URL(this.base + this.prefix + path);
       if (query) {
         for (const [k, v] of Object.entries(query)) {
@@ -98,26 +149,47 @@
       } else if (raw) {
         init.body = body;
       }
-      const res = await this._fetch(url.toString(), init);
-      if (!res.ok) {
-        // A 401 usually means the access token expired (commonly after the
-        // device slept). Refresh once and retry before surfacing the error so
-        // the caller — and the user — never sees the blip.
-        if (res.status === 401 && !_retried && await this._refreshSession()) {
-          return this._request(method, path, { body, query, headers, raw, _retried: true });
+
+      let res, release;
+      try {
+        [res, release] = await this._send(url.toString(), init, REQUEST_TIMEOUT_MS);
+      } catch (e) {
+        // A stalled socket does not heal itself — the same request on a new
+        // connection is what recovers, which is exactly what the user was
+        // doing by hand when they tapped another tab. Reads are safe to repeat,
+        // so retry a GET once before surfacing anything; writes are the
+        // outbox's problem, not this layer's.
+        if (e && e.timeout && method === "GET" && !_stalled) {
+          return this._request(method, path, { ...opts, _stalled: true });
         }
-        let detail = res.statusText;
-        try {
-          const j = await res.json();
-          detail = j.detail || j.message || detail;
-        } catch (_) {}
-        const err = new Error(detail);
-        err.status = res.status;
-        throw err;
+        throw e;
       }
-      if (res.status === 204) return null;
-      const ct = res.headers.get("content-type") || "";
-      return ct.includes("application/json") ? res.json() : res.text();
+
+      try {
+        if (!res.ok) {
+          // A 401 usually means the access token expired (commonly after the
+          // device slept). Refresh once and retry before surfacing the error so
+          // the caller — and the user — never sees the blip.
+          if (res.status === 401 && !_retried && await this._refreshSession()) {
+            return this._request(method, path, { ...opts, _retried: true });
+          }
+          let detail = res.statusText;
+          try {
+            const j = await res.json();
+            detail = j.detail || j.message || detail;
+          } catch (_) {}
+          const err = new Error(detail);
+          err.status = res.status;
+          throw err;
+        }
+        if (res.status === 204) return null;
+        const ct = res.headers.get("content-type") || "";
+        // Awaited inside the try so the body read is still covered by the
+        // deadline — release() below must not fire until the bytes are in.
+        return ct.includes("application/json") ? await res.json() : await res.text();
+      } finally {
+        release();
+      }
     }
 
     get(path, query)         { return this._request("GET",    path, { query }); }
@@ -129,31 +201,41 @@
     // For multipart bodies (play photo upload). Caller passes a FormData.
     async upload(path, formData, _retried) {
       const url = this.base + this.prefix + path;
-      const res = await this._fetch(url, {
+      const [res, release] = await this._send(url, {
         method: "POST",
         headers: this._authHeader(),
         body: formData,
-      });
-      if (!res.ok) {
-        if (res.status === 401 && !_retried && await this._refreshSession()) {
-          return this.upload(path, formData, true);
+      }, UPLOAD_TIMEOUT_MS);
+      try {
+        if (!res.ok) {
+          if (res.status === 401 && !_retried && await this._refreshSession()) {
+            return this.upload(path, formData, true);
+          }
+          let detail = res.statusText;
+          try { detail = (await res.json()).detail || detail; } catch (_) {}
+          const err = new Error(detail);
+          err.status = res.status;
+          throw err;
         }
-        let detail = res.statusText;
-        try { detail = (await res.json()).detail || detail; } catch (_) {}
-        const err = new Error(detail);
-        err.status = res.status;
-        throw err;
+        return await res.json();
+      } finally {
+        release();
       }
-      return res.json();
     }
 
-    // Fire-and-forget analytics ping — never blocks the UI.
+    // Fire-and-forget analytics ping — never blocks the UI. Deliberately not
+    // routed through _fetch: a stalled analytics ping must not count toward
+    // offline detection, but it still gets a deadline so it can't sit on a
+    // connection the app needs for real work.
     trackEvent(event) {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
       fetch(this.base + "/api/v1/analytics/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ app: "boardgame-buddy", event }),
-      }).catch(() => {});
+        signal: ctl.signal,
+      }).catch(() => {}).finally(() => clearTimeout(timer));
     }
   }
 
