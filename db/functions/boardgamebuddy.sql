@@ -269,8 +269,9 @@
 --               offline outbox safe to retry after a lost response.
 
 -- bgb_finalize_session(p_host UUID, p_code TEXT, p_payload JSONB)
---   → JSONB (PlayResponse, via bgb_log_play) or {"error": "not_found" |
---     "expired" | "forbidden" | "game_not_found"}
+--   → JSONB (PlayResponse, via bgb_log_play), {"duplicate": true, "id": UUID}
+--     when the payload's client_key is one bgb_log_play already stored, or
+--     {"error": "not_found" | "expired" | "forbidden" | "game_not_found"}
 --   Defined in: db/migrations/boardgamebuddy/042_write_rpcs.sql
 --               (body replaced by 052_finalize_score_matches_rounds.sql, then
 --                again by 053_host_only_live_scores.sql)
@@ -280,7 +281,10 @@
 --               marks the session finalized. Replaced a 10 round-trip Python
 --               chain — the host's Save used to block on all of it. A failed
 --               write (game_not_found) leaves the session open so the host can
---               retry.
+--               retry. The duplicate envelope passes straight through (it has
+--               no `error` key and its `id` is the original play's), so the
+--               session still gets finalized against that play — the caller
+--               reads the row back via play_routes.load_play_response.
 --               It no longer touches boardgamebuddy_play_session_scores at
 --               all. 042 overlaid the joiners' live per-round totals onto the
 --               host's player list and 052 narrowed that to a fallback for

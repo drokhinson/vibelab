@@ -12,11 +12,14 @@
 // only copy of a play someone spent two hours recording. Nothing in here is
 // evictable, and nothing in here expires.
 //
-// Retry safety comes from `client_key` (migration 048): one UUID per queued
-// play, re-sent on every attempt. If the request lands but the response is
-// lost — signal drops mid-flush, tab closed, backend restarts — the retry
-// returns the original play instead of writing a second one. Without that the
-// queue would have to choose between losing plays and duplicating them.
+// Retry safety comes from `client_key` (migration 048): one UUID per finished
+// play, minted when the host taps Save and re-sent by every attempt — the live
+// write included (play-flow's _save stamps it on the payload). If a request
+// lands but its response is lost — signal drops mid-flush, tab closed, backend
+// restarts — the retry returns the original play instead of writing a second
+// one. Without that the queue would have to choose between losing plays and
+// duplicating them, and a live write that failed on its way home could not be
+// handed to the queue at all.
 
 /**
  * @typedef {Object} OutboxEntry
@@ -102,16 +105,37 @@
 
   class Outbox {
     /**
+     * Mint an idempotency key.
+     *
+     * Public because the live save path stamps one on the payload BEFORE the
+     * write (play-flow's _save), so a POST that landed but lost its response is
+     * recognised as a duplicate when that same payload is later handed to
+     * enqueue() — rather than written a second time.
+     *
+     * @returns {string} UUID
+     */
+    static newClientKey() {
+      return _newKey();
+    }
+
+    /**
      * Queue a finished play. THROWS when the write doesn't land — the caller
      * must surface that, because a silent failure here means the host believes
      * a play was saved that no longer exists anywhere.
      *
-     * @param {Object} payload  PlaySession.toPlayCreate() output
+     * @param {Object} payload  PlaySession.toPlayCreate() output. A
+     *   `client_key` already on it is kept — see newClientKey().
      * @param {Object|null} gameSnapshot
      * @returns {OutboxEntry}
      */
     static enqueue(payload, gameSnapshot) {
-      const clientKey = _newKey();
+      const clientKey = (payload && payload.client_key) || _newKey();
+      // Same key already queued: a re-entry, not a second play. Two rows
+      // sharing a key would both flush, and the second would come back
+      // `duplicate` — harmless, but only by accident, and the queue would have
+      // shown the host two pending uploads for one game.
+      const existing = _read().find((e) => e.clientKey === clientKey);
+      if (existing) return existing;
       /** @type {OutboxEntry} */
       const entry = {
         clientKey,
@@ -259,8 +283,25 @@
       // Play.create already chains _invalidatePlayDeps() per call. Re-pull the
       // feed's first page once, at the end, so the user lands on a feed that
       // contains what just uploaded instead of a skeleton.
-      if (sent > 0 && window.Feed && window.Feed.refreshFirstPage) {
-        window.Feed.refreshFirstPage().catch(() => {});
+      //
+      // AWAITED rather than fired and forgotten, because the event below hands
+      // the page over: a FeedView the user is sitting on right now splices it
+      // straight in instead of opening its own request and painting a beat
+      // later. Costs the flush one round trip, which the uploads dialog's
+      // "Uploading…" state already covers.
+      if (sent > 0) {
+        let page = null;
+        if (window.Feed && window.Feed.refreshFirstPage) {
+          try { page = await window.Feed.refreshFirstPage(); } catch (_) {}
+        }
+        // The queue's only other signal is store's `outboxCount`, and a count
+        // can't say what landed — a mounted feed needs the cards. A document
+        // CustomEvent is this project's cross-view channel (`status-changed`,
+        // `play-changed`), consumed through View.listenDom so it unbinds on
+        // unmount: "refresh the feed if it's open" needs no open-check here.
+        document.dispatchEvent(new CustomEvent("plays-uploaded", {
+          detail: { sent, page },
+        }));
       }
       _publish();
       return { sent, failed, remaining: Outbox.count() };

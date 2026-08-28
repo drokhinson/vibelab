@@ -152,13 +152,18 @@ def _fetch_play_expansions(
     return out
 
 
-def _load_play_response(sb, play_id: str, viewer_id: str) -> PlayResponse:
+def load_play_response(sb, play_id: str, viewer_id: str) -> PlayResponse:
     """Read one stored play back and shape it as a PlayResponse.
 
-    Shared by GET /plays/{id} and by log_play's duplicate branch, where the
-    client re-sent a client_key we already have a row for: what it MEANT to
-    write can differ from what actually landed, so the answer has to come from
-    the stored row rather than from the payload in hand.
+    Shared by GET /plays/{id}, by log_play's duplicate branch, and by
+    session_service.finalize_session's — the client re-sent a client_key we
+    already have a row for, and what it MEANT to write can differ from what
+    actually landed, so the answer has to come from the stored row rather than
+    from the payload in hand.
+
+    Public (no leading underscore) for that third caller: finalize goes through
+    bgb_log_play too, so it inherits the same duplicate envelope and must read
+    the row back the same way.
     """
     res = (
         sb.table("boardgamebuddy_plays")
@@ -312,7 +317,7 @@ async def log_play(
     # rather than the payload this attempt carried. Still 201: from the
     # client's side the play is recorded either way.
     if isinstance(data, dict) and data.get("duplicate"):
-        return _load_play_response(sb, data["id"], user.user_id)
+        return load_play_response(sb, data["id"], user.user_id)
     return PlayResponse.model_validate(data)
 
 
@@ -331,7 +336,7 @@ async def get_play(
     # play even when the viewer wasn't a participant, and tapping through
     # should succeed. Writes/deletes stay owner-only (gated inline in
     # update_play / delete_play); `is_own` tells the frontend which is which.
-    return _load_play_response(get_supabase(), play_id, user.user_id)
+    return load_play_response(get_supabase(), play_id, user.user_id)
 
 
 @router.put(

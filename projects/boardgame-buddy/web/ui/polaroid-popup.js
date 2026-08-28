@@ -9,11 +9,14 @@
 // Two callers, one card:
 //   • Non-host joiners (session-viewer) get the plain X-only splash.
 //   • The host (play-flow) shows it the instant they hit Save, while the
-//     write runs behind it — so the card also carries the save state
-//     (`saving` / `error` / `warning`) and the host-only "Another round?"
-//     action. It shows exactly one bottom button at a time: the state CTA
-//     while the write is in flight or has failed, then "Another round?"
-//     once the play has landed. Going to the feed is the X's job.
+//     write runs behind it — plus the host-only "Another round?" action and,
+//     when there's something to say about the play's fate, a `warning` line.
+//     It does NOT set `saving`: the upload queue guarantees delivery, so
+//     there is nothing for the host to wait on and the card is live from the
+//     first frame. Going to the feed is the X's job.
+//
+// `saving` and `error` remain the honest way to render a write the user must
+// wait on, and renderInner still does — no current caller needs it.
 
 // @ts-check
 
@@ -31,12 +34,16 @@
    * @property {string=} playId — when present, the splash adds a "View play"
    *           CTA that opens the in-place play-detail popup. Set by the
    *           phase=finalized handler.
-   * @property {boolean=} saving — the play is still being written. The lone
-   *           bottom button is a disabled spinner + "Saving…" ("Another
-   *           round?" isn't offered yet), and the card can't be dismissed
-   *           (no X, inert backdrop) so nobody walks away mid-write.
-   * @property {string=} error — the background save failed. Renders under
-   *           the winner pill and swaps the lone bottom button to "Retry".
+   * @property {boolean=} saving — the play is still being written and the user
+   *           must wait: the lone bottom button is a disabled spinner +
+   *           "Saving…" ("Another round?" isn't offered), and the card can't be
+   *           dismissed (no X, inert backdrop). No caller sets this today — the
+   *           host's write is backed by the upload queue, so it isn't something
+   *           to wait on.
+   * @property {string=} error — the save failed with nowhere left to put the
+   *           play (play-flow only reaches this when the queue write itself
+   *           fails). Renders under the winner pill and swaps the lone bottom
+   *           button to "Retry".
    * @property {string=} warning — muted advisory line (e.g. the photo
    *           upload failed but the play itself saved).
    * @property {() => void=} onDismiss — override the default feed redirect
@@ -162,9 +169,8 @@
    * The X in the card's corner — the wrap-up card's primary exit now that
    * the bottom button is "Another round?". It takes the same feed redirect
    * as a backdrop tap. `onClose` overrides it; absent that it falls back to
-   * `onDismiss` so a caller that only overrides dismissal (play-flow on a
-   * failed save, which sends the host back to Settle Up rather than off to
-   * a feed missing their play) keeps one destination for every exit.
+   * `onDismiss`, so a caller that redirects dismissal keeps one destination for
+   * every exit rather than having the X take a different one.
    */
   function handleClose(opts) {
     if (opts && typeof opts.onClose === "function") {

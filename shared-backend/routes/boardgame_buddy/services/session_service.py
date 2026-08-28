@@ -222,6 +222,21 @@ def finalize_session(sb, *, host_user_id: str, code: str, payload: dict[str, Any
         .data
     )
     raise_for_rpc_error(data, "Finalize")
+    # A client_key (migration 048) we already hold a play for. bgb_log_play
+    # short-circuits and hands back {"duplicate": true, "id": <uuid>};
+    # bgb_finalize_session passes that straight through, having tested only for
+    # `error` — and `v_play->>'id'` still resolves, so the session is correctly
+    # stamped finalized against the original play. What the envelope is NOT is a
+    # PlayResponse, so read the stored row back the way log_play does.
+    #
+    # Reached when the host taps Save, the response is lost, and play-flow hands
+    # the same payload — same key — to the upload queue.
+    if isinstance(data, dict) and data.get("duplicate"):
+        # Imported here, not at module scope: play_routes imports .services, so
+        # a top-level import would close the cycle.
+        from ..play_routes import load_play_response
+
+        return load_play_response(sb, data["id"], host_user_id)
     return PlayResponse.model_validate(data)
 
 

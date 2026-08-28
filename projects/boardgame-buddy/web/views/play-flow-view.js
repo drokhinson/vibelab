@@ -27,6 +27,12 @@
   // rest of the Gather cascade off screen.
   const EXPANSION_FILTER_THRESHOLD = 5;
 
+  // How long "Another round?" will hold the new lobby's POST /sessions waiting
+  // on the previous round's write to settle — see _startAnotherRound. Bounded
+  // because domain/api.js sets no fetch timeout, and a round with no lobby at
+  // all is worse than one whose predecessor's spectators saw 'abandoned'.
+  const LOBBY_GATE_MAX_WAIT_MS = 8000;
+
   class PlayFlowView extends window.View {
     constructor() {
       super("play-flow");
@@ -86,6 +92,18 @@
       // The background save passes it back to update() so a late response
       // can only repaint its own card.
       this._cardId = null;
+      // Monotonic token for save runs, bumped by _resetRunState. Paired with
+      // the PlaySession the run's snapshot was built from, it answers "has the
+      // host moved on?" — see _isStaleSave. The wrap-up card is dismissible
+      // from frame one now, so a write can resolve two screens later.
+      this._saveSeq = 0;
+      // Resolves when the CURRENT save's write settles — success, failure or
+      // queued — and deliberately not when _runSave returns, which is after the
+      // best-effort photo attach. Gates the next round's POST /sessions.
+      this._savePromise = null;
+      // A promise the next _ensureLobbyOpen must wait behind. Set by
+      // _startAnotherRound AFTER _resetRunState, which nulls it.
+      this._lobbyGate = null;
     }
 
     async onMount() {
@@ -291,6 +309,13 @@
       this._phaseSeq++;
       this._pendingPhase = 0;
       this._pendingDeletes = 0;
+      // _phaseSeq's sibling for the save path: a write that resolves after this
+      // must not clear the draft, null activePlay, or re-disable the Save button
+      // of the run that replaced it. See _isStaleSave.
+      this._saveSeq++;
+      // Nulled here so a plain onMount reset can't inherit the previous run's
+      // gate; _startAnotherRound deliberately sets it AFTER calling this.
+      this._lobbyGate = null;
       this._saving = false;
       this._error = null;
     }
@@ -343,7 +368,15 @@
       const code = this._liveLobbyCode();
       if (code && !this._lobbyProvisional) return Promise.resolve(code);
       if (!this._lobbyPromise) {
-        this._lobbyPromise = this._ensureLobbyOpen()
+        // Captured into a local at chain-construction time: _resetRunState
+        // nulls the field, and a chain that read it later would lose the gate
+        // its own run was started with. Null on every path but "Another
+        // round?", where it holds the mint until the previous round's write has
+        // settled — see _startAnotherRound.
+        const gate = this._lobbyGate;
+        this._lobbyPromise = Promise.resolve(gate)
+          .catch(() => {})
+          .then(() => this._ensureLobbyOpen())
           .catch(() => {})
           .then(() => {
             this._lobbyPromise = null;
@@ -374,6 +407,22 @@
     _isLobbyGone(e) {
       const status = e && e.status;
       return status === 404 || status === 410;
+    }
+
+    /**
+     * Has the host moved on from the run this save belongs to?
+     *
+     * Two tests, because they catch different things. `snap.ps !== this._ps` is
+     * the one that matters: _startAnotherRound installs a brand-new
+     * PlaySession, so a late `this._ps.clear()` would wipe the NEXT round's
+     * roster and its draft. `snap.seq !== this._saveSeq` covers a reset that
+     * happened to reuse an instance (onMount's conditional _resetRunState),
+     * where identity alone would still say "current".
+     *
+     * @param {{ps: any, seq: number}} snap
+     */
+    _isStaleSave(snap) {
+      return snap.ps !== this._ps || snap.seq !== this._saveSeq;
     }
 
     /**
@@ -2584,10 +2633,12 @@
 
     // ── Save ───────────────────────────────────────────────────────────────
 
-    // Card first, write behind it. The wrap-up splash goes up in the same
-    // frame as the tap and carries the save state on its bottom button
-    // (spinner → "Another round?", or "Retry" if the write failed), so the
-    // host never watches a disabled button wait on a round-trip.
+    // Card first, write behind it — and the card does not wait on the write.
+    // "Another round?" and the corner X are live in the same frame as the tap,
+    // because the upload queue makes delivery of a finished play guaranteed:
+    // if the write fails, the play goes to the outbox and the header indicator
+    // owns it from there. Nothing is left for the host to watch, so the card
+    // carries no save state at all.
     _save() {
       if (!this._ps.gameId) {
         this._error = "Pick a game first.";
@@ -2603,17 +2654,31 @@
       // host had just been looking at.
       this._commitResolvedScores();
 
+      const payload = this._ps.toPlayCreate();
+      // One key per finished play, minted here and carried by every attempt —
+      // the live finalize/create AND any later outbox flush. Without it, a POST
+      // that landed but lost its response would be re-sent by the queue as a
+      // second play. bgb_log_play (migration 048) short-circuits a key it has
+      // already stored, and bgb_finalize_session calls it, so both write paths
+      // inherit the guard.
+      payload.client_key = window.Outbox.newClientKey();
+
       // Snapshot everything the write and the next round need BEFORE the
       // draft is cleared (on success) or recycled (Another round?), and
       // before _startAnotherRound nulls out _ps.code / this._lobby.
       const snap = {
-        payload: this._ps.toPlayCreate(),
+        payload,
         lobbyCode: this._liveLobbyCode(),
         photoFile: this._ps.photoFile || null,
         // Carried on the snapshot, not re-read from _ps at write time: a
         // Retry can fire after the draft has been recycled, and the outbox
         // entry's card would then be labelled with the wrong game.
         gameSnapshot: this._ps.gameSnapshot || null,
+        // The run this save belongs to. Every post-write touch of VIEW state is
+        // gated on these — the card is dismissible from frame one, so the host
+        // can be two screens away by the time the write resolves.
+        ps: this._ps,
+        seq: this._saveSeq,
       };
       const game = this._ps.gameSnapshot || {};
       const winner = this._ps.players.find((p) => p.is_winner);
@@ -2623,26 +2688,49 @@
       this._error = null;
       this.render();
 
+      // Retire the DISK copy of the draft at the tap. The card no longer holds
+      // the host here, so they can reach the Play tab before the write lands —
+      // where _resumableSession() would offer to resume the game they just
+      // saved. _ps stays intact in memory: a failed save still has to leave a
+      // complete Settle Up behind the card, and that path re-persists.
+      this._ps.unpersist();
+      window.store.set("activePlay", null);
+
+      // Resolved by _runSave the instant the write settles — before the photo
+      // attach, which is best-effort and must not hold the next round's lobby.
+      let settleWrite;
+      this._savePromise = new Promise((res) => { settleWrite = res; });
+
       if (!window.PolaroidPopup) {
         // No splash available — fall back to the old blocking shape.
-        this._runSave(snap).then(() => window.router.go("feed"));
+        this._runSave(snap, settleWrite).then(() => window.router.go("feed"));
         return;
       }
-      // Same wrap-up splash non-host joiners get, plus the host-only save
-      // state + "Another round?" CTA. Leaving for the feed is the card's
-      // corner X, on the popup's default dismiss handler (/feed, which
-      // _runSave has already re-pulled by then).
+      // Same wrap-up splash non-host joiners get, plus the host-only "Another
+      // round?" CTA. No `saving` — see the note above _save: with it unset the
+      // card renders that CTA and its corner X immediately. `onRetry` is passed
+      // anyway; it only renders once `error` is set, which now happens on the
+      // single unrecoverable path in _runSave (the queue write itself failing).
       this._cardId = window.PolaroidPopup.show({
         headline: "Well played!",
         gameName: game.name || "Game over",
         gameThumbnail: game.thumbnail_url || game.image_url || null,
         winnerName: winner ? winner.name : null,
-        saving: true,
         onAnotherRound: () => this._startAnotherRound(seed),
-        onRetry: () => this._runSave(snap),
+        // Re-arms the write gate, so a "Another round?" tapped during a retry
+        // waits on that attempt rather than on the one that already settled.
+        onRetry: () => {
+          let settleRetry;
+          this._savePromise = new Promise((res) => { settleRetry = res; });
+          this._runSave(snap, settleRetry);
+        },
       });
+      // Read back off the snapshot rather than this._cardId at write time:
+      // _resetRunState nulls the field, and update()'s guard treats a null id
+      // as "any card", so a stale run could repaint a later card.
+      snap.cardId = this._cardId;
       // Deliberately not awaited — the card is already up.
-      this._runSave(snap);
+      this._runSave(snap, settleWrite);
     }
 
     /**
@@ -2652,22 +2740,27 @@
      * best-effort; if either fails the play stays saved and the card carries
      * a warning line.
      *
-     * On failure the draft is left completely untouched, so "Retry" can
-     * re-fire with the same snapshot and closing the card drops the host
-     * back onto an intact Settle Up screen.
+     * A failed write is not the host's problem to solve: it goes to the upload
+     * queue, carrying the same client_key the live attempt used, so a request
+     * that actually landed can't be written twice. The one exception is the
+     * queue write itself failing — see the error branch.
      *
      * @param {{payload: Object, lobbyCode: string|null, photoFile: File|null,
-     *          uploadPromise?: Promise<any>|null}} snap
+     *          gameSnapshot: Object|null, ps: any, seq: number,
+     *          cardId?: number, uploadPromise?: Promise<any>|null}} snap
      *   The same object across a Retry — `uploadPromise` is memoized onto it
      *   so a retry doesn't re-push photo bytes that already landed.
+     * @param {(() => void)=} onWriteSettled  Resolves _save's write gate.
      */
-    async _runSave(snap) {
-      this._saving = true;
+    async _runSave(snap, onWriteSettled) {
+      // Only claim the Save CTA if this run still owns the view. A Retry can
+      // only fire from a card that is still up, but a stale re-entry must never
+      // re-disable the NEXT round's Save button.
+      if (!this._isStaleSave(snap)) this._saving = true;
       const popup = window.PolaroidPopup;
       // Every update below is scoped to the card this run started on, so a
       // slow request can never repaint a card (or dialog) that replaced it.
-      const cardId = this._cardId;
-      if (popup) popup.update({ saving: true, error: null }, cardId);
+      const cardId = snap.cardId;
 
       // Start the upload alongside the save rather than after it. On mobile
       // upstream the photo bytes are the largest single chunk of wall clock,
@@ -2716,38 +2809,53 @@
           }
         }
       } catch (e) {
-        // The link died between the tap and the request. Queueing beats
-        // stranding the host on a Retry button they can't satisfy — the play
-        // is recorded either way, and the outbox pushes it when signal
-        // returns. Only for a network failure: a 4xx is a real rejection and
-        // queueing it would just defer the same error.
-        if (e && e.offline && !queued) {
+        // Every failure goes to the queue, not just a network one. The card is
+        // dismissible, so there is no longer a surface guaranteed to be there
+        // to carry a Retry — and no draft behind it to fall back to once the
+        // host has started another round. The queue is that surface: the play
+        // is recorded, the header indicator says so, and the flush is safe
+        // because snap.payload.client_key is the key the live write already
+        // carried — if that request actually landed and only its response was
+        // lost, the server returns the original play rather than a second.
+        //
+        // A terminal 4xx is queued too. It parks as `failed` and shows up in
+        // the uploads dialog for the host to look at, which beats vanishing.
+        if (!queued) {
           try {
             this._queuePlay(snap);
             queued = true;
           } catch (_) {
-            // Fall through to the error card below — see _queuePlay.
+            // The queue write itself failed — localStorage full or unavailable.
+            // This is the one genuinely unrecoverable outcome in the flow, so
+            // it gets a modal the host cannot miss rather than a line on a card
+            // they may already have closed.
+            const msg = (e && e.message) || "Failed to save";
+            if (!this._isStaleSave(snap)) {
+              // Still their current draft: put it back on disk and drop them on
+              // Settle Up, where Save can be tapped again.
+              this._saving = false;
+              this._error = msg;
+              snap.ps.persist();
+              window.store.set("activePlay", snap.ps);
+              this.render();
+            }
+            if (popup) {
+              popup.alert({
+                title: "Couldn't save this play",
+                body: "There's no room left on this device to hold it. Free up "
+                  + "some space and try again — the game is still on the Settle "
+                  + "Up screen.",
+              });
+            }
+            return;
           }
         }
-        if (!queued) {
-          this._saving = false;
-          const msg = (e && e.message) || "Failed to save";
-          if (popup) {
-            // Closing a failed card must NOT take the default feed redirect —
-            // the draft is still intact behind it, so drop the host back onto
-            // Settle Up with the error surfaced there instead. handleClose()
-            // falls back to onDismiss, so this covers the X too.
-            popup.update({
-              saving: false,
-              error: msg,
-              onDismiss: () => { this._error = msg; this.render(); },
-            }, cardId);
-          } else {
-            this._error = msg;
-            this.render();
-          }
-          return;
-        }
+      } finally {
+        // Every exit from the write passes through here — including the early
+        // return above, whose value waits on this. The next round's POST
+        // /sessions gates on it and nothing else: gating on _runSave's return
+        // would make it wait on the photo attach too.
+        if (onWriteSettled) onWriteSettled();
       }
 
       // Queued, not saved: there is no server row, so nothing downstream that
@@ -2755,20 +2863,30 @@
       // disk in the outbox and leaving the draft behind would offer the host a
       // "Resume hosting?" banner for a game they already finished.
       if (queued) {
-        this._saving = false;
-        this._ps.clear();
-        window.store.set("activePlay", null);
+        if (!this._isStaleSave(snap)) {
+          this._saving = false;
+          // Wipes the in-memory draft; the disk copy went at the tap, and
+          // clear() removing an already-absent key is fine. Skipped when stale,
+          // where this._ps is the NEXT round's session — clearing that would
+          // empty the roster the host is looking at right now.
+          this._ps.clear();
+          window.store.set("activePlay", null);
+        }
         if (popup) {
           // A photo picked while still online can't ride along: the blob is
           // never persisted, so the queue has no way to hold it. Say so rather
           // than letting it disappear between the tap and the upload.
+          //
+          // Two wordings, because there are two ways to land here: the host was
+          // offline at the tap, or the write failed on its way out. "Next time
+          // you're online" is a lie in the second case. No-ops when the card is
+          // gone — the header indicator is the surface then.
+          const when = offlineNow ? "it uploads next time you're online" : "it'll upload shortly";
           popup.update({
-            saving: false,
             error: null,
             warning: snap.photoFile
-              ? "Saved on this device — it uploads next time you're online. The photo wasn't kept; add one from the play card afterwards."
-              : "Saved on this device — it uploads next time you're online.",
-            onDismiss: null,
+              ? `Saved on this device — ${when}. The photo wasn't kept; add one from the play card afterwards.`
+              : `Saved on this device — ${when}.`,
           }, cardId);
         }
         return;
@@ -2786,12 +2904,20 @@
         window.Play.rememberLastPlay(saved.play || saved);
       }
 
-      this._saving = false;
-      // The play is on the server — the draft has done its job. Note we do
-      // NOT render() after this: the card covers the view, and every exit
+      // The draft has done its job — but only if it is still THIS run's draft.
+      // When the host tapped "Another round?" before the write landed, _ps is
+      // the new session: clearing it would empty the roster they are looking at
+      // and delete the draft that backs it. Everything else below is
+      // account-level (it describes the play that just landed, which is true on
+      // whatever screen the host has reached), so it runs either way.
+      //
+      // Note we do NOT render() here: the card covers the view, and every exit
       // from it (X, Another round?) paints on its own.
-      this._ps.clear();
-      window.store.set("activePlay", null);
+      if (!this._isStaleSave(snap)) {
+        this._saving = false;
+        this._ps.clear();
+        window.store.set("activePlay", null);
+      }
       // Re-pull the feed's first page NOW, behind the still-up wrap-up card,
       // so the X lands on a feed that already contains this play.
       // store.invalidate("feed") used to sit here and did nothing for this —
@@ -2809,24 +2935,16 @@
       if (window.Buddy && window.Buddy.allBuddies) window.Buddy.allBuddies().catch(() => {});
       if (window.Game && window.Game.recentlyPlayed) window.Game.recentlyPlayed(6).catch(() => {});
 
-      // Unblock the card here, on the play landing — not on the photo. The
-      // photo has always been best-effort, so making the X / Another round?
-      // wait on it only ever cost the host time.
+      // Clear a prior attempt's error line. The card was never blocked on this
+      // write, so there is nothing to unblock — this only matters after the
+      // localStorage-full path put an error on it and a Retry then succeeded.
       //
       // Deliberately no `playId` — the saved card is one CTA, "Another
       // round?", and the corner X out to the feed. The play is one tap away
       // on that feed, so a "View play" button only crowded the wrap-up. (The
       // joiner splash in session-viewer still sets playId; that card has no
       // other affordance.)
-      if (popup) {
-        popup.update({
-          saving: false,
-          error: null,
-          // Clears any onDismiss a prior failed attempt installed, so X /
-          // backdrop go back to the default feed redirect.
-          onDismiss: null,
-        }, cardId);
-      }
+      if (popup) popup.update({ error: null }, cardId);
 
       if (uploadPromise) await this._attachPhoto(uploadPromise, savedId, cardId);
     }
@@ -2933,27 +3051,51 @@
     async _startAnotherRound(seed) {
       if (window.PolaroidPopup) window.PolaroidPopup.dismiss();
 
-      // Start the new lobby's POST /sessions before the teardown + repaint
-      // below, so it overlaps them instead of following them. Safe here: the
-      // session this restarts from has just been finalized, so there is no
-      // open lobby for bgb_create_session's stale-abandon sweep to close.
-      // _ensureLobbyOpen() picks it up on the create branch further down.
-      //
-      // Skipped offline: the request can only fail, and _ensureLobbyOpen will
-      // discard the record rather than consume it — leaving prefetchLobby's
-      // single slot holding a rejected promise for the next real host tap.
-      //
+      // Read before the teardown, so the gate below doesn't depend on which
+      // fields _resetRunState happens to null.
+      const priorWrite = this._savePromise;
+
       // Re-latch connectivity for the new run. _offline otherwise carries over
       // from the session that just finished, and a stale `true` would make
       // _advancePhase skip its PATCH for a host who walked back into signal
       // between rounds.
       this._offline = !!(window.BgbNet && window.BgbNet.isOffline());
-      if (!this._offline) {
-        window.PlaySession.prefetchLobby({ gameId: seed.gameId });
-      }
 
       this._resetRunState();
       this._expansionsOpen = false;
+
+      // POST /sessions runs bgb_create_session, which abandons every OTHER open
+      // session this host owns. The finalize for the round being left may still
+      // be in flight — the wrap-up card no longer waits for it — so minting now
+      // could close the lobby that finalize is about to write to. The play
+      // itself survives (_runSave falls back to Play.create on the 404/410 via
+      // _isLobbyGone), but every spectator's mirror would end on 'abandoned'
+      // instead of the finalized wrap-up card.
+      //
+      // So the MINT waits for that write to settle. The repaint does not:
+      // everything from here to the render() below is synchronous, so the host
+      // gets the prefilled Gather screen in this frame and only the invite code
+      // arrives late. _lobbyReady() consumes the gate.
+      //
+      // Bounded, because domain/api.js sets no fetch timeout: after
+      // LOBBY_GATE_MAX_WAIT_MS the mint goes ahead and we accept the old
+      // behaviour rather than leave the round with no lobby at all.
+      //
+      // Skipped offline: the request can only fail, and _ensureLobbyOpen will
+      // discard the record rather than consume it — leaving prefetchLobby's
+      // single slot holding a rejected promise for the next real host tap.
+      //
+      // Set AFTER _resetRunState, which nulls _lobbyGate so a plain onMount
+      // reset can't inherit a previous run's.
+      this._lobbyGate = this._offline ? null : Promise.race([
+        Promise.resolve(priorWrite).catch(() => {}),
+        new Promise((r) => setTimeout(r, LOBBY_GATE_MAX_WAIT_MS)),
+      ]).then(() => {
+        // Fired here rather than before the teardown so the POST starts the
+        // moment the previous write is out of the way — still overlapping the
+        // roster sync and live-scores wiring that follow.
+        window.PlaySession.prefetchLobby({ gameId: seed.gameId });
+      });
 
       const ps = new window.PlaySession({
         gameId: seed.gameId,
