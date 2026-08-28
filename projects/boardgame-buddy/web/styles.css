@@ -14,6 +14,15 @@
 :root {
   /* Layout */
   --bgb-nav-height: 64px;
+  /* .bgb-global-header's resolved height: 0.5rem padding x2 + a 36px control
+     row + the 1px bottom rule. Used for scroll-padding-top below so that
+     scrollIntoView({block:"start"}) targets clear the pinned header. */
+  --bgb-header-height: 53px;
+
+  /* The header is sticky, so an unpadded scroll-into-view drops its target
+     underneath it. Callers: play-flow-view.js, game-explorer-view.js,
+     session-viewer-view.js. */
+  scroll-padding-top: calc(var(--bgb-header-height) + 8px);
 
   /* Game-specific theming (set dynamically in game-detail.js) */
   --game-accent: #6B3FA0;
@@ -202,11 +211,21 @@
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
-html, body {
+html {
   max-width: 100%;
   overflow-x: hidden;
 }
 body {
+  max-width: 100%;
+  /* `clip`, NOT `hidden`. <html>'s overflow is the one that propagates to the
+     viewport, so once it is non-visible, <body>'s own overflow-x applies to
+     <body> itself — which turns it into a scroll container. <body> has no
+     fixed height and therefore never actually scrolls, so every
+     `position: sticky` in the app resolved against a dead scrollport and rode
+     the page off-screen: the global header never pinned, and neither did the
+     cascade Continue CTA. `clip` suppresses exactly the same horizontal
+     overflow without establishing a scrollport. */
+  overflow-x: clip;
   margin: 0;
   min-height: 100dvh;
   font-family: var(--font-sans);
