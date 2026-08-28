@@ -17,7 +17,7 @@
        precaches the shell so the app opens with no signal — which is what
        makes offline hosting work for someone who closed the tab. -->
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#1a0f0b" />
+  <meta name="theme-color" content="#1A1310" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="apple-touch-icon" href="assets/brand/bgb-icon-192.png" />
@@ -36,10 +36,28 @@
   <!-- Supabase JS Client (deferred — only used from DOMContentLoaded onward) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Google Fonts: Poppins (UI) + Crimson Text (display) + Fraunces / JetBrains Mono (polaroid card) -->
+  <!-- Google Fonts: Geist (UI) + Fraunces (display + polaroid) + JetBrains Mono (scores).
+       Crimson Text was dropped — --font-display is aliased to Fraunces in styles.css. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Crimson+Text:wght@400;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&family=JetBrains+Mono:wght@500;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&family=JetBrains+Mono:wght@500;700&display=swap" />
+
+  <!-- Theme boot. Runs before first paint so there is no flash of the wrong
+       theme: stored choice wins, otherwise the OS preference. Kept inline and
+       dependency-free on purpose — init.js is far too late for this. -->
+  <script>
+    (function () {
+      var stored = null;
+      try { stored = localStorage.getItem("bgb.theme"); } catch (e) {}
+      var mode = stored === "light" || stored === "dark"
+        ? stored
+        : (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+            ? "light" : "dark");
+      document.documentElement.setAttribute("data-bgb", mode);
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", mode === "light" ? "#F7F0E1" : "#1A1310");
+    })();
+  </script>
 
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -57,6 +75,16 @@
              stays a clean logo + wordmark lockup. -->
         <span class="bgb-global-header__title font-display">Boardgame Buddy</span>
       </a>
+      <!-- Pending uploads. Sibling of the avatar, not a child — syncGlobalAvatar
+           replaces the avatar span via outerHTML on every user change, which
+           would destroy anything nested inside it. -->
+      <button id="bgb-outbox-indicator" class="bgb-outbox is-zero"
+              title="Uploads" aria-label="Uploads"
+              onclick="window.BgbOutboxIndicator.open()">
+        <span class="bgb-outbox__ring" aria-hidden="true"></span>
+        <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+        <span class="bgb-outbox__badge" hidden></span>
+      </button>
       <button class="bgb-global-header__avatar" title="Settings"
               onclick="window.router.go('settings')">
         <!-- Placeholder; init.js#syncGlobalAvatar replaces this with a BgbBadge
@@ -140,6 +168,7 @@
   <!-- Domain -->
   <script src="domain/api.js"></script>
   <script src="domain/store.js"></script>
+  <script src="domain/theme.js"></script>
   <script src="domain/net.js"></script>
   <script src="domain/outbox.js"></script>
   <script src="domain/cache.js"></script>
@@ -168,6 +197,7 @@
   <script src="ui/play-card.js"></script>
   <script src="ui/game-card.js"></script>
   <script src="ui/status-tag.js"></script>
+  <script src="ui/outbox-indicator.js"></script>
   <script src="ui/markdown.js"></script>
   <script src="ui/polaroid-popup.js"></script>
   <script src="ui/install-prompt.js"></script>
@@ -179,6 +209,7 @@
   <script src="widgets/game-finder.js"></script>
   <script src="widgets/join-panel.js"></script>
   <script src="widgets/add-game-modal.js"></script>
+  <script src="widgets/outbox-modal.js"></script>
   <script src="widgets/import-expansions-modal.js"></script>
 
   <!-- Views -->

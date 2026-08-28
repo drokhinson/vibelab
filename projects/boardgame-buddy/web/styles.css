@@ -1,50 +1,157 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   BoardgameBuddy — Fantasy Speakeasy design system
-   DaisyUI v4 luxury theme + warm overrides
+   BoardgameBuddy — "Lamplight Study" design system
+   Game night under a warm lamp: espresso ground, amber glow, terracotta wins.
+
+   Structure:
+     :root                     scales + typography (theme-independent)
+     :root, [data-bgb=dark]    dark palette (default)
+     [data-bgb=light]          light palette
+   Every colour is a token. The DaisyUI oklch base vars (--b1/--b2/--b3/--bc)
+   are overridden per theme, which is what flips the ~158 rules across this
+   file that read oklch(var(--b*)) without touching them individually.
    ───────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Brand accent — warm brass/amber */
-  --accent:        #C9922A;
-  --accent-hover:  #B8820E;
+  /* Layout */
+  --bgb-nav-height: 64px;
 
   /* Game-specific theming (set dynamically in game-detail.js) */
   --game-accent: #6B3FA0;
 
-  /* Layout */
-  --bgb-nav-height: 64px;
+  /* Typography — three families.
+     Geist     = geometric sans with more character than Poppins (UI, body)
+     Fraunces  = warm display serif; also serves --font-display
+     JetBrains = tabular numerals for scores and session codes */
+  --font-sans:     'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-polaroid: 'Fraunces', Georgia, serif;
+  --font-display:  var(--font-polaroid);   /* alias: every .font-display call site still works */
+  --font-score:    'JetBrains Mono', ui-monospace, monospace;
 
-  /* Typography — cozy-modern pairing
-     Poppins  = friendly geometric sans for UI chrome
-     Crimson  = warm humanist serif for display/headings */
-  --font-sans:    'Poppins',     -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Crimson Text', Georgia, serif;
+  /* Spacing — 4px base */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px;
 
-  /* Cozy-modern accents (warm-spectrum replacements for cool blues / neutrals) */
-  --rust:              #A65D2C;        /* danger/destructive accents */
-  --rust-soft:         rgba(166,93,44,0.28);
-  --rust-strong:       rgba(166,93,44,0.85);
-  --warm-gray-mid:     rgba(165,149,136,0.55); /* warm taupe-grey for inactive toggles */
+  /* Radius */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-pill: 999px;
 
-  /* Polaroid play-card palette — warm cream surface that reads like a real
-     instant photo on the dark luxury background. Kept independent from the
-     DaisyUI oklch theme so the cards stay legible on any future re-theme. */
-  --polaroid-bg:        #FFFBF1;
-  --polaroid-bg-soft:   #F5EEDC;
-  --polaroid-ink:       #1D1812;
-  --polaroid-ink-soft:  #4A3F2F;
-  --polaroid-muted:     #8B7E68;
-  --polaroid-line:      #DAC9A4;
-  --polaroid-accent:    #C8553D;
-  --font-polaroid:      'Fraunces', Georgia, serif;
-  --font-score:         'JetBrains Mono', ui-monospace, monospace;
+  /* Motion */
+  --ease: cubic-bezier(.32, .72, 0, 1);
 }
 
-/* ── Warm the luxury theme backgrounds (subtle amber tint) ───────────────────── */
-[data-theme="luxury"] {
-  --b1: 14% 0.018 52;
-  --b2: 11% 0.015 52;
-  --b3: 19% 0.020 52;
+/* ── Dark (default) ─────────────────────────────────────────────────────────── */
+:root,
+:root[data-bgb="dark"] {
+  color-scheme: dark;
+
+  --bg-0: #1A1310;   /* app ground   */
+  --bg-1: #251C16;   /* raised       */
+  --bg-2: #33261C;   /* elevated     */
+
+  --ink:       #F0E7D8;
+  --ink-muted: #B0A18E;
+  --ink-faint: #847665;
+
+  --line:        rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  --accent:       #E0A94A;
+  --accent-hover: #EFBC62;
+  --accent-quiet: rgba(224, 169, 74, 0.14);
+
+  --win:  #C8553D;                       /* terracotta — winners, in-progress */
+  --rust: #C8553D;                       /* destructive */
+  --rust-soft:   rgba(200, 85, 61, 0.28);
+  --rust-strong: rgba(200, 85, 61, 0.85);
+  --warm-gray-mid: rgba(165, 149, 136, 0.55);
+
+  /* Paper — the play card surface */
+  --paper:       #F8F2E5;
+  --paper-ink:   #211A12;
+  --paper-muted: #7C7263;
+  --paper-line:  #E6DCC8;
+  --card-border: transparent;            /* dark needs no border; light does */
+
+  --shadow-c: rgba(12, 5, 0, 0.62);      /* tinted to the ground, never pure black */
+  --sh-1: 0 1px 2px var(--shadow-c);
+  --sh-2: 0 2px 10px -2px var(--shadow-c);
+  --sh-3: 0 10px 26px -12px var(--shadow-c), 0 2px 6px -2px var(--shadow-c);
+
+  --glow: radial-gradient(ellipse 130% 55% at 50% -6%,
+          rgba(224, 169, 74, 0.20), transparent 62%);
+  --tex-opacity: 0.04;
+
+  --nav-bg:   #241809;
+  --auth-bg:  #2D1A0A;
+
+  /* DaisyUI oklch base — the single lever for every oklch(var(--b*)) rule */
+  --b1: 12% 0.014 48;
+  --b2: 9%  0.012 48;
+  --b3: 18% 0.016 48;
+  --bc: 90% 0.014 82;
+}
+
+/* ── Light ──────────────────────────────────────────────────────────────────── */
+:root[data-bgb="light"] {
+  color-scheme: light;
+
+  --bg-0: #F7F0E1;
+  --bg-1: #FFFBF2;
+  --bg-2: #FFFFFF;
+
+  --ink:       #2A2016;
+  --ink-muted: #6F6252;
+  --ink-faint: #93856F;
+
+  --line:        rgba(36, 28, 20, 0.11);
+  --line-strong: rgba(36, 28, 20, 0.20);
+
+  --accent:       #A87215;
+  --accent-hover: #8E5F10;
+  --accent-quiet: rgba(168, 114, 21, 0.13);
+
+  --win:  #A8452F;
+  --rust: #A8452F;
+  --rust-soft:   rgba(168, 69, 47, 0.24);
+  --rust-strong: rgba(168, 69, 47, 0.85);
+  --warm-gray-mid: rgba(120, 106, 92, 0.45);
+
+  /* On a cream ground a cream card disappears — go white and add a hairline */
+  --paper:       #FFFFFF;
+  --paper-ink:   #2A2016;
+  --paper-muted: #7C7263;
+  --paper-line:  #E8DFCD;
+  --card-border: rgba(48, 34, 20, 0.12);
+
+  --shadow-c: rgba(120, 88, 44, 0.20);
+  --sh-1: 0 1px 2px var(--shadow-c);
+  --sh-2: 0 2px 10px -2px var(--shadow-c);
+  --sh-3: 0 10px 26px -12px var(--shadow-c), 0 2px 6px -2px var(--shadow-c);
+
+  --glow: radial-gradient(ellipse 130% 55% at 50% -6%,
+          rgba(224, 169, 74, 0.26), transparent 62%);
+  --tex-opacity: 0.035;
+
+  --nav-bg:  #FFFBF2;
+  --auth-bg: #F2E7D2;
+
+  --b1: 96% 0.010 85;
+  --b2: 99% 0.005 85;
+  --b3: 89% 0.014 80;
+  --bc: 24% 0.020 60;
+}
+
+/* ── Polaroid aliases ────────────────────────────────────────────────────────
+   69 rules in this file paint surfaces with --polaroid-*. Aliasing them onto
+   the paper tokens above means both themes flow through without editing any
+   of those rules. ─────────────────────────────────────────────────────────── */
+:root {
+  --polaroid-bg:       var(--paper);
+  --polaroid-bg-soft:  color-mix(in srgb, var(--paper) 92%, var(--paper-line));
+  --polaroid-ink:      var(--paper-ink);
+  --polaroid-ink-soft: color-mix(in srgb, var(--paper-ink) 78%, var(--paper));
+  --polaroid-muted:    var(--paper-muted);
+  --polaroid-line:     var(--paper-line);
+  --polaroid-accent:   var(--win);
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
@@ -89,7 +196,7 @@ body {
 
 /* ── Auth view — warm atmospheric gradient ───────────────────────────────────── */
 [data-view="auth"] {
-  background: radial-gradient(ellipse at 50% 0%, #2D1A0A 0%, oklch(var(--b1)) 65%);
+  background: radial-gradient(ellipse at 50% 0%, var(--auth-bg) 0%, oklch(var(--b1)) 65%);
 }
 
 /* ── Motion — entrance animation ────────────────────────────────────────────── */
@@ -477,7 +584,7 @@ body {
 .chapter-add__target-btn--active {
   background: var(--exp-color, var(--accent));
   border-color: var(--exp-color, var(--accent));
-  color: #1a0e02;
+  color: var(--bg-0);
 }
 .chapter-add__target-dot {
   width: 8px;
@@ -487,7 +594,7 @@ body {
   flex-shrink: 0;
 }
 .chapter-add__target-btn--active .chapter-add__target-dot {
-  background: #1a0e02;
+  background: var(--bg-0);
 }
 
 /* Per-row add/remove toggle. The default "add" state is an outlined
@@ -516,10 +623,10 @@ body {
 .chapter-add__pool-toggle [data-lucide] { color: var(--accent); }
 .chapter-add__pool-toggle:hover {
   background: var(--accent);
-  color: #1a0e02;
+  color: var(--bg-0);
   border-color: var(--accent-hover);
 }
-.chapter-add__pool-toggle:hover [data-lucide] { color: #1a0e02; }
+.chapter-add__pool-toggle:hover [data-lucide] { color: var(--bg-0); }
 .chapter-add__pool-toggle--compact {
   padding: 4px 9px;
   font-size: 0.72rem;
@@ -573,9 +680,9 @@ body {
 .chapter-add__chip--active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #1a0e02;
+  color: var(--bg-0);
 }
-.chapter-add__chip--active [data-lucide] { color: #1a0e02; }
+.chapter-add__chip--active [data-lucide] { color: var(--bg-0); }
 
 /* ── Chapter editor (shared by Create + Edit) ────────────────────────────
    The "Option C" layout: cream game chip, title field with Import .md,
@@ -1177,7 +1284,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   height: 30px;
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid rgba(255, 255, 255, 0.25);
+  border: 2px solid var(--line-strong);
   transition: transform 140ms ease, border-color 140ms ease;
   padding: 0;
 }
@@ -1455,8 +1562,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   height: var(--bgb-nav-height);
   padding-bottom: env(safe-area-inset-bottom);
   border-radius: 0;
-  background: #241809;
-  border-top: 1px solid rgba(205, 162, 63, 0.22);
+  background: var(--nav-bg);
+  border-top: 1px solid var(--line-strong);
   box-shadow: 0 -1px 12px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: stretch;
@@ -1471,7 +1578,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   justify-content: center;
   gap: 4px;
   position: relative;
-  color: rgba(247, 239, 220, 0.55);
+  color: var(--ink-faint);
   cursor: pointer;
   padding: 0;
   border-radius: 0;
@@ -1481,10 +1588,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border: none;
   transition: color 0.2s ease, background 0.2s ease;
 }
-.bgb-nav__tab:hover { color: rgba(247, 239, 220, 0.85); }
+.bgb-nav__tab:hover { color: var(--ink-muted); }
 .bgb-nav__tab.active {
-  color: #F5DC8E;
-  background: rgba(205, 162, 63, 0.08);
+  color: var(--accent);
+  background: var(--accent-quiet);
 }
 /* Active marker: a 2px gold rule underlining the selected tab. Keeps the
    indicator inside the rectangle instead of floating a pill on top of it.
@@ -1651,7 +1758,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   content: ""; flex: 1; border-top: 1px solid oklch(var(--b3));
 }
 .auth-divider span { padding: 0 12px; }
-.feed-cards { display: flex; flex-direction: column; gap: 1rem; }
+.feed-cards { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+/* A flex item's min-width defaults to `auto`, i.e. its content size — so a
+   horizontal rail inside one of these columns widens the column to the full
+   scroll width and pushes the header and bottom nav off-screen at 390px.
+   Every column that hosts a rail has to opt out explicitly. */
+.feed-cards > *,
+.play-session,
+.feed-rail { min-width: 0; }
 .feed-empty {
   text-align: center; padding: 2.5rem 1rem;
   background: oklch(var(--b2)); border-radius: 1rem;
@@ -1697,21 +1811,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    scroll-position-preserving rerender are unchanged — see ui/play-card.js. */
 .play-card {
   background: var(--polaroid-bg);
-  border: none;
-  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-md);
   padding: 12px 12px 16px;
-  box-shadow: 0 1px 1px rgba(0,0,0,0.04),
-              0 8px 24px -8px rgba(0,0,0,0.55),
-              0 2px 4px rgba(0,0,0,0.18);
+  box-shadow: var(--sh-3);
   perspective: 1500px;
   position: relative;
   cursor: pointer;
   color: var(--polaroid-ink);
-  /* Entrance animation lives on .play-session — putting it on the card
-     itself would override the per-card tilt below because the fadeUp
-     keyframe ends with `transform: translateY(0)` under `both` fill-mode.
-     Tilts are applied via the dedicated nth-child block below so toggling
-     `.no-tilt` kills them in one place. */
+  /* Entrance animation lives on .play-session, not here: the fadeUp keyframe
+     ends with `transform: translateY(0)` under `both` fill-mode, which would
+     clobber the hover lift below. */
 }
 .play-card__inner {
   position: relative;
@@ -1743,16 +1853,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   overflow: hidden;
 }
 
-/* ── Tilts (isolated for easy kill-switch) ────────────────────────────────
-   Single-card polaroids alternate by their order in the feed; strip cards
-   alternate inside the rail. Add `.no-tilt` anywhere up the tree to flatten
-   every card without touching markup. */
-.play-card--single                                  { transform: rotate(-0.6deg); }
-.play-card--single:nth-of-type(even)                { transform: rotate( 0.8deg); }
-.play-session__scroll > .play-card--strip:nth-child(4n+1) { transform: rotate(-1.4deg); }
-.play-session__scroll > .play-card--strip:nth-child(4n+2) { transform: rotate( 0.8deg); }
-.play-session__scroll > .play-card--strip:nth-child(4n+3) { transform: rotate(-0.4deg); }
-.play-session__scroll > .play-card--strip:nth-child(4n)   { transform: rotate( 1.2deg); }
+/* ── No tilts ─────────────────────────────────────────────────────────────
+   The nth-child rotations that used to live here are gone: cards sit square
+   on the grid. Hover lift is the only transform on a card now, which also
+   means the rail no longer needs slack padding to keep tilted corners from
+   clipping. `.no-tilt` is retained as a no-op hook for callers that set it. */
 
 /* Single-play sessions: the lone polaroid sits flat and centered. The
    rail's horizontal scroll + scroll-snap don't apply when there's only
@@ -1796,7 +1901,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* Status overlay — always the top-right of the photo, on every play card,
-   with or without an image. Matches .collection-tile / .hot-game-tile /
+   with or without an image. Matches .collection-tile /
    .game-polaroid__status / .plays-list__status so the owned/played chip is
    in the same corner everywhere. The bottom-right is the game-thumbnail
    badge's corner. */
@@ -1936,6 +2041,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card--strip .play-card__caption-meta .win { font-size: 11px; }
 .play-card--strip .play-card__caption-meta .win-loss { font-size: 11px; }
 .play-card--single { min-width: 280px; }
+.play-card { transition: transform 200ms var(--ease), box-shadow 200ms var(--ease); }
+.play-card:hover { transform: translateY(-3px); }
 
 /* ── Back face ────────────────────────────────────────────────────────── */
 .play-card__back-head {
@@ -2120,30 +2227,33 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0 0 0.75rem;
   animation: fadeUp 200ms ease both;
 }
+/* Date is an eyebrow above the sentence rather than competing with it on the
+   same baseline — it's context, not a peer of "You and Marcus played 3 games". */
 .play-session__header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 2px;
   padding: 0 1rem;
   margin-bottom: 0.55rem;
-  gap: 0.5rem;
+  min-width: 0;
 }
 .play-session__title {
-  font-weight: 600;
   font-size: 0.95rem;
-  flex: 1; min-width: 0;
+  min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  color: oklch(var(--bc));
+  color: var(--ink-muted);
+  letter-spacing: -0.005em;
 }
 .play-session__date {
-  font-size: 0.78rem;
-  opacity: 0.65;
-  flex-shrink: 0;
-  color: oklch(var(--bc));
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 .play-session__name {
   font-weight: 600;
-  color: inherit;
+  color: var(--ink);
   cursor: pointer;
 }
 .play-session__name:hover { text-decoration: underline; }
@@ -2163,7 +2273,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      the padding below. The tilt is kept off the edges by that padding, not by
      the overflow value, so state the honest one. */
   overflow-y: hidden;
-  padding: 14px 20px 18px;
+  min-width: 0;
+  padding: 4px 16px 12px;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -2177,15 +2288,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    sit on a slightly darker cream wash with a hairline border so they read
    as little clippings on the polaroid wall. */
 .feed-rail {
-  background: var(--polaroid-bg);
+  background: transparent;
   border: none;
-  border-radius: 6px;
-  padding: 14px 14px 12px;
-  margin: 0 16px 12px;
-  box-shadow: 0 1px 1px rgba(0,0,0,0.04),
-              0 8px 24px -8px rgba(0,0,0,0.55),
-              0 2px 4px rgba(0,0,0,0.18);
-  color: var(--polaroid-ink);
+  border-radius: 0;
+  padding: 0;
+  margin: 0 0 4px;
+  box-shadow: none;
+  color: var(--ink);
 }
 .feed-rail__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
 .feed-rail__header h3 {
@@ -2193,10 +2302,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 700;
   font-size: 1.05rem;
   letter-spacing: -0.01em;
-  color: var(--polaroid-ink);
+  color: var(--ink);
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
-.feed-rail__header h3 i { color: var(--polaroid-accent); }
+.feed-rail__header { padding: 0 1rem; }
+.feed-rail__scroll { padding-left: 1rem; padding-right: 1rem; }
+.feed-rail__header h3 i { color: var(--accent); }
 .feed-rail__scroll {
   display: flex; gap: 0.6rem; overflow-x: auto;
   /* An absent overflow-y computes to `auto` beside a scrollable overflow-x,
@@ -2207,36 +2318,45 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      scrollHeight == clientHeight; a taller tile would have put a gesture trap
      across those rails. See the note on .play-session__scroll. */
   overflow-y: hidden;
+  min-width: 0;
   scrollbar-width: none; padding: 2px 2px 6px;
   -webkit-overflow-scrolling: touch;
 }
 .feed-rail__scroll::-webkit-scrollbar { display: none; }
 
-.hot-game-tile {
-  flex: 0 0 120px;
-  background: var(--polaroid-bg-soft);
-  border: 1px solid var(--polaroid-line);
-  border-radius: 0.55rem;
-  text-align: left; padding: 0; overflow: hidden;
-  cursor: pointer;
-  color: var(--polaroid-ink);
+/* Rail variant of the canonical Game tile. Replaces the former
+   `.hot-game-tile` family, which was duplicated across two feed renderers.
+   Sits on the app ground rather than a cream panel: paper now means "this is
+   a play", not "this is a section". */
+.game-polaroid.game-polaroid--rail {
+  flex: 0 0 112px;
+  scroll-snap-align: start;
+  background: var(--bg-1);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 0;
+  overflow: hidden;
+  box-shadow: var(--sh-1);
 }
-.hot-game-tile:hover { border-color: var(--polaroid-accent); }
-.hot-game-tile img { width: 100%; height: 120px; object-fit: cover; display: block; }
-.hot-game-tile__placeholder {
-  width: 100%; height: 120px; display: grid; place-items: center;
-  background: var(--polaroid-line); opacity: 0.7;
-  color: var(--polaroid-ink-soft);
+.game-polaroid.game-polaroid--rail:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
 }
-.hot-game-tile__body { padding: 0.4rem 0.55rem; min-width: 0; }
-.hot-game-tile__name {
-  font-size: 0.85rem; font-weight: 600; line-height: 1.2;
-  color: var(--polaroid-ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.game-polaroid.game-polaroid--rail .game-polaroid__photo { border-radius: 0; }
+.game-polaroid.game-polaroid--rail .game-polaroid__photo-img,
+.game-polaroid.game-polaroid--rail .game-polaroid__photo-placeholder { height: 112px; }
+.game-polaroid.game-polaroid--rail .game-polaroid__caption { padding: 8px 10px 10px; }
+.game-polaroid.game-polaroid--rail .game-polaroid__name {
+  font-family: var(--font-sans);
+  font-size: 12.5px; font-weight: 600; line-height: 1.3;
+  color: var(--ink);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; white-space: normal; min-height: 2.6em;
 }
-.hot-game-tile__plays {
-  font-size: 0.72rem; color: var(--polaroid-muted); margin-top: 0.15rem;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.game-polaroid.game-polaroid--rail .game-polaroid__meta {
+  font-size: 10.5px; color: var(--ink-faint); margin-top: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .buddy-tile {
@@ -2845,7 +2965,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* Bottom-right expansion-owned count for any tile that has room. Uses the
-   tile's relative positioning anchor (set via .collection-tile / .hot-game-tile). */
+   tile's relative positioning anchor (set via .collection-tile / .game-polaroid). */
 .expansion-count-badge {
   position: absolute;
   bottom: 4px; right: 4px;
@@ -2892,8 +3012,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* Status-tag positioning inside the standard tile shapes ─ pin top-right. */
 .collection-tile { position: relative; }
 .collection-tile .status-tag { position: absolute; top: 4px; right: 4px; z-index: 2; }
-.hot-game-tile { position: relative; }
-.hot-game-tile .status-tag { position: absolute; top: 4px; right: 4px; z-index: 2; }
 .expansion-list__row .status-tag { margin-left: auto; }
 
 /* ── Scoring rounds table ─────────────────────────────────────────────────── */
@@ -3507,8 +3625,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: #eafde9;
   display: grid;
   place-items: center;
-  border: 1.5px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  border: 1.5px solid var(--paper);
+  box-shadow: var(--sh-2);
 }
 .expansion-polaroid__cap {
   font-family: var(--font-polaroid);
@@ -4048,22 +4166,6 @@ main[data-view="session-viewer"].hidden {
   margin: 0;
   color: oklch(var(--bc));
 }
-.cascade-chooser__resume {
-  background: var(--polaroid-bg);
-  color: var(--polaroid-ink);
-  border-radius: 14px;
-  border: 1px solid var(--polaroid-line);
-  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45);
-  padding: 12px 14px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 14px;
-}
-.cascade-chooser__resume-title { font-family: var(--font-polaroid); font-weight: 700; font-size: 14px; }
-.cascade-chooser__resume-meta { display: block; font-size: 11px; color: var(--polaroid-muted); }
-.cascade-chooser__resume-actions { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
 
 .cascade-chooser__cards {
   display: flex;
@@ -6569,7 +6671,7 @@ main[data-view="session-viewer"].hidden {
   transition: background 0.2s;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35),
               inset 0 2px 0 rgba(255, 255, 255, 0.18);
-  border: 3px solid rgba(255, 255, 255, 0.18);
+  border: 3px solid var(--line-strong);
 }
 .avatar-cust__track {
   position: relative;
@@ -6802,34 +6904,6 @@ main[data-view="session-viewer"].hidden {
 }
 .cascade-card__hint [data-lucide] { flex: none; margin-top: 1px; color: var(--rust); }
 
-/* "N plays waiting to upload", above the host cards on the Play tab. */
-.lp-pending {
-  background: var(--polaroid-bg);
-  color: var(--polaroid-ink);
-  border: 1px solid var(--rust-soft);
-  border-radius: 14px;
-  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45);
-  padding: 12px 14px;
-  margin-bottom: 14px;
-  display: grid;
-  grid-template-columns: 32px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  animation: fadeUp 220ms ease both;
-}
-.lp-pending__icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: var(--rust-soft);
-  color: var(--rust);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.lp-pending__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.lp-pending__title { font-family: var(--font-polaroid); font-weight: 700; font-size: 14px; }
-.lp-pending__meta { font-size: 11px; color: var(--polaroid-muted); }
 
 /* Per-row Discard in Settings → Pending uploads. The row is a flex
    space-between pair, so the action needs its own basis to sit after the meta
@@ -6996,4 +7070,402 @@ main[data-view="session-viewer"].hidden {
   .bgb-install,
   .bgb-install--leaving { animation: none; }
   .bgb-install__cta { transition: none; }
+}
+
+/* ── Theme segmented control (Settings → Appearance) ─────────────────────────
+   Three states, so a two-position switch can't express it: "Auto" follows the
+   OS, Light and Dark are explicit overrides. */
+.set-card__row--static { cursor: default; }
+.theme-seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 0 12px 12px;
+  background: oklch(var(--b2));
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.theme-seg__opt {
+  flex: 1 1 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+}
+.theme-seg__opt:hover { color: var(--ink); }
+.theme-seg__opt.is-on {
+  background: var(--accent);
+  color: var(--bg-0);
+}
+
+/* Separator between winner name and score. Was a U+2736 dingbat, which is the
+   one non-SVG glyph the app rendered as data-art and drew inconsistently
+   across platforms; a styled dot is deterministic. */
+.play-card__caption-meta .win-sep {
+  display: inline-block;
+  width: 3px; height: 3px;
+  margin: 0 6px;
+  border-radius: 50%;
+  background: var(--polaroid-line);
+  vertical-align: middle;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Play tab — lid + quiet list
+   Hosting is the primary action; the other two are secondary. Rendering all
+   three as identical rows asserted they were peers, which read as templated.
+   ══════════════════════════════════════════════════════════════════════════ */
+.lp-lid {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  text-align: left;
+  display: block;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  padding: 22px 20px;
+  box-shadow: var(--sh-3);
+  background: linear-gradient(150deg,
+              color-mix(in srgb, var(--accent) 20%, var(--bg-1)) 0%,
+              var(--bg-1) 62%);
+  transition: transform 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.lp-lid:hover { transform: translateY(-3px); }
+.lp-lid:active { transform: scale(0.99); }
+.lp-lid__emboss {
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 120px;
+  height: 120px;
+  color: var(--accent);
+  opacity: 0.16;
+  pointer-events: none;
+}
+.lp-lid__emboss img { width: 100%; height: 100%; display: block; }
+.lp-lid__kicker {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 5px;
+}
+.lp-lid__title {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.lp-lid__sub {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  margin-top: 5px;
+  max-width: 74%;
+  line-height: 1.4;
+}
+
+.lp-quiet { display: flex; flex-direction: column; margin-top: var(--s-2); }
+.lp-quiet__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 56px;               /* ≥44px tap target */
+  padding: 12px 2px;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  text-align: left;
+}
+.lp-quiet__row:last-child { border-bottom: 1px solid var(--line); }
+.lp-quiet__row:hover .lp-quiet__title { color: var(--accent); }
+.lp-quiet__art {
+  width: 38px; height: 38px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.lp-quiet__body { flex: 1; min-width: 0; display: block; }
+.lp-quiet__title {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  transition: color 160ms var(--ease);
+}
+.lp-quiet__sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lp-quiet__go {
+  font-family: var(--font-score);
+  font-size: 11px;
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+
+/* ── Resume: a ticket stub, not a system alert ──────────────────────────────
+   A left accent bar is the stock alert component. This reads as a stub torn
+   off a pad: perforation, punched notches, code set like a ticket number.
+   Both action buttons are unchanged — they already existed. */
+.lp-stub {
+  position: relative;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-3);
+  margin-bottom: var(--s-4);
+}
+.lp-stub__top { display: flex; align-items: stretch; }
+.lp-stub__art {
+  width: 64px;
+  flex-shrink: 0;
+  object-fit: cover;
+  align-self: stretch;
+  border-radius: var(--r-md) 0 0 0;
+}
+.lp-stub__body {
+  flex: 1; min-width: 0;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+}
+.lp-stub__eyebrow {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--polaroid-accent);
+}
+.lp-stub__title {
+  font-family: var(--font-display);
+  font-size: 18px; font-weight: 700; letter-spacing: -0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lp-stub__meta { font-size: 11.5px; color: var(--polaroid-muted); }
+.lp-stub__perf {
+  width: 0;
+  border-left: 2px dashed var(--polaroid-line);
+  margin: 10px 0;
+}
+.lp-stub__code {
+  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px;
+  padding: 0 13px;
+}
+.lp-stub__code b {
+  font-family: var(--font-score);
+  font-size: 14px; font-weight: 700; letter-spacing: 0.12em;
+}
+.lp-stub__code span {
+  font-size: 8px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--polaroid-muted);
+}
+/* notches punched out of the top and bottom edges at the perforation line */
+.lp-stub::before,
+.lp-stub::after {
+  content: "";
+  position: absolute;
+  right: 88px;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: oklch(var(--b1));
+  z-index: 2;
+}
+.lp-stub::before { top: -6.5px; }
+.lp-stub::after  { bottom: -6.5px; }
+.lp-stub__actions {
+  display: flex; gap: var(--s-2);
+  justify-content: flex-end;
+  padding: 0 13px 12px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Header upload indicator
+   Always present so it is discoverable, greyed at zero so it is plainly inert.
+   ══════════════════════════════════════════════════════════════════════════ */
+.bgb-outbox {
+  position: relative;
+  width: 36px; height: 36px;
+  flex-shrink: 0;
+  margin-right: var(--s-2);          /* ≥8px clear of the avatar */
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--accent);
+  cursor: pointer;
+  transition: color 160ms var(--ease), border-color 160ms var(--ease);
+}
+/* 44x44 hit area without inflating the visible control */
+.bgb-outbox::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+.bgb-outbox.is-zero {
+  color: var(--ink-faint);
+  border-color: transparent;
+  opacity: 0.55;
+}
+.bgb-outbox__badge {
+  position: absolute;
+  top: -5px; right: -5px;
+  min-width: 18px; height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--bg-0);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+  border: 2px solid oklch(var(--b1));
+}
+.bgb-outbox__badge--failed { background: var(--rust); color: #fff; }
+.bgb-outbox__ring { display: none; }
+.bgb-outbox.is-busy .bgb-outbox__ring {
+  display: block;
+  position: absolute;
+  inset: -1px;
+  border-radius: var(--r-sm);
+  border: 1.5px solid transparent;
+  border-top-color: var(--accent);
+  animation: bgb-outbox-spin 900ms linear infinite;
+}
+@keyframes bgb-outbox-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .bgb-outbox.is-busy .bgb-outbox__ring { animation: none; opacity: 0.6; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Outbox dialog (widgets/outbox-modal.js)
+   Chrome comes from polaroid-popup; only the body is ours. The height cap
+   mirrors .chapter-guide__card so the action row clears the keyboard.
+   ══════════════════════════════════════════════════════════════════════════ */
+.polaroid-popup__card.outbox-modal {
+  width: calc(100vw - 32px);
+  max-width: 380px;
+  max-height: 100%;
+  padding: 20px 16px 14px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.outbox-modal__hint {
+  font-size: 12px;
+  color: var(--polaroid-muted);
+  margin: -4px 0 0;
+  line-height: 1.45;
+}
+.outbox-modal__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+}
+.outbox-modal__empty {
+  font-size: 13px;
+  color: var(--polaroid-muted);
+  padding: 18px 2px;
+  text-align: center;
+}
+.outbox-modal__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--polaroid-line);
+}
+.outbox-modal__row:last-child { border-bottom: none; }
+.outbox-modal__art {
+  width: 38px; height: 38px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.outbox-modal__art--empty { background: var(--polaroid-line); }
+.outbox-modal__body { flex: 1; min-width: 0; display: block; }
+.outbox-modal__name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--polaroid-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.outbox-modal__meta {
+  display: block;
+  font-size: 11px;
+  color: var(--polaroid-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.outbox-modal__chip {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: var(--r-pill);
+}
+.outbox-modal__chip--up     { background: var(--accent-quiet); color: var(--accent); }
+.outbox-modal__chip--queued { background: var(--polaroid-line); color: var(--polaroid-muted); }
+.outbox-modal__chip--failed { background: var(--rust-soft); color: var(--rust); }
+.outbox-modal__act {
+  position: relative;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 11px;
+  border-radius: var(--r-pill);
+  background: var(--rust);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+.outbox-modal__act::before { content: ""; position: absolute; inset: -8px -4px; }
+.outbox-modal__act--quiet {
+  background: transparent;
+  color: var(--polaroid-muted);
+  border: 1px solid var(--polaroid-line);
+}
+.outbox-modal__actions {
+  display: flex;
+  gap: var(--s-2);
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 1px solid var(--polaroid-line);
 }

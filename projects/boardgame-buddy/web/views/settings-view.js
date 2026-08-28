@@ -26,7 +26,6 @@
 
       // True while a manual outbox flush is in flight — drives the Upload now
       // button's disabled/"Uploading…" state.
-      this._uploadingOutbox = false;
     }
 
     async onMount() {
@@ -98,6 +97,8 @@
           <div class="set-card-label">Admin tools</div>
           ${this._renderAdminCard()}
         ` : ""}
+        <div class="set-card-label">Appearance</div>
+        ${this._renderAppearanceCard()}
         <div class="set-card-label">Connections</div>
         ${this._renderBggCard()}
         ${this._renderPendingUploadsSection()}
@@ -223,6 +224,44 @@
     }
 
     // ── Admin tools card ──────────────────────────────────────────────────────
+    // ── Appearance ────────────────────────────────────────────────────────────
+    // A three-way segmented control rather than a sun/moon switch: "Auto" is a
+    // real state (follow the OS) and a two-position toggle can't express it.
+    _renderAppearanceCard() {
+      const auto = window.BgbTheme.isAuto();
+      const mode = window.BgbTheme.current();
+      const seg = (value, label) => {
+        const on = value === "auto" ? auto : (!auto && mode === value);
+        return `
+          <button class="theme-seg__opt${on ? " is-on" : ""}"
+                  aria-pressed="${on ? "true" : "false"}"
+                  onclick="window.settingsView._setTheme('${value}')">${label}</button>`;
+      };
+      return `
+        <div class="set-card">
+          <div class="set-card__row set-card__row--static">
+            <span class="set-card__row-icon"><i data-lucide="sun-moon" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">Theme</span>
+              <span class="set-card__row-sub">
+                ${auto ? `Following your device — currently ${mode}.` : `Always ${mode}.`}
+              </span>
+            </span>
+          </div>
+          <div class="theme-seg" role="group" aria-label="Theme">
+            ${seg("auto", "Auto")}${seg("light", "Light")}${seg("dark", "Dark")}
+          </div>
+        </div>
+      `;
+    }
+
+    /** @param {"auto"|"light"|"dark"} value */
+    _setTheme(value) {
+      if (value === "auto") window.BgbTheme.clear();
+      else window.BgbTheme.set(value);
+      this.render();
+    }
+
     _renderAdminCard() {
       const n = this._adminReportsCount;
       const badge = (n && n > 0) ? `<span class="set-card__badge">${n}</span>` : "";
@@ -351,95 +390,37 @@
      *
      * The whole section is absent when the queue is empty — an always-present
      * "0 pending uploads" row would train people to ignore the one place that
-     * tells them a play is still only on this phone.
+     * tells them a play is still only on this phone. (The header indicator is
+     * the always-present affordance; it greys out instead of vanishing.)
      *
-     * Entries marked `failed` are ones the server rejected outright (the game
-     * was deleted, the payload is invalid). They will never succeed on retry,
-     * so the flush skips them rather than wedging the queue behind them, and
-     * they need a manual delete — hence the per-row action.
+     * The list, the upload action and the per-entry retry/remove all live in
+     * widgets/outbox-modal.js, which the global header opens too. Settings had
+     * its own parallel rendering of the same queue before that consolidation
+     * — see .claude/rules/ui-object-design.md §4.
      */
     _renderPendingUploadsSection() {
-      const entries = window.Outbox ? window.Outbox.list() : [];
-      if (!entries.length) return "";
+      const n = window.Outbox ? window.Outbox.count() : 0;
+      if (!n) return "";
       const offline = !!(window.BgbNet && window.BgbNet.isOffline());
-      const busy = !!this._uploadingOutbox;
-
-      const rows = entries.map((e) => {
-        const name = (e.gameSnapshot && e.gameSnapshot.name) || "Unknown game";
-        const when = (e.payload && e.payload.played_at) || "";
-        const failed = e.state === "failed";
-        return `
-          <div class="set-card__cache-row">
-            <span class="set-card__cache-row-label">${escapeHtml(name)}</span>
-            <span class="set-card__cache-row-meta">
-              ${escapeHtml(when)}${failed ? ` · ${escapeHtml(e.lastError || "rejected")}` : ""}
-            </span>
-            ${failed ? `
-              <button class="btn btn-ghost btn-xs set-card__cache-row-action"
-                      onclick="window.settingsView._discardQueuedPlay('${escapeAttr(e.clientKey)}')">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Discard
-              </button>
-            ` : ""}
-          </div>
-        `;
-      }).join("");
-
       return `
         <div class="set-card-label">Pending uploads</div>
         <div class="set-card">
-          <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
-            <p class="text-sm opacity-80">
-              ${entries.length} ${entries.length === 1 ? "play is" : "plays are"}
-              saved on this device and not on the server yet.
-              ${offline ? "They'll upload as soon as you're back online." : ""}
-            </p>
-            <div class="set-card__cache-breakdown">${rows}</div>
-            ${offline ? "" : `
-              <button class="btn btn-primary btn-sm" ${busy ? "disabled" : ""}
-                      onclick="window.settingsView._uploadPending()">
-                ${busy ? "Uploading…" : "Upload now"}
-              </button>
-            `}
-          </div>
+          <button class="set-card__row" onclick="window.OutboxModal.open()">
+            <span class="set-card__row-icon"><i data-lucide="cloud-upload" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">
+                ${n} ${n === 1 ? "play" : "plays"} waiting to upload
+              </span>
+              <span class="set-card__row-sub">
+                ${offline
+                  ? "Saved on this device — they'll go up when you're back online."
+                  : "Saved on this device until the server confirms them."}
+              </span>
+            </span>
+            <span class="set-card__row-chev"><i data-lucide="chevron-right" class="w-4 h-4"></i></span>
+          </button>
         </div>
       `;
-    }
-
-    async _uploadPending() {
-      this._uploadingOutbox = true;
-      this.render();
-      let res;
-      try {
-        res = await window.Outbox.flush();
-      } finally {
-        this._uploadingOutbox = false;
-        this.render();
-      }
-      if (window.showToast) {
-        if (res.sent > 0) {
-          window.showToast(`Uploaded ${res.sent} ${res.sent === 1 ? "play" : "plays"}.`, "success");
-        } else {
-          window.showToast("Couldn't upload — they're still safe on this device.", "error");
-        }
-      }
-    }
-
-    async _discardQueuedPlay(clientKey) {
-      const entry = window.Outbox.list().find((e) => e.clientKey === clientKey);
-      if (!entry) return;
-      const name = (entry.gameSnapshot && entry.gameSnapshot.name) || "this play";
-      // Destructive and unrecoverable — the queue is the only copy. Routed
-      // through the project's single confirm surface per
-      // .claude/rules/web-frontend.md.
-      const ok = await window.PolaroidPopup.confirm({
-        title: "Discard this play?",
-        body: `${name} was never uploaded, and this device holds the only copy. This can't be undone.`,
-        confirmLabel: "Discard",
-        cancelLabel: "Keep it",
-      });
-      if (!ok) return;
-      window.Outbox.remove(clientKey);
-      this.render();
     }
 
     _renderCacheCard() {

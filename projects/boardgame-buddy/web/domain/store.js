@@ -21,6 +21,7 @@
         currentRoute: { name: "splash", params: {} },
         offline: false,       // BgbNet.isOffline() — see domain/net.js
         outboxCount: 0,       // plays queued for upload — see domain/outbox.js
+        theme: "dark",        // "light" | "dark" — see domain/theme.js
       };
       this._subs = new Map(); // key → Set<fn>
     }

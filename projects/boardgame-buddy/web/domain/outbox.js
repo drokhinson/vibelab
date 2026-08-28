@@ -145,6 +145,41 @@
       return _mine(_read()).filter((e) => e.state !== "failed").length;
     }
 
+    /**
+     * True while a flush is in flight.
+     *
+     * Entry.state is only ever "queued" or "failed" — there is deliberately no
+     * third "uploading" value, because _flush()'s selector picks the first
+     * entry whose state !== "failed" and would happily re-select one. The UI
+     * treats the oldest non-failed entry as the active upload while this is
+     * true, which is accurate given the loop is strictly serial.
+     *
+     * @returns {boolean}
+     */
+    static isFlushing() {
+      return !!_flushing;
+    }
+
+    /**
+     * Put a parked entry back in the queue.
+     *
+     * `failed` means the server rejected it outright (410 gone, 422 invalid),
+     * so _flush() skips it to avoid wedging everything behind it. Retrying is
+     * therefore an explicit user act: clear the flag and let the next flush
+     * pick it up in order.
+     *
+     * @param {string} clientKey
+     */
+    static requeue(clientKey) {
+      const all = _read();
+      const entry = all.find((e) => e.clientKey === clientKey);
+      if (!entry) return;
+      entry.state = "queued";
+      entry.lastError = null;
+      _write(all);
+      _publish();
+    }
+
     /** @param {string} clientKey */
     static remove(clientKey) {
       _write(_read().filter((e) => e.clientKey !== clientKey));

@@ -119,7 +119,7 @@
     // Caption "winner" block. Three modes:
     //   - cooperative + any winners → "We beat the game" (brass win style)
     //   - cooperative + no winners  → "The game won" (muted, no star)
-    //   - competitive               → winner name(s) ✶ score (or just name)
+    //   - competitive               → winner name(s) · score (or just name)
     // Coop renderings don't list players because everyone won/lost together
     // and the joined name list overruns the caption on big tables.
     const winnerBlock = buildWinnerBlock(card, me);
@@ -197,7 +197,7 @@
   //       any winners → "We won!" / "They won!"     (brass)
   //       no winners  → "We lost" / "They lost"     (grey/italic)
   //   - standard competitive (a single named winner) →
-  //       "<You|Name> ✶ <score>" (score omitted if unknown)
+  //       "<You|Name> · <score>" (score omitted if unknown)
   // "We" vs "They" depends on whether the viewer is in the play (logged it
   // OR appears in participants).
   function buildWinnerBlock(card, me) {
@@ -218,7 +218,9 @@
     const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
     const winnerName = winnerIsSelf ? "You" : escapeHtml(card.winner_display_name);
     const winnerScore = winnerScoreFor(card);
-    return `<span class="win">${winnerName}${winnerScore != null ? ` ✶ <span class="win-score">${escapeHtml(String(winnerScore))}</span>` : ""}</span>`;
+    return `<span class="win">${winnerName}${winnerScore != null
+    ? `<span class="win-sep" aria-hidden="true"></span><span class="win-score">${escapeHtml(String(winnerScore))}</span>`
+    : ""}</span>`;
   }
 
   // `winner_display_name` is a comma-joined list of winners (one entry for a

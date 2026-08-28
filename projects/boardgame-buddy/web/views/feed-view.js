@@ -281,40 +281,52 @@
       return `
         <section class="play-session${isSingle ? " play-session--single" : ""}">
           <header class="play-session__header">
-            <span class="play-session__title">${title}</span>
             <span class="play-session__date">${escapeHtml(dateLabel)}</span>
+            <span class="play-session__title">${title}</span>
           </header>
           <div class="play-session__scroll">${cards}</div>
         </section>
       `;
     }
 
-    _renderHotGamesCard(card) {
+    // Both game rails ("Hot this week", "Time to revisit") are the same
+    // component with a different heading and meta line — they used to be two
+    // byte-identical copies of a bespoke `.hot-game-tile`. Tiles now delegate
+    // to the canonical Game component per .claude/rules/ui-object-design.md §2.
+    /**
+     * @param {any} card
+     * @param {{icon: string, title: string, meta: (entry: any) => string}} opts
+     */
+    _renderGameRail(card, { icon, title, meta }) {
       const tiles = (card.games || []).map((entry) => {
-        const status = this._statusMap[entry.game.id] || null;
-        const expCount = entry.game.bgg_id ? (this._expansionCounts[entry.game.bgg_id] || 0) : 0;
-        return `
-        <div class="hot-game-tile" onclick="window.router.go('game-detail',{gameId:'${entry.game.id}',gameName:'${jsStr(entry.game.name || '')}'})">
-          ${window.renderStatusTag(entry.game.id, status, { size: "xs", pending: !this._statusReady })}
-          ${entry.game.thumbnail_url
-            ? `<img src="${entry.game.thumbnail_url}" alt="" loading="lazy" />`
-            : `<div class="hot-game-tile__placeholder"><i data-lucide="dice-6"></i></div>`
-          }
-          <div class="hot-game-tile__body">
-            <div class="hot-game-tile__name">${escapeHtml(entry.game.name)}</div>
-            <div class="hot-game-tile__plays">${entry.play_count} plays</div>
-          </div>
-          ${window.renderExpansionBadge(expCount)}
-        </div>`;
+        const game = entry.game;
+        const status = this._statusMap[game.id] || null;
+        const expCount = game.bgg_id ? (this._expansionCounts[game.bgg_id] || 0) : 0;
+        return window.renderGamePolaroid(game, {
+          variant: "rail",
+          collectionStatus: status,
+          pending: !this._statusReady,
+          meta: meta(entry),
+          badgeHtml: window.renderExpansionBadge(expCount),
+          clickHandler: `window.router.go('game-detail',{gameId:'${game.id}',gameName:'${jsStr(game.name || "")}'})`,
+        });
       }).join("");
       return `
         <section class="feed-rail">
           <header class="feed-rail__header">
-            <h3><i data-lucide="flame" class="w-4 h-4"></i> Hot this week</h3>
+            <h3><i data-lucide="${icon}" class="w-4 h-4"></i> ${escapeHtml(title)}</h3>
           </header>
           <div class="feed-rail__scroll">${tiles}</div>
         </section>
       `;
+    }
+
+    _renderHotGamesCard(card) {
+      return this._renderGameRail(card, {
+        icon: "flame",
+        title: "Hot this week",
+        meta: (entry) => `${entry.play_count} plays`,
+      });
     }
 
     _renderSuggestedBuddiesCard(card) {
@@ -341,31 +353,11 @@
     }
 
     _renderFeaturedFromCollectionCard(card) {
-      const tiles = (card.games || []).map((entry) => {
-        const status = this._statusMap[entry.game.id] || null;
-        const expCount = entry.game.bgg_id ? (this._expansionCounts[entry.game.bgg_id] || 0) : 0;
-        return `
-        <div class="hot-game-tile" onclick="window.router.go('game-detail',{gameId:'${entry.game.id}',gameName:'${jsStr(entry.game.name || '')}'})">
-          ${window.renderStatusTag(entry.game.id, status, { size: "xs", pending: !this._statusReady })}
-          ${entry.game.thumbnail_url
-            ? `<img src="${entry.game.thumbnail_url}" alt="" loading="lazy" />`
-            : `<div class="hot-game-tile__placeholder"><i data-lucide="dice-6"></i></div>`
-          }
-          <div class="hot-game-tile__body">
-            <div class="hot-game-tile__name">${escapeHtml(entry.game.name)}</div>
-            <div class="hot-game-tile__plays">${entry.last_played_at ? "Last: " + formatDate(entry.last_played_at) : "Never played"}</div>
-          </div>
-          ${window.renderExpansionBadge(expCount)}
-        </div>`;
-      }).join("");
-      return `
-        <section class="feed-rail">
-          <header class="feed-rail__header">
-            <h3><i data-lucide="archive" class="w-4 h-4"></i> Time to revisit</h3>
-          </header>
-          <div class="feed-rail__scroll">${tiles}</div>
-        </section>
-      `;
+      return this._renderGameRail(card, {
+        icon: "archive",
+        title: "Time to revisit",
+        meta: (entry) => (entry.last_played_at ? "Last: " + formatDate(entry.last_played_at) : "Never played"),
+      });
     }
 
     async _addBuddy(userId, btnEl) {
