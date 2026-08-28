@@ -7317,7 +7317,15 @@ main[data-view="session-viewer"].hidden {
   position: relative;
   width: 36px; height: 36px;
   flex-shrink: 0;
-  margin-right: var(--s-2);          /* ≥8px clear of the avatar */
+  /* The header is justify-content: space-between over three children, which
+     parks this button in the middle of the gap after the brand. `auto` on the
+     left collapses that gap so the upload bubble sits flush against the
+     profile bubble at the right edge. */
+  margin-left: auto;
+  /* The header's own `gap: 0.6rem` already separates the two controls; this
+     just buys back the 4px the ::before hit area below reaches into it, so
+     the two 44px targets stay ≥8px apart. */
+  margin-right: var(--s-1);
   display: grid;
   place-items: center;
   border-radius: var(--r-sm);
