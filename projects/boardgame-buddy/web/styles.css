@@ -1774,6 +1774,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .feed-cards > *,
 .play-session,
 .feed-rail { min-width: 0; }
+/* .feed-cards is a 1rem-gap flex column, so the divider's own block margins
+   would stack on top of that gap and float the heading between the two days
+   it is meant to label. Zero them out here and let the gap do the spacing. */
+.feed-cards > .day-divider { margin: 0.35rem 0.2rem -0.25rem; }
 .feed-empty {
   text-align: center; padding: 2.5rem 1rem;
   background: oklch(var(--b2)); border-radius: 1rem;
@@ -2235,8 +2239,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0 0 0.75rem;
   animation: fadeUp 200ms ease both;
 }
-/* Date is an eyebrow above the sentence rather than competing with it on the
-   same baseline — it's context, not a peer of "You and Marcus played 3 games". */
+/* The date used to sit here as an eyebrow on every card, which printed
+   "Today" once per session. It is now a .day-divider emitted once per day
+   above the group — see views/feed-view.js#render. */
 .play-session__header {
   display: flex;
   flex-direction: column;
@@ -2251,13 +2256,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--ink-muted);
   letter-spacing: -0.005em;
-}
-.play-session__date {
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--accent);
 }
 .play-session__name {
   font-weight: 600;
@@ -5971,8 +5969,11 @@ main[data-view="session-viewer"].hidden {
 }
 .spoke-toggle__pill.is-active .spoke-toggle__count { opacity: 0.95; }
 
-/* ── Plays spoke: cream-card list rows with day-bucket dividers ─────────── */
-.plays-day-divider {
+/* ── Day-bucket divider ──────────────────────────────────────────────────
+   Shared by the Plays list (This week / Last week / Earlier) and the Feed
+   (Today / Yesterday / Mon D). Was .plays-day-divider; promoted rather than
+   copied when the feed stopped printing a date on every session card. */
+.day-divider {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 0.82rem;
@@ -5981,6 +5982,8 @@ main[data-view="session-viewer"].hidden {
   letter-spacing: 0.05em;
   margin: 0.95rem 0.2rem 0.45rem;
 }
+
+/* ── Plays spoke: cream-card list rows ───────────────────────────────────── */
 .plays-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .plays-list__row {
   display: flex;
@@ -6439,7 +6442,7 @@ main[data-view="session-viewer"].hidden {
 
 /* Plays-list typography overrides (the cards still come from the .plays-list
    block above; these just polish the text contrast on cream). */
-.bgb-cream-screen .plays-day-divider { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .day-divider { color: var(--accent-hover, #B8820E); }
 
 /* Empty-state and pager captions */
 .bgb-cream-screen .profile-empty { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
@@ -7267,6 +7270,11 @@ main[data-view="session-viewer"].hidden {
   font-variant-numeric: tabular-nums;
   border: 2px solid oklch(var(--b1));
 }
+/* `display: grid` above is an author rule and outranks the UA stylesheet's
+   `[hidden] { display: none }`, so outbox-indicator.js setting badge.hidden
+   did nothing and an empty gold pill painted on every screen. Same guard as
+   .import-exp-search[hidden] / .field-clear-btn[hidden] elsewhere in here. */
+.bgb-outbox__badge[hidden] { display: none; }
 .bgb-outbox__badge--failed { background: var(--rust); color: #fff; }
 .bgb-outbox__ring { display: none; }
 .bgb-outbox.is-busy .bgb-outbox__ring {
