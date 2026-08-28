@@ -5696,6 +5696,9 @@ main[data-view="session-viewer"].hidden {
   padding: 0.85rem 0 0.25rem;
 }
 .profile-stat-card {
+  /* Shared by both __v variants so the numeric and text values keep the same
+     box height — see .profile-stat-card__v--text. */
+  --stat-value-size: 1.45rem;
   background: var(--polaroid-bg, #FFFBF1);
   color: var(--polaroid-ink, #1D1812);
   border: 1px solid var(--card-border);
@@ -5724,7 +5727,7 @@ main[data-view="session-viewer"].hidden {
 }
 .profile-stat-card__v {
   font-family: var(--font-display);
-  font-size: 1.45rem;
+  font-size: var(--stat-value-size);
   font-weight: 700;
   line-height: 1;
   color: var(--accent-ink);
@@ -5732,7 +5735,13 @@ main[data-view="session-viewer"].hidden {
 .profile-stat-card__v--text {
   font-size: 0.82rem;
   font-weight: 600;
-  padding: 0.25rem 0.1rem 0.1rem;
+  /* Same box height as the numeric value above (font-size x line-height 1),
+     so the Top game tile's label lands on the same line as Games / Plays /
+     Buddies instead of riding ~2px high. The smaller type just centres inside
+     that taller line box. `display: block` is load-bearing — text-overflow
+     needs a block container, so this can't be a flex centring job. */
+  line-height: var(--stat-value-size);
+  padding: 0 0.1rem;
   color: var(--polaroid-ink, #1D1812);
   max-width: 100%;
   white-space: nowrap;
