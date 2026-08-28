@@ -119,7 +119,7 @@
    */
   function wire(root, opts) {
     root.__opts = opts;
-    if (window.lucide) window.lucide.createIcons({ root });
+    window.BgbIcons.render(root);
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => handleClose(opts));
     const viewBtn = root.querySelector(".polaroid-popup__view");
@@ -204,18 +204,18 @@
       : "";
     const winner = opts.winnerName
       ? `<div class="polaroid-popup__winner">
-           <i data-lucide="trophy" class="w-4 h-4"></i>
+           <i data-icon="trophy" class="w-4 h-4"></i>
            <span>${escapeHtml(opts.winnerName)}</span>
          </div>`
       : `<div class="polaroid-popup__winner polaroid-popup__winner--muted">No winner recorded</div>`;
     const photo = opts.gameThumbnail
       ? `<img class="polaroid-popup__photo" src="${escapeAttr(opts.gameThumbnail)}" alt="" />`
       : `<div class="polaroid-popup__photo polaroid-popup__photo--placeholder">
-           <i data-lucide="dice-6" class="w-10 h-10"></i>
+           <i data-icon="dice-6" class="w-10 h-10"></i>
          </div>`;
     const viewBtn = opts.playId
       ? `<button class="polaroid-popup__view btn btn-ghost btn-sm" data-play-id="${escapeAttr(opts.playId)}">
-           <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+           <i data-icon="external-link" class="w-3.5 h-3.5"></i>
            <span>View play</span>
          </button>`
       : "";
@@ -242,12 +242,12 @@
                   ${opts.saving ? "disabled" : ""}>
             ${opts.saving
               ? `<span class="loading loading-spinner loading-xs"></span><span>Saving…</span>`
-              : `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Retry</span>`}
+              : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i><span>Retry</span>`}
           </button>
         ` : ""}
         ${!pending && opts.onAnotherRound ? `
           <button class="polaroid-popup__another btn btn-primary btn-sm">
-            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            <i data-icon="rotate-ccw" class="w-3.5 h-3.5"></i>
             <span>Another round?</span>
           </button>
         ` : ""}
@@ -258,7 +258,7 @@
     // other.
     const closeBtn = opts.saving ? "" : `
       <button class="polaroid-popup__close" aria-label="Close">
-        <i data-lucide="x" class="w-4 h-4"></i>
+        <i data-icon="x" class="w-4 h-4"></i>
       </button>
     `;
     return `
@@ -303,7 +303,7 @@
         if (ev.target === root) { dismiss(); resolve(false); }
       });
       document.body.appendChild(root);
-      if (window.lucide) window.lucide.createIcons({ root });
+      window.BgbIcons.render(root);
       const cancelBtn = root.querySelector(".polaroid-popup__cancel");
       const confirmBtn = root.querySelector(".polaroid-popup__confirm");
       if (cancelBtn) cancelBtn.addEventListener("click", () => { dismiss(); resolve(false); });
@@ -341,7 +341,7 @@
         if (ev.target === root) { dismiss(); resolve(); }
       });
       document.body.appendChild(root);
-      if (window.lucide) window.lucide.createIcons({ root });
+      window.BgbIcons.render(root);
       const okBtn = root.querySelector(".polaroid-popup__confirm");
       if (okBtn) okBtn.addEventListener("click", () => { dismiss(); resolve(); });
     });
@@ -409,7 +409,7 @@
         <div class="polaroid-popup__card polaroid-popup__card--confirm avatar-cust"
              role="dialog" aria-modal="true" aria-label="${escapeAttr(headerTitle)}">
           <button class="polaroid-popup__close" aria-label="Close">
-            <i data-lucide="x" class="w-4 h-4"></i>
+            <i data-icon="x" class="w-4 h-4"></i>
           </button>
           <div class="avatar-cust__body">
             <div class="polaroid-popup__title">${escapeHtml(headerTitle)}</div>
@@ -418,14 +418,14 @@
 
             <div class="avatar-cust__carousel">
               <button class="avatar-cust__arrow" data-step="-1" aria-label="Previous">
-                <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                <i data-icon="chevron-left" class="w-5 h-5"></i>
               </button>
               <div class="avatar-cust__reel">
                 <div class="avatar-cust__badge"></div>
                 <div class="avatar-cust__track"></div>
               </div>
               <button class="avatar-cust__arrow" data-step="1" aria-label="Next">
-                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                <i data-icon="chevron-right" class="w-5 h-5"></i>
               </button>
             </div>
             <div class="avatar-cust__name-reel"><div class="avatar-cust__name-track"></div></div>
@@ -611,7 +611,7 @@
       const saveBtn = root.querySelector(".polaroid-popup__confirm");
       if (saveBtn) saveBtn.addEventListener("click", () => finish(true));
 
-      if (window.lucide) window.lucide.createIcons({ root });
+      window.BgbIcons.render(root);
       rerender();
     });
   }

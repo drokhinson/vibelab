@@ -366,6 +366,14 @@
   }
   window.store.subscribe("user", syncGlobalAvatar);
 
+  // Pending uploads live in the header. Two keys drive it: the count itself,
+  // and connectivity (which changes what the dialog offers).
+  function syncOutboxIndicator() {
+    if (window.BgbOutboxIndicator) window.BgbOutboxIndicator.render();
+  }
+  window.store.subscribe("outboxCount", syncOutboxIndicator);
+  window.store.subscribe("offline", syncOutboxIndicator);
+
   // Persistent offline banner under the global header. Lives at this level
   // rather than in a View because connectivity is app state, not screen state:
   // every view would otherwise have to remember to render it, and the one that
@@ -380,7 +388,7 @@
     }
     const probing = !!(window.BgbNet && window.BgbNet.isProbing());
     el.innerHTML = `
-      <i data-lucide="cloud-off" class="w-4 h-4 bgb-offline-banner__icon"></i>
+      <i data-icon="cloud-off" class="w-4 h-4 bgb-offline-banner__icon"></i>
       <span class="bgb-offline-banner__text">
         No connection — plays save to this device.
       </span>
@@ -390,7 +398,7 @@
       </button>
     `;
     el.classList.remove("hidden");
-    if (window.lucide) window.lucide.createIcons({ root: el });
+    window.BgbIcons.render(el);
   }
   window.store.subscribe("offline", syncOfflineBanner);
 
@@ -469,10 +477,16 @@
     // Start watching connectivity before anything else can issue a request, so
     // the very first failure already counts toward offline detection.
     window.BgbNet.start();
+    // Owns theme changes from here on; index.html's inline boot set the
+    // initial attribute before first paint.
+    window.BgbTheme.start();
     window.store.set("outboxCount", window.Outbox.count());
     // start() only publishes on an edge, so a page that loads already offline
     // would never fire the subscriber. Paint the banner from the current state.
     syncOfflineBanner(window.BgbNet.isOffline());
+    // Same reasoning: store.set above only notifies when the value CHANGES, so
+    // a cold load with items already queued would never paint the badge.
+    syncOutboxIndicator();
 
     // Restore a previously-active play session, if any.
     const ps = window.PlaySession.load();
@@ -502,7 +516,7 @@
     wireBottomNav();
     // One document-wide icon pass for the static shell (bottom nav, header).
     // Views refresh their own subtree via View.refreshIcons() from here on.
-    if (window.lucide) window.lucide.createIcons();
+    window.BgbIcons.render();
     initSupabase();
 
     // Register the app-shell worker. Wrapped defensively (same idiom as

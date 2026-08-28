@@ -26,7 +26,6 @@
 
       // True while a manual outbox flush is in flight — drives the Upload now
       // button's disabled/"Uploading…" state.
-      this._uploadingOutbox = false;
     }
 
     async onMount() {
@@ -98,6 +97,8 @@
           <div class="set-card-label">Admin tools</div>
           ${this._renderAdminCard()}
         ` : ""}
+        <div class="set-card-label">Appearance</div>
+        ${this._renderAppearanceCard()}
         <div class="set-card-label">Connections</div>
         ${this._renderBggCard()}
         ${this._renderPendingUploadsSection()}
@@ -124,7 +125,7 @@
       return `
         <header class="spoke-head">
           <button class="spoke-head__back" onclick="window.router.go('profile-self')" aria-label="Back to profile">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="spoke-head__title font-display">Settings</h2>
           <span></span>
@@ -149,14 +150,14 @@
               <div class="set-card__acct-name">${escapeHtml(me.display_name || "")}</div>
               ${me.username ? `
                 <div class="set-card__acct-handle" title="Your username never changes. Buddies can find you with it.">
-                  <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>
+                  <i data-icon="at-sign" class="w-3.5 h-3.5"></i>
                   ${escapeHtml(me.username)}
                 </div>` : ""}
             </div>
             <button class="set-card__avatar-btn" type="button"
                     title="Edit your profile" aria-label="Edit your profile"
                     onclick="window.settingsView._openEditProfile()">
-              <i data-lucide="palette" class="w-4 h-4"></i>
+              <i data-icon="palette" class="w-4 h-4"></i>
               Edit profile
             </button>
           </div>
@@ -201,7 +202,7 @@
         return `
           <div class="set-card__acct-edit-form" style="padding-top: 0;">
             <button class="btn btn-ghost btn-xs" onclick="window.settingsView._openAdminForm()">
-              <i data-lucide="key-round" class="w-3.5 h-3.5"></i> Have an admin key?
+              <i data-icon="key-round" class="w-3.5 h-3.5"></i> Have an admin key?
             </button>
           </div>
         `;
@@ -223,19 +224,57 @@
     }
 
     // ── Admin tools card ──────────────────────────────────────────────────────
+    // ── Appearance ────────────────────────────────────────────────────────────
+    // A three-way segmented control rather than a sun/moon switch: "Auto" is a
+    // real state (follow the OS) and a two-position toggle can't express it.
+    _renderAppearanceCard() {
+      const auto = window.BgbTheme.isAuto();
+      const mode = window.BgbTheme.current();
+      const seg = (value, label) => {
+        const on = value === "auto" ? auto : (!auto && mode === value);
+        return `
+          <button class="theme-seg__opt${on ? " is-on" : ""}"
+                  aria-pressed="${on ? "true" : "false"}"
+                  onclick="window.settingsView._setTheme('${value}')">${label}</button>`;
+      };
+      return `
+        <div class="set-card">
+          <div class="set-card__row set-card__row--static">
+            <span class="set-card__row-icon"><i data-icon="sun-moon" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">Theme</span>
+              <span class="set-card__row-sub">
+                ${auto ? `Following your device — currently ${mode}.` : `Always ${mode}.`}
+              </span>
+            </span>
+          </div>
+          <div class="theme-seg" role="group" aria-label="Theme">
+            ${seg("auto", "Auto")}${seg("light", "Light")}${seg("dark", "Dark")}
+          </div>
+        </div>
+      `;
+    }
+
+    /** @param {"auto"|"light"|"dark"} value */
+    _setTheme(value) {
+      if (value === "auto") window.BgbTheme.clear();
+      else window.BgbTheme.set(value);
+      this.render();
+    }
+
     _renderAdminCard() {
       const n = this._adminReportsCount;
       const badge = (n && n > 0) ? `<span class="set-card__badge">${n}</span>` : "";
       return `
         <div class="set-card">
           <button class="set-card__row" onclick="window.router.go('admin')">
-            <span class="set-card__row-icon"><i data-lucide="flag" class="w-4 h-4"></i></span>
+            <span class="set-card__row-icon"><i data-icon="flag" class="w-4 h-4"></i></span>
             <span class="set-card__row-body">
               <span class="set-card__row-title">Chapter reports</span>
               <span class="set-card__row-sub">Moderate community-reported reference-guide chapters.</span>
             </span>
             ${badge}
-            <span class="set-card__row-chev"><i data-lucide="chevron-right" class="w-4 h-4"></i></span>
+            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
           </button>
         </div>
       `;
@@ -253,7 +292,7 @@
         <button class="btn btn-ghost btn-sm" title="Sync from BoardGameGeek"
                 ${this._bggSyncing ? "disabled" : ""}
                 onclick="window.settingsView._syncBgg()">
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 ${this._bggSyncing ? "animate-spin" : ""}"></i>
+          <i data-icon="refresh-cw" class="w-3.5 h-3.5 ${this._bggSyncing ? "animate-spin" : ""}"></i>
           ${this._bggSyncing ? "Syncing…" : "Sync"}
         </button>` : "";
 
@@ -270,7 +309,7 @@
               silently in the background.
             </p>
             <button class="btn btn-primary btn-sm" onclick="window.settingsView._openBggLink()">
-              <i data-lucide="link" class="w-4 h-4"></i> Link BoardGameGeek
+              <i data-icon="link" class="w-4 h-4"></i> Link BoardGameGeek
             </button>
             ${this._bggLinkOpen ? this._renderBggLinkForm() : ""}
           </div>
@@ -351,95 +390,37 @@
      *
      * The whole section is absent when the queue is empty — an always-present
      * "0 pending uploads" row would train people to ignore the one place that
-     * tells them a play is still only on this phone.
+     * tells them a play is still only on this phone. (The header indicator is
+     * the always-present affordance; it greys out instead of vanishing.)
      *
-     * Entries marked `failed` are ones the server rejected outright (the game
-     * was deleted, the payload is invalid). They will never succeed on retry,
-     * so the flush skips them rather than wedging the queue behind them, and
-     * they need a manual delete — hence the per-row action.
+     * The list, the upload action and the per-entry retry/remove all live in
+     * widgets/outbox-modal.js, which the global header opens too. Settings had
+     * its own parallel rendering of the same queue before that consolidation
+     * — see .claude/rules/ui-object-design.md §4.
      */
     _renderPendingUploadsSection() {
-      const entries = window.Outbox ? window.Outbox.list() : [];
-      if (!entries.length) return "";
+      const n = window.Outbox ? window.Outbox.count() : 0;
+      if (!n) return "";
       const offline = !!(window.BgbNet && window.BgbNet.isOffline());
-      const busy = !!this._uploadingOutbox;
-
-      const rows = entries.map((e) => {
-        const name = (e.gameSnapshot && e.gameSnapshot.name) || "Unknown game";
-        const when = (e.payload && e.payload.played_at) || "";
-        const failed = e.state === "failed";
-        return `
-          <div class="set-card__cache-row">
-            <span class="set-card__cache-row-label">${escapeHtml(name)}</span>
-            <span class="set-card__cache-row-meta">
-              ${escapeHtml(when)}${failed ? ` · ${escapeHtml(e.lastError || "rejected")}` : ""}
-            </span>
-            ${failed ? `
-              <button class="btn btn-ghost btn-xs set-card__cache-row-action"
-                      onclick="window.settingsView._discardQueuedPlay('${escapeAttr(e.clientKey)}')">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Discard
-              </button>
-            ` : ""}
-          </div>
-        `;
-      }).join("");
-
       return `
         <div class="set-card-label">Pending uploads</div>
         <div class="set-card">
-          <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
-            <p class="text-sm opacity-80">
-              ${entries.length} ${entries.length === 1 ? "play is" : "plays are"}
-              saved on this device and not on the server yet.
-              ${offline ? "They'll upload as soon as you're back online." : ""}
-            </p>
-            <div class="set-card__cache-breakdown">${rows}</div>
-            ${offline ? "" : `
-              <button class="btn btn-primary btn-sm" ${busy ? "disabled" : ""}
-                      onclick="window.settingsView._uploadPending()">
-                ${busy ? "Uploading…" : "Upload now"}
-              </button>
-            `}
-          </div>
+          <button class="set-card__row" onclick="window.OutboxModal.open()">
+            <span class="set-card__row-icon"><i data-icon="cloud-upload" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">
+                ${n} ${n === 1 ? "play" : "plays"} waiting to upload
+              </span>
+              <span class="set-card__row-sub">
+                ${offline
+                  ? "Saved on this device — they'll go up when you're back online."
+                  : "Saved on this device until the server confirms them."}
+              </span>
+            </span>
+            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+          </button>
         </div>
       `;
-    }
-
-    async _uploadPending() {
-      this._uploadingOutbox = true;
-      this.render();
-      let res;
-      try {
-        res = await window.Outbox.flush();
-      } finally {
-        this._uploadingOutbox = false;
-        this.render();
-      }
-      if (window.showToast) {
-        if (res.sent > 0) {
-          window.showToast(`Uploaded ${res.sent} ${res.sent === 1 ? "play" : "plays"}.`, "success");
-        } else {
-          window.showToast("Couldn't upload — they're still safe on this device.", "error");
-        }
-      }
-    }
-
-    async _discardQueuedPlay(clientKey) {
-      const entry = window.Outbox.list().find((e) => e.clientKey === clientKey);
-      if (!entry) return;
-      const name = (entry.gameSnapshot && entry.gameSnapshot.name) || "this play";
-      // Destructive and unrecoverable — the queue is the only copy. Routed
-      // through the project's single confirm surface per
-      // .claude/rules/web-frontend.md.
-      const ok = await window.PolaroidPopup.confirm({
-        title: "Discard this play?",
-        body: `${name} was never uploaded, and this device holds the only copy. This can't be undone.`,
-        confirmLabel: "Discard",
-        cancelLabel: "Keep it",
-      });
-      if (!ok) return;
-      window.Outbox.remove(clientKey);
-      this.render();
     }
 
     _renderCacheCard() {
@@ -496,7 +477,7 @@
             ${breakdown}
             <button class="btn btn-primary btn-sm" ${busy ? "disabled" : ""}
                     onclick="window.settingsView._refreshLocalCache()">
-              <i data-lucide="refresh-cw" class="w-4 h-4 ${busy ? "animate-spin" : ""}"></i>
+              <i data-icon="refresh-cw" class="w-4 h-4 ${busy ? "animate-spin" : ""}"></i>
               ${busy ? "Refreshing…" : "Refresh local cache"}
             </button>
           </div>
@@ -543,7 +524,7 @@
       return `
         <div class="settings-logout">
           <button class="btn btn-sm settings-logout__btn" onclick="window.handleLogout()">
-            <i data-lucide="log-out" class="w-4 h-4"></i> Log out
+            <i data-icon="log-out" class="w-4 h-4"></i> Log out
           </button>
         </div>
       `;
@@ -721,9 +702,9 @@
 
       const step = (state, body) => {
         const icon = state === "done"
-          ? `<i data-lucide="check" class="bgg-log__icon"></i>`
+          ? `<i data-icon="check" class="bgg-log__icon"></i>`
           : state === "active"
-            ? `<i data-lucide="loader-2" class="bgg-log__icon bgg-log__icon--spin"></i>`
+            ? `<i data-icon="loader-2" class="bgg-log__icon bgg-log__icon--spin"></i>`
             : `<span class="bgg-log__icon bgg-log__icon--idle"></span>`;
         return `<li class="bgg-log__step bgg-log__step--${state}">${icon}<span class="bgg-log__body">${body}</span></li>`;
       };

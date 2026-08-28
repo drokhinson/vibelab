@@ -112,7 +112,7 @@
       this.container.innerHTML = `
         <header class="search-topbar">
           <button class="btn btn-ghost btn-sm" onclick="window.router.back('settings')">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="font-display font-semibold text-lg">Admin tools</h2>
           <span></span>
@@ -120,7 +120,7 @@
         <section class="p-3">
           <div class="admin-reports__header">
             <h3 class="font-semibold flex items-center gap-2">
-              <i data-lucide="flag" class="w-4 h-4"></i> Chapter reports
+              <i data-icon="flag" class="w-4 h-4"></i> Chapter reports
             </h3>
             <div class="admin-reports__filter">
               <button class="btn btn-xs ${this._status === "open" ? "btn-primary" : "btn-ghost"}"
@@ -145,7 +145,7 @@
       return `
         <div class="admin-reports__header">
           <h3 class="font-semibold flex items-center gap-2">
-            <i data-lucide="image-off" class="w-4 h-4"></i>
+            <i data-icon="image-off" class="w-4 h-4"></i>
             Games missing images
             ${this._missingImagesLoading ? "" : `<span class="opacity-60 font-normal text-sm">(${count})</span>`}
           </h3>
@@ -154,7 +154,7 @@
                   onclick="window.adminView._refreshAllImages()">
             ${this._bulkRefreshing
               ? `<span class="loading loading-spinner loading-xs"></span> Refreshing…`
-              : `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh all`}
+              : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> Refresh all`}
           </button>
         </div>
         ${this._renderMissingImagesBody()}
@@ -198,7 +198,7 @@
                       onclick="window.adminView._refreshOneImage('${g.id}')">
                 ${refreshing
                   ? `<span class="loading loading-spinner loading-xs"></span> Refreshing…`
-                  : `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh`}
+                  : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> Refresh`}
               </button>
             </div>
           </div>
@@ -244,7 +244,7 @@
                 </button>
                 <button class="btn btn-error btn-xs"
                         onclick="window.adminView._deleteChapter('${r.chapter_id}', '${r.id}')">
-                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete chapter
+                  <i data-icon="trash-2" class="w-3.5 h-3.5"></i> Delete chapter
                 </button>
               </div>
             ` : `

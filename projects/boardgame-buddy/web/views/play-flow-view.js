@@ -971,7 +971,7 @@
           ${showBack ? `
             <button class="cascade-back" title="Back"
                     onclick="window.playFlowView._phaseBack('${escapeAttr(title.toLowerCase())}')">
-              <i data-lucide="chevron-up" class="w-4 h-4"></i>
+              <i data-icon="chevron-up" class="w-4 h-4"></i>
             </button>
           ` : `<span class="cascade-back-spacer"></span>`}
           <div class="cascade-screen__header-body">
@@ -980,7 +980,7 @@
           </div>
           <button class="cascade-screen__close" title="End session"
                   onclick="window.playFlowView._abandon()">
-            <i data-lucide="x" class="w-4 h-4"></i>
+            <i data-icon="x" class="w-4 h-4"></i>
           </button>
         </header>
       `;
@@ -994,7 +994,7 @@
                   ${disabled ? "disabled" : ""}
                   onclick="window.playFlowView.${handler}">
             ${escapeHtml(label)}
-            <i data-lucide="arrow-down" class="w-4 h-4"></i>
+            <i data-icon="arrow-down" class="w-4 h-4"></i>
           </button>
         </div>
       `;
@@ -1035,7 +1035,7 @@
         return `
           <section class="cascade-card cascade-card--invite cascade-card--offline">
             <span class="cascade-invite__icon">
-              <i data-lucide="cloud-off" class="w-4 h-4"></i>
+              <i data-icon="cloud-off" class="w-4 h-4"></i>
             </span>
             <div class="cascade-invite__body">
               <span class="cascade-invite__title">Offline</span>
@@ -1063,7 +1063,7 @@
         return `
           <section class="cascade-card cascade-card--invite">
             <span class="cascade-invite__icon">
-              <i data-lucide="wifi-off" class="w-4 h-4"></i>
+              <i data-icon="wifi-off" class="w-4 h-4"></i>
             </span>
             <div class="cascade-invite__body">
               <span class="cascade-invite__title">No session code</span>
@@ -1077,7 +1077,7 @@
       return `
         <section class="cascade-card cascade-card--invite">
           <span class="cascade-invite__icon">
-            <i data-lucide="qr-code" class="w-4 h-4"></i>
+            <i data-icon="qr-code" class="w-4 h-4"></i>
           </span>
           <div class="cascade-invite__body">
             <span class="cascade-invite__title">Session code</span>
@@ -1136,7 +1136,7 @@
       const opt = (id, label, icon) => `
         <button class="play-mode-opt ${mode === id ? "is-active" : ""}"
                 onclick="window.playFlowView._setPlayMode('${id}')">
-          <i data-lucide="${icon}" class="w-4 h-4"></i>
+          <i data-icon="${icon}" class="w-4 h-4"></i>
           <span>${label}</span>
         </button>`;
       return `
@@ -1180,7 +1180,7 @@
           ` : ""}
           <button class="btn btn-ghost btn-xs" title="Remove player"
                   onclick="window.playFlowView._removePlayer(${i})">
-            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            <i data-icon="x" class="w-3.5 h-3.5"></i>
           </button>
         </li>
       `;
@@ -1200,9 +1200,9 @@
         ? `<div class="cascade-rulebook-row">
              <a href="${escapeAttr(rulebookUrl)}" target="_blank" rel="noopener"
                 class="btn btn-outline btn-sm cascade-rulebook-cta">
-               <i data-lucide="book-open" class="w-4 h-4"></i>
+               <i data-icon="book-open" class="w-4 h-4"></i>
                <span>Rulebook</span>
-               <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+               <i data-icon="external-link" class="w-3.5 h-3.5"></i>
              </a>
            </div>`
         : "";
@@ -1366,7 +1366,7 @@
         <div class="coop-outcome">
           <button class="coop-outcome-btn ${won ? "is-winner" : ""}"
                   onclick="window.playFlowView._setCoopOutcome(${!won})">
-            <i data-lucide="${won ? "trophy" : "circle"}" class="w-4 h-4"></i>
+            <i data-icon="${won ? "trophy" : "circle"}" class="w-4 h-4"></i>
             <span>${won ? "We won together" : "Mark as won"}</span>
           </button>
           <p class="text-xs opacity-60 mt-1">Co-op: everyone wins or loses together.</p>
@@ -1417,7 +1417,7 @@
           <section class="cascade-card cascade-card--offline">
             <label class="cascade-card__label">Photo</label>
             <p class="cascade-card__hint">
-              <i data-lucide="cloud-off" class="w-4 h-4"></i>
+              <i data-icon="cloud-off" class="w-4 h-4"></i>
               Photos need a connection. Add one from the play card once this uploads.
             </p>
           </section>
@@ -1431,14 +1431,14 @@
               <img src="${escapeAttr(url)}" alt="Selected play photo" />
               <button class="btn btn-ghost btn-xs cascade-photo__remove"
                       onclick="window.playFlowView._clearPhoto()">
-                <i data-lucide="x" class="w-3.5 h-3.5"></i> Remove
+                <i data-icon="x" class="w-3.5 h-3.5"></i> Remove
               </button>
             </div>
           ` : `
             <label class="cascade-photo__pick">
               <input type="file" accept="image/*" class="hidden"
                      onchange="window.playFlowView._onPhotoSelect(this.files && this.files[0])" />
-              <i data-lucide="camera" class="w-5 h-5"></i>
+              <i data-icon="camera" class="w-5 h-5"></i>
               <span>Tap to add photo (optional)</span>
             </label>
           `}
@@ -1453,7 +1453,7 @@
                   ${this._saving ? "disabled" : ""}
                   onclick="window.playFlowView._save()">
             ${this._saving ? "Saving…" : "Save play"}
-            <i data-lucide="check" class="w-4 h-4"></i>
+            <i data-icon="check" class="w-4 h-4"></i>
           </button>
         </div>
       `;
@@ -1575,17 +1575,17 @@
         <div class="cascade-game-chip">
           ${game.thumbnail_url
             ? `<img class="cascade-game-chip__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />`
-            : `<div class="cascade-game-chip__thumb cascade-game-chip__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
+            : `<div class="cascade-game-chip__thumb cascade-game-chip__thumb--placeholder"><i data-icon="dice-6"></i></div>`}
           <div class="cascade-game-chip__name">${escapeHtml(game.name)}</div>
           <button class="cascade-game-chip__details" type="button"
                   title="View game details" aria-label="View game details"
                   onclick="window.playFlowView._openGameDetails()">
-            <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+            <i data-icon="arrow-up-right" class="w-4 h-4"></i>
           </button>
           <button class="cascade-game-chip__clear" type="button"
                   title="Change game" aria-label="Clear pick"
                   onclick="window.playFlowView._clearGamePick()">
-            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            <i data-icon="x" class="w-3.5 h-3.5"></i>
           </button>
         </div>
       `;
@@ -2111,10 +2111,10 @@
           <section class="cascade-card cascade-card--expansions is-disabled" aria-disabled="true">
             <div class="collapsible-header collapsible-header--static">
               <span class="collapsible-header__title">
-                <i data-lucide="puzzle" class="w-4 h-4"></i>
+                <i data-icon="puzzle" class="w-4 h-4"></i>
                 Expansions
               </span>
-              <i data-lucide="chevron-right" class="w-4 h-4 collapsible-header__chev"></i>
+              <i data-icon="chevron-right" class="w-4 h-4 collapsible-header__chev"></i>
             </div>
             <p class="cascade-card__hint">${escapeHtml(disabledHint)}</p>
           </section>
@@ -2133,10 +2133,10 @@
           <button class="collapsible-header" aria-expanded="${open}"
                   onclick="window.playFlowView._toggleExpansionsPicker()">
             <span class="collapsible-header__title">
-              <i data-lucide="puzzle" class="w-4 h-4"></i>
+              <i data-icon="puzzle" class="w-4 h-4"></i>
               <span class="cascade-exp-title">${this._expansionsHeaderLabel()}</span>
             </span>
-            <i data-lucide="${chevron}" class="w-4 h-4 collapsible-header__chev"></i>
+            <i data-icon="${chevron}" class="w-4 h-4 collapsible-header__chev"></i>
           </button>
           ${open ? `
             ${showFilter ? this._renderExpansionFilter() : ""}
@@ -2148,7 +2148,7 @@
             <div class="cascade-exp-actions">
               <button type="button" class="btn btn-sm expansion-import-btn"
                       onclick="window.playFlowView._openImportExpansions()">
-                <i data-lucide="plus" class="w-4 h-4"></i> Import expansions
+                <i data-icon="plus" class="w-4 h-4"></i> Import expansions
               </button>
             </div>
           ` : ""}
@@ -2160,7 +2160,7 @@
       const q = this._expansionQuery || "";
       return `
         <div class="game-finder cascade-exp-filter">
-          <i data-lucide="search" class="w-4 h-4 game-finder__icon"></i>
+          <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
           <input type="text" id="cascade-exp-filter-input"
                  class="input input-bordered game-finder__input cascade-exp-filter__input"
                  placeholder="Filter expansions…" aria-label="Filter expansions by name"
@@ -2169,7 +2169,7 @@
                  oninput="window.playFlowView._onExpansionFilterInput(this.value)" />
           <button type="button" class="field-clear-btn" aria-label="Clear filter" ${q ? "" : "hidden"}
                   onclick="window.playFlowView._clearExpansionFilter()">
-            <i data-lucide="x" class="w-4 h-4"></i>
+            <i data-icon="x" class="w-4 h-4"></i>
           </button>
         </div>
       `;
@@ -2258,12 +2258,12 @@
           <span class="expansion-list__dot"></span>
           ${e.thumbnail_url
             ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" class="expansion-list__thumb" loading="lazy" />`
-            : `<div class="expansion-list__thumb expansion-list__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
+            : `<div class="expansion-list__thumb expansion-list__thumb--placeholder"><i data-icon="dice-6"></i></div>`}
           <div class="expansion-list__body">
             <div class="expansion-list__name">${escapeHtml(label)}</div>
           </div>
           <span class="cascade-exp-toggle ${active ? "cascade-exp-toggle--on" : ""}">
-            <i data-lucide="${active ? "check" : "plus"}" class="w-4 h-4"></i>
+            <i data-icon="${active ? "check" : "plus"}" class="w-4 h-4"></i>
           </span>
         </li>
       `;

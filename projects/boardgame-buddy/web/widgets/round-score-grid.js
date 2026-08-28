@@ -90,7 +90,7 @@
                     ${editable ? `
                       <button class="scoring-round-remove" title="Remove round"
                               onclick="window.${host}._removeRoundAt(${r})">
-                        <i data-lucide="x" class="w-3 h-3"></i>
+                        <i data-icon="x" class="w-3 h-3"></i>
                       </button>
                     ` : ""}
                     R${r + 1}
@@ -115,7 +115,7 @@
       ${editable ? `
         <div class="flex gap-2 mt-1">
           <button class="btn btn-ghost btn-xs" onclick="window.${host}._addRound()">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Round
+            <i data-icon="plus" class="w-3.5 h-3.5"></i> Round
           </button>
         </div>
       ` : ""}
@@ -163,9 +163,9 @@
           ? `<button class="scoring-winner-btn ${p.is_winner ? "is-winner" : ""}"
                      title="${p.is_winner ? "Winner" : "Mark as winner"}"
                      onclick="window.${host}._toggleWinner(${i})">
-              <i data-lucide="${p.is_winner ? "trophy" : "circle"}" class="w-4 h-4"></i>
+              <i data-icon="${p.is_winner ? "trophy" : "circle"}" class="w-4 h-4"></i>
             </button>`
-          : (p.is_winner ? `<i data-lucide="trophy" class="w-4 h-4"></i>` : "")}
+          : (p.is_winner ? `<i data-icon="trophy" class="w-4 h-4"></i>` : "")}
         <span class="scoring-total${negClass}">${escapeHtml(total)}</span>
       </div>
     </td>`;

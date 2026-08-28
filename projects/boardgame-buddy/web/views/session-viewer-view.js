@@ -488,7 +488,7 @@
       return `
         <header class="search-topbar">
           <button class="btn btn-ghost btn-sm" onclick="window.router.back('feed')">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="font-display font-semibold text-base play-detail__crumb">
             Session ${escapeHtml(codeLabel)}
@@ -534,7 +534,7 @@
             <div class="cascade-game">
               ${game.thumbnail_url
                 ? `<img class="cascade-game__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />`
-                : `<div class="cascade-game__thumb cascade-game__thumb--placeholder"><i data-lucide="dice-6" class="w-5 h-5"></i></div>`}
+                : `<div class="cascade-game__thumb cascade-game__thumb--placeholder"><i data-icon="dice-6" class="w-5 h-5"></i></div>`}
               <div>
                 <div class="cascade-game__name">${escapeHtml(game.name)}</div>
                 <div class="cascade-game__sub">${host ? "Hosted by " + escapeHtml(host.display_name) : ""}</div>
@@ -542,7 +542,7 @@
             </div>
           ` : `
             <div class="cascade-game">
-              <div class="cascade-game__thumb cascade-game__thumb--placeholder"><i data-lucide="dice-6" class="w-5 h-5"></i></div>
+              <div class="cascade-game__thumb cascade-game__thumb--placeholder"><i data-icon="dice-6" class="w-5 h-5"></i></div>
               <div>
                 <div class="cascade-game__name">Waiting on host to pick a game</div>
                 <div class="cascade-game__sub">${host ? "Hosted by " + escapeHtml(host.display_name) : ""}</div>
@@ -553,7 +553,7 @@
 
         <section class="cascade-card">
           <label class="cascade-card__label">
-            <i data-lucide="users" class="w-3.5 h-3.5"></i>
+            <i data-icon="users" class="w-3.5 h-3.5"></i>
             Lobby (${participants.length})
           </label>
           ${participants.length === 0
@@ -582,7 +582,7 @@
           ${badge}
           <span class="cascade-player__name">${escapeHtml(p.display_name)}</span>
           ${isHost
-            ? `<span class="session-viewer__host-tag"><i data-lucide="crown" class="w-3 h-3"></i> Host</span>`
+            ? `<span class="session-viewer__host-tag"><i data-icon="crown" class="w-3 h-3"></i> Host</span>`
             : ""}
         </li>
       `;
@@ -691,7 +691,7 @@
       return `
         <section class="cascade-card">
           <p class="text-sm opacity-80">
-            <i data-lucide="hourglass" class="w-4 h-4 inline align-middle"></i>
+            <i data-icon="hourglass" class="w-4 h-4 inline align-middle"></i>
             The host is wrapping up. Hang tight…
           </p>
         </section>
@@ -704,7 +704,7 @@
       if (s.status === "abandoned" || s.phase === "abandoned") {
         const banner = `
           <div class="session-viewer__status session-viewer__status--abandoned">
-            <i data-lucide="x-circle" class="w-4 h-4"></i>
+            <i data-icon="x-circle" class="w-4 h-4"></i>
             The host ended the session.
           </div>
         `;

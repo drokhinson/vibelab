@@ -71,7 +71,7 @@
     const host = _body();
     if (!host) return;
     host.innerHTML = html;
-    if (window.lucide) window.lucide.createIcons({ root: host });
+    window.BgbIcons.render(host);
   }
 
   function _renderStates() {
@@ -134,7 +134,7 @@
             <button type="button" class="import-exp-row__add"
                     data-exp-action="import" data-exp-bgg-id="${e.bgg_id}"
                     aria-label="Import ${escapeHtml(e.name)}">
-              <i data-lucide="plus" class="w-4 h-4"></i>
+              <i data-icon="plus" class="w-4 h-4"></i>
             </button>
           </li>
         `).join("")}
@@ -226,8 +226,8 @@
       if (!_root()) return;
       // Fail this row only — the rest of the list stays usable.
       btnEl.disabled = false;
-      btnEl.innerHTML = `<i data-lucide="rotate-ccw" class="w-4 h-4"></i>`;
-      if (window.lucide) window.lucide.createIcons({ root: btnEl });
+      btnEl.innerHTML = `<i data-icon="rotate-ccw" class="w-4 h-4"></i>`;
+      window.BgbIcons.render(btnEl);
       if (row) row.classList.add("import-exp-row--error");
       if (errEl) {
         errEl.textContent = (e && e.message) || "Import failed — tap to retry.";
@@ -275,7 +275,7 @@
       <div class="polaroid-popup__card polaroid-popup__card--confirm import-exp-modal"
            role="dialog" aria-modal="true" aria-label="Import expansions">
         <button class="polaroid-popup__close" aria-label="Close">
-          <i data-lucide="x" class="w-4 h-4"></i>
+          <i data-icon="x" class="w-4 h-4"></i>
         </button>
         <div class="polaroid-popup__title">Import expansions</div>
         <p class="polaroid-popup__body import-exp-modal__hint">
@@ -284,13 +284,13 @@
             : "Expansions BoardGameGeek lists for this game."}
         </p>
         <div class="game-finder import-exp-search" hidden>
-          <i data-lucide="search" class="w-4 h-4 game-finder__icon"></i>
+          <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
           <input type="text" class="input input-bordered game-finder__input import-exp-search__input"
                  placeholder="Filter expansions…" aria-label="Filter expansions by name"
                  autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
           <button type="button" class="field-clear-btn"
                   data-exp-action="clear-filter" aria-label="Clear filter" hidden>
-            <i data-lucide="x" class="w-4 h-4"></i>
+            <i data-icon="x" class="w-4 h-4"></i>
           </button>
         </div>
         <div class="import-exp-modal__body"></div>
@@ -300,7 +300,7 @@
       if (ev.target === root) dismiss();
     });
     document.body.appendChild(root);
-    if (window.lucide) window.lucide.createIcons({ root });
+    window.BgbIcons.render(root);
 
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => dismiss());

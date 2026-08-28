@@ -101,7 +101,7 @@
     const caret = active && active.selectionStart;
 
     root.innerHTML = renderCard();
-    if (window.lucide) window.lucide.createIcons({ root });
+    window.BgbIcons.render(root);
 
     const closeBtn = root.querySelector(".play-detail-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", dismiss);
@@ -122,7 +122,7 @@
       return `
         <div class="play-detail-popup__card" role="dialog" aria-modal="true" aria-busy="true">
           <button class="play-detail-popup__close" aria-label="Close">
-            <i data-lucide="x" class="w-4 h-4"></i>
+            <i data-icon="x" class="w-4 h-4"></i>
           </button>
           <div class="play-detail-popup__loading">${window.buddyLoader({ size: 80 })}</div>
         </div>
@@ -132,7 +132,7 @@
       return `
         <div class="play-detail-popup__card" role="alertdialog" aria-modal="true">
           <button class="play-detail-popup__close" aria-label="Close">
-            <i data-lucide="x" class="w-4 h-4"></i>
+            <i data-icon="x" class="w-4 h-4"></i>
           </button>
           <div class="play-detail-popup__error">${escapeHtml(state.error)}</div>
         </div>
@@ -144,7 +144,7 @@
         <div class="play-detail-popup__topbar">
           <span></span>
           <button class="play-detail-popup__close" type="button" aria-label="Close">
-            <i data-lucide="x" class="w-4 h-4"></i>
+            <i data-icon="x" class="w-4 h-4"></i>
           </button>
         </div>
         <div class="play-detail-popup__scroll">
@@ -166,7 +166,7 @@
           <button class="btn btn-ghost play-detail__delete-btn" type="button"
                   ${state.saving ? "disabled" : ""}
                   onclick="window.PlayDetailPopup._deletePlay()">
-            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
+            <i data-icon="trash-2" class="w-4 h-4"></i> Delete
           </button>
           <button class="btn btn-ghost" type="button"
                   onclick="window.PlayDetailPopup._cancelEdit()">Cancel</button>
@@ -183,7 +183,7 @@
         <div class="play-detail-popup__footer">
           <button class="play-detail-popup__edit play-detail-popup__edit--full" type="button"
                   onclick="window.PlayDetailPopup._enterEdit()">
-            <i data-lucide="pencil" class="w-4 h-4"></i>
+            <i data-icon="pencil" class="w-4 h-4"></i>
             <span>Edit</span>
           </button>
         </div>
@@ -201,7 +201,7 @@
           <button class="play-detail-popup__edit play-detail-popup__edit--full play-detail__leave-btn" type="button"
                   ${state.saving ? "disabled" : ""}
                   onclick="window.PlayDetailPopup._leavePlay()">
-            <i data-lucide="ghost" class="w-4 h-4"></i>
+            <i data-icon="ghost" class="w-4 h-4"></i>
             <span>${state.saving ? "Removing…" : "I didn't play — remove me"}</span>
           </button>
         </div>
@@ -234,7 +234,7 @@
       : (p.is_own
           ? `<button class="play-detail-popup__add-photo" type="button"
                      onclick="window.PlayDetailPopup._enterEditWithPhotoPicker()">
-              <i data-lucide="image-plus" class="w-6 h-6"></i>
+              <i data-icon="image-plus" class="w-6 h-6"></i>
               <span class="play-detail-popup__add-photo-title">Add a photo</span>
               <span class="play-detail-popup__add-photo-hint">Tap to upload</span>
             </button>`
@@ -247,7 +247,7 @@
         ${(p.expansions || []).length > 0 ? `
           <section class="play-detail__section">
             <h3 class="play-detail__section-title">
-              <i data-lucide="puzzle" class="w-4 h-4"></i> Expansions
+              <i data-icon="puzzle" class="w-4 h-4"></i> Expansions
             </h3>
             <ul class="play-detail__expansions">
               ${(p.expansions || []).map((e) => `
@@ -266,14 +266,14 @@
         ${p.notes ? `
           <section class="play-detail__section">
             <h3 class="play-detail__section-title">
-              <i data-lucide="sticky-note" class="w-4 h-4"></i> Notes
+              <i data-icon="sticky-note" class="w-4 h-4"></i> Notes
             </h3>
             <p class="play-detail__notes">${escapeHtml(p.notes)}</p>
           </section>` : ""}
 
         <section class="play-detail__section">
           <h3 class="play-detail__section-title">
-            <i data-lucide="users" class="w-4 h-4"></i> Players
+            <i data-icon="users" class="w-4 h-4"></i> Players
           </h3>
           ${ranked.length === 0
             ? `<div class="text-sm opacity-60">No players recorded.</div>`
@@ -290,7 +290,7 @@
                         extraClass: "play-detail__player-badge",
                       }) : ""}
                       <span class="play-detail__player-text">${escapeHtml(pl.name)}</span>
-                      ${pl.is_winner ? `<i data-lucide="crown" class="w-3.5 h-3.5 play-detail__player-crown"></i>` : ""}
+                      ${pl.is_winner ? `<i data-icon="crown" class="w-3.5 h-3.5 play-detail__player-crown"></i>` : ""}
                     </span>
                     <span class="play-detail__player-score">${pl.score != null ? pl.score : ""}</span>
                   </li>
@@ -301,7 +301,7 @@
         ${hasRoundGrid(p.players) ? `
           <section class="play-detail__section play-detail__section--rounds">
             <h3 class="play-detail__section-title">
-              <i data-lucide="layers" class="w-4 h-4"></i> Rounds
+              <i data-icon="layers" class="w-4 h-4"></i> Rounds
             </h3>
             ${window.renderRoundGrid(
               (p.players || []).map((pl) => ({
@@ -389,14 +389,14 @@
             <label class="play-detail__edit-photo-replace">
               <input type="file" accept="image/*" class="hidden play-detail-popup__photo-file"
                      onchange="window.PlayDetailPopup._onPhotoSelect(this.files)" />
-              <i data-lucide="camera" class="w-4 h-4"></i> Replace photo
+              <i data-icon="camera" class="w-4 h-4"></i> Replace photo
             </label>
           ` : `
             <label class="play-detail__edit-photo-pick">
               <input type="file" accept="image/*" class="hidden play-detail-popup__photo-file"
                      onchange="window.PlayDetailPopup._onPhotoSelect(this.files)" />
               <span class="play-detail__edit-photo-pick-icon">
-                <i data-lucide="image-plus" class="w-5 h-5"></i>
+                <i data-icon="image-plus" class="w-5 h-5"></i>
               </span>
               <span class="play-detail__edit-photo-pick-body">
                 <span class="play-detail__edit-photo-pick-title">Add a photo</span>
@@ -412,7 +412,7 @@
           <section class="play-detail__section play-detail__section--rounds">
             <div class="scoring-section__head">
               <h3 class="play-detail__section-title">
-                <i data-lucide="layers" class="w-4 h-4"></i> Rounds
+                <i data-icon="layers" class="w-4 h-4"></i> Rounds
               </h3>
               ${window.RoundGridSign.renderToggle("PlayDetailPopup")}
             </div>
@@ -426,7 +426,7 @@
 
         <section class="play-detail__section">
           <h3 class="play-detail__section-title">
-            <i data-lucide="users" class="w-4 h-4"></i> Players
+            <i data-icon="users" class="w-4 h-4"></i> Players
           </h3>
           <ul class="play-detail__edit-players">
             ${d.players.map((pl, i) => `
@@ -445,7 +445,7 @@
                 </label>
                 <button class="btn btn-ghost btn-xs" title="Remove" type="button"
                         onclick="window.PlayDetailPopup._removePlayer(${i})">
-                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                  <i data-icon="x" class="w-3.5 h-3.5"></i>
                 </button>
               </li>
             `).join("")}
@@ -464,14 +464,14 @@
           ${hasRoundGrid(d.players, "roundScores") ? "" : `
             <button class="btn btn-ghost btn-xs play-detail__init-rounds" type="button"
                     onclick="window.PlayDetailPopup._initRounds()">
-              <i data-lucide="layers" class="w-3.5 h-3.5"></i> Track per-round scores
+              <i data-icon="layers" class="w-3.5 h-3.5"></i> Track per-round scores
             </button>
           `}
         </section>
 
         <section class="play-detail__section">
           <h3 class="play-detail__section-title">
-            <i data-lucide="sticky-note" class="w-4 h-4"></i> Notes
+            <i data-icon="sticky-note" class="w-4 h-4"></i> Notes
           </h3>
           <textarea class="textarea textarea-bordered w-full" rows="2"
                     oninput="window.PlayDetailPopup._setDraft('notes', this.value)">${escapeHtml(d.notes)}</textarea>
@@ -512,7 +512,7 @@
                     aria-label="Go to game detail page"
                     title="Go to game detail page"
                     onclick="${gameNav}">
-              <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+              <i data-icon="arrow-up-right" class="w-4 h-4"></i>
             </button>
           ` : ""}
         </div>

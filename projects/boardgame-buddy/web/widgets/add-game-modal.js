@@ -40,7 +40,7 @@
       <div class="polaroid-popup__card polaroid-popup__card--confirm add-game-modal"
            role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
         <button class="polaroid-popup__close" aria-label="Close">
-          <i data-lucide="x" class="w-4 h-4"></i>
+          <i data-icon="x" class="w-4 h-4"></i>
         </button>
         <div class="polaroid-popup__title">${escapeHtml(title)}</div>
         <p class="polaroid-popup__body add-game-modal__hint">
@@ -54,7 +54,7 @@
       if (ev.target === root) dismiss();
     });
     document.body.appendChild(root);
-    if (window.lucide) window.lucide.createIcons({ root });
+    window.BgbIcons.render(root);
 
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => dismiss());

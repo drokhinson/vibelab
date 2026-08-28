@@ -28,7 +28,7 @@
       const configMissing = !cfg || !cfg.supabaseUrl || !cfg.supabaseAnonKey;
       const configBanner = configMissing
         ? `<div class="alert alert-warning mb-4 text-sm">
-             <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+             <i data-icon="alert-triangle" class="w-4 h-4"></i>
              <span>Supabase auth is not configured. Check supabaseUrl / supabaseAnonKey in config.js.</span>
            </div>`
         : "";
@@ -42,7 +42,7 @@
       const offline = !!(window.BgbNet && window.BgbNet.isOffline());
       const offlineBanner = offline
         ? `<div class="alert alert-warning mb-4 text-sm">
-             <i data-lucide="cloud-off" class="w-4 h-4"></i>
+             <i data-icon="cloud-off" class="w-4 h-4"></i>
              <span>You're offline. Signing in needs a connection — plays you
              already recorded are safe on this device.</span>
            </div>`

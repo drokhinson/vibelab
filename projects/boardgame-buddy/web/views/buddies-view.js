@@ -32,7 +32,7 @@
       return `
         <header class="search-topbar search-topbar--flush">
           <button class="btn btn-ghost btn-sm" onclick="window.router.back('profile-self')">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="font-display font-semibold text-lg">Buddies</h2>
           <span></span>
@@ -118,7 +118,7 @@
           ${this._q
             ? `<ul class="search-list">${this._search.map((u) => `
                 <li class="search-hit" onclick="window.router.go('profile-other',{userId:'${u.id}'})">
-                  <div class="search-hit__placeholder"><i data-lucide="user"></i></div>
+                  <div class="search-hit__placeholder"><i data-icon="user"></i></div>
                   <div class="search-hit__body">
                     <div class="search-hit__name">${escapeHtml(u.display_name)}</div>
                     ${u.username ? `<div class="search-hit__meta">@${escapeHtml(u.username)}</div>` : ""}
@@ -186,7 +186,7 @@
                           aria-label="Remove buddy"
                           title="Remove buddy"
                           onclick="event.stopPropagation();window.buddiesView._unfriend('${b.id}')">
-                    <i data-lucide="x" class="w-4 h-4"></i>
+                    <i data-icon="x" class="w-4 h-4"></i>
                   </button>
                 </li>
               `;}).join("")}</ul>`}

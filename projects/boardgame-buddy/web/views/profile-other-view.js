@@ -95,7 +95,7 @@
       return `
         <header>
           <button class="btn btn-ghost btn-sm" onclick="window.router.back('feed')" aria-label="Back">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
         </header>
       `;
@@ -123,15 +123,15 @@
 
     _renderRelationButton(p) {
       if (p.is_buddy) {
-        return `<button class="btn btn-sm btn-ghost" disabled><i data-lucide="check" class="w-4 h-4"></i> Buddies</button>`;
+        return `<button class="btn btn-sm btn-ghost" disabled><i data-icon="check" class="w-4 h-4"></i> Buddies</button>`;
       }
       if (p.has_pending_request) {
         if (p.pending_request_direction === "incoming") {
-          return `<button class="btn btn-sm btn-primary" onclick="window.profileOtherView._accept('${p.id}')"><i data-lucide="user-check" class="w-4 h-4"></i> Accept request</button>`;
+          return `<button class="btn btn-sm btn-primary" onclick="window.profileOtherView._accept('${p.id}')"><i data-icon="user-check" class="w-4 h-4"></i> Accept request</button>`;
         }
-        return `<button class="btn btn-sm btn-ghost" disabled><i data-lucide="clock" class="w-4 h-4"></i> Request sent</button>`;
+        return `<button class="btn btn-sm btn-ghost" disabled><i data-icon="clock" class="w-4 h-4"></i> Request sent</button>`;
       }
-      return `<button class="btn btn-sm btn-primary" onclick="window.profileOtherView._addBuddy('${p.id}')"><i data-lucide="user-plus" class="w-4 h-4"></i> Buddy up</button>`;
+      return `<button class="btn btn-sm btn-primary" onclick="window.profileOtherView._addBuddy('${p.id}')"><i data-icon="user-plus" class="w-4 h-4"></i> Buddy up</button>`;
     }
 
     async _addBuddy(userId) {
@@ -222,11 +222,11 @@
       return `
         <section class="preview-card">
           <header class="preview-card__head">
-            <span class="preview-card__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
+            <span class="preview-card__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
             <h3 class="preview-card__title font-display">${escapeHtml(title)}</h3>
             <span class="preview-card__sub">${escapeHtml(sub)}</span>
             <button class="preview-card__seeall" onclick="${seeAllJs}">
-              See all <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              See all <i data-icon="chevron-right" class="w-3 h-3"></i>
             </button>
           </header>
           <div class="preview-card__body">${body}</div>
@@ -253,7 +253,7 @@
         <li class="preview-card__play" onclick="window.PlayDetailPopup.show('${p.id}')">
           ${p.game_thumbnail
             ? `<img class="preview-card__play-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
-            : `<div class="preview-card__play-thumb preview-card__play-thumb--placeholder"><i data-lucide="dice-6" class="w-4 h-4"></i></div>`}
+            : `<div class="preview-card__play-thumb preview-card__play-thumb--placeholder"><i data-icon="dice-6" class="w-4 h-4"></i></div>`}
           <div class="preview-card__play-info">
             <div class="preview-card__play-name">${escapeHtml(p.game_name || "")}</div>
             ${playerCount > 0 ? `<div class="preview-card__play-meta">${playerCount} ${playerCount === 1 ? "player" : "players"}</div>` : ""}

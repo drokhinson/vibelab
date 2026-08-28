@@ -43,16 +43,15 @@
       // synchronously just before this). Re-hydrating is idempotent and covers
       // the case where that call threw.
       this._hydrateFromCache();
-      // Signal dropping (or returning) changes which host cards make sense and
-      // whether the pending banner offers an Upload button; a background flush
-      // draining the queue removes the banner entirely. View.listen
-      // auto-unsubscribes on unmount.
+      // Signal dropping (or returning) changes which host cards make sense.
+      // The upload queue is account-level state and now lives in the global
+      // header (ui/outbox-indicator.js), so this view no longer watches it.
+      // View.listen auto-unsubscribes on unmount.
       this.listen("offline", () => {
-        this._patchOfflineRegions();
+        this._patchChooserCards();
         // The Join half is a widget, so it can't subscribe for itself.
         window.joinPanel.syncOffline();
       });
-      this.listen("outboxCount", () => this._patchOfflineRegions());
       this._refreshLastPlay();
     }
 
@@ -88,28 +87,36 @@
         </header>
 
         ${resumable ? `
-          <section class="cascade-chooser__resume">
-            <div class="cascade-chooser__resume-body">
-              <span class="cascade-chooser__resume-title">Resume hosting?</span>
-              <span class="cascade-chooser__resume-meta">
-                ${game ? escapeHtml(game.name) : "Game in progress"}
-                · code ${escapeHtml(ps.code)}
-              </span>
+          <section class="lp-stub">
+            <div class="lp-stub__top">
+              ${game && game.thumbnail_url
+                ? `<img class="lp-stub__art" src="${escapeAttr(game.thumbnail_url)}" alt="" loading="lazy" />`
+                : ""}
+              <div class="lp-stub__body">
+                <span class="lp-stub__eyebrow">In progress</span>
+                <span class="lp-stub__title">${game ? escapeHtml(game.name) : "Game in progress"}</span>
+                <span class="lp-stub__meta">${(ps.players || []).length
+                  ? `${(ps.players || []).length} players`
+                  : "Lobby open"}</span>
+              </div>
+              <div class="lp-stub__perf" aria-hidden="true"></div>
+              <div class="lp-stub__code">
+                <b>${escapeHtml(ps.code)}</b><span>code</span>
+              </div>
             </div>
-            <div class="cascade-chooser__resume-actions">
-              <button class="btn btn-primary btn-sm"
-                      onclick="window.logPlayView._resume()">
-                Resume
-              </button>
+            <div class="lp-stub__actions">
               <button class="btn btn-ghost btn-sm"
                       onclick="window.logPlayView._discard()">
                 Discard
+              </button>
+              <button class="btn btn-primary btn-sm"
+                      onclick="window.logPlayView._resume()">
+                Resume
               </button>
             </div>
           </section>
         ` : ""}
 
-        <div id="lp-pending-host">${this._renderPendingUploads()}</div>
 
         <div class="cascade-chooser__cards">${this._renderChooserCards()}</div>
 
@@ -127,96 +134,53 @@
       window.joinPanel.mount(this.container.querySelector("#lp-join-mount"));
     }
 
-    /**
-     * "N plays waiting to upload", above the host cards.
-     *
-     * Sits here rather than only in Settings because this is the screen the
-     * host lands on straight after an offline save, and a queue nobody can see
-     * is a queue nobody trusts. Auto-flushing already happens on boot, on
-     * `online` and on tab focus — the button is for the case where the user
-     * can see they have signal and the app hasn't noticed yet.
-     */
-    _renderPendingUploads() {
-      const n = window.Outbox ? window.Outbox.count() : 0;
-      if (!n) return "";
-      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
-      return `
-        <section class="lp-pending">
-          <span class="lp-pending__icon">
-            <i data-lucide="cloud-upload" class="w-4 h-4"></i>
-          </span>
-          <div class="lp-pending__body">
-            <span class="lp-pending__title">
-              ${n} ${n === 1 ? "play" : "plays"} waiting to upload
-            </span>
-            <span class="lp-pending__meta">
-              ${offline ? "They'll go up when you're back online." : "Uploading…"}
-            </span>
-          </div>
-          ${offline ? "" : `
-            <button class="btn btn-primary btn-sm"
-                    onclick="window.logPlayView._flushOutbox()">
-              Upload now
-            </button>
-          `}
-        </section>
-      `;
-    }
-
-    async _flushOutbox() {
-      const res = await window.Outbox.flush();
-      if (res.sent > 0 && window.showToast) {
-        window.showToast(`Uploaded ${res.sent} ${res.sent === 1 ? "play" : "plays"}.`, "success");
-      } else if (res.remaining > 0 && window.showToast) {
-        window.showToast("Still can't reach the server — they're safe on this device.", "error");
-      }
-      // Outbox.flush() publishes outboxCount, which patches the banner. The
-      // explicit call covers the no-op case (nothing sent, count unchanged),
-      // where the store never fires.
-      this._patchOfflineRegions();
-    }
-
-    /**
-     * Repaint just the two regions connectivity touches.
-     *
-     * Not render(): that rebuilds the whole container via innerHTML, which
-     * replaces the JoinPanel's host element and would wipe a half-typed
-     * session code every time the network flapped or a background flush
-     * landed. Same reasoning as _patchChooserCards below.
-     */
-    _patchOfflineRegions() {
-      if (!this._mounted) return;
-      const pending = this.container.querySelector("#lp-pending-host");
-      if (pending) {
-        pending.innerHTML = this._renderPendingUploads();
-        this.refreshIcons(pending);
-      }
-      this._patchChooserCards();
-    }
-
+    // Hosting is the primary action, "Another round" is a shortcut with real
+    // content behind it, and the explorer is browsing. Rendering all three as
+    // identical rows asserted they were peers. The lid + ruled-rows split
+    // encodes the actual hierarchy.
     _renderChooserCards() {
       const offline = !!(window.BgbNet && window.BgbNet.isOffline());
       return `
-        <button class="cascade-chooser__card cascade-chooser__card--host"
-                onclick="window.logPlayView._host()">
-          <span class="cascade-chooser__card-icon">
-            <i data-lucide="${offline ? "cloud-off" : "dice-6"}" class="w-7 h-7"></i>
+        <button class="lp-lid" onclick="window.logPlayView._host()">
+          <span class="lp-lid__emboss" aria-hidden="true">
+            <img src="assets/sprites/bgb-die.svg" alt="" />
           </span>
-          <span class="cascade-chooser__card-title">Host a game</span>
-          <span class="cascade-chooser__card-body">${offline
-            ? "Offline — saves to this device."
-            : "Open a session, log a play."}</span>
+          <span class="lp-lid__kicker">${offline ? "Offline" : "Start something"}</span>
+          <span class="lp-lid__title">Host a game</span>
+          <span class="lp-lid__sub">${offline
+            ? "Saves to this device and uploads when you're back online."
+            : "Open a session and log a play. Everyone joins with a code."}</span>
         </button>
 
-        ${this._renderAnotherRoundCard()}
+        <div class="lp-quiet">
+          ${this._renderAnotherRoundCard()}
+          <button class="lp-quiet__row" onclick="window.router.go('game-explorer')">
+            <span class="lp-quiet__body">
+              <span class="lp-quiet__title">Game explorer</span>
+              <span class="lp-quiet__sub">Browse by players, play time and type.</span>
+            </span>
+            <span class="lp-quiet__go" aria-hidden="true">&rarr;</span>
+          </button>
+        </div>
+      `;
+    }
 
-        <button class="cascade-chooser__card cascade-chooser__card--explore"
-                onclick="window.router.go('game-explorer')">
-          <span class="cascade-chooser__card-icon">
-            <i data-lucide="compass" class="w-7 h-7"></i>
+    _renderAnotherRoundCard() {
+      const p = this._lastPlay;
+      if (!p || !p.game_id) return "";
+      const names = (p.players || []).map((x) => x.name).filter(Boolean);
+      const art = p.game_thumbnail;
+      const label = [p.game_name, names.join(", ")].filter(Boolean).join(" · ");
+      return `
+        <button class="lp-quiet__row" onclick="window.logPlayView._anotherRound()">
+          ${art
+            ? `<img class="lp-quiet__art" src="${escapeHtml(art)}" alt="" loading="lazy" />`
+            : ""}
+          <span class="lp-quiet__body">
+            <span class="lp-quiet__title">Another round</span>
+            <span class="lp-quiet__sub">${label ? escapeHtml(label) : "Same game, fresh scores."}</span>
           </span>
-          <span class="cascade-chooser__card-title">Game Explorer</span>
-          <span class="cascade-chooser__card-body">Browse by players, play time and type.</span>
+          <span class="lp-quiet__go" aria-hidden="true">&rarr;</span>
         </button>
       `;
     }
@@ -302,7 +266,15 @@
     // the join panel below (and blow away a half-typed code) the moment a late
     // last-play landed. With the seed in place this path is rare; when it does
     // run, nothing outside the card row moves.
+    /**
+     * Repaint just the host cards.
+     *
+     * Not render(): that rebuilds the whole container via innerHTML, which
+     * replaces the JoinPanel's host element and would wipe a half-typed
+     * session code every time the network flapped.
+     */
     _patchChooserCards() {
+      if (!this._mounted) return;
       const el = this.container.querySelector(".cascade-chooser__cards");
       if (!el) { this.render(); return; }
       el.innerHTML = this._renderChooserCards();
@@ -316,26 +288,6 @@
     // adjacent. The 48px slot carries the game's box art rather than a Lucide
     // glyph; renderGamePolaroid() is deliberately not reused here, it's a full
     // grid tile (big photo + caption + status badge), not an avatar-sized mark.
-    _renderAnotherRoundCard() {
-      const p = this._lastPlay;
-      if (!p || !p.game_id) return "";
-      const names = (p.players || []).map((x) => x.name).filter(Boolean);
-      const art = p.game_thumbnail;
-      return `
-        <button class="cascade-chooser__card cascade-chooser__card--again"
-                onclick="window.logPlayView._anotherRound()">
-          <span class="cascade-chooser__card-icon${art ? " cascade-chooser__card-icon--photo" : ""}">
-            ${art
-              ? `<img src="${escapeHtml(art)}" alt="" loading="lazy" />`
-              : `<i data-lucide="dice-6" class="w-7 h-7"></i>`}
-          </span>
-          <span class="cascade-chooser__card-title">Another Round</span>
-          <span class="cascade-chooser__card-body cascade-chooser__card-body--players">
-            ${names.length ? escapeHtml(names.join(", ")) : "Same game, fresh scores."}
-          </span>
-        </button>
-      `;
-    }
 
     // Stages the previous game + roster into a fresh draft and drops the
     // user on Gather, exactly like the wrap-up card's "Another round?".
