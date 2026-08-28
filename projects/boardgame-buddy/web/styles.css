@@ -58,7 +58,21 @@
   --accent-hover: #EFBC62;
   --accent-quiet: rgba(224, 169, 74, 0.14);
 
+  /* Accent on a PAPER surface. --accent/--accent-hover are tuned for the app
+     ground; paper is light in BOTH themes, so gold ink on it must be dark in
+     both. Using --accent-hover here is what made the Settings section labels
+     render at 1.6:1 on the cream sheet. */
+  --accent-ink:   #8A5F0B;
+  /* Solid-accent chips: the fill, and what is legible on top of it. */
+  --accent-fill:  #E0A94A;
+  --on-accent:    #2B1E06;
+  --accent-fill-grad: linear-gradient(120deg, #F0C662, var(--accent) 60%, var(--accent-hover));
+  --accent-fill-sh:   0 6px 14px -4px rgba(201, 146, 42, 0.55),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+
   --win:  #C8553D;                       /* terracotta — winners, in-progress */
+  --ok:   #1F6B2E;                       /* success — won tag, connected dot */
+  --warn: #A05A12;                       /* warning — stale sync, needs action */
   --rust: #C8553D;                       /* destructive */
   --rust-soft:   rgba(200, 85, 61, 0.28);
   --rust-strong: rgba(200, 85, 61, 0.85);
@@ -67,9 +81,19 @@
   /* Paper — the play card surface */
   --paper:       #F8F2E5;
   --paper-ink:   #211A12;
-  --paper-muted: #7C7263;
+  --paper-muted: #6F6556;   /* was #7C7263 — only 4.2:1 on the cream above */
   --paper-line:  #E6DCC8;
   --card-border: transparent;            /* dark needs no border; light does */
+
+  /* Sheet — the full-bleed surface behind Settings and the profile spokes
+     (.bgb-cream-screen). Dark lays one sheet of cream paper over the espresso
+     ground; light drops it entirely (see the light block) because the page
+     ground is already warm paper. */
+  --sheet-bg:        var(--paper);
+  --sheet-ink:       var(--paper-ink);
+  --sheet-ink-muted: var(--paper-muted);
+  --sheet-card:      var(--polaroid-bg-soft);
+  --sheet-line:      var(--polaroid-line);
 
   --shadow-c: rgba(12, 5, 0, 0.62);      /* tinted to the ground, never pure black */
   --sh-1: 0 1px 2px var(--shadow-c);
@@ -110,7 +134,19 @@
   --accent-hover: #8E5F10;
   --accent-quiet: rgba(168, 114, 21, 0.13);
 
+  /* Accent on paper — same job as in dark, and here paper is white. */
+  --accent-ink:   #8E5F10;
+  /* --accent itself is too mid-toned to carry text: white on #A87215 is only
+     4.1:1, so a solid accent chip fills with the darker gold instead. */
+  --accent-fill:  #8E5F10;
+  --on-accent:    #FFFFFF;
+  --accent-fill-grad: linear-gradient(120deg, #9C6812, #8E5F10 55%, #7A4F0B);
+  --accent-fill-sh:   0 6px 14px -4px rgba(122, 79, 11, 0.32),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.22);
+
   --win:  #A8452F;
+  --ok:   #1B6029;
+  --warn: #96520E;
   --rust: #A8452F;
   --rust-soft:   rgba(168, 69, 47, 0.24);
   --rust-strong: rgba(168, 69, 47, 0.85);
@@ -122,6 +158,15 @@
   --paper-muted: #7C7263;
   --paper-line:  #E8DFCD;
   --card-border: rgba(48, 34, 20, 0.12);
+
+  /* No sheet in light: the page ground IS the warm paper, so a second cream
+     layer just flattens the screen. Cards go white on it with the hairline
+     above, exactly like the feed. */
+  --sheet-bg:        transparent;
+  --sheet-ink:       oklch(var(--bc));
+  --sheet-ink-muted: var(--ink-muted);
+  --sheet-card:      var(--paper);
+  --sheet-line:      rgba(48, 34, 20, 0.14);
 
   --shadow-c: rgba(120, 88, 44, 0.20);
   --sh-1: 0 1px 2px var(--shadow-c);
@@ -439,7 +484,7 @@ body {
   list-style: disc outside;
 }
 .scroll-chapter__content a {
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -1149,7 +1194,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .chapter-edit__preview h4 {
   font-family: var(--font-polaroid, var(--font-display));
   font-weight: 600;
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
   margin: 0.85rem 0 0.35rem;
 }
 .chapter-edit__preview h2 { font-size: 1.15rem; }
@@ -1165,7 +1210,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .chapter-edit__preview li { margin: 0.2rem 0; color: #4a3c28; }
 .chapter-edit__preview a {
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -2454,7 +2499,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    re-color the glyph and the muted-state body against the cream palette
    instead of the dark-theme oklch tokens. */
 .bgb-cream-screen .bgg-log { color: var(--polaroid-ink, #1D1812); }
-.bgb-cream-screen .bgg-log__icon { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .bgg-log__icon { color: var(--accent-ink); }
 .bgb-cream-screen .bgg-log__icon--idle { background: var(--polaroid-line, #DAC9A4); }
 .bgb-cream-screen .bgg-log__step--idle .bgg-log__body { color: var(--polaroid-muted, #8B7E68); }
 .bgb-cream-screen .bgg-log__sublist { color: var(--polaroid-muted, #8B7E68); }
@@ -2763,7 +2808,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   position: absolute; top: 2px; right: 2px;
   min-width: 16px; height: 16px;
   padding: 0 4px; border-radius: 999px;
-  background: var(--accent); color: #1a0d00;
+  background: var(--accent-fill); color: var(--on-accent);
   font-size: 0.62rem; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center;
 }
@@ -2804,9 +2849,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .filter-chip:hover { border-color: var(--accent); }
 .filter-chip.is-active {
-  background: var(--accent);
-  color: #1a0d00;
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
   font-weight: 600;
 }
 
@@ -2827,7 +2872,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   gap: 0.5rem;
   padding: 0.5rem 1rem;
   background: var(--polaroid-bg, #FFFBF1);
-  border-top: 1px solid var(--polaroid-line, #DAC9A4);
+  border-top: 1px solid var(--sheet-line);
   box-shadow:
     0 -2px 12px rgba(58, 42, 8, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.65);
@@ -3256,14 +3301,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   letter-spacing: 0.04em;
   vertical-align: 0.1em;
 }
+/* Both chips sit inside a .buddies-row, which is a paper card in either theme —
+   so they read from the paper tokens. oklch(var(--bc)/…) is the *ground*
+   foreground (near-white in dark), which left the label and dashed border
+   invisible on the cream card. */
 .player-type-chip--account {
   background: oklch(0.55 0.15 60 / 0.18);
-  color: oklch(0.85 0.15 60);
+  color: oklch(0.45 0.15 60);
 }
 .player-type-chip--custom {
-  background: oklch(var(--bc) / 0.08);
-  color: oklch(var(--bc) / 0.65);
-  border: 1px dashed oklch(var(--bc) / 0.25);
+  background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
+  color: var(--polaroid-muted, #8B7E68);
+  border: 1px dashed color-mix(in srgb, var(--polaroid-ink) 25%, transparent);
 }
 .buddies-row--ghost { flex-wrap: wrap; }
 .buddies-row--ghost.is-expanded {
@@ -3272,13 +3321,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .buddies-row__avatar--ghost {
   background: oklch(var(--b1));
-  border: 1px dashed oklch(var(--bc) / 0.35);
+  border: 1px dashed color-mix(in srgb, var(--polaroid-ink) 35%, transparent);
 }
 .buddies-link-panel {
   flex-basis: 100%;
   margin-top: 0.55rem;
   padding-top: 0.55rem;
-  border-top: 1px dashed oklch(var(--bc) / 0.2);
+  border-top: 1px dashed color-mix(in srgb, var(--polaroid-ink) 22%, transparent);
   display: flex; flex-direction: column; gap: 0.4rem;
   cursor: default;
 }
@@ -5620,12 +5669,12 @@ main[data-view="session-viewer"].hidden {
 .profile-stat-card {
   background: var(--polaroid-bg, #FFFBF1);
   color: var(--polaroid-ink, #1D1812);
-  border: none;
+  border: 1px solid var(--card-border);
   border-radius: 0.95rem;
   padding: 0.65rem 0.3rem 0.55rem;
   text-align: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--sh-2);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   min-height: 68px;
   display: flex;
@@ -5636,10 +5685,10 @@ main[data-view="session-viewer"].hidden {
 }
 .profile-stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+  box-shadow: var(--sh-3);
 }
 .profile-stat-card--static { cursor: default; }
-.profile-stat-card--static:hover { transform: none; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22); }
+.profile-stat-card--static:hover { transform: none; box-shadow: var(--sh-2); }
 .profile-stat-card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -5649,7 +5698,7 @@ main[data-view="session-viewer"].hidden {
   font-size: 1.45rem;
   font-weight: 700;
   line-height: 1;
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
 }
 .profile-stat-card__v--text {
   font-size: 0.82rem;
@@ -5677,7 +5726,8 @@ main[data-view="session-viewer"].hidden {
   border-radius: 1.1rem;
   padding: 0.9rem 0.95rem 0.95rem;
   margin-top: 0.75rem;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--sh-3);
 }
 .preview-card__head {
   display: flex;
@@ -5686,7 +5736,7 @@ main[data-view="session-viewer"].hidden {
   margin-bottom: 0.7rem;
 }
 .preview-card__icon {
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
   display: grid; place-items: center;
 }
 .preview-card__title {
@@ -5704,7 +5754,7 @@ main[data-view="session-viewer"].hidden {
 }
 .preview-card__seeall {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
   border: none;
   border-radius: 999px;
   padding: 0.4rem 0.8rem;
@@ -5745,7 +5795,7 @@ main[data-view="session-viewer"].hidden {
   position: relative;
   background: var(--polaroid-line, #DAC9A4);
   cursor: pointer;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--sh-2);
   transition: transform 0.15s;
 }
 .preview-card__cover:hover { transform: translateY(-2px); }
@@ -5817,8 +5867,8 @@ main[data-view="session-viewer"].hidden {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  background: color-mix(in srgb, #1f6b2e 18%, transparent);
-  color: #1f6b2e;
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
   border-radius: 999px;
   padding: 0.1rem 0.45rem;
   font-family: var(--font-sans);
@@ -5850,11 +5900,11 @@ main[data-view="session-viewer"].hidden {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 0.9rem;
-  color: #fff;
-  background: var(--accent-hover, #B8820E);
+  color: var(--on-accent);
+  background: var(--accent-fill);
   border: 2.5px solid var(--polaroid-bg, #FFFBF1);
   margin-left: -0.55rem;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--sh-1);
 }
 /* When the bud is a .user-badge, the badge's inline-color background takes
    over but we still want the overlap + ring look. */
@@ -5879,14 +5929,14 @@ main[data-view="session-viewer"].hidden {
   width: 44px; height: 44px;
   border-radius: 0.7rem;
   border: none;
-  background: rgba(247, 240, 223, 0.06);
+  background: oklch(var(--bc) / 0.07);
   color: var(--accent);
   cursor: pointer;
   display: grid; place-items: center;
   flex: none;
   transition: background 0.15s, transform 0.15s;
 }
-.spoke-head__back:hover { background: rgba(247, 240, 223, 0.14); transform: translateX(-2px); }
+.spoke-head__back:hover { background: oklch(var(--bc) / 0.14); transform: translateX(-2px); }
 .spoke-head__back:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -5935,8 +5985,8 @@ main[data-view="session-viewer"].hidden {
 .spoke-toggle__pill {
   flex: 1;
   border-radius: 999px;
-  border: 1.5px solid rgba(247, 240, 223, 0.14);
-  background: rgba(247, 240, 223, 0.05);
+  border: 1.5px solid oklch(var(--bc) / 0.14);
+  background: oklch(var(--bc) / 0.05);
   color: oklch(var(--bc) / 0.72);
   padding: 0.6rem 0.85rem;
   font-size: 0.85rem;
@@ -5951,15 +6001,14 @@ main[data-view="session-viewer"].hidden {
 }
 .spoke-toggle__pill:hover { color: oklch(var(--bc)); border-color: var(--accent); }
 .spoke-toggle__pill.is-active {
-  background: linear-gradient(120deg, #F0C662, var(--accent) 60%, var(--accent-hover));
-  color: #3a2a08;
+  background: var(--accent-fill-grad);
+  color: var(--on-accent);
   border-color: transparent;
   /* Lift the selected pill off the row so the user can tell at a glance
      which mode they're viewing — the prior inactive/active contrast on
      the cream sheet read as "two identical tabs" until the gold glow
      was added back. */
-  box-shadow: 0 6px 14px -4px rgba(201, 146, 42, 0.55),
-              inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow: var(--accent-fill-sh);
   font-weight: 800;
 }
 .spoke-toggle__count {
@@ -5993,14 +6042,15 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-ink, #1D1812);
   border-radius: 0.85rem;
   padding: 0.65rem 0.75rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--sh-2);
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   min-height: 64px;
 }
 .plays-list__row:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+  box-shadow: var(--sh-3);
 }
 .plays-list__thumb {
   width: 50px; height: 50px;
@@ -6055,7 +6105,7 @@ main[data-view="session-viewer"].hidden {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
   font-weight: 700;
 }
 
@@ -6064,14 +6114,15 @@ main[data-view="session-viewer"].hidden {
   background: var(--polaroid-bg, #FFFBF1);
   color: var(--polaroid-ink, #1D1812);
   border-radius: 1.1rem;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--sh-3);
   overflow: hidden;
 }
 .set-card-label {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 0.78rem;
-  color: var(--accent);
+  color: var(--accent-ink);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 1rem 0.25rem 0.45rem;
@@ -6124,7 +6175,7 @@ main[data-view="session-viewer"].hidden {
   border-radius: 0.65rem;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
   font-family: var(--font-sans);
   font-weight: 700;
   font-size: 0.78rem;
@@ -6164,7 +6215,7 @@ main[data-view="session-viewer"].hidden {
   border-radius: 0.65rem;
   display: grid; place-items: center;
   background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
   flex: none;
 }
 .set-card__row-body { flex: 1; min-width: 0; }
@@ -6191,8 +6242,8 @@ main[data-view="session-viewer"].hidden {
   place-items: center;
 }
 .set-card__badge {
-  background: var(--accent);
-  color: #3a2a08;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   border-radius: 999px;
   min-width: 24px;
   height: 22px;
@@ -6215,7 +6266,7 @@ main[data-view="session-viewer"].hidden {
 .set-card__bgg-mark {
   font-family: var(--font-display);
   font-size: 0.78rem;
-  color: var(--accent);
+  color: var(--accent-ink);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
@@ -6247,9 +6298,9 @@ main[data-view="session-viewer"].hidden {
 .set-card__bgg-status-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: #2f8a3e;
+  background: var(--ok);
 }
-.set-card__bgg-status--warn { color: #b96a1c; }
+.set-card__bgg-status--warn { color: var(--warn); }
 
 /* Soft gold rim when the user-badge "me" sits on the dark global header so it
    reads as a single coin rather than dissolving into the bar. */
@@ -6259,59 +6310,66 @@ main[data-view="session-viewer"].hidden {
 
 /* ────────────────────────────────────────────────────────────────────────────
    Cream screen — secondary views (Settings + spokes)
-   The Profile hub keeps its dark backdrop with cream cards on top, but
-   every spoke the hub routes into (Collection / Wishlist / Plays /
-   Buddies / Settings) reads as one big sheet of cream paper. Inputs,
-   filter pills, list rows, and the collection-tile placeholder all flip
-   to ink-on-cream so they stay legible against the new surface.
+   Every spoke the hub routes into (Collection / Wishlist / Plays / Buddies /
+   Settings) reads as one big sheet of paper. Inputs, filter pills, list rows
+   and the collection-tile placeholder all flip to ink-on-paper so they stay
+   legible against it.
+
+   The sheet is a DARK-mode device: it is what separates these screens from the
+   espresso ground. In light the page ground already IS warm paper, so a second
+   cream layer only flattens the screen — --sheet-bg goes transparent there and
+   the cards carry the separation instead (white on cream + --card-border),
+   exactly like the feed. Everything below stays valid in both themes because
+   the surface under it is light either way; only the tokens differ.
    ────────────────────────────────────────────────────────────────────────── */
 .bgb-cream-screen {
-  background: var(--polaroid-bg, #FFFBF1);
-  color: var(--polaroid-ink, #1D1812);
+  background: var(--sheet-bg);
+  color: var(--sheet-ink);
 }
 
 /* Spoke head chrome (back arrow + title + count) */
 .bgb-cream-screen .spoke-head__back {
   background: color-mix(in srgb, var(--polaroid-ink) 6%, transparent);
-  color: var(--accent-hover, #B8820E);
+  color: var(--accent-ink);
 }
 .bgb-cream-screen .spoke-head__back:hover {
   background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
 }
-.bgb-cream-screen .spoke-head__title { color: var(--accent-hover, #B8820E); }
-.bgb-cream-screen .spoke-head__count { color: var(--polaroid-muted, #8B7E68); }
+.bgb-cream-screen .spoke-head__title { color: var(--accent-ink); }
+.bgb-cream-screen .spoke-head__count { color: var(--sheet-ink-muted); }
 
 /* Buddies-view header reuses .search-topbar instead of .spoke-head — match
    the cream-screen look so the back button doesn't disappear into the
    bg. */
-.bgb-cream-screen .search-topbar h2 { color: var(--accent-hover, #B8820E); }
-.bgb-cream-screen .search-topbar .btn-ghost { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .search-topbar h2 { color: var(--accent-ink); }
+.bgb-cream-screen .search-topbar .btn-ghost { color: var(--accent-ink); }
 
-/* Cards: drop the cream bg (parent is cream) onto a slightly warmer wash
-   so they still read as discrete elements without floating on dead air. */
+/* Cards: in dark the parent is cream, so they sit on a slightly warmer wash to
+   read as discrete elements without floating on dead air; in light --sheet-card
+   is plain white against the cream ground, which does the same job. */
 .bgb-cream-screen .set-card,
 .bgb-cream-screen .plays-list__row,
 .bgb-cream-screen .buddies-row {
-  background: var(--polaroid-bg-soft, #F5EEDC);
+  background: var(--sheet-card);
   color: var(--polaroid-ink, #1D1812);
 }
 .bgb-cream-screen .buddies-row {
-  border: 1px solid var(--polaroid-line, #DAC9A4);
+  border: 1px solid var(--sheet-line);
 }
 .bgb-cream-screen .buddies-row__avatar { background: var(--polaroid-line, #DAC9A4); color: var(--polaroid-ink); }
 .bgb-cream-screen .buddies-row__name { color: var(--polaroid-ink, #1D1812); }
 .bgb-cream-screen .buddies-row__when { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
-.bgb-cream-screen .buddies-section { border-top-color: var(--polaroid-line, #DAC9A4); }
-.bgb-cream-screen .buddies-section h3 { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .buddies-section { border-top-color: var(--sheet-line); }
+.bgb-cream-screen .buddies-section h3 { color: var(--accent-ink); }
 
 /* Profile-search suggestion rows under the buddies-view search bar —
    .search-hit defaults to DaisyUI's dark base tones, which render as
    black boxes on cream. Match the warm-wash polaroid look used by
    .buddies-row so the suggestions stay legible. */
 .bgb-cream-screen .search-hit {
-  background: var(--polaroid-bg-soft, #F5EEDC);
+  background: var(--sheet-card);
   color: var(--polaroid-ink, #1D1812);
-  border: 1px solid var(--polaroid-line, #DAC9A4);
+  border: 1px solid var(--sheet-line);
 }
 .bgb-cream-screen .search-hit:hover { border-color: var(--accent); }
 .bgb-cream-screen .search-hit__placeholder {
@@ -6331,7 +6389,7 @@ main[data-view="session-viewer"].hidden {
 .set-card .input.input-bordered {
   background: var(--polaroid-bg, #FFFBF1);
   color: var(--polaroid-ink, #1D1812);
-  border: 1px solid var(--polaroid-line, #DAC9A4);
+  border: 1px solid var(--sheet-line);
 }
 .bgb-cream-screen .input::placeholder,
 .set-card .input::placeholder { color: var(--polaroid-muted, #8B7E68); }
@@ -6354,7 +6412,7 @@ main[data-view="session-viewer"].hidden {
   font-size: 0.92rem;
   color: var(--polaroid-ink, #1D1812);
   padding: 0.4rem 0 0.3rem;
-  border-bottom: 1px solid var(--polaroid-line, #DAC9A4);
+  border-bottom: 1px solid var(--sheet-line);
 }
 .set-card__cache-breakdown {
   display: flex;
@@ -6386,53 +6444,46 @@ main[data-view="session-viewer"].hidden {
   background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
 }
 
-/* Owned ↔ Played toggle pills */
-.bgb-cream-screen .spoke-toggle__pill {
-  background: var(--polaroid-bg-soft, #F5EEDC);
+/* Owned ↔ Played toggle pills. Scoped to :not(.is-active) so the selected
+   pill keeps the gold gradient from the base .is-active rule — this override
+   used to tie with it on specificity and knock its background out, which is
+   why a duplicate .is-active block had to be re-declared here. One gradient,
+   one place, no drift. */
+.bgb-cream-screen .spoke-toggle__pill:not(.is-active) {
+  background: var(--sheet-card);
   color: var(--polaroid-muted, #8B7E68);
-  border-color: var(--polaroid-line, #DAC9A4);
+  border-color: var(--sheet-line);
 }
-.bgb-cream-screen .spoke-toggle__pill:hover {
+.bgb-cream-screen .spoke-toggle__pill:not(.is-active):hover {
   border-color: var(--accent);
   color: var(--polaroid-ink, #1D1812);
-}
-/* Re-apply the gold gradient active state — the cream-screen base rule
-   above ties on specificity with the dark-theme `.is-active` block and
-   was knocking out its background, so the selected pill was rendering
-   indistinguishable from the inactive one on the Collection screen. */
-.bgb-cream-screen .spoke-toggle__pill.is-active {
-  background: linear-gradient(120deg, #F0C662, var(--accent) 60%, var(--accent-hover));
-  border-color: transparent;
-  color: #3a2a08;
-  box-shadow: 0 6px 14px -4px rgba(201, 146, 42, 0.45),
-              inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 /* Filter chips (player count / playtime / play mode) */
 .bgb-cream-screen .filter-chip {
   background: var(--polaroid-bg, #FFFBF1);
-  border-color: var(--polaroid-line, #DAC9A4);
+  border-color: var(--sheet-line);
   color: var(--polaroid-ink, #1D1812);
 }
 .bgb-cream-screen .filter-chip:hover { border-color: var(--accent); }
 .bgb-cream-screen .filter-chip.is-active {
-  background: var(--accent);
-  color: #3a2a08;
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
 }
 .bgb-cream-screen .search-filters {
-  background: var(--polaroid-bg-soft, #F5EEDC);
-  border: 1px solid var(--polaroid-line, #DAC9A4);
+  background: var(--sheet-card);
+  border: 1px solid var(--sheet-line);
 }
-.bgb-cream-screen .search-filter-label { color: var(--polaroid-muted, #8B7E68); }
-.bgb-cream-screen .search-filter-badge { background: var(--accent); color: #3a2a08; }
+.bgb-cream-screen .search-filter-label { color: var(--sheet-ink-muted); }
+.bgb-cream-screen .search-filter-badge { background: var(--accent-fill); color: var(--on-accent); }
 
 /* Collection-tile + recent-plays placeholders need cream-tone background
    instead of the dark theme's `--b2`/`--b3` so they sit cleanly on the
    cream sheet. */
 .bgb-cream-screen .collection-tile {
-  background: var(--polaroid-bg-soft, #F5EEDC);
-  border: 1px solid var(--polaroid-line, #DAC9A4);
+  background: var(--sheet-card);
+  border: 1px solid var(--sheet-line);
 }
 .bgb-cream-screen .collection-tile__name { color: var(--polaroid-ink, #1D1812); }
 .bgb-cream-screen .collection-tile__placeholder {
@@ -6442,14 +6493,14 @@ main[data-view="session-viewer"].hidden {
 
 /* Plays-list typography overrides (the cards still come from the .plays-list
    block above; these just polish the text contrast on cream). */
-.bgb-cream-screen .day-divider { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .day-divider { color: var(--accent-ink); }
 
 /* Empty-state and pager captions */
-.bgb-cream-screen .profile-empty { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
-.bgb-cream-screen .opacity-60 { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
+.bgb-cream-screen .profile-empty { color: var(--sheet-ink-muted); opacity: 1; }
+.bgb-cream-screen .opacity-60 { color: var(--sheet-ink-muted); opacity: 1; }
 
 /* Settings: section labels + BGG attribution footer */
-.bgb-cream-screen .set-card-label { color: var(--accent-hover, #B8820E); }
+.bgb-cream-screen .set-card-label { color: var(--accent-ink); }
 .bgb-cream-screen .settings-bgg-credit { color: var(--polaroid-muted, #8B7E68); }
 .bgb-cream-screen .settings-bgg-credit__text { color: var(--polaroid-muted, #8B7E68); }
 
@@ -7020,15 +7071,20 @@ main[data-view="session-viewer"].hidden {
 
 /* ── Theme segmented control (Settings → Appearance) ─────────────────────────
    Three states, so a two-position switch can't express it: "Auto" follows the
-   OS, Light and Dark are explicit overrides. */
+   OS, Light and Dark are explicit overrides.
+
+   This control sits INSIDE a .set-card, i.e. on paper — so every token it reads
+   has to be a paper token. It used to paint its track with oklch(var(--b2)),
+   the app *ground*, which rendered as a near-black strip across the cream card
+   in dark mode. */
 .set-card__row--static { cursor: default; }
 .theme-seg {
   display: flex;
   gap: 4px;
   padding: 4px;
   margin: 0 12px 12px;
-  background: oklch(var(--b2));
-  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--polaroid-ink) 7%, transparent);
+  border: 1px solid var(--sheet-line);
   border-radius: var(--r-md);
 }
 .theme-seg__opt {
@@ -7038,17 +7094,17 @@ main[data-view="session-viewer"].hidden {
   border: none;
   border-radius: var(--r-sm);
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--polaroid-muted, #8B7E68);
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: background 160ms var(--ease), color 160ms var(--ease);
 }
-.theme-seg__opt:hover { color: var(--ink); }
+.theme-seg__opt:hover { color: var(--polaroid-ink); }
 .theme-seg__opt.is-on {
-  background: var(--accent);
-  color: var(--bg-0);
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 
 /* Separator between winner name and score. Was a U+2736 dingbat, which is the
