@@ -2,8 +2,8 @@
 //
 // Composition:
 //   - Optional "resume play" chip when a PlaySession draft is active
-//   - Mixed cards from /feed: plays (spine) + hot games / suggested buddies /
-//     featured-from-collection (first page only)
+//   - Mixed cards from /feed: plays (spine) + hot games / suggested buddies
+//     (first page only)
 //   - "Load more" tail when next_cursor is set
 //   Game search lives on the Host/Join landing now (Find a Game that fits).
 
@@ -338,8 +338,6 @@
           return this._renderHotGamesCard(card);
         case "suggested_buddies":
           return this._renderSuggestedBuddiesCard(card);
-        case "featured_from_collection":
-          return this._renderFeaturedFromCollectionCard(card);
         default:
           return "";
       }
@@ -385,10 +383,11 @@
       `;
     }
 
-    // Both game rails ("Hot this week", "Time to revisit") are the same
-    // component with a different heading and meta line — they used to be two
-    // byte-identical copies of a bespoke `.hot-game-tile`. Tiles now delegate
-    // to the canonical Game component per .claude/rules/ui-object-design.md §2.
+    // Shared game-rail component — a heading plus a horizontal strip of game
+    // tiles. It used to back two rails ("Hot this week" and the since-removed
+    // "Time to revisit"), so it stays parameterised by heading and meta line.
+    // Tiles delegate to the canonical Game component per
+    // .claude/rules/ui-object-design.md §2.
     /**
      * @param {any} card
      * @param {{icon: string, title: string, meta: (entry: any) => string}} opts
@@ -448,14 +447,6 @@
       `;
     }
 
-    _renderFeaturedFromCollectionCard(card) {
-      return this._renderGameRail(card, {
-        icon: "archive",
-        title: "Time to revisit",
-        meta: (entry) => (entry.last_played_at ? "Last: " + formatDate(entry.last_played_at) : "Never played"),
-      });
-    }
-
     async _addBuddy(userId, btnEl) {
       try {
         btnEl.disabled = true;
@@ -473,17 +464,17 @@
   // Bucket plays by sessionKey across the whole page. Every play that shares
   // a (played_at, sorted-participant-set) key collapses into one
   // { kind: "play_session", plays: [...] } card no matter what non-play
-  // cards (Hot Games, Suggested Buddies, Featured-From-Collection) the
-  // backend interleaves between them. The session card lands at the
+  // cards (Hot Games, Suggested Buddies) the backend interleaves between
+  // them. The session card lands at the
   // position of the FIRST play with that key; non-play cards stay where
   // the backend put them. Single-play sessions still wrap so every feed
   // item carries the gold-bordered section + clickable header.
   //
   // Before: a strict consecutive walk fragmented sessions whenever the
   // backend interleaved a non-play card between two same-key plays — a
-  // common case since feed_service.py inserts Featured-From-Collection
-  // and Suggested-Buddies after the first play on page 1, splitting any
-  // game-night whose plays land in the top two slots.
+  // common case since feed_service.py inserts Suggested-Buddies after the
+  // first play on page 1, splitting any game-night whose plays land in the
+  // top two slots.
 
   function groupCards(rawCards) {
     const out = [];
@@ -617,10 +608,5 @@
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return (parts[0] || "?").slice(0, 2).toUpperCase();
   }
-  function formatDate(iso) {
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-
   window.FeedView = FeedView;
 })();

@@ -859,21 +859,10 @@ class FeedSuggestedBuddiesCard(BaseModel):
     suggestions: list[FeedSuggestedBuddy]
 
 
-class FeedFeaturedFromCollectionEntry(BaseModel):
-    game: GameSummary
-    last_played_at: Optional[date] = None
-
-
-class FeedFeaturedFromCollectionCard(BaseModel):
-    kind: Literal[FeedCardKind.FEATURED_FROM_COLLECTION] = FeedCardKind.FEATURED_FROM_COLLECTION
-    games: list[FeedFeaturedFromCollectionEntry]
-
-
 FeedCard = Union[
     FeedPlayCard,
     FeedHotGamesCard,
     FeedSuggestedBuddiesCard,
-    FeedFeaturedFromCollectionCard,
 ]
 
 
@@ -892,10 +881,6 @@ class HotGamesResponse(BaseModel):
 
 class SuggestedBuddiesResponse(BaseModel):
     suggestions: list[FeedSuggestedBuddy] = []
-
-
-class FeaturedFromCollectionResponse(BaseModel):
-    games: list[FeedFeaturedFromCollectionEntry] = []
 
 
 class GameBundlesResponse(BaseModel):
