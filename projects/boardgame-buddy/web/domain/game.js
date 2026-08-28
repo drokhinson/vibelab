@@ -99,7 +99,9 @@
     }
 
     accentColor() {
-      return this.theme_color || this.expansion_color || "#C9922A";
+      // Fall back to the brand accent token rather than a literal: the old
+// #C9922A was the pre-Lamplight gold and fails contrast on the light ground.
+      return this.theme_color || this.expansion_color || "var(--accent)";
     }
 
     bggUrl() {
