@@ -164,6 +164,25 @@
       // Run on every render so cross-page boundaries fold naturally when new
       // pages append.
       const cards = groupCards(rawCards);
+      // The date is a heading above each day's group, not an eyebrow on every
+      // session — a game night split across two sets of buddies used to print
+      // "Today" twice.
+      //
+      // A SEEN-DAYS SET, not a "did the day change from the previous card"
+      // check: /feed is cursor-paginated by created_at, not played_at (see
+      // STRUCTURE.md), and nothing re-sorts client-side — so a back-dated play
+      // can land between two same-day plays and a consecutive-run walk would
+      // print the same heading twice. Keyed on the raw YYYY-MM-DD string, and
+      // rebuilt on every render, so appending a page can't double-print either.
+      const seenDays = new Set();
+      const body = cards.map((c) => {
+        let heading = "";
+        if (c.kind === "play_session" && c.played_at && !seenDays.has(c.played_at)) {
+          seenDays.add(c.played_at);
+          heading = `<h3 class="day-divider">${escapeHtml(formatSessionDate(c.played_at))}</h3>`;
+        }
+        return heading + this._renderCard(c);
+      }).join("");
       // Search pill + avatar moved into the global app header — feed now
       // jumps straight to the resume chip and the card timeline.
       const html = `
@@ -171,7 +190,7 @@
           ${this._error ? `<div class="alert alert-error mb-3">${this._error}</div>` : ""}
           <div class="feed-cards">
             ${cards.length === 0 && !this._loading ? this._renderEmpty() : ""}
-            ${cards.map((c) => this._renderCard(c)).join("")}
+            ${body}
           </div>
           ${this._renderLoadMore()}
         </div>
@@ -249,7 +268,8 @@
     }
 
     _renderPlaySession(card) {
-      // Header reads "You and Sam played 3 games" / "Bill played Catan".
+      // Header reads "You and Sam played 3 games" / "Bill played Catan". The
+      // date is not here — render() emits it once per day above the group.
       // Names are clickable: viewer's own name → profile-self, others →
       // profile-other. Each play inside the rail still reuses
       // renderPlayCard so flip / no-flip subtrees / state map keep
@@ -269,7 +289,6 @@
         gameCount: card.plays.length,
         gameNameForSingle,
       });
-      const dateLabel = formatSessionDate(card.played_at);
       const sessionPlayCount = card.plays.length;
       const isSingle = sessionPlayCount === 1;
       // Annotate each play with the session play count so the polaroid
@@ -281,7 +300,6 @@
       return `
         <section class="play-session${isSingle ? " play-session--single" : ""}">
           <header class="play-session__header">
-            <span class="play-session__date">${escapeHtml(dateLabel)}</span>
             <span class="play-session__title">${title}</span>
           </header>
           <div class="play-session__scroll">${cards}</div>

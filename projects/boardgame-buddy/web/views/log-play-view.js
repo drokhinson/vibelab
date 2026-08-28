@@ -1,9 +1,10 @@
 // views/log-play-view.js — The Play tab: Host on top, Join on the bottom.
 //
 // Two halves on a single screen, split by a divider:
-//   • Top (Host): "Let's play" heading, an optional "Resume hosting?" banner,
-//     an optional "N plays waiting to upload" banner, then three host cards —
-//     Host a game / Another Round / Game Explorer. With no connection the
+//   • Top (Host): "Let's play" heading, then one list of option cards —
+//     the session in progress (when there is one), Host a game, Another
+//     Round, Game Explorer. They are all the same .lp-opt component; the
+//     only difference between them is surface weight. With no connection the
 //     cards stay exactly where they are and only their copy changes: offline
 //     is detected, never chosen, so there is nothing here to opt into.
 //   • Bottom (Join): the JoinPanel widget — a 5-char code input and the list
@@ -77,48 +78,12 @@
     }
 
     render() {
-      const ps = this._resumableSession();
-      const resumable = !!ps;
-      const game = resumable ? ps.gameSnapshot : null;
-
       this.container.innerHTML = `
         <header class="cascade-chooser__header">
           <h1 class="font-display">Let's play</h1>
         </header>
 
-        ${resumable ? `
-          <section class="lp-stub">
-            <div class="lp-stub__top">
-              ${game && game.thumbnail_url
-                ? `<img class="lp-stub__art" src="${escapeAttr(game.thumbnail_url)}" alt="" loading="lazy" />`
-                : ""}
-              <div class="lp-stub__body">
-                <span class="lp-stub__eyebrow">In progress</span>
-                <span class="lp-stub__title">${game ? escapeHtml(game.name) : "Game in progress"}</span>
-                <span class="lp-stub__meta">${(ps.players || []).length
-                  ? `${(ps.players || []).length} players`
-                  : "Lobby open"}</span>
-              </div>
-              <div class="lp-stub__perf" aria-hidden="true"></div>
-              <div class="lp-stub__code">
-                <b>${escapeHtml(ps.code)}</b><span>code</span>
-              </div>
-            </div>
-            <div class="lp-stub__actions">
-              <button class="btn btn-ghost btn-sm"
-                      onclick="window.logPlayView._discard()">
-                Discard
-              </button>
-              <button class="btn btn-primary btn-sm"
-                      onclick="window.logPlayView._resume()">
-                Resume
-              </button>
-            </div>
-          </section>
-        ` : ""}
-
-
-        <div class="cascade-chooser__cards">${this._renderChooserCards()}</div>
+        <div class="lp-opts">${this._renderChooserCards()}</div>
 
         <hr class="lp-divider" />
 
@@ -134,33 +99,81 @@
       window.joinPanel.mount(this.container.querySelector("#lp-join-mount"));
     }
 
-    // Hosting is the primary action, "Another round" is a shortcut with real
-    // content behind it, and the explorer is browsing. Rendering all three as
-    // identical rows asserted they were peers. The lid + ruled-rows split
-    // encodes the actual hierarchy.
+    // Everything the screen offers is one .lp-opt card — same box, same 44px
+    // mark slot, same type scale. Hosting is still the primary action and the
+    // live session still stands apart, but that is carried by surface weight
+    // (--host's amber wash, --live's terracotta) rather than by three
+    // different components. See the .lp-opt block in styles.css.
     _renderChooserCards() {
       const offline = !!(window.BgbNet && window.BgbNet.isOffline());
       return `
-        <button class="lp-lid" onclick="window.logPlayView._host()">
-          <span class="lp-lid__emboss" aria-hidden="true">
+        ${this._renderResumeCard()}
+
+        <button class="lp-opt lp-opt--host" onclick="window.logPlayView._host()">
+          <span class="lp-opt__emboss" aria-hidden="true">
             <img src="assets/sprites/bgb-die.svg" alt="" />
           </span>
-          <span class="lp-lid__kicker">${offline ? "Offline" : "Start something"}</span>
-          <span class="lp-lid__title">Host a game</span>
-          <span class="lp-lid__sub">${offline
-            ? "Saves to this device and uploads when you're back online."
-            : "Open a session and log a play. Everyone joins with a code."}</span>
+          <span class="lp-opt__mark lp-opt__mark--icon" aria-hidden="true">
+            <i data-icon="dice-6" class="w-6 h-6"></i>
+          </span>
+          <span class="lp-opt__body">
+            <span class="lp-opt__title">Host a game</span>
+            <span class="lp-opt__sub">${offline
+              ? "Saves to this device and uploads when you're back online."
+              : "Open a session — everyone joins with a code."}</span>
+          </span>
         </button>
 
-        <div class="lp-quiet">
-          ${this._renderAnotherRoundCard()}
-          <button class="lp-quiet__row" onclick="window.router.go('game-explorer')">
-            <span class="lp-quiet__body">
-              <span class="lp-quiet__title">Game explorer</span>
-              <span class="lp-quiet__sub">Browse by players, play time and type.</span>
-            </span>
-            <span class="lp-quiet__go" aria-hidden="true">&rarr;</span>
-          </button>
+        ${this._renderAnotherRoundCard()}
+
+        <button class="lp-opt" onclick="window.router.go('game-explorer')">
+          <span class="lp-opt__mark lp-opt__mark--icon" aria-hidden="true">
+            <i data-icon="search" class="w-5 h-5"></i>
+          </span>
+          <span class="lp-opt__body">
+            <span class="lp-opt__title">Game explorer</span>
+            <span class="lp-opt__sub">Browse by players, play time and type.</span>
+          </span>
+        </button>
+      `;
+    }
+
+    // The session in progress. Unlike its siblings this card is not a
+    // navigation — it carries two real buttons — so the row itself is inert
+    // and Discard / Resume are the only tap targets.
+    //
+    // The code rides in the meta line rather than its own ticket column. That
+    // column (plus the perforation and the notches pinned to it) is exactly
+    // what used to push Discard and Resume onto a detached second row; with
+    // it gone, both actions fit on the game's own line.
+    _renderResumeCard() {
+      const ps = this._resumableSession();
+      if (!ps) return "";
+      const game = ps.gameSnapshot;
+      const players = (ps.players || []).length;
+      // The word "code" would push this line past the ~117px the sub gets once
+      // both buttons share the row. The mono/tracked treatment says it for us
+      // — same as the join list's own bare session codes.
+      const meta = [
+        players ? `${players} players` : "Lobby open",
+        ps.code ? `<b class="lp-opt__code">${escapeHtml(ps.code)}</b>` : "",
+      ].filter(Boolean).join(" · ");
+      return `
+        <div class="lp-opt lp-opt--live">
+          ${game && game.thumbnail_url
+            ? `<img class="lp-opt__mark" src="${escapeAttr(game.thumbnail_url)}" alt="" loading="lazy" />`
+            : `<span class="lp-opt__mark lp-opt__mark--icon" aria-hidden="true">
+                 <i data-icon="dice-6" class="w-5 h-5"></i>
+               </span>`}
+          <span class="lp-opt__body">
+            <span class="lp-opt__eyebrow">In progress</span>
+            <span class="lp-opt__title">${game ? escapeHtml(game.name) : "Game in progress"}</span>
+            <span class="lp-opt__sub">${meta}</span>
+          </span>
+          <span class="lp-opt__actions">
+            <button class="lp-opt__discard" onclick="window.logPlayView._discard()">Discard</button>
+            <button class="lp-opt__resume" onclick="window.logPlayView._resume()">Resume</button>
+          </span>
         </div>
       `;
     }
@@ -172,15 +185,16 @@
       const art = p.game_thumbnail;
       const label = [p.game_name, names.join(", ")].filter(Boolean).join(" · ");
       return `
-        <button class="lp-quiet__row" onclick="window.logPlayView._anotherRound()">
+        <button class="lp-opt" onclick="window.logPlayView._anotherRound()">
           ${art
-            ? `<img class="lp-quiet__art" src="${escapeHtml(art)}" alt="" loading="lazy" />`
-            : ""}
-          <span class="lp-quiet__body">
-            <span class="lp-quiet__title">Another round</span>
-            <span class="lp-quiet__sub">${label ? escapeHtml(label) : "Same game, fresh scores."}</span>
+            ? `<img class="lp-opt__mark" src="${escapeAttr(art)}" alt="" loading="lazy" />`
+            : `<span class="lp-opt__mark lp-opt__mark--icon" aria-hidden="true">
+                 <i data-icon="rotate-ccw" class="w-5 h-5"></i>
+               </span>`}
+          <span class="lp-opt__body">
+            <span class="lp-opt__title">Another round</span>
+            <span class="lp-opt__sub">${label ? escapeHtml(label) : "Same game, fresh scores."}</span>
           </span>
-          <span class="lp-quiet__go" aria-hidden="true">&rarr;</span>
         </button>
       `;
     }
@@ -193,9 +207,9 @@
     // in hand.
     //
     // "Host a game" is a NEW game, always: fresh draft, fresh session code,
-    // empty game slot. Continuing an existing session is what the "Resume
-    // hosting?" banner directly above these cards is for — and it is the only
-    // thing that does it.
+    // empty game slot. Continuing an existing session is what the in-progress
+    // card directly above this one is for — and it is the only thing that
+    // does it.
     //
     // This used to skip the clear whenever a resumable draft existed, so a host
     // who tapped Host with one lying around silently landed back in the old
@@ -267,7 +281,9 @@
     // last-play landed. With the seed in place this path is rare; when it does
     // run, nothing outside the card row moves.
     /**
-     * Repaint just the host cards.
+     * Repaint just the option list — resume card included, since it now lives
+     * in the same list. Re-reading _resumableSession() is a localStorage hit,
+     * so this stays cheap.
      *
      * Not render(): that rebuilds the whole container via innerHTML, which
      * replaces the JoinPanel's host element and would wipe a half-typed
@@ -275,19 +291,18 @@
      */
     _patchChooserCards() {
       if (!this._mounted) return;
-      const el = this.container.querySelector(".cascade-chooser__cards");
+      const el = this.container.querySelector(".lp-opts");
       if (!el) { this.render(); return; }
       el.innerHTML = this._renderChooserCards();
       this.refreshIcons(el);
     }
 
-    // Middle host card: replay the last game with the same table. Sits between
-    // Host and Game Explorer — a repeat of last night's game is the more
-    // likely tap than browsing for a new one. Only rendered when there IS a
-    // last play, so a brand-new account sees just Host and Game Explorer,
-    // adjacent. The 48px slot carries the game's box art rather than a Lucide
-    // glyph; renderGamePolaroid() is deliberately not reused here, it's a full
-    // grid tile (big photo + caption + status badge), not an avatar-sized mark.
+    // Sits between Host and Game Explorer — a repeat of last night's game is
+    // the more likely tap than browsing for a new one. Only rendered when
+    // there IS a last play, so a brand-new account sees just Host and Game
+    // Explorer, adjacent. The 44px mark carries the game's box art;
+    // renderGamePolaroid() is deliberately not reused here, it's a full grid
+    // tile (big photo + caption + status badge), not an avatar-sized mark.
 
     // Stages the previous game + roster into a fresh draft and drops the
     // user on Gather, exactly like the wrap-up card's "Another round?".
@@ -340,7 +355,7 @@
       window.router.go("play-flow");
     }
 
-    // ── Resume banner ──────────────────────────────────────────────────────
+    // ── In-progress card ───────────────────────────────────────────────────
 
     _resume() {
       window.router.go("play-flow");

@@ -192,7 +192,7 @@
       }
       const groups = groupPlays(this._plays);
       return groups.map((grp) => `
-        <h3 class="plays-day-divider font-display">${escapeHtml(grp.label)}</h3>
+        <h3 class="day-divider font-display">${escapeHtml(grp.label)}</h3>
         <ul class="plays-list">
           ${grp.items.map((p) => this._renderRow(p)).join("")}
         </ul>
@@ -288,6 +288,7 @@
 
   // Group plays into This week / Last week / Earlier based on played_at,
   // using Monday as the week boundary. Plays with no date land in Earlier.
+  // The heading class is the shared .day-divider the feed also uses.
   function groupPlays(plays) {
     const monday = mondayOf(new Date());
     const lastMonday = new Date(monday);
