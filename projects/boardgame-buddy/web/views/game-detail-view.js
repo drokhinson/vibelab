@@ -98,7 +98,7 @@
       if (this._error) {
         this.container.innerHTML = `
           <header class="search-topbar">
-            <button class="btn btn-ghost btn-sm" onclick="window.router.back('feed')"><i data-lucide="arrow-left" class="w-4 h-4"></i></button>
+            <button class="btn btn-ghost btn-sm" onclick="window.router.back('feed')"><i data-icon="arrow-left" class="w-4 h-4"></i></button>
           </header>
           <div class="p-6 alert alert-error">${escapeHtml(this._error)}</div>
         `;
@@ -119,12 +119,12 @@
       this.container.innerHTML = `
         <article class="game-detail" style="--game-accent:${accent}">
           <button class="btn btn-ghost btn-sm game-detail__back" onclick="window.router.back('feed')" aria-label="Back">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <header class="game-detail__cover">
             <div class="game-detail__polaroid">
               <div class="game-detail__polaroid-photo${heroSrc ? "" : " game-detail__polaroid-photo--empty"}">
-                ${heroSrc ? `<img src="${heroSrc}" alt="" />` : `<i data-lucide="dice-6" class="w-10 h-10"></i>`}
+                ${heroSrc ? `<img src="${heroSrc}" alt="" />` : `<i data-icon="dice-6" class="w-10 h-10"></i>`}
               </div>
               ${g.year_published ? `<div class="game-detail__polaroid-cap">${g.year_published}</div>` : `<div class="game-detail__polaroid-cap">&nbsp;</div>`}
               <span class="game-detail__polaroid-status">
@@ -136,23 +136,23 @@
             <h1 class="game-detail__name font-display">${escapeHtml(g.name)}</h1>
             ${this._renderBaseGameLink(g)}
             <div class="game-detail__meta">
-              ${g.is_expansion ? `<span class="game-detail__meta-pill"><i data-lucide="puzzle" class="w-3.5 h-3.5"></i> Expansion</span>` : ""}
-              ${g.playerRangeText() ? `<span class="game-detail__meta-pill"><i data-lucide="users" class="w-3.5 h-3.5"></i> ${g.playerRangeText()}</span>` : ""}
-              ${g.playTimeText() ? `<span class="game-detail__meta-pill"><i data-lucide="clock" class="w-3.5 h-3.5"></i> ${g.playTimeText()}</span>` : ""}
-              ${g.play_mode === "cooperative" ? `<span class="game-detail__meta-pill"><i data-lucide="handshake" class="w-3.5 h-3.5"></i> Co-op</span>` : ""}
+              ${g.is_expansion ? `<span class="game-detail__meta-pill"><i data-icon="puzzle" class="w-3.5 h-3.5"></i> Expansion</span>` : ""}
+              ${g.playerRangeText() ? `<span class="game-detail__meta-pill"><i data-icon="users" class="w-3.5 h-3.5"></i> ${g.playerRangeText()}</span>` : ""}
+              ${g.playTimeText() ? `<span class="game-detail__meta-pill"><i data-icon="clock" class="w-3.5 h-3.5"></i> ${g.playTimeText()}</span>` : ""}
+              ${g.play_mode === "cooperative" ? `<span class="game-detail__meta-pill"><i data-icon="handshake" class="w-3.5 h-3.5"></i> Co-op</span>` : ""}
             </div>
             <div class="game-detail__actions">
               ${g.is_expansion ? "" : `
                 <button class="btn btn-secondary game-detail__action" onclick="window.gameDetailView._startPlay()">
-                  <i data-lucide="play" class="w-4 h-4"></i> Log a play
+                  <i data-icon="play" class="w-4 h-4"></i> Log a play
                 </button>
               `}
               ${g.bggUrl() ? `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--bgg"
                                 href="${g.bggUrl()}" target="_blank" rel="noopener">
-                <i data-lucide="external-link" class="w-4 h-4"></i> BGG
+                <i data-icon="external-link" class="w-4 h-4"></i> BGG
               </a>` : `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--disabled" disabled
                                 title="No BGG link available">
-                <i data-lucide="external-link" class="w-4 h-4"></i> BGG
+                <i data-icon="external-link" class="w-4 h-4"></i> BGG
               </button>`}
               ${this._renderRulebookButton(g)}
             </div>
@@ -184,7 +184,7 @@
       return `
         <section class="game-detail__section">
           <h3 class="game-detail__section-title">
-            <i data-lucide="dice-6" class="w-4 h-4"></i>
+            <i data-icon="dice-6" class="w-4 h-4"></i>
             Recent plays
           </h3>
           <div class="play-session__scroll game-detail__plays-scroll">${cards}</div>
@@ -227,7 +227,7 @@
       if (!g.is_expansion || !g.base_game_id) return "";
       return `
         <a class="game-detail__base-link" onclick="window.router.go('game-detail',{gameId:'${g.base_game_id}',gameName:'${jsStr(g.base_game_name || '')}'})">
-          <i data-lucide="corner-up-left" class="w-3.5 h-3.5"></i>
+          <i data-icon="corner-up-left" class="w-3.5 h-3.5"></i>
           <span>Expansion of <strong>${escapeHtml(g.base_game_name || "base game")}</strong></span>
         </a>
       `;
@@ -243,13 +243,13 @@
       const importBtn = `
         <button class="btn btn-xs expansion-import-btn"
                 onclick="window.gameDetailView._openImportExpansions()">
-          <i data-lucide="plus" class="w-3.5 h-3.5"></i> Import expansions
+          <i data-icon="plus" class="w-3.5 h-3.5"></i> Import expansions
         </button>`;
       if (list.length === 0) {
         return `
           <section class="game-detail__section game-detail__section--expansions">
             <h3 class="game-detail__section-title">
-              <i data-lucide="puzzle" class="w-4 h-4"></i>
+              <i data-icon="puzzle" class="w-4 h-4"></i>
               Expansions
               ${importBtn}
             </h3>
@@ -260,7 +260,7 @@
       return `
         <section class="game-detail__section game-detail__section--expansions">
           <h3 class="game-detail__section-title">
-            <i data-lucide="puzzle" class="w-4 h-4"></i>
+            <i data-icon="puzzle" class="w-4 h-4"></i>
             Expansions (${list.length})
             ${importBtn}
           </h3>
@@ -279,8 +279,8 @@
                   <div class="expansion-polaroid__photo">
                     ${e.thumbnail_url
                       ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" loading="lazy" />`
-                      : `<div class="expansion-polaroid__placeholder"><i data-lucide="dice-6"></i></div>`}
-                    ${owned ? `<span class="expansion-polaroid__check"><i data-lucide="check" class="w-3.5 h-3.5"></i></span>` : ""}
+                      : `<div class="expansion-polaroid__placeholder"><i data-icon="dice-6"></i></div>`}
+                    ${owned ? `<span class="expansion-polaroid__check"><i data-icon="check" class="w-3.5 h-3.5"></i></span>` : ""}
                   </div>
                   <div class="expansion-polaroid__cap">${escapeHtml(label)}</div>
                 </article>
@@ -368,7 +368,7 @@
       return `
         <section class="game-detail__section game-detail__section--guide">
           <h3 class="game-detail__section-title">
-            <i data-lucide="scroll-text" class="w-4 h-4"></i>
+            <i data-icon="scroll-text" class="w-4 h-4"></i>
             Reference guide
           </h3>
           <div id="game-detail-guide-mount"></div>
@@ -416,19 +416,19 @@
           : "";
         return `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--rulebook"
                    href="${url}" target="_blank" rel="noopener"${adminAttrs}>
-                  <i data-lucide="book-open" class="w-4 h-4"></i> Rulebook
+                  <i data-icon="book-open" class="w-4 h-4"></i> Rulebook
                 </a>`;
       }
       if (isAdmin) {
         return `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--add"
                         onclick="window.gameDetailView._promptAddRulebook()"
                         title="Set rulebook URL (admin)">
-                  <i data-lucide="plus" class="w-4 h-4"></i> Rulebook
+                  <i data-icon="plus" class="w-4 h-4"></i> Rulebook
                 </button>`;
       }
       return `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--disabled" disabled
                       title="No rulebook available">
-                <i data-lucide="book-open" class="w-4 h-4"></i> Rulebook
+                <i data-icon="book-open" class="w-4 h-4"></i> Rulebook
               </button>`;
     }
 

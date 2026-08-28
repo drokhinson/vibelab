@@ -179,7 +179,7 @@
           </div>
           ${offline ? `
             <p class="cascade-card__hint">
-              <i data-lucide="cloud-off" class="w-4 h-4"></i>
+              <i data-icon="cloud-off" class="w-4 h-4"></i>
               Joining needs a connection — the lobby lives on the server. You
               can still host your own game offline.
             </p>
@@ -196,7 +196,7 @@
                     title="Refresh"
                     ${this._loading ? "disabled" : ""}
                     onclick="window.joinPanel._load()">
-              <i data-lucide="refresh-cw" class="w-4 h-4 ${this._loading ? "cascade-join__refresh-spin" : ""}"></i>
+              <i data-icon="refresh-cw" class="w-4 h-4 ${this._loading ? "cascade-join__refresh-spin" : ""}"></i>
             </button>
           </div>
           ${this._loading && sessions.length === 0
@@ -209,7 +209,7 @@
         </section>
         `}
       `;
-      if (window.lucide) window.lucide.createIcons({ root: el });
+      window.BgbIcons.render(el);
 
       if (hadFocus) {
         const input = document.getElementById("join-code-input");
@@ -223,7 +223,7 @@
     _renderEmpty() {
       return `
         <div class="cascade-join__empty">
-          <i data-lucide="moon" class="w-6 h-6"></i>
+          <i data-icon="moon" class="w-6 h-6"></i>
           <p>No active sessions right now. Enter a code above if a host shared one.</p>
         </div>
       `;
@@ -234,7 +234,7 @@
       const thumb = s.game && s.game.thumbnail_url
         ? `<img src="${escapeAttr(s.game.thumbnail_url)}" alt="" class="cascade-join__row-thumb" />`
         : `<div class="cascade-join__row-thumb cascade-join__row-thumb--placeholder">
-             <i data-lucide="dice-6" class="w-4 h-4"></i>
+             <i data-icon="dice-6" class="w-4 h-4"></i>
            </div>`;
       // Sessions past Gather are spectator-only — the user lands in the
       // read-only session-viewer and isn't added to the host's player list.
@@ -254,7 +254,7 @@
             <div class="cascade-join__row-bottom">
               <span class="cascade-join__row-game">${escapeHtml(gameName)}</span>
               <span class="cascade-join__row-count">
-                <i data-lucide="users" class="w-3 h-3"></i>
+                <i data-icon="users" class="w-3 h-3"></i>
                 ${s.participant_count}
               </span>
             </div>

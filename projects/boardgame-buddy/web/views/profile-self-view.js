@@ -204,11 +204,11 @@
       return `
         <section class="preview-card ${modifier}">
           <header class="preview-card__head">
-            <span class="preview-card__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
+            <span class="preview-card__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
             <h3 class="preview-card__title font-display">${escapeHtml(title)}</h3>
             <span class="preview-card__sub">${escapeHtml(sub)}</span>
             <button class="preview-card__seeall" onclick="window.router.go('${route}')">
-              See all <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              See all <i data-icon="chevron-right" class="w-3 h-3"></i>
             </button>
           </header>
           <div class="preview-card__body">${body}</div>
@@ -243,11 +243,11 @@
         <li class="preview-card__play" onclick="window.PlayDetailPopup.show('${p.id}')">
           ${p.game_thumbnail
             ? `<img class="preview-card__play-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
-            : `<div class="preview-card__play-thumb preview-card__play-thumb--placeholder"><i data-lucide="dice-6" class="w-4 h-4"></i></div>`}
+            : `<div class="preview-card__play-thumb preview-card__play-thumb--placeholder"><i data-icon="dice-6" class="w-4 h-4"></i></div>`}
           <div class="preview-card__play-info">
             <div class="preview-card__play-name">
               ${escapeHtml(p.game_name || "")}
-              ${youWon ? `<span class="preview-card__play-won"><i data-lucide="trophy" class="w-3 h-3"></i> Won</span>` : ""}
+              ${youWon ? `<span class="preview-card__play-won"><i data-icon="trophy" class="w-3 h-3"></i> Won</span>` : ""}
             </div>
             ${playerCount > 0 ? `<div class="preview-card__play-meta">${playerCount} ${playerCount === 1 ? "player" : "players"}</div>` : ""}
           </div>

@@ -12,7 +12,7 @@ Logging a play also surfaces the reference guide in-line: once a game is picked,
 Prototype
 
 ## Tech Stack
-- **Frontend (web):** Vanilla HTML/CSS/JS, DaisyUI v4 + Tailwind CDN, Lucide icons, Supabase JS SDK (CDN). Installable PWA (`manifest.json` + `sw.js`) so the host flow works with no connectivity — see Offline mode under Screen Flow §3. `ui/install-prompt.js` surfaces the install itself: a dismissable strip docked above the bottom nav on phone-sized viewports, replaying Chrome's `beforeinstallprompt` on tap and falling back to a "Share → Add to Home Screen" hint on iOS (which has no install API). It is shown only on the feed, and only when signed in and not already running standalone; dismissal is session-scoped via the `bgb.pwa.installDismissed` sessionStorage key.
+- **Frontend (web):** Vanilla HTML/CSS/JS, DaisyUI v4 + Tailwind CDN, Phosphor icons vendored in `ui/icons.js`, Supabase JS SDK (CDN). Installable PWA (`manifest.json` + `sw.js`) so the host flow works with no connectivity — see Offline mode under Screen Flow §3. `ui/install-prompt.js` surfaces the install itself: a dismissable strip docked above the bottom nav on phone-sized viewports, replaying Chrome's `beforeinstallprompt` on tap and falling back to a "Share → Add to Home Screen" hint on iOS (which has no install API). It is shown only on the feed, and only when signed in and not already running standalone; dismissal is session-scoped via the `bgb.pwa.installDismissed` sessionStorage key.
 - **Native app (`app/`):** React Native / Expo (SDK 54, RN 0.81, React 19), React Navigation
   (native-stack + bottom-tabs), Context + useReducer state, Supabase Auth (secure-store, PKCE),
   Supabase Realtime for live sessions. Self-contained — theme/api/components live under `app/src`
@@ -208,7 +208,7 @@ Not read on finalize: the host's payload is the grid (see
 |--------|------|-------|
 | id | TEXT PK | `setup`, `player_turn`, `card_reference`, `scoring`, `tips`, `variant` |
 | label | TEXT | human label |
-| icon | TEXT | lucide icon name |
+| icon | TEXT | icon name resolved by `ui/icons.js` (unknown names fall back) |
 | display_order | INT | sort in UI |
 
 ### boardgamebuddy_guide_chapters

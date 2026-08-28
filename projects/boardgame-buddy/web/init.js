@@ -388,7 +388,7 @@
     }
     const probing = !!(window.BgbNet && window.BgbNet.isProbing());
     el.innerHTML = `
-      <i data-lucide="cloud-off" class="w-4 h-4 bgb-offline-banner__icon"></i>
+      <i data-icon="cloud-off" class="w-4 h-4 bgb-offline-banner__icon"></i>
       <span class="bgb-offline-banner__text">
         No connection — plays save to this device.
       </span>
@@ -398,7 +398,7 @@
       </button>
     `;
     el.classList.remove("hidden");
-    if (window.lucide) window.lucide.createIcons({ root: el });
+    window.BgbIcons.render(el);
   }
   window.store.subscribe("offline", syncOfflineBanner);
 
@@ -516,7 +516,7 @@
     wireBottomNav();
     // One document-wide icon pass for the static shell (bottom nav, header).
     // Views refresh their own subtree via View.refreshIcons() from here on.
-    if (window.lucide) window.lucide.createIcons();
+    window.BgbIcons.render();
     initSupabase();
 
     // Register the app-shell worker. Wrapped defensively (same idiom as

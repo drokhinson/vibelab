@@ -356,7 +356,7 @@
       this.container.innerHTML = `
         <header class="cascade-back-row">
           <button class="btn btn-ghost btn-sm" onclick="window.router.back('log-play')">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <h1 class="font-display cascade-back-row__title">Game Explorer</h1>
           <span></span>
@@ -584,12 +584,12 @@
         <nav class="lp-find-pager">
           <button class="btn btn-ghost btn-sm" ${this._page <= 1 ? "disabled" : ""}
                   onclick="window.gameExplorerView._goPage(${this._page - 1})">
-            <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
+            <i data-icon="chevron-left" class="w-4 h-4"></i> Prev
           </button>
           <span class="text-xs opacity-60">Page ${this._page} of ${totalPages}</span>
           <button class="btn btn-ghost btn-sm" ${this._page >= totalPages ? "disabled" : ""}
                   onclick="window.gameExplorerView._goPage(${this._page + 1})">
-            Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            Next <i data-icon="chevron-right" class="w-4 h-4"></i>
           </button>
         </nav>
       `;

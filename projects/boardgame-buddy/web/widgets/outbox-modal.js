@@ -114,7 +114,7 @@
     if (body) body.innerHTML = renderBody();
     const foot = root.querySelector(".outbox-modal__actions");
     if (foot) foot.innerHTML = renderActions();
-    if (window.lucide) window.lucide.createIcons({ root });
+    window.BgbIcons.render(root);
   }
 
   function renderActions() {
@@ -142,7 +142,7 @@
       <div class="polaroid-popup__card polaroid-popup__card--confirm outbox-modal"
            role="dialog" aria-modal="true" aria-label="Waiting to upload">
         <button class="polaroid-popup__close" aria-label="Close">
-          <i data-lucide="x" class="w-4 h-4"></i>
+          <i data-icon="x" class="w-4 h-4"></i>
         </button>
         <div class="polaroid-popup__title">Waiting to upload</div>
         <p class="outbox-modal__hint">${offline
@@ -156,7 +156,7 @@
       if (ev.target === root) dismiss();
     });
     document.body.appendChild(root);
-    if (window.lucide) window.lucide.createIcons({ root });
+    window.BgbIcons.render(root);
 
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => dismiss());

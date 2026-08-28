@@ -166,14 +166,14 @@
       return `
         <header class="spoke-head">
           <button class="spoke-head__back" onclick="window.router.go('profile-self')" aria-label="Back to profile">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="spoke-head__title font-display">Wishlist</h2>
           <span class="spoke-head__count">${total} game${total === 1 ? "" : "s"}</span>
           <button class="spoke-head__add btn btn-primary btn-sm"
                   onclick="window.wishlistView._openAddGame()"
                   aria-label="Add a game to your wishlist">
-            <i data-lucide="plus" class="w-4 h-4"></i><span>Add</span>
+            <i data-icon="plus" class="w-4 h-4"></i><span>Add</span>
           </button>
         </header>
       `;
@@ -198,7 +198,7 @@
                  oninput="window.wishlistView._onSearchInput(this.value)" />
           <button id="wishlist-filter-btn" class="btn btn-ghost relative" title="Filters"
                   onclick="window.wishlistView._toggleFilters()">
-            <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+            <i data-icon="sliders-horizontal" class="w-4 h-4"></i>
             ${activeFilters > 0 ? `<span class="search-filter-badge">${activeFilters}</span>` : ""}
           </button>
         </div>
@@ -284,7 +284,7 @@
           ${window.renderStatusTag(g.id, status, { size: "xs" })}
           ${g.thumbnail_url
             ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="" loading="lazy" />`
-            : `<div class="collection-tile__placeholder"><i data-lucide="dice-6"></i></div>`}
+            : `<div class="collection-tile__placeholder"><i data-icon="dice-6"></i></div>`}
           <div class="collection-tile__name">${escapeHtml(g.name || "Unknown")}</div>
           ${window.renderExpansionBadge(expCount, { context: "total" })}
         </div>
@@ -300,13 +300,13 @@
           <button class="btn btn-primary spoke-pager-footer__btn" ${page <= 1 ? "disabled" : ""}
                   onclick="window.wishlistView._goPage(${page - 1})"
                   aria-label="Previous page">
-            <i data-lucide="chevron-left" class="w-4 h-4"></i><span>Prev</span>
+            <i data-icon="chevron-left" class="w-4 h-4"></i><span>Prev</span>
           </button>
           <span class="spoke-pager-footer__page">Page ${page} of ${totalPages}</span>
           <button class="btn btn-primary spoke-pager-footer__btn" ${page >= totalPages ? "disabled" : ""}
                   onclick="window.wishlistView._goPage(${page + 1})"
                   aria-label="Next page">
-            <span>Next</span><i data-lucide="chevron-right" class="w-4 h-4"></i>
+            <span>Next</span><i data-icon="chevron-right" class="w-4 h-4"></i>
           </button>
         </nav>
       `;

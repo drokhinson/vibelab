@@ -30,9 +30,6 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Lucide Icons (deferred — init.js waits for DOMContentLoaded) -->
-  <script defer src="https://unpkg.com/lucide@1/dist/umd/lucide.min.js"></script>
-
   <!-- Supabase JS Client (deferred — only used from DOMContentLoaded onward) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -82,7 +79,7 @@
               title="Uploads" aria-label="Uploads"
               onclick="window.BgbOutboxIndicator.open()">
         <span class="bgb-outbox__ring" aria-hidden="true"></span>
-        <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+        <i data-icon="cloud-upload" class="w-4 h-4"></i>
         <span class="bgb-outbox__badge" hidden></span>
       </button>
       <button class="bgb-global-header__avatar" title="Settings"
@@ -141,21 +138,21 @@
   <nav class="hidden bgb-nav" data-auth-only>
     <button class="bgb-nav__tab" data-nav="feed">
       <span class="bgb-nav__ico">
-        <i data-lucide="home" class="w-5 h-5"></i>
+        <i data-icon="home" class="w-5 h-5"></i>
       </span>
       <span class="bgb-nav__label">Feed</span>
     </button>
     <button class="bgb-nav__tab bgb-nav__tab--play" data-nav="log-play"
             data-nav-views="play-flow,log-play,game-explorer,session-viewer">
       <span class="bgb-nav__ico">
-        <i data-lucide="dices" class="w-5 h-5"></i>
+        <i data-icon="dices" class="w-5 h-5"></i>
       </span>
       <span class="bgb-nav__label">Play</span>
     </button>
     <button class="bgb-nav__tab" data-nav="profile-self"
             data-nav-views="profile-self,collection,wishlist,plays,buddies,settings">
       <span class="bgb-nav__ico">
-        <i data-lucide="user" class="w-5 h-5"></i>
+        <i data-icon="user" class="w-5 h-5"></i>
       </span>
       <span class="bgb-nav__label">Profile</span>
     </button>
@@ -196,6 +193,7 @@
   <script src="ui/user-badge.js"></script>
   <script src="ui/play-card.js"></script>
   <script src="ui/game-card.js"></script>
+  <script src="ui/icons.js"></script>
   <script src="ui/status-tag.js"></script>
   <script src="ui/outbox-indicator.js"></script>
   <script src="ui/markdown.js"></script>

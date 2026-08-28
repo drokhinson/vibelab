@@ -38,7 +38,7 @@ The brand mark is always called `<prefix>-logo.svg`. If a separate small-scale f
 
 ## Custom Images, Not Generic Emojis
 
-**Do not use generic emojis as visual assets anywhere in an app** — not as data-art (category markers, item icons, cover art), not in empty states, not in UI copy, not as loading/success flourishes. Every visual mark is either a Lucide chrome icon (per `web-frontend.md`) or a **custom-built SVG** that belongs to the project's visual identity:
+**Do not use generic emojis as visual assets anywhere in an app** — not as data-art (category markers, item icons, cover art), not in empty states, not in UI copy, not as loading/success flourishes. Every visual mark is either a chrome icon from the project's vendored icon set (per `web-frontend.md`) or a **custom-built SVG** that belongs to the project's visual identity:
 
 - Data-art marks (one image per category/item kind) → `web/assets/sprites/<group>/<prefix>-<group>-<name>.svg` (e.g. `travel-scrapbook-cat-restaurant.svg` under `sprites/categories/`).
 - Cover/decoration stickers users pick from → also `sprites/`, one file per option; store the option's slug in the DB, derive the file path from the slug in the render fn.
@@ -50,7 +50,7 @@ DB seed tables for option sets store an `icon` **slug** (text), never an emoji c
 
 Keep the existing rule from `web-frontend.md`:
 
-- **Inline (in JS / HTML):** Lucide-style UI chrome icons (24×24 stroke icons), small one-off decorative shapes, inline icons used inside a single render function.
+- **Inline (in JS / HTML):** UI chrome icons from the project's vendored set, small one-off decorative shapes, inline icons used inside a single render function.
 - **File (in `assets/`):** Anything that's part of the project's visual identity (logo, hero art) or that's referenced more than once (loading spinner, empty-state illustration, plant/monster sprites). These get a real `.svg`/`.png`/`.json` file under the relevant subdirectory.
 
 Rough rule: if the asset has a name (not just "this triangle here"), it's a file.

@@ -125,7 +125,7 @@
       return `
         <header class="spoke-head">
           <button class="spoke-head__back" onclick="window.router.go('profile-self')" aria-label="Back to profile">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="spoke-head__title font-display">Settings</h2>
           <span></span>
@@ -150,14 +150,14 @@
               <div class="set-card__acct-name">${escapeHtml(me.display_name || "")}</div>
               ${me.username ? `
                 <div class="set-card__acct-handle" title="Your username never changes. Buddies can find you with it.">
-                  <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>
+                  <i data-icon="at-sign" class="w-3.5 h-3.5"></i>
                   ${escapeHtml(me.username)}
                 </div>` : ""}
             </div>
             <button class="set-card__avatar-btn" type="button"
                     title="Edit your profile" aria-label="Edit your profile"
                     onclick="window.settingsView._openEditProfile()">
-              <i data-lucide="palette" class="w-4 h-4"></i>
+              <i data-icon="palette" class="w-4 h-4"></i>
               Edit profile
             </button>
           </div>
@@ -202,7 +202,7 @@
         return `
           <div class="set-card__acct-edit-form" style="padding-top: 0;">
             <button class="btn btn-ghost btn-xs" onclick="window.settingsView._openAdminForm()">
-              <i data-lucide="key-round" class="w-3.5 h-3.5"></i> Have an admin key?
+              <i data-icon="key-round" class="w-3.5 h-3.5"></i> Have an admin key?
             </button>
           </div>
         `;
@@ -240,7 +240,7 @@
       return `
         <div class="set-card">
           <div class="set-card__row set-card__row--static">
-            <span class="set-card__row-icon"><i data-lucide="sun-moon" class="w-4 h-4"></i></span>
+            <span class="set-card__row-icon"><i data-icon="sun-moon" class="w-4 h-4"></i></span>
             <span class="set-card__row-body">
               <span class="set-card__row-title">Theme</span>
               <span class="set-card__row-sub">
@@ -268,13 +268,13 @@
       return `
         <div class="set-card">
           <button class="set-card__row" onclick="window.router.go('admin')">
-            <span class="set-card__row-icon"><i data-lucide="flag" class="w-4 h-4"></i></span>
+            <span class="set-card__row-icon"><i data-icon="flag" class="w-4 h-4"></i></span>
             <span class="set-card__row-body">
               <span class="set-card__row-title">Chapter reports</span>
               <span class="set-card__row-sub">Moderate community-reported reference-guide chapters.</span>
             </span>
             ${badge}
-            <span class="set-card__row-chev"><i data-lucide="chevron-right" class="w-4 h-4"></i></span>
+            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
           </button>
         </div>
       `;
@@ -292,7 +292,7 @@
         <button class="btn btn-ghost btn-sm" title="Sync from BoardGameGeek"
                 ${this._bggSyncing ? "disabled" : ""}
                 onclick="window.settingsView._syncBgg()">
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 ${this._bggSyncing ? "animate-spin" : ""}"></i>
+          <i data-icon="refresh-cw" class="w-3.5 h-3.5 ${this._bggSyncing ? "animate-spin" : ""}"></i>
           ${this._bggSyncing ? "Syncing…" : "Sync"}
         </button>` : "";
 
@@ -309,7 +309,7 @@
               silently in the background.
             </p>
             <button class="btn btn-primary btn-sm" onclick="window.settingsView._openBggLink()">
-              <i data-lucide="link" class="w-4 h-4"></i> Link BoardGameGeek
+              <i data-icon="link" class="w-4 h-4"></i> Link BoardGameGeek
             </button>
             ${this._bggLinkOpen ? this._renderBggLinkForm() : ""}
           </div>
@@ -406,7 +406,7 @@
         <div class="set-card-label">Pending uploads</div>
         <div class="set-card">
           <button class="set-card__row" onclick="window.OutboxModal.open()">
-            <span class="set-card__row-icon"><i data-lucide="cloud-upload" class="w-4 h-4"></i></span>
+            <span class="set-card__row-icon"><i data-icon="cloud-upload" class="w-4 h-4"></i></span>
             <span class="set-card__row-body">
               <span class="set-card__row-title">
                 ${n} ${n === 1 ? "play" : "plays"} waiting to upload
@@ -417,7 +417,7 @@
                   : "Saved on this device until the server confirms them."}
               </span>
             </span>
-            <span class="set-card__row-chev"><i data-lucide="chevron-right" class="w-4 h-4"></i></span>
+            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
           </button>
         </div>
       `;
@@ -477,7 +477,7 @@
             ${breakdown}
             <button class="btn btn-primary btn-sm" ${busy ? "disabled" : ""}
                     onclick="window.settingsView._refreshLocalCache()">
-              <i data-lucide="refresh-cw" class="w-4 h-4 ${busy ? "animate-spin" : ""}"></i>
+              <i data-icon="refresh-cw" class="w-4 h-4 ${busy ? "animate-spin" : ""}"></i>
               ${busy ? "Refreshing…" : "Refresh local cache"}
             </button>
           </div>
@@ -524,7 +524,7 @@
       return `
         <div class="settings-logout">
           <button class="btn btn-sm settings-logout__btn" onclick="window.handleLogout()">
-            <i data-lucide="log-out" class="w-4 h-4"></i> Log out
+            <i data-icon="log-out" class="w-4 h-4"></i> Log out
           </button>
         </div>
       `;
@@ -702,9 +702,9 @@
 
       const step = (state, body) => {
         const icon = state === "done"
-          ? `<i data-lucide="check" class="bgg-log__icon"></i>`
+          ? `<i data-icon="check" class="bgg-log__icon"></i>`
           : state === "active"
-            ? `<i data-lucide="loader-2" class="bgg-log__icon bgg-log__icon--spin"></i>`
+            ? `<i data-icon="loader-2" class="bgg-log__icon bgg-log__icon--spin"></i>`
             : `<span class="bgg-log__icon bgg-log__icon--idle"></span>`;
         return `<li class="bgg-log__step bgg-log__step--${state}">${icon}<span class="bgg-log__body">${body}</span></li>`;
       };

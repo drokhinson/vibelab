@@ -67,7 +67,7 @@
       const placeholder = escapeAttr(this._opts.placeholder || "Search for a game…");
       containerEl.innerHTML = `
         <div class="game-finder">
-          <i data-lucide="search" class="w-4 h-4 game-finder__icon"></i>
+          <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
           <input id="${this.inputId}"
                  class="input input-bordered game-finder__input"
                  placeholder="${placeholder}"
@@ -76,7 +76,7 @@
               onmousedown="event.preventDefault()"></ul>
         </div>
       `;
-      if (window.lucide) window.lucide.createIcons({ root: containerEl });
+      window.BgbIcons.render(containerEl);
 
       const input = document.getElementById(this.inputId);
       if (input) {
@@ -247,7 +247,7 @@
         }
         dd.classList.remove("hidden");
         this._wireRowClicks(dd);
-        if (window.lucide) window.lucide.createIcons({ root: dd });
+        window.BgbIcons.render(dd);
         return;
       }
 
@@ -294,7 +294,7 @@
           `<li class="game-finder-dropdown__hint">Search failed. Try again.</li>` +
           this._bggFooter(q);
         this._wireRowClicks(dd);
-        if (window.lucide) window.lucide.createIcons({ root: dd });
+        window.BgbIcons.render(dd);
         if (this._opts.onError) this._opts.onError(e);
         return;
       }
@@ -317,7 +317,7 @@
       dd.innerHTML = rows + this._bggFooter(q);
       dd.classList.remove("hidden");
       this._wireRowClicks(dd);
-      if (window.lucide) window.lucide.createIcons({ root: dd });
+      window.BgbIcons.render(dd);
     }
 
     /**
@@ -384,7 +384,7 @@
            </li>`;
       dd.classList.remove("hidden");
       this._wireRowClicks(dd);
-      if (window.lucide) window.lucide.createIcons({ root: dd });
+      window.BgbIcons.render(dd);
     }
 
     // Short, sticky "Search BoardGameGeek" action pinned to the bottom of the
@@ -395,7 +395,7 @@
         <li class="game-finder-dropdown__bgg-footer">
           <button type="button" class="game-finder-bgg-btn"
                   data-finder-action="run-bgg" data-finder-query="${escapeAttr(q)}">
-            <i data-lucide="search" class="w-4 h-4"></i>
+            <i data-icon="search" class="w-4 h-4"></i>
             <span>Search BoardGameGeek</span>
           </button>
         </li>`;
@@ -415,7 +415,7 @@
             data-finder-source="${escapeAttr(source)}">
           ${game.thumbnail_url
             ? `<img class="game-finder-dropdown-item__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" loading="lazy" />`
-            : `<div class="game-finder-dropdown-item__thumb game-finder-dropdown-item__thumb--placeholder"><i data-lucide="dice-6"></i></div>`}
+            : `<div class="game-finder-dropdown-item__thumb game-finder-dropdown-item__thumb--placeholder"><i data-icon="dice-6"></i></div>`}
           <div class="game-finder-dropdown-item__body">
             <div class="game-finder-dropdown-item__name">${escapeHtml(game.name)}</div>
             ${meta ? `<div class="game-finder-dropdown-item__meta">${escapeHtml(meta)}</div>` : ""}
@@ -486,7 +486,7 @@
               data-finder-bgg-name="${escapeAttr(hit.name)}"
               data-bgg-id="${hit.bgg_id}">
             <div class="game-finder-dropdown-item__thumb game-finder-dropdown-item__thumb--placeholder">
-              <i data-lucide="dice-6"></i>
+              <i data-icon="dice-6"></i>
             </div>
             <div class="game-finder-dropdown-item__body">
               <div class="game-finder-dropdown-item__name">${escapeHtml(hit.name)}</div>
@@ -500,7 +500,7 @@
           </li>
         `).join("");
       this._wireRowClicks(dd);
-      if (window.lucide) window.lucide.createIcons({ root: dd });
+      window.BgbIcons.render(dd);
     }
 
     async _importBgg(bggId, name, rowEl) {

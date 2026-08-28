@@ -154,7 +154,7 @@
       return `
         <header class="spoke-head">
           <button class="spoke-head__back" onclick="${backJs}" aria-label="Back to profile">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="spoke-head__title font-display">${titleHtml}</h2>
           <span class="spoke-head__count">${this._total} total</span>
@@ -174,7 +174,7 @@
           <button class="btn btn-ghost btn-sm" title="Refresh"
                   ${this._loading ? "disabled" : ""}
                   onclick="window.playsView._load({reset:true})">
-            <i data-lucide="refresh-cw" class="w-4 h-4 ${this._loading ? "animate-spin" : ""}"></i>
+            <i data-icon="refresh-cw" class="w-4 h-4 ${this._loading ? "animate-spin" : ""}"></i>
           </button>
         </div>
       `;
@@ -209,7 +209,7 @@
         (me && (w.name || "") === (me.display_name || ""))
       );
       const subParts = [];
-      if (winnerLabel) subParts.push(`<span class="plays-list__winner"><i data-lucide="trophy" class="w-3 h-3"></i> ${winnerLabel}</span>`);
+      if (winnerLabel) subParts.push(`<span class="plays-list__winner"><i data-icon="trophy" class="w-3 h-3"></i> ${winnerLabel}</span>`);
       if (playerCount > 0) subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
       const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
       const statusOverlay = p.game_id
@@ -221,14 +221,14 @@
           <div class="plays-list__thumb">
             ${p.game_thumbnail
               ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
-              : `<div class="plays-list__placeholder"><i data-lucide="dice-6"></i></div>`}
+              : `<div class="plays-list__placeholder"><i data-icon="dice-6"></i></div>`}
             ${statusOverlay}
           </div>
           <div class="plays-list__body">
             <div class="plays-list__top">
               <div class="plays-list__game">
                 ${escapeHtml(p.game_name)}
-                ${youWon ? `<span class="plays-list__won-tag"><i data-lucide="trophy" class="w-3 h-3"></i> Won</span>` : ""}
+                ${youWon ? `<span class="plays-list__won-tag"><i data-icon="trophy" class="w-3 h-3"></i> Won</span>` : ""}
               </div>
               <div class="plays-list__date">${formatDate(p.played_at)}</div>
             </div>

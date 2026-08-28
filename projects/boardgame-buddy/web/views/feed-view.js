@@ -314,7 +314,7 @@
       return `
         <section class="feed-rail">
           <header class="feed-rail__header">
-            <h3><i data-lucide="${icon}" class="w-4 h-4"></i> ${escapeHtml(title)}</h3>
+            <h3><i data-icon="${icon}" class="w-4 h-4"></i> ${escapeHtml(title)}</h3>
           </header>
           <div class="feed-rail__scroll">${tiles}</div>
         </section>
@@ -345,7 +345,7 @@
       return `
         <section class="feed-rail">
           <header class="feed-rail__header">
-            <h3><i data-lucide="user-plus" class="w-4 h-4"></i> Buddies you may know</h3>
+            <h3><i data-icon="user-plus" class="w-4 h-4"></i> Buddies you may know</h3>
           </header>
           <div class="feed-rail__scroll">${tiles}</div>
         </section>

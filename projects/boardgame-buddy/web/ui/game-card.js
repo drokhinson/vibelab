@@ -62,7 +62,7 @@
         <div class="game-polaroid__photo">
           ${img
             ? `<img class="game-polaroid__photo-img" src="${escapeHtml(img)}" alt=""${eager ? "" : ` loading="lazy"`} />`
-            : `<div class="game-polaroid__photo-placeholder"><i data-lucide="dice-6"></i></div>`}
+            : `<div class="game-polaroid__photo-placeholder"><i data-icon="dice-6"></i></div>`}
           ${statusOverlay}
         </div>
         <div class="game-polaroid__caption">

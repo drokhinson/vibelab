@@ -44,7 +44,7 @@
       : `${count} ${noun} owned`;
     return `
       <span class="expansion-count-badge" title="${tip}">
-        <i data-lucide="git-fork" class="w-3 h-3"></i> ${count}
+        <i data-icon="git-fork" class="w-3 h-3"></i> ${count}
       </span>
     `;
   }
@@ -66,7 +66,7 @@
                 title="${LABEL[status]} — change status"
                 aria-label="${LABEL[status]} — change status"
                 onclick="event.stopPropagation();window.statusPicker.openFor(event,'${jsStr(gameId)}','${status}')">
-          <i data-lucide="${ICON[status]}" class="w-3 h-3"></i>
+          <i data-icon="${ICON[status]}" class="w-3 h-3"></i>
           ${label}
         </button>
       `;
@@ -92,7 +92,7 @@
               title="Add to collection"
               aria-label="Add to collection"
               onclick="event.stopPropagation();window.statusPicker.openFor(event,'${jsStr(gameId)}','')">
-        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+        <i data-icon="plus" class="w-3.5 h-3.5"></i>
         ${addLabel}
       </button>
     `;
@@ -132,7 +132,7 @@
         if (s === cur) continue;
         parts.push(`
           <button class="status-picker__opt" data-status="${s}">
-            <i data-lucide="${ICON[s]}" class="w-3.5 h-3.5"></i> ${LABEL[s]}
+            <i data-icon="${ICON[s]}" class="w-3.5 h-3.5"></i> ${LABEL[s]}
           </button>`);
       }
       // Remove is only meaningful when a real collection row exists.
@@ -141,11 +141,11 @@
       if (cur === "owned" || cur === "wishlist") {
         parts.push(`
           <button class="status-picker__opt status-picker__opt--danger" data-action="remove">
-            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove
+            <i data-icon="trash-2" class="w-3.5 h-3.5"></i> Remove
           </button>`);
       }
       this._el.innerHTML = parts.join("");
-      if (window.lucide) window.lucide.createIcons({ root: this._el });
+      window.BgbIcons.render(this._el);
     }
 
     openFor(event, gameId, currentStatus) {

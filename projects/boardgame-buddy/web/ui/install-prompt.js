@@ -123,7 +123,7 @@
       </div>
       <button class="bgb-install__close" type="button"
               aria-label="Not now" data-act="dismiss">
-        <i data-lucide="x" class="w-4 h-4"></i>
+        <i data-icon="x" class="w-4 h-4"></i>
       </button>`;
 
     root.addEventListener("click", (ev) => {
@@ -134,7 +134,7 @@
     });
 
     document.body.appendChild(root);
-    if (window.lucide) window.lucide.createIcons({ root });
+    window.BgbIcons.render(root);
     return root;
   }
 

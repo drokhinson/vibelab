@@ -10,7 +10,7 @@ Every web auth screen that offers Google / Apple sign-in uses the same visuals s
 
 ## Pattern
 
-- **Provider logos are inline SVG**, not Lucide / image / emoji. Google uses the four-color `G` (4 `<path>` elements with their official hex fills). Apple uses a single `<path>` with `fill="currentColor"` so it inherits the button text color (light on dark, dark on light).
+- **Provider logos are inline SVG**, not a chrome icon / image / emoji. Google uses the four-color `G` (4 `<path>` elements with their official hex fills). Apple uses a single `<path>` with `fill="currentColor"` so it inherits the button text color (light on dark, dark on light).
 - Logos are **18×18px**, sized via `.auth-oauth-logo`.
 - Buttons are **full-width pills** (`border-radius: 999px`, `width: 100%`).
 - Two variant classes: `.auth-oauth-google` and `.auth-oauth-apple`. The Apple variant rebinds `color` on `.auth-oauth-logo` so the monochrome glyph adopts the button's text color.
@@ -95,7 +95,7 @@ The CSS uses `var(--bg)`, `var(--bg-card)`, `var(--text-primary)`, `var(--text-m
 These exist on the branch today (boardgame-buddy) and should be migrated to the canonical pattern whenever those auth screens are next touched:
 
 - ❌ Text-only OAuth buttons (no logo).
-- ❌ Lucide icons (`<i data-lucide="chrome">`, `<i data-lucide="apple">`) instead of inline SVG. Boardgame-buddy does this. Lucide's `chrome` is not the Google brand mark, and Lucide's `apple` is a fruit, not the logo.
+- ❌ A generic chrome icon (e.g. `<i data-icon="chrome">`, `<i data-icon="apple">`) instead of inline SVG. An icon set's `chrome` is not the Google brand mark, and its `apple` is a fruit, not the logo.
 - ❌ Emoji (🍎, etc.) for provider marks. Looks unprofessional and renders inconsistently.
 - ❌ Squared / lightly-rounded buttons. Use the full pill (`border-radius: 999px`).
 - ❌ Divider copy other than "or use email". Keep it consistent across apps.

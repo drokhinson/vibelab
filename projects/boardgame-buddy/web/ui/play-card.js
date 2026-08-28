@@ -291,7 +291,7 @@
               aria-label="Open play details"
               title="Open play details"
               onclick="${detailNav}">
-        <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+        <i data-icon="maximize-2" class="w-3.5 h-3.5"></i>
       </button>
       <header class="play-card__back-head">
         <span class="play-card__back-title">${escapeHtml(p.game_name || (card.game && card.game.name) || "")}</span>
@@ -452,7 +452,7 @@
       article.replaceWith(fresh);
       // Scope the icon pass to the card just patched — a document-wide
       // walk here would re-scan every mounted (hidden) view per flip.
-      if (window.lucide) window.lucide.createIcons({ root: fresh });
+      window.BgbIcons.render(fresh);
     });
   }
 

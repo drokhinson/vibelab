@@ -619,7 +619,7 @@ components above.
       `, ...distinctTypes.map((t) => `
         <button class="chapter-add__chip ${t.id === this._typeFilter ? "chapter-add__chip--active" : ""}"
                 onclick="window.referenceGuideAddView._onTypeFilter('${t.id}')">
-          <i data-lucide="${t.icon}" class="w-3.5 h-3.5"></i>
+          <i data-icon="${t.icon}" class="w-3.5 h-3.5"></i>
           ${escapeHtml(t.label)}
         </button>
       `)].join("");
@@ -648,7 +648,7 @@ components above.
         <div class="scroll-panel chapter-add__pool-scroll">
           <div class="scroll-panel__peek">
             <div class="scroll-panel__search-row">
-              <i data-lucide="search" class="w-4 h-4 scroll-panel__search-icon"></i>
+              <i data-icon="search" class="w-4 h-4 scroll-panel__search-icon"></i>
               <input class="scroll-panel__search"
                      type="search"
                      placeholder="Search chapters…"
@@ -664,13 +664,13 @@ components above.
         <button class="chapter-add__fab-back"
                 title="${escapeAttr(backLabel)}"
                 onclick="${backOnClick}">
-          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          <i data-icon="arrow-left" class="w-4 h-4"></i>
           <span>${escapeHtml(backLabel)}</span>
         </button>
         <button class="chapter-add__fab"
                 title="Create a new chapter"
                 onclick="window.referenceGuideAddView._enterCreate()">
-          <i data-lucide="plus" class="w-5 h-5"></i>
+          <i data-icon="plus" class="w-5 h-5"></i>
           <span>New chapter</span>
         </button>
       `;
@@ -680,7 +680,7 @@ components above.
       return `
         <section class="scroll-section" data-type="${escapeAttr(group.type)}">
           <h4 class="scroll-section__header">
-            <i data-lucide="${group.icon}" class="w-4 h-4"></i>
+            <i data-icon="${group.icon}" class="w-4 h-4"></i>
             ${escapeHtml(group.label)}
           </h4>
           <ul class="scroll-chapter-list">
@@ -709,8 +709,8 @@ components above.
                 title="${inGuide ? "Remove from my guide" : "Add to my guide"}"
                 onclick="event.preventDefault();event.stopPropagation();window.referenceGuideAddView._toggleInGuide('${c.id}')">
           ${inGuide
-            ? `<i data-lucide="check" class="w-4 h-4"></i><span>Added</span>`
-            : `<i data-lucide="plus" class="w-4 h-4"></i><span>Add</span>`}
+            ? `<i data-icon="check" class="w-4 h-4"></i><span>Added</span>`
+            : `<i data-icon="plus" class="w-4 h-4"></i><span>Add</span>`}
         </button>
       `;
 
@@ -719,12 +719,12 @@ components above.
           <details>
             <summary class="scroll-chapter__summary scroll-chapter__summary--rich">
               ${dot}
-              <span class="scroll-chapter__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
+              <span class="scroll-chapter__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
               <div class="scroll-chapter__summary-text">
                 <div class="scroll-chapter__title">${escapeHtml(c.title)}</div>
                 <div class="scroll-chapter__submeta">
                   <span class="scroll-chapter__pop" title="${c.popularity} ${c.popularity === 1 ? "person has" : "people have"} this in their guide">
-                    <i data-lucide="users" class="w-3 h-3"></i> ${c.popularity}
+                    <i data-icon="users" class="w-3 h-3"></i> ${c.popularity}
                   </span>
                   ${author ? `<span class="scroll-chapter__author">${author}</span>` : ""}
                 </div>
@@ -736,13 +736,13 @@ components above.
               ${isOwner ? `
                 <button class="btn btn-ghost btn-xs"
                         onclick="event.preventDefault();window.referenceGuideAddView._editFromPool('${c.id}')">
-                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit
+                  <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit
                 </button>
               ` : ""}
               ${isAuthed && !isOwner ? `
                 <button class="btn btn-ghost btn-xs"
                         onclick="event.preventDefault();window.referenceGuideAddView._reportChapter('${c.id}')">
-                  <i data-lucide="flag" class="w-3.5 h-3.5"></i> Report
+                  <i data-icon="flag" class="w-3.5 h-3.5"></i> Report
                 </button>
               ` : ""}
             </div>
@@ -825,7 +825,7 @@ components above.
         <button type="button"
                 class="chapter-edit__tpill ${t.id === this._formType ? "chapter-edit__tpill--on" : ""}"
                 onclick="window.referenceGuideAddView._pickType('${t.id}')">
-          <i data-lucide="${t.icon || "book"}" class="w-4 h-4"></i>
+          <i data-icon="${t.icon || "book"}" class="w-4 h-4"></i>
           <span>${escapeHtml(t.label)}</span>
         </button>
       `).join("");
@@ -856,25 +856,25 @@ components above.
                <span class="chapter-edit__tdiv"></span>
                <button type="button" class="chapter-edit__tbtn" title="Bulleted list"
                        onclick="window.referenceGuideAddView._fmt('ul')">
-                 <i data-lucide="list" class="w-4 h-4"></i>
+                 <i data-icon="list" class="w-4 h-4"></i>
                </button>
                <button type="button" class="chapter-edit__tbtn" title="Link"
                        onclick="window.referenceGuideAddView._fmt('link')">
-                 <i data-lucide="link" class="w-4 h-4"></i>
+                 <i data-icon="link" class="w-4 h-4"></i>
                </button>
                <button type="button" class="chapter-edit__tbtn" data-pop-trigger title="Insert table"
                        onclick="event.stopPropagation();window.referenceGuideAddView._togglePop('table')">
-                 <i data-lucide="table" class="w-4 h-4"></i>
+                 <i data-icon="table" class="w-4 h-4"></i>
                </button>
                <button type="button" class="chapter-edit__tbtn chapter-edit__tbtn--gold"
                        data-pop-trigger title="Text colour"
                        onclick="event.stopPropagation();window.referenceGuideAddView._togglePop('color')">
-                 <i data-lucide="palette" class="w-4 h-4"></i>
+                 <i data-icon="palette" class="w-4 h-4"></i>
                </button>
                <span class="chapter-edit__tdiv"></span>
                <button type="button" class="chapter-edit__tbtn" title="Authoring guide"
                        onclick="window.referenceGuideAddView._toggleGuide()">
-                 <i data-lucide="info" class="w-4 h-4"></i>
+                 <i data-icon="info" class="w-4 h-4"></i>
                </button>
              </div>
              <textarea id="chapter-form-content"
@@ -904,7 +904,7 @@ components above.
           <label class="chapter-edit__import" title="Import a .md file as this chapter">
             <input type="file" accept=".md,text/markdown,text/plain"
                    onchange="window.referenceGuideAddView._onImportMd(event)" />
-            <i data-lucide="upload" class="w-4 h-4"></i>
+            <i data-icon="upload" class="w-4 h-4"></i>
             <span>Import .md</span>
           </label>
           <button type="button"
@@ -912,7 +912,7 @@ components above.
                   title="${escapeAttr(genTitle)}"
                   ${genDisabled ? "disabled" : ""}
                   onclick="window.referenceGuideAddView._onGenerateAi()">
-            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <i data-icon="sparkles" class="w-4 h-4"></i>
             <span>${this._generating ? "Generating…" : "Generate with AI"}</span>
           </button>
         </div>
@@ -955,11 +955,11 @@ components above.
             <div class="chapter-edit__seg">
               <button type="button" class="${!isPreview ? "on" : ""}"
                       onclick="window.referenceGuideAddView._setEditorView('write')">
-                <i data-lucide="pencil" class="w-4 h-4"></i> Write
+                <i data-icon="pencil" class="w-4 h-4"></i> Write
               </button>
               <button type="button" class="${isPreview ? "on" : ""}"
                       onclick="window.referenceGuideAddView._setEditorView('preview')">
-                <i data-lucide="eye" class="w-4 h-4"></i> Preview
+                <i data-icon="eye" class="w-4 h-4"></i> Preview
               </button>
             </div>
 
@@ -994,7 +994,7 @@ components above.
                aria-label="Chapter authoring guide">
             <button type="button" class="polaroid-popup__close" aria-label="Close"
                     onclick="window.referenceGuideAddView._toggleGuide()">
-              <i data-lucide="x" class="w-4 h-4"></i>
+              <i data-icon="x" class="w-4 h-4"></i>
             </button>
             <div class="chapter-edit__preview chapter-guide__body">
               ${window.renderMarkdown(CHAPTER_AUTHORING_GUIDE)}
@@ -1004,7 +1004,7 @@ components above.
                       onclick="window.referenceGuideAddView._toggleGuide()">Close</button>
               <button type="button" class="btn btn-primary btn-sm"
                       onclick="window.referenceGuideAddView._downloadGuide()">
-                <i data-lucide="download" class="w-4 h-4"></i> Download .md
+                <i data-icon="download" class="w-4 h-4"></i> Download .md
               </button>
             </div>
           </div>

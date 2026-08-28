@@ -110,7 +110,7 @@
     _render() {
       if (!this._container) return;
       this._container.innerHTML = this._html();
-      if (window.lucide) window.lucide.createIcons({ root: this._container });
+      window.BgbIcons.render(this._container);
       // Per-section accordion mutex: opening a chapter inside a
       // .scroll-chapter-list closes any other open <details> in the same list.
       // `toggle` doesn't bubble, so listen in capture phase.
@@ -155,7 +155,7 @@
                 <p>Add chapters for quick rule lookup and clarification.</p>
                 <button class="scroll-panel__add"
                         onclick="window.referenceGuideScroll._openAddChapter()">
-                  <i data-lucide="plus" class="w-4 h-4"></i> Add a chapter
+                  <i data-icon="plus" class="w-4 h-4"></i> Add a chapter
                 </button>
               </div>
             </div>
@@ -183,7 +183,7 @@
       const rollupHint = open && hasChapters ? `
         <button class="scroll-panel__rollup-hint" type="button"
                 onclick="window.referenceGuideScroll._toggleScroll()">
-          <i data-lucide="chevron-up" class="w-3.5 h-3.5"></i>
+          <i data-icon="chevron-up" class="w-3.5 h-3.5"></i>
           Tap to roll up scroll
         </button>
       ` : "";
@@ -195,7 +195,7 @@
                   onclick="window.referenceGuideScroll._toggleScroll()"></button>
           <div class="scroll-panel__peek">
             <div class="scroll-panel__search-row">
-              <i data-lucide="search" class="w-4 h-4 scroll-panel__search-icon"></i>
+              <i data-icon="search" class="w-4 h-4 scroll-panel__search-icon"></i>
               <input class="scroll-panel__search"
                      type="search"
                      placeholder="Search chapters…"
@@ -205,7 +205,7 @@
             ${!open ? `
               <button class="scroll-panel__hint" type="button"
                       onclick="window.referenceGuideScroll._toggleScroll()">
-                <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                <i data-icon="chevron-down" class="w-3.5 h-3.5"></i>
                 Tap to expand and see chapters
               </button>` : ""}
           </div>
@@ -213,7 +213,7 @@
             ${bodyInner}
             <button class="scroll-panel__add"
                     onclick="window.referenceGuideScroll._openAddChapter()">
-              <i data-lucide="plus" class="w-4 h-4"></i> Add a chapter
+              <i data-icon="plus" class="w-4 h-4"></i> Add a chapter
             </button>
             ${rollupHint}
           </div>
@@ -246,7 +246,7 @@
       return `
         <section class="scroll-section" data-type="${escapeAttr(group.type)}">
           <h4 class="scroll-section__header">
-            <i data-lucide="${group.icon}" class="w-4 h-4"></i>
+            <i data-icon="${group.icon}" class="w-4 h-4"></i>
             ${escapeHtml(group.label)}
           </h4>
           <ul class="scroll-chapter-list">
@@ -272,7 +272,7 @@
       const editBtn = isOwner ? `
         <button class="btn btn-ghost btn-xs"
                 onclick="window.referenceGuideScroll._editChapter('${c.id}', event)">
-          <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Edit
+          <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit
         </button>
       ` : "";
       return `
@@ -280,19 +280,19 @@
           <details>
             <summary class="scroll-chapter__summary">
               ${dot}
-              <span class="scroll-chapter__icon"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
+              <span class="scroll-chapter__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
               <span class="scroll-chapter__title">${escapeHtml(c.title)}</span>
             </summary>
             <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
             <div class="scroll-chapter__actions">
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._removeChapter('${c.id}', '${c.source_game_id || c.game_id}', event)">
-                <i data-lucide="book-minus" class="w-3.5 h-3.5"></i> Remove
+                <i data-icon="book-minus" class="w-3.5 h-3.5"></i> Remove
               </button>
               ${editBtn}
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._reportChapter('${c.id}', event)">
-                <i data-lucide="flag" class="w-3.5 h-3.5"></i> Report
+                <i data-icon="flag" class="w-3.5 h-3.5"></i> Report
               </button>
             </div>
           </details>
