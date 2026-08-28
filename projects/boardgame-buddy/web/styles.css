@@ -14,6 +14,15 @@
 :root {
   /* Layout */
   --bgb-nav-height: 64px;
+  /* .bgb-global-header's resolved height: 0.5rem padding x2 + a 36px control
+     row + the 1px bottom rule. Used for scroll-padding-top below so that
+     scrollIntoView({block:"start"}) targets clear the pinned header. */
+  --bgb-header-height: 53px;
+
+  /* The header is sticky, so an unpadded scroll-into-view drops its target
+     underneath it. Callers: play-flow-view.js, game-explorer-view.js,
+     session-viewer-view.js. */
+  scroll-padding-top: calc(var(--bgb-header-height) + 8px);
 
   /* Game-specific theming (set dynamically in game-detail.js) */
   --game-accent: #6B3FA0;
@@ -202,11 +211,21 @@
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
-html, body {
+html {
   max-width: 100%;
   overflow-x: hidden;
 }
 body {
+  max-width: 100%;
+  /* `clip`, NOT `hidden`. <html>'s overflow is the one that propagates to the
+     viewport, so once it is non-visible, <body>'s own overflow-x applies to
+     <body> itself — which turns it into a scroll container. <body> has no
+     fixed height and therefore never actually scrolls, so every
+     `position: sticky` in the app resolved against a dead scrollport and rode
+     the page off-screen: the global header never pinned, and neither did the
+     cascade Continue CTA. `clip` suppresses exactly the same horizontal
+     overflow without establishing a scrollport. */
+  overflow-x: clip;
   margin: 0;
   min-height: 100dvh;
   font-family: var(--font-sans);
@@ -5677,6 +5696,9 @@ main[data-view="session-viewer"].hidden {
   padding: 0.85rem 0 0.25rem;
 }
 .profile-stat-card {
+  /* Shared by both __v variants so the numeric and text values keep the same
+     box height — see .profile-stat-card__v--text. */
+  --stat-value-size: 1.45rem;
   background: var(--polaroid-bg, #FFFBF1);
   color: var(--polaroid-ink, #1D1812);
   border: 1px solid var(--card-border);
@@ -5705,7 +5727,7 @@ main[data-view="session-viewer"].hidden {
 }
 .profile-stat-card__v {
   font-family: var(--font-display);
-  font-size: 1.45rem;
+  font-size: var(--stat-value-size);
   font-weight: 700;
   line-height: 1;
   color: var(--accent-ink);
@@ -5713,7 +5735,13 @@ main[data-view="session-viewer"].hidden {
 .profile-stat-card__v--text {
   font-size: 0.82rem;
   font-weight: 600;
-  padding: 0.25rem 0.1rem 0.1rem;
+  /* Same box height as the numeric value above (font-size x line-height 1),
+     so the Top game tile's label lands on the same line as Games / Plays /
+     Buddies instead of riding ~2px high. The smaller type just centres inside
+     that taller line box. `display: block` is load-bearing — text-overflow
+     needs a block container, so this can't be a flex centring job. */
+  line-height: var(--stat-value-size);
+  padding: 0 0.1rem;
   color: var(--polaroid-ink, #1D1812);
   max-width: 100%;
   white-space: nowrap;
@@ -6177,6 +6205,10 @@ main[data-view="session-viewer"].hidden {
   padding: 0 0.9rem 0.9rem;
 }
 .set-card__acct-edit-form input { flex: 1; min-width: 0; }
+/* The zero top padding assumes an account row sits above. On Settings the
+   admin-key block is now the card's only child, so it has to pay for its own
+   top edge. */
+.set-card__acct-edit-form:first-child { padding-top: 0.9rem; }
 .set-card__avatar-btn {
   display: inline-flex;
   align-items: center;
@@ -7298,7 +7330,15 @@ main[data-view="session-viewer"].hidden {
   position: relative;
   width: 36px; height: 36px;
   flex-shrink: 0;
-  margin-right: var(--s-2);          /* ≥8px clear of the avatar */
+  /* The header is justify-content: space-between over three children, which
+     parks this button in the middle of the gap after the brand. `auto` on the
+     left collapses that gap so the upload bubble sits flush against the
+     profile bubble at the right edge. */
+  margin-left: auto;
+  /* The header's own `gap: 0.6rem` already separates the two controls; this
+     just buys back the 4px the ::before hit area below reaches into it, so
+     the two 44px targets stay ≥8px apart. */
+  margin-right: var(--s-1);
   display: grid;
   place-items: center;
   border-radius: var(--r-sm);
