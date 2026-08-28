@@ -92,13 +92,28 @@ The "polaroid family" is the project's signature: cream-paper background, soft d
 
 `--game-accent` and `--exp-color` are the only tokens routinely set inline; they have to be because they are data-derived. Every other color comes from the stylesheet.
 
-### 4.2a DaisyUI dark tones need an explicit re-skin on cream screens
+### 4.2a Ground tokens vs paper tokens
 
-The app loads `<html data-theme="luxury">` (DaisyUI's dark theme), so anything that touches `oklch(var(--b1))`, `oklch(var(--b2))`, `oklch(var(--b3))`, or `oklch(var(--bc))` renders in dark-theme colors. On a `.bgb-cream-screen` surface (Buddies, Collection, Wishlist, Plays, Settings) those become **black boxes on cream** — text becomes unreadable.
+The app has two themes, switched by `data-bgb` on `<html>` (`domain/theme.js`). `--b1`/`--b2`/`--b3`/`--bc` are redefined per theme, so anything painting with `oklch(var(--b*))` follows the theme automatically. `<html data-theme="luxury">` is DaisyUI's own attribute and is deliberately *not* the light/dark lever — leave it alone.
+
+The trap is not dark-vs-light, it is **ground vs paper**. `--b*`, `--ink*`, `--line*` and `--accent`/`--accent-hover` describe the app *ground*, which is espresso in dark and cream in light. But the polaroid/paper surfaces — play cards, `.set-card`, the `.bgb-cream-screen` sheet — are light in **both** themes. Point a ground token at one of those and it inverts: `oklch(var(--b2))` becomes a black box on cream, and `--accent-hover` becomes pale gold text on cream at 1.6:1. Both of those shipped.
+
+On a paper surface, use the paper tokens instead:
+
+| Ground token | Paper equivalent |
+|---|---|
+| `oklch(var(--b1))`, `oklch(var(--b2))` | `--polaroid-bg`, `--polaroid-bg-soft`, `--sheet-card` |
+| `oklch(var(--bc))`, `--ink` | `--polaroid-ink` |
+| `--ink-muted` | `--polaroid-muted` |
+| `--line`, `oklch(var(--b3))` | `--polaroid-line`, `--sheet-line` |
+| `--accent`, `--accent-hover` (as text) | `--accent-ink` |
+| `--accent` (as a solid fill) | `--accent-fill` + `--on-accent` for what sits on it |
+
+`--sheet-*` is the `.bgb-cream-screen` family specifically: dark lays a cream sheet over the espresso ground, light drops the sheet (`--sheet-bg: transparent`) because the page ground is already warm paper, and the cards carry the separation instead (white + `--card-border`).
+
+**Rule of thumb:** before placing any element on a paper surface, grep its CSS for `oklch(var(--b` and `--accent-hover` — if either is there, re-point it at the paper column above.
 
 This is **not just an input problem**. Any element whose default styles reach for the DaisyUI base palette will hit it: inputs, textareas, selects, dropdown menus, suggestion rows, autocomplete items, list rows. Even a card written for the dark feed and then rendered inside a cream screen suffers.
-
-**Rule of thumb:** before placing any element on a `.bgb-cream-screen`, grep its CSS for `oklch(var(--b` — if it's there, add a `.bgb-cream-screen` override (or scope the override to the component's own class family) that maps those tokens to polaroid equivalents (`--polaroid-bg`, `--polaroid-ink`, `--polaroid-line`, `--polaroid-muted`).
 
 Existing canonical overrides to copy:
 
