@@ -65,7 +65,6 @@ class FeedCardKind(StrEnum):
     PLAY = "play"
     HOT_GAMES = "hot_games"
     SUGGESTED_BUDDIES = "suggested_buddies"
-    FEATURED_FROM_COLLECTION = "featured_from_collection"
 
 
 

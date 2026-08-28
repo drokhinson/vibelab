@@ -4,9 +4,8 @@ Thin adapter over services/feed_service.py. The Feed page composes:
   - plays from accepted buddies + self (chronological)
   - hot games this week (first page)
   - suggested buddies (first page)
-  - featured-from-collection (first page)
 
-The three rails are embedded in the /feed response by
+The two rails are embedded in the /feed response by
 feed_service.build_feed_page; they have no standalone endpoints.
 """
 

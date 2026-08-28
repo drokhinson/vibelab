@@ -32,7 +32,7 @@ Each object has a JS file in `web/domain/` that wraps its API surface, normalize
 | **Chapter** | `domain/chapter.js` | A user-built reference excerpt for a Game (rule summary, setup notes, scoring quirks). Pooled across users; the player merges chapters from base + expansions into a "guide" for that game. |
 | **Collection** | `domain/collection.js` | Per-user `(game, status)` mapping — owned / wishlist / played-not-owned. Drives the status badges everywhere a Game appears. |
 | **Profile** | `domain/profile.js` | Public projection of a User: stats, recent plays, owned games, favourite game. |
-| **Feed** | `domain/feed.js` | Composite chronological stream of plays + algorithmic rails (hot games, suggested buddies, time-to-revisit). Lives in its own object because the response is heterogeneous. |
+| **Feed** | `domain/feed.js` | Composite chronological stream of plays + algorithmic rails (hot games, suggested buddies). Lives in its own object because the response is heterogeneous. |
 
 The `domain/store.js` file is the cross-cutting state container. Views call `window.store.subscribe(key, fn)` to listen for changes and `window.store.set(key, value)` to publish. The `user`, `feed`, and `myCollectionMap` keys are the high-traffic ones; everything else is view-local.
 

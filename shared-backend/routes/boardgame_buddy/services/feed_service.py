@@ -1,13 +1,11 @@
-"""Feed assembly — composes play cards + hot games + suggested buddies +
-featured-from-collection. Hits the RPCs added in migration 012."""
+"""Feed assembly — composes play cards + hot games + suggested buddies.
+Hits the RPCs added in migration 012."""
 
 from datetime import date, datetime
 from typing import Any, Optional, Tuple
 
 from ..models import (
     FeedCard,
-    FeedFeaturedFromCollectionCard,
-    FeedFeaturedFromCollectionEntry,
     FeedHotGamesCard,
     FeedHotGamesEntry,
     FeedPageResponse,
@@ -16,7 +14,6 @@ from ..models import (
     FeedPlayUser,
     FeedSuggestedBuddiesCard,
     FeedSuggestedBuddy,
-    FeaturedFromCollectionResponse,
     GameSummary,
     HotGamesResponse,
     SuggestedBuddiesResponse,
@@ -141,36 +138,6 @@ def fetch_suggested_buddies(sb, viewer_id: str, *, limit: int = 10) -> Suggested
     return SuggestedBuddiesResponse(suggestions=suggestions)
 
 
-def fetch_featured_from_collection(
-    sb,
-    viewer_id: str,
-    *,
-    days_since: int = 60,
-    limit: int = 5,
-) -> FeaturedFromCollectionResponse:
-    # Over-fetch so expansion-only entries can be dropped without starving the
-    # rail. The RPC returns owned-collection rows ordered oldest-first; we
-    # filter out is_expansion games here in Python (no migration needed).
-    rows = sb.rpc(
-        "bgb_dormant_collection",
-        {"uid": viewer_id, "days_since": days_since, "lim": limit * 2},
-    ).execute().data or []
-    game_ids = [r["game_id"] for r in rows]
-    games = fetch_games_by_ids(sb, game_ids)
-    entries: list[FeedFeaturedFromCollectionEntry] = []
-    for r in rows:
-        g = games.get(r["game_id"])
-        if not g or g.is_expansion:
-            continue
-        entries.append(FeedFeaturedFromCollectionEntry(
-            game=g,
-            last_played_at=r.get("last_played_at"),
-        ))
-        if len(entries) >= limit:
-            break
-    return FeaturedFromCollectionResponse(games=entries)
-
-
 def build_feed_page(
     sb,
     viewer_id: str,
@@ -182,8 +149,7 @@ def build_feed_page(
 
     Composition rule (v1): plays form the spine; on the first page (cursor is
     None), prepend a Hot Games card and intersperse a Suggested Buddies card
-    after the first play and a Featured-From-Collection card mid-page.
-    Subsequent pages return plays only.
+    after the first play. Subsequent pages return plays only.
     """
     play_cards, next_cursor = fetch_feed_plays(sb, viewer_id, cursor=cursor, limit=limit)
     cards: list[FeedCard] = []
@@ -193,36 +159,23 @@ def build_feed_page(
         if hot.games:
             cards.append(FeedHotGamesCard(window_days=hot.window_days, games=hot.games))
 
-    # Interleave suggestions / featured roughly through the page so the feed
-    # never feels like a wall of identical units.
+    # Interleave suggestions roughly through the page so the feed never feels
+    # like a wall of identical units — the order is:
+    #   play 1 → suggested-buddies → play 2 → ...
     suggestions_card: Optional[FeedSuggestedBuddiesCard] = None
-    featured_card: Optional[FeedFeaturedFromCollectionCard] = None
     if first_page:
         sug = fetch_suggested_buddies(sb, viewer_id)
         if sug.suggestions:
             suggestions_card = FeedSuggestedBuddiesCard(suggestions=sug.suggestions)
-        feat = fetch_featured_from_collection(sb, viewer_id)
-        if feat.games:
-            featured_card = FeedFeaturedFromCollectionCard(games=feat.games)
 
-    # Time-to-revisit lands immediately after the first play so dormant games
-    # are surfaced before the user has to scroll. Suggestions still slot in
-    # near the top but after the featured rail, so the order is:
-    #   play 1 → featured-from-collection → suggested-buddies → play 2 → ...
-    insert_feat_after = 1
     insert_sug_after = 1
     for i, card in enumerate(play_cards):
         cards.append(card)
-        if featured_card and i + 1 == insert_feat_after:
-            cards.append(featured_card)
-            featured_card = None
         if suggestions_card and i + 1 == insert_sug_after:
             cards.append(suggestions_card)
             suggestions_card = None
-    # Stragglers (page too short to hit the insertion index).
+    # Straggler (page too short to hit the insertion index).
     if suggestions_card:
         cards.append(suggestions_card)
-    if featured_card:
-        cards.append(featured_card)
 
     return FeedPageResponse(cards=cards, next_cursor=next_cursor)

@@ -2333,7 +2333,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .play-session__scroll::-webkit-scrollbar { display: none; }
 
-/* ── Feed rails (hot games / suggested buddies / featured) ─────────────────
+/* ── Feed rails (hot games / suggested buddies) ────────────────────────────
    Carry the same cream polaroid surface as the play cards so the feed reads
    as a coherent stack of paper instead of two visual systems. Inner tiles
    sit on a slightly darker cream wash with a hairline border so they read
@@ -2347,24 +2347,38 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   box-shadow: none;
   color: var(--ink);
 }
-.feed-rail__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+.feed-rail__header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.5rem;
+  padding: 0 1rem;
+}
+/* The heading sits on its own cream chip rather than bare on the espresso
+   ground — a taped paper label on the polaroid wall. Same surface as the
+   play cards, so a rail heading reads as part of the same paper system
+   instead of floating type on black. */
 .feed-rail__header h3 {
   font-family: var(--font-polaroid);
   font-weight: 700;
   font-size: 1.05rem;
   letter-spacing: -0.01em;
-  color: var(--ink);
+  color: var(--polaroid-ink);
+  background: var(--polaroid-bg);
+  border: 1px solid var(--polaroid-line);
+  border-radius: var(--r-pill);
+  padding: 0.24rem 0.8rem 0.3rem;
+  box-shadow: var(--sh-1);
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
-.feed-rail__header { padding: 0 1rem; }
 .feed-rail__scroll { padding-left: 1rem; padding-right: 1rem; }
-.feed-rail__header h3 i { color: var(--accent); }
+/* Amber accent disappears against cream — the terracotta polaroid accent is
+   the one that carries on paper in both themes. */
+.feed-rail__header h3 i { color: var(--polaroid-accent); }
 .feed-rail__scroll {
   display: flex; gap: 0.6rem; overflow-x: auto;
   /* An absent overflow-y computes to `auto` beside a scrollable overflow-x,
      not to `visible` (CSS Overflow 3 §3) — so leaving it off silently made
      this rail a VERTICAL scroll container too, sitting over the Hot this
-     week / Buddies you may know / Time to revisit tiles. It swallows nothing
+     week / Buddies you may know tiles. It swallows nothing
      today only because the tiles fit inside the padding, leaving
      scrollHeight == clientHeight; a taller tile would have put a gesture trap
      across those rails. See the note on .play-session__scroll. */

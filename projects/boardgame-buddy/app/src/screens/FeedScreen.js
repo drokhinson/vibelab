@@ -1,11 +1,11 @@
-// FeedScreen — home: chronological play feed + hot-games / suggested-buddies /
-// featured-from-collection rails. Mirrors web/views/feed-view.js. Cursor-
-// paginated FlatList off state.feed; composes PlayCard, GameTile, BuddyRow.
+// FeedScreen — home: chronological play feed + hot-games / suggested-buddies
+// rails. Mirrors web/views/feed-view.js. Cursor-paginated FlatList off
+// state.feed; composes PlayCard, GameTile, BuddyRow.
 
 import React, { useCallback } from 'react';
 import { View, Text, FlatList, ScrollView, Pressable, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Flame, Users, RotateCcw } from 'lucide-react-native';
+import { Search, Flame, Users } from 'lucide-react-native';
 import { COLORS, FONTS, RADII, SPACING } from '../theme';
 import { useAppState, useAppActions } from '../store/AppContext';
 import PlayCard from '../components/PlayCard';
@@ -50,8 +50,6 @@ export default function FeedScreen({ navigation }) {
         return <PlaySessionRail card={card} me={me} openGame={openGame} />;
       case 'hot_games':
         return <GameRail title="Hot this week" Icon={Flame} entries={card.games} openGame={openGame} countKey="play_count" countSuffix="plays" />;
-      case 'featured_from_collection':
-        return <GameRail title="Time to revisit" Icon={RotateCcw} entries={card.games} openGame={openGame} />;
       case 'suggested_buddies':
         return <SuggestedBuddies card={card} navigation={navigation} />;
       default:

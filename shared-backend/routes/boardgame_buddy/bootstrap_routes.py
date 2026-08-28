@@ -7,8 +7,7 @@ cached identity to boot from. It returns:
   - current_user (raw profile row)
   - profile_bundle (stats, shelves, recent plays, status_map, buddies, requests)
   - feed_first_page + feed_cursor (composed in Python; reuses feed_service so
-    Hot Games / Suggested Buddies / Featured-From-Collection interspersing is
-    not duplicated)
+    Hot Games / Suggested Buddies interspersing is not duplicated)
   - recently_played_games (host flow game-picker seed)
   - play_partners (host flow player-picker seed: accounts + ghosts + recent,
     from one bgb_play_partners RPC)
