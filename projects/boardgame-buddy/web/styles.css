@@ -16,7 +16,7 @@
   --bgb-nav-height: 64px;
 
   /* Game-specific theming (set dynamically in game-detail.js) */
-  --game-accent: #6B3FA0;
+  --game-accent: var(--accent);
 
   /* Typography — three families.
      Geist     = geometric sans with more character than Poppins (UI, body)
@@ -88,6 +88,11 @@
   --b2: 9%  0.012 48;
   --b3: 18% 0.016 48;
   --bc: 90% 0.014 82;
+
+  /* Collection status pills */
+  --st-owned-bg:  rgba(122, 176, 128, 0.18); --st-owned-fg:  #96D3A0;
+  --st-wish-bg:   rgba(224, 169, 74, 0.18);  --st-wish-fg:   #E5B863;
+  --st-played-bg: rgba(160, 150, 220, 0.18); --st-played-fg: #B3A9E0;
 }
 
 /* ── Light ──────────────────────────────────────────────────────────────────── */
@@ -138,6 +143,10 @@
   --b2: 99% 0.005 85;
   --b3: 89% 0.014 80;
   --bc: 24% 0.020 60;
+
+  --st-owned-bg:  #E4F0E5; --st-owned-fg:  #2F6033;
+  --st-wish-bg:   #F7EBD2; --st-wish-fg:   #8A6410;
+  --st-played-bg: #EAE7F6; --st-played-fg: #4A4285;
 }
 
 /* ── Polaroid aliases ────────────────────────────────────────────────────────
@@ -2930,22 +2939,25 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    still reads cleanly — the previous low-alpha fills bled the underlying
    image through. Text contrast is held by a high-lightness foreground
    colour over a low-lightness saturated background. */
+/* Status tags were a fixed dark fill under light text — built when the app had
+   only a dark ground. On the light theme they read as heavy dark blobs sitting
+   on cream, so each pair is a token that flips with the theme. */
 .status-tag--owned {
-  background: oklch(0.32 0.15 130);
-  color: oklch(0.95 0.12 130);
+  background: var(--st-owned-bg);
+  color: var(--st-owned-fg);
 }
 .status-tag--wishlist {
-  background: oklch(0.34 0.15 60);
-  color: oklch(0.95 0.13 60);
+  background: var(--st-wish-bg);
+  color: var(--st-wish-fg);
 }
 .status-tag--played {
-  background: oklch(0.32 0.10 270);
-  color: oklch(0.95 0.08 270);
+  background: var(--st-played-bg);
+  color: var(--st-played-fg);
 }
 .status-tag--add {
-  background: oklch(var(--b1));
-  color: oklch(var(--bc));
-  border-color: oklch(var(--b3));
+  background: var(--polaroid-bg);
+  color: var(--polaroid-muted);
+  border-color: var(--polaroid-line);
   padding: 0.18rem 0.4rem;
 }
 .status-tag--add:hover {
@@ -3257,28 +3269,30 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   vertical-align: 0.1em;
 }
 .player-type-chip--account {
-  background: oklch(0.55 0.15 60 / 0.18);
-  color: oklch(0.85 0.15 60);
+  background: var(--accent-quiet);
+  color: var(--accent-hover);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .player-type-chip--custom {
-  background: oklch(var(--bc) / 0.08);
-  color: oklch(var(--bc) / 0.65);
-  border: 1px dashed oklch(var(--bc) / 0.25);
+  background: color-mix(in srgb, var(--polaroid-ink) 7%, transparent);
+  color: var(--polaroid-muted);
+  border: 1px dashed var(--polaroid-line);
 }
 .buddies-row--ghost { flex-wrap: wrap; }
 .buddies-row--ghost.is-expanded {
-  background: oklch(var(--b3));
+  background: var(--paper-line);
   border-color: var(--accent);
 }
 .buddies-row__avatar--ghost {
-  background: oklch(var(--b1));
-  border: 1px dashed oklch(var(--bc) / 0.35);
+  background: var(--polaroid-bg);
+  border: 1px dashed var(--polaroid-muted);
+  color: var(--polaroid-muted);
 }
 .buddies-link-panel {
   flex-basis: 100%;
   margin-top: 0.55rem;
   padding-top: 0.55rem;
-  border-top: 1px dashed oklch(var(--bc) / 0.2);
+  border-top: 1px dashed var(--polaroid-line);
   display: flex; flex-direction: column; gap: 0.4rem;
   cursor: default;
 }
@@ -3781,7 +3795,7 @@ main[data-view="session-viewer"].hidden {
 .cascade-back-row__title {
   text-align: center;
   font-size: 22px;
-  color: var(--polaroid-bg);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -6016,8 +6030,8 @@ main[data-view="session-viewer"].hidden {
 }
 .spoke-toggle__pill:hover { color: oklch(var(--bc)); border-color: var(--accent); }
 .spoke-toggle__pill.is-active {
-  background: linear-gradient(120deg, #F0C662, var(--accent) 60%, var(--accent-hover));
-  color: #3a2a08;
+  background: var(--accent);
+  color: var(--bg-0);
   border-color: transparent;
   /* Lift the selected pill off the row so the user can tell at a glance
      which mode they're viewing — the prior inactive/active contrast on
@@ -6347,13 +6361,16 @@ main[data-view="session-viewer"].hidden {
 .bgb-cream-screen .search-topbar h2 { color: var(--accent-hover, #B8820E); }
 .bgb-cream-screen .search-topbar .btn-ghost { color: var(--accent-hover, #B8820E); }
 
-/* Cards: drop the cream bg (parent is cream) onto a slightly warmer wash
-   so they still read as discrete elements without floating on dead air. */
+/* Cards on a cream screen. The warmer-wash trick these used to rely on stopped
+   working when --polaroid-bg-soft became a color-mix off --paper: the wash and
+   the sheet now differ by ~2 RGB units. Separation comes from a hairline
+   instead, which holds in both themes. */
 .bgb-cream-screen .set-card,
 .bgb-cream-screen .plays-list__row,
 .bgb-cream-screen .buddies-row {
   background: var(--polaroid-bg-soft, #F5EEDC);
   color: var(--polaroid-ink, #1D1812);
+  border: 1px solid var(--paper-line);
 }
 .bgb-cream-screen .buddies-row {
   border: 1px solid var(--polaroid-line, #DAC9A4);
@@ -6461,11 +6478,13 @@ main[data-view="session-viewer"].hidden {
    was knocking out its background, so the selected pill was rendering
    indistinguishable from the inactive one on the Collection screen. */
 .bgb-cream-screen .spoke-toggle__pill.is-active {
-  background: linear-gradient(120deg, #F0C662, var(--accent) 60%, var(--accent-hover));
+  /* Was a hardcoded dark-theme gold gradient (#F0C662 -> --accent) under a
+     fixed near-black label. In light --accent darkens, so the gradient ran
+     bright to dark beneath unreadable text. A flat accent fill works in both. */
+  background: var(--accent);
   border-color: transparent;
-  color: #3a2a08;
-  box-shadow: 0 6px 14px -4px rgba(201, 146, 42, 0.45),
-              inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  color: var(--bg-0);
+  box-shadow: var(--sh-1);
 }
 
 /* Filter chips (player count / playtime / play mode) */
