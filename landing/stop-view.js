@@ -39,7 +39,11 @@
 //
 // That isolation cuts both ways: this page cannot reach into the frame either.
 // So the read-only pass cannot be done from out here — StopReadonly.harden()
-// splices it into the srcdoc string to run inside the postcard instead.
+// splices it into the srcdoc string to run inside the postcard instead. The
+// same wall is why keyboard paging needs StopKeys: clicking a postcard to flip
+// it moves focus into the frame, and from then on the reader's arrow keys fire
+// in the postcard's document and never reach this page's keydown listener. See
+// stop-keys.js.
 //
 // Note on headers: `X-Frame-Options: DENY` governs framing of HTTP responses; a
 // `srcdoc` iframe has no HTTP response, so it is not affected. If a
@@ -57,7 +61,6 @@
   var current = 0;
   var handlers = {};
   var open = false;
-  var keyHandler = null;
 
   // Keep in step with the transition on .stop-screen__frame--sliding.
   var SLIDE_MS = 280;
@@ -145,13 +148,17 @@
   function buildFrame(html, title) {
     var next = proto.cloneNode(false);
     next.setAttribute("title", title);
-    // Every postcard goes in read-only, and carries the rig that lays its two
-    // faces side by side on a sideways phone — see stop-readonly.js and
-    // stop-pair.js for why both have to happen inside the document rather than
-    // out here. attach() then keeps that frame told which way the phone is
-    // held, so rotating re-lays-out the card without rebuilding the frame.
-    next.srcdoc = window.StopReadonly.harden(window.StopPair.pair(html));
+    // Every postcard goes in read-only, carries the rig that lays its two faces
+    // side by side on a sideways phone, and reports the reader's arrow/Escape
+    // presses back out — see stop-readonly.js, stop-pair.js and stop-keys.js for
+    // why all three have to happen inside the document rather than out here.
+    // The two attach() calls then keep that frame told which way the phone is
+    // held (so rotating re-lays-out the card without rebuilding the frame) and
+    // let its keys reach handleKey once a click has moved focus into it.
+    next.srcdoc = window.StopReadonly.harden(
+      window.StopKeys.relay(window.StopPair.pair(html)));
     window.StopPair.attach(next);
+    window.StopKeys.attach(next, handleKey);
     return next;
   }
 
@@ -241,6 +248,50 @@
     if (open && handlers.onExit) handlers.onExit();
   }
 
+  // ── Keys ──────────────────────────────────────────────────────────────────
+  // What a key means, in one place, because it arrives by two routes: from this
+  // page's own keydown listener while focus is on the chrome, and relayed out of
+  // the postcard by stop-keys.js once a click on the card has moved focus into
+  // the frame. Returns true if the key was consumed, so the caller can decide
+  // about preventDefault (the relayed route has nothing left to prevent — the
+  // event already ran its course inside the frame).
+  //
+  // mods carries only what the decision needs: repeat, and the three modifiers
+  // that mean the keystroke belongs to the browser rather than to us.
+  function handleKey(key, mods) {
+    if (!open) return false;
+    // Alt+Left and Cmd+Left are Back. Leave every modified arrow alone rather
+    // than enumerate the shortcuts — none of them mean "next postcard".
+    if (mods.meta || mods.ctrl || mods.alt) return false;
+    if (key === "Escape") { exit(); return true; }
+    // One card, no nav row: the recap reuses this screen that way.
+    if (list.length < 2) return false;
+    if (key !== "ArrowLeft" && key !== "ArrowRight") return false;
+    // Held-down arrows are dropped, not throttled. Every move builds a fresh
+    // iframe and rewrites the address bar; at key-repeat rate that is a flood of
+    // renders for a reader who almost certainly meant one card.
+    if (mods.repeat) return true;
+    go(key === "ArrowLeft" ? -1 : 1);
+    return true;
+  }
+
+  // Text-entry controls own their arrows and their Escape. Nothing on the trip
+  // screen can have focus while the reader is up — trip.js hides the screen that
+  // holds the admin bar — but this listener is on document alongside admin.js's,
+  // so the guard is cheap insurance against that ever changing.
+  var FIELD_SEL = "input,textarea,select,[contenteditable]";
+
+  function onKeyDown(ev) {
+    var t = ev.target;
+    if (t && t.closest && t.closest(FIELD_SEL)) return;
+    if (handleKey(ev.key, {
+      repeat: !!ev.repeat,
+      meta: !!ev.metaKey,
+      ctrl: !!ev.ctrlKey,
+      alt: !!ev.altKey,
+    })) ev.preventDefault();
+  }
+
   // What this screen is showing, for the chrome's wording and its aria-labels.
   // "Postcard" unless a caller says otherwise (trip-summary.js passes "Recap").
   // The markup carries the postcard wording, so this only ever has to overwrite.
@@ -297,13 +348,7 @@
     if (open) return;
     open = true;
     root.hidden = false;
-    keyHandler = function (ev) {
-      if (ev.key === "Escape") { exit(); return; }
-      if (list.length < 2) return;
-      if (ev.key === "ArrowLeft") go(-1);
-      else if (ev.key === "ArrowRight") go(1);
-    };
-    document.addEventListener("keydown", keyHandler);
+    document.addEventListener("keydown", onKeyDown);
   }
 
   function close() {
@@ -314,10 +359,7 @@
     // when the reader is back on the trip list — again by swapping the frame,
     // for the history reason in renderFrame().
     renderFrame("", "Postcard");
-    if (keyHandler) {
-      document.removeEventListener("keydown", keyHandler);
-      keyHandler = null;
-    }
+    document.removeEventListener("keydown", onKeyDown);
   }
 
   // currentIndex is how trip.js decides whether a background refresh has any
