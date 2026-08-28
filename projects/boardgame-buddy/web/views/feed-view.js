@@ -14,6 +14,11 @@
       this._page = null;
       this._loading = false;
       this._error = null;
+      // How many of _page.cards came from the first page. _load({cursor})
+      // appends strictly behind this boundary, so it's what lets an upload
+      // replace page one in place without discarding the pages the user
+      // scrolled down to — see _onUploadsLanded.
+      this._firstPageLen = 0;
       // False until the viewer's collection map is known either way — see
       // onMount. Gates the status corner on every game tile in the feed.
       this._statusReady = false;
@@ -49,6 +54,7 @@
         this.render();
       });
       this.listenDom("play-changed", (e) => this._onPlayChanged(e.detail || {}));
+      this.listenDom("plays-uploaded", (e) => this._onUploadsLanded(e.detail || {}));
       this._refreshCollectionData();
       await this._load({ initial: true });
       this._installScrollObserver();
@@ -85,11 +91,19 @@
       // Play.update() already busted the cache for the next mount.
       if (!playId || (kind !== "delete" && kind !== "leave")) return;
       if (!this._page || !Array.isArray(this._page.cards)) return;
-      const cards = this._page.cards.filter(
-        (c) => !(c.kind === "play" && c.play_id === playId),
-      );
+      // Count the removals that fell inside the first-page slice so the
+      // boundary keeps pointing at the same card — _onUploadsLanded slices on
+      // it, and a stale boundary would splice the fresh page over a row that
+      // belongs to a cursor page.
+      let removedInFirst = 0;
+      const cards = this._page.cards.filter((c, i) => {
+        const drop = c.kind === "play" && c.play_id === playId;
+        if (drop && i < this._firstPageLen) removedInFirst++;
+        return !drop;
+      });
       if (cards.length === this._page.cards.length) return; // not on this page
       this._page = { ...this._page, cards };
+      this._firstPageLen -= removedInFirst;
       // This is the repaint: the new object identity makes store.set fire this
       // view's own listen("feed") subscriber (onMount, above) exactly once. No
       // explicit render() call — that would paint the whole feed twice. The
@@ -99,6 +113,68 @@
       // variant on its own — no session-level bookkeeping needed here.
       window.store.set("feed", this._page);
       window.Feed.refreshFirstPage().catch(() => {});
+    }
+
+    /**
+     * A background outbox flush landed queued plays while the user was sitting
+     * on this feed. Without this the new play stays invisible until the next
+     * mount: Feed.refreshFirstPage() only re-warms the bgbCache entry, and this
+     * view paints from its own _page.
+     *
+     * Splices the refreshed first page over the slice it replaces rather than
+     * replacing _page wholesale — dropping the cursor pages of someone who had
+     * scrolled four of them in would yank the screen out from under them.
+     *
+     * @param {{page?: any, sent?: number}} detail  page is the warm first page
+     *   the flush already fetched (domain/outbox.js).
+     */
+    _onUploadsLanded({ page }) {
+      // listenDom unbinds on unmount, so this is belt-and-braces — but the view
+      // is a singleton and a leaked listener would paint a hidden screen.
+      if (!this._mounted) return;
+      // refreshFirstPage only fails when the network went away again mid-flush.
+      // Nothing fresh to paint; the next mount re-fetches anyway.
+      if (!page || !Array.isArray(page.cards)) return;
+      // Still on the skeleton (or a failed first load) — _load owns the first
+      // paint and racing it would only get overwritten.
+      if (!this._page || !Array.isArray(this._page.cards)) return;
+
+      const tail = this._page.cards.slice(this._firstPageLen);
+      // The refreshed page-one window can now extend over rows the tail already
+      // holds (it grew by the plays that just uploaded), and groupCards() would
+      // emit the same play twice inside one session card.
+      const freshIds = new Set(
+        page.cards.filter((c) => c.kind === "play" && c.play_id).map((c) => c.play_id),
+      );
+      const nextCards = [
+        ...page.cards,
+        ...tail.filter((c) => !(c.kind === "play" && c.play_id && freshIds.has(c.play_id))),
+      ];
+      // Nothing visibly moved: the flush's refresh can land right after a mount
+      // that already fetched the same page, and a needless repaint would cost
+      // the user their scroll position for no new content.
+      if (cardsSig(nextCards) === cardsSig(this._page.cards)) return;
+
+      this._page = {
+        ...this._page,
+        cards: nextCards,
+        // With a tail, the running cursor belongs to the LAST page fetched, not
+        // to the first page we just re-pulled. Without one, the fresh cursor is
+        // both correct and newer.
+        next_cursor: tail.length ? this._page.next_cursor : page.next_cursor,
+      };
+      this._firstPageLen = page.cards.length;
+      // Known seam: the cards pushed past the old page-one boundary fall into
+      // the gap between the new first page and a tail fetched from the old one,
+      // so they drop out of the running list until the next mount. That's one
+      // card per play this flush uploaded — one or two in practice — against
+      // re-fetching every cursor page to close it.
+      //
+      // Same repaint mechanism as _onPlayChanged: the new object identity makes
+      // store.set fire this view's own listen("feed") subscriber exactly once,
+      // so there's no render() call here. No skeleton either — render() only
+      // paints one while _page is null, and it isn't on this path.
+      window.store.set("feed", this._page);
     }
 
     async onUnmount() {
@@ -142,8 +218,10 @@
         if (cursor && this._page) {
           this._page.cards = [...this._page.cards, ...data.cards];
           this._page.next_cursor = data.next_cursor;
+          // _firstPageLen stays put: appends land strictly behind it.
         } else {
           this._page = data;
+          this._firstPageLen = data.cards.length;
         }
         window.store.set("feed", this._page);
       } catch (e) {
@@ -430,6 +508,13 @@
       existing.plays.push(card);
     }
     return out;
+  }
+
+  // Identity signature of a card list — what would visibly change if painted.
+  // Plays are identified by id; rails by kind alone, since their contents are
+  // server-chosen and a reshuffle isn't worth a repaint mid-scroll.
+  function cardsSig(cards) {
+    return cards.map((c) => (c.kind === "play" ? `p:${c.play_id}` : c.kind)).join("|");
   }
 
   function sessionKey(card) {
