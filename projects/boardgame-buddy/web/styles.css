@@ -2352,27 +2352,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin-bottom: 0.5rem;
   padding: 0 1rem;
 }
-/* The heading sits on its own cream chip rather than bare on the espresso
-   ground — a taped paper label on the polaroid wall. Same surface as the
-   play cards, so a rail heading reads as part of the same paper system
-   instead of floating type on black. */
 .feed-rail__header h3 {
   font-family: var(--font-polaroid);
   font-weight: 700;
   font-size: 1.05rem;
   letter-spacing: -0.01em;
-  color: var(--polaroid-ink);
-  background: var(--polaroid-bg);
-  border: 1px solid var(--polaroid-line);
-  border-radius: var(--r-pill);
-  padding: 0.24rem 0.8rem 0.3rem;
-  box-shadow: var(--sh-1);
+  color: var(--ink);
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
 .feed-rail__scroll { padding-left: 1rem; padding-right: 1rem; }
-/* Amber accent disappears against cream — the terracotta polaroid accent is
-   the one that carries on paper in both themes. */
-.feed-rail__header h3 i { color: var(--polaroid-accent); }
+.feed-rail__header h3 i { color: var(--accent); }
 .feed-rail__scroll {
   display: flex; gap: 0.6rem; overflow-x: auto;
   /* An absent overflow-y computes to `auto` beside a scrollable overflow-x,
@@ -2391,14 +2380,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* Rail variant of the canonical Game tile. Replaces the former
    `.hot-game-tile` family, which was duplicated across two feed renderers.
-   Sits on the app ground rather than a cream panel: paper now means "this is
-   a play", not "this is a section". */
+   Carries the same cream caption as the collection / wishlist tiles (see
+   `.collection-tile` and its `.bgb-cream-screen` overrides) and the buddy
+   tiles beside it: a game tile looks like a game tile wherever it appears,
+   rather than going dark-on-espresso only in the feed. */
 .game-polaroid.game-polaroid--rail {
   flex: 0 0 112px;
   scroll-snap-align: start;
-  background: var(--bg-1);
-  color: var(--ink);
-  border: 1px solid var(--line);
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-ink);
+  border: 1px solid var(--polaroid-line);
   border-radius: var(--r-md);
   padding: 0;
   overflow: hidden;
@@ -2406,21 +2397,26 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .game-polaroid.game-polaroid--rail:hover {
   transform: translateY(-3px);
-  border-color: var(--line-strong);
+  border-color: color-mix(in srgb, var(--polaroid-ink) 25%, var(--polaroid-line));
 }
 .game-polaroid.game-polaroid--rail .game-polaroid__photo { border-radius: 0; }
 .game-polaroid.game-polaroid--rail .game-polaroid__photo-img,
 .game-polaroid.game-polaroid--rail .game-polaroid__photo-placeholder { height: 112px; }
-.game-polaroid.game-polaroid--rail .game-polaroid__caption { padding: 8px 10px 10px; }
+/* Left-aligned like `.collection-tile__name`, not centred like the
+   find-a-game polaroid grid. */
+.game-polaroid.game-polaroid--rail .game-polaroid__caption {
+  padding: 6px 8px 8px;
+  text-align: left;
+}
 .game-polaroid.game-polaroid--rail .game-polaroid__name {
   font-family: var(--font-sans);
   font-size: 12.5px; font-weight: 600; line-height: 1.3;
-  color: var(--ink);
+  color: var(--polaroid-ink);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; white-space: normal; min-height: 2.6em;
 }
 .game-polaroid.game-polaroid--rail .game-polaroid__meta {
-  font-size: 10.5px; color: var(--ink-faint); margin-top: 3px;
+  font-size: 10.5px; color: var(--polaroid-muted); margin-top: 3px;
   font-variant-numeric: tabular-nums;
 }
 
