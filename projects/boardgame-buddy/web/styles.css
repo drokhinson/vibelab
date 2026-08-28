@@ -6196,6 +6196,10 @@ main[data-view="session-viewer"].hidden {
   padding: 0 0.9rem 0.9rem;
 }
 .set-card__acct-edit-form input { flex: 1; min-width: 0; }
+/* The zero top padding assumes an account row sits above. On Settings the
+   admin-key block is now the card's only child, so it has to pay for its own
+   top edge. */
+.set-card__acct-edit-form:first-child { padding-top: 0.9rem; }
 .set-card__avatar-btn {
   display: inline-flex;
   align-items: center;

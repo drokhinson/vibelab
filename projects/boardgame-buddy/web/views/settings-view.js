@@ -1,8 +1,12 @@
 // views/settings-view.js — account settings & integrations.
 //
-// Same five sections as before (Account, Admin tools, Connections, Logout,
-// BGG attribution) re-skinned into the warm-cream card aesthetic. Admin
-// tools now surfaces a live "open chapter reports" badge count.
+// Admin tools, Appearance, Connections, Pending uploads, Local cache, Logout
+// and BGG attribution, in the warm-cream card aesthetic. Admin tools surfaces
+// a live "open chapter reports" badge count.
+//
+// The identity/"Edit profile" account card moved to the Profile hub
+// (views/profile-self-view.js). What is left under "Account" here is the
+// admin-key escalation block, shown only to non-admins.
 
 (function () {
   class SettingsView extends window.View {
@@ -91,12 +95,13 @@
 
       this.container.innerHTML = `
         ${this._renderHead()}
-        <div class="set-card-label">Account</div>
-        ${this._renderAccountCard(me)}
         ${me.is_admin ? `
           <div class="set-card-label">Admin tools</div>
           ${this._renderAdminCard()}
-        ` : ""}
+        ` : `
+          <div class="set-card-label">Account</div>
+          <div class="set-card">${this._renderBecomeAdminBlock()}</div>
+        `}
         <div class="set-card-label">Appearance</div>
         ${this._renderAppearanceCard()}
         <div class="set-card-label">Connections</div>
@@ -133,74 +138,10 @@
       `;
     }
 
-    // ── Account card ──────────────────────────────────────────────────────────
-    _renderAccountCard(me) {
-      const badge = window.BgbBadge.render({
-        avatar: me.avatar,
-        displayName: me.display_name,
-        size: "md",
-        isMe: true,
-        extraClass: "set-card__acct-avatar",
-      });
-      return `
-        <div class="set-card">
-          <div class="set-card__acct">
-            ${badge}
-            <div class="set-card__acct-body">
-              <div class="set-card__acct-name">${escapeHtml(me.display_name || "")}</div>
-              ${me.username ? `
-                <div class="set-card__acct-handle" title="Your username never changes. Buddies can find you with it.">
-                  <i data-icon="at-sign" class="w-3.5 h-3.5"></i>
-                  ${escapeHtml(me.username)}
-                </div>` : ""}
-            </div>
-            <button class="set-card__avatar-btn" type="button"
-                    title="Edit your profile" aria-label="Edit your profile"
-                    onclick="window.settingsView._openEditProfile()">
-              <i data-icon="palette" class="w-4 h-4"></i>
-              Edit profile
-            </button>
-          </div>
-          ${me.is_admin ? "" : this._renderBecomeAdminBlock()}
-        </div>
-      `;
-    }
-
-    async _openEditProfile() {
-      const me = window.store.get("user");
-      if (!me) return;
-      const picked = await window.PolaroidPopup.avatarCustomizer({
-        headerTitle: "Edit your profile",
-        includeNameField: true,
-        saveLabel: "Save",
-        current: me.avatar || null,
-        displayName: me.display_name,
-      });
-      if (!picked) return;
-      try {
-        const body = {
-          avatar: { icon: picked.icon, iconColor: picked.iconColor, bgColor: picked.bgColor },
-        };
-        if (picked.displayName && picked.displayName !== me.display_name) {
-          body.display_name = picked.displayName;
-        }
-        const updated = await window.api.post("/profile", body);
-        // Carry the new fields onto the in-memory user so the rest of the
-        // app re-renders against them. Store.set() fires listeners → render().
-        const next = new window.User({ ...me, ...updated });
-        window.store.set("user", next);
-      } catch (e) {
-        window.PolaroidPopup.alert({
-          title: "Couldn't save profile",
-          body: e && e.message ? String(e.message) : "Please try again.",
-        });
-      }
-    }
-
     _renderBecomeAdminBlock() {
       if (!this._adminFormOpen) {
         return `
-          <div class="set-card__acct-edit-form" style="padding-top: 0;">
+          <div class="set-card__acct-edit-form">
             <button class="btn btn-ghost btn-xs" onclick="window.settingsView._openAdminForm()">
               <i data-icon="key-round" class="w-3.5 h-3.5"></i> Have an admin key?
             </button>

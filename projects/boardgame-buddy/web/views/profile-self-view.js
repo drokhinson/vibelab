@@ -1,10 +1,14 @@
 // views/profile-self-view.js — Profile Hub.
 //
-// Identity row → four tappable stat tiles → warm-cream preview cards
+// Account card → four tappable stat tiles → warm-cream preview cards
 // (Collection / Wishlist / Recent plays / Buddies). Each preview's
 // "See all →" routes to a dedicated full-screen spoke. Settings is
 // reachable via the avatar in the global header. All cards seed from
 // a single /profile/bundle call.
+//
+// The account card (identity + "Edit profile") used to live in Settings.
+// It sits here instead so the hub's own identity block is the thing you
+// edit, rather than a read-only echo of a card one screen away.
 
 (function () {
   const PREVIEW_COVERS = 4;
@@ -56,7 +60,7 @@
         return;
       }
       this.container.innerHTML = `
-        ${this._renderIdRow(me)}
+        ${this._renderAccountCard(me)}
         ${this._renderStats(b)}
         ${this._error ? `<div class="alert alert-error text-sm mt-3">${escapeHtml(this._error)}</div>` : ""}
         ${this._renderCollectionPreview(b)}
@@ -68,24 +72,70 @@
       this.refreshIcons();
     }
 
-    // ── Identity row ──────────────────────────────────────────────────────────
-    _renderIdRow(me) {
+    // ── Account card ──────────────────────────────────────────────────────────
+    // Same .set-card markup Settings used to render — the hub is not a
+    // .bgb-cream-screen, but .set-card reads the --polaroid-* tokens directly,
+    // which is what .profile-stat-card and .preview-card below already use.
+    _renderAccountCard(me) {
       const badge = window.BgbBadge.render({
         avatar: me.avatar,
         displayName: me.display_name,
-        size: "lg",
+        size: "md",
         isMe: true,
-        extraClass: "profile-hub__avatar",
+        extraClass: "set-card__acct-avatar",
       });
       return `
-        <header class="profile-hub__id">
-          ${badge}
-          <div class="profile-hub__who">
-            <div class="profile-hub__name font-display">${escapeHtml(me.display_name || "")}</div>
-            ${me.username ? `<div class="profile-hub__handle">@${escapeHtml(me.username)}</div>` : ""}
+        <div class="set-card">
+          <div class="set-card__acct">
+            ${badge}
+            <div class="set-card__acct-body">
+              <div class="set-card__acct-name">${escapeHtml(me.display_name || "")}</div>
+              ${me.username ? `
+                <div class="set-card__acct-handle" title="Your username never changes. Buddies can find you with it.">
+                  <i data-icon="at-sign" class="w-3.5 h-3.5"></i>
+                  ${escapeHtml(me.username)}
+                </div>` : ""}
+            </div>
+            <button class="set-card__avatar-btn" type="button"
+                    title="Edit your profile" aria-label="Edit your profile"
+                    onclick="window.profileSelfView._openEditProfile()">
+              <i data-icon="palette" class="w-4 h-4"></i>
+              Edit profile
+            </button>
           </div>
-        </header>
+        </div>
       `;
+    }
+
+    async _openEditProfile() {
+      const me = window.store.get("user");
+      if (!me) return;
+      const picked = await window.PolaroidPopup.avatarCustomizer({
+        headerTitle: "Edit your profile",
+        includeNameField: true,
+        saveLabel: "Save",
+        current: me.avatar || null,
+        displayName: me.display_name,
+      });
+      if (!picked) return;
+      try {
+        const body = {
+          avatar: { icon: picked.icon, iconColor: picked.iconColor, bgColor: picked.bgColor },
+        };
+        if (picked.displayName && picked.displayName !== me.display_name) {
+          body.display_name = picked.displayName;
+        }
+        const updated = await window.api.post("/profile", body);
+        // Carry the new fields onto the in-memory user so the rest of the
+        // app re-renders against them. Store.set() fires listeners → render().
+        const next = new window.User({ ...me, ...updated });
+        window.store.set("user", next);
+      } catch (e) {
+        window.PolaroidPopup.alert({
+          title: "Couldn't save profile",
+          body: e && e.message ? String(e.message) : "Please try again.",
+        });
+      }
     }
 
     // ── Four stat tiles ───────────────────────────────────────────────────────
