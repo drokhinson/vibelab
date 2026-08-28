@@ -261,7 +261,7 @@ body {
   border: 1px solid rgba(139, 111, 60, 0.3);
   border-radius: 3px;
 }
-.scroll-panel .scroll-chapter [data-lucide] {
+.scroll-panel .scroll-chapter [data-icon-name] {
   color: #6B4A1A;
 }
 .scroll-panel .btn-ghost {
@@ -341,7 +341,7 @@ body {
   text-transform: uppercase;
   color: #6B4A1A;
 }
-.scroll-section__header [data-lucide] { color: #6B4A1A; }
+.scroll-section__header [data-icon-name] { color: #6B4A1A; }
 /* Make the rolled edges tappable. They visually overlap the existing
    ::before/::after rolls and give a 32px tap target. */
 .scroll-panel__roll {
@@ -620,13 +620,13 @@ body {
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
   white-space: nowrap;
 }
-.chapter-add__pool-toggle [data-lucide] { color: var(--accent); }
+.chapter-add__pool-toggle [data-icon-name] { color: var(--accent); }
 .chapter-add__pool-toggle:hover {
   background: var(--accent);
   color: var(--bg-0);
   border-color: var(--accent-hover);
 }
-.chapter-add__pool-toggle:hover [data-lucide] { color: var(--bg-0); }
+.chapter-add__pool-toggle:hover [data-icon-name] { color: var(--bg-0); }
 .chapter-add__pool-toggle--compact {
   padding: 4px 9px;
   font-size: 0.72rem;
@@ -638,13 +638,13 @@ body {
   color: #2F6033;
   border-color: rgba(74, 122, 74, 0.55);
 }
-.chapter-add__pool-toggle--in [data-lucide] { color: #2F6033; }
+.chapter-add__pool-toggle--in [data-icon-name] { color: #2F6033; }
 .chapter-add__pool-toggle--in:hover {
   background: rgba(166, 93, 44, 0.18);
   color: var(--rust);
   border-color: var(--rust);
 }
-.chapter-add__pool-toggle--in:hover [data-lucide] { color: var(--rust); }
+.chapter-add__pool-toggle--in:hover [data-icon-name] { color: var(--rust); }
 
 /* Horizontally-scrollable chip filter. Fits any phone screen without
    overflowing into other UI. Native scroll, snap-x, hidden scrollbar. */
@@ -682,7 +682,7 @@ body {
   border-color: var(--accent);
   color: var(--bg-0);
 }
-.chapter-add__chip--active [data-lucide] { color: var(--bg-0); }
+.chapter-add__chip--active [data-icon-name] { color: var(--bg-0); }
 
 /* ── Chapter editor (shared by Create + Edit) ────────────────────────────
    The "Option C" layout: cream game chip, title field with Import .md,
@@ -1020,7 +1020,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: #3a2a08;
   box-shadow: 0 4px 12px rgba(201, 146, 42, 0.35);
 }
-.chapter-edit__tpill--on [data-lucide] { color: #3a2a08; }
+.chapter-edit__tpill--on [data-icon-name] { color: #3a2a08; }
 
 /* Write / Preview segmented control. */
 .chapter-edit__seg {
@@ -1397,7 +1397,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .chapter-add__fab:hover { filter: brightness(1.06); }
 .chapter-add__fab:active { transform: scale(0.97); }
-.chapter-add__fab [data-lucide] { color: #3a2a08; }
+.chapter-add__fab [data-icon-name] { color: #3a2a08; }
 
 /* Mirror back FAB on the left side of the browse screen. Secondary
    visual treatment (dark cream-on-dark) so the gold "+ New chapter"
@@ -1429,7 +1429,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border-color: var(--accent);
 }
 .chapter-add__fab-back:active { transform: scale(0.97); }
-.chapter-add__fab-back [data-lucide] { color: var(--accent); }
+.chapter-add__fab-back [data-icon-name] { color: var(--accent); }
 .chapter-add__fab-back span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1639,11 +1639,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: #0D0A06 !important;
 }
 
-/* ── Lucide icon sizing helpers ──────────────────────────────────────────────── */
-[data-lucide] {
+/* ── Icon sizing ─────────────────────────────────────────────────────────────
+   An inline <svg> with no width/height fills its container, so an icon whose
+   Tailwind w-N/h-N class fails to apply balloons to full width rather than
+   degrading quietly. The 1em default keeps an unsized icon sane; call sites
+   that set w-N/h-N still win on specificity. */
+[data-icon-name] {
   display: inline-block;
   vertical-align: middle;
   flex-shrink: 0;
+  width: 1em;
+  height: 1em;
 }
 
 /* ── Toast positioning ───────────────────────────────────────────────────────── */
@@ -5447,7 +5453,7 @@ main[data-view="session-viewer"].hidden {
   background: rgba(201, 146, 42, 0.16);
   border-color: var(--accent);
 }
-.play-detail-popup__add-photo [data-lucide] { color: var(--accent); }
+.play-detail-popup__add-photo [data-icon-name] { color: var(--accent); }
 .play-detail-popup__add-photo-title {
   font-weight: 700;
   font-size: 0.95rem;
@@ -6902,7 +6908,7 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-muted);
   line-height: 1.35;
 }
-.cascade-card__hint [data-lucide] { flex: none; margin-top: 1px; color: var(--rust); }
+.cascade-card__hint [data-icon-name] { flex: none; margin-top: 1px; color: var(--rust); }
 
 
 /* Per-row Discard in Settings → Pending uploads. The row is a flex
