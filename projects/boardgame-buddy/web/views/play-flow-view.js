@@ -277,8 +277,10 @@
      * closed. The invite card showed a code that could not be joined and
      * Continue bounced off a 404.
      *
-     * Called from _startAnotherRound (which has always done this inline) and,
-     * conditionally, from onMount.
+     * Called from _startAnotherRound (which has always done this inline),
+     * conditionally from onMount, and from both terminal branches of _runSave —
+     * the run a saved or queued play belongs to is over, and leaving its lobby
+     * handles live is what let a finished session mint a replacement for itself.
      */
     _resetRunState() {
       // Live wiring — mirrors onUnmount.
@@ -579,6 +581,12 @@
     }
 
     async _ensureLobbyOpen() {
+      // A closed-out draft never gets a lobby. This is the last line of defence
+      // against the resurrection this change fixes: an in-flight poll tick that
+      // 404s on the just-finalized session would otherwise read that as a dead
+      // lobby and POST a replacement — a phantom open session that shows up in
+      // every buddy's Join chooser for a game that is already saved.
+      if (this._ps.isDone()) return;
       // Token the phase the host is on right now. Continue no longer waits for
       // the lobby, so they can be on Play by the time this resolves — and both
       // branches below otherwise adopt the server's phase wholesale, which
@@ -743,6 +751,13 @@
       // interval is never armed — not armed-and-skipping, which would still
       // wake the tab every 2s for nothing.
       if (this._isOffline()) return;
+      // Same reasoning, same remedy, for every phase after Gather. Promotion is
+      // a Gather-only act: bgb_join_session only writes the participants table
+      // while the session is gathering, so someone joining by code during Play
+      // or Settle is a spectator who never reaches the host's roster. From
+      // Gather onward the host PUSHES (live scores), and there is nothing left
+      // to read back. _advancePhase arms and disarms this on the transition.
+      if (this._ps.phase !== "gather") return;
       if (this._lobbyPoll || !this._lobby) return;
       this._lobbyPoll = setInterval(() => this._lobbyPollTick(), 2000);
     }
@@ -752,10 +767,13 @@
       // Hidden tab: skip the fetch — the visibilitychange listener (onMount)
       // fires one catch-up tick the moment the tab is visible again.
       if (document.hidden) return;
-      // The poll's only real effect is Gather-time joiner auto-promotion, so
-      // outside Gather skip the fetch entirely. The interval stays armed:
-      // the back arrow can roll the phase back to gather, and the next tick
-      // in gather resumes fetching.
+      // Outside Gather there is nothing to promote (see _startLobbyPoll), and
+      // the interval is disarmed there anyway. This stays because the
+      // visibilitychange catch-up listener in onMount calls this tick DIRECTLY,
+      // without going through _startLobbyPoll — so the tick has to defend
+      // itself. Without it, a host who saves and then backgrounds and
+      // foregrounds the tab fetches a finalized session, reads the 404 as a
+      // dead lobby, and mints a replacement for a game that is already saved.
       if (this._ps.phase !== "gather") return;
       // Skip the tick while a participant DELETE is in flight — the
       // server still has the row, and the merge logic below would
@@ -854,6 +872,19 @@
       if (!ul) return;
       ul.innerHTML = this._ps.players.map((p, i) => this._renderPlayerRow(p, i)).join("");
       this.refreshIcons();
+    }
+
+    /**
+     * Arm the poll in Gather, disarm it everywhere else.
+     *
+     * Called from _advancePhase — the one funnel every phase change goes
+     * through, forward via Continue and backward via _phaseBack, online and
+     * offline alike. _startLobbyPoll no-ops offline and off-Gather on its own,
+     * so this is safe to call unconditionally on either branch.
+     */
+    _syncLobbyPollToPhase() {
+      if (this._ps.phase === "gather") this._startLobbyPoll();
+      else this._stopLobbyPoll();
     }
 
     _stopLobbyPoll() {
@@ -1550,6 +1581,7 @@
         ++this._phaseSeq;
         this._ps.phase = next;
         this._ps.persist();
+        this._syncLobbyPollToPhase();
         this.render();
         this._scrollToCurrentPhase();
         return;
@@ -1565,6 +1597,7 @@
       const seq = ++this._phaseSeq;
       this._ps.phase = next;
       this._ps.persist();
+      this._syncLobbyPollToPhase();
       this.render();
       this._scrollToCurrentPhase();
       this._pendingPhase++;
@@ -2869,6 +2902,19 @@
           // clear() removing an already-absent key is fine. Skipped when stale,
           // where this._ps is the NEXT round's session — clearing that would
           // empty the roster the host is looking at right now.
+          //
+          // _resetRunState() first, for the same staleness reason: the run this
+          // save belongs to is over, so its lobby handles and live wiring have
+          // to go before the draft does. Leaving _lobby set is what let the
+          // visibilitychange catch-up tick keep firing against a finished
+          // session — see _lobbyPollTick's phase guard.
+          //
+          // It bumps _saveSeq, which is half of _isStaleSave. That is both safe
+          // and correct here: this branch returns below, the saved branch is
+          // mutually exclusive with it, and neither is followed by another
+          // staleness test (_attachPhoto works off savedId/cardId locals). The
+          // bump says "this run is over", which is precisely what just happened.
+          this._resetRunState();
           this._ps.clear();
           window.store.set("activePlay", null);
         }
@@ -2915,6 +2961,8 @@
       // from it (X, Another round?) paints on its own.
       if (!this._isStaleSave(snap)) {
         this._saving = false;
+        // Release the run before the draft — see the queued branch above.
+        this._resetRunState();
         this._ps.clear();
         window.store.set("activePlay", null);
       }

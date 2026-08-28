@@ -45,6 +45,9 @@
       this.phase        = initial.phase || "gather";
       this.photoBlob    = null; // in-memory only — never persisted
       this.photoUrl     = initial.photoUrl || null;
+      // Closed out by clear(). In-memory only, and never read from `initial`:
+      // a done draft is never persisted, so a loaded one is always live.
+      this._done        = false;
     }
 
     static load() {
@@ -59,6 +62,14 @@
     }
 
     persist() {
+      // A closed-out draft never goes back to disk. clear() is not the end of
+      // this object's life — the view keeps holding it, and ~30 persist() call
+      // sites can still fire against it — so without this, one late write
+      // re-creates the key and the Play tab offers to resume a finished game.
+      // That is exactly how a saved play used to come back: a poll tick 404s on
+      // the finalized session, _healLobby persists to drop the dead code, then
+      // _ensureLobbyOpen mints a fresh lobby and persists the new one.
+      if (this._done) return;
       const snapshot = {
         gameId: this.gameId,
         gameSnapshot: this.gameSnapshot,
@@ -101,7 +112,13 @@
       this.code = null;
       this.sessionId = null;
       this.hostUserId = null;
-      this.phase = "gather";
+      // Terminal, not "gather". Two guards read this and both were dead before:
+      // LogPlayView._resumableSession()'s `phase !== "finalized"` test (nothing
+      // in the client ever wrote that value), and PlayFlowView's Gather-only
+      // poll gate — which resetting to "gather" actively re-OPENED, turning the
+      // clear into the trigger for the resurrection it was meant to prevent.
+      this.phase = "finalized";
+      this._done = true;
       this.photoBlob = null;
       this.photoUrl = null;
       if (this.photoPreviewUrl) {
@@ -114,6 +131,21 @@
 
     isActive() {
       return !!(this.gameId || this.players.length || this.code);
+    }
+
+    /**
+     * Has this draft been closed out?
+     *
+     * Deliberately in-memory only — it is not part of the persisted snapshot,
+     * because a done draft is never written, so load() can never see one. Every
+     * legitimate re-seed builds a NEW PlaySession (onMount, _startAnotherRound,
+     * LogPlayView._anotherRound, JoinPanel), so the flag never outstays the run
+     * it belongs to.
+     *
+     * @returns {boolean}
+     */
+    isDone() {
+      return !!this._done;
     }
 
     /**
