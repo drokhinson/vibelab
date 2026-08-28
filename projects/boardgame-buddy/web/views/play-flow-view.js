@@ -670,7 +670,18 @@
     // /play/{code} so a refresh resumes the session (and the URL is
     // shareable). Uses replaceState — we don't want a back-press from the
     // session to land on a /play entry that would re-create a fresh lobby.
+    //
+    // _ensureLobbyOpen() is a plain async chain with no cancellation: if the
+    // host bounces to another tab (Feed, Profile, …) while a lobby open/
+    // re-validate is still in flight, onUnmount() doesn't abort it — it just
+    // resolves later and, without this guard, would silently rewrite the
+    // address bar to /play/{code} out from under whatever view the user has
+    // since navigated to. A refresh at that point would then reopen this
+    // session instead of the screen actually on screen. Gate on _mounted
+    // (flipped false by View.unmount()) so only a still-current run touches
+    // the URL.
     _syncUrlToCode() {
+      if (!this._mounted) return;
       if (!this._ps || !this._ps.code) return;
       if (window.router && window.router.replaceUrl) {
         window.router.replaceUrl("play-flow", { code: this._ps.code });
