@@ -175,10 +175,9 @@
     _renderCollectionPreview(b) {
       const items = (b && b.owned_page) || [];
       const count = (b && b.owned_total) || 0;
-      const ownedExp = (b && b.stats && b.stats.owned_expansions) || 0;
-      const subtitle = ownedExp > 0
-        ? `${count} games · ${ownedExp} expansion${ownedExp === 1 ? "" : "s"}`
-        : `${count} game${count === 1 ? "" : "s"}`;
+      // Games only — owned expansions are surfaced per-tile in the Collection
+      // spoke (collection-view.js) rather than folded into this count.
+      const subtitle = `${count} game${count === 1 ? "" : "s"}`;
       return this._previewCard({
         icon: "library-big",
         title: "Collection",
