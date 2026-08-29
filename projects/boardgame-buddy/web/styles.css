@@ -2766,7 +2766,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* ── Session viewer (joiner-side read-only lobby) ───────────────────────────── */
 .session-viewer { display: flex; flex-direction: column; gap: 0.85rem; }
+/* Gutter for the two states that render outside the cascade (cold load and
+   hard error). The view container itself is px-0 so the cascade screens can
+   own their gutters — see the comment on <main data-view="session-viewer">. */
+.session-viewer__shell { padding: 12px 16px; }
 .session-viewer__status {
+  margin: 12px 16px 0;
   display: flex; align-items: center; gap: 0.45rem;
   padding: 0.55rem 0.7rem;
   border-radius: 0.5rem;
@@ -3309,11 +3314,23 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .scoring-table thead th:has(.scoring-head__badge) { opacity: 1; padding: 0.35rem 0.35rem; }
 .scoring-head__badge { width: 36px; height: 36px; vertical-align: middle; }
 .scoring-head__badge .user-badge__initials { font-size: 16px; }
-/* Tap the column-header bubble to toggle that header between the bubble and
-   the player's display name. Pure DOM class toggle (round-score-grid.js). */
+/* Tap any column header to flip EVERY header between the bubble and the
+   player's display name; the choice is remembered across sessions
+   (RoundGridNames in round-score-grid.js).
+   44x44 minimum does double duty: the tap-target floor from
+   .claude/rules/web-frontend.md — the name span alone is ~16px tall, so the
+   named state used to be a sliver — and it holds the header row at one height
+   across both states, so toggling doesn't jolt the table. The 36px bubble plus
+   its 4px padding already lands on 44, so bubble mode is unchanged. */
 .scoring-head__toggle {
   background: none; border: none; padding: 4px; cursor: pointer;
+  min-width: 44px; min-height: 44px;
   display: inline-flex; align-items: center; justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.scoring-head__toggle:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 0.4rem;
 }
 .scoring-head__name {
   display: none;

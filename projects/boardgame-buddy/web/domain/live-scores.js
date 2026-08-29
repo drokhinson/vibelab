@@ -39,6 +39,15 @@
       this._listeners = new Set();
       // Map<participant_id, Map<round_index, score>>
       this._byPlayer = new Map();
+      // Server-rendered copy of the same table, handed to us by the session
+      // bundle (see seed()). Kept separately so refresh() can fall back to it
+      // rather than overwrite it.
+      this._seed = new Map();
+      // Has a direct table read ever returned rows? For a spectator who joined
+      // after Gather the answer is permanently no — they have no participant
+      // row, so bgb_session_scores_select filters everything out — and the
+      // seed is the only copy of the grid they will ever get.
+      this._tableReadable = false;
       // Optimistic writes that haven't been confirmed by the table yet, keyed
       // "<participant>|<round>". refresh() rebuilds _byPlayer from what the
       // table returns, so without this an in-flight keystroke would blink back
@@ -89,6 +98,8 @@
       this._channel = null;
       this._listeners.clear();
       this._byPlayer.clear();
+      this._seed.clear();
+      this._tableReadable = false;
       this._pending.clear();
     }
 
@@ -112,8 +123,20 @@
         // host deleted (a removed round) lived on in the cache forever, so
         // totalFor() and maxRound() kept counting a round that was no longer
         // on anyone's grid.
-        const next = new Map();
-        for (const row of data || []) this._ingestInto(next, row);
+        const rows = data || [];
+        if (rows.length) this._tableReadable = true;
+        // Zero rows is ambiguous: either nobody has scored yet, or RLS is
+        // filtering the whole table out from under a late spectator. Fall back
+        // to the bundle's copy — which is empty too in the first case, so the
+        // two are indistinguishable exactly when it doesn't matter.
+        //
+        // Once a read HAS returned rows the ambiguity is gone: this client can
+        // see the table, so an empty read means the host cleared it and the
+        // seed (which is at best one poll behind) must not resurrect what they
+        // just removed.
+        const authoritative = rows.length > 0 || this._tableReadable;
+        const next = authoritative ? new Map() : this._cloneSeed();
+        for (const row of rows) this._ingestInto(next, row);
         // Re-apply writes still in flight — the table hasn't seen them yet.
         for (const [key, score] of this._pending) {
           const sep = key.lastIndexOf("|");
@@ -128,6 +151,56 @@
         // Best-effort; the Realtime subscription will catch us up otherwise.
       }
       this._emit();
+    }
+
+    /**
+     * Fold in the server's copy of this session's scores, as carried by the
+     * session bundle (`GET /sessions/{code}` → `scores`, migration 054).
+     *
+     * This is the only path that reaches a spectator who joined after Gather:
+     * they hold no participant row, so `bgb_session_scores_select` hides the
+     * whole table from their anon-key client — refresh() reads zero rows and
+     * Realtime never fires — and without this their mirror would sit on an
+     * empty grid for the entire game. Everyone else reads the table directly
+     * and the seed is ignored from the first successful read onward.
+     *
+     * @param {Array<ScoreRow>} rows
+     */
+    seed(rows) {
+      const next = new Map();
+      for (const row of rows || []) this._ingestInto(next, row);
+      this._seed = next;
+      if (this._tableReadable) return;
+      // Table's invisible to us: the seed IS the grid. Pending writes can't
+      // exist here (spectators never write), but re-apply them anyway so the
+      // rule "in-flight writes survive a re-read" holds on every path.
+      const merged = this._cloneSeed();
+      for (const [key, score] of this._pending) {
+        const sep = key.lastIndexOf("|");
+        this._ingestInto(merged, {
+          participant_id: key.slice(0, sep),
+          round_index: Number(key.slice(sep + 1)),
+          score,
+        });
+      }
+      this._byPlayer = merged;
+      this._emit();
+    }
+
+    /**
+     * True while the only copy of the grid we hold came from a seed. That is
+     * the late-spectator case, and it means Realtime will never fire for this
+     * session either (the same policy gates both), so a caller polling on a
+     * "Realtime is the fast path" cadence should not stand down for us.
+     */
+    isSeedOnly() {
+      return !this._tableReadable;
+    }
+
+    _cloneSeed() {
+      const copy = new Map();
+      for (const [playerId, m] of this._seed) copy.set(playerId, new Map(m));
+      return copy;
     }
 
     /**

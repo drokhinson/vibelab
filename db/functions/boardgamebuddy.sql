@@ -163,18 +163,21 @@
 
 -- bgb_session_bundle(p_session_id UUID)
 --   → JSONB shaped like models.SessionResponse { id, code, status, phase,
---     host_user_id, game_id, game, participants[], created_at, expires_at,
---     finalized_play_id } or {"error": "not_found"}
+--     host_user_id, game_id, game, participants[], scores[], created_at,
+--     expires_at, finalized_play_id } or {"error": "not_found"}
 --   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
---   Last updated in: db/migrations/boardgamebuddy/037_joinable_sessions_rpc.sql
---               (game block delegated to bgb_game_summary; output unchanged)
+--   Last updated in: db/migrations/boardgamebuddy/054_session_bundle_scores.sql
+--               (adds `scores` — the live grid, [] outside phase='play')
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (_build_response — the response builder for every session
 --               endpoint; also invoked internally by the three RPCs below)
 --   Purpose:    Single round-trip lobby payload: session row + participant
---               roster with profile avatars + optional GameSummary. Replaced
---               the 3-4 sequential PostgREST selects _build_response used
---               to fan out.
+--               roster with profile avatars + optional GameSummary + the
+--               live score grid. Replaced the 3-4 sequential PostgREST
+--               selects _build_response used to fan out. The scores array is
+--               how a spectator who joined after Gather sees the grid at all:
+--               they hold no participant row, so the table's RLS SELECT
+--               policy hides it from their own client (migration 054).
 
 -- bgb_create_session(p_host UUID, p_host_display_name TEXT,
 --                    p_game UUID DEFAULT NULL)
