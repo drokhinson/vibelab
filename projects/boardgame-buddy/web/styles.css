@@ -4281,7 +4281,7 @@ main[data-view="session-viewer"].hidden {
 .cascade-players { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .cascade-player {
   display: grid;
-  grid-template-columns: auto 1fr 56px auto;
+  grid-template-columns: auto auto 1fr 56px auto;
   gap: 6px;
   align-items: center;
   padding: 6px 8px;
@@ -4289,8 +4289,8 @@ main[data-view="session-viewer"].hidden {
   border: 1px solid var(--polaroid-line);
   border-radius: 8px;
 }
-/* Team mode adds a team field — fifth column. */
-.cascade-player:has(.cascade-player__team) { grid-template-columns: auto 1fr 56px 64px auto; }
+/* Team mode adds a team field — sixth column. */
+.cascade-player:has(.cascade-player__team) { grid-template-columns: auto auto 1fr 56px 64px auto; }
 .cascade-player--read {
   display: flex;
   align-items: center;
@@ -4317,6 +4317,46 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-ink);
 }
 .cascade-player__team { width: 64px; }
+
+/* Drag handle on the host's Gather rows — see widgets/player-reorder.js.
+   touch-action: none is load-bearing: without it the browser claims the
+   vertical gesture for page scroll and the row never picks up on touch.
+   44x44 hit target per .claude/rules/web-frontend.md; the negative vertical
+   margin keeps it from growing the row past its own 6px padding, and the name
+   column (1fr) absorbs the width. */
+.cascade-player__grip {
+  touch-action: none;
+  cursor: grab;
+  background: none;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -6px -4px;
+  color: var(--polaroid-line);
+}
+.cascade-player__grip:active { cursor: grabbing; }
+.cascade-player.is-dragging { opacity: 0.35; }
+/* While a row is up, nothing else on any row is tappable. The inline handlers
+   still carry their pre-drag indices until _movePlayer repaints, so a stray tap
+   would address the wrong player. The grip stays live so the gesture can end. */
+.cascade-players.is-reordering .cascade-player > *:not(.cascade-player__grip) {
+  pointer-events: none;
+}
+.cascade-player--drag-clone {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  pointer-events: none;
+  border-radius: 8px;
+  background: var(--polaroid-bg);
+  opacity: 0.97;
+  rotate: -1.5deg;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25);
+}
 
 .cascade-player-add {
   display: grid;

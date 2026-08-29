@@ -29,6 +29,7 @@ from .models import (
     SessionCreate,
     SessionJoinBody,
     SessionPhaseUpdate,
+    SessionReorderParticipantsBody,
     SessionResponse,
     SessionUpdateBody,
 )
@@ -125,6 +126,29 @@ async def add_session_participant(
         code=code,
         user_id=body.user_id,
         display_name=body.display_name,
+    )
+
+
+@router.put(
+    "/sessions/{code}/participants/order",
+    response_model=SessionResponse,
+    status_code=200,
+    summary="Reorder the lobby roster (host-only)",
+)
+async def reorder_session_participants(
+    body: SessionReorderParticipantsBody,
+    code: str = Path(..., description="Session code"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionResponse:
+    """Host sets the roster's column order. The order the host arranges in
+    Gather is the order the scoring grid's columns appear in for every
+    spectator, so without this a dragged row moves on the host's phone only.
+    Gather-only — once Play starts the roster, and its order, are frozen."""
+    return session_service.reorder_participants(
+        get_supabase(),
+        viewer_id=user.user_id,
+        code=code,
+        participant_ids=body.participant_ids,
     )
 
 

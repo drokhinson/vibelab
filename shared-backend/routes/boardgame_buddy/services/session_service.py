@@ -139,6 +139,38 @@ def add_participant(
     return _bundle_to_response(data)
 
 
+def reorder_participants(
+    sb,
+    *,
+    viewer_id: str,
+    code: str,
+    participant_ids: list[str],
+) -> SessionResponse:
+    """Host-only: set the roster's column order. Gather-only.
+
+    The participants array's order IS the scoring grid's column order on every
+    surface — widgets/round-score-grid.js keys each cell off the array index,
+    and the spectator's mirror builds its grid straight from this array — so
+    this is what makes a row the host dragged in Gather move on everybody
+    else's screen too. Without it the drag is local to the host's phone.
+
+    One RPC: bgb_reorder_participants (migration 056), on the same gate
+    add/remove use, so it answers with the same host_only / roster_locked
+    vocabulary _helpers already maps.
+    """
+    data = (
+        sb.rpc("bgb_reorder_participants", {
+            "p_host": viewer_id,
+            "p_code": code,
+            "p_order": participant_ids,
+        })
+        .execute()
+        .data
+    )
+    _reject_non_host(data, "Only the host can reorder participants")
+    return _bundle_to_response(data)
+
+
 def remove_participant(
     sb,
     *,
