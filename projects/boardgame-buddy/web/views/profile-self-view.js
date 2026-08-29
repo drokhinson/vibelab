@@ -270,9 +270,8 @@
       const click = `onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})"`;
       return `
         <div class="preview-card__cover" ${click} title="${escapeAttr(g.name || "")}">
-          ${g.thumbnail_url
-            ? `<img src="${escapeAttr(g.thumbnail_url)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />`
-            : `<div class="preview-card__cover-fallback">${escapeHtml((g.name || "?").slice(0, 14))}</div>`}
+          ${gameArtImg(g, "card", { alt: g.name || "" })
+            || `<div class="preview-card__cover-fallback">${escapeHtml((g.name || "?").slice(0, 14))}</div>`}
         </div>
       `;
     }

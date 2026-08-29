@@ -97,6 +97,11 @@
 --               (viewer_status now falls through to 'played' when the viewer
 --               has any visible play of the game with no collection row —
 --               same fix Profile bundle's status_map got in migration 022)
+--               db/migrations/boardgamebuddy/055_hi_res_tile_art.sql
+--                 (each expansion now carries image_url as well as
+--                  thumbnail_url — the reel crops its polaroids at 132x110,
+--                  which upscaled BGG's ~200px thumbnail)
+
 --   Called by:  shared-backend/routes/boardgame_buddy/game_routes.py
 --               (GET /games/{game_id}/bundle)
 --   Purpose:    Single round-trip Game Detail payload: game row + base game
@@ -118,6 +123,12 @@
 --                  LEFT JOIN then COUNT(*), so a play the user logged was
 --                  counted once per participant — a 4-player play read as
 --                  4 plays. Now EXISTS, matching bgb_play_stats.)
+--               db/migrations/boardgamebuddy/055_hi_res_tile_art.sql
+--                 (owned/wishlist pages emit a real image_url instead
+--                  of NULL, via a LEFT JOIN to boardgamebuddy_games — 020
+--                  denormalized name/thumbnail onto collection rows but not
+--                  the full-size art)
+
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)
 --   Purpose:    Single round-trip Profile Self / Profile Other payload.
@@ -463,6 +474,11 @@
 --                      p_limit INT DEFAULT 1000)
 --   → JSONB { "items": [CollectionItem…], "total": BIGINT, "truncated": BOOLEAN }
 --   Defined in: db/migrations/boardgamebuddy/049_collection_shelf.sql
+--   Last updated in: db/migrations/boardgamebuddy/055_hi_res_tile_art.sql
+--               (owned/wishlist items emit a real image_url instead of NULL,
+--                via a LEFT JOIN to boardgamebuddy_games for that one column;
+--                collection tiles crop square and were upscaling the ~200px
+--                thumbnail. The 'played' branch already had `g` in scope.)
 --   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
 --               (GET /collection/shelf), which the web Collection and Wishlist
 --               spokes call once per shelf via domain/collection.js.
@@ -471,7 +487,8 @@
 --               entire shelf on every request and sliced it in Python, so page
 --               9 cost what page 1 cost — ~1s per page turn. Three round trips
 --               collapse to one here: the shelf reads the denormalized
---               c.game_* columns (020) instead of joining boardgamebuddy_games,
+--               c.game_* columns (020) rather than embedding the games row
+--               (image_url is the one exception — see 055),
 --               play stats fold in as a LATERAL (same visibility rule as
 --               bgb_play_stats — logged-by OR participated-in), and
 --               expansion_count is computed in SQL rather than a follow-up

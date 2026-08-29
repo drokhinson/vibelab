@@ -538,6 +538,10 @@ class ExpansionListItem(BaseModel):
     bgg_id: Optional[int] = None
     name: str
     thumbnail_url: Optional[str] = None
+    # Full-size box art. The expansion reel crops its polaroids at 132x110,
+    # which upscales BGG's ~200px thumbnail; the web client prefers this and
+    # falls back to thumbnail_url when a game has no re-hosted image.
+    image_url: Optional[str] = None
     color: Optional[str] = None
     is_enabled: bool = False
     rulebook_url: Optional[str] = None

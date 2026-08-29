@@ -30,8 +30,9 @@ from .services._helpers import game_select_clause
 
 
 # Deliberately narrower than game_select_clause(): /collection renders plain
-# tiles, so it skips the expansion, rulebook and full-size-image columns the
-# grid and detail surfaces need.
+# tiles, so it skips the expansion and rulebook columns the grid and detail
+# surfaces need. image_url IS carried: the tiles crop square with object-fit,
+# which upscales BGG's ~200px thumbnail on any modern DPR.
 #
 # The web client no longer reads this endpoint at all — it derives its status
 # map and expansion counts from /collection/status-map, which is one bounded
@@ -40,7 +41,7 @@ from .services._helpers import game_select_clause
 # `status` and `game_id`.
 _TILE_GAME_FIELDS = (
     "id, bgg_id, name, year_published, min_players, max_players, "
-    "playing_time, thumbnail_url, theme_color"
+    "playing_time, thumbnail_url, image_url, theme_color"
 )
 
 

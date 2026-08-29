@@ -115,7 +115,7 @@
       const accent = g.accentColor();
       const status = this._status;
 
-      const heroSrc = g.image_url || g.thumbnail_url;
+      const heroSrc = gameArtSrc(g, "card");
       this.container.innerHTML = `
         <article class="game-detail" style="--game-accent:${accent}">
           <button class="btn btn-ghost btn-sm game-detail__back" onclick="window.router.back('feed')" aria-label="Back">
@@ -124,7 +124,7 @@
           <header class="game-detail__cover">
             <div class="game-detail__polaroid">
               <div class="game-detail__polaroid-photo${heroSrc ? "" : " game-detail__polaroid-photo--empty"}">
-                ${heroSrc ? `<img src="${heroSrc}" alt="" />` : `<i data-icon="dice-6" class="w-10 h-10"></i>`}
+                ${gameArtImg(g, "card", { eager: true }) || `<i data-icon="dice-6" class="w-10 h-10"></i>`}
               </div>
               ${g.year_published ? `<div class="game-detail__polaroid-cap">${g.year_published}</div>` : `<div class="game-detail__polaroid-cap">&nbsp;</div>`}
               <span class="game-detail__polaroid-status">
@@ -277,9 +277,8 @@
                 <article class="expansion-polaroid" title="${escapeAttr(e.name || '')}"
                          onclick="window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || '')}'})">
                   <div class="expansion-polaroid__photo">
-                    ${e.thumbnail_url
-                      ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" loading="lazy" />`
-                      : `<div class="expansion-polaroid__placeholder"><i data-icon="dice-6"></i></div>`}
+                    ${gameArtImg(e, "card", { width: 132, height: 110 })
+                      || `<div class="expansion-polaroid__placeholder"><i data-icon="dice-6"></i></div>`}
                     ${owned ? `<span class="expansion-polaroid__check"><i data-icon="check" class="w-3.5 h-3.5"></i></span>` : ""}
                   </div>
                   <div class="expansion-polaroid__cap">${escapeHtml(label)}</div>
