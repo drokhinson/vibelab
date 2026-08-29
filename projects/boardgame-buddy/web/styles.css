@@ -1636,10 +1636,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 #app {
   /* Override Tailwind's min-h-screen (100vh). On mobile, 100vh is the
      *large* viewport — counted as if the address bar is hidden — so when
-     it's visible #app extends below the visible area, dragging .cascade-scroll
-     with it. The sticky Continue CTA then sticks to that off-screen bottom
-     and disappears behind the fixed nav. 100dvh tracks the live visible
-     viewport so the scroll container always ends right above the nav. */
+     it's visible #app extends below the visible area, pushing the end of
+     every view below the fold. 100dvh tracks the live visible viewport so
+     the page always ends right above the nav.
+     NOTE for the cascade: this padding-bottom reserves the nav's strip for
+     ALL views, which is why --cascade-bottom-pad must NOT add the nav
+     height a second time. See the cascade block below. */
   min-height: 100dvh;
   padding-bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
 }
@@ -4016,15 +4018,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    existing position: sticky; top: 0 rule. */
 
 :root {
-  /* Bottom padding inside each cascade-screen — set equal to the
-     .cascade-cta-wrap sticky `bottom` value so the CTA's in-flow
-     natural position (cascade-screen.bottom − padding-bottom) lands
-     exactly on the sticky line when fully scrolled. That gives a
-     smooth sticky → release handoff: the CTA stays pinned above the
-     Play disc while there's content below, then settles in its
-     padded position below the last component at the end of the
-     section. Keep this value in sync with `.cascade-cta-wrap` below. */
-  --cascade-bottom-pad: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 28px);
+  /* Height of the docked CTA bar: its 12px top padding + the 52px
+     .cascade-cta button + its 28px bottom padding. The bar is fixed
+     directly on top of the nav, so this is exactly how much of the
+     screen it covers. */
+  --cascade-cta-bar: 92px;
+  /* Bottom padding inside each cascade-screen — clears the docked bar
+     plus 12px so the last card never ends up underneath it. The nav's
+     own height is NOT included: #app already reserves
+     `var(--bgb-nav-height) + env(safe-area-inset-bottom)` as its bottom
+     padding, and double-counting it is what used to leave a band of
+     dead scroll below the section. */
+  --cascade-bottom-pad: calc(var(--cascade-cta-bar) + 12px);
 }
 
 /* Hard-hide the cascade containers when the router toggles .hidden. The
@@ -4165,24 +4170,49 @@ main[data-view="session-viewer"].hidden {
   font-size: 12px;
 }
 
-/* CTA (Continue / Wrap up / Save play). Sticks to the bottom of each
-   screen so the user always sees the next-step button. */
+/* CTA (Continue / Wrap up / Save play). Docked directly on top of the
+   bottom nav on all three screens, at every scroll position.
+
+   This used to be `position: sticky` with a bottom offset, released at
+   the end of the section by a `padding-bottom` calibrated to the same
+   offset. The calibration was wrong: #app reserves the nav's height as
+   its OWN bottom padding, so the last var(--bgb-nav-height) px of
+   scroll sit below the section — scrolling into them lifted the button
+   64px clear of the line it was meant to hold (measured: 27px above the
+   nav at rest, 91px at the end of every screen). Fixed positioning has
+   no release point to keep in sync, and matches how .spoke-pager-footer
+   and .bgb-install already dock to this nav. */
 .cascade-cta-wrap {
-  /* Classic sticky-bottom pattern: pinned at this offset above the
-     Play disc while there's content below, then releases to its
-     natural in-flow position at the end of the cascade-screen so the
-     user can scroll past it. `margin-top: auto` inside the flex
-     column pushes the wrapper to the section's end; the cascade-screen
-     `padding-bottom` (--cascade-bottom-pad) is calibrated to the same
-     28px value so the natural release point lands exactly on the
-     sticky line — no visible jump. The 28px is breathing room above
-     the flat nav bar's top edge. */
-  position: sticky;
-  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 28px);
-  margin-top: auto;
-  padding-top: 8px;
+  position: fixed;
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
+  /* Pin to #app's 480px column rather than the viewport, the way
+     .bgb-install does — .bgb-nav itself is deliberately edge-to-edge,
+     but the CTA belongs to the content column. */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;    /* as .bgb-install — don't lean on preflight */
+  padding: 12px 16px 28px;   /* sums to --cascade-cta-bar */
   z-index: 35;
+  /* Content passes under the bar, so fade the ground in behind it
+     instead of letting cards collide with the button. */
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, var(--bg-0) 46%);
+  /* The fade's transparent top still shows content through it — keep
+     that content tappable, exactly as it was when the wrapper had no
+     background at all. */
+  pointer-events: none;
 }
+.cascade-cta-wrap .cascade-cta { pointer-events: auto; }
+/* Two of the three screens are always locked. `visibility: hidden` on
+   .is-locked does inherit into a fixed descendant, but don't rely on
+   that — three CTAs stacked on the same 92px strip is not a state worth
+   leaving to inheritance. */
+.cascade-screen.is-locked .cascade-cta-wrap { display: none; }
+/* The joiner's read-only mirror reuses .cascade-screen but renders no CTA
+   (it auto-scrolls forward as the host advances the phase), so it has no
+   bar to clear — just ordinary trailing breathing room above the nav. */
+main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .cascade-cta {
   width: 100%;
   height: 52px;
@@ -4216,21 +4246,31 @@ main[data-view="session-viewer"].hidden {
 .cascade-cta[disabled]:hover { background: var(--polaroid-muted); }
 
 .cascade-error {
-  /* Sticky alongside the CTA — sits above it while pinned, releases
-     with the page at the end of the section. */
-  position: sticky;
-  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + 92px);
-  margin: 0 16px;
+  /* Rides on top of the docked CTA bar, so it docks the same way and to
+     the same column. --cascade-cta-bar puts its bottom edge exactly on
+     the bar's top edge, which is 12px of bar padding above the button. */
+  position: fixed;
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + var(--cascade-cta-bar));
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;
+  padding: 0 16px;
   z-index: 36;
 }
 
 /* Keyboard up (score entry, player names): the bottom nav and the home
    indicator are both behind it, so their clearances become dead space — and
-   sticky resolves against the layout viewport, which iOS does NOT shrink for
-   the keyboard. Re-anchor both sticky rows to the top of the keyboard instead.
+   fixed resolves against the layout viewport, which iOS does NOT shrink for
+   the keyboard. Re-anchor both docked rows to the top of the keyboard instead.
+   The bar's 28px bottom padding is nav breathing room with nothing left to
+   breathe over, so it collapses to 12px and the button lands at kb + 12 —
+   the same place it sat before this bar had padding of its own.
    --bgb-kb-inset comes from ui/viewport-lock.js. */
 :root.bgb-kb-open .cascade-cta-wrap {
-  bottom: calc(var(--bgb-kb-inset, 0px) + 12px);
+  bottom: var(--bgb-kb-inset, 0px);
+  padding-bottom: 12px;
 }
 :root.bgb-kb-open .cascade-error {
   bottom: calc(var(--bgb-kb-inset, 0px) + 76px);
