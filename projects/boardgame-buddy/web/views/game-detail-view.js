@@ -128,7 +128,7 @@
               </div>
               ${g.year_published ? `<div class="game-detail__polaroid-cap">${g.year_published}</div>` : `<div class="game-detail__polaroid-cap">&nbsp;</div>`}
               <span class="game-detail__polaroid-status">
-                ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add" })}
+                ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add", gameName: g.name })}
               </span>
             </div>
           </header>

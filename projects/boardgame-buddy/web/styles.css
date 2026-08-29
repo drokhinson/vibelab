@@ -247,7 +247,8 @@ body {
    and .bgb-nav, which leaked onto splash/auth.
 
    The project had patched this three times, three different ways (the
-   :not(.hidden) guard on the chapter editor, .status-picker.hidden, and the
+   :not(.hidden) guard on the chapter editor, the since-retired
+   .status-picker.hidden, and the
    play-flow/session-viewer containers). This rule ends it for every present and
    future component. `!important` is deliberate and safe: nothing in this app
    ever wants to override .hidden, and no JS sets an inline display on an
@@ -1878,8 +1879,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* ── Play card — Polaroid ──────────────────────────────────────────────────
    The card reads like an instant photo pinned to the page: cream surface,
-   soft drop shadow, slight tilt, photo at the top in its natural aspect
-   ratio, big serif caption below. Three sizes via modifier classes:
+   soft drop shadow, photo at the top in its natural aspect ratio, then a
+   two-row caption: the game name with an open button, and below a hairline
+   the winner with the collection-status pill. Three sizes via modifier
+   classes:
      .play-card--single                  → full-width standalone play
      .play-card--strip.is-landscape      → in a multi-game session, wide photo
      .play-card--strip.is-portrait       → in a multi-game session, tall photo
@@ -1976,116 +1979,154 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: block;
 }
 
-/* Status overlay — always the top-right of the photo, on every play card,
-   with or without an image. Matches .collection-tile /
-   .game-polaroid__status / .plays-list__status so the owned/played chip is
-   in the same corner everywhere. The bottom-right is the game-thumbnail
-   badge's corner. */
-.play-card__status-overlay {
-  position: absolute;
-  right: 6px;
-  top: 6px;
-  z-index: 3;
+/* No session photo → the game's box art IS the photo. Cap its height and
+   letterbox it on the soft paper ground instead of cropping, so a tall cover
+   can't take over the feed. --photo-aspect is unused here; the intrinsic
+   ratio drives the box until max-height clamps it. */
+.play-card__photo--cover {
+  aspect-ratio: auto;
+  background: var(--polaroid-bg-soft);
 }
+.play-card__photo--cover::after { content: none; }   /* no badge to protect */
+.play-card__photo--cover .play-card__photo-img {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: contain;
+}
+.play-card--strip .play-card__photo--cover .play-card__photo-img { max-height: 150px; }
+
+/* Box-art badge — bottom-right of a session photo. Fixed height, auto width:
+   because it's absolutely positioned it shrink-wraps the decoded image, so a
+   tall cover stays narrow and a wide one stays short. It used to be a hard
+   78x78 with object-fit:cover, which sliced the sides off portrait box art.
+   Inert by design — the open button in the title row is the only way into the
+   game page now, so a tap here flips the card like the rest of the photo. */
 .play-card__game-overlay {
   position: absolute;
   right: 10px;
   bottom: 10px;
-  width: 78px;
-  height: 78px;
-  border-radius: 10px;
+  height: 62px;
+  width: auto;
+  max-width: 45%;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--polaroid-bg);
   border: 2px solid var(--polaroid-bg);
   box-shadow: 0 6px 14px rgba(0,0,0,0.4),
               0 0 0 1px rgba(0,0,0,0.18);
   z-index: 2;
-  cursor: pointer;
+  line-height: 0;
 }
 .play-card__game-overlay img {
-  width: 100%; height: 100%; object-fit: cover; display: block;
+  height: 100%; width: auto; object-fit: contain; display: block;
 }
 .play-card--strip .play-card__game-overlay {
-  width: 54px;
-  height: 54px;
+  height: 44px;
   right: 8px;
   bottom: 8px;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
-/* ── Caption row ──────────────────────────────────────────────────────────
-   Default: game name left, winner right on a single row. The winner never
-   shrinks — the game name takes the ellipsis — so short names like "You"
-   always read in full. When the row genuinely can't fit both (.has-long-meta,
-   set by play-card.js from a post-paint measurement), the meta drops to its
-   own row below the title and scrolls horizontally inside the polaroid frame
-   instead of clipping. */
+/* ── Caption ──────────────────────────────────────────────────────────────
+   Two stacked rows. The title row carries the game name and an explicit open
+   button; the meta row carries the winner and the collection-status pill,
+   separated by a hairline.
+
+   This replaced a single row that put the name and the winner on the same
+   line, which needed a post-paint re-measure (.has-long-meta) to decide
+   whether they fit. In the meta row the pill never shrinks and the WINNER
+   takes the ellipsis — the reverse of the old rule — so a 220px strip card
+   still reads its status. */
 .play-card__caption {
   width: 100%;
-  padding: 14px 4px 4px;
+  padding: 12px 4px 2px;
   display: flex;
-  flex-wrap: nowrap;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
 }
-.play-card__caption.has-long-meta {
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 6px 10px;
+.play-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 .play-card__caption-name {
   font-family: var(--font-polaroid);
   font-weight: 700;
   font-size: 22px;
-  line-height: 1.05;
+  line-height: 1.15;
   letter-spacing: -0.01em;
   color: var(--polaroid-ink);
   cursor: pointer;
-  flex: 0 1 auto;
-  /* The title is the only shrinkable half of the row, so it takes the
-     ellipsis when space runs out. It never collapses past this floor —
-     once the title would go narrower than ~5 characters the caption
-     overflows and the fit pass drops the winner onto its own row. */
-  min-width: 5ch;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.play-card__caption.has-long-meta .play-card__caption-name {
-  flex: 0 0 100%;            /* claim the first row entirely */
-  min-width: 0;
-}
 .play-card__caption-name:hover { text-decoration: underline; }
-.play-card__caption-meta {
-  /* Never shrink: the winner name is short and must read in full. Squeezing
-     it clipped names like "You" / "Julia" mid-glyph at the polaroid edge. */
+
+/* 32px of visible chrome inside a 44px hit box (the ::before), pulled back
+   with negative margins so the button doesn't inflate the row's height. */
+.play-card__open {
+  position: relative;
   flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin: -6px -4px -6px 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: transparent;
+  border: none;
+  color: var(--polaroid-muted);
+  cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+.play-card__open::before { content: ""; position: absolute; inset: -6px; }
+.play-card__open:hover,
+.play-card__open:focus-visible {
+  background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
+  color: var(--polaroid-ink);
+  outline: none;
+}
+.play-card__open:focus-visible { box-shadow: 0 0 0 2px var(--accent-ink); }
+
+.play-card__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  max-width: 100%;
-  text-align: right;
+  padding-top: 7px;
+  border-top: 1px solid var(--polaroid-line);
+}
+.play-card__caption-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
   font-size: 11px;
   color: var(--polaroid-muted);
   font-weight: 500;
   letter-spacing: 0.02em;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  scrollbar-width: none;
 }
-.play-card__caption.has-long-meta .play-card__caption-meta {
-  flex: 0 0 100%;            /* full-width scroll lane on row 2 */
-  max-width: 100%;
-  text-align: left;
-}
-.play-card__caption-meta::-webkit-scrollbar { display: none; }
 .play-card__caption-meta .win {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   color: var(--polaroid-accent);
   font-weight: 700;
   font-size: 12px;
+}
+/* "Won by" — the winner has its own row now, so it can afford to say what
+   the name means. Team/co-op outcomes ("We won!") read as sentences already
+   and skip it. */
+.play-card__caption-meta .win-label {
+  color: var(--polaroid-muted);
+  font-weight: 500;
 }
 .play-card__caption-meta .win-score {
   font-family: var(--font-score);
@@ -2102,6 +2143,40 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 12px;
   font-style: italic;
 }
+.play-card__status-slot { flex: 0 0 auto; margin-left: auto; }
+
+/* The pill on cream paper. The .status-tag--* fills are opaque on purpose —
+   they sit on top of photos everywhere else — and read as heavy blocks here,
+   so the card restates them as tinted outlines against the polaroid ground. */
+.play-card__status-slot .status-tag--owned {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, var(--polaroid-bg));
+  border-color: color-mix(in srgb, var(--ok) 32%, var(--polaroid-bg));
+}
+.play-card__status-slot .status-tag--wishlist {
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent-ink) 12%, var(--polaroid-bg));
+  border-color: color-mix(in srgb, var(--accent-ink) 32%, var(--polaroid-bg));
+}
+.play-card__status-slot .status-tag--played {
+  color: var(--polaroid-muted);
+  background: var(--polaroid-bg-soft);
+  border-color: var(--polaroid-line);
+}
+.play-card__status-slot .status-tag--add {
+  color: var(--polaroid-ink-soft);
+  background: transparent;
+  border-color: var(--polaroid-line);
+}
+.play-card__status-slot .status-tag--add:hover {
+  background: transparent;
+  color: var(--polaroid-ink);
+  border-color: var(--polaroid-muted);
+}
+.play-card__status-slot .status-tag:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 1px;
+}
 
 /* ── Size variants ─────────────────────────────────────────────────────── */
 .play-card--strip {
@@ -2111,8 +2186,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .play-card--strip.is-landscape { flex: 0 0 260px; }
 .play-card--strip.is-portrait  { flex: 0 0 220px; }
-.play-card--strip .play-card__caption       { padding: 10px 2px 2px; }
+.play-card--strip .play-card__caption       { padding: 10px 2px 2px; gap: 5px; }
 .play-card--strip .play-card__caption-name  { font-size: 17px; }
+.play-card--strip .play-card__open          { width: 28px; height: 28px; }
+.play-card--strip .play-card__meta-row      { padding-top: 6px; gap: 6px; }
 .play-card--strip .play-card__caption-meta  { font-size: 10px; }
 .play-card--strip .play-card__caption-meta .win { font-size: 11px; }
 .play-card--strip .play-card__caption-meta .win-loss { font-size: 11px; }
@@ -2611,6 +2688,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
   border-radius: 0.6rem; overflow: hidden; cursor: pointer; padding: 0;
 }
+/* Positioning anchor for the expansion chip. Without it the chip resolves
+   against .collection-tile, whose bottom-right is the title row — which is
+   where it used to land, on top of long game names. */
+.collection-tile__art { position: relative; line-height: 0; }
 .collection-tile img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 .collection-tile__placeholder { width: 100%; aspect-ratio: 1; display: grid; place-items: center; background: oklch(var(--b3)); }
 .collection-tile__name { padding: 0.3rem 0.4rem; font-size: 0.75rem; font-weight: 600; line-height: 1.15; text-align: left; }
@@ -2963,6 +3044,19 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 0.62rem;
   line-height: 1.2;
 }
+/* The labelled pill in a play card's meta row. Sized for a 44px hit box via
+   the ::before below rather than 44px of visible chrome, which would tower
+   over an 11px winner line. Colours come from .play-card__status-slot — the
+   fills below are tuned to sit on a photo, not on cream paper. */
+.status-tag--sm-row {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  gap: 0.3rem;
+  position: relative;
+}
+.status-tag--sm-row::before { content: ""; position: absolute; inset: -8px; }
+.status-tag--sm-row i { width: 0.82rem; height: 0.82rem; }
 .status-tag--lg {
   min-height: 2.5rem;
   padding: 0.4rem 0.9rem;
@@ -3044,8 +3138,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   height: 0.85rem;
 }
 
-/* Bottom-right expansion-owned count for any tile that has room. Uses the
-   tile's relative positioning anchor (set via .collection-tile / .game-polaroid). */
+/* Bottom-right expansion count, pinned to the tile's ART box — the chip is
+   absolutely positioned, so its host must be .collection-tile__art or
+   .game-polaroid__photo, never the whole tile (that puts it on the title). */
 .expansion-count-badge {
   position: absolute;
   bottom: 4px; right: 4px;
@@ -3060,34 +3155,124 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 600;
 }
 
-/* Popover that fires from a + tag. Lives at body level (positioned absolutely
-   via JS) so it floats over whatever tile it was anchored to. */
-.status-picker {
-  position: absolute;
-  z-index: 60;
-  min-width: 140px;
-  padding: 0.25rem;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.55rem;
-  box-shadow: 0 10px 28px oklch(0 0 0 / 0.45);
-  display: flex; flex-direction: column; gap: 2px;
+/* ── Status sheet ─────────────────────────────────────────────────────────
+   The picker that fires from any status tag, anywhere in the app. It rides
+   the shared .polaroid-popup__backdrop chrome (so it inherits the
+   visualViewport sizing that keeps it clear of the iOS keyboard and home
+   indicator) and re-anchors it to the bottom of the screen.
+
+   It replaced a popover pinned under whichever chip was tapped: that put
+   ~30px rows wherever the chip happened to sit, which on a play card meant
+   near the top of the screen. Rows here are 56px and within thumb reach.
+   See ui/status-tag.js. */
+/* Doubled up on .polaroid-popup__backdrop deliberately: that rule is defined
+   LATER in this file and sets align-items:center / padding:18px, so a bare
+   .status-sheet (same specificity, earlier) would lose and the sheet would
+   render as a centred card. */
+.polaroid-popup__backdrop.status-sheet {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
 }
-.status-picker.hidden { display: none; }
-.status-picker__opt {
-  display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 0.35rem;
-  background: transparent;
-  border: none;
-  color: oklch(var(--bc));
-  font-size: 0.85rem; font-weight: 500;
+.status-sheet .status-sheet__panel {
+  width: 100%;
+  max-width: 520px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border-radius: 20px 20px 0 0;
+  padding: 8px 12px max(16px, env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.42);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: statusSheetIn 260ms var(--ease) both;
+}
+@keyframes statusSheetIn {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+/* Set by close() for the duration of CLOSE_MS before the node is removed. */
+.polaroid-popup__backdrop.status-sheet.is-closing { animation: fadeOut 200ms ease-out both; }
+.status-sheet.is-closing .status-sheet__panel {
+  animation: statusSheetOut 200ms var(--ease) both;
+}
+@keyframes statusSheetOut {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+.status-sheet__grip {
+  width: 44px; height: 4px; border-radius: 4px;
+  background: var(--polaroid-line);
+  margin: 4px auto 8px;
+}
+.status-sheet__title {
+  margin: 0 0 2px; padding: 0 10px;
+  font-family: var(--font-polaroid);
+  font-weight: 700; font-size: 19px; letter-spacing: -0.01em;
+  color: var(--polaroid-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.status-sheet__sub {
+  margin: 0 0 8px; padding: 0 10px;
+  font-size: 0.78rem; color: var(--polaroid-muted);
+}
+.status-sheet__opt {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; min-height: 56px; padding: 0 10px;
+  background: transparent; border: none; border-radius: 12px;
+  font-size: 0.97rem; font-weight: 500; line-height: 1.2;
+  color: var(--polaroid-ink);
+  cursor: pointer; text-align: left;
+}
+.status-sheet__opt:hover { background: var(--polaroid-bg-soft); }
+.status-sheet__opt:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: -3px;
+}
+.status-sheet__opt > i,
+.status-sheet__opt > svg { color: var(--polaroid-muted); flex: 0 0 auto; }
+.status-sheet__opt-label { flex: 1 1 auto; min-width: 0; }
+.status-sheet__opt-sub {
+  display: block; margin-top: 3px;
+  font-size: 0.74rem; font-weight: 400; color: var(--polaroid-muted);
+}
+.status-sheet__radio {
+  flex: 0 0 auto; width: 21px; height: 21px; border-radius: 50%;
+  border: 2px solid var(--polaroid-line);
+  display: grid; place-items: center;
+}
+.status-sheet__opt[aria-checked="true"] {
+  background: var(--polaroid-bg-soft);
+  font-weight: 600;
+}
+.status-sheet__opt[aria-checked="true"] > i,
+.status-sheet__opt[aria-checked="true"] > svg { color: var(--ok); }
+.status-sheet__opt[aria-checked="true"] .status-sheet__radio { border-color: var(--ok); }
+.status-sheet__opt[aria-checked="true"] .status-sheet__radio::after {
+  content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--ok);
+}
+/* Played is derived from logged plays — no row to set, so it reads as a
+   statement rather than an option. */
+.status-sheet__note {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 44px; padding: 0 10px; margin-bottom: 2px;
+  font-size: 0.82rem; color: var(--polaroid-muted);
+}
+.status-sheet__rule { height: 1px; background: var(--polaroid-line); margin: 6px 10px; }
+.status-sheet__opt--danger { color: var(--rust); }
+.status-sheet__opt--danger > i,
+.status-sheet__opt--danger > svg { color: var(--rust); }
+.status-sheet__cancel {
+  min-height: 52px; margin-top: 4px;
+  border: 1px solid var(--polaroid-line); border-radius: 12px;
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-ink);
+  font-size: 0.94rem; font-weight: 600;
   cursor: pointer;
-  text-align: left;
 }
-.status-picker__opt:hover { background: oklch(var(--b3)); }
-.status-picker__opt--danger { color: oklch(0.7 0.18 25); }
-.status-picker__opt--danger:hover { background: oklch(0.35 0.18 25 / 0.4); }
+.status-sheet__cancel:hover { background: var(--polaroid-line); }
 
 /* Status-tag positioning inside the standard tile shapes ─ pin top-right. */
 .collection-tile { position: relative; }

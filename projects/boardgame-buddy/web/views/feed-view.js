@@ -8,6 +8,13 @@
 //   Game search lives on the Host/Join landing now (Find a Game that fits).
 
 (function () {
+  // Game ids are UUIDs so this is belt-and-braces, but a selector built from
+  // data is a selector that can be broken by data.
+  function cssAttrEscape(v) {
+    if (window.CSS && window.CSS.escape) return window.CSS.escape(String(v));
+    return String(v).replace(/["\\]/g, "\\$&");
+  }
+
   class FeedView extends window.View {
     constructor() {
       super("feed");
@@ -54,7 +61,7 @@
         if (!gameId) return;
         if (status == null) delete this._statusMap[gameId];
         else this._statusMap[gameId] = status;
-        this.render();
+        this._syncStatusPills(gameId, status);
       });
       this.listenDom("play-changed", (e) => this._onPlayChanged(e.detail || {}));
       this.listenDom("plays-uploaded", (e) => this._onUploadsLanded(e.detail || {}));
@@ -78,6 +85,48 @@
       }
       this._statusReady = true;
       this.render();
+    }
+
+    /**
+     * Repaint just the status pills for one game instead of re-rendering the
+     * whole feed. A full render() resets the scroll position and flips every
+     * open card back over — cheap to ignore when the pill was a corner chip,
+     * obvious now that it sits in the card's meta row. Mirrors _syncCardStatus
+     * in views/game-explorer-view.js.
+     *
+     * Nothing to patch is not a problem: _statusMap is already updated above,
+     * so a game that isn't on screen picks the new status up on the next paint.
+     */
+    _syncStatusPills(gameId, status) {
+      const root = this.container;
+      if (!root) return;
+      const sel = cssAttrEscape(gameId);
+
+      // Play cards. The slot is always emitted (it holds an empty string while
+      // the collection map is in flight), so this finds the host either way.
+      root.querySelectorAll(`.play-card__status-slot[data-game-id="${sel}"]`)
+        .forEach((host) => {
+          host.innerHTML = window.renderStatusTag(gameId, status || null, {
+            size: "sm-row",
+            addLabel: "Add",
+            gameName: host.dataset.gameName || "",
+          });
+          this.refreshIcons(host);
+        });
+
+      // Hot-games rail tiles render the same game through renderGamePolaroid,
+      // so they carry their own host.
+      root.querySelectorAll(`.game-polaroid[data-game-id="${sel}"]`)
+        .forEach((tile) => {
+          tile.setAttribute("data-status", status || "");
+          const host = tile.querySelector(".game-polaroid__status");
+          if (!host) return;
+          host.innerHTML = window.renderStatusTag(gameId, status || null, {
+            compact: true,
+            gameName: tile.dataset.gameName || "",
+          });
+          this.refreshIcons(host);
+        });
     }
 
     /**

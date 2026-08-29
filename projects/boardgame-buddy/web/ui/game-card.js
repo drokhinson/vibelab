@@ -22,7 +22,9 @@
    * @param {string} [opts.meta] Override the derived "3–5P · 60m" meta line
    *   (the rails show play counts or a last-played date instead).
    * @param {string} [opts.badgeHtml] Extra corner badge markup, e.g. the
-   *   expansion-count chip.
+   *   expansion-count chip. Rendered inside .game-polaroid__photo — it
+   *   positions itself absolutely, so anchoring it to the article would put
+   *   it over the caption.
    * @param {boolean} [opts.pending] Collection map still loading — the status
    *   tag renders empty rather than guessing "not owned".
    * @param {boolean} [opts.eager] Load the photo eagerly instead of lazily.
@@ -51,12 +53,13 @@
     // from bubbling to the article (which would jump into Gather). Matches
     // the play-card's status overlay behaviour.
     const statusOverlay = game.id
-      ? `<span class="game-polaroid__status" onclick="event.stopPropagation()">${window.renderStatusTag(game.id, collectionStatus, { compact: true, pending })}</span>`
+      ? `<span class="game-polaroid__status" onclick="event.stopPropagation()">${window.renderStatusTag(game.id, collectionStatus, { compact: true, pending, gameName: game.name })}</span>`
       : "";
     return `
       <article class="game-polaroid game-polaroid--${escapeHtml(variant)}"
                role="button" tabindex="0"
                data-game-id="${escapeHtml(game.id || "")}"
+               data-game-name="${escapeHtml(game.name || "")}"
                data-status="${escapeHtml(collectionStatus || "")}"
                onclick="${clickHandler}">
         <div class="game-polaroid__photo">
@@ -64,12 +67,12 @@
             ? `<img class="game-polaroid__photo-img" src="${escapeHtml(img)}" alt=""${eager ? "" : ` loading="lazy"`} />`
             : `<div class="game-polaroid__photo-placeholder"><i data-icon="dice-6"></i></div>`}
           ${statusOverlay}
+          ${badgeHtml}
         </div>
         <div class="game-polaroid__caption">
           <div class="game-polaroid__name">${escapeHtml(game.name || "Unknown game")}</div>
           ${meta ? `<div class="game-polaroid__meta">${escapeHtml(meta)}</div>` : ""}
         </div>
-        ${badgeHtml}
       </article>
     `;
   }

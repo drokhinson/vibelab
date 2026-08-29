@@ -1,20 +1,24 @@
 // ui/play-card.js — Polaroid play card rendered in the Feed and Profile.
 //
 // Two-faced flip card styled like an instant photo: cream surface, soft drop
-// shadow, slight tilt, photo at the top in its natural aspect ratio.
-//   Front  → photo (with game-thumbnail badge in the bottom-right corner if
-//            the user uploaded their own snapshot), then a caption row with
-//            the game name on the left and the winner on the right. Front-side
-//            notes only render on the single (non-session) variant.
+// shadow, photo at the top in its natural aspect ratio.
+//   Front  → photo, then a two-row caption:
+//              title row — game name + an explicit open button
+//              meta row  — winner on the left, collection-status pill on the
+//                          right, above a hairline
+//            When the user uploaded their own snapshot the game's box art
+//            rides along as a small bottom-right badge at its natural aspect;
+//            with no snapshot the box art IS the photo, height-capped.
 //   Back   → game title + duration, ranked scoreboard with the winner row
 //            tinted, optional notes, maximize button (top-right) into the
 //            in-place play-detail popup, and a "Tap to flip back" footer.
 //
-// Clicking the game-name text, the game-thumbnail badge, or the maximize
-// button navigates (data-no-flip). Clicking anywhere else on the card flips
-// it. State lives in a module-level Map keyed by play_id so flipping
-// re-renders only the affected <article> via outerHTML replacement — the
-// feed scroll position is preserved.
+// Clicking the game-name text, the open button, the status pill, or the
+// maximize button acts on its own (data-no-flip). Clicking anywhere else on
+// the card — the photo and the box-art badge included — flips it. State lives
+// in a module-level Map keyed by play_id so flipping re-renders only the
+// affected <article> via outerHTML replacement — the feed scroll position is
+// preserved.
 
 (function () {
   // Per-play state lives outside the render so re-renders are cheap and
@@ -90,10 +94,6 @@
       : "play-card--single";
     const flippedAttr = s.flipped ? " is-flipped" : "";
 
-    // The caption's one-row vs two-row layout is a character-count guess at
-    // this point (see renderFront) — re-measure it once this markup lands.
-    scheduleCaptionFit();
-
     return `
       <article class="play-card ${variantClass}${flippedAttr}"
                data-play-id="${escapeAttr(card.play_id)}"
@@ -110,11 +110,11 @@
     `;
   }
 
-  function renderFront(card, { variant, photoSrc, aspect }) {
+  function renderFront(card, { photoSrc, aspect }) {
     const g = card.game || {};
     const me = window.store && window.store.get && window.store.get("user");
     const gameName = escapeHtml(g.name || "Unknown game");
-    const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${jsStr(g.name || "")}'})`;
+    const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${escapeAttr(jsStr(g.name || ""))}'})`;
 
     // Caption "winner" block. Three modes:
     //   - cooperative + any winners → "We beat the game" (brass win style)
@@ -134,30 +134,26 @@
     const statusMap = (window.store && window.store.get && window.store.get("myCollectionMap")) || null;
     const statusPending = !statusMap;
     const gameStatus = (g.id && statusMap && statusMap[g.id]) || null;
-    // Status pill placement: always the TOP-right corner of the photo slot,
-    // whether the card shows a user-uploaded session photo, the game art, or
-    // nothing at all. Every other game tile in the app (collection, wishlist,
-    // hot-games rail, find-a-game polaroid, plays list) pins it there too, so
-    // the affordance sits in one predictable spot. The bottom-right corner is
-    // left to the game-thumbnail badge.
-    const statusOverlayHtml = g.id
-      ? `<span class="play-card__status-overlay" data-no-flip>${window.renderStatusTag(g.id, gameStatus, { compact: true, pending: statusPending })}</span>`
+
+    // Box-art badge: only when the user uploaded their own session photo
+    // (otherwise the box art IS the photo slot). Fixed height, auto width, so
+    // a tall cover stays narrow and a wide one stays short instead of being
+    // square-cropped. Deliberately inert — no onclick, no data-no-flip — so
+    // the whole photo area flips the card and the ONE way into the game page
+    // is the open button in the title row below.
+    const badgeHtml = (hasUserPhoto && gameThumb)
+      ? `<div class="play-card__game-overlay" aria-hidden="true">
+           <img src="${escapeAttr(gameThumb)}" alt="" loading="lazy" />
+         </div>`
       : "";
 
-    // Game thumbnail badge: only appears when the user uploaded their own
-    // session photo (otherwise the game image IS the photo slot). It sits in
-    // the bottom-right corner as a sibling of the status pill, which owns the
-    // top-right.
-    const badgeHtml = (hasUserPhoto && gameThumb)
-      ? `<div class="play-card__game-overlay" data-no-flip onclick="${gameNav}">
-           <img src="${escapeAttr(gameThumb)}" alt="${escapeAttr(g.name || "")}" loading="lazy" />
-         </div>
-         ${statusOverlayHtml}`
-      : statusOverlayHtml;
-
+    // With no snapshot the box art fills the slot: --cover caps its height and
+    // letterboxes it rather than cropping, so a tall cover can't take over the
+    // feed. With a snapshot the slot keeps the photo's measured aspect ratio.
+    const coverClass = hasUserPhoto ? "" : " play-card__photo--cover";
     const photoStyle = `--photo-aspect:${aspect}`;
     const photoHtml = photoSrc
-      ? `<div class="play-card__photo" style="${photoStyle}">
+      ? `<div class="play-card__photo${coverClass}" style="${photoStyle}">
            <img class="play-card__photo-img"
                 src="${escapeAttr(photoSrc)}"
                 alt="${escapeAttr(g.name || "")}"
@@ -165,31 +161,39 @@
                 onload="window.playCardFlip.onPhotoLoad(event, '${escapeAttr(card.play_id)}')" />
            ${badgeHtml}
          </div>`
-      : `<div class="play-card__photo" style="${photoStyle}">${statusOverlayHtml}</div>`;
+      : `<div class="play-card__photo" style="${photoStyle}"></div>`;
 
-    // Notes live exclusively on the back of the card now — the front stays
-    // tight (photo + caption) so cards in a strip line up cleanly.
+    // Notes live exclusively on the back of the card — the front stays tight
+    // (photo + caption) so cards in a strip line up cleanly.
     //
-    // Long winners ("Wolfgang Theresa, britt.michaela, …") get bumped onto
-    // their own row below the title where they scroll horizontally inside
-    // the polaroid frame. This threshold is a character-count guess so the
-    // first paint is close; `fitCaption` re-measures after paint and is the
-    // authority on which layout the caption ends up in.
-    const winnerText = stripTags(winnerBlock);
-    const longThreshold = variant === "strip" ? 18 : 28;
-    const wrapClass = winnerText.length > longThreshold ? " has-long-meta" : "";
-
+    // The winner used to share a row with the title and needed a post-paint
+    // re-measure to decide whether it fit; it has its own row now, so the
+    // layout is static and the title simply ellipsises.
     return `
       ${photoHtml}
-      <div class="play-card__caption${wrapClass}">
-        <a class="play-card__caption-name" data-no-flip onclick="${gameNav}">${gameName}</a>
-        <div class="play-card__caption-meta">${winnerBlock}</div>
+      <div class="play-card__caption">
+        <div class="play-card__title-row">
+          <a class="play-card__caption-name" data-no-flip onclick="${gameNav}">${gameName}</a>
+          <button class="play-card__open" type="button" data-no-flip
+                  aria-label="Open ${gameName}" title="Open ${gameName}"
+                  onclick="${gameNav}">
+            <i data-icon="arrow-up-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div class="play-card__meta-row">
+          <div class="play-card__caption-meta">${winnerBlock}</div>
+          ${g.id
+            ? `<span class="play-card__status-slot" data-no-flip
+                     data-game-id="${escapeAttr(g.id)}"
+                     data-game-name="${escapeAttr(g.name || "")}">
+                 ${window.renderStatusTag(g.id, gameStatus, {
+                     size: "sm-row", addLabel: "Add", pending: statusPending, gameName: g.name,
+                   })}
+               </span>`
+            : ""}
+        </div>
       </div>
     `;
-  }
-
-  function stripTags(html) {
-    return String(html).replace(/<[^>]*>/g, "");
   }
 
   // Build the "won" caption span. Three buckets:
@@ -197,7 +201,7 @@
   //       any winners → "We won!" / "They won!"     (brass)
   //       no winners  → "We lost" / "They lost"     (grey/italic)
   //   - standard competitive (a single named winner) →
-  //       "<You|Name> · <score>" (score omitted if unknown)
+  //       "Won by <You|Name> · <score>" (score omitted if unknown)
   // "We" vs "They" depends on whether the viewer is in the play (logged it
   // OR appears in participants).
   function buildWinnerBlock(card, me) {
@@ -218,7 +222,10 @@
     const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
     const winnerName = winnerIsSelf ? "You" : escapeHtml(card.winner_display_name);
     const winnerScore = winnerScoreFor(card);
-    return `<span class="win">${winnerName}${winnerScore != null
+    // The winner has its own caption row now, so a bare name would read as an
+    // unexplained label. The team buckets above already read as sentences and
+    // don't take the prefix.
+    return `<span class="win"><span class="win-label">Won by</span>${winnerName}${winnerScore != null
     ? `<span class="win-sep" aria-hidden="true"></span><span class="win-score">${escapeHtml(String(winnerScore))}</span>`
     : ""}</span>`;
   }
@@ -383,48 +390,7 @@
     if (article && article.classList.contains("play-card--strip")) {
       article.classList.toggle("is-portrait", orient === "portrait");
       article.classList.toggle("is-landscape", orient === "landscape");
-      // Orientation just changed the card's width — the caption may no
-      // longer fit on one row (or may finally fit again).
-      scheduleCaptionFit();
     }
-  }
-
-  // ── Caption fit ─────────────────────────────────────────────────────────────
-  //
-  // The caption is a single row (game name left, winner right) until it stops
-  // fitting, at which point `.has-long-meta` drops the winner onto its own
-  // full-width scroll lane. `renderFront` guesses from the winner's character
-  // count so the first paint is already close, but the true answer depends on
-  // the rendered font and the card's final width (strip cards resize once the
-  // photo's orientation is known), so we re-measure after paint and correct
-  // the guess. Without this, a short winner ("You", "Julia") sitting next to a
-  // long game title used to get clipped mid-glyph at the polaroid's edge.
-  let captionFitQueued = false;
-
-  function scheduleCaptionFit() {
-    if (captionFitQueued || typeof requestAnimationFrame !== "function") return;
-    captionFitQueued = true;
-    requestAnimationFrame(() => {
-      captionFitQueued = false;
-      document.querySelectorAll(".play-card__caption").forEach(fitCaption);
-    });
-  }
-
-  // Always measure from the unwrapped state: the wrapped layout never
-  // overflows, so measuring it as-is would latch two rows forever. Reading
-  // with the class off makes the decision idempotent.
-  function fitCaption(caption) {
-    if (!caption.clientWidth) return;   // hidden view — keep the render guess
-    caption.classList.remove("has-long-meta");
-    const overflows = caption.scrollWidth > caption.clientWidth + 1;
-    caption.classList.toggle("has-long-meta", overflows);
-  }
-
-  window.addEventListener("resize", scheduleCaptionFit);
-  // Polaroid captions are measured in a webfont; a fallback-font measurement
-  // taken before it loads can pick the wrong layout.
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(scheduleCaptionFit).catch(() => {});
   }
 
   // ── Single-card re-render (preserves feed scroll) ───────────────────────────

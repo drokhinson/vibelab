@@ -53,7 +53,7 @@
       this._scopeAutoSwitched = false;
       // Per-game owned/wishlist/played status map. Populated from
       // Collection.myStatusMap() on mount; patched live by status-changed
-      // CustomEvents fired from the status-picker.
+      // CustomEvents fired from the status sheet.
       this._collectionMap = {};
     }
 
@@ -463,7 +463,7 @@
       el.setAttribute("data-status", next);
       const host = el.querySelector(".game-polaroid__status");
       if (!host) return;
-      host.innerHTML = window.renderStatusTag(g.id, next || null, { compact: true });
+      host.innerHTML = window.renderStatusTag(g.id, next || null, { compact: true, gameName: g.name });
       this.refreshIcons(host);
     }
 

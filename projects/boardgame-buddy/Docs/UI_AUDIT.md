@@ -513,3 +513,45 @@ visual-regression risk across many screens and deserves its own change:
   chronological log should render through `renderPlayCard`.
 - **Two affordances for one destination**: `PlayDetailPopup` opens from a
   maximize button on a play card, but from a full-row tap in the plays list.
+
+### Pass 3 (feed card rework) — 2026-08-29
+
+Scope was the feed's play card, but two of the changes are app-wide.
+
+**The status picker is now a bottom sheet.** `StatusPicker` in `ui/status-tag.js`
+was a body-level popover positioned under whichever chip opened it. Both the chip
+(24×24) and its rows (~30px) were under the 44×44 floor in
+`.claude/rules/web-frontend.md`, and on a play card the popover landed near the
+top of the screen. It rides the shared `.polaroid-popup__backdrop` chrome now,
+bottom-anchored, with 56px radio rows — one surface for all seven
+`renderStatusTag` call sites, per §3b/§3c. Three behaviour changes came with it:
+the current status is listed and checked rather than omitted; `played` renders as
+a read-only note (it is derived from logged plays, so there is no row to set); and
+the write is optimistic with a rollback, replacing a UI that waited on the round
+trip. The two bare `alert()` calls went to `PolaroidPopup.alert`.
+
+**CSS removed:**
+- `.status-picker` / `.status-picker__opt` / `--danger` (was `styles.css:3063–3090`).
+- `.play-card__status-overlay` — the pill left the photo corner for the caption.
+- Every `.has-long-meta` rule — the winner has its own caption row now, so the
+  post-paint fit pass has nothing to decide.
+
+**JS removed** (all in `ui/play-card.js`, all supporting the one-row caption):
+`fitCaption`, `scheduleCaptionFit`, `captionFitQueued`, `stripTags`, the
+`longThreshold` character-count guess, the `resize` listener and the
+`document.fonts.ready` hook.
+
+**Two positioning bugs of the same shape, fixed:** the expansion-count chip and
+(previously) the status chip are absolutely positioned but were emitted as
+siblings of the whole tile, so they resolved against the tile — whose
+bottom-right is the title row. Collection and wishlist tiles gained a
+`.collection-tile__art` host; `renderGamePolaroid` moved `badgeHtml` inside
+`.game-polaroid__photo`, which also fixed the feed's hot-games rail.
+
+**Still open, unchanged by this pass:** everything under "Still open after this
+pass" above. Note that `renderStatusTag`'s option shapes grew rather than
+shrank — `size: "sm-row"` joins `xs` / `lg` / `compact` for the pill on the
+card's cream ground. The collapse to a single scale is still owed.
+
+**Known web/native drift:** `app/src/components/PlayCard.js` has no status
+control and a fixed 180px photo. It does not track this rework.
