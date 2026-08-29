@@ -337,6 +337,11 @@
       `;
       this.container.innerHTML = html;
       this.refreshIcons();
+      // Rail titles that don't fit their 112px tile sweep instead of
+      // truncating, and only a post-paint measurement can tell which those
+      // are. Infinite scroll re-renders the whole list through here, so
+      // appended pages are covered by the same call.
+      if (window.scheduleRailTitleFit) window.scheduleRailTitleFit();
       // The sentinel div is replaced on every render — re-observe the
       // new node so infinite scroll keeps firing.
       this._observeSentinel();
