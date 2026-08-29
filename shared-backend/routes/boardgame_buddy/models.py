@@ -772,6 +772,20 @@ class SessionAddParticipantBody(BaseModel):
     display_name: str
 
 
+class SessionReorderParticipantsBody(BaseModel):
+    """Host-only "set the roster order" body: the full ordered list of
+    participant ids, front to back — the order the host's Gather list is in,
+    which is the order the scoring grid's columns appear in on every surface.
+
+    Ids this session doesn't own are ignored. Participants the list omits — a
+    joiner who arrived between the host's drag and this write — are appended in
+    joined_at order rather than dropped, so a race can't knock someone off the
+    end of the grid.
+    """
+
+    participant_ids: list[str] = Field(default_factory=list, max_length=64)
+
+
 class JoinableSession(BaseModel):
     """A session the calling user can join from the Join chooser screen.
 

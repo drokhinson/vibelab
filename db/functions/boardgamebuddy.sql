@@ -1,6 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 050 (ghost link/merge in one statement; collection status map)
+-- Last updated: migration 056 (participant `position` — the host's roster order
+--               reaches the spectators' grid)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -177,8 +178,10 @@
 --     host_user_id, game_id, game, participants[], scores[], created_at,
 --     expires_at, finalized_play_id } or {"error": "not_found"}
 --   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
---   Last updated in: db/migrations/boardgamebuddy/054_session_bundle_scores.sql
---               (adds `scores` — the live grid, [] outside phase='play')
+--   Last updated in: db/migrations/boardgamebuddy/056_participant_order.sql
+--               (participants sort by `position NULLS LAST, joined_at` — the
+--               one and only live participant-ordering site. 054 added
+--               `scores`, the live grid, [] outside phase='play')
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (_build_response — the response builder for every session
 --               endpoint; also invoked internally by the three RPCs below)
@@ -194,7 +197,10 @@
 --                    p_game UUID DEFAULT NULL)
 --   → JSONB (SessionResponse bundle) or {"error": "code_allocation_failed"}
 --   Defined in: db/migrations/boardgamebuddy/036_session_rpcs.sql
---   Last updated in: db/migrations/boardgamebuddy/038_fix_session_code_entropy.sql
+--   Last updated in: db/migrations/boardgamebuddy/056_participant_order.sql
+--               (seats the host at position 0 — with a NULL there the host
+--               sorts LAST the moment bgb_add_participant gives everyone else
+--               a real position). Before that, 038:
 --               (code entropy from uuid_send(gen_random_uuid()) — 036's
 --               gen_random_bytes failed on Supabase because pgcrypto lives
 --               in the `extensions` schema, outside the function's
@@ -397,6 +403,9 @@
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
 --     "host_only" | "roster_locked" | "display_name_required"}
 --   Defined in: db/migrations/boardgamebuddy/046_session_write_rpcs.sql
+--   Last updated in: db/migrations/boardgamebuddy/056_participant_order.sql
+--               (seats at position = max+1 so a host-added player lands at the
+--               end of one ordering rather than in a second, NULL one)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (add_participant — POST /sessions/{code}/participants)
 --   Purpose:    Host-seats a buddy (p_user set) or ghost (p_user NULL) in one
@@ -405,6 +414,23 @@
 --               trimmed display_name — riding the two partial unique indexes,
 --               with unique_violation swallowed so a double-tap is an
 --               idempotent success rather than a 500.
+
+-- bgb_reorder_participants(p_host UUID, p_code TEXT, p_order UUID[])
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
+--     "host_only" | "roster_locked"}
+--   Defined in: db/migrations/boardgamebuddy/056_participant_order.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (reorder_participants — PUT /sessions/{code}/participants/order)
+--   Purpose:    Host sets the roster's column order by handing over the full
+--               ordered id array. The participants array's order IS the
+--               scoring grid's column order on every surface, so this is what
+--               carries a row the host dragged in Gather to the spectators'
+--               mirror. Gather-only, on bgb_session_gate's require_gather arm,
+--               same as add/remove. Ids from another session are ignored, and
+--               participants the array omits — a joiner who arrived between
+--               the drag and the write — are appended in joined_at order
+--               rather than dropped, so a race can't drop someone off the
+--               end of the grid.
 
 -- bgb_remove_participant(p_host UUID, p_code TEXT, p_participant UUID)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |

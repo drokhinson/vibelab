@@ -291,7 +291,15 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_participants (
   session_id UUID NOT NULL REFERENCES public.boardgamebuddy_play_sessions(id) ON DELETE CASCADE,
   user_id UUID REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   display_name TEXT NOT NULL,
-  joined_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Host-assigned column order, 0-based (migration 056). The participants
+  -- array's order IS the scoring grid's column order on every surface, so this
+  -- is what carries a row the host dragged in Gather through to the
+  -- spectators' mirror. NULL = never ordered; bgb_session_bundle sorts
+  -- (position NULLS LAST, joined_at), which puts a joiner who arrived after a
+  -- reorder at the end — where the host's own lobby poll appends them locally.
+  -- bgb_create_session seats the host at 0 and bgb_add_participant at max+1.
+  position SMALLINT
 );
 ALTER TABLE public.boardgamebuddy_play_session_participants ENABLE ROW LEVEL SECURITY;
 

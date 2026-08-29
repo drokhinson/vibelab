@@ -181,6 +181,7 @@ Roster for an open session — populated as players join.
 | user_id | UUID FK | nullable → profiles (NULL for guest joins) |
 | display_name | TEXT | |
 | joined_at | TIMESTAMPTZ | |
+| position | SMALLINT | nullable. Host-assigned column order, 0-based (migration 056). The participants array's order **is** the scoring grid's column order on every surface, so this is what carries a row the host dragged in Gather through to the spectators' mirror. NULL = never ordered; the bundle sorts `(position NULLS LAST, joined_at)`, so a joiner who arrives after a reorder lands at the end — where the host's own lobby poll appends them locally. `bgb_create_session` seats the host at 0 and `bgb_add_participant` at max+1; `bgb_join_session` leaves it NULL on purpose. |
 
 ### boardgamebuddy_play_session_scores
 Per-participant, per-round live scores during the Play phase (migration 026;
@@ -345,6 +346,7 @@ each missing game from the BGG XML API.
 - `PATCH /api/v1/boardgame_buddy/sessions/{code}/phase` — host advances the cascading flow (body `{phase: 'gather'|'play'|'settle'|'finalized'|'abandoned'}`). Transitions enforced: gather→play→settle→finalized, plus any→abandoned. Joiners watch this column via Realtime.
 - `POST /api/v1/boardgame_buddy/sessions/{code}/join` — join a session by code. Returns 409 once the session has moved past phase=gather.
 - `POST /api/v1/boardgame_buddy/sessions/{code}/participants` — host-only. Adds a buddy (with `user_id`) or a ghost (name-only, `user_id=null`) to the lobby roster so joiners see the player. Gather-only.
+- `PUT /api/v1/boardgame_buddy/sessions/{code}/participants/order` — host-only. Body `{participant_ids: [...]}`, the full ordered roster front to back. Sets each row's `position`, which is what makes a row the host dragged in Gather move in every spectator's lobby list and grid. Gather-only (409 `roster_locked` after), and ids the array omits are appended in `joined_at` order rather than dropped so a joiner arriving mid-drag can't fall off the grid.
 - `DELETE /api/v1/boardgame_buddy/sessions/{code}/participants/{participant_id}` — host-only. Removes a participant from the lobby roster. Refuses to remove the host themselves. Gather-only.
 - `DELETE /api/v1/boardgame_buddy/sessions/{code}` — host abandons a session
 - `POST /api/v1/boardgame_buddy/sessions/{code}/finalize` — write a play row from the session. **The host's payload is the grid** and the RPC writes it verbatim; it does not read `boardgamebuddy_play_session_scores` at all (migration 053). It used to overlay live per-round totals onto the payload — 042 as an override, 052 narrowed to a fallback — to recover cells joiners had authored that the host's draft had never seen. Host-only scoring makes that case impossible, and `play-flow-view._commitResolvedScores` already folds the live overlay into the draft before building the payload, so an overlay could now only ever disagree with it: exactly the "saved total doesn't match its own rounds" bug 052 was written to fix.
