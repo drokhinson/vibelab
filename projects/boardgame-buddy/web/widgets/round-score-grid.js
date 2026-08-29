@@ -39,11 +39,14 @@
 //                     play-flow-view overlay live realtime scores when a
 //                     player has a real user_id. Defaults to reading from
 //                     player.roundScores.
-//   headerNames     — start each column header on the player's name rather
-//                     than the colored bubble. The live play screens (host +
-//                     joiner mirror) pass true because names are what you
-//                     scan mid-game; the play-detail popup leaves it off.
-//                     Either way tapping a header flips that column.
+//   headerNames     — DEFAULT for the column headers: true starts them on the
+//                     player's name, false on the colored bubble. The live
+//                     play screens (host + joiner mirror) pass true because
+//                     names are what you scan mid-game; the play-detail popup
+//                     leaves it off. It is only a default — a user who has
+//                     tapped a header once carries a stored preference
+//                     (RoundGridNames) that wins on every surface, and one tap
+//                     flips EVERY column, not just the one tapped.
 //
 // There is deliberately NO total resolver. The Total row is ALWAYS the sum of
 // the very cells this render just emitted — same getCellValue, same round
@@ -61,7 +64,9 @@
     const editable = o.editable !== false;
     const mode = o.playMode || "competitive";
     const showSign = !!o.showSign;
-    const headerNames = !!o.headerNames;
+    // opts.headerNames is this surface's DEFAULT; a stored user choice wins.
+    const headerNamesDefault = !!o.headerNames;
+    const headerNames = RoundGridNames.enabled(headerNamesDefault);
     const getCell = o.getCellValue || defaultCellValue;
     const safePlayers = Array.isArray(players) ? players : [];
     // Spectators size their grid from the live-scores round count, not from
@@ -78,7 +83,7 @@
             <tr>
               <th></th>
               ${safePlayers.map((p) => `
-                <th class="scoring-head${headerNames ? " is-named" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name)}</th>
+                <th class="scoring-head${headerNames ? " is-named" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name, headerNames, headerNamesDefault)}</th>
               `).join("")}
             </tr>
           </thead>
@@ -224,15 +229,25 @@
     });
   }
 
-  // Wraps a column-header badge in a button that toggles the header cell
-  // between the colored bubble and the player's display name. Both spans are
-  // always emitted; CSS shows one, and which side the cell starts on is the
-  // caller's `headerNames` choice (the `is-named` class on the th). Pure DOM
-  // toggle (no re-render, no host method) so it works identically in the host
-  // grid, the joiner grid, and the play-detail popup. Shared via window export.
-  function renderScoringHead(badgeHtml, name) {
-    return `<button type="button" class="scoring-head__toggle" title="${escapeAttr(name)}"
-              onclick="this.closest('.scoring-head').classList.toggle('is-named')">
+  // Wraps a column-header badge in a button that flips EVERY column header
+  // between the colored bubble and the player's display name, and remembers
+  // the choice (RoundGridNames). Both spans are always emitted; CSS shows one.
+  //
+  // Still no host method and still no re-render, for the same reason it never
+  // had one: the two states differ by a single class, so there is nothing to
+  // rebuild. Routing the tap through a host's `outerHTML` repaint instead
+  // would reset `.scoring-table-wrap`'s scrollLeft — on a 5-6 player grid the
+  // table snaps back to column 1 — blur whatever cell was being typed in, and
+  // give the read-only spectator mirror a host contract it has never needed.
+  //
+  // `fallback` is the caller's opts.headerNames default, so the first tap on a
+  // surface the user has never toggled flips away from what it actually shows.
+  function renderScoringHead(badgeHtml, name, isNamed, fallback) {
+    return `<button type="button" class="scoring-head__toggle"
+              aria-pressed="${isNamed ? "true" : "false"}"
+              aria-label="${escapeAttr(name)} — show player names on every column"
+              title="${escapeAttr(name)}"
+              onclick="window.RoundGridNames.toggleAll(${!!fallback})">
               <span class="scoring-head__bubble">${badgeHtml}</span>
               <span class="scoring-head__name">${escapeHtml(name)}</span>
             </button>`;
@@ -301,6 +316,70 @@
     },
   };
 
+  // Persisted user preference for whether column headers show the player's
+  // display NAME instead of their colored bubble. One value for the whole app:
+  // tapping any header moves all of them, on every surface, and it is still
+  // set the next time the user opens a grid.
+  //
+  // Unlike SIGN_PREF_KEY there is no single default — the live play screens
+  // (host + spectator mirror) start on names, the play-detail popup on
+  // bubbles. So this key is an OVERRIDE: absent means "use this surface's own
+  // default", which the caller supplies as `fallback` (opts.headerNames). One
+  // tap anywhere and the stored value wins everywhere.
+  const NAMES_PREF_KEY = "bgb.scoring.headerNames";
+  // Mirrors the stored value for this page's lifetime. A browser that refuses
+  // localStorage (private-mode Safari, blocked site data) would otherwise flip
+  // the headers and then snap back on the next repaint, which reads as a
+  // broken button rather than as a browser setting.
+  let _namesChoice = null;
+  const RoundGridNames = {
+    /**
+     * @param {boolean} [fallback] surface default, used only while the user
+     *   has never expressed a preference.
+     * @returns {boolean}
+     */
+    enabled(fallback) {
+      if (_namesChoice != null) return _namesChoice;
+      try {
+        const v = localStorage.getItem(NAMES_PREF_KEY);
+        if (v === "1") return true;
+        if (v === "0") return false;
+      } catch (_) {}
+      return !!fallback;
+    },
+    set(on) {
+      _namesChoice = !!on;
+      try { localStorage.setItem(NAMES_PREF_KEY, on ? "1" : "0"); } catch (_) {}
+    },
+    /** Flip relative to what is on screen (stored value, else `fallback`). */
+    toggle(fallback) {
+      const next = !this.enabled(fallback);
+      this.set(next);
+      return next;
+    },
+    /**
+     * Inline-handler entry point: flip the preference, then repaint every
+     * column header in the document. Document-wide rather than per-table so a
+     * grid sitting behind the play-detail popup doesn't read stale until its
+     * own next repaint.
+     * @param {boolean} [fallback]
+     */
+    toggleAll(fallback) {
+      const on = this.toggle(fallback);
+      this.apply(on);
+      return on;
+    },
+    /** @param {boolean} on */
+    apply(on) {
+      const heads = document.querySelectorAll(".scoring-head");
+      Array.prototype.forEach.call(heads, (th) => {
+        th.classList.toggle("is-named", on);
+        const btn = th.querySelector(".scoring-head__toggle");
+        if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    },
+  };
+
   window.renderRoundGrid = renderRoundGrid;
   window.renderRoundGridTotalsCell = renderTotalsCell;
   window.roundGridRoundCount = roundGridRoundCount;
@@ -309,4 +388,5 @@
   window.parseRoundScore = parseRoundScore;
   window.nextSignToggle = nextSignToggle;
   window.RoundGridSign = RoundGridSign;
+  window.RoundGridNames = RoundGridNames;
 })();
