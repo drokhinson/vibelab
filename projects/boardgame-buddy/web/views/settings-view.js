@@ -39,6 +39,10 @@
       // section's copy and reveals the Upload now button.
       this.listen("outboxCount", () => this.render());
       this.listen("offline", () => this.render());
+      // Auto mode can flip while this screen is open (the OS appearance changed
+      // in Settings, or the sunset switch landed) — the Appearance card's
+      // "currently light/dark" subtext has to follow. See domain/theme.js.
+      this.listen("theme", () => this.render());
       // The BGG import poll skips its ticks while the tab is hidden — fire
       // one immediate catch-up tick when it becomes visible again (only
       // while a poll is actually armed). Auto-removed on unmount via

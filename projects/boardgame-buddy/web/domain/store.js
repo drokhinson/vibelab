@@ -77,6 +77,9 @@
         // a publish when the value it last published is unchanged.
         offline: !!(window.BgbNet && window.BgbNet.isOffline()),
         outboxCount: window.Outbox ? window.Outbox.count() : 0,
+        // Same reasoning again: the painted theme isn't a session value, and
+        // logout must not leave the key undefined for subscribers.
+        theme: window.BgbTheme ? window.BgbTheme.current() : "dark",
       };
       for (const subs of this._subs.values()) {
         for (const fn of subs) {
