@@ -43,6 +43,11 @@
   // starve the ones that would still land.
   const ROSTER_RECONCILE_MAX = 4;
 
+  // A reorder is a burst of drops, and each one names every participant. Coalesce
+  // them: without this a host tidying the line-up fires a round trip per drag,
+  // each renumbering the same rows.
+  const ORDER_PUSH_DEBOUNCE_MS = 300;
+
   class PlayFlowView extends window.View {
     constructor() {
       super("play-flow");
@@ -85,6 +90,11 @@
       // size of the last pending set, and a change in it refills the budget.
       this._rosterRetries = 0;
       this._rosterPending = 0;
+      // Debounce + single-flight for the roster ORDER write. _orderDirty
+      // survives an in-flight push so a drop that lands mid-request isn't lost.
+      this._orderTimer = null;
+      this._orderPromise = null;
+      this._orderDirty = false;
       // Monotonic token for phase-change PATCHes. After a call's PATCH
       // resolves it only reconciles state if it is still the latest — a
       // stale earlier PATCH resolving after a newer navigation must not yank
@@ -280,6 +290,9 @@
     }
 
     async onUnmount() {
+      // A navigation mid-drag would otherwise leave the clone on document.body
+      // and the pointer capture stranded.
+      if (window.PlayerReorder) window.PlayerReorder.cancel();
       this._stopLobbyPoll();
       if (this._gameFinder) { try { this._gameFinder.unmount(); } catch (_) {} this._gameFinder = null; }
       if (this._liveOff) { try { this._liveOff(); } catch (_) {} }
@@ -359,6 +372,11 @@
       this._rosterSyncPromise = null;
       this._rosterRetries = 0;
       this._rosterPending = 0;
+      // A queued order write belongs to the run that queued it — firing it
+      // against the next run's lobby would reorder a roster it never saw.
+      if (this._orderTimer) { clearTimeout(this._orderTimer); this._orderTimer = null; }
+      this._orderPromise = null;
+      this._orderDirty = false;
       this._saving = false;
       this._error = null;
     }
@@ -850,6 +868,14 @@
       // overwrite this._lobby with a row whose phase may not yet reflect
       // the transition the host just kicked off.
       if (this._pendingPhase > 0) return;
+      // A drag owns the DOM order of the player list until it drops. This tick
+      // ends in _refreshPlayersList(), which replaces every <li> — including the
+      // one under the user's finger. Skipping a tick costs a joiner two seconds
+      // of latency; not skipping costs the host their gesture.
+      if (window.PlayerReorder && window.PlayerReorder.isDragging()) return;
+      // Same for an order write in flight: the bundle below was fetched before
+      // it landed, so acting on it would repaint the pre-drag order back in.
+      if (this._orderPromise || this._orderDirty) return;
       try {
         const next = await window.PlaySession.fetchLobby(this._lobby.code);
         const prevIds = new Set((this._lobby.participants || []).map((p) => p.id));
@@ -940,6 +966,105 @@
       if (!ul) return;
       ul.innerHTML = this._ps.players.map((p, i) => this._renderPlayerRow(p, i)).join("");
       this.refreshIcons();
+      this._bindPlayerReorder();
+    }
+
+    /**
+     * (Re)bind the drag-to-reorder gesture to the Gather players list.
+     *
+     * Called after every paint of that list. render() replaces the whole
+     * container, so the <ul> is a new node and binds fresh; _refreshPlayersList
+     * only swaps its children, so the delegated machine survives and bind()
+     * no-ops on the node's own flag. Exactly one machine per live <ul> either
+     * way — which is the point of delegating rather than binding each row.
+     */
+    _bindPlayerReorder() {
+      if (!window.PlayerReorder) return;
+      const ul = this.container.querySelector("#screen-gather .cascade-players");
+      if (!ul) return;
+      window.PlayerReorder.bind(ul, {
+        rowSelector: ".cascade-player",
+        handleSelector: ".cascade-player__grip",
+        onReorder: (from, to) => this._movePlayer(from, to),
+      });
+    }
+
+    /**
+     * Move a player between slots.
+     *
+     * The players array IS the scoring grid's column order — round-score-grid.js
+     * keys every cell, input id and inline handler off the array index — so this
+     * splice is the whole of the local reorder. It is also exactly why nothing
+     * that patches BY index may run against the stale order: _patchScoringCells,
+     * _refreshTotalsCells and _setInitials's heads[i] all address columns
+     * positionally. Both index-keyed surfaces are therefore repainted here, not
+     * patched. Everything that identifies a player — is_winner, team, initials,
+     * roundScores, participant_id — lives on the object and travels with it, and
+     * the live-scores overlay is keyed by participant_id rather than by index.
+     *
+     * from/to are DOM positions the widget read off the live list. A mismatch
+     * means something repainted underneath the drag (it shouldn't — the poll is
+     * gated on isDragging()); fall back to a full render rather than splice
+     * against an array that isn't the one the host was looking at.
+     */
+    _movePlayer(from, to) {
+      const players = this._ps.players || [];
+      if (from === to) return;
+      if (from < 0 || from >= players.length || to < 0 || to >= players.length) {
+        this.render();
+        return;
+      }
+      const [moved] = players.splice(from, 1);
+      players.splice(to, 0, moved);
+      this._ps.persist();
+      this._refreshPlayersList();     // re-bakes every inline handler's index
+      this._refreshScoringSection();  // re-bakes every cell id and handler index
+      this._pushOrderToLobby();
+    }
+
+    /**
+     * Mirror the local player order into the lobby roster.
+     *
+     * Debounced, because a tidy-up is a burst of drops and each write names the
+     * whole roster. Best-effort like every other lobby write: losing it costs
+     * the spectators a column order, not the host their play. The one moment it
+     * is not fire-and-forget is the gather→play advance, where _advancePhase
+     * awaits the flush — bgb_reorder_participants is Gather-only.
+     *
+     * Offline there is no lobby at all, so the order simply stays local; it is
+     * pushed by the next drag once a lobby exists.
+     */
+    _pushOrderToLobby() {
+      if (this._isOffline()) return;
+      this._orderDirty = true;
+      if (this._orderTimer) clearTimeout(this._orderTimer);
+      this._orderTimer = setTimeout(() => {
+        this._orderTimer = null;
+        this._flushOrderToLobby();
+      }, ORDER_PUSH_DEBOUNCE_MS);
+    }
+
+    _flushOrderToLobby() {
+      if (this._orderTimer) { clearTimeout(this._orderTimer); this._orderTimer = null; }
+      if (this._orderPromise) return this._orderPromise;
+      if (!this._orderDirty || this._isOffline()) return Promise.resolve();
+      this._orderDirty = false;
+      // Only players that HAVE a roster row can be named. Anyone still waiting
+      // on their POST is appended server-side in joined_at order, and the next
+      // drag (or the pre-Play flush, which syncs the roster first) places them.
+      const ids = (this._ps.players || []).map((p) => p.participant_id).filter(Boolean);
+      if (ids.length < 2) return Promise.resolve();
+      this._orderPromise = this._withLobby((code) =>
+        window.PlaySession.reorderParticipants(code, ids)
+      ).then((updated) => {
+        if (updated) this._lobby = updated;
+        return updated;
+      }).finally(() => {
+        this._orderPromise = null;
+        // A drop landed while the write was in flight — send the newer order.
+        if (this._orderDirty) this._flushOrderToLobby();
+      });
+      return this._orderPromise;
     }
 
     /**
@@ -1087,6 +1212,7 @@
       this.refreshIcons();
       this._mountReferenceGuide();
       this._mountGameFinder();
+      this._bindPlayerReorder();
       // NOTE: do NOT call _scrollToCurrentPhase() here. render() runs every
       // 2s via the lobby poll and on every player edit — yanking the scroll
       // to the top of the active section made long Gather screens feel
@@ -1323,6 +1449,11 @@
       });
       return `
         <li class="cascade-player">
+          <button class="cascade-player__grip" type="button" tabindex="-1"
+                  aria-label="Reorder ${escapeAttr(p.name)}"
+                  title="Hold and drag to reorder">
+            <i data-icon="grip-vertical" class="w-4 h-4"></i>
+          </button>
           ${badge}
           <span class="cascade-player__name">${escapeHtml(p.name)}</span>
           <input class="cascade-player__init" type="text" maxlength="3"
@@ -1679,6 +1810,12 @@
         // and repainted above, so this await costs the host nothing on screen.
         if (next === "play") {
           try { await this._syncRosterToLobby(); } catch (_) {}
+          // Then the order, in that sequence: the order write names participant
+          // ids, and the sync above is what gives a just-pushed player one, so
+          // running them the other way round would leave that player appended
+          // rather than placed. bgb_reorder_participants is Gather-only too, so
+          // a debounced write still sitting in its timer would come back 409.
+          try { await this._flushOrderToLobby(); } catch (_) {}
         }
         // The cascade has ALREADY moved — the phase above is local truth and
         // the draft is complete on its own. This PATCH only catches the server

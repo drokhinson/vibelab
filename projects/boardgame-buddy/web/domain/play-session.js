@@ -262,6 +262,17 @@
       });
     }
 
+    // Host-only. Set the roster's column order — the full ordered id list,
+    // front to back. The participants array's order is the scoring grid's
+    // column order on every surface (the spectator's mirror builds its grid
+    // straight from it), so without this a row the host drags in Gather moves
+    // on their own phone only. Gather-only: 409 `roster_locked` after that.
+    static reorderParticipants(code, participantIds) {
+      return window.api.put(`/sessions/${code}/participants/order`, {
+        participant_ids: participantIds,
+      });
+    }
+
     // Host-only. Remove a participant row by id.
     static removeParticipant(code, participantId) {
       return window.api.del(`/sessions/${code}/participants/${participantId}`);
