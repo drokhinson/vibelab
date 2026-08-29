@@ -33,6 +33,16 @@
   // all is worse than one whose predecessor's spectators saw 'abandoned'.
   const LOBBY_GATE_MAX_WAIT_MS = 8000;
 
+  // How many times the Gather poll will re-push a roster that still hasn't
+  // fully landed, before it stops trying. The reconcile runs every 2s for the
+  // whole Gather phase, so it needs a floor: a row the server keeps refusing
+  // (bgb_add_participant answers display_name_required for a blank name, and
+  // will keep answering it) would otherwise be a POST every 2s for as long as
+  // the host sits on the screen. The budget resets whenever the pending set
+  // changes size — progress, or a newly added player — so a stuck row can't
+  // starve the ones that would still land.
+  const ROSTER_RECONCILE_MAX = 4;
+
   class PlayFlowView extends window.View {
     constructor() {
       super("play-flow");
@@ -67,6 +77,14 @@
       // between optimistic local removal and server confirmation from
       // snapping the player back into the grid via a stale poll.
       this._pendingDeletes = 0;
+      // In-flight roster push, so the three callers that can want one at once
+      // (the Gather poll's reconcile, the pre-Play flush, a fresh mint) share
+      // a single batch instead of stacking one per tick.
+      this._rosterSyncPromise = null;
+      // Reconcile budget — see ROSTER_RECONCILE_MAX. _rosterPending is the
+      // size of the last pending set, and a change in it refills the budget.
+      this._rosterRetries = 0;
+      this._rosterPending = 0;
       // Monotonic token for phase-change PATCHes. After a call's PATCH
       // resolves it only reconciles state if it is still the latest — a
       // stale earlier PATCH resolving after a newer navigation must not yank
@@ -123,6 +141,24 @@
       const keepCode = (this.params && this.params.code) || this._ps.code || null;
       if (!this._lobby || !keepCode || this._lobby.code !== keepCode) {
         this._resetRunState();
+      }
+      // A participant_id addresses a row in ONE lobby's roster. When the run we
+      // are about to start isn't the one those ids were minted against they
+      // point at nothing — and _syncRosterToLobby SKIPS anyone already carrying
+      // one, so leaving them behind is exactly how a resumed draft ends up in a
+      // lobby that holds only the host.
+      //
+      // Gated on the code changing rather than folded into _resetRunState(),
+      // which runs on every plain browser refresh (this._lobby is null on a
+      // fresh page load, so its guard above always fires). A host who refreshes
+      // mid-Play has ids that are still valid against a roster that is now
+      // LOCKED — bgb_add_participant is Gather-only, so nothing could
+      // re-acquire them, and every column's live-score write is gated on
+      // p.participant_id. Clearing them there would turn a Gather-phase bug
+      // into a permanent Play-phase one.
+      if (!keepCode || this._ps.code !== keepCode) {
+        for (const p of this._ps.players || []) p.participant_id = null;
+        this._ps.persist();
       }
       // Deep-link entry: URL was /play/{code}. If the localStorage draft is
       // for a different code (or empty), adopt the URL's code so
@@ -318,6 +354,11 @@
       // Nulled here so a plain onMount reset can't inherit the previous run's
       // gate; _startAnotherRound deliberately sets it AFTER calling this.
       this._lobbyGate = null;
+      // Deliberately NOT clearing participant_id here — see onMount. This runs
+      // on every plain browser refresh, where the draft's ids are still good.
+      this._rosterSyncPromise = null;
+      this._rosterRetries = 0;
+      this._rosterPending = 0;
       this._saving = false;
       this._error = null;
     }
@@ -511,6 +552,20 @@
     _onLobbyReplaced() {
       this._noteCodeReplaced();
       for (const p of this._ps.players || []) p.participant_id = null;
+      // bgb_create_session seats the host, so the replacement's roster already
+      // carries their row — adopt it here. _syncRosterToLobby below skips the
+      // host by design, and a replacement that happens mid-Play leaves the
+      // Gather poll disarmed, so nothing else would ever give the host back an
+      // id: their own column would stop streaming for the rest of the game.
+      const me = window.store.get("user");
+      const mine = me && ((this._lobby && this._lobby.participants) || [])
+        .find((part) => part.user_id === me.id);
+      if (mine) {
+        const self = (this._ps.players || []).find((p) => p.user_id === me.id);
+        if (self) self.participant_id = mine.id;
+      }
+      this._rosterRetries = 0;
+      this._rosterPending = 0;
       this._ps.persist();
       // Tear the old channel down now; it is subscribed to a session id that
       // no longer means anything.
@@ -692,7 +747,19 @@
         this._ps.persist();
         this._syncUrlToCode();
         this._reconcileGameToLobby();
-        if (priorCode && session.code !== priorCode) this._onLobbyReplaced();
+        if (priorCode && session.code !== priorCode) {
+          this._onLobbyReplaced();
+        } else {
+          // A lobby minted for a run that ALREADY has a roster. "Another
+          // round?" on the Play tab (log-play-view._anotherRound) seeds one
+          // straight from the last play, and a resumed draft can carry one
+          // too. POST /sessions seats only the host, and nothing here used to
+          // push the rest: priorCode is null on a fresh draft, so the
+          // _onLobbyReplaced branch above never fired and a six-player game
+          // reached spectators as a one-column grid with no scores in it.
+          // Fire-and-forget, like every other roster write.
+          this._syncRosterToLobby();
+        }
       } catch (_) {
         // No lobby this run. That is a degraded live session, not a broken
         // play: the cascade runs off the draft and Save falls back to
@@ -851,6 +918,7 @@
         // Gather, when new joiners get auto-promoted to player rows).
         // Patch just that subtree — scroll position survives.
         if (playersChanged) this._refreshPlayersList();
+        this._reconcileRosterToLobby();
       } catch (e) {
         // A dead lobby 404s here every 2s. Swallowing that forever left the
         // invite card advertising a code nobody could join for the rest of the
@@ -1602,6 +1670,16 @@
       this._scrollToCurrentPhase();
       this._pendingPhase++;
       try {
+        // Gather is the only phase bgb_add_participant accepts a roster write
+        // in; past it every push comes back 409 roster_locked, which
+        // _withLobby swallows without a sound. So the roster has to be
+        // complete BEFORE the phase moves, or a player whose row never landed
+        // never gets one — and their column stays empty on every spectator's
+        // screen for the whole game. The cascade has already flipped locally
+        // and repainted above, so this await costs the host nothing on screen.
+        if (next === "play") {
+          try { await this._syncRosterToLobby(); } catch (_) {}
+        }
         // The cascade has ALREADY moved — the phase above is local truth and
         // the draft is complete on its own. This PATCH only catches the server
         // (and spectators' read-only mirrors) up, whenever it can.
@@ -1630,6 +1708,18 @@
           }
           return updated;
         });
+        // Republish the grid under any id the flush above just adopted. It
+        // has to happen HERE and not where the id lands: the flush runs while
+        // the server is still in 'gather', and the scores table's RLS write
+        // policy only accepts the host while phase='play' (migration 053), so
+        // an upsert issued any earlier is refused. Without this a column whose
+        // roster row arrived at the last moment would start at whatever round
+        // the host next types in, and every round before it would read blank
+        // on every spectator's screen. Fire-and-forget; a failed PATCH above
+        // just means the write is refused again, harmlessly.
+        if (next === "play" && this._liveScores) {
+          this._liveScores.syncGrid(this._ps.players).catch(() => {});
+        }
       } finally {
         this._pendingPhase--;
       }
@@ -1810,19 +1900,20 @@
       );
       if (!exists) {
         const currentRounds = this._maxRoundCount();
-        this._ps.players.push({
+        const row = {
           name,
           is_winner: false,
           score: null,
           user_id: user_id || null,
           avatar: avatar || null,
           roundScores: Array(currentRounds).fill(null),
-        });
+        };
+        this._ps.players.push(row);
         this._ps.persist();
         // Sync to the backend participants table so spectators see this
-        // player. Fire-and-forget — _lobbyPoll will reconcile within ~2s and
-        // backfill participant_id onto the local row.
-        this._pushParticipantToBackend(name, user_id);
+        // player. Fire-and-forget, and handed the row itself so the response's
+        // participant_id lands on it without waiting for the poll.
+        this._pushParticipantToBackend(row);
       }
       this._closeBuddyDropdown();
       this.render();
@@ -1837,13 +1928,37 @@
     // blaming the session — took a failure in the nice-to-have and spent it on
     // the must-have. _withLobby re-mints a dead lobby and retries, and
     // _syncRosterToLobby re-pushes the roster whenever a new lobby is opened.
-    async _pushParticipantToBackend(name, userId) {
-      await this._withLobby((code) =>
+    async _pushParticipantToBackend(player) {
+      const bundle = await this._withLobby((code) =>
         window.PlaySession.addParticipant(code, {
-          userId: userId || null,
-          displayName: name,
+          userId: player.user_id || null,
+          displayName: player.name,
         })
       );
+      if (bundle) this._adoptParticipantId(player, bundle);
+    }
+
+    /**
+     * Take the participant id the server just seated for one local row.
+     *
+     * POST /participants answers with the whole session bundle, so the row is
+     * already in hand — waiting up to 2s for _lobbyPollTick to match it back
+     * by name is 2s in which every cell the host types for this player is
+     * dropped by the participant_id guard in _setRoundScore.
+     *
+     * Matched on the same keys the poll uses: user_id for an account, a
+     * case-insensitive display name for a guest (their only handle).
+     */
+    _adoptParticipantId(player, bundle) {
+      if (!player || player.participant_id) return;
+      const parts = (bundle && bundle.participants) || [];
+      const key = (player.name || "").toLowerCase();
+      const hit = parts.find((part) => (player.user_id
+        ? part.user_id === player.user_id
+        : !part.user_id && (part.display_name || "").toLowerCase() === key));
+      if (!hit) return;
+      player.participant_id = hit.id;
+      this._ps.persist();
     }
 
     // Lookup helper used by the buddy autocomplete dropdown: resolves the
@@ -3187,17 +3302,69 @@
      * handful of rows — and each push is best-effort by design: a roster row
      * that doesn't land costs spectators a name, not the host their play.
      */
-    async _syncRosterToLobby() {
-      if (!this._lobby || !this._lobby.code) return;
+    _syncRosterToLobby() {
+      // Single-flight. Three callers can want this at once — the Gather poll
+      // every 2s, _advancePhase on the way into Play, and a fresh mint — and
+      // without the gate a slow POST would have another full batch stacked on
+      // top of it every tick, leaving bgb_add_participant's server-side dedup
+      // to do the de-duplicating this loop should be doing itself.
+      if (this._rosterSyncPromise) return this._rosterSyncPromise;
+      this._rosterSyncPromise = (async () => {
+        // Awaits the code rather than bailing on a missing _lobby: the whole
+        // point is to run on the fresh-mint path, where the caller is ahead of
+        // _ensureLobbyOpen.
+        const code = await this._lobbyReady();
+        if (!code) return;
+        const me = window.store.get("user");
+        const meId = me ? me.id : null;
+        const pending = (this._ps.players || []).filter(
+          (p) => !p.participant_id && !(meId && p.user_id === meId)
+        );
+        if (pending.length === 0) return;
+        await Promise.all(pending.map((p) => this._pushParticipantToBackend(p)));
+      })();
+      this._rosterSyncPromise
+        .catch(() => {})
+        .then(() => { this._rosterSyncPromise = null; });
+      return this._rosterSyncPromise;
+    }
+
+    /**
+     * Re-push any local player the lobby doesn't know about yet.
+     *
+     * The roster's twin of _reconcileGameToLobby: a cheap, idempotent catch-up
+     * that rides the Gather poll so the roster heals itself instead of
+     * depending on every individual write having landed. It has to, because
+     * _withLobby swallows everything that isn't a definitive 404/410 — one
+     * dropped POST used to cost that player their column for the entire game,
+     * since live scores are keyed by participant_id and the host's cells for a
+     * row without one are never mirrored anywhere.
+     *
+     * bgb_add_participant dedups server-side, so a push that races the poll's
+     * own backfill is a no-op rather than a second row.
+     */
+    _reconcileRosterToLobby() {
+      if (this._isOffline()) return;
       const me = window.store.get("user");
       const meId = me ? me.id : null;
       const pending = (this._ps.players || []).filter(
         (p) => !p.participant_id && !(meId && p.user_id === meId)
-      );
-      if (pending.length === 0) return;
-      await Promise.all(
-        pending.map((p) => this._pushParticipantToBackend(p.name, p.user_id))
-      );
+      ).length;
+      if (pending === 0) {
+        this._rosterRetries = 0;
+        this._rosterPending = 0;
+        return;
+      }
+      // Fresh budget whenever the pending set changes size: a push that landed
+      // (or a player the host just added) is progress, and progress means this
+      // is converging rather than looping.
+      if (pending !== this._rosterPending) {
+        this._rosterPending = pending;
+        this._rosterRetries = 0;
+      }
+      if (this._rosterRetries >= ROSTER_RECONCILE_MAX) return;
+      this._rosterRetries++;
+      this._syncRosterToLobby();
     }
   }
 
