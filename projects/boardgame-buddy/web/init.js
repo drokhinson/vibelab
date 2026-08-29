@@ -505,6 +505,9 @@
     // surface that pins an action row above the software keyboard reads these
     // (see ui/viewport-lock.js for why dvh alone isn't enough).
     window.BgbViewport.start();
+    // Hold the page at 1x in an iOS Safari tab, where the viewport meta's
+    // user-scalable=no is ignored (see ui/zoom-lock.js).
+    window.BgbZoomLock.start();
 
     // Start watching connectivity before anything else can issue a request, so
     // the very first failure already counts toward offline detection.

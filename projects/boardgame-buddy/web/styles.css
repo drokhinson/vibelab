@@ -214,6 +214,27 @@
 html {
   max-width: 100%;
   overflow-x: hidden;
+  /* WebKit inflates text on rotation to landscape unless this is pinned. 100%
+     means "render at the author's size", not "ignore the user" — system Zoom
+     and Dynamic Type are unaffected. */
+  -webkit-text-size-adjust: 100%;
+  /* Kills double-tap-to-zoom document-wide — the second of the three iOS zoom
+     triggers (pinch is ui/zoom-lock.js, focus auto-zoom is the 16px floor at the
+     end of this file). Chrome on Android already suppresses double-tap zoom on
+     any page declaring width=device-width; Safari does not.
+
+     On the root on purpose. touch-action resolves by INTERSECTING the values
+     from the touched element up to the root, so `manipulation` here cannot
+     loosen a descendant: .cascade-player__grip stays `none`
+     (none ∩ manipulation = none) and the drag-reorder pointer machine in
+     widgets/player-reorder.js keeps working untouched. It also still permits
+     panning and pinch, so nothing scroll-related changes.
+
+     Preferred over a JS double-tap suppressor, which would have to
+     preventDefault() the second touchend and so would guess wrong about taps
+     meant for a control — this codebase leans on inline onclick= handlers, and
+     a swallowed click is a much worse bug than a stray zoom. */
+  touch-action: manipulation;
 }
 body {
   max-width: 100%;
@@ -3386,6 +3407,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border-radius: 0.35rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  /* Overridden to 16px by the iOS focus-zoom block at the END of this file —
+     the computed value is 16px, not 0.8rem. */
   font-size: 0.8rem;
 }
 .scoring-cell:focus { outline: none; border-color: var(--accent); }
@@ -4844,6 +4867,8 @@ main[data-view="session-viewer"].hidden {
   text-align: right;
   font-family: var(--font-score);
   font-variant-numeric: tabular-nums;
+  /* Overridden to 16px by the iOS focus-zoom block at the END of this file, in
+     lockstep with .scoring-cell so the two grids stay column-aligned. */
   font-size: 0.8rem;
   color: var(--polaroid-ink);
 }
@@ -7775,4 +7800,55 @@ main[data-view="session-viewer"].hidden {
   justify-content: flex-end;
   padding-top: 6px;
   border-top: 1px solid var(--polaroid-line);
+}
+
+/* ── iOS focus-zoom floor ─────────────────────────────────────────────────────
+   iOS Safari zooms the whole page whenever a focused form control computes
+   under 16px. That drags the sticky .bgb-global-header and the fixed .bgb-nav
+   out of the visible box (both are laid out against the layout viewport, which
+   zoom doesn't change) and desyncs the visualViewport numbers
+   ui/viewport-lock.js publishes. Android never does this, which is the whole of
+   the "iPhone zooms, Android doesn't" report.
+
+   Unlike pinch and double-tap zoom, this is NOT suppressed by the viewport meta
+   or by ui/zoom-lock.js in a Safari tab — a >=16px computed size is the only
+   fix. Same reasoning as .chapter-edit__mdarea above, which got this treatment
+   in isolation; this block finishes the job for every remaining control.
+
+   THIS BLOCK MUST STAY LAST IN THE FILE. Every selector below is 0,1,0 and ties
+   with the component rule it overrides, so the win comes purely from source
+   order. Adding a new sub-16px input? Add it here, not next to its component.
+
+   Not gated on @media (pointer: coarse) on purpose: iPadOS Safari can report
+   pointer:fine when a trackpad is attached, which would silently drop the floor
+   on a device that still needs it. The cost is slightly larger form text on
+   desktop — cosmetic on a 480px-max phone column, and the same rendering
+   everywhere is what makes desktop verification meaningful.
+
+   A blanket `input, textarea, select { font-size: max(16px, 1em) }` does NOT
+   work here: element selectors are 0,0,1 and lose to every component class
+   below regardless of source order. */
+.input-sm,
+.select-sm,
+.textarea-sm,
+/* The core scoring grid — 0.8rem, so every tap into a round-score cell zoomed
+   the page. --read is bumped in lockstep: its own comment says out loud that
+   the read-only cell mirrors the editable cell's METRICS so a spectator's grid
+   lines up column-for-column with the host's. Bump one without the other and
+   that contract breaks.
+   Columns do not widen. min-width, not the text, is what sets column width for
+   every realistic score: .scoring-cell is min-width:3.4rem (54.4px) and a
+   4-digit score at 16px measures ~38px + 12.8px padding + 2px border ~= 53px,
+   still under it. Measured at 390px across 4/5/6 players with the ± sign toggle
+   both off and on: table width is byte-identical before and after (390/416,
+   390/513, 423/610px), and .scoring-table-wrap's overflow-x:auto engages on
+   exactly the same configurations as before. Only row height moves, +3px, from
+   the taller line box. */
+.scoring-cell,
+.scoring-cell--read,
+.scroll-panel__search,
+.import-exp-search__input,
+.cascade-exp-filter__input,
+.avatar-cust__name-input {
+  font-size: 16px;
 }
