@@ -2406,7 +2406,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-session__name:hover { text-decoration: underline; }
 
 /* Multi-card rail — horizontal scroll of polaroid strip cards. Padded
-   generously so the tilted edges don't clip against the viewport. Cards
+   generously so the hover lift and card shadows don't clip against the
+   viewport. Cards
    are vertically centered so landscape (shorter) polaroids don't float at
    the top of the row next to taller portrait neighbours. */
 .play-session__scroll {
@@ -2416,8 +2417,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   /* NOT `visible`: beside a scrollable overflow-x, `visible` computes to
      `auto` (CSS Overflow 3 §3), so asking for it silently produced a rail
      that scrolls VERTICALLY too — a scroll container sitting over most of the
-     feed, ready to swallow a vertical drag the moment a tilted card outgrew
-     the padding below. The tilt is kept off the edges by that padding, not by
+     feed, ready to swallow a vertical drag the moment a lifted card outgrew
+     the padding below. Cards are kept off the edges by that padding, not by
      the overflow value, so state the honest one. */
   overflow-y: hidden;
   min-width: 0;
@@ -3729,9 +3730,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .expansion-list__name { font-weight: 600; font-size: 0.9rem; }
 
 /* ── Game detail polaroid cover ────────────────────────────────────────────
-   Replaces the legacy hero banner with a tilted cream polaroid frame that
+   Replaces the legacy hero banner with a square cream polaroid frame that
    carries the game's box art + designer-year caption underneath. Status pill
-   sits on the top-right corner with its own tilt so it reads as a sticker. */
+   sits on the top-right corner as a sticker.
+
+   No tilt and no hover transform: the frame is not interactive (no onclick,
+   no role, no tabindex), and the `:hover` rule that used to straighten it had
+   no `@media (hover: hover)` guard — on touch the sticky hover state latched
+   after a tap, so the cover appeared to snap upright when tapped. Matches the
+   play cards, which dropped their nth-child tilts earlier (see "No tilts"). */
 .game-detail {
   position: relative;
 }
@@ -3751,11 +3758,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
     0 1px 1px rgba(0, 0, 0, 0.04),
     0 18px 40px -8px rgba(0, 0, 0, 0.6),
     0 2px 4px rgba(0, 0, 0, 0.22);
-  transform: rotate(-2.4deg);
-  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
   color: var(--polaroid-ink);
 }
-.game-detail__polaroid:hover { transform: rotate(0deg) scale(1.02); }
 .game-detail__polaroid-photo {
   width: 100%;
   aspect-ratio: 4 / 5;
@@ -3790,7 +3794,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   top: -10px;
   right: -12px;
   z-index: 5;
-  transform: rotate(4deg);
 }
 
 /* Back button — floats over the polaroid cover on the top-left. 44×44 hit
@@ -3869,10 +3872,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
               box-shadow 0.2s;
   color: var(--polaroid-ink);
 }
-.expansion-polaroid:nth-child(odd)  { transform: rotate(-1.4deg); }
-.expansion-polaroid:nth-child(even) { transform: rotate( 1.2deg); }
+/* Square, like every other card. The alternating nth-child tilts that used to
+   sit here straightened on `:hover`, which on touch meant a tap both navigated
+   AND snapped the card upright. A plain lift is the only transform now. */
 .expansion-polaroid:hover {
-  transform: rotate(0deg) translateY(-3px);
+  transform: translateY(-3px);
   box-shadow:
     0 1px 1px rgba(0, 0, 0, 0.05),
     0 14px 28px -6px rgba(0, 0, 0, 0.55),
