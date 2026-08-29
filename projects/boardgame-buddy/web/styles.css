@@ -45,6 +45,14 @@
 
   /* Motion */
   --ease: cubic-bezier(.32, .72, 0, 1);
+
+  /* Ghost-player badge ink — the silhouette outline AND its initials.
+     Same job as --accent-ink: nearly every ghost badge sits on a PAPER surface
+     (the Gather roster, the buddy dropdown, the play card back, the popup, the
+     scoring grid), and paper is light in BOTH themes, so this espresso brown is
+     theme-independent. The buddies list is the one screen where the badge sits
+     on the app ground instead; it overrides this below. */
+  --ghost-ink: #3B2A1C;
 }
 
 /* ── Dark (default) ─────────────────────────────────────────────────────────── */
@@ -3603,10 +3611,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: oklch(var(--b3));
   border-color: var(--accent);
 }
-.buddies-row__avatar--ghost {
-  background: oklch(var(--b1));
-  border: 1px dashed color-mix(in srgb, var(--polaroid-ink) 35%, transparent);
-}
+/* The buddies list is the ONE surface where a ghost badge sits on the app
+   ground rather than on paper (.buddies-row is oklch(var(--b2)) — near-white in
+   light, near-black espresso in dark). In dark theme the paper brown would be
+   invisible on it, so the ink flips to a warm tan there and only there.
+   This row used to paint its own fill + dashed border, which is why the buddies
+   screen was the one place a ghost badge didn't look like the others; the
+   silhouette is now the whole mark, so both are gone. */
+:root[data-bgb="dark"] .buddies-row { --ghost-ink: #C4A987; }
 .buddies-link-panel {
   flex-basis: 100%;
   margin-top: 0.55rem;
@@ -6902,12 +6914,45 @@ main[data-view="session-viewer"].hidden {
 .user-badge.set-card__acct-avatar { width: 54px; height: 54px; }
 .user-badge.set-card__acct-avatar .user-badge__initials { font-size: 20px; }
 
-/* Ghost player: same look as a default-no-customization badge but with a
-   dashed outline so it reads as a placeholder identity. */
+/* Ghost player: not a disc at all — a brown ghost silhouette holding the
+   initials, so a seat with no account behind it is legible AS a placeholder.
+   Undoes .user-badge's disc chrome rather than overriding it piecemeal; this
+   block must stay AFTER .user-badge so it wins without !important.
+   overflow is unpinned because the disc's `overflow: hidden` would clip the
+   hem, and opacity goes back to 1 — the old .92 on a 1.9:1 mark was the whole
+   legibility problem. */
 .user-badge--ghost {
-  border-style: dashed;
-  opacity: 0.92;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  opacity: 1;
+  position: relative;
+  color: var(--ghost-ink);
 }
+.user-badge__ghost {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  stroke-width: 1.6px;
+}
+/* The initials ride above the silhouette, nudged up off the geometric centre:
+   the hem's notches make the bottom third read lighter, so dead-centre text
+   sits visually low inside the dome. */
+.user-badge--ghost .user-badge__initials {
+  position: relative;
+  transform: translateY(-4%);
+}
+/* A ghost's interior is narrower than a disc's at the text baseline, so every
+   size steps down ~15%. */
+.user-badge--ghost.user-badge--xs .user-badge__initials { font-size: 8px; }
+.user-badge--ghost.user-badge--sm .user-badge__initials { font-size: 10px; }
+.user-badge--ghost.user-badge--md .user-badge__initials { font-size: 14px; }
+.user-badge--ghost.user-badge--lg .user-badge__initials { font-size: 24px; }
+/* At 72px a 1.6 stroke reads as a heavy marker line — thin it. */
+.user-badge--ghost.user-badge--lg .user-badge__ghost { stroke-width: 1.2px; }
 
 /* ─────────────────────────────────────────────────────────────────────────────
    AVATAR CUSTOMIZER — modal embedded in the polaroid popup chrome.

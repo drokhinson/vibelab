@@ -48,11 +48,13 @@
       // row, so bgb_session_scores_select filters everything out — and the
       // seed is the only copy of the grid they will ever get.
       this._tableReadable = false;
-      // Optimistic writes that haven't been confirmed by the table yet, keyed
-      // "<participant>|<round>". refresh() rebuilds _byPlayer from what the
-      // table returns, so without this an in-flight keystroke would blink back
-      // to its old value on the next poll tick.
-      this._pending = new Map();
+      // Host-only ordered writer. Owns every local edit that the table has not
+      // yet been observed to agree with, keyed "<participant>|<round>".
+      // refresh() rebuilds _byPlayer from what the table returns, so without
+      // this an in-flight keystroke would blink back to its old value on the
+      // next poll tick — and the Realtime handler consults it so a stale echo
+      // can't overwrite a newer local value. See domain/score-write-queue.js.
+      this._writes = new window.ScoreWriteQueue((rows) => this._sendRows(rows));
     }
 
     async start() {
@@ -76,11 +78,17 @@
               ? payload.new
               : payload.old;
             if (!row) return;
+            const key = this._writes.keyFor(row.participant_id, row.round_index);
             if (payload.eventType === "DELETE") {
-              this._forget(row);
-            } else {
+              // A delete for a cell we hold an unconfirmed value for is the
+              // echo of our own removeRoundAt tail-drop, not news.
+              if (!this._writes.intentFor(key)) this._forget(row);
+            } else if (this._writes.accept(key, row.score)) {
               this._ingest(row);
             }
+            // Emit even when the row was ignored: the repaint is idempotent,
+            // and session-viewer-view stamps its "Realtime is alive" timestamp
+            // off this callback to stand the poll fallback down.
             this._emit();
           }
         )
@@ -100,7 +108,7 @@
       this._byPlayer.clear();
       this._seed.clear();
       this._tableReadable = false;
-      this._pending.clear();
+      this._writes.clear();
     }
 
     /**
@@ -136,9 +144,15 @@
         // just removed.
         const authoritative = rows.length > 0 || this._tableReadable;
         const next = authoritative ? new Map() : this._cloneSeed();
-        for (const row of rows) this._ingestInto(next, row);
-        // Re-apply writes still in flight — the table hasn't seen them yet.
-        for (const [key, score] of this._pending) {
+        for (const row of rows) {
+          // A re-read is as good a confirmation as a Realtime echo: if the
+          // table now holds what we asked for, the intent has done its job.
+          this._writes.accept(
+            this._writes.keyFor(row.participant_id, row.round_index), row.score);
+          this._ingestInto(next, row);
+        }
+        // Re-apply writes still unconfirmed — the table hasn't caught up yet.
+        for (const [key, score] of this._writes.entries()) {
           const sep = key.lastIndexOf("|");
           this._ingestInto(next, {
             participant_id: key.slice(0, sep),
@@ -175,7 +189,7 @@
       // exist here (spectators never write), but re-apply them anyway so the
       // rule "in-flight writes survive a re-read" holds on every path.
       const merged = this._cloneSeed();
-      for (const [key, score] of this._pending) {
+      for (const [key, score] of this._writes.entries()) {
         const sep = key.lastIndexOf("|");
         this._ingestInto(merged, {
           participant_id: key.slice(0, sep),
@@ -231,46 +245,38 @@
         }
         this._byPlayer.set(playerId, shifted);
       }
-      // Pending writes are re-applied by refresh(), so they need the same
+      // Unconfirmed writes are re-applied by refresh(), so they need the same
       // shift or they'd resurrect the pre-removal numbering.
-      const pending = new Map();
-      for (const [key, score] of this._pending) {
-        const sep = key.lastIndexOf("|");
-        const r = Number(key.slice(sep + 1));
-        if (r === idx) continue;
-        pending.set(`${key.slice(0, sep)}|${r > idx ? r - 1 : r}`, score);
-      }
-      this._pending = pending;
+      this._writes.shiftRounds(idx);
       this._emit();
       if (!window.supabaseClient || !this.sessionId) return;
       try {
+        // Let every per-cell write settle first. One landing AFTER the DELETE
+        // below would re-insert its row at the PRE-shift index — precisely the
+        // phantom trailing round this method exists to prevent.
+        await this._writes.drain();
         // Delete the whole tail and rewrite it from the shifted map. A
         // per-row UPDATE ladder would collide with the
         // (session_id, participant_id, round_index) unique index partway
         // through; dropping the tail first cannot.
-        const from = () =>
-          window.supabaseClient.from("boardgamebuddy_play_session_scores");
-        await from()
+        const del = await window.supabaseClient
+          .from("boardgamebuddy_play_session_scores")
           .delete()
           .eq("session_id", this.sessionId)
           .gte("round_index", idx);
+        if (del && del.error) throw del.error;
         const rows = [];
         for (const [participantId, m] of this._byPlayer) {
           for (const [r, score] of m) {
             if (r < idx) continue;
             rows.push({
-              session_id: this.sessionId,
               participant_id: participantId,
               round_index: r,
               score: score == null ? null : score,
             });
           }
         }
-        if (rows.length) {
-          await from().upsert(rows, {
-            onConflict: "session_id,participant_id,round_index",
-          });
-        }
+        await this._sendRows(rows);
       } catch (_) {
         // Best-effort; the next refresh() re-reads the table wholesale.
       }
@@ -372,7 +378,6 @@
           // with what we just published.
           this._ingest({ participant_id: p.participant_id, round_index: r, score: numeric });
           rows.push({
-            session_id: this.sessionId,
             participant_id: p.participant_id,
             round_index: r,
             score: numeric,
@@ -382,13 +387,45 @@
       if (!rows.length) return;
       this._emit();
       try {
-        await window.supabaseClient
-          .from("boardgamebuddy_play_session_scores")
-          .upsert(rows, { onConflict: "session_id,participant_id,round_index" });
+        // Settle per-cell writes first so this bulk copy can't be overtaken by
+        // one of them. At the only call site today (entering Play) the queue is
+        // empty and this is free; it keeps the method safe if it's ever called
+        // mid-game.
+        await this._writes.drain();
+        await this._sendRows(rows);
       } catch (_) {
         // Best-effort, exactly like every other mirror write — the next
         // keystroke or refresh() reconciles.
       }
+    }
+
+    /**
+     * The ONE place a write leaves this module, and the one place the result
+     * is checked. Rows arrive without session_id; it's stamped on here.
+     *
+     * supabase-js v2 RESOLVES with {data, error} — it does not reject unless
+     * .throwOnError() is set, and nothing here sets it. Converting to a
+     * rejection is what makes the queue's failure path real: without it a 403
+     * from the host-only RLS policy, or a write made with no network at all,
+     * took the success path and reported a row as landed that never did.
+     *
+     * @param {Array<{participant_id: string, round_index: number, score: number?}>} rows
+     * @returns {Promise<any>}
+     */
+    _sendRows(rows) {
+      if (!window.supabaseClient || !this.sessionId || !rows || !rows.length) {
+        return Promise.resolve();
+      }
+      return window.supabaseClient
+        .from("boardgamebuddy_play_session_scores")
+        .upsert(
+          rows.map((r) => Object.assign({ session_id: this.sessionId }, r)),
+          { onConflict: "session_id,participant_id,round_index" }
+        )
+        .then((res) => {
+          if (res && res.error) throw res.error;
+          return res;
+        });
     }
 
     async _upsert(participantId, roundIndex, value) {
@@ -396,37 +433,19 @@
         value === "" || value == null || Number.isNaN(Number(value))
           ? null
           : Number(value);
-      // Optimistic local update so the keyboard input feels instant on a
-      // slow network — the Realtime echo will arrive a moment later and
-      // overwrite with the same value.
+      // Optimistic local update so the keyboard input feels instant on a slow
+      // network. SYNCHRONOUS, before anything awaits: play-flow-view's
+      // _setRoundScore repaints totals and re-derives the crown right after
+      // calling us and depends on this emit having already landed.
       this._ingest({
         participant_id: participantId,
         round_index: roundIndex,
         score: numeric,
       });
-      const key = `${participantId}|${Number(roundIndex)}`;
-      this._pending.set(key, numeric);
       this._emit();
-      const row = {
-        session_id: this.sessionId,
-        participant_id: participantId,
-        round_index: roundIndex,
-        score: numeric,
-      };
-      const settle = () => {
-        // Only clear if this is still the newest write for the cell — a later
-        // keystroke has already replaced the entry and owns it now.
-        if (this._pending.get(key) === numeric) this._pending.delete(key);
-      };
-      return window.supabaseClient
-        .from("boardgamebuddy_play_session_scores")
-        .upsert(row, {
-          onConflict: "session_id,participant_id,round_index",
-        })
-        .then(
-          (res) => { settle(); return res; },
-          (err) => { settle(); throw err; }
-        );
+      // The queue guarantees at most one request per cell is outstanding, so
+      // two keystrokes in one cell can no longer reach the table out of order.
+      return this._writes.queue(participantId, roundIndex, numeric);
     }
 
     _ingest(row) {

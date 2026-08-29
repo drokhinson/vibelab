@@ -98,6 +98,10 @@
     if (!root) return;
     const active = document.activeElement;
     const activeId = active && active.id;
+    // Reads as null on <input type=number> (the flat Score field) — that type
+    // doesn't support selection, so the `caret != null` guard below skips the
+    // restore for it. Only setSelectionRange throws there, and it is already
+    // wrapped.
     const caret = active && active.selectionStart;
 
     root.innerHTML = renderCard();
@@ -435,6 +439,7 @@
                 ${hasRoundGrid(d.players, "roundScores")
                   ? `<span class="play-detail__edit-score-readout">${escapeHtml(playerTotal(pl, d.players))}</span>`
                   : `<input type="number" class="input input-bordered input-sm play-detail__edit-score"
+                            id="play-popup-score-${i}"
                             placeholder="Score"
                             value="${escapeAttr(pl.score)}"
                             oninput="window.PlayDetailPopup._setPlayerScore(${i}, this.value)" />`}
