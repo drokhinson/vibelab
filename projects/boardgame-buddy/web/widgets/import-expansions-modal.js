@@ -66,7 +66,7 @@
     );
   }
 
-  /** Paint into the card body and re-run Lucide over just that subtree. */
+  /** Paint into the card body and re-hydrate icons over just that subtree. */
   function _setBody(html) {
     const host = _body();
     if (!host) return;

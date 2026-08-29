@@ -1740,9 +1740,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* ── Icon sizing ─────────────────────────────────────────────────────────────
    An inline <svg> with no width/height fills its container, so an icon whose
    Tailwind w-N/h-N class fails to apply balloons to full width rather than
-   degrading quietly. The 1em default keeps an unsized icon sane; call sites
-   that set w-N/h-N still win on specificity. */
-[data-icon-name] {
+   degrading quietly. This is the floor that keeps an unsized icon sane.
+
+   :where() is load-bearing. A bare [data-icon-name] is 0,1,0 — a TIE with
+   .w-5, not a loss for it — and this file is the last stylesheet in the
+   document (see "the hiding contract" above), so the tie went to the floor and
+   every icon in the app rendered at 1em of whatever font-size it happened to
+   inherit. The w-N/h-N on ~120 call sites did nothing, and the popup's
+   `w-10 h-10` placeholder glyph came out at 13px instead of 40px.
+   :where() drops this to 0,0,0 so any real class beats it, which is what the
+   floor was always meant to be. Do not unwrap it. */
+:where([data-icon-name]) {
   display: inline-block;
   vertical-align: middle;
   flex-shrink: 0;
@@ -3575,8 +3583,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .buddies-row__name { font-weight: 600; }
 .buddies-row__when { font-size: 0.74rem; opacity: 0.6; }
 
-/* Destructive icon button — tints the inner Lucide stroke and outlines on
-   hover so the X reads as a destructive action even before the confirm. */
+/* Destructive icon button — tints the glyph and outlines on hover so the X
+   reads as a destructive action even before the confirm. The icon inherits it
+   through currentColor; the `i` selector covers the frame before
+   BgbIcons.render() swaps the placeholder for its <svg>. */
 .bgb-destructive-icon-btn { color: var(--rust); }
 .bgb-destructive-icon-btn i { color: var(--rust); }
 .bgb-destructive-icon-btn:hover {
