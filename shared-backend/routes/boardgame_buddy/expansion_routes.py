@@ -93,7 +93,7 @@ async def list_expansions(
 
     expansions = (
         sb.table("boardgamebuddy_games")
-        .select("id, bgg_id, name, thumbnail_url, expansion_color, rulebook_url")
+        .select("id, bgg_id, name, thumbnail_url, image_url, expansion_color, rulebook_url")
         .eq("is_expansion", True)
         .eq("base_game_bgg_id", base_bgg_id)
         .order("name")
@@ -122,6 +122,7 @@ async def list_expansions(
             bgg_id=r.get("bgg_id"),
             name=r["name"],
             thumbnail_url=r.get("thumbnail_url"),
+            image_url=r.get("image_url"),
             color=r.get("expansion_color"),
             is_enabled=r["id"] in enabled_ids,
             rulebook_url=r.get("rulebook_url"),
@@ -269,6 +270,7 @@ async def import_expansion(
         bgg_id=row.get("bgg_id"),
         name=row["name"],
         thumbnail_url=row.get("thumbnail_url"),
+        image_url=row.get("image_url"),
         color=row.get("expansion_color"),
         is_enabled=False,
         rulebook_url=row.get("rulebook_url"),

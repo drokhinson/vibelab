@@ -561,12 +561,9 @@ async def refresh_game_images(
 # single-table. These helpers build the payload from an in-hand game row
 # (no extra round trip) and fan a games-row mutation out to dependents.
 
-# Columns a play row caches off boardgamebuddy_games. game_play_mode is the
-# game's intrinsic mode, distinct from plays.play_mode (the user's per-play
-# choice).
-PLAY_DENORM_GAME_FIELDS = "name, thumbnail_url, image_url, play_mode"
-
-# Columns a collection row caches off boardgamebuddy_games.
+# Columns a collection row caches off boardgamebuddy_games. This is a superset
+# of what a play row caches (044 left plays with just name + thumbnail), so it
+# is also what _sync_denormalized_game_fields selects to build both payloads.
 COLLECTION_DENORM_GAME_FIELDS = (
     "bgg_id, name, thumbnail_url, year_published, min_players, max_players, "
     "playing_time, is_expansion, base_game_bgg_id, expansion_color, "
@@ -575,12 +572,15 @@ COLLECTION_DENORM_GAME_FIELDS = (
 
 
 def play_denormalized_from_game(game: dict) -> dict:
-    """Translate a boardgamebuddy_games row into the play-denorm payload."""
+    """Translate a boardgamebuddy_games row into the play-denorm payload.
+
+    Only the two columns plays still carries: 044_cleanup.sql dropped
+    game_image_url and game_play_mode from boardgamebuddy_plays because nothing
+    read them off a play row.
+    """
     return {
         "game_name": game["name"],
         "game_thumbnail_url": game.get("thumbnail_url"),
-        "game_image_url": game.get("image_url"),
-        "game_play_mode": game.get("play_mode"),
     }
 
 

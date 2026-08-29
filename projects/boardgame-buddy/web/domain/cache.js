@@ -18,7 +18,11 @@
 // bindUser, mismatched entries in localStorage are dropped.
 
 (function () {
-  const SCHEMA_VERSION = 1;
+  // 2: game payloads carry image_url on collection shelves, profile pages and
+  //    expansion lists (migration 055). Entries cached at v1 hold thumbnail-only
+  //    games, so returning users would keep painting the low-res art from
+  //    localStorage until natural expiry.
+  const SCHEMA_VERSION = 2;
   const STORAGE_PREFIX = "bgb_cache:";
   const META_SUFFIX = "__meta";
   const SIZE_BUDGET_BYTES = 3 * 1024 * 1024; // ~3 MB localStorage budget

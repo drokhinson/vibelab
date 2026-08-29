@@ -90,7 +90,7 @@ def _existing_game_map(sb: Client, bgg_ids: list[int]) -> dict[int, dict]:
         return {}
     rows = (
         sb.table("boardgamebuddy_games")
-        .select("id, " + COLLECTION_DENORM_GAME_FIELDS + ", image_url")
+        .select("id, " + COLLECTION_DENORM_GAME_FIELDS)
         .in_("bgg_id", bgg_ids)
         .execute()
     )

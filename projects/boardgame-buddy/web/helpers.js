@@ -51,6 +51,27 @@ function stripBaseGameName(name, baseName) {
   return stripped || raw;
 }
 
+// Pick a game's artwork URL at the resolution the surface actually needs.
+//
+// Every game carries two re-hosted images: `image_url` is BGG's full-size box
+// art (commonly 800-1200px) and `thumbnail_url` is BGG's <thumbnail>, which is
+// only ~150-200px on its long edge. Tiles that crop with `object-fit: cover`
+// are 110-145 CSS px wide, so on any 2-3x display the thumbnail is being
+// upscaled — that is the blur. Anything that size or larger asks for "card".
+//
+// "chip" is for the <=48px marks (finder rows, game chips, list thumbs) where
+// the full-size art would be pure wasted bandwidth.
+//
+// Either size falls back to the other: `image_url` is null for games whose
+// Storage upload failed, and payloads cached before the API started sending it
+// have no such key at all.
+function gameArtSrc(game, size) {
+  const g = game || {};
+  const full = g.image_url || "";
+  const thumb = g.thumbnail_url || "";
+  return (size === "chip" ? (thumb || full) : (full || thumb)) || "";
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return "";
   return new Date(dateStr).toLocaleDateString("en-US", {

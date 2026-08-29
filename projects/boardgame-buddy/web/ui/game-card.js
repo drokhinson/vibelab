@@ -43,7 +43,7 @@
     badgeHtml = "",
     pending = false,
   } = {}) {
-    const img = game.thumbnail_url || game.image_url || "";
+    const img = gameArtSrc(game, "card");
     const players = game.min_players
       ? `${game.min_players}${game.max_players && game.max_players !== game.min_players ? "–" + game.max_players : ""}P`
       : "";
@@ -64,7 +64,7 @@
                onclick="${clickHandler}">
         <div class="game-polaroid__photo">
           ${img
-            ? `<img class="game-polaroid__photo-img" src="${escapeHtml(img)}" alt=""${eager ? "" : ` loading="lazy"`} />`
+            ? `<img class="game-polaroid__photo-img" src="${escapeHtml(img)}" alt="" decoding="async"${eager ? "" : ` loading="lazy"`} />`
             : `<div class="game-polaroid__photo-placeholder"><i data-icon="dice-6"></i></div>`}
           ${statusOverlay}
           ${badgeHtml}
