@@ -707,6 +707,14 @@ class SessionParticipantResponse(BaseModel):
     avatar: Optional[Avatar] = None
 
 
+class SessionScoreRow(BaseModel):
+    """One cell of the live grid, keyed by roster row (migration 053)."""
+
+    participant_id: str
+    round_index: int
+    score: Optional[int] = None
+
+
 class SessionResponse(BaseModel):
     id: str
     code: str
@@ -719,6 +727,12 @@ class SessionResponse(BaseModel):
     game_id: Optional[str] = None
     game: Optional[GameSummary] = None
     participants: list[SessionParticipantResponse] = []
+    # Live grid snapshot, populated only while phase='play' (migration 054).
+    # A spectator who joined after Gather has no participant row, so the
+    # scores table's RLS SELECT policy returns them nothing and Realtime is
+    # silent for them; this is how their mirror gets the host's scores. Empty
+    # (never absent) in every other phase.
+    scores: list[SessionScoreRow] = []
     created_at: datetime
     expires_at: datetime
     finalized_play_id: Optional[str] = None

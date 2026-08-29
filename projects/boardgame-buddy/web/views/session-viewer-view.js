@@ -155,15 +155,35 @@
       // fires one catch-up tick the moment the tab is visible again.
       if (document.hidden) return;
       const phase = this._session && this._session.phase;
+      // Self-heal the live-scores channel. _subscribePhase() starts it when
+      // the Realtime phase event lands, but a phase change the poll caught
+      // instead (dropped socket, backgrounded tab, a channel that never
+      // reached READY) used to leave the spectator on the Play screen with no
+      // score channel at all — an empty grid and a frozen 0 total for the
+      // rest of the game, because the fallback refresh below is itself gated
+      // on _liveScores existing. Starting it here costs one guard per tick
+      // and is idempotent.
+      if (phase === "play" && !this._liveScores) await this._maybeStartLiveScores();
       if ((phase === "play" || phase === "settle") && !catchUp) {
         // During play/settle, Realtime (phase channel + live scores) carries
         // the updates and the poll is only a fallback: fetch every 5th tick
         // (10s), and only when no Realtime event landed within the last 10s.
         // Gather keeps the full 2s cadence — roster joins/leaves are
         // poll-only.
+        //
+        // Unless this spectator is on the seeded path: they joined after
+        // Gather, so RLS hides the scores table from them and Realtime is
+        // silent by construction. The poll IS their live scoring, and
+        // standing it down would leave the grid frozen. Every other tick
+        // (4s) — still half the Gather cadence.
+        const seedOnly = this._liveScores && this._liveScores.isSeedOnly();
         this._pollTick++;
-        if (this._pollTick % 5 !== 0) return;
-        if (Date.now() - this._lastRealtimeAt < 10000) return;
+        if (seedOnly && phase === "play") {
+          if (this._pollTick % 2 !== 0) return;
+        } else {
+          if (this._pollTick % 5 !== 0) return;
+          if (Date.now() - this._lastRealtimeAt < 10000) return;
+        }
       }
       // Realtime is the fast path for live scores, but it can drop an event
       // (backgrounded tab, socket hiccup). On fallback/catch-up ticks,
@@ -182,6 +202,10 @@
         const structural = this._structuralDiff(prev, next);
         const participantsOnly = !structural && this._participantsDiff(prev, next);
         this._session = next;
+        // Every poll carries a fresh grid snapshot. For a late spectator this
+        // is the only thing that moves their scoreboard, which is why the
+        // play/settle gating above keeps letting a fetch through for them.
+        this._seedLiveScores(next);
         if (structural) {
           this.render();
         } else if (participantsOnly) {
@@ -191,7 +215,17 @@
           // just the participant surfaces in place instead.
           this._patchParticipants();
         }
-        if (next.phase !== prevPhase) this._handlePhaseSideEffects(next);
+        if (next.phase !== prevPhase) {
+          this._handlePhaseSideEffects(next);
+          // A phase change the poll caught (rather than Realtime) still moves
+          // the spectator to the matching section, and still brings the score
+          // channel up on the way into Play / down on the way out. The winner
+          // popup reads the live totals, so this runs after the side effects
+          // above, not before.
+          this._scrollToCurrentPhase(next.phase);
+          if (next.phase === "play") await this._maybeStartLiveScores();
+          else await this._maybeStopLiveScores();
+        }
       } catch (_) {
         // Best-effort; let Realtime handle the bulk of updates.
       }
@@ -290,7 +324,15 @@
         sessionId: this._session.id,
         isHost: false,
       });
-      await this._liveScores.start();
+      // Seed from the bundle we already hold before the channel's own read —
+      // for a late spectator (no participant row, table hidden by RLS) it is
+      // the only copy of the grid that will ever reach this screen.
+      this._seedLiveScores(this._session);
+      // Subscribe BEFORE start(). start() backfills the table and _emit()s
+      // once when it's done; subscribing afterwards missed that emit, so a
+      // spectator who arrived after the host had already scored kept staring
+      // at the empty grid its first render painted until some later event
+      // (the next host keystroke, or the 10s poll fallback) happened to fire.
       this._liveOff = this._liveScores.subscribe(() => {
         // Realtime is alive — the poll's play/settle fallback stands down.
         // Skip the stamp when the emit came from our own poll-triggered
@@ -298,6 +340,7 @@
         if (!this._refreshingScores) this._lastRealtimeAt = Date.now();
         this._onLiveScoresChange();
       });
+      await this._liveScores.start();
     }
 
     // Live-scores tick. If the round count changed (the host added or removed
@@ -342,6 +385,20 @@
           if (el.textContent !== text) el.textContent = text;
         }
       });
+    }
+
+    // Hand the bundle's `scores` array (migration 054) to the live-scores
+    // overlay. No-op for a spectator whose own table read works — LiveScores
+    // ignores the seed from its first successful read onward.
+    _seedLiveScores(session) {
+      if (!this._liveScores || !session || !Array.isArray(session.scores)) return;
+      // Any emit this triggers is our own poll's doing, not a Realtime event.
+      // Flag it the same way the refresh() path does, or the poll's
+      // "Realtime is alive, stand down" gate would be fooled by its own tick
+      // and halve the only update cadence a late spectator has.
+      this._refreshingScores = true;
+      try { this._liveScores.seed(session.scores); }
+      finally { this._refreshingScores = false; }
     }
 
     async _maybeStopLiveScores() {
@@ -428,16 +485,20 @@
       const s = this._session;
       if (this._error && !s) {
         this.container.innerHTML = `
-          ${this._renderTopbar(null)}
-          <div class="p-6 alert alert-error">${escapeHtml(this._error)}</div>
+          <div class="session-viewer__shell">
+            ${this._renderCrumbRow()}
+            <div class="alert alert-error">${escapeHtml(this._error)}</div>
+          </div>
         `;
         this.refreshIcons();
         return;
       }
       if (!s) {
         this.container.innerHTML = `
-          ${this._renderTopbar(null)}
-          ${window.buddyLoader({ size: 96 })}
+          <div class="session-viewer__shell">
+            ${this._renderCrumbRow()}
+            ${window.buddyLoader({ size: 96 })}
+          </div>
         `;
         this.refreshIcons();
         return;
@@ -454,7 +515,6 @@
       const lockSettle = phase !== "settle" && phase !== "finalized";
 
       this.container.innerHTML = `
-        ${this._renderTopbar(s)}
         <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
           ${this._renderHeaderRow("Gather", 1, "Waiting on the host")}
           ${this._renderGather(s)}
@@ -483,25 +543,34 @@
       return "Waiting on the host";
     }
 
-    _renderTopbar(s) {
-      const codeLabel = s ? s.code : (this._code || "");
+    // Back row for the two states that have no cascade to hang a header on
+    // (cold load and hard error). The live cascade puts the same affordance in
+    // the screen header's left slot instead — see _renderHeaderRow.
+    _renderCrumbRow() {
+      const codeLabel = this._code || "";
       return `
-        <header class="search-topbar">
-          <button class="btn btn-ghost btn-sm" onclick="window.router.back('feed')">
+        <div class="cascade-back-row">
+          <button class="cascade-back" title="Back" onclick="window.router.back('feed')">
             <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
-          <h2 class="font-display font-semibold text-base play-detail__crumb">
-            Session ${escapeHtml(codeLabel)}
-          </h2>
-          <span></span>
-        </header>
+          <h2 class="cascade-back-row__title font-display">Session ${escapeHtml(codeLabel)}</h2>
+          <span class="cascade-back-spacer"></span>
+        </div>
       `;
     }
 
+    // Same three-column grid the host's screen header uses, so the two sides of
+    // a session read as the same screen. The host's left slot rolls the phase
+    // backwards; the spectator doesn't own the phase, so theirs leaves the
+    // session — which is also why this view no longer carries a separate crumb
+    // bar above the cascade (the session code has its own card now).
     _renderHeaderRow(title, step, hint) {
       return `
         <header class="cascade-screen__header cascade-screen__header--read">
-          <span class="cascade-back-spacer"></span>
+          <button class="cascade-back" title="Leave session"
+                  onclick="window.router.back('feed')">
+            <i data-icon="arrow-left" class="w-4 h-4"></i>
+          </button>
           <div class="cascade-screen__header-body">
             <h1 class="cascade-screen__title">${escapeHtml(title)}</h1>
             <span class="cascade-screen__step">Step ${step} of 3 · ${escapeHtml(hint)}</span>
@@ -523,33 +592,77 @@
 
     // ── Section: Gather (read-only) ─────────────────────────────────────────
 
-    _renderGather(s) {
+    // The game card, shared by Gather and Play. One renderer so the game reads
+    // the same on both steps (.claude/rules/ui-object-design.md §2) — `label`
+    // is the only thing that differs, because on Play the card is answering
+    // "what are we playing?" rather than "what did the host pick?".
+    _renderGameCard(s, label) {
       const game = s.game || null;
       const participants = s.participants || [];
-      const hostId = s.host_user_id;
-      const host = participants.find((p) => p.user_id === hostId);
+      const host = participants.find((p) => p.user_id === s.host_user_id);
+      const sub = host ? "Hosted by " + escapeHtml(host.display_name) : "";
       return `
         <section class="cascade-card">
-          ${game ? `
-            <div class="cascade-game">
-              ${game.thumbnail_url
-                ? `<img class="cascade-game__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />`
-                : `<div class="cascade-game__thumb cascade-game__thumb--placeholder"><i data-icon="dice-6" class="w-5 h-5"></i></div>`}
-              <div>
-                <div class="cascade-game__name">${escapeHtml(game.name)}</div>
-                <div class="cascade-game__sub">${host ? "Hosted by " + escapeHtml(host.display_name) : ""}</div>
-              </div>
+          <label class="cascade-card__label">${escapeHtml(label)}</label>
+          <div class="cascade-game">
+            ${game && game.thumbnail_url
+              ? `<img class="cascade-game__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />`
+              : `<div class="cascade-game__thumb cascade-game__thumb--placeholder"><i data-icon="dice-6" class="w-5 h-5"></i></div>`}
+            <div>
+              <div class="cascade-game__name">${game ? escapeHtml(game.name) : "Waiting on host to pick a game"}</div>
+              <div class="cascade-game__sub">${sub}</div>
             </div>
-          ` : `
-            <div class="cascade-game">
-              <div class="cascade-game__thumb cascade-game__thumb--placeholder"><i data-icon="dice-6" class="w-5 h-5"></i></div>
-              <div>
-                <div class="cascade-game__name">Waiting on host to pick a game</div>
-                <div class="cascade-game__sub">${host ? "Hosted by " + escapeHtml(host.display_name) : ""}</div>
-              </div>
-            </div>
-          `}
+          </div>
         </section>
+      `;
+    }
+
+    // Session code, in the same card the host reads it off (play-flow-view's
+    // _renderInviteCard). The spectator's copy is what lets them pass the code
+    // on to somebody else at the table — and it's why the crumb bar that used
+    // to carry the code above the cascade is gone.
+    _renderInviteCard(s) {
+      const code = (s && s.code) || this._code || null;
+      if (!code) return "";
+      return `
+        <section class="cascade-card cascade-card--invite">
+          <span class="cascade-invite__icon">
+            <i data-icon="qr-code" class="w-4 h-4"></i>
+          </span>
+          <div class="cascade-invite__body">
+            <span class="cascade-invite__title">Session code</span>
+            <span class="cascade-invite__code">${escapeHtml(code)}</span>
+          </div>
+        </section>
+      `;
+    }
+
+    // Same rulebook CTA the host gets on their Play step (play-flow-view's
+    // _renderPlay). The session bundle carries rulebook_url on its game, so
+    // there was never a data reason for the spectator to go without it. No
+    // rulebook on this game → no row at all, exactly as on the host side.
+    _renderRulebookRow(s) {
+      const url = s && s.game && s.game.rulebook_url;
+      if (!url) return "";
+      return `
+        <div class="cascade-rulebook-row">
+          <a href="${escapeAttr(url)}" target="_blank" rel="noopener"
+             class="btn btn-outline btn-sm cascade-rulebook-cta">
+            <i data-icon="book-open" class="w-4 h-4"></i>
+            <span>Rulebook</span>
+            <i data-icon="external-link" class="w-3.5 h-3.5"></i>
+          </a>
+        </div>
+      `;
+    }
+
+    _renderGather(s) {
+      const participants = s.participants || [];
+      const hostId = s.host_user_id;
+      return `
+        ${this._renderGameCard(s, "Game")}
+
+        ${this._renderInviteCard(s)}
 
         <section class="cascade-card">
           <label class="cascade-card__label">
@@ -595,8 +708,13 @@
         return `<section class="cascade-card"><p class="text-sm opacity-70">Waiting on the host…</p></section>`;
       }
       return `
+        ${this._renderGameCard(s, "Now playing")}
+
+        ${this._renderInviteCard(s)}
+
         <section class="cascade-card cascade-card--guide">
-          <label class="cascade-card__label">Your reference guide</label>
+          <label class="cascade-card__label">Reference guide</label>
+          ${this._renderRulebookRow(s)}
           <div id="session-viewer-guide-mount" class="session-viewer__guide-mount"></div>
         </section>
 
