@@ -70,12 +70,58 @@
           ${badgeHtml}
         </div>
         <div class="game-polaroid__caption">
-          <div class="game-polaroid__name">${escapeHtml(game.name || "Unknown game")}</div>
+          <div class="game-polaroid__name"><span class="game-polaroid__name-text">${escapeHtml(game.name || "Unknown game")}</span></div>
           ${meta ? `<div class="game-polaroid__meta">${escapeHtml(meta)}</div>` : ""}
         </div>
       </article>
     `;
   }
 
+  // ── Rail title sweep ───────────────────────────────────────────────────────
+  // A rail tile is 112px wide, so plenty of game names don't fit. Rather than
+  // truncate them, the title sweeps left and right (styles.css,
+  // @keyframes railTitleSweep). Only JS knows how far to sweep, so it measures
+  // the overflow and hands the animation two custom properties.
+  //
+  // Same shape as fitCaption() in ui/play-card.js, for the same two reasons:
+  // measure from the un-swept state so the decision is idempotent no matter
+  // how often this runs, and re-run on fonts.ready because a measurement taken
+  // against the fallback font is wrong.
+
+  let railFitQueued = false;
+
+  function fitRailTitle(el) {
+    el.classList.remove("is-sweeping");
+    el.style.removeProperty("--sweep-shift");
+    el.style.removeProperty("--sweep-dur");
+    // Hidden view (the router keeps mounted views in the DOM) — measuring
+    // would read 0 and wrongly settle the title. Leave it for the next pass.
+    if (!el.clientWidth) return;
+    const over = el.scrollWidth - el.clientWidth;
+    if (over <= 1) return;
+    el.style.setProperty("--sweep-shift", `-${over}px`);
+    // ~26px/s each way plus ~3.4s of pauses: a longer title sweeps for longer
+    // rather than faster, so the reading speed stays the same on every tile.
+    el.style.setProperty("--sweep-dur", `${((over / 26) * 2 + 3.4).toFixed(2)}s`);
+    el.classList.add("is-sweeping");
+  }
+
+  function scheduleRailTitleFit() {
+    if (railFitQueued || typeof requestAnimationFrame !== "function") return;
+    railFitQueued = true;
+    requestAnimationFrame(() => {
+      railFitQueued = false;
+      document
+        .querySelectorAll(".game-polaroid--rail .game-polaroid__name")
+        .forEach(fitRailTitle);
+    });
+  }
+
+  window.addEventListener("resize", scheduleRailTitleFit);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(scheduleRailTitleFit).catch(() => {});
+  }
+
   window.renderGamePolaroid = renderGamePolaroid;
+  window.scheduleRailTitleFit = scheduleRailTitleFit;
 })();
