@@ -57,6 +57,7 @@
       <article class="game-polaroid game-polaroid--${escapeHtml(variant)}"
                role="button" tabindex="0"
                data-game-id="${escapeHtml(game.id || "")}"
+               data-game-name="${escapeHtml(game.name || "")}"
                data-status="${escapeHtml(collectionStatus || "")}"
                onclick="${clickHandler}">
         <div class="game-polaroid__photo">
