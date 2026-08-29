@@ -190,6 +190,73 @@
       "x-circle": "x-circle"
   };
 
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const parser = typeof DOMParser !== "undefined" ? new DOMParser() : null;
+
+  /** name -> a detached <svg> in THIS document, built once and cloned per use. */
+  const built = new Map();
+
+  /**
+   * Build the glyph's <svg> once, in this document, ready to clone.
+   *
+   * The markup in PATHS is parsed as image/svg+xml rather than assigned to
+   * `svg.innerHTML`, and that is the whole point of this function.
+   *
+   * Every icon in the app was blank on iPhone — the bottom-nav glyphs, the
+   * cascade back/close buttons, the popup X — while the chips and discs behind
+   * them still painted. Not a colour bug: the Play chip's glyph is a hardcoded
+   * #2A1B0E on a hardcoded gold gradient in both themes and it was empty in
+   * both, so nothing about it was theme-specific either. Not a load failure
+   * either: init.js calls render() unguarded, so a missing BgbIcons would have
+   * thrown boot. What was left is the one step in here whose result is
+   * engine-dependent — `innerHTML` on an SVG-namespaced element, which leans on
+   * the HTML fragment parser's foreign-content path to put <path> in the SVG
+   * namespace. Blink does (verified); WebKit evidently does not, and an <svg>
+   * full of HTML <path> elements is in the DOM, matches CSS, and lays out as
+   * nothing. XML parsing has exactly one namespace rule, so there is no
+   * equivalent divergence to fall into.
+   *
+   * No WebKit build is reachable from CI here, so the iPhone itself is the
+   * confirmation step for this one.
+   *
+   * Every entry in PATHS is well-formed, self-closing XML, which the strict
+   * parser requires. If one ever isn't, the parse yields a <parsererror>
+   * document and we fall back to the old innerHTML build rather than dropping
+   * the icon.
+   *
+   * @param {string} name
+   * @param {string} d Glyph markup — one or more <path>/<circle> elements.
+   * @returns {SVGSVGElement}
+   */
+  function build(name, d) {
+    const cached = built.get(name);
+    if (cached) return cached;
+
+    let svg = null;
+    if (parser) {
+      const doc = parser.parseFromString(
+        '<svg xmlns="' + SVG_NS + '" viewBox="0 0 256 256">' + d + "</svg>",
+        "image/svg+xml"
+      );
+      const root = doc.documentElement;
+      if (root && root.namespaceURI === SVG_NS && !doc.querySelector("parsererror")) {
+        svg = /** @type {SVGSVGElement} */ (document.importNode(root, true));
+      } else {
+        console.warn("BgbIcons: could not parse glyph", name, "- falling back");
+      }
+    }
+    if (!svg) {
+      svg = document.createElementNS(SVG_NS, "svg");
+      svg.setAttribute("viewBox", "0 0 256 256");
+      svg.innerHTML = d;
+    }
+
+    svg.setAttribute("fill", "currentColor");
+    svg.setAttribute("aria-hidden", "true");
+    built.set(name, svg);
+    return svg;
+  }
+
   /**
    * Replace every un-hydrated <i data-icon> under `root` with an inline SVG.
    * Idempotent: hydrated nodes are removed from the DOM, so a second pass is
@@ -202,18 +269,14 @@
     const nodes = scope.querySelectorAll("i[data-icon]");
     for (const el of nodes) {
       const name = el.getAttribute("data-icon");
-      let d = PATHS[name];
-      if (!d) {
-        d = PATHS[FALLBACK];
+      let key = name;
+      if (!key || !PATHS[key]) {
         if (name) console.warn("BgbIcons: unknown icon", name, "- using", FALLBACK);
+        key = FALLBACK;
       }
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("viewBox", "0 0 256 256");
-      svg.setAttribute("fill", "currentColor");
-      svg.setAttribute("aria-hidden", "true");
-      svg.setAttribute("data-icon-name", name || FALLBACK);
+      const svg = /** @type {SVGSVGElement} */ (build(key, PATHS[key]).cloneNode(true));
+      svg.setAttribute("data-icon-name", key);
       if (el.className) svg.setAttribute("class", el.className);
-      svg.innerHTML = d;
       el.replaceWith(svg);
     }
   }
