@@ -1331,10 +1331,11 @@
           </section>
         `;
       }
-      // Session code surface. Rendered on Gather AND Play so the host can
-      // always read the code aloud / share it (PR #274 allows late joiners
-      // as spectators, so the lobby is effectively always "open"). Settle
-      // Up drops it — the game is over.
+      // Session code surface, Gather only. The lobby stays effectively open
+      // past Gather (PR #274 admits late joiners as spectators), so the code
+      // still has to be readable on Play — but there it rides the game-info
+      // strip below rather than a card of its own, because by then the game
+      // is the fact worth top billing. Settle Up drops it — the game is over.
       // Prefer the live lobby's code; on first paint after a reopen (cold
       // reload, nav back, or the join panel's "Reopen" path) the persisted
       // draft already carries the same code, so fall back to it instead
@@ -1478,6 +1479,39 @@
 
     // ── Play screen ─────────────────────────────────────────────────────────
 
+    /**
+     * The Play step's header strip: the game being played and the code to
+     * join it, on one line. Replaces the standalone invite card there —
+     * see widgets/game-info-bar.js for why the two steps diverge.
+     *
+     * Code resolution matches _renderInviteCard exactly, including the fall
+     * back to the persisted draft's code on first paint after a reopen, so
+     * the two steps can never disagree about what code this session has.
+     *
+     * @returns {string}
+     */
+    _renderGameInfoBar() {
+      const game = this._ps.gameSnapshot || null;
+      if (this._isOffline()) {
+        return window.renderGameInfoBar({ game, state: "offline" });
+      }
+      const code = (this._lobby && this._lobby.code) || (this._ps && this._ps.code) || null;
+      // No code and nothing in flight: the mint failed and isn't retrying.
+      if (!code && !this._lobbyPromise) {
+        return window.renderGameInfoBar({ game, state: "failed" });
+      }
+      return window.renderGameInfoBar({
+        game,
+        code,
+        state: code ? "ready" : "pending",
+        // Shown for a few seconds after a dead session was swapped for a fresh
+        // one: the code the host already read out to the table is no longer
+        // the one to share.
+        note: code && this._codeReplaced ? "New code — share it again" : "",
+        noteAccent: true,
+      });
+    }
+
     _renderPlay() {
       if (!this._ps.gameId) {
         return `<section class="cascade-card"><p class="text-sm opacity-70">Pick a game on the Gather step first.</p></section>`;
@@ -1496,14 +1530,14 @@
              </a>
            </div>`
         : "";
-      // Scoring sits directly under the invite card and the reference guide
+      // Scoring sits directly under the game-info strip and the reference guide
       // below it: the grid is what the host touches every round, so it stays
       // above the fold, and the guide — a reach-for-it-occasionally reference
       // whose scroll can run long — is what you scroll down to. Same order in
       // the spectator mirror (session-viewer-view.js) and in native
       // (app/src/screens/PlayFlowScreen.js).
       return `
-        ${this._renderInviteCard()}
+        ${this._renderGameInfoBar()}
         ${this._renderScoringSection()}
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
