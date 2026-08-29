@@ -2688,6 +2688,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
   border-radius: 0.6rem; overflow: hidden; cursor: pointer; padding: 0;
 }
+/* Positioning anchor for the expansion chip. Without it the chip resolves
+   against .collection-tile, whose bottom-right is the title row — which is
+   where it used to land, on top of long game names. */
+.collection-tile__art { position: relative; line-height: 0; }
 .collection-tile img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 .collection-tile__placeholder { width: 100%; aspect-ratio: 1; display: grid; place-items: center; background: oklch(var(--b3)); }
 .collection-tile__name { padding: 0.3rem 0.4rem; font-size: 0.75rem; font-weight: 600; line-height: 1.15; text-align: left; }
@@ -3134,8 +3138,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   height: 0.85rem;
 }
 
-/* Bottom-right expansion-owned count for any tile that has room. Uses the
-   tile's relative positioning anchor (set via .collection-tile / .game-polaroid). */
+/* Bottom-right expansion count, pinned to the tile's ART box — the chip is
+   absolutely positioned, so its host must be .collection-tile__art or
+   .game-polaroid__photo, never the whole tile (that puts it on the title). */
 .expansion-count-badge {
   position: absolute;
   bottom: 4px; right: 4px;
