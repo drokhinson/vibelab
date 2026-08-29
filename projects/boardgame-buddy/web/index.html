@@ -2,7 +2,19 @@
 <html lang="en" data-theme="luxury">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Locked at 1x. The chrome (.bgb-global-header sticky, .bgb-nav fixed) is laid
+       out against the layout viewport, which zoom doesn't change — so a zoomed page
+       renders both bars scaled up and running off the sides of the visible box.
+       maximum-scale/user-scalable cover Android Chrome and iOS *standalone* (home
+       screen) mode; iOS Safari 10+ ignores them in a normal tab, which is what
+       ui/zoom-lock.js is for. Double-tap zoom and the <16px focus auto-zoom are
+       handled in styles.css — see the Layout block.
+       No viewport-fit=cover: all 13 env(safe-area-inset-*) usages in styles.css
+       currently resolve to 0px, and turning them real would shift the nav, #app's
+       bottom padding, three cascade CTA offsets and every modal at once — and with
+       apple-mobile-web-app-status-bar-style=black-translucent above, push header
+       content under the clock in standalone. Separate, device-tested change. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <!-- Resolve every relative URL (scripts, styles, assets/, the buddyLoader
        mark) against the deploy root, not the current route. The History-API
        router (domain/view.js) puts multi-segment paths like /game/:id/chapters
@@ -193,6 +205,7 @@
 
   <!-- UI components -->
   <script src="ui/viewport-lock.js"></script>
+  <script src="ui/zoom-lock.js"></script>
   <script src="ui/oauth-buttons.js"></script>
   <script src="ui/user-badge.js"></script>
   <script src="ui/play-card.js"></script>

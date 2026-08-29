@@ -33,7 +33,14 @@
     if (!vv) return; // no data → the CSS fallback ladder wins
     // A pinch-zoomed page reports a shrunken visual viewport that has nothing
     // to do with the keyboard. Hold the last good box until the user zooms out
-    // rather than sizing a shell from numbers in zoomed CSS pixels.
+    // rather than sizing a shell from numbers in zoomed CSS pixels. This is a
+    // plain early return, not an unsubscribe: zooming back out fires another
+    // resize/scroll and the properties refresh themselves.
+    //
+    // ui/zoom-lock.js now makes this path rare, but not impossible — it is gated
+    // on maxTouchPoints, can fail to load offline, and rides on WebKit
+    // continuing to honour gesturestart cancellation. So this stays as the last
+    // line of defence.
     if (vv.scale && vv.scale > 1.01) return;
     const h = Math.round(vv.height);
     const top = Math.round(vv.offsetTop || 0);
