@@ -213,7 +213,7 @@
       if (playerCount > 0) subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
       const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
       const statusOverlay = p.game_id
-        ? `<span class="plays-list__status">${window.renderStatusTag(p.game_id, (this._statusMap || {})[p.game_id] || null, { compact: true })}</span>`
+        ? `<span class="plays-list__status">${window.renderStatusTag(p.game_id, (this._statusMap || {})[p.game_id] || null, { compact: true, gameName: p.game_name })}</span>`
         : "";
       return `
         <li class="plays-list__row" data-play-id="${p.id}"

@@ -2,12 +2,19 @@
 //
 // Renders:
 //   - owned / wishlist / played → coloured pill with icon + label
-//   - none → "+" button that opens a small popover ("Owned" or "Wishlist")
+//   - none → "+" button that opens the picker ("Owned" or "Wishlist")
 //
-// The popover is a single body-level element shared across all tiles. After a
-// pick, Collection.add() runs and a `status-changed` CustomEvent fires on
-// `document` so any view rendering the tag can patch its local status map and
-// re-render without a full reload.
+// The picker is a BOTTOM SHEET: a single body-level element shared across all
+// tiles, built on the project's polaroid modal chrome so it inherits the
+// visual-viewport sizing that keeps a sheet clear of the iOS keyboard and home
+// indicator (see .polaroid-popup__backdrop in styles.css and ui/viewport-lock.js).
+// It replaced a popover pinned under whichever chip was tapped — that put ~30px
+// rows wherever the chip happened to sit, often near the top of the screen.
+//
+// A pick writes optimistically: the local status map is patched and a
+// `status-changed` CustomEvent fires on `document` BEFORE the network call, so
+// every surface rendering the tag repaints in the same frame. A failed write
+// rolls the map back and surfaces the error through PolaroidPopup.alert.
 
 (function () {
   const ICON = {
@@ -20,21 +27,31 @@
     wishlist: "Wishlist",
     played: "Played",
   };
+  // Sub-labels only the sheet shows — the pill is too small to carry them.
+  const BLURB = {
+    owned: "On your shelf",
+    wishlist: "Games you want",
+  };
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
+  }
 
   /**
-   * Build the HTML for a tile's status tag.
-   * @param {string} gameId
-   * @param {("owned"|"wishlist"|"played"|null|undefined)} status
-   * @param {{ size?: "sm"|"xs", pending?: boolean }} [opts]
-   */
-  /**
-   * Tiny chip surfaced bottom-right on a game tile to call out how many
+   * Tiny chip surfaced bottom-right on a game tile's ART to call out how many
    * expansions are associated with it. The semantics depend on caller
    * context (passed in via `opts.context`):
    *   - "owned"  → "N expansion(s) owned" (collection views, profile)
    *   - "total"  → "N expansion(s) in Boardgame Buddy" (browse/search)
    * Same git-fork icon either way so the chip is recognisable across
    * the app — the tooltip clarifies which sense applies.
+   *
+   * The chip positions itself absolutely, so it must be emitted INSIDE the
+   * tile's art box (.collection-tile__art / .game-polaroid__photo) rather than
+   * as a sibling of the whole tile — otherwise it anchors to the tile's
+   * bottom-right, which is the title row, and lands on long game names.
    */
   function renderExpansionBadge(count, opts = {}) {
     if (!count || count < 1) return "";
@@ -49,15 +66,38 @@
     `;
   }
 
+  /**
+   * Build the HTML for a tile's status tag.
+   * @param {string} gameId
+   * @param {("owned"|"wishlist"|"played"|null|undefined)} status
+   * @param {Object} [opts]
+   * @param {"xs"|"sm-row"|"lg"} [opts.size] Size preset. "sm-row" is the
+   *   labelled pill that sits in a play card's meta row on the cream polaroid
+   *   ground; it takes its colours from .play-card__status-slot.
+   * @param {boolean} [opts.compact] Icon-only circle, for corner banners over
+   *   a boardgame image.
+   * @param {boolean} [opts.pending] The viewer's collection map is still in
+   *   flight — render nothing rather than guessing "not owned".
+   * @param {string} [opts.addLabel] Inline text beside the "+" (suppressed by
+   *   `compact`).
+   * @param {string} [opts.gameName] Titles the picker sheet. Falls back to a
+   *   generic heading when a call site doesn't have the name to hand.
+   */
   function renderStatusTag(gameId, status, opts = {}) {
     const sizeCls =
       opts.size === "xs" ? " status-tag--xs" :
+      opts.size === "sm-row" ? " status-tag--sm-row" :
       opts.size === "lg" ? " status-tag--lg" :
       "";
     // Compact mode is the icon-only chip rendered as a corner banner on a
     // boardgame image. Picker still opens on tap, so users can flip the
     // shelf-state from any context — no label, just colour + icon.
     const compactCls = opts.compact ? " status-tag--compact" : "";
+    // Values land inside a single-quoted JS string inside an HTML attribute.
+    // jsStr backslash-escapes the quote, esc then neutralises the HTML layer
+    // (a bare " in a game name would otherwise close the onclick attribute).
+    const gid = esc(jsStr(gameId));
+    const name = esc(jsStr(opts.gameName || ""));
     const isStatus = status === "owned" || status === "wishlist" || status === "played";
     if (isStatus) {
       const label = opts.compact ? "" : LABEL[status];
@@ -65,7 +105,7 @@
         <button class="status-tag status-tag--${status}${sizeCls}${compactCls}"
                 title="${LABEL[status]} — change status"
                 aria-label="${LABEL[status]} — change status"
-                onclick="event.stopPropagation();window.statusPicker.openFor(event,'${jsStr(gameId)}','${status}')">
+                onclick="event.stopPropagation();window.statusPicker.openFor(event,'${gid}','${status}','${name}')">
           <i data-icon="${ICON[status]}" class="w-3 h-3"></i>
           ${label}
         </button>
@@ -83,138 +123,233 @@
     // plus (e.g. "Add to collection" on the game-detail action row). The
     // compact variant suppresses the label so the chip is a pure icon button.
     const addLabel = opts.addLabel && !opts.compact
-      ? `<span class="status-tag__label">${String(opts.addLabel).replace(/[&<>"']/g, (c) => ({
-          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-        }[c]))}</span>`
+      ? `<span class="status-tag__label">${esc(opts.addLabel)}</span>`
       : "";
     return `
       <button class="status-tag status-tag--add${sizeCls}${compactCls}"
               title="Add to collection"
               aria-label="Add to collection"
-              onclick="event.stopPropagation();window.statusPicker.openFor(event,'${jsStr(gameId)}','')">
+              onclick="event.stopPropagation();window.statusPicker.openFor(event,'${gid}','','${name}')">
         <i data-icon="plus" class="w-3.5 h-3.5"></i>
         ${addLabel}
       </button>
     `;
   }
 
+  const SHEET_ID = "bgb-status-sheet";
+  const CLOSE_MS = 200;
+
   class StatusPicker {
     constructor() {
       this._el = null;
       this._gameId = null;
+      this._gameName = "";
       this._currentStatus = null;
-      this._outsideHandler = (e) => {
-        if (this._el && !this._el.contains(e.target)) this.close();
+      this._returnFocus = null;
+      this._closeTimer = null;
+      this._prevOverflow = "";
+      this._onKeyDown = (e) => {
+        if (e.key !== "Escape" || !this._el) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.close();
       };
     }
 
-    _ensureEl() {
-      if (this._el) return;
-      this._el = document.createElement("div");
-      this._el.className = "status-picker hidden";
-      // Body listener is bound once; option HTML is re-rendered each open.
-      this._el.addEventListener("click", (e) => {
-        const removeBtn = e.target.closest('[data-action="remove"]');
-        if (removeBtn) { this._remove(); return; }
-        const setBtn = e.target.closest("[data-status]");
-        if (setBtn) this._choose(setBtn.dataset.status);
-      });
-      document.body.appendChild(this._el);
-    }
+    // ── Markup ──────────────────────────────────────────────────────────────
 
-    _populateOptions() {
-      if (!this._el) return;
+    _renderPanel() {
       const cur = this._currentStatus;
       const parts = [];
-      // "Played" is derived (no DB row), so it's never a target to set —
-      // only Owned and Wishlist appear as set-targets.
-      for (const s of ["owned", "wishlist"]) {
-        if (s === cur) continue;
+
+      // "Played" is derived from logged plays — there's no collection row to
+      // set, so it can't be an option. Say so instead of silently omitting the
+      // state the user is actually in.
+      if (cur === "played") {
         parts.push(`
-          <button class="status-picker__opt" data-status="${s}">
-            <i data-icon="${ICON[s]}" class="w-3.5 h-3.5"></i> ${LABEL[s]}
+          <div class="status-sheet__note">
+            <i data-icon="${ICON.played}" class="w-4 h-4"></i>
+            Played — counted from your logged plays
+          </div>`);
+      }
+
+      // Unlike the old popover, the CURRENT status is listed and checked —
+      // that's what makes this a radio group rather than a menu of "the other
+      // things you could be".
+      for (const s of ["owned", "wishlist"]) {
+        const on = s === cur;
+        parts.push(`
+          <button class="status-sheet__opt" type="button" role="radio"
+                  aria-checked="${on ? "true" : "false"}" data-status="${s}">
+            <i data-icon="${ICON[s]}" class="w-5 h-5"></i>
+            <span class="status-sheet__opt-label">${LABEL[s]}<span class="status-sheet__opt-sub">${BLURB[s]}</span></span>
+            <span class="status-sheet__radio" aria-hidden="true"></span>
           </button>`);
       }
+
       // Remove is only meaningful when a real collection row exists.
       // Played-only games have no row to delete — clearing it would mean
       // deleting plays, which isn't what this control does.
       if (cur === "owned" || cur === "wishlist") {
+        parts.push(`<div class="status-sheet__rule"></div>`);
         parts.push(`
-          <button class="status-picker__opt status-picker__opt--danger" data-action="remove">
-            <i data-icon="trash-2" class="w-3.5 h-3.5"></i> Remove
+          <button class="status-sheet__opt status-sheet__opt--danger" type="button"
+                  data-action="remove">
+            <i data-icon="trash-2" class="w-5 h-5"></i>
+            <span class="status-sheet__opt-label">Remove from collection</span>
           </button>`);
       }
-      this._el.innerHTML = parts.join("");
-      window.BgbIcons.render(this._el);
+
+      const heading = this._gameName ? esc(this._gameName) : "Collection status";
+      return `
+        <div class="status-sheet__panel" role="radiogroup" aria-label="Collection status">
+          <div class="status-sheet__grip" aria-hidden="true"></div>
+          <h3 class="status-sheet__title">${heading}</h3>
+          <p class="status-sheet__sub">Where does this sit in your collection?</p>
+          ${parts.join("")}
+          <button class="status-sheet__cancel" type="button" data-action="close">Cancel</button>
+        </div>
+      `;
     }
 
-    openFor(event, gameId, currentStatus) {
+    // ── Open / close ────────────────────────────────────────────────────────
+
+    /**
+     * @param {Event} event      The originating tap (focus returns here on close).
+     * @param {string} gameId
+     * @param {string} currentStatus  "" when the viewer has no relationship.
+     * @param {string} [gameName]     Titles the sheet.
+     */
+    openFor(event, gameId, currentStatus, gameName) {
       event.stopPropagation();
-      this._ensureEl();
+      // A second open while one is closing would otherwise let the pending
+      // teardown remove the new sheet.
+      if (this._closeTimer) { clearTimeout(this._closeTimer); this._closeTimer = null; }
+      this._teardown();
+
       this._gameId = gameId;
+      this._gameName = gameName || "";
       this._currentStatus = currentStatus || null;
-      this._populateOptions();
-      const rect = event.currentTarget.getBoundingClientRect();
-      // Pin the popover under the tag, nudging it inside the viewport so
-      // it never spills off the right edge on phones.
-      const top = rect.bottom + window.scrollY + 4;
-      let left = rect.left + window.scrollX;
-      const maxLeft = window.scrollX + window.innerWidth - 160;
-      if (left > maxLeft) left = maxLeft;
-      this._el.style.top = `${top}px`;
-      this._el.style.left = `${left}px`;
-      this._el.classList.remove("hidden");
-      // Defer adding the outside-click handler so the originating click
-      // doesn't immediately close the popover.
-      setTimeout(() => document.addEventListener("click", this._outsideHandler, true), 0);
+      this._returnFocus = (event && event.currentTarget) || null;
+
+      const root = document.createElement("div");
+      root.id = SHEET_ID;
+      root.className = "polaroid-popup__backdrop status-sheet";
+      root.setAttribute("role", "dialog");
+      root.setAttribute("aria-modal", "true");
+      root.setAttribute("aria-label", "Collection status");
+      root.innerHTML = this._renderPanel();
+
+      root.addEventListener("click", (e) => {
+        if (e.target === root) { this.close(); return; }          // backdrop
+        if (e.target.closest('[data-action="close"]')) { this.close(); return; }
+        if (e.target.closest('[data-action="remove"]')) { this._remove(); return; }
+        const setBtn = e.target.closest("[data-status]");
+        if (setBtn) this._choose(setBtn.dataset.status);
+      });
+
+      document.body.appendChild(root);
+      window.BgbIcons.render(root);
+      this._el = root;
+
+      this._prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      document.addEventListener("keydown", this._onKeyDown, true);
+
+      // Land focus on the row the user is currently in, so a keyboard or
+      // screen-reader user hears their state before the alternatives.
+      const focusTarget = root.querySelector('[aria-checked="true"]')
+        || root.querySelector(".status-sheet__opt");
+      if (focusTarget) focusTarget.focus();
     }
 
     close() {
-      if (this._el) this._el.classList.add("hidden");
+      const root = this._el;
       this._gameId = null;
+      this._gameName = "";
       this._currentStatus = null;
-      document.removeEventListener("click", this._outsideHandler, true);
+      if (!root) return;
+      this._el = null;
+      document.removeEventListener("keydown", this._onKeyDown, true);
+      document.body.style.overflow = this._prevOverflow;
+
+      const back = this._returnFocus;
+      this._returnFocus = null;
+      // Only pull focus back if it's still inside the sheet — a pick that
+      // re-rendered the originating pill leaves a detached node behind.
+      if (back && back.isConnected && root.contains(document.activeElement)) {
+        try { back.focus(); } catch (_) {}
+      }
+
+      root.classList.add("is-closing");
+      this._closeTimer = setTimeout(() => {
+        this._closeTimer = null;
+        if (root.parentNode) root.parentNode.removeChild(root);
+      }, CLOSE_MS);
+    }
+
+    _teardown() {
+      if (this._el && this._el.parentNode) this._el.parentNode.removeChild(this._el);
+      const stale = document.getElementById(SHEET_ID);
+      if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+      this._el = null;
+      document.removeEventListener("keydown", this._onKeyDown, true);
+    }
+
+    // ── Writes ──────────────────────────────────────────────────────────────
+
+    /**
+     * Patch the cached map so any reader (play cards, recent-plays thumbs,
+     * anything pulling `window.store.get('myCollectionMap')` synchronously)
+     * sees the new state, then announce it. `null` flags "no relationship" —
+     * listeners delete their local entry so the tile flips back to "+".
+     * Called BEFORE the network write so the pill moves in the same frame as
+     * the tap, and again with the old value if that write fails.
+     */
+    _applyLocal(gameId, status) {
+      const cur = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
+      const next = { ...cur };
+      if (status == null) delete next[gameId];
+      else next[gameId] = status;
+      window.store.set("myCollectionMap", next);
+      document.dispatchEvent(new CustomEvent("status-changed", {
+        detail: { gameId, status: status == null ? null : status },
+      }));
     }
 
     async _choose(status) {
       const gameId = this._gameId;
+      const prev = this._currentStatus;
       this.close();
       if (!gameId || (status !== "owned" && status !== "wishlist")) return;
+      if (status === prev) return;                 // re-picking the current row is a no-op
+      this._applyLocal(gameId, status);
       try {
         await window.Collection.add(gameId, status);
       } catch (e) {
-        alert(e.message || "Failed to add");
-        return;
+        this._applyLocal(gameId, prev);
+        window.PolaroidPopup.alert({
+          title: "Couldn't save that",
+          body: (e && e.message) || `${LABEL[status]} didn't stick — check your connection and try again.`,
+        });
       }
-      // Patch the cached map so any reader (play cards, recent-plays thumbs,
-      // anything pulling `window.store.get('myCollectionMap')` synchronously)
-      // sees the new state without waiting for the next refetch.
-      const cur = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
-      window.store.set("myCollectionMap", { ...cur, [gameId]: status });
-      document.dispatchEvent(new CustomEvent("status-changed", {
-        detail: { gameId, status },
-      }));
     }
 
     async _remove() {
       const gameId = this._gameId;
+      const prev = this._currentStatus;
       this.close();
       if (!gameId) return;
+      this._applyLocal(gameId, null);
       try {
         await window.Collection.removeByGame(gameId);
       } catch (e) {
-        alert(e.message || "Failed to remove");
-        return;
+        this._applyLocal(gameId, prev);
+        window.PolaroidPopup.alert({
+          title: "Couldn't remove that",
+          body: (e && e.message) || "The game is still in your collection — check your connection and try again.",
+        });
       }
-      const cur = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
-      const next = { ...cur };
-      delete next[gameId];
-      window.store.set("myCollectionMap", next);
-      // null status flags "no relationship" — listeners delete the entry
-      // from their local status map so the tile flips back to the + button.
-      document.dispatchEvent(new CustomEvent("status-changed", {
-        detail: { gameId, status: null },
-      }));
     }
   }
 

@@ -247,7 +247,8 @@ body {
    and .bgb-nav, which leaked onto splash/auth.
 
    The project had patched this three times, three different ways (the
-   :not(.hidden) guard on the chapter editor, .status-picker.hidden, and the
+   :not(.hidden) guard on the chapter editor, the since-retired
+   .status-picker.hidden, and the
    play-flow/session-viewer containers). This rule ends it for every present and
    future component. `!important` is deliberate and safe: nothing in this app
    ever wants to override .hidden, and no JS sets an inline display on an
@@ -2963,6 +2964,19 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 0.62rem;
   line-height: 1.2;
 }
+/* The labelled pill in a play card's meta row. Sized for a 44px hit box via
+   the ::before below rather than 44px of visible chrome, which would tower
+   over an 11px winner line. Colours come from .play-card__status-slot — the
+   fills below are tuned to sit on a photo, not on cream paper. */
+.status-tag--sm-row {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  gap: 0.3rem;
+  position: relative;
+}
+.status-tag--sm-row::before { content: ""; position: absolute; inset: -8px; }
+.status-tag--sm-row i { width: 0.82rem; height: 0.82rem; }
 .status-tag--lg {
   min-height: 2.5rem;
   padding: 0.4rem 0.9rem;
@@ -3060,34 +3074,124 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 600;
 }
 
-/* Popover that fires from a + tag. Lives at body level (positioned absolutely
-   via JS) so it floats over whatever tile it was anchored to. */
-.status-picker {
-  position: absolute;
-  z-index: 60;
-  min-width: 140px;
-  padding: 0.25rem;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.55rem;
-  box-shadow: 0 10px 28px oklch(0 0 0 / 0.45);
-  display: flex; flex-direction: column; gap: 2px;
+/* ── Status sheet ─────────────────────────────────────────────────────────
+   The picker that fires from any status tag, anywhere in the app. It rides
+   the shared .polaroid-popup__backdrop chrome (so it inherits the
+   visualViewport sizing that keeps it clear of the iOS keyboard and home
+   indicator) and re-anchors it to the bottom of the screen.
+
+   It replaced a popover pinned under whichever chip was tapped: that put
+   ~30px rows wherever the chip happened to sit, which on a play card meant
+   near the top of the screen. Rows here are 56px and within thumb reach.
+   See ui/status-tag.js. */
+/* Doubled up on .polaroid-popup__backdrop deliberately: that rule is defined
+   LATER in this file and sets align-items:center / padding:18px, so a bare
+   .status-sheet (same specificity, earlier) would lose and the sheet would
+   render as a centred card. */
+.polaroid-popup__backdrop.status-sheet {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
 }
-.status-picker.hidden { display: none; }
-.status-picker__opt {
-  display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 0.35rem;
-  background: transparent;
-  border: none;
-  color: oklch(var(--bc));
-  font-size: 0.85rem; font-weight: 500;
+.status-sheet .status-sheet__panel {
+  width: 100%;
+  max-width: 520px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border-radius: 20px 20px 0 0;
+  padding: 8px 12px max(16px, env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.42);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: statusSheetIn 260ms var(--ease) both;
+}
+@keyframes statusSheetIn {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+/* Set by close() for the duration of CLOSE_MS before the node is removed. */
+.polaroid-popup__backdrop.status-sheet.is-closing { animation: fadeOut 200ms ease-out both; }
+.status-sheet.is-closing .status-sheet__panel {
+  animation: statusSheetOut 200ms var(--ease) both;
+}
+@keyframes statusSheetOut {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+.status-sheet__grip {
+  width: 44px; height: 4px; border-radius: 4px;
+  background: var(--polaroid-line);
+  margin: 4px auto 8px;
+}
+.status-sheet__title {
+  margin: 0 0 2px; padding: 0 10px;
+  font-family: var(--font-polaroid);
+  font-weight: 700; font-size: 19px; letter-spacing: -0.01em;
+  color: var(--polaroid-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.status-sheet__sub {
+  margin: 0 0 8px; padding: 0 10px;
+  font-size: 0.78rem; color: var(--polaroid-muted);
+}
+.status-sheet__opt {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; min-height: 56px; padding: 0 10px;
+  background: transparent; border: none; border-radius: 12px;
+  font-size: 0.97rem; font-weight: 500; line-height: 1.2;
+  color: var(--polaroid-ink);
+  cursor: pointer; text-align: left;
+}
+.status-sheet__opt:hover { background: var(--polaroid-bg-soft); }
+.status-sheet__opt:focus-visible {
+  outline: 2px solid var(--polaroid-accent);
+  outline-offset: -2px;
+}
+.status-sheet__opt > i,
+.status-sheet__opt > svg { color: var(--polaroid-muted); flex: 0 0 auto; }
+.status-sheet__opt-label { flex: 1 1 auto; min-width: 0; }
+.status-sheet__opt-sub {
+  display: block; margin-top: 3px;
+  font-size: 0.74rem; font-weight: 400; color: var(--polaroid-muted);
+}
+.status-sheet__radio {
+  flex: 0 0 auto; width: 21px; height: 21px; border-radius: 50%;
+  border: 2px solid var(--polaroid-line);
+  display: grid; place-items: center;
+}
+.status-sheet__opt[aria-checked="true"] {
+  background: var(--polaroid-bg-soft);
+  font-weight: 600;
+}
+.status-sheet__opt[aria-checked="true"] > i,
+.status-sheet__opt[aria-checked="true"] > svg { color: var(--ok); }
+.status-sheet__opt[aria-checked="true"] .status-sheet__radio { border-color: var(--ok); }
+.status-sheet__opt[aria-checked="true"] .status-sheet__radio::after {
+  content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--ok);
+}
+/* Played is derived from logged plays — no row to set, so it reads as a
+   statement rather than an option. */
+.status-sheet__note {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 44px; padding: 0 10px; margin-bottom: 2px;
+  font-size: 0.82rem; color: var(--polaroid-muted);
+}
+.status-sheet__rule { height: 1px; background: var(--polaroid-line); margin: 6px 10px; }
+.status-sheet__opt--danger { color: var(--rust); }
+.status-sheet__opt--danger > i,
+.status-sheet__opt--danger > svg { color: var(--rust); }
+.status-sheet__cancel {
+  min-height: 52px; margin-top: 4px;
+  border: none; border-radius: 12px;
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-ink);
+  font-size: 0.94rem; font-weight: 600;
   cursor: pointer;
-  text-align: left;
 }
-.status-picker__opt:hover { background: oklch(var(--b3)); }
-.status-picker__opt--danger { color: oklch(0.7 0.18 25); }
-.status-picker__opt--danger:hover { background: oklch(0.35 0.18 25 / 0.4); }
+.status-sheet__cancel:hover { background: var(--polaroid-line); }
 
 /* Status-tag positioning inside the standard tile shapes ─ pin top-right. */
 .collection-tile { position: relative; }

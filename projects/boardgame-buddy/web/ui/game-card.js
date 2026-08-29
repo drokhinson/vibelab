@@ -51,7 +51,7 @@
     // from bubbling to the article (which would jump into Gather). Matches
     // the play-card's status overlay behaviour.
     const statusOverlay = game.id
-      ? `<span class="game-polaroid__status" onclick="event.stopPropagation()">${window.renderStatusTag(game.id, collectionStatus, { compact: true, pending })}</span>`
+      ? `<span class="game-polaroid__status" onclick="event.stopPropagation()">${window.renderStatusTag(game.id, collectionStatus, { compact: true, pending, gameName: game.name })}</span>`
       : "";
     return `
       <article class="game-polaroid game-polaroid--${escapeHtml(variant)}"
