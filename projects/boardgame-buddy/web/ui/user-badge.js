@@ -6,9 +6,12 @@
 // every surface that shows a player renders via BgbBadge.render() so the
 // customization shows up consistently.
 //
-// Ghost players (free-text names without an account) and users who haven't
-// customized their badge yet (avatar == null) render the BGB default:
-// brown background + gold initials.
+// Users who haven't customized their badge yet (avatar == null) render the BGB
+// default: brown background + gold initials.
+//
+// Ghost players (free-text names without an account) are the one shape that
+// isn't a disc — they render as a brown ghost silhouette with their initials
+// inside it. See GHOST_PATH below.
 
 // @ts-check
 
@@ -22,14 +25,26 @@
     bgColor: "#2a1812",
   });
 
-  // Ghost players (free-text nicknames with no profile) read as a faint
-  // light-grey badge with the same gold initials, signalling "this seat
-  // isn't a linked account yet" at a glance.
-  const GHOST_AVATAR = Object.freeze({
-    icon: "initials",
-    iconColor: "#C9922A",
-    bgColor: "#C9C2B0",
-  });
+  // Ghost players (free-text nicknames with no profile) render as a ghost
+  // silhouette outline holding their initials, in BGB brown. They used to be a
+  // filled disc — gold #C9922A initials on a #C9C2B0 warm grey — which was
+  // 1.9:1, far under the 4.5:1 floor and the least legible mark in the app.
+  //
+  // Only `icon` is meaningful now: the outline and the initials both take their
+  // colour from --ghost-ink in CSS, because a placeholder seat has no
+  // user-chosen palette to honour and the mark has to stay legible on the cream
+  // paper surfaces AND the espresso app ground.
+  const GHOST_AVATAR = Object.freeze({ icon: "initials" });
+
+  // The silhouette: a dome over a 4-point hem, stroked (not filled) so the
+  // initials read through it. Deliberately NOT the Phosphor `ghost` glyph in
+  // ui/icons.js — that one has eyes baked in, which would collide with the
+  // initials sitting in the same space.
+  //
+  // Inline here rather than a file under web/assets/ (cf. .claude/rules/
+  // assets.md): it is an icon used inside a single render function, and it
+  // belongs to the same inline library as the ICONS map directly below.
+  const GHOST_PATH = "M4 20.6V10.8a8 8 0 0 1 16 0v9.8l-4-2.4-4 2.4-4-2.4-4 2.4Z";
 
   // 12-swatch palette offered in the customizer. `light` controls the
   // contrast color of the check mark on the active swatch — see CSS.
@@ -122,17 +137,17 @@
    */
 
   /**
-   * Return HTML for a user badge. Ghosts and uncustomized users get the
-   * BGB default brown + gold initials look; customized users get their
-   * chosen icon (or initials) painted in their chosen colors.
+   * Return HTML for a user badge. Uncustomized users get the BGB default brown
+   * + gold disc; customized users get their chosen icon (or initials) painted
+   * in their chosen colors; ghosts get the brown silhouette.
    * @param {BadgeOpts} opts
    * @returns {string}
    */
   function render(opts) {
     const size = opts.size || "sm";
     const isGhost = !!opts.isGhost;
-    // Ghost players never have a customized avatar — always the light
-    // grey baseline so they read as placeholder seats.
+    // Ghost players never have a customized avatar — they aren't an account,
+    // so there is no palette of their own to honour.
     const av = isGhost ? GHOST_AVATAR : (opts.avatar || DEFAULT_AVATAR);
     const override = opts.initials != null ? String(opts.initials).trim() : "";
     const initials = override || initialsOf(opts.displayName);
@@ -143,12 +158,20 @@
       opts.isMe ? "user-badge--me" : "",
       opts.extraClass || "",
     ].filter(Boolean).join(" ");
-    const styleBg = `background:${escapeAttr(av.bgColor)}`;
-    const styleColor = `color:${escapeAttr(av.iconColor)}`;
     const showInitials = !!opts.forceInitials || av.icon === "initials" || !ICONS[av.icon];
     const inner = showInitials
       ? `<span class="user-badge__initials">${escapeHtml(initials)}</span>`
       : `<svg class="user-badge__icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[av.icon]}</svg>`;
+    // Ghosts carry NO inline colours: an inline style would outrank the
+    // stylesheet, and --ghost-ink has to be able to vary by surface.
+    if (isGhost) {
+      return `<span class="${classes}" aria-label="${escapeAttr(opts.displayName || "")}"` +
+        `><svg class="user-badge__ghost" viewBox="0 0 24 24" aria-hidden="true" fill="none"` +
+        ` stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"` +
+        `><path d="${GHOST_PATH}"/></svg>${inner}</span>`;
+    }
+    const styleBg = `background:${escapeAttr(av.bgColor)}`;
+    const styleColor = `color:${escapeAttr(av.iconColor)}`;
     return `<span class="${classes}" style="${styleBg};${styleColor}" aria-label="${escapeAttr(opts.displayName || "")}">${inner}</span>`;
   }
 
