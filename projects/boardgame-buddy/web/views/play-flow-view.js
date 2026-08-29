@@ -1496,14 +1496,20 @@
              </a>
            </div>`
         : "";
+      // Scoring sits directly under the invite card and the reference guide
+      // below it: the grid is what the host touches every round, so it stays
+      // above the fold, and the guide — a reach-for-it-occasionally reference
+      // whose scroll can run long — is what you scroll down to. Same order in
+      // the spectator mirror (session-viewer-view.js) and in native
+      // (app/src/screens/PlayFlowScreen.js).
       return `
         ${this._renderInviteCard()}
+        ${this._renderScoringSection()}
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
           ${rulebookRow}
           <div id="play-flow-guide-mount"></div>
         </section>
-        ${this._renderScoringSection()}
       `;
     }
 

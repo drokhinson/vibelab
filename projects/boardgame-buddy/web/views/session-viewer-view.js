@@ -707,18 +707,21 @@
       if (!s.game_id) {
         return `<section class="cascade-card"><p class="text-sm opacity-70">Waiting on the host…</p></section>`;
       }
+      // Scoring above the reference guide, mirroring the host's Play step
+      // (play-flow-view.js _renderPlay) — a spectator is here to watch the
+      // grid move, so it comes first and the guide is what they scroll to.
       return `
         ${this._renderGameCard(s, "Now playing")}
 
         ${this._renderInviteCard(s)}
+
+        ${this._renderViewerScoring(s)}
 
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
           ${this._renderRulebookRow(s)}
           <div id="session-viewer-guide-mount" class="session-viewer__guide-mount"></div>
         </section>
-
-        ${this._renderViewerScoring(s)}
       `;
     }
 
