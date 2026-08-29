@@ -4325,6 +4325,162 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-weight: 600;
 }
 
+/* ── Game-info strip (Play step) ─────────────────────────────────────────────
+   What the invite card above becomes once the game is under way. Gather keeps
+   the card — the code is what people are still acting on there. On Play the
+   game is the fact you keep checking and the code is one you read out once,
+   so both collapse onto a single line that costs ~14px less than the card did
+   and leaves more of the scoring grid above the fold.
+   Rendered by widgets/game-info-bar.js for BOTH the host (play-flow-view) and
+   the spectator mirror (session-viewer-view) — on the spectator side it also
+   replaces a whole second "Now playing" card. ───────────────────────────── */
+.cascade-gamebar {
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border-radius: 12px;
+  border: 1px solid var(--card-border, var(--polaroid-line));
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45),
+              0 2px 4px rgba(0, 0, 0, 0.18);
+  padding: 4px 6px 4px 10px;
+}
+.cascade-gamebar__row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.cascade-gamebar__thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--polaroid-line);
+}
+.cascade-gamebar__thumb--placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--polaroid-muted);
+}
+.cascade-gamebar__name {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--polaroid-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The code slot. 44px tall in every state so the tappable variant clears the
+   hit-area floor (.claude/rules/web-frontend.md) while the visible pill stays
+   at chip scale — the padding is the target, not the paint. */
+.cascade-gamebar__code {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  flex: none;
+}
+.cascade-gamebar__code-text {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  font-variant-numeric: tabular-nums;
+}
+.cascade-gamebar__code--copy {
+  position: relative;
+  isolation: isolate;
+  color: var(--polaroid-accent);
+  cursor: pointer;
+}
+/* The pill is painted by a pseudo-element inset from the 44px button, so the
+   hit area can clear the floor without the chip growing to match it. */
+.cascade-gamebar__code--copy::before {
+  content: "";
+  position: absolute;
+  inset: 7px 0;
+  z-index: -1;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--polaroid-accent) 11%, transparent);
+  transition: background 130ms var(--ease);
+}
+.cascade-gamebar__code--copy:hover::before {
+  background: color-mix(in srgb, var(--polaroid-accent) 18%, transparent);
+}
+.cascade-gamebar__code--copy:focus-visible {
+  outline: 2px solid var(--polaroid-accent);
+  outline-offset: -4px;
+  border-radius: 999px;
+}
+.cascade-gamebar__code--copy.is-copied {
+  color: var(--ok);
+}
+.cascade-gamebar__code--copy.is-copied::before {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+/* Copy / check swap. Both glyphs ship hydrated and only one is ever shown, so
+   confirming the tap needs no icon re-render. */
+.cascade-gamebar__glyph { flex: none; }
+/* Holds the copy glyph's width in the pending pill, so the slot is the same
+   size before and after the code arrives. */
+.cascade-gamebar__glyph--spacer { width: 14px; }
+.cascade-gamebar__glyph--done { display: none; }
+.cascade-gamebar__code--copy.is-copied .cascade-gamebar__glyph--idle { display: none; }
+.cascade-gamebar__code--copy.is-copied .cascade-gamebar__glyph--done { display: inline-block; }
+
+/* Minting. Same pulse the invite card's placeholder uses, at strip scale, and
+   the same pill geometry as the copy button so the slot doesn't jump shape
+   when the real code lands — only its contents change. */
+.cascade-gamebar__code--pending {
+  position: relative;
+  isolation: isolate;
+  color: var(--polaroid-muted);
+  animation: importExpPulse 1.2s ease-in-out infinite;
+}
+.cascade-gamebar__code--pending::before {
+  content: "";
+  position: absolute;
+  inset: 7px 0;
+  z-index: -1;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--polaroid-muted) 10%, transparent);
+}
+/* Offline, or a lobby that never opened. Nothing to copy, so nothing to tap. */
+.cascade-gamebar__code--absent {
+  color: var(--rust);
+  font-family: var(--font-sans);
+}
+.cascade-gamebar__code--absent .cascade-gamebar__code-text {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+/* Exception states earn a second line — the strip is one line only when there
+   is nothing to explain. */
+.cascade-gamebar__note {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--polaroid-muted);
+  margin: 0 4px 8px 0;
+  padding-left: 40px;
+}
+.cascade-gamebar__note.is-accent {
+  color: var(--polaroid-accent);
+  font-weight: 600;
+}
+.cascade-gamebar--offline,
+.cascade-gamebar--failed {
+  border-style: dashed;
+  border-color: var(--rust-soft);
+}
+
 /* Game pick row inside Gather */
 .cascade-game {
   display: grid;

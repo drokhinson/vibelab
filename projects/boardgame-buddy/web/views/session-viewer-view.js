@@ -592,18 +592,18 @@
 
     // ── Section: Gather (read-only) ─────────────────────────────────────────
 
-    // The game card, shared by Gather and Play. One renderer so the game reads
-    // the same on both steps (.claude/rules/ui-object-design.md §2) — `label`
-    // is the only thing that differs, because on Play the card is answering
-    // "what are we playing?" rather than "what did the host pick?".
-    _renderGameCard(s, label) {
+    // The game card, Gather only — it mirrors the host's own Gather step, down
+    // to sitting above the session code. Play answers "what are we playing?"
+    // with the game-info strip instead, which folds this card and the code card
+    // below into one line (widgets/game-info-bar.js).
+    _renderGameCard(s) {
       const game = s.game || null;
       const participants = s.participants || [];
       const host = participants.find((p) => p.user_id === s.host_user_id);
       const sub = host ? "Hosted by " + escapeHtml(host.display_name) : "";
       return `
         <section class="cascade-card">
-          <label class="cascade-card__label">${escapeHtml(label)}</label>
+          <label class="cascade-card__label">Game</label>
           <div class="cascade-game">
             ${game && game.thumbnail_url
               ? `<img class="cascade-game__thumb" src="${escapeAttr(game.thumbnail_url)}" alt="" />`
@@ -617,10 +617,11 @@
       `;
     }
 
-    // Session code, in the same card the host reads it off (play-flow-view's
-    // _renderInviteCard). The spectator's copy is what lets them pass the code
-    // on to somebody else at the table — and it's why the crumb bar that used
-    // to carry the code above the cascade is gone.
+    // Session code on Gather, in the same card the host reads it off
+    // (play-flow-view's _renderInviteCard). The spectator's copy is what lets
+    // them pass the code on to somebody else at the table — and it's why the
+    // crumb bar that used to carry the code above the cascade is gone. Play
+    // carries the code on the game-info strip instead.
     _renderInviteCard(s) {
       const code = (s && s.code) || this._code || null;
       if (!code) return "";
@@ -635,6 +636,26 @@
           </div>
         </section>
       `;
+    }
+
+    /**
+     * The Play step's header strip — the same widget the host renders
+     * (play-flow-view's _renderGameInfoBar), so both sides of a session read
+     * the game and the code off an identical line. On this side it replaces a
+     * PAIR of cards: the "Now playing" game card and the session-code card
+     * that used to sit under it.
+     *
+     * The spectator arrived by code, so the host-only offline / minting /
+     * mint-failed states can't happen here — the bundle always carries one.
+     *
+     * @param {any} s Session bundle.
+     * @returns {string}
+     */
+    _renderGameInfoBar(s) {
+      return window.renderGameInfoBar({
+        game: (s && s.game) || null,
+        code: (s && s.code) || this._code || null,
+      });
     }
 
     // Same rulebook CTA the host gets on their Play step (play-flow-view's
@@ -660,7 +681,7 @@
       const participants = s.participants || [];
       const hostId = s.host_user_id;
       return `
-        ${this._renderGameCard(s, "Game")}
+        ${this._renderGameCard(s)}
 
         ${this._renderInviteCard(s)}
 
@@ -711,9 +732,7 @@
       // (play-flow-view.js _renderPlay) — a spectator is here to watch the
       // grid move, so it comes first and the guide is what they scroll to.
       return `
-        ${this._renderGameCard(s, "Now playing")}
-
-        ${this._renderInviteCard(s)}
+        ${this._renderGameInfoBar(s)}
 
         ${this._renderViewerScoring(s)}
 

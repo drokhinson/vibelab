@@ -53,7 +53,7 @@ Today the codebase honours this rule for two of the four object families and bre
 | **Game** | _(no canonical tile)_ | n/a | ⚠️ Six bespoke tiles (`.collection-tile`, `.hot-game-tile`, `.preview-card__cover`, `.game-detail__polaroid`, `.plays-list__thumb`, `.game-polaroid`). `renderGamePolaroid` exists in `ui/game-card.js` but only the Gather grid uses it. |
 | **Buddy** | _(no canonical row)_ | n/a | ⚠️ Buddy rows are rendered via `BgbBadge.render` for the avatar but the surrounding row markup is duplicated in `views/buddies-view.js`, `views/feed-view.js` (suggestions), and the profile preview. Less severe than Game because the avatar — the visual identity — is shared. |
 | **Chapter** | (none yet) | `widgets/reference-guide-scroll.js` renders chapters into the parchment scroll | Chapters are not surfaced outside the scroll, so the rule does not need to be enforced. If a future change shows a single chapter in a tooltip / preview, that would be the moment to extract a `renderChapter` function. |
-| **Session** | `widgets/round-score-grid.js` + the cascading `play-flow-view` screens | The scoring grid is shared between host (live edit) and joiner (read-only mirror). | ✅ Single source for the scoring view. The Gather/Settle screens are unique to the host. |
+| **Session** | `widgets/round-score-grid.js` + `widgets/game-info-bar.js`, plus the cascading `play-flow-view` screens | The scoring grid is shared between host (live edit) and joiner (read-only mirror); the Play step's game-info strip is shared by the same pair. | ✅ Single source for both the scoring view and the Play header. The Gather/Settle screens are unique to the host. |
 
 The rule manifests at three levels:
 
@@ -309,6 +309,7 @@ projects/boardgame-buddy/web/
 ├── widgets/                ← Composite stateful widgets (see §6)
 │   ├── reference-guide-scroll.js   → ReferenceGuideScroll class (Chapter rendering)
 │   ├── round-score-grid.js          → renderRoundGrid (Session scoring)
+│   ├── game-info-bar.js             → renderGameInfoBar (Session header on Play)
 │   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
 │
 ├── views/                  ← One file per screen / route (17 total)
