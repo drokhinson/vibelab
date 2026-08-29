@@ -2775,6 +2775,19 @@
       if (dd) {
         dd.classList.add("hidden");
         dd.innerHTML = "";
+        if (window.BgbDropdownFit) window.BgbDropdownFit.reset(dd);
+      }
+    }
+
+    // Reveal + size in one call. The list is position:absolute inside the
+    // Gather card, so a CSS-only max-height runs off the bottom of the screen
+    // whenever the Players card sits low — which, with a full roster above it,
+    // is the normal case. BgbDropdownFit measures the visible box (keyboard
+    // included) and flips the list above the input when it has to.
+    _showBuddyDropdown(dd) {
+      dd.classList.remove("hidden");
+      if (window.BgbDropdownFit) {
+        window.BgbDropdownFit.fit(dd, dd.closest(".cascade-buddy-combo"));
       }
     }
 
@@ -2823,7 +2836,7 @@
         const ddLoading = document.getElementById("play-flow-buddy-dropdown");
         if (ddLoading) {
           ddLoading.innerHTML = `<li class="cascade-buddy-dropdown-header">Loading…</li>`;
-          ddLoading.classList.remove("hidden");
+          this._showBuddyDropdown(ddLoading);
         }
         if (this._buddyPreloadPromise) {
           try { await this._buddyPreloadPromise; } catch (_) {}
@@ -2834,6 +2847,7 @@
           if (ddPost) {
             ddPost.innerHTML = "";
             ddPost.classList.add("hidden");
+            if (window.BgbDropdownFit) window.BgbDropdownFit.reset(ddPost);
           }
           return;
         }
@@ -2888,6 +2902,7 @@
       if (rows.length === 0) {
         dd.classList.add("hidden");
         dd.innerHTML = "";
+        if (window.BgbDropdownFit) window.BgbDropdownFit.reset(dd);
         return;
       }
       const headerHtml = header
@@ -2903,10 +2918,12 @@
         const subtitle = c.username
           ? `<span class="cascade-buddy-dropdown-sub">@${escapeHtml(c.username)}</span>`
           : "";
+        // "sm" (28px), not "xs" — the row is 48px tall now and a 20px badge
+        // floats in it. Purely visual: the whole <li> is the tap target.
         const badge = window.BgbBadge.render({
           avatar: c.avatar,
           displayName: c.name,
-          size: "xs",
+          size: "sm",
           isGhost: c.source === "ghost",
         });
         return `
@@ -2918,7 +2935,7 @@
           </li>
         `;
       }).join("");
-      dd.classList.remove("hidden");
+      this._showBuddyDropdown(dd);
       this.refreshIcons();
     }
 

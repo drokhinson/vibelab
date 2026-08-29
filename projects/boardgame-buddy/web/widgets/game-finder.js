@@ -196,7 +196,7 @@
         const dd = document.getElementById(this.dropdownId);
         if (dd) {
           dd.innerHTML = `<li class="game-finder-dropdown__hint">Loading recent games…</li>`;
-          dd.classList.remove("hidden");
+          this._show(dd);
         }
         const p = this._ensureRecentGamesLoad();
         if (p) {
@@ -210,12 +210,24 @@
       this._renderDropdown(q);
     }
 
+    // Reveal + size in one call. The dropdown is position:absolute, so a
+    // CSS-only max-height overruns the fold whenever the input sits low on
+    // screen; BgbDropdownFit measures the space that's actually visible and
+    // flips the list above the input when there isn't enough below it.
+    _show(dd) {
+      dd.classList.remove("hidden");
+      if (window.BgbDropdownFit && this._container) {
+        window.BgbDropdownFit.fit(dd, this._container.querySelector(".game-finder"));
+      }
+    }
+
     _close() {
       const dd = document.getElementById(this.dropdownId);
       if (dd) {
         dd.classList.add("hidden");
         dd.classList.remove("game-finder-dropdown--loading");
         dd.innerHTML = "";
+        if (window.BgbDropdownFit) window.BgbDropdownFit.reset(dd);
       }
     }
 
@@ -245,7 +257,7 @@
             `<li class="game-finder-dropdown__header">Recently played</li>` +
             list.map((g) => this._renderRow(g, "recent")).join("");
         }
-        dd.classList.remove("hidden");
+        this._show(dd);
         this._wireRowClicks(dd);
         window.BgbIcons.render(dd);
         return;
@@ -272,7 +284,7 @@
       // showing and flag the dropdown as loading (top bar + dimmed rows) so
       // the list visibly refreshes instead of blanking. Only when the
       // dropdown is cold (no rows) do we show a spinner row.
-      dd.classList.remove("hidden");
+      this._show(dd);
       if (dd.querySelector(".game-finder-dropdown-item")) {
         dd.classList.add("game-finder-dropdown--loading");
       } else {
@@ -315,7 +327,7 @@
         : `<li class="game-finder-dropdown__hint">No matches in your library.</li>`;
 
       dd.innerHTML = rows + this._bggFooter(q);
-      dd.classList.remove("hidden");
+      this._show(dd);
       this._wireRowClicks(dd);
       window.BgbIcons.render(dd);
     }
@@ -382,7 +394,7 @@
              No match on this device. Offline you can only pick games already
              saved here — your collection and recent plays.
            </li>`;
-      dd.classList.remove("hidden");
+      this._show(dd);
       this._wireRowClicks(dd);
       window.BgbIcons.render(dd);
     }
@@ -459,7 +471,7 @@
            <span class="game-finder-spinner" aria-hidden="true"></span>
            <span>Searching BoardGameGeek…</span>
          </li>`;
-      dd.classList.remove("hidden");
+      this._show(dd);
 
       let data;
       try {
@@ -494,7 +506,7 @@
                 ${hit.year_published || ""}${hit.already_in_db ? `${hit.year_published ? " · " : ""}In library` : ""}
               </div>
             </div>
-            <button class="btn btn-ghost btn-xs game-finder-dropdown-item__action">
+            <button class="btn btn-ghost btn-sm game-finder-dropdown-item__action">
               ${hit.already_in_db ? "Pick" : "Import"}
             </button>
           </li>
