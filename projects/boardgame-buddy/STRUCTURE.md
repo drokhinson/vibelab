@@ -37,6 +37,19 @@ community pool chapters; writing chapters stays on web). That exclusion covers t
 editor, so "Generate with AI" (`POST /games/{id}/chapters/generate`) is web-only too — it
 drafts into an editor form, and native has no form to draft into. Organized around the repo's
 one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md`):
+
+> **Known debt — theming.** `.claude/rules/theming.md` and `.claude/rules/react-native.md` now
+> bind `projects/*/app/**`: theme tokens must mirror the web vocabulary name for name
+> (`bg0`/`bg1`/`bg2`, `ink`/`inkMuted`/`inkFaint`, `line`/`lineStrong`, `accent*`, `paper*`) and
+> the app must ship **both** light and dark, resolved through `useColorScheme()` plus a stored
+> override, with no colour literal in a `StyleSheet`. Native satisfies none of that yet: it is
+> dark-only on the pre-rename vocabulary (`bg`/`card`/`text`/`border`/`polaroid*`), across 439
+> references in 56 files, and its styles are static `StyleSheet.create` calls that cannot react
+> to a theme switch at all. This is a tracked follow-up, not an oversight — it is pure refactor
+> with no behaviour change, and folding it into the rebuild PR would have made both halves
+> unreviewable. The three-surface rule already holds by accident: the polaroid play card is a
+> photograph and stays light in both modes.
+
 - **Design system** (`app/src/ui/` + `app/src/theme.js`): primitive kit — `Screen` (safe-area +
   keyboard handling + a `FooterBar` slot that always stays above the keyboard), `Text` (semantic
   variants over the 4-family type system), `Button`, `Card`, `Input`, `Sheet`, `Skeleton`,
@@ -70,10 +83,13 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
   first screen has settled — Game Detail force-fetches its own bundle, so a miss is harmless.
 - **Wrap-up card** (`app/src/components/PolaroidPopup.js`): Save puts the "Well played!" polaroid
   up in the same frame and runs the write behind it. `showPolaroid()` returns a card id and
-  `updatePolaroid(patch, id)` no-ops once a newer card replaced it. Modal while saving (no close,
-  inert backdrop, spinning CTA), then **Go to feed** + host-only **Another round?**; a server
-  rejection swaps in **Retry** with the draft left intact, a failed photo becomes a warning line
-  on the card, and a network failure settles to "Saved on this phone" because the outbox owns it.
+  `updatePolaroid(patch, id)` no-ops once a newer card replaced it. The card is **not modal
+  while the write runs** — the outbox guarantees delivery, so there is nothing to wait on and
+  holding the host behind a write they can't influence is the only cost. **One bottom button at
+  a time**: an error owns the slot as **Retry** (dismissing lands back on an intact Settle Up),
+  otherwise the host gets **Another round?** and everyone else a plain feed link. Every exit —
+  backdrop, hardware back, fallback CTA — shares one destination. A failed photo becomes a
+  warning line on the card, and a network failure settles to "Saved on this phone".
   **Another round?** reseeds a new session with the same game/expansions/mode/roster (teams kept,
   scores reset) under a new code and pushes the roster as participants.
 - **Connectivity** (`app/src/offline/net.js`): one app-wide answer to "are we offline?",
@@ -120,7 +136,22 @@ one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md
   calls `syncGrid()` to publish the host's whole grid, since a resumed draft can hold cells the
   table has never seen and spectators can no longer fill the gaps in themselves. Removing a
   round `DELETE`s its rows — writing NULLs leaves them behind and `maxRound()`, which spectators
-  size their grid from, grows the round straight back.
+  size their grid from, grows the round straight back. Two rules that are easy to break:
+  - **The host's local draft outranks the live overlay on the host's own device.** This device is
+    the only writer, so the overlay carries nothing but our own echoes — and typing "36" fires two
+    independent upserts (3, then 36) with no ordering between them. Let the overlay win and the 3
+    landing last rewrites the cell. The overlay stays authoritative on the spectator's screen,
+    which has no draft of its own.
+  - **A spectator who joined after Gather has no participant row**, so the scores table's RLS
+    hands them zero rows and Realtime is silent for them. `useSessionWatch` seeds `LiveScores`
+    from the bundle's `scores` snapshot (migration 054) and re-seeds on every poll tick — for
+    that viewer the poll, not the socket, is the update channel.
+  - **Participant array order IS the grid's column order** (migration 056; the bundle sorts by
+    `position NULLS LAST, joined_at` and `position` never reaches the wire, so never re-sort it
+    client-side). `pushRosterToLobby` seats the roster with a `Promise.all` — the rows land in
+    completion order — then publishes the host's order via
+    `PUT /sessions/{code}/participants/order`. Host-side drag-to-reorder is not built yet; the
+    endpoint is wired, so it is UI only.
 - **The lobby never blocks the host** (`usePlaySession`): recording the play is the must-have,
   the live session is not. Continue needs only a game pick; the phase flips locally and the
   lobby catches up; a refused mint is a line on the invite card rather than an error over the
