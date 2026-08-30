@@ -74,8 +74,8 @@
   <div id="app" class="max-w-[480px] mx-auto min-h-screen flex flex-col">
 
     <!-- Global app header — persists across views once the user is signed in.
-         Brand on the left routes back to the feed; avatar on the right opens
-         the user's profile. Hidden on splash / auth via data-auth-only. -->
+         Brand on the left routes back to the feed; the gear on the right opens
+         Settings. Hidden on splash / auth via data-auth-only. -->
     <header data-auth-only class="hidden bgb-global-header">
       <a class="bgb-global-header__brand" onclick="window.router.go('feed')">
         <img src="assets/brand/bgb-logo.svg" alt="" class="bgb-global-header__logo" />
@@ -84,9 +84,7 @@
              stays a clean logo + wordmark lockup. -->
         <span class="bgb-global-header__title font-display">Boardgame Buddy</span>
       </a>
-      <!-- Pending uploads. Sibling of the avatar, not a child — syncGlobalAvatar
-           replaces the avatar span via outerHTML on every user change, which
-           would destroy anything nested inside it. -->
+      <!-- Pending uploads. Its own control, sitting to the left of the gear. -->
       <button id="bgb-outbox-indicator" class="bgb-outbox is-zero"
               title="Uploads" aria-label="Uploads"
               onclick="window.BgbOutboxIndicator.open()">
@@ -94,12 +92,12 @@
         <i data-icon="cloud-upload" class="w-4 h-4"></i>
         <span class="bgb-outbox__badge" hidden></span>
       </button>
-      <button class="bgb-global-header__avatar" title="Settings"
+      <!-- Gear, not the user's badge. The button has always routed to Settings,
+           but an avatar reads as "my profile" — and Profile already has its own
+           bottom-nav tab, so the badge here was both redundant and misleading. -->
+      <button class="bgb-global-header__settings" title="Settings" aria-label="Settings"
               onclick="window.router.go('settings')">
-        <!-- Placeholder; init.js#syncGlobalAvatar replaces this with a BgbBadge
-             once the user store fires. -->
-        <span id="bgb-global-avatar" class="user-badge user-badge--sm"
-              style="background:#2a1812;color:#C9922A">?</span>
+        <i data-icon="gear" class="w-5 h-5"></i>
       </button>
     </header>
 

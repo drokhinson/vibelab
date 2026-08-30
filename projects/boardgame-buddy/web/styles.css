@@ -1801,17 +1801,43 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   white-space: nowrap;
   line-height: 1.1;
 }
-.bgb-global-header__avatar {
-  background: transparent; border: none; padding: 0;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.bgb-global-header__avatar .user-badge {
+/* Settings gear at the right end. Deliberately the same 36px chrome box as
+   .bgb-outbox next to it — the two header controls read as one pair of
+   utilities rather than "an icon and an identity". */
+.bgb-global-header__settings {
+  position: relative;
   width: 36px; height: 36px;
-  border: 2px solid oklch(var(--b3));
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--accent);
+  cursor: pointer;
+  transition: color 160ms var(--ease), border-color 160ms var(--ease),
+              transform 260ms var(--ease);
 }
-.bgb-global-header__avatar .user-badge__initials { font-size: 14px; }
-.bgb-global-header__avatar:hover .user-badge { border-color: var(--accent); }
+/* 44x44 hit area without inflating the visible control — same trick as
+   .bgb-outbox::before. */
+.bgb-global-header__settings::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+.bgb-global-header__settings:hover {
+  border-color: var(--accent);
+  transform: rotate(30deg);
+}
+.bgb-global-header__settings:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bgb-global-header__settings { transition: color 160ms var(--ease), border-color 160ms var(--ease); }
+  .bgb-global-header__settings:hover { transform: none; }
+}
 
 /* DaisyUI's .btm-nav is position:fixed left:0 right:0 — fine on a phone but
    on a desktop browser it stretches the full viewport while the app itself
@@ -6900,12 +6926,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .set-card__bgg-status--warn { color: var(--warn); }
 
-/* Soft gold rim when the user-badge "me" sits on the dark global header so it
-   reads as a single coin rather than dissolving into the bar. */
-.bgb-global-header__avatar .user-badge--me {
-  border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
 /* ────────────────────────────────────────────────────────────────────────────
    Cream screen — secondary views (Settings + spokes)
    Every spoke the hub routes into (Collection / Wishlist / Plays / Buddies /
@@ -7107,6 +7127,85 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    bump its border so it reads on cream. */
 .bgb-cream-screen .settings-logout__btn {
   border: 1.5px solid color-mix(in srgb, var(--rust, #b23b34) 45%, transparent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Settings in DARK — a real dark screen, not a cream sheet with the lights off
+
+   .bgb-cream-screen lays one full-bleed sheet of cream paper (--sheet-bg =
+   --paper = #F8F2E5) over the espresso ground. That sheet is what separates a
+   spoke from the app ground, and it works for the browsing spokes — Collection,
+   Wishlist, Plays are galleries of paper artefacts, so paper is the right
+   ground for them. Settings is not a gallery: it is a full screen of chrome,
+   and rendering it as an unbroken cream page meant "dark mode" handed the user
+   the brightest surface in the app.
+
+   Rather than rewrite the ~50 rules under .bgb-cream-screen, this re-points the
+   TOKENS they read, scoped to the settings screen in dark. Every rule below
+   that section keeps working untouched; only the surfaces they resolve to move
+   from paper to espresso.
+
+   Custom properties substitute where they are DECLARED, not where they are
+   used, so the --polaroid-* aliases (declared on :root from --paper) have to be
+   restated here with literal values — overriding --paper alone would not reach
+   them. See the "Polaroid aliases" block at the top of this file.
+
+   Light is unaffected: there the sheet is already transparent over a warm-paper
+   ground, which is exactly the relationship this gives dark.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root[data-bgb="dark"] [data-view="settings"].bgb-cream-screen {
+  /* The sheet drops away and the app ground carries the screen — the same move
+     light already makes, so the two themes now differ only in tone. */
+  --sheet-bg:        transparent;
+  --sheet-ink:       #F0E7D8;
+  --sheet-ink-muted: #B0A18E;
+  --sheet-card:      #261D17;   /* raised card, one step off the ground */
+  --sheet-line:      rgba(255, 255, 255, 0.09);
+
+  /* Paper tokens → dark surfaces. --paper is the card; --polaroid-bg is one
+     step DOWN from it, because in dark a form field reads as a well cut into
+     the card, where on paper it read as a lighter patch laid on top. */
+  --paper:       #261D17;
+  --paper-ink:   #F0E7D8;
+  --paper-muted: #B0A18E;
+  --paper-line:  rgba(255, 255, 255, 0.12);
+  --card-border: rgba(255, 255, 255, 0.09);
+
+  --polaroid-bg:       #1C1510;
+  --polaroid-bg-soft:  #2E231B;
+  --polaroid-ink:      #F0E7D8;
+  --polaroid-ink-soft: #D6C9B4;
+  --polaroid-muted:    #B0A18E;
+  --polaroid-line:     rgba(255, 255, 255, 0.12);
+
+  /* --accent-ink is "gold that survives a light surface" — on espresso the
+     gold can go back to full strength. #E0A94A is 8.4:1 on the card above. */
+  --accent-ink: #E0A94A;
+
+  /* The status colours are likewise tuned for paper: --ok #1F6B2E is 1.4:1 on
+     the card and disappears entirely. These are the same hues lifted onto the
+     dark ground. */
+  --ok:   #6FBF7F;
+  --warn: #E5A33F;
+  --rust: #E87B63;
+}
+
+/* A card on the ground instead of on a sheet needs its edge back: dark shadows
+   do almost no separating work, so the hairline carries it. */
+:root[data-bgb="dark"] [data-view="settings"] .set-card {
+  border: 1px solid var(--card-border);
+  box-shadow: var(--sh-2);
+}
+
+/* BGG's attribution mark is a fixed-colour lockup (#3F3A60 navy on white) that
+   we must not recolour, and the navy vanishes on espresso. Give it the light
+   plate it was drawn for instead of filtering it. */
+:root[data-bgb="dark"] [data-view="settings"] .settings-bgg-credit__logo {
+  filter: none;
+  background: #FFFFFF;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  box-sizing: content-box;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
