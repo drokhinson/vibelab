@@ -29,12 +29,13 @@
 --   → JSONB { career, podium, games, nemesis, rhythm, shelf, table_size,
 --             taste, comeback, coop, personal_bests }
 --   Defined in: db/migrations/boardgamebuddy/058_user_stats_detail.sql
+--               (shelf block replaced by 059_shelf_played_before.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/stats_routes.py
 --               (GET /users/me/stats/detail)
 --   Purpose:    Everything on the Stats spoke (/profile/stats) in one call —
 --               the most-played podium, a per-game win/score breakdown for
 --               the picker, nemesis, a 26-week play heatmap with streaks,
---               the unplayed-shelf count, table-size distribution, category
+--               the unplayed shelf, table-size distribution, category
 --               taste, comeback-from-behind wins, the co-op record and
 --               personal bests. Composed as one function for the same reason
 --               bgb_profile_bundle is: every block reads the same "my plays"
@@ -49,6 +50,13 @@
 --               alongside total_plays/win_count. nemesis, table_size.avg and
 --               rhythm.busiest_weekday are null when there is nothing to
 --               compute; every other key is always present.
+--               shelf (as of 059) is
+--               {owned, played, unplayed, marked, games[], games_truncated}:
+--               'played' counts a logged play OR a collections.played_before_at
+--               mark, and 'games' is every owned base game with no logged
+--               plays (capped at 300) for the Stats spoke's shelf sheet to
+--               list and toggle. The mark is scoped to this block alone — no
+--               other function or aggregate reads played_before_at.
 
 -- bgb_feed_plays(viewer UUID, before_played_at DATE DEFAULT NULL,
 --                before_created_at TIMESTAMPTZ DEFAULT NULL, lim INT DEFAULT 20)

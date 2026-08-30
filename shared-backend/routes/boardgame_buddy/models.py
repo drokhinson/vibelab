@@ -237,6 +237,18 @@ class CollectionUpdate(BaseModel):
     status: CollectionStatus
 
 
+class CollectionPlayedBefore(BaseModel):
+    """Hand-mark an owned game as played before the user joined BoardgameBuddy.
+
+    Deliberately NOT a CollectionStatus value: migration 010 removed 'played'
+    from the status CHECK because played-ness is derived from
+    boardgamebuddy_plays everywhere else. This is a separate, narrower claim —
+    it clears the game off the Shelf of Shame and touches nothing else.
+    """
+
+    played_before: bool
+
+
 class CollectionItem(BaseModel):
     id: str
     game_id: str

@@ -91,8 +91,9 @@ Linked to Supabase Auth `auth.users`.
 | id | UUID PK | |
 | user_id | UUID FK | → profiles |
 | game_id | UUID FK | → games |
-| status | TEXT | owned / played / wishlist |
+| status | TEXT | owned / wishlist. Migration 010 dropped `played` — played-ness is derived from `boardgamebuddy_plays` |
 | added_at | TIMESTAMPTZ | |
+| played_before_at | TIMESTAMPTZ | Migration 059. Non-null = the owner hand-marked this as played before joining, so it leaves the Shelf of Shame without a fabricated play. Read ONLY by the `shelf` block of `bgb_user_stats_detail` — never counted as a play |
 | UNIQUE(user_id, game_id) | | |
 
 ### boardgamebuddy_buddy_edges
@@ -326,6 +327,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/games/recently-played?limit=6` — distinct games the caller has logged plays for, sorted by latest `played_at DESC`. Backs the quick-pick tiles on the host Gather screen's Game card, and the empty-query suggestions inside the game search sheet.
 - `POST /api/v1/boardgame_buddy/collection`
 - `PATCH /api/v1/boardgame_buddy/collection/{game_id}`
+- `PATCH /api/v1/boardgame_buddy/collection/{game_id}/played-before` — body `{played_before}`. Sets/clears `boardgamebuddy_collections.played_before_at` (migration 059) so a game played before the user joined can leave the Shelf of Shame without a fabricated play session. An UPDATE filtered on `status='owned'`, never an upsert — it cannot bring a game into the collection, and a zero-row match is a 404. Deliberately narrow: the mark is read only by the `shelf` block of `bgb_user_stats_detail`, so a marked game still reads as Owned in the status map, on its detail page and in every play count. Written from the Stats spoke's shelf sheet (`web/widgets/shelf-of-shame-sheet.js`).
 - `DELETE /api/v1/boardgame_buddy/collection/{game_id}`
 - `GET /api/v1/boardgame_buddy/plays` — paginated plays the target user logged + participated in. Each play includes `is_own`, `logged_by_id`, `logged_by_name`. Supports `page`, `per_page`, `game_id`, `buddy_id` (treated as a player_user_id filter post-migration-009), `search` (free-text match on game name OR any player's display name), and `user_id` (target user; defaults to the viewer — profiles are public).
 - `POST /api/v1/boardgame_buddy/plays` — one round trip: the whole write (play row + players + expansions) happens inside the `bgb_log_play` RPC (migration 042). Migration 044 dropped its legacy buddies-roster insert — the only reader of that roster was `GET /plays/filter-options`, which was removed as uncalled. **Idempotent when the body carries `client_key`** (migration 048): a key this user already has a play for returns that play instead of writing a second one, still as a 201. The key is minted when the host taps Save and carried by every attempt — the live write and any later outbox flush — which is what lets a failed live write be handed to the queue without risking a duplicate. `POST /sessions/{code}/finalize` inherits the guard (it goes through `bgb_log_play`) and reads the stored row back the same way.
@@ -348,7 +350,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/feed?cursor=&limit=20` — Strava-style mixed feed (plays + hot games + suggested buddies). Cursor-paginated via `created_at`. Both rails are composed into this response by `feed_service.build_feed_page`; they have no standalone endpoints.
 - `GET /api/v1/boardgame_buddy/users/me/stats` — Strava-style aggregate stats for the current user
 - `GET /api/v1/boardgame_buddy/users/{user_id}/stats` — same shape for any user (profiles are public)
-- `GET /api/v1/boardgame_buddy/users/me/stats/detail` — everything the Stats spoke draws, in one call (podium, per-game win/score breakdown, nemesis, 26-week play rhythm, unplayed shelf, table size, taste, comebacks, co-op record, personal bests). Backed by `bgb_user_stats_detail`. Self-only, unlike the two above.
+- `GET /api/v1/boardgame_buddy/users/me/stats/detail` — everything the Stats spoke draws, in one call (podium, per-game win/score breakdown, nemesis, 26-week play rhythm, unplayed shelf, table size, taste, comebacks, co-op record, personal bests). Backed by `bgb_user_stats_detail`. Self-only, unlike the two above. The `shelf` block is `{owned, played, unplayed, marked, games[], games_truncated}`: `played` counts a logged play OR a `played_before_at` mark, and `games` is every owned base game with no logged plays (capped at 300) — the list the shelf sheet renders and toggles. It ships inside this payload rather than through a second endpoint so the sheet's rows and the count on the card that opens it cannot drift apart, and so the sheet needs no fetch to open.
 - `GET /api/v1/boardgame_buddy/users/{user_id}/profile` — public profile + buddy-relation flags
 - `GET /api/v1/boardgame_buddy/search?q=&include_bgg=false` — unified game search (collection → DB; BGG only when `include_bgg=true`). Expansions are excluded from every source unless `include_expansions=true` — they aren't pickable as a session's main game and are added through the base game's expansion section instead.
 - `POST /api/v1/boardgame_buddy/sessions` — open a short-code play session (body `{game_id?}`). Closes any prior open session for the same host first.

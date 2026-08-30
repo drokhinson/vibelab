@@ -22,7 +22,10 @@
 //                                     their_wins, your_wins} — null under 3 shared plays
 // @property {Object} rhythm          {weeks[], current_streak_weeks,
 //                                     longest_streak_weeks, busiest_weekday}
-// @property {Object} shelf           {owned, played, unplayed}
+// @property {Object} shelf           {owned, played, unplayed, marked,
+//                                    games[], games_truncated} — games are the
+//                                    owned base games with no logged plays,
+//                                    for the shelf sheet to list and toggle
 // @property {Object} table_size      {avg, buckets[]}
 // @property {Array}  taste           up to 6 × {name, plays}
 // @property {Object} comeback        {wins_from_behind, tracked_plays}
@@ -41,6 +44,9 @@
   // Stable host for the By-game card, so picking a game can swap just that
   // section instead of the whole screen.
   const BY_GAME_ID = "stats-by-game";
+  // Same idea for the Shelf of shame card: marking a game as played from the
+  // sheet moves the ring and the sentence, and nothing else on the screen.
+  const SHELF_ID = "stats-shelf";
 
   class StatsView extends window.View {
     constructor() {
@@ -452,37 +458,20 @@
       `;
     }
 
+    // The shelf card is a stable host: a mark applied from the sheet swaps its
+    // insides rather than repainting the screen, so SHELF_ID and _renderShelf
+    // are split out for the two call sites to share — the same shape
+    // BY_GAME_ID / _renderByGameInner already use.
     _renderShelfAndTable(shelf, table) {
       const hasShelf = shelf && shelf.owned > 0;
       const buckets = (table && Array.isArray(table.buckets) && table.buckets) || [];
       const hasTable = table && table.avg != null && buckets.length;
       if (!hasShelf && !hasTable) return "";
-      const pctPlayed = hasShelf ? Math.round((shelf.played / shelf.owned) * 100) : 0;
-      const circ = 2 * Math.PI * SHELF_R;
       const peak = Math.max(1, ...buckets.map((b) => b.plays));
       return `
         <div class="stats-duo">
           ${hasShelf ? `
-            <div class="stats-mini">
-              <div class="stats-mini__k"><i data-icon="layers" class="w-3 h-3"></i> Shelf of shame</div>
-              <div class="stats-shelf">
-                <div class="stats-shelf__ring">
-                  <svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true">
-                    <circle class="stats-ring__track" cx="29" cy="29" r="${SHELF_R}" fill="none" stroke-width="7" />
-                    <circle class="stats-ring__arc" cx="29" cy="29" r="${SHELF_R}" fill="none" stroke-width="7"
-                            stroke-linecap="round" stroke-dasharray="${circ.toFixed(1)}"
-                            stroke-dashoffset="${(circ * (1 - pctPlayed / 100)).toFixed(1)}" />
-                  </svg>
-                  <div class="stats-shelf__mid">${pctPlayed}%</div>
-                </div>
-                <div class="stats-mini__d" style="margin-top:0">
-                  You've played <b>${pctPlayed}%</b> of what you own.
-                  ${shelf.unplayed
-                    ? `<b>${shelf.unplayed}</b> of ${shelf.owned} ${shelf.owned === 1 ? "game has" : "games have"} never hit the table.`
-                    : `Every box on the shelf has hit the table.`}
-                </div>
-              </div>
-            </div>` : ""}
+            <div class="stats-mini" id="${SHELF_ID}">${this._renderShelf(shelf)}</div>` : ""}
           ${hasTable ? `
             <div class="stats-mini">
               <div class="stats-mini__k"><i data-icon="users" class="w-3 h-3"></i> Table size</div>
@@ -491,6 +480,47 @@
                 ${buckets.map((b) => this._bar(PLAYER_LABEL[b.size] || `${b.size}+`, b.plays, peak)).join("")}
               </div>
             </div>` : ""}
+        </div>
+      `;
+    }
+
+    // Split so a mark can repaint the dial and the sentence WITHOUT rebuilding
+    // the Show button: the sheet holds that button as its return-focus target,
+    // and replacing the node would leave a keyboard user on <body> when the
+    // sheet closes. The button's presence depends only on games.length, which
+    // a mark never changes.
+    _renderShelf(shelf) {
+      const games = Array.isArray(shelf.games) ? shelf.games : [];
+      return `
+        <div class="stats-mini__k"><i data-icon="layers" class="w-3 h-3"></i> Shelf of shame</div>
+        <div data-shelf-body>${this._renderShelfBody(shelf)}</div>
+        ${games.length ? `
+          <button class="stats-mini__more" type="button" aria-haspopup="dialog"
+                  onclick="window.statsView._openShelfSheet(event)">
+            Show <i data-icon="chevron-right" class="w-3 h-3"></i>
+          </button>` : ""}
+      `;
+    }
+
+    _renderShelfBody(shelf) {
+      const pctPlayed = Math.round((shelf.played / shelf.owned) * 100);
+      const circ = 2 * Math.PI * SHELF_R;
+      const marked = shelf.marked || 0;
+      return `
+        <div class="stats-shelf">
+          <div class="stats-shelf__ring">
+            <svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true">
+              <circle class="stats-ring__track" cx="29" cy="29" r="${SHELF_R}" fill="none" stroke-width="7" />
+              <circle class="stats-ring__arc" cx="29" cy="29" r="${SHELF_R}" fill="none" stroke-width="7"
+                      stroke-linecap="round" stroke-dasharray="${circ.toFixed(1)}"
+                      stroke-dashoffset="${(circ * (1 - pctPlayed / 100)).toFixed(1)}" />
+            </svg>
+            <div class="stats-shelf__mid">${pctPlayed}%</div>
+          </div>
+          <div class="stats-mini__d" style="margin-top:0">
+            You've played <b>${pctPlayed}%</b> of what you own.
+            ${this._shelfLine(shelf, marked)}
+          </div>
         </div>
       `;
     }
@@ -556,6 +586,22 @@
       `;
     }
 
+    // Three cases, not two-plus-a-suffix: "Every box has hit the table" with
+    // "4 more are marked as played" bolted on afterwards contradicts itself,
+    // because a marked box IS one that has hit the table.
+    _shelfLine(shelf, marked) {
+      const owned = shelf.owned;
+      if (shelf.unplayed) {
+        const head = `<b>${shelf.unplayed}</b> of ${owned} ${owned === 1 ? "game has" : "games have"} never hit the table.`;
+        return marked
+          ? `${head} <b>${marked}</b> more ${marked === 1 ? "is" : "are"} marked as played before you joined.`
+          : head;
+      }
+      return marked
+        ? `Every box on the shelf has hit the table, <b>${marked}</b> of them before you joined.`
+        : `Every box on the shelf has hit the table.`;
+    }
+
     _bar(label, value, peak) {
       const w = Math.max(4, Math.round((value / peak) * 100));
       return `
@@ -582,6 +628,58 @@
         returnFocus: (event && event.currentTarget) || null,
         onPick: (game) => this._selectGame(game.game_id),
       });
+    }
+
+    // The shelf sheet needs no fetch: detail.shelf.games came down with the
+    // rest of this screen, which is also what makes the sheet's list and the
+    // "63 of 74" sentence on the card that opened it impossible to disagree.
+    _openShelfSheet(event) {
+      const shelf = (this._detail && this._detail.shelf) || null;
+      const games = (shelf && Array.isArray(shelf.games) && shelf.games) || [];
+      if (!games.length) return;
+      window.ShelfOfShameSheet.open({
+        games,
+        truncated: !!shelf.games_truncated,
+        returnFocus: (event && event.currentTarget) || null,
+        onToggle: (gameId, playedBefore) => this._applyShelfMark(gameId, playedBefore),
+      });
+    }
+
+    /**
+     * Apply one mark to the local payload and repaint the shelf card alone.
+     *
+     * Called for the sheet's optimistic paint AND for its rollback, so it sets
+     * the state it is handed rather than flipping — two racing writes on one
+     * row would otherwise undo the wrong one. No-ops when the row is already
+     * in the requested state, so a rollback that changes nothing costs nothing.
+     *
+     * @param {string} gameId
+     * @param {boolean} playedBefore
+     */
+    _applyShelfMark(gameId, playedBefore) {
+      const shelf = (this._detail && this._detail.shelf) || null;
+      if (!shelf || !Array.isArray(shelf.games)) return;
+      const row = shelf.games.find((g) => g.game_id === gameId);
+      if (!row || row.played_before === playedBefore) return;
+
+      row.played_before = playedBefore;
+      const d = playedBefore ? 1 : -1;
+      shelf.played = (shelf.played || 0) + d;
+      shelf.unplayed = (shelf.unplayed || 0) - d;
+      shelf.marked = (shelf.marked || 0) + d;
+
+      // The counts above are hand-edited, so the cached payload is now a
+      // half-truth. Dropping it means the next mount refetches rather than
+      // serving our arithmetic back to us.
+      window.Stats.invalidate();
+
+      // The dial and the sentence only — the Show button beside them is the
+      // sheet's return-focus target and must survive (see _renderShelf).
+      const host = this.container
+        && this.container.querySelector(`#${SHELF_ID} [data-shelf-body]`);
+      if (!host) return;
+      host.innerHTML = this._renderShelfBody(shelf);
+      this.refreshIcons(host);
     }
 
     // Patch the one card that changed instead of rebuilding all nine sections
