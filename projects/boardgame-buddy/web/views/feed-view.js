@@ -514,34 +514,12 @@
       });
     }
 
-    // Why this person is being suggested, not how much. A candidate is here
-    // for a shared play or a shared buddy; when it's both, the shared play is
-    // the one worth saying — it's also what ranked them (migration 057).
-    _suggestionReason(s) {
-      return (s.play_count || 0) > 0 ? "Played with" : "Mutual buddy";
-    }
-
+    // The rail itself lives in ui/buddy-suggestion-rail.js — the Buddies
+    // screen renders the same one from GET /buddies/suggested.
     _renderSuggestedBuddiesCard(card) {
-      const tiles = (card.suggestions || []).map((s) => `
-        <div class="buddy-tile">
-          <div class="buddy-tile__avatar-wrap"
-               onclick="window.router.go('profile-other',{userId:'${s.user_id}'})">
-            ${window.BgbBadge.render({ avatar: s.avatar, displayName: s.display_name, size: "md", extraClass: "buddy-tile__avatar" })}
-          </div>
-          <div class="buddy-tile__name">${escapeHtml(s.display_name)}</div>
-          <div class="buddy-tile__reason">${this._suggestionReason(s)}</div>
-          <button class="btn btn-xs btn-primary mt-1"
-                  onclick="window.feedView._addBuddy('${s.user_id}', this)">Add</button>
-        </div>
-      `).join("");
-      return `
-        <section class="feed-rail">
-          <header class="feed-rail__header">
-            <h3><i data-icon="user-plus" class="w-4 h-4"></i> Buddies you may know</h3>
-          </header>
-          <div class="feed-rail__scroll">${tiles}</div>
-        </section>
-      `;
+      return window.renderSuggestedBuddiesRail(card.suggestions, {
+        addHandler: "window.feedView._addBuddy",
+      });
     }
 
     async _addBuddy(userId, btnEl) {

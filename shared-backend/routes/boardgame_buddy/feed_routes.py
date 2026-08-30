@@ -5,8 +5,10 @@ Thin adapter over services/feed_service.py. The Feed page composes:
   - hot games this week (first page)
   - suggested buddies (first page)
 
-The two rails are embedded in the /feed response by
-feed_service.build_feed_page; they have no standalone endpoints.
+Both rails are embedded in the /feed response by
+feed_service.build_feed_page. Hot games has no standalone endpoint; suggested
+buddies also ships as GET /buddies/suggested (buddy_routes.py) so the Buddies
+screen can render the same rail without pulling a feed page.
 """
 
 from typing import Optional

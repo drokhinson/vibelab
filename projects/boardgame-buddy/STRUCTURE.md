@@ -326,6 +326,7 @@ each missing game from the BGG XML API.
 - `POST /api/v1/boardgame_buddy/plays/{play_id}/leave` — a non-owner participant self-removes from a play they didn't take part in. Turns their `player_user_id` row into a ghost (nulls the id, keeps `player_display_name`) instead of deleting the play — the owner keeps it and sees them as a named ghost; the play drops out of the leaver's history/played-with. 400 if the caller owns the play (use edit/delete), 404 if they aren't a player in it.
 - `GET /api/v1/boardgame_buddy/buddies` — accepted mutual edges only (mutual graph, migration 008). Returns `BuddyEdgeResponse[]`
 - `GET /api/v1/boardgame_buddy/buddies/requests` — pending requests in both directions: `{incoming[], outgoing[]}`
+- `GET /api/v1/boardgame_buddy/buddies/suggested?limit=` — "Buddies you may know" candidates (`bgb_suggested_buddies`); the same rail the Feed embeds, as a standalone call for the Buddies screen
 - `POST /api/v1/boardgame_buddy/buddies/request` — body `{target_user_id}`; auto-accepts if a reverse request exists
 - `POST /api/v1/boardgame_buddy/buddies/{request_id}/accept` — accept incoming request
 - `POST /api/v1/boardgame_buddy/buddies/{request_id}/reject` — delete a pending request
@@ -392,7 +393,7 @@ Path-based routing via the History API (`projects/boardgame-buddy/web/domain/vie
 | `/profile/collection` | `collection` | — | `userId` (when viewing another user — though `/u/:userId` is preferred for that) | Collection grid. |
 | `/profile/wishlist` | `wishlist` | — | `userId` | Wishlist grid. |
 | `/profile/plays` | `plays` | — | `userId` | Plays log. |
-| `/profile/buddies` | `buddies` | — | — | Accepted buddies + pending requests + search. |
+| `/profile/buddies` | `buddies` | — | — | Accepted buddies + pending requests + search. Buddies and Played-with are paged 6 per page, with the "Buddies you may know" rail between them. |
 | `/u/:userId` | `profile-other` | `userId` | — | Public profile for another account. Distinct from `/profile/*` so userId can't collide with a subpage name. |
 | `/settings` | `settings` | — | — | Account / theme / logout. |
 | `/admin` | `admin` | — | — | Chapter-reports moderation. Only reachable when `is_admin=true`. |

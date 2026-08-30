@@ -5,7 +5,7 @@ play_routes.py. The new model is friend-request based: send_request →
 incoming/outgoing pending → accept/reject → accepted edge.
 """
 
-from fastapi import Depends, Path
+from fastapi import Depends, Path, Query
 
 from db import get_supabase
 
@@ -24,8 +24,9 @@ from .models import (
     MessageResponse,
     PlayedWithUser,
     PlayPartnersResponse,
+    SuggestedBuddiesResponse,
 )
-from .services import buddy_service, played_with_service
+from .services import buddy_service, feed_service, played_with_service
 
 
 @router.get(
@@ -52,6 +53,25 @@ async def list_buddy_requests(
 ) -> BuddyRequestsResponse:
     """Pending buddy requests for the current user, split incoming / outgoing."""
     return buddy_service.list_requests(get_supabase(), user.user_id)
+
+
+@router.get(
+    "/buddies/suggested",
+    response_model=SuggestedBuddiesResponse,
+    status_code=200,
+    summary="Suggest people the current user may know",
+)
+async def list_suggested_buddies(
+    limit: int = Query(12, ge=1, le=50, description="Maximum suggestions to return"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SuggestedBuddiesResponse:
+    """Same ranked candidates the feed's "Buddies you may know" rail renders.
+
+    Shared as a standalone endpoint so the Buddies page can show the rail
+    without pulling a whole feed page."""
+    return feed_service.fetch_suggested_buddies(
+        get_supabase(), user.user_id, limit=limit
+    )
 
 
 @router.post(
