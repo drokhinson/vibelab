@@ -3021,6 +3021,19 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
 }
 .exp-tree__switch.is-on { color: oklch(var(--bc)); }
+/* On a 320px phone the row can hold the switch, the Loading… note AND
+   "Collapse all" only if something gives. The switch's label is the one thing
+   here that stays understandable when trimmed — the track already says what
+   the control is — so it shrinks and ellipses rather than pushing the toggle
+   past the gutter. min-width:0 on both, or a flex item refuses to shrink below
+   its content. */
+.exp-tree__switch { min-width: 0; }
+.exp-tree__switch > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .exp-tree__switch-track {
   flex: none;
   box-sizing: border-box;
