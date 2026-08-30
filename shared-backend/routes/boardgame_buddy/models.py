@@ -211,6 +211,14 @@ class BggExpansionCandidate(BaseModel):
     bgg_id: int
     name: str
     full_name: str
+    bgg_owned: Optional[int] = Field(
+        None,
+        description=(
+            "How many BoardGameGeek users own this expansion — the popup's sort key. "
+            "None when BGG's stats lookup failed or was skipped, in which case the "
+            "row shows no count and the list falls back to alphabetical order."
+        ),
+    )
 
     @computed_field  # type: ignore[misc]
     @property

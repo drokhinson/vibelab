@@ -6117,6 +6117,26 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-size: 11px;
   color: #b3492f;
 }
+/* Owner-count chip. The list is ordered by this number descending, so the
+   chip exists to make that order legible — without it the sort reads as
+   random. Omitted at 0 or unknown, where a chip would be pure noise. Not a
+   tap target, so the 44x44 rule doesn't apply; the row already sets it. */
+.import-exp-row__owners {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--polaroid-bg);
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+.import-exp-row__owners svg { opacity: 0.75; }
 .import-exp-row__add {
   flex-shrink: 0;
   width: 44px;

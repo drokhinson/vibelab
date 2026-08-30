@@ -12,6 +12,8 @@ catalog. It exposes:
   native GameDetailScreen; the chapter system does not consume it).
 """
 
+import asyncio
+import logging
 import re
 from typing import Optional
 
@@ -20,7 +22,7 @@ from fastapi import Depends, Header, HTTPException, Path
 from db import get_supabase
 
 from . import router
-from .bgg_client import fetch_bgg, parse_bgg_xml
+from .bgg_client import fetch_bgg, fetch_owner_counts, parse_bgg_xml
 from .game_routes import (
     _invalidate_game_caches,
     _next_expansion_color,
@@ -38,6 +40,8 @@ from .models import (
     ExpansionToggleRequest,
     MessageResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 # Separators BGG uses between a base game's name and the expansion's own name:
 # "Catan: Cities & Knights", "Carcassonne – Inns & Cathedrals", "Azul, Crystal
@@ -151,6 +155,29 @@ def _load_base_game(base_id: str) -> dict:
     return row
 
 
+# Whole-request ceiling on the popularity lookup. fetch_owner_counts issues up
+# to six sequential 20s batches; without a budget a slow BGG turns a popup that
+# used to open instantly into a two-minute stall. On timeout the candidates keep
+# whatever counts arrived and the rest sort alphabetically.
+_OWNER_COUNT_BUDGET_S = 12.0
+
+
+async def _owner_counts_within_budget(bgg_ids: list[int]) -> dict[int, int]:
+    """fetch_owner_counts under a wall-clock budget. Never raises."""
+    if not bgg_ids:
+        return {}
+    try:
+        return await asyncio.wait_for(
+            fetch_owner_counts(bgg_ids), timeout=_OWNER_COUNT_BUDGET_S
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "BGG owner-count lookup exceeded %.0fs for %d ids — falling back to "
+            "alphabetical order", _OWNER_COUNT_BUDGET_S, len(bgg_ids),
+        )
+        return {}
+
+
 @router.get(
     "/games/{base_id}/expansions/available",
     response_model=list[BggExpansionCandidate],
@@ -166,6 +193,11 @@ async def list_available_expansions(
     filtered out, and each name has the base game's name stripped off the
     front. BGG `/thing` responses are cached in-process for 24h, so reopening
     the popup costs nothing.
+
+    Ordered by BGG owner count, descending — the candidates are by definition
+    absent from BgB's catalog, so nobody here owns or has played them and there
+    is no local popularity signal to sort on. Names break ties, which also makes
+    a failed stats lookup degrade cleanly to plain alphabetical order.
     """
     base = _load_base_game(base_id)
     base_bgg_id = base.get("bgg_id")
@@ -213,7 +245,19 @@ async def list_available_expansions(
         for exp_id, full_name in candidates.items()
         if exp_id not in already_imported
     ]
-    results.sort(key=lambda c: c.name.lower())
+    # Counts are looked up over the FULL candidate set, not the filtered one:
+    # the expansions BGG links to a base game are a stable set, so the chunk
+    # boundaries — and therefore the cache keys — stay warm as candidates get
+    # imported out of this list.
+    counts = await _owner_counts_within_budget(list(candidates))
+    for c in results:
+        c.bgg_owned = counts.get(c.bgg_id)
+
+    # Known counts first, most-owned down; unknown counts alphabetically after
+    # them. `bgg_owned is None` sorts False(0) before True(1), so a partial
+    # lookup still ranks what it knows instead of discarding it, and a total
+    # failure degrades to exactly the old alphabetical order.
+    results.sort(key=lambda c: (c.bgg_owned is None, -(c.bgg_owned or 0), c.name.lower()))
     return results
 
 

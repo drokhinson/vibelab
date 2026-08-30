@@ -153,7 +153,7 @@ def _map_bgg_status(resp: httpx.Response, *, path: str, params: dict) -> None:
     )
 
 
-async def fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
+async def fetch_bgg(path: str, params: dict, *, timeout: float, use_cache: bool = True) -> str:
     """GET an XML document from the BGG API with consistent error mapping.
 
     Anonymous request — used for catalog endpoints (search, /thing). Sends the
@@ -165,8 +165,15 @@ async def fetch_bgg(path: str, params: dict, *, timeout: float) -> str:
     change post-import so 24h is fine, search results are momentary so 1h is
     enough to absorb repeat typing. fetch_bgg_as_user (per-user collection/
     plays) is never cached — those reflect the user's live BGG state.
+
+    Pass `use_cache=False` for a response the caller doesn't want in that cache. The
+    one user today is the batched `stats=1` /thing fetch behind
+    `fetch_owner_counts`: 20 full game records is ~1MB of XML, and the
+    `bgg.thing` namespace is capped at 500 entries, so admitting those would
+    evict the per-game entries the rest of the app reads on every page. That
+    caller keeps its own cache of the parsed integers instead.
     """
-    cache_key = _cache_key_for(path, params)
+    cache_key = _cache_key_for(path, params) if use_cache else None
     if cache_key is not None:
         hit = _get_cached_response(path, cache_key)
         if hit is not None:
@@ -218,6 +225,90 @@ _BGG_SEARCH_TTL_S = 60 * 60
 
 cache.configure(_BGG_CACHE_THING, max_entries=500)
 cache.configure(_BGG_CACHE_SEARCH, max_entries=200)
+
+# Derived-value cache for `fetch_owner_counts`: one small int per bgg_id rather
+# than the ~1MB XML the batched stats request returns. Entries are cheap, so the
+# cap is generous — a few thousand expansion ids is well under a megabyte.
+_BGG_CACHE_OWNED = "bgg.owned"
+_BGG_OWNED_TTL_S = 24 * 60 * 60
+# BGG's /thing takes a comma-joined id list. 20 full game records per response is
+# already ~1MB of XML; larger batches mostly buy parse time. Chunk boundaries are
+# derived from the sorted id list so repeat calls for the same base game issue
+# byte-identical requests.
+_OWNED_CHUNK_SIZE = 20
+_OWNED_MAX_CHUNKS = 6
+
+cache.configure(_BGG_CACHE_OWNED, max_entries=4000)
+
+
+def _parse_owned_counts(root: ET.Element) -> dict[int, int]:
+    """Pull <statistics><ratings><owned value="N"> off every <item> in a /thing response."""
+    counts: dict[int, int] = {}
+    for item in root.findall("item"):
+        try:
+            item_id = int(item.get("id", "0"))
+        except (TypeError, ValueError):
+            continue
+        if not item_id:
+            continue
+        owned_el = item.find("statistics/ratings/owned")
+        if owned_el is None:
+            continue
+        try:
+            counts[item_id] = int(owned_el.get("value", "0"))
+        except (TypeError, ValueError):
+            continue
+    return counts
+
+
+async def fetch_owner_counts(bgg_ids: list[int]) -> dict[int, int]:
+    """Best-effort BGG owner counts keyed by bgg_id.
+
+    Backs the popularity ordering in the "Import expansions" popup. Deliberately
+    total: any BGG failure returns the counts gathered so far (possibly none) so
+    a caller can degrade to its previous ordering instead of failing the request.
+
+    Chunks are issued sequentially, not concurrently — this module has no
+    rate-limit guard and `_map_bgg_status` turns BGG's 429 into an exception, so
+    parallel batches would trip it for everyone.
+    """
+    counts: dict[int, int] = {}
+    misses: list[int] = []
+    for bgg_id in bgg_ids:
+        hit = cache.get(_BGG_CACHE_OWNED, bgg_id)
+        if hit is not None:
+            counts[bgg_id] = hit
+        else:
+            misses.append(bgg_id)
+    if not misses:
+        return counts
+
+    misses.sort()
+    chunks = [
+        misses[i:i + _OWNED_CHUNK_SIZE]
+        for i in range(0, len(misses), _OWNED_CHUNK_SIZE)
+    ][:_OWNED_MAX_CHUNKS]
+
+    for chunk in chunks:
+        try:
+            body = await fetch_bgg(
+                "/thing",
+                {"id": ",".join(str(i) for i in chunk), "stats": 1},
+                timeout=20.0,
+                use_cache=False,
+            )
+            fetched = _parse_owned_counts(parse_bgg_xml(body, context="thing stats batch"))
+        except Exception as exc:  # noqa: BLE001 — ordering is a nicety, never a failure
+            logger.warning("BGG owner-count batch failed (%d ids): %s", len(chunk), exc)
+            return counts
+        for bgg_id in chunk:
+            # Absent from the response means BGG has no stats for that id. Cache
+            # the zero too, so the next open doesn't re-request the whole batch
+            # for the sake of one id that will never have a count.
+            n = fetched.get(bgg_id, 0)
+            cache.set(_BGG_CACHE_OWNED, bgg_id, n, ttl_seconds=_BGG_OWNED_TTL_S)
+            counts[bgg_id] = n
+    return counts
 
 
 def _cache_key_for(path: str, params: dict) -> Optional[tuple[str, ...]]:
