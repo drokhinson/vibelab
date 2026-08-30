@@ -403,8 +403,8 @@
     /**
      * Reconcile the grid by game id rather than rewriting it. Cards still on
      * screen keep their existing DOM — crucially their <img>, which otherwise
-     * blanks for a frame on every rebuild — and skip the per-card lucide SVG
-     * rebuild. Only genuinely new cards are built.
+     * blanks for a frame on every rebuild — and skip the per-card icon
+     * hydration. Only genuinely new cards are built.
      */
     _paintGrid() {
       const host = this.container.querySelector("#gx-grid-host");
@@ -484,7 +484,7 @@
       if (!host) return;
       const next = this._renderPager();
       // The pager is unchanged on most paints; skip the DOM write and the
-      // two lucide chevron rebuilds when the markup is identical.
+      // two chevron hydrations when the markup is identical.
       if (host.innerHTML.trim() === next.trim()) return;
       host.innerHTML = next;
       this.refreshIcons(host);

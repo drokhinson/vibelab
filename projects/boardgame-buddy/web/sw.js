@@ -37,12 +37,12 @@ const CACHE = `bgb-shell-${BUILD_ID}`;
 
 // Cross-origin runtime deps. In the deployed artifact the workflow already
 // rewrites the DaisyUI + Tailwind CDN pair to a same-origin assets/bgb-tw.css,
-// so this is what's genuinely left: the icon set, the Supabase client, and the
-// fonts. Cached opportunistically on the first online load rather than at
-// install — a CDN hiccup must not be able to fail the whole install and leave
-// the app with no shell at all.
+// so this is what's genuinely left: the Supabase client and the fonts. The
+// icon set is NOT among them — it is vendored into ui/icons.js precisely so it
+// rides the precache below and survives offline. Cached opportunistically on
+// the first online load rather than at install — a CDN hiccup must not be able
+// to fail the whole install and leave the app with no shell at all.
 const RUNTIME_ORIGINS = [
-  "https://unpkg.com",
   "https://cdn.jsdelivr.net",
   "https://fonts.googleapis.com",
   "https://fonts.gstatic.com",
