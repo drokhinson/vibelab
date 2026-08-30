@@ -7617,7 +7617,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .spoke-toggle__pill.is-active .spoke-toggle__count { opacity: 0.95; }
 
 /* Three pills in the 480px column need tighter metrics than two — at the
-   two-pill padding "Played, not owned" alone eats half the row. The label
+   two-pill padding "Expansions" alone eats half the row. The label
    wraps to two lines rather than truncating, and min-height stays 44px, so
    the padding shrinks but the tap target never does. */
 .spoke-toggle--3 .spoke-toggle__pill {
