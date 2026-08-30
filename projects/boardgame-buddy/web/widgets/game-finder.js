@@ -7,7 +7,8 @@
 //
 // The network is never what the user waits on to see a list. Every keystroke
 // paints synchronously first — from an exact cached answer, a cached answer to
-// a shorter query this one extends, or the device's own warmed library — and
+// a shorter query this one extends, or the viewer's own games as cached on the
+// device (_devicePool: their owned, played and wishlisted shelves) — and
 // /search then refines that in place. Which is why the Gather picker feels
 // instant: the game a host is reaching for is nearly always one of their own,
 // and every one of those is already on the phone.
@@ -48,11 +49,17 @@
   // the provisional list and the real one are the same length.
   const PROVISIONAL_LIMIT = 20;
 
-  // The device pool (recents + every warmed game bundle) is rebuilt at most
-  // this often, so a fast typer walks an already-built index instead of
-  // re-reading the cache on every keystroke. Short enough that bundles warmed
-  // by the background loader show up while the sheet is still open.
+  // The device pool is rebuilt at most this often, so a fast typer walks an
+  // already-built index instead of re-reading the cache on every keystroke.
+  // Short enough that a shelf or bundle warmed by a background loader shows up
+  // while the sheet is still open.
   const DEVICE_POOL_TTL_MS = 5000;
+
+  // The viewer's own shelves, best-match-first: a host is likeliest reaching
+  // for a game they own, then one they've played, then one they've only
+  // wishlisted. Order matters only for de-duplication (first source wins the
+  // row); the rendered list is ranked by how well the name matches.
+  const SHELVES = ["owned", "played", "wishlist"];
 
   /**
    * @typedef {Object} GameFinderOpts
@@ -157,6 +164,7 @@
       // before the user focuses. Failure leaves _recentGames as null so
       // the next focus retries instead of caching an empty list forever.
       this._ensureRecentGamesLoad();
+      this._warmShelves();
     }
 
     unmount() {
@@ -236,6 +244,36 @@
         try { this._searchAbort.abort(); } catch (_) {}
         this._searchAbort = null;
       }
+    }
+
+    /**
+     * Make sure the viewer's shelves are on the device, since they're what the
+     * dropdown paints from before any request.
+     *
+     * Only fetches the ones that aren't there: Collection.shelf() is SWR, so a
+     * present-and-fresh shelf costs nothing and a present-but-stale one
+     * refreshes itself in the background. `owned` is usually already warm —
+     * init.js pulls it from an idle callback at boot — which leaves `played`
+     * and `wishlist` as the ones this actually fetches, once, in the
+     * background, while the user is still reading the sheet.
+     *
+     * A collection mutation calls Collection.invalidateShelves(), so a shelf
+     * that just changed reads as missing here and is refetched.
+     */
+    _warmShelves() {
+      if (!window.Collection || !window.Collection.shelf) return;
+      const me = window.store && window.store.get("user");
+      if (!me || !me.id) return;
+      const kick = () => {
+        for (const status of SHELVES) {
+          if (window.Collection.cachedShelf(me.id, status)) continue;
+          window.Collection.shelf(me.id, status)
+            .then(() => { this._devicePoolRows = null; })
+            .catch(() => {});
+        }
+      };
+      if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 2000 });
+      else setTimeout(kick, 0);
     }
 
     _ensureRecentGamesLoad() {
@@ -432,9 +470,14 @@
     }
 
     /**
-     * Provisional match list: cached-prefix hits (which carry the server's own
-     * collection-first ranking, and can include catalog games the device never
-     * owned) followed by device matches not already in it.
+     * Provisional match list: the viewer's own games first, then cached-prefix
+     * hits filling whatever is left of the cap.
+     *
+     * That order is the point. The device pool is games this user owns, has
+     * played, or has wishlisted — which is what /search itself ranks first —
+     * whereas a cached prefix answer is mostly catalog. Filling from the cache
+     * first would let twenty strangers' games crowd the host's own out of a
+     * twenty-row list, which is the opposite of what the picker is for.
      *
      * @param {string} q
      * @returns {Array<Object>}
@@ -446,10 +489,10 @@
         if (byId.size >= PROVISIONAL_LIMIT) return;
         byId.set(g.id, g);
       };
+      this._deviceMatches(q).forEach(add);
       if (window.Game && window.Game.cachedSearchPrefix) {
         window.Game.cachedSearchPrefix(q).forEach(add);
       }
-      this._deviceMatches(q).forEach(add);
       return Array.from(byId.values());
     }
 
@@ -471,25 +514,31 @@
     }
 
     /**
-     * Every game the device can offer with no server, name-ordered, each row
-     * carrying its lower-cased name so a keystroke is one indexOf per entry.
+     * Every game the device can offer with no server — the viewer's own games —
+     * name-ordered, each row carrying its lower-cased name so a keystroke is
+     * one indexOf per entry.
      *
-     * Two sources, both already on disk:
+     * Sources in priority order, all already on disk:
+     *   • `collection.shelf:me|{owned,played,wishlist}` — a whole shelf per
+     *     entry (up to 1000 rows, expansions already excluded server-side),
+     *     each row carrying the full GameSummary. This is the pool: it is
+     *     precisely "games related to this user", it includes the ones they've
+     *     PLAYED but don't own — which a Gather host reaches for constantly —
+     *     and it is three map lookups rather than a walk.
      *   • `game.recent:self` — the host-flow seed bootstrap warms (24h/7d).
-     *   • `game.bundle:*`    — one entry per OWNED game, warmed by
-     *     Bootstrap.warmGameBundles() from an idle callback after login.
+     *   • `game.bundle:*` — one entry per OWNED game, warmed by
+     *     Bootstrap.warmGameBundles(). Kept as the long-lived floor under the
+     *     shelves: a bundle stays peekable for 60 minutes against a shelf's 5,
+     *     so a host who has had the app open a while still gets their whole
+     *     library even if no shelf has been touched since.
      *
-     * That second one is the real library: it's the user's whole collection,
-     * which is overwhelmingly what a group is playing — offline in a cabin, and
-     * equally at a table with signal, which is why this pool now backs the
-     * online first paint too and not just the offline branch. Read through
-     * peek() so entries past their fresh window still count — a stale name and
-     * thumbnail are fine, and the game row itself is immutable after BGG
-     * import anyway.
+     * All read through peek(), so entries past their fresh window still count —
+     * a stale name and thumbnail are fine, and the game row itself is immutable
+     * after BGG import anyway.
      *
-     * Memoized for DEVICE_POOL_TTL_MS: rebuilding walks up to 250 cache
-     * entries, which is wasted work at typing speed but must still pick up
-     * bundles the background warm-up finishes while the sheet is open.
+     * Memoized for DEVICE_POOL_TTL_MS: rebuilding walks up to 250 bundle
+     * entries, which is wasted work at typing speed but must still pick up a
+     * shelf or bundle a background warm-up finishes while the sheet is open.
      *
      * @returns {Array<{game: Object, lower: string}>}
      */
@@ -511,6 +560,18 @@
           seen.add(g.id);
           rows.push({ game: g, lower: g.name.toLowerCase() });
         };
+
+        const me = window.store && window.store.get("user");
+        if (me && me.id && window.Collection && window.Collection.cachedShelf) {
+          for (const status of SHELVES) {
+            const shelf = window.Collection.cachedShelf(me.id, status);
+            const items = (shelf && shelf.items) || [];
+            // Nested `expansions` rows are deliberately not walked — see
+            // consider() on why expansions stay out of this list.
+            for (const item of items) consider(item && item.game);
+          }
+        }
+
         const recent = cache.peek("game.recent", "self");
         if (Array.isArray(recent)) recent.forEach(consider);
         for (const gameId of cache.keys("game.bundle")) {
