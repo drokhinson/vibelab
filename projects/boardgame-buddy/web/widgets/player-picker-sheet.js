@@ -271,7 +271,10 @@
             input.focus();
           }
           const list = /** @type {HTMLElement|null} */ (root.querySelector(LIST_SEL));
-          if (list) list.style.minHeight = list.clientHeight + "px";
+          // Written as a custom property, not min-height, so the stylesheet can
+          // drop the pin when the software keyboard shrinks the sheet — an
+          // inline min-height would out-specify any rule trying to.
+          if (list) list.style.setProperty("--bgb-sheet-list-min", list.clientHeight + "px");
         },
         onClose: () => {
           this._candidates = [];
