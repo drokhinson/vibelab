@@ -175,6 +175,30 @@
 
   <!-- Load order: config → helpers → domain → ui → views → init -->
   <script src="config.js"></script>
+  <!-- Open the connection to the API before anything asks for it. The first
+       call of a session otherwise pays DNS + TLS on top of its round trip,
+       which is exactly what the game picker's first keystroke feels. The href
+       can't be authored statically — apiBase comes from config.js, which
+       build.sh generates per environment — so the link is injected here,
+       immediately after that config lands and before any domain script runs.
+       crossorigin: the API is a different origin and every call is a
+       credential-less CORS fetch, so the preconnected socket has to come from
+       the anonymous pool or it won't be the one reused. -->
+  <script>
+    (function () {
+      var base = (window.APP_CONFIG && window.APP_CONFIG.apiBase) || "";
+      if (!base) return;
+      try {
+        var origin = new URL(base, window.location.href).origin;
+        if (origin === window.location.origin) return;
+        var link = document.createElement("link");
+        link.rel = "preconnect";
+        link.href = origin;
+        link.crossOrigin = "anonymous";
+        document.head.appendChild(link);
+      } catch (e) {}
+    })();
+  </script>
   <script src="helpers.js"></script>
 
   <!-- Domain -->

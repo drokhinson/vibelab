@@ -83,15 +83,29 @@
      * every play on a client_key, so re-queueing a write that may have landed
      * is de-duplicated server-side rather than double-written.
      *
+     * A caller-supplied `signal` (the game picker aborts a search the moment
+     * the next keystroke supersedes it) is the one abort that means nothing
+     * about the link: it never calls noteFailure() and never sets `offline`,
+     * or typing would walk the app into offline mode one keystroke at a time.
+     * It rejects with `err.aborted = true`, which callers ignore.
+     *
      * @param {string} url
      * @param {RequestInit} init
+     * @param {AbortSignal} [callerSignal]
      * @returns {Promise<Response>}
      */
-    async _fetch(url, init) {
+    async _fetch(url, init, callerSignal) {
       let res;
       try {
         res = await fetch(url, init);
       } catch (e) {
+        if (callerSignal && callerSignal.aborted) {
+          const err = new Error("Request superseded.");
+          err.aborted = true;
+          err.status = 0;
+          err.cause = e;
+          throw err;
+        }
         if (window.BgbNet) window.BgbNet.noteFailure();
         const timedOut = !!e && (e.name === "AbortError" || e.name === "TimeoutError");
         const err = new Error(timedOut
@@ -118,20 +132,32 @@
      * @param {string} url
      * @param {RequestInit} init
      * @param {number} timeoutMs
+     * @param {AbortSignal} [callerSignal] aborts the request early
      * @returns {Promise<[Response, () => void]>} the response and its release fn
      */
-    _send(url, init, timeoutMs) {
+    _send(url, init, timeoutMs, callerSignal) {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), timeoutMs);
-      const release = () => clearTimeout(timer);
-      return this._fetch(url, { ...init, signal: ctl.signal }).then(
+      let onCallerAbort = null;
+      if (callerSignal) {
+        if (callerSignal.aborted) ctl.abort();
+        else {
+          onCallerAbort = () => ctl.abort();
+          callerSignal.addEventListener("abort", onCallerAbort);
+        }
+      }
+      const release = () => {
+        clearTimeout(timer);
+        if (onCallerAbort) callerSignal.removeEventListener("abort", onCallerAbort);
+      };
+      return this._fetch(url, { ...init, signal: ctl.signal }, callerSignal).then(
         (res) => [res, release],
         (e) => { release(); throw e; },
       );
     }
 
     async _request(method, path, opts = {}) {
-      const { body, query, headers, raw, _retried, _stalled } = opts;
+      const { body, query, headers, raw, signal, _retried, _stalled } = opts;
       const url = new URL(this.base + this.prefix + path);
       if (query) {
         for (const [k, v] of Object.entries(query)) {
@@ -152,7 +178,7 @@
 
       let res, release;
       try {
-        [res, release] = await this._send(url.toString(), init, REQUEST_TIMEOUT_MS);
+        [res, release] = await this._send(url.toString(), init, REQUEST_TIMEOUT_MS, signal);
       } catch (e) {
         // A stalled socket does not heal itself — the same request on a new
         // connection is what recovers, which is exactly what the user was
@@ -187,12 +213,27 @@
         // Awaited inside the try so the body read is still covered by the
         // deadline — release() below must not fire until the bytes are in.
         return ct.includes("application/json") ? await res.json() : await res.text();
+      } catch (e) {
+        // Headers arriving is not the request being done, so a caller abort
+        // can land during the body read — after _fetch has already returned,
+        // and as a raw AbortError. Tag it here too so `err.aborted` is the one
+        // thing a caller has to check, whenever the abort happened to fire.
+        if (signal && signal.aborted && !(e && e.aborted)) {
+          const err = new Error("Request superseded.");
+          err.aborted = true;
+          err.status = 0;
+          err.cause = e;
+          throw err;
+        }
+        throw e;
       } finally {
         release();
       }
     }
 
-    get(path, query)         { return this._request("GET",    path, { query }); }
+    // `opts` carries per-call extras — today just `{ signal }`, used by the
+    // game picker to drop a search the next keystroke has superseded.
+    get(path, query, opts)   { return this._request("GET",    path, { ...(opts || {}), query }); }
     post(path, body)         { return this._request("POST",   path, { body }); }
     put(path, body)          { return this._request("PUT",    path, { body }); }
     patch(path, body)        { return this._request("PATCH",  path, { body }); }

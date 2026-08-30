@@ -44,6 +44,50 @@
       return window.bgbCache.get("game.search", Game._searchKey(q, limit));
     }
 
+    /**
+     * Games from the cached result of the LONGEST cached query that is a
+     * strict prefix of `q`, narrowed to `q`.
+     *
+     * Typing "catan" issues five distinct queries, and cachedSearch() misses
+     * on all but an exact repeat — yet the answer to "cat" already contains
+     * every "cata" the server would return. The finder paints these
+     * immediately and replaces them when the real response lands.
+     *
+     * Provisional, never final: a cached page is capped at `limit`, so
+     * narrowing it can miss rows the server would rank in once the query
+     * gets more specific.
+     *
+     * @returns {Array<Object>} GameSummary rows, in their cached rank order.
+     */
+    static cachedSearchPrefix(q, { limit = 20 } = {}) {
+      if (!window.bgbCache) return [];
+      const query = (q || "").trim().toLowerCase();
+      if (!query) return [];
+      const suffix = `|${limit}`;
+      let bestKey = null;
+      let bestLen = -1;
+      for (const key of window.bgbCache.keys("game.search")) {
+        if (!key.endsWith(suffix)) continue;
+        const cachedQ = key.slice(0, -suffix.length);
+        // Strict prefix and strictly shorter — an exact match is
+        // cachedSearch()'s job and is served as a final result, not this.
+        if (!cachedQ || cachedQ.length >= query.length) continue;
+        if (!query.startsWith(cachedQ)) continue;
+        if (cachedQ.length > bestLen) { bestLen = cachedQ.length; bestKey = key; }
+      }
+      if (!bestKey) return [];
+      const hit = window.bgbCache.peek("game.search", bestKey);
+      const results = (hit && hit.results) || [];
+      const out = [];
+      for (const r of results) {
+        const g = r && r.game;
+        if (!g || !g.name) continue;
+        if (!g.name.toLowerCase().includes(query)) continue;
+        out.push(g);
+      }
+      return out;
+    }
+
     // Single ranked search. include_bgg=true appends BGG hits.
     //
     // Library searches (include_bgg=false) are memoized in bgbCache under
@@ -52,16 +96,20 @@
     // any collection mutation so a freshly-added game's status stays correct.
     // BGG searches bypass the cache — they hit the external BGG API (already
     // cached server-side) and are far less frequent.
-    static async search(q, { includeBgg = false, limit = 20 } = {}) {
+    //
+    // `signal` aborts the in-flight request; the finder passes one so a
+    // superseded keystroke stops competing for the connection.
+    static async search(q, { includeBgg = false, limit = 20, signal = null } = {}) {
       const query = (q || "").trim();
       const params = { q: query, limit, include_bgg: includeBgg ? "true" : "false" };
+      const opts = signal ? { signal } : undefined;
       if (includeBgg || !window.bgbCache) {
-        return window.api.get("/search", params);
+        return window.api.get("/search", params, opts);
       }
       const key = Game._searchKey(query, limit);
       const hit = window.bgbCache.get("game.search", key);
       if (hit) return hit;
-      const data = await window.api.get("/search", params);
+      const data = await window.api.get("/search", params, opts);
       // 3-minute TTL: long enough that a burst of typing/backspacing is
       // instant, short enough that the catalog stays reasonably fresh.
       window.bgbCache.set("game.search", key, data, 3 * 60 * 1000);
