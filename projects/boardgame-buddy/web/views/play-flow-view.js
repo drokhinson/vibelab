@@ -1424,16 +1424,16 @@
       const ps = this._ps;
       const game = ps.gameSnapshot;
       return `
+        ${this._renderInviteCard()}
+
         <section class="cascade-card">
           <label class="cascade-card__label">Game</label>
           ${game ? this._renderPickedGameChip() : this._renderGameChooser()}
         </section>
 
-        ${this._renderInviteCard()}
+        ${this._renderPlayModeSelector()}
 
         ${this._renderExpansionsPicker()}
-
-        ${this._renderPlayModeSelector()}
 
         <section class="cascade-card">
           <label class="cascade-card__label">Players</label>
