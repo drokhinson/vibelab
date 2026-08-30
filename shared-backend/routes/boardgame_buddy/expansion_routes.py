@@ -12,15 +12,17 @@ catalog. It exposes:
   native GameDetailScreen; the chapter system does not consume it).
 """
 
+import asyncio
+import logging
 import re
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, Path
+from fastapi import Depends, Header, HTTPException, Path, Query
 
 from db import get_supabase
 
 from . import router
-from .bgg_client import fetch_bgg, parse_bgg_xml
+from .bgg_client import fetch_bgg, fetch_owner_counts, parse_bgg_xml
 from .game_routes import (
     _invalidate_game_caches,
     _next_expansion_color,
@@ -34,10 +36,13 @@ from .dependencies import (
 )
 from .models import (
     BggExpansionCandidate,
+    ExpansionCatalogResponse,
     ExpansionListItem,
     ExpansionToggleRequest,
     MessageResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 # Separators BGG uses between a base game's name and the expansion's own name:
 # "Catan: Cities & Knights", "Carcassonne – Inns & Cathedrals", "Azul, Crystal
@@ -151,6 +156,29 @@ def _load_base_game(base_id: str) -> dict:
     return row
 
 
+# Whole-request ceiling on the popularity lookup. fetch_owner_counts issues up
+# to six sequential 20s batches; without a budget a slow BGG turns a popup that
+# used to open instantly into a two-minute stall. On timeout the candidates keep
+# whatever counts arrived and the rest sort alphabetically.
+_OWNER_COUNT_BUDGET_S = 12.0
+
+
+async def _owner_counts_within_budget(bgg_ids: list[int]) -> dict[int, int]:
+    """fetch_owner_counts under a wall-clock budget. Never raises."""
+    if not bgg_ids:
+        return {}
+    try:
+        return await asyncio.wait_for(
+            fetch_owner_counts(bgg_ids), timeout=_OWNER_COUNT_BUDGET_S
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "BGG owner-count lookup exceeded %.0fs for %d ids — falling back to "
+            "alphabetical order", _OWNER_COUNT_BUDGET_S, len(bgg_ids),
+        )
+        return {}
+
+
 @router.get(
     "/games/{base_id}/expansions/available",
     response_model=list[BggExpansionCandidate],
@@ -166,6 +194,11 @@ async def list_available_expansions(
     filtered out, and each name has the base game's name stripped off the
     front. BGG `/thing` responses are cached in-process for 24h, so reopening
     the popup costs nothing.
+
+    Ordered by BGG owner count, descending — the candidates are by definition
+    absent from BgB's catalog, so nobody here owns or has played them and there
+    is no local popularity signal to sort on. Names break ties, which also makes
+    a failed stats lookup degrade cleanly to plain alphabetical order.
     """
     base = _load_base_game(base_id)
     base_bgg_id = base.get("bgg_id")
@@ -213,7 +246,19 @@ async def list_available_expansions(
         for exp_id, full_name in candidates.items()
         if exp_id not in already_imported
     ]
-    results.sort(key=lambda c: c.name.lower())
+    # Counts are looked up over the FULL candidate set, not the filtered one:
+    # the expansions BGG links to a base game are a stable set, so the chunk
+    # boundaries — and therefore the cache keys — stay warm as candidates get
+    # imported out of this list.
+    counts = await _owner_counts_within_budget(list(candidates))
+    for c in results:
+        c.bgg_owned = counts.get(c.bgg_id)
+
+    # Known counts first, most-owned down; unknown counts alphabetically after
+    # them. `bgg_owned is None` sorts False(0) before True(1), so a partial
+    # lookup still ranks what it knows instead of discarding it, and a total
+    # failure degrades to exactly the old alphabetical order.
+    results.sort(key=lambda c: (c.bgg_owned is None, -(c.bgg_owned or 0), c.name.lower()))
     return results
 
 
@@ -275,6 +320,72 @@ async def import_expansion(
         is_enabled=False,
         rulebook_url=row.get("rulebook_url"),
     )
+
+
+@router.get(
+    "/collection/expansion-catalog",
+    response_model=ExpansionCatalogResponse,
+    status_code=200,
+    summary="Every catalog expansion for the base games a user owns",
+)
+async def collection_expansion_catalog(
+    user_id: Optional[str] = Query(
+        None, description="Target user (profiles are public); defaults to the viewer."
+    ),
+    user: CurrentUser = Depends(get_current_user),
+) -> ExpansionCatalogResponse:
+    """List every expansion BgB has for every base game on this user's owned shelf.
+
+    Backs the Expansions tree's "show all" toggle, which greys out the ones the
+    user doesn't own yet. Two bounded queries rather than one
+    /games/{id}/expansions call per base game — a 40-game shelf would otherwise
+    be 40 requests to paint one screen.
+    """
+    sb = get_supabase()
+    target = user_id or user.user_id
+
+    owned = (
+        sb.table("boardgamebuddy_collections")
+        .select("game_bgg_id")
+        .eq("user_id", target)
+        .eq("status", "owned")
+        .eq("game_is_expansion", False)
+        .execute()
+    )
+    base_bgg_ids = sorted({
+        r["game_bgg_id"] for r in (owned.data or []) if r.get("game_bgg_id")
+    })
+    if not base_bgg_ids:
+        return ExpansionCatalogResponse(items=[])
+
+    rows = (
+        sb.table("boardgamebuddy_games")
+        .select(
+            "id, bgg_id, name, thumbnail_url, image_url, expansion_color, "
+            "rulebook_url, base_game_bgg_id"
+        )
+        .eq("is_expansion", True)
+        .in_("base_game_bgg_id", base_bgg_ids)
+        .order("name")
+        .execute()
+    )
+
+    return ExpansionCatalogResponse(items=[
+        ExpansionListItem(
+            expansion_game_id=r["id"],
+            bgg_id=r.get("bgg_id"),
+            name=r["name"],
+            thumbnail_url=r.get("thumbnail_url"),
+            image_url=r.get("image_url"),
+            color=r.get("expansion_color"),
+            # Per-user enable state is a play-time concern and this list is a
+            # catalog view, so it stays false rather than costing a third query.
+            is_enabled=False,
+            rulebook_url=r.get("rulebook_url"),
+            base_game_bgg_id=r.get("base_game_bgg_id"),
+        )
+        for r in (rows.data or [])
+    ])
 
 
 @router.post(

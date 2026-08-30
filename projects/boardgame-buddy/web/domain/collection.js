@@ -30,8 +30,31 @@
   // truncated and the caller falls back to the paginated grid.
   const SHELF_LIMIT = 1000;
 
-  function _shelfKey(targetUserId, status) {
-    return `${targetUserId || "me"}|${status}`;
+  function _shelfKey(targetUserId, status, includeExpansions) {
+    // The expansions dimension is part of the key because the two shapes are
+    // a subset/superset pair over the same (target, status): without it the
+    // tree's fetch would overwrite the flat Owned grid's entry with rows the
+    // grid filters out anyway, and vice versa.
+    return `${targetUserId || "me"}|${status}|${includeExpansions ? "all" : "base"}`;
+  }
+
+  /** Shared request builder — shelf() and cachedShelf() must not drift. */
+  async function _fetchShelf(targetUserId, status, includeExpansions) {
+    const qs = new URLSearchParams({
+      status,
+      exclude_expansions: includeExpansions ? "false" : "true",
+      limit: String(SHELF_LIMIT),
+    });
+    const me = window.store.get("user");
+    if (targetUserId && me && targetUserId !== me.id) {
+      qs.set("user_id", targetUserId);
+    }
+    const data = await window.api.get(`/collection/shelf?${qs.toString()}`);
+    return {
+      items: (data && data.items) || [],
+      total: (data && data.total) || 0,
+      truncated: !!(data && data.truncated),
+    };
   }
 
   async function _fetch() {
@@ -109,6 +132,13 @@
       return (entry && entry.status) || null;
     }
 
+    /** Synchronous peek at the cached per-base-game owned-expansion counts. */
+    static cachedExpansionCounts() {
+      if (!window.bgbCache) return null;
+      const entry = window.bgbCache.peek(NS, COMBINED_KEY);
+      return (entry && entry.expCount) || null;
+    }
+
     static async myExpansionCountByBaseBggId(opts = {}) {
       const r = await _ensure(opts);
       return r.expCount;
@@ -118,33 +148,58 @@
      * A whole collection shelf, cached. Callers page, filter and search this
      * locally via window.ShelfFilter rather than re-fetching per page.
      *
+     * `includeExpansions` asks the server for owned expansion rows too — the
+     * Collection spoke's Expansions tree needs them, every other caller
+     * filters them out. Grouping stays client-side (domain/expansion-tree.js)
+     * because each row already carries is_expansion / base_game_bgg_id /
+     * bgg_id, and nesting in SQL would silently drop owned expansions whose
+     * base game the viewer doesn't own.
+     *
      * @param {string} targetUserId
      * @param {"owned"|"wishlist"|"played"} status
-     * @param {{force?: boolean}} [opts]
+     * @param {{force?: boolean, includeExpansions?: boolean}} [opts]
      * @returns {Promise<{items: any[], total: number, truncated: boolean}>}
      */
-    static shelf(targetUserId, status, { force = false } = {}) {
-      const key = _shelfKey(targetUserId, status);
+    static shelf(targetUserId, status, { force = false, includeExpansions = false } = {}) {
+      const key = _shelfKey(targetUserId, status, includeExpansions);
+      if (force) window.bgbCache.delete(SHELF_NS, key);
+      return window.bgbCache.swr(
+        SHELF_NS,
+        key,
+        () => _fetchShelf(targetUserId, status, includeExpansions),
+        { freshTtl: SHELF_FRESH_TTL_MS, staleTtl: SHELF_STALE_TTL_MS },
+      );
+    }
+
+    /**
+     * Every catalog expansion for the base games this user owns, for the
+     * Expansions tree's "show all" toggle. One request rather than a
+     * /games/{id}/expansions call per base game.
+     *
+     * Cached in the shelf namespace so invalidateShelves() — which every
+     * collection mutation already fans out to — covers it. A BGG *import*
+     * does not go through that path (it changes the catalog, not anyone's
+     * collection), so the import flow force-refreshes explicitly.
+     *
+     * @param {string} targetUserId
+     * @param {{force?: boolean}} [opts]
+     * @returns {Promise<any[]>}
+     */
+    static expansionCatalog(targetUserId, { force = false } = {}) {
+      const key = `${targetUserId || "me"}|expcatalog`;
       if (force) window.bgbCache.delete(SHELF_NS, key);
       return window.bgbCache.swr(
         SHELF_NS,
         key,
         async () => {
-          const qs = new URLSearchParams({
-            status,
-            exclude_expansions: "true",
-            limit: String(SHELF_LIMIT),
-          });
+          const qs = new URLSearchParams();
           const me = window.store.get("user");
           if (targetUserId && me && targetUserId !== me.id) {
             qs.set("user_id", targetUserId);
           }
-          const data = await window.api.get(`/collection/shelf?${qs.toString()}`);
-          return {
-            items: (data && data.items) || [],
-            total: (data && data.total) || 0,
-            truncated: !!(data && data.truncated),
-          };
+          const q = qs.toString();
+          const data = await window.api.get(`/collection/expansion-catalog${q ? "?" + q : ""}`);
+          return (data && data.items) || [];
         },
         { freshTtl: SHELF_FRESH_TTL_MS, staleTtl: SHELF_STALE_TTL_MS },
       );
@@ -156,9 +211,9 @@
      * get(): a shelf a couple of minutes old beats a spinner, and shelf() is
      * what corrects it. Returns null on a miss.
      */
-    static cachedShelf(targetUserId, status) {
+    static cachedShelf(targetUserId, status, { includeExpansions = false } = {}) {
       if (!window.bgbCache) return null;
-      return window.bgbCache.peek(SHELF_NS, _shelfKey(targetUserId, status));
+      return window.bgbCache.peek(SHELF_NS, _shelfKey(targetUserId, status, includeExpansions));
     }
 
     /**

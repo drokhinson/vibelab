@@ -10,6 +10,12 @@
 // client-side — no debounce, no second request. It matches the displayed
 // name and BGG's full name (so typing the base game's name still hits).
 //
+// The server returns the list ordered by BGG owner count, descending, with
+// unknown counts alphabetical at the tail — candidates are by definition
+// absent from BgB's catalog, so there is no local popularity signal to rank
+// them on. Never re-sort client-side: _renderRows filters, which preserves
+// order, and the owners chip is what makes that order legible.
+//
 // Opened from the expansion section on both surfaces that own expansions:
 //   - views/game-detail-view.js (boardgame page)
 //   - views/play-flow-view.js   (host Gather screen)
@@ -32,6 +38,8 @@
    * @property {number} bgg_id
    * @property {string} name       Base-game prefix stripped.
    * @property {string} full_name  BGG's original string.
+   * @property {number|null} [bgg_owned] BGG owners — the sort key. Null when
+   *   BGG's stats lookup failed, in which case the row shows no chip.
    * @property {string} [bgg_url]
    */
 
@@ -121,6 +129,14 @@
       + escapeHtml(raw.slice(i + q.length));
   }
 
+  /** 12345 -> "12.3k". The chip sits inline in a 44px row, so five digits
+   * don't fit; the full number rides along in the title attribute. */
+  function _ownersLabel(n) {
+    if (n >= 10000) return Math.round(n / 1000) + "k";
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+    return String(n);
+  }
+
   /** @param {ExpansionCandidate[]} list */
   function _renderList(list) {
     return `
@@ -131,6 +147,11 @@
               <span class="import-exp-row__name" title="${escapeHtml(e.full_name || e.name)}">${_highlight(e.name, _query)}</span>
               <span class="import-exp-row__error" hidden></span>
             </span>
+            ${e.bgg_owned >= 1 ? `
+              <span class="import-exp-row__owners"
+                    title="${e.bgg_owned.toLocaleString()} BoardGameGeek users own this">
+                <i data-icon="users" class="w-3 h-3"></i>${_ownersLabel(e.bgg_owned)}
+              </span>` : ""}
             <button type="button" class="import-exp-row__add"
                     data-exp-action="import" data-exp-bgg-id="${e.bgg_id}"
                     aria-label="Import ${escapeHtml(e.name)}">

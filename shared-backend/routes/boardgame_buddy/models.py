@@ -211,6 +211,14 @@ class BggExpansionCandidate(BaseModel):
     bgg_id: int
     name: str
     full_name: str
+    bgg_owned: Optional[int] = Field(
+        None,
+        description=(
+            "How many BoardGameGeek users own this expansion — the popup's sort key. "
+            "None when BGG's stats lookup failed or was skipped, in which case the "
+            "row shows no count and the list falls back to alphabetical order."
+        ),
+    )
 
     @computed_field  # type: ignore[misc]
     @property
@@ -237,9 +245,14 @@ class CollectionItem(BaseModel):
     last_played_at: Optional[date] = None
     play_count: int = 0
     game: GameSummary
-    # When this row is a base game and the user owns/has-wishlisted/has-played
-    # one or more of its expansions on the same shelf, those expansion rows
-    # ride along here so the FE can show them nested without a follow-up call.
+    # Always empty today: both branches of bgb_collection_shelf hard-code
+    # 'expansions', '[]'::jsonb, and /collection/grid never sets it either.
+    # The web client asks for the flat shelf with expansions included
+    # (exclude_expansions=false) and nests them itself, in
+    # web/domain/expansion-tree.js — nesting in SQL would silently drop the
+    # two cases that grouping surfaces: an owned expansion whose base game the
+    # viewer doesn't own, and one whose denormalized base_game_bgg_id is null.
+    # Kept on the wire because the native app reads this shape.
     expansions: list["CollectionItem"] = Field(default_factory=list)
 
 
@@ -545,6 +558,24 @@ class ExpansionListItem(BaseModel):
     color: Optional[str] = None
     is_enabled: bool = False
     rulebook_url: Optional[str] = None
+    # Which base game this expansion extends. Only the catalog endpoint sets
+    # it — /games/{id}/expansions is already scoped to one base game, so there
+    # it would be the same value on every row.
+    base_game_bgg_id: Optional[int] = None
+
+
+class ExpansionCatalogResponse(BaseModel):
+    """Every catalog expansion for every base game the viewer owns.
+
+    Backs the Expansions tree's "show all" toggle. One response rather than a
+    per-base-game call: a shelf of 40 games would otherwise be 40 requests to
+    render one screen.
+
+    `owned` is deliberately absent — the caller is the Collection spoke, which
+    already knows its own shelf and marks the rows itself.
+    """
+
+    items: list[ExpansionListItem]
 
 
 class ExpansionToggleRequest(BaseModel):
