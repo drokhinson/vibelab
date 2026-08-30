@@ -2772,10 +2772,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-session__scroll::-webkit-scrollbar { display: none; }
 
 /* ── Feed rails (hot games / suggested buddies) ────────────────────────────
-   Carry the same cream polaroid surface as the play cards so the feed reads
-   as a coherent stack of paper instead of two visual systems. Inner tiles
-   sit on a slightly darker cream wash with a hairline border so they read
-   as little clippings on the polaroid wall. */
+   The rail itself is transparent — the feed ground carries it. Its tiles are
+   the app's chrome tiles, not photographs: see the token re-point below. */
 .feed-rail {
   background: transparent;
   border: none;
@@ -2824,12 +2822,42 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .feed-rail--flush .feed-rail__header { padding-left: 0; padding-right: 0; }
 .feed-rail--flush .feed-rail__scroll { padding-left: 0; padding-right: 0; }
 
+/* Feed-rail tiles are chrome, not photographs.
+   A rail tile and a `.collection-tile` are the same object — a game in a grid —
+   so they have to land on the same surface. The Collection spoke gets there
+   through `.bgb-spoke-screen`, which re-points --polaroid-* at the app tokens
+   (--bg-1 card, --line hairline, --ink title). The feed is not a spoke screen,
+   so its rails were left on the root paper aliases — and paper is deliberately
+   CREAM IN BOTH THEMES (it means "photograph"; see the alias block near the top
+   of this file). That handed the dark feed a cream caption footer under every
+   Hot-this-week tile while the identical tile in Collection read espresso.
+
+   --polaroid-bg-soft goes to --bg-1, not the --bg-2 the chrome block picks, so
+   the tile is the same value as `.collection-tile`'s --sheet-card rather than
+   one step brighter. Every value here is a var(), so both themes flow through
+   without a dark-only branch: in light --bg-1 is #FFFBF2, the same near-white
+   the collection tiles already carry there, which is why light looks unchanged.
+
+   Scoped to the feed on purpose. `.feed-rail` also runs on the Buddies spoke
+   (`.feed-rail--flush`), where .bgb-spoke-screen already re-points these; a
+   bare `.feed-rail` selector would out-specify it and quietly restyle that
+   screen's buddy tiles too. The play cards stacked around these rails are real
+   paper and keep their cream. */
+[data-view="feed"] .feed-rail {
+  --polaroid-bg:       var(--bg-1);
+  --polaroid-bg-soft:  var(--bg-1);
+  --polaroid-ink:      var(--ink);
+  --polaroid-ink-soft: var(--ink-muted);
+  --polaroid-muted:    var(--ink-muted);
+  --polaroid-line:     var(--line);
+}
+
 /* Rail variant of the canonical Game tile. Replaces the former
    `.hot-game-tile` family, which was duplicated across two feed renderers.
-   Carries the same cream caption as the collection / wishlist tiles (see
-   `.collection-tile` and its `.bgb-spoke-screen` overrides) and the buddy
-   tiles beside it: a game tile looks like a game tile wherever it appears,
-   rather than going dark-on-espresso only in the feed. */
+   Paints itself from --polaroid-*, so it picks up whichever surface its host
+   re-points those to: the chrome card on the feed (see the block above) and on
+   the Buddies spoke, matching `.collection-tile` in both themes. A game tile
+   looks like a game tile wherever it appears. */
 .game-polaroid.game-polaroid--rail {
   flex: 0 0 112px;
   scroll-snap-align: start;
