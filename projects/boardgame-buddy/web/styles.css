@@ -281,6 +281,7 @@
      .game-picker-sheet,
      .player-picker-sheet,
      .game-search-sheet,
+     .shelf-sheet,
      .exp-picker,
      .import-exp-modal,
      [data-view="log-play"]) {
@@ -317,6 +318,7 @@
      .game-picker-sheet,
      .player-picker-sheet,
      .game-search-sheet,
+     .shelf-sheet,
      .exp-picker,
      .import-exp-modal,
      [data-view="log-play"]) {
@@ -3973,6 +3975,136 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-bg);
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ── Shelf of shame sheet ─────────────────────────────────────────────────
+   The list behind the Stats spoke's Shelf of shame card. Multi-select in
+   spirit — every row is an independent toggle that writes immediately, so
+   there is no footer commit, just Cancel. Panel chrome is the shared
+   .bgb-sheet__* family; only these rows and the tab strip are ours. */
+
+/* Unplayed / Marked played. A two-option segmented control, not a sheet of its
+   own: it switches which slice of one in-memory array the list renders, and
+   burying that behind a second overlay would be absurd. Its own host element
+   so a toggle can repaint the counts without touching the search field. */
+.shelf-sheet__tabs {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 8px 0 2px;
+  border-radius: 999px;
+  /* --well is only declared on the chrome surfaces (.shelf-sheet is named in
+     the re-point list at the top of this file); the fallback covers a paper
+     context, as .game-finder__input and .import-exp-modal do. */
+  background: var(--well, var(--polaroid-bg-soft));
+}
+.shelf-sheet__tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--polaroid-muted);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+/* An accent wash, not just the card tone: the plain --polaroid-bg pill was
+   1.10:1 against the --well strip behind it in BOTH themes, so the selected
+   tab read as unselected at a glance even though its label was legible. The
+   accent tint is the same signal .shelf-sheet__row uses for a ticked row. */
+.shelf-sheet__tab[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 22%, var(--polaroid-bg));
+  color: var(--accent-ink);
+  box-shadow: var(--sh-1);
+}
+.shelf-sheet__tab:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -3px; }
+
+.shelf-sheet__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  /* 56px, as every other sheet row in the app — .game-picker__row,
+     .player-picker__row, .status-sheet__opt. */
+  min-height: 56px;
+  padding: 6px 10px;
+  flex: none;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.shelf-sheet__row:active { background: var(--polaroid-bg-soft); }
+@media (hover: hover) {
+  .shelf-sheet__row:hover { background: var(--polaroid-bg-soft); }
+}
+.shelf-sheet__row:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -3px; }
+.shelf-sheet__row[aria-checked="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.shelf-sheet__row[aria-checked="true"] .shelf-sheet__name { color: var(--accent-ink); }
+/* A row whose write is still in the air. Not disabled — a second tap should
+   still register and win; this only says the app heard the first one. */
+.shelf-sheet__row[data-busy="1"] { opacity: 0.6; }
+
+.shelf-sheet__art {
+  width: 44px; height: 44px;
+  flex: none;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--polaroid-line);
+  box-shadow: var(--sh-2);
+}
+.shelf-sheet__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Coverless game: the dice placeholder .game-picker__art--empty uses, so it
+   reads as a game rather than as a failed image. */
+.shelf-sheet__art--empty {
+  display: grid;
+  place-items: center;
+  color: var(--polaroid-muted);
+  box-shadow: none;
+}
+.shelf-sheet__body { flex: 1 1 auto; min-width: 0; }
+.shelf-sheet__name,
+.shelf-sheet__meta {
+  display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.shelf-sheet__name { font-size: 0.97rem; font-weight: 600; line-height: 1.2; }
+.shelf-sheet__meta {
+  margin-top: 3px;
+  font-size: 0.74rem;
+  color: var(--polaroid-muted);
+}
+/* The tick column is reserved whether or not the row is ticked, so toggling
+   one doesn't reflow the name beside it (.claude/rules/overlays.md §6). */
+.shelf-sheet__check {
+  flex: none;
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  border-radius: 7px;
+  border: 2px solid var(--polaroid-line);
+  color: var(--on-accent, #fff);
+}
+.shelf-sheet__row[aria-checked="true"] .shelf-sheet__check {
+  background: var(--accent-fill, var(--accent));
+  border-color: var(--accent-fill, var(--accent));
+}
+/* Sits under the list rather than in __sub, because it is a caveat about the
+   rows on screen, not a description of the sheet. */
+.shelf-sheet__note {
+  flex: none;
+  margin: 6px 2px 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--polaroid-muted);
 }
 
 /* ── Player picker sheet ──────────────────────────────────────────────────
@@ -9602,11 +9734,20 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 /* ── Spoke: small stat cards ──────────────────────────────────────────────── */
-/* align-items:start, not stretch: a 3-row Taste card beside a two-block
-   Comeback card would otherwise stretch to match and show a half-empty
-   box. A ragged bottom edge reads as a stat grid; dead space reads as a
-   bug. */
-.stats-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.75rem; align-items: start; }
+/* align-items:stretch, reversing the earlier call for align-items:start. The
+   argument for start was that a 3-row Taste card stretched to match a taller
+   neighbour shows a half-empty box, and dead space reads as a bug. On a phone
+   it reads the other way round: two cards on one row are one row, and a pair
+   whose bottom edges miss each other by 40px reads as broken alignment, not as
+   data. Cards keep their content top-aligned inside the stretched track, so a
+   short card gains trailing space rather than stretched innards — and the one
+   card with a footer control (Shelf of shame's Show button) spends that space
+   by pinning it to the bottom edge. */
+.stats-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.75rem; align-items: stretch; }
+/* A duo can legitimately render one child — a new account with plays but no
+   collection gets Table size and no Shelf of shame. Half a row against empty
+   space is not what stretch is for. */
+.stats-duo:has(> :only-child) { grid-template-columns: 1fr; }
 .stats-mini {
   background: var(--polaroid-bg, #FFFBF1);
   border: 1px solid var(--card-border);
@@ -9614,6 +9755,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding: 0.7rem 0.75rem 0.75rem;
   box-shadow: var(--sh-2);
   min-width: 0;
+  /* Column flex so a stretched card can push a footer control (see
+     .stats-mini__more) to its bottom edge instead of leaving the slack
+     dangling below the content. */
+  display: flex;
+  flex-direction: column;
 }
 .stats-mini--flat { background: transparent; box-shadow: none; border-color: var(--polaroid-line, #DAC9A4); }
 .stats-mini__k {
@@ -9639,6 +9785,39 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .stats-mini__v small { font-size: 0.8rem; font-weight: 600; color: var(--polaroid-muted, #8B7E68); }
 .stats-mini__d { font-size: 0.68rem; color: var(--polaroid-muted, #8B7E68); line-height: 1.4; margin-top: 0.25rem; }
 .stats-mini__d b { color: var(--accent-ink); font-family: var(--font-score); font-weight: 700; }
+
+/* The Shelf of shame card's footer control. Same pill as
+   .preview-card__seeall — this is the same "there is a list behind this card"
+   affordance, and .claude/rules/ui-object-design.md §3b says one affordance per
+   destination — but it sits at the BOTTOM of the card rather than in a header
+   row, which is what spends the slack .stats-duo's stretch hands a short card.
+   margin-top:auto is why .stats-mini is a flex column. */
+.stats-mini__more {
+  margin-top: auto;
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  min-height: 32px;
+  position: relative;
+  transition: background 0.15s;
+}
+/* 44x44 hit area without inflating a 32px pill
+   (.claude/rules/mobile-web.md §5). */
+.stats-mini__more::before { content: ""; position: absolute; inset: -6px -4px; }
+.stats-mini__more:active { background: color-mix(in srgb, var(--accent) 34%, transparent); }
+@media (hover: hover) {
+  .stats-mini__more:hover { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+}
+.stats-mini__more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Spoke: nemesis ───────────────────────────────────────────────────────── */
 .stats-nemesis { display: flex; align-items: center; gap: 0.6rem; }
