@@ -102,27 +102,8 @@
   --paper-line:  #E6DCC8;
   --card-border: transparent;            /* dark needs no border; light does */
 
-  /* Chrome — the profile hub's and the spokes' card surface.
-     Paper above is for things that are PHOTOGRAPHS (play cards, the Gather
-     grid, the parchment scroll); those stay cream in both themes because photo
-     paper does. The hub and its spokes are plain UI, so in dark they follow the
-     ground instead. Card-to-ground is only 1.14:1 by design — the hairline and
-     the shadow do the separating, not brightness. */
-  --chrome:        #2A1F18;
-  --chrome-line:   rgba(224, 169, 74, 0.14);
-  --chrome-emboss: rgba(255, 255, 255, 0.06);
-  --chrome-ok:     #6FC27B;   /* --ok is tuned for cream; 1.6:1 on chrome */
-
-  /* Sheet — the full-bleed surface behind Settings and the profile spokes
-     (.bgb-spoke-screen). Dark used to lay one sheet of cream paper over the
-     espresso ground, which is what made every spoke brighter than the app
-     around it. Now both themes drop the sheet and let the cards carry the
-     separation — chrome on espresso here, white on cream in light. There is
-     no --sheet-bg any more: the page ground shows through in both. */
-  --sheet-ink:       var(--ink);
-  --sheet-ink-muted: var(--ink-muted);
-  --sheet-card:      var(--chrome);
-  --sheet-line:      var(--chrome-line);
+  /* Top highlight on a raised strip. Cream catches light; espresso does not. */
+  --card-emboss: rgba(255, 255, 255, 0.06);
 
   --shadow-c: rgba(12, 5, 0, 0.62);      /* tinted to the ground, never pure black */
   --sh-1: 0 1px 2px var(--shadow-c);
@@ -163,8 +144,10 @@
   --accent-hover: #8E5F10;
   --accent-quiet: rgba(168, 114, 21, 0.13);
 
-  /* Accent on paper — same job as in dark, and here paper is white. */
-  --accent-ink:   #8E5F10;
+  /* Accent on a card — same job as in dark. #8E5F10 sat at 4.4:1 once it landed
+     on its own 16-18% amber wash (the "See all" pill, the spoke back button),
+     so it is a step darker than --accent-hover rather than equal to it. */
+  --accent-ink:   #7F540D;
   /* --accent itself is too mid-toned to carry text: white on #A87215 is only
      4.1:1, so a solid accent chip fills with the darker gold instead. */
   --accent-fill:  #8E5F10;
@@ -188,20 +171,7 @@
   --paper-line:  #E8DFCD;
   --card-border: rgba(48, 34, 20, 0.12);
 
-  /* Light needs no chrome/paper split — the ground is already warm paper, so
-     these resolve to the same white card the feed uses. Defined so the tokens
-     are honest in both themes even though only dark reads them today. */
-  --chrome:        #FFFFFF;
-  --chrome-line:   rgba(48, 34, 20, 0.12);
-  --chrome-emboss: rgba(255, 255, 255, 0.65);
-  --chrome-ok:     #1B6029;
-
-  /* The page ground IS the warm paper here, so the cards go white on it with
-     the hairline above, exactly like the feed. */
-  --sheet-ink:       oklch(var(--bc));
-  --sheet-ink-muted: var(--ink-muted);
-  --sheet-card:      var(--paper);
-  --sheet-line:      rgba(48, 34, 20, 0.14);
+  --card-emboss: rgba(255, 255, 255, 0.65);
 
   --shadow-c: rgba(120, 88, 44, 0.20);
   --sh-1: 0 1px 2px var(--shadow-c);
@@ -236,35 +206,68 @@
   --polaroid-accent:   var(--win);
 }
 
-/* ── Dark: the profile hub + its spokes run on chrome, not paper ─────────────
-   The aliases above are right for photographs and wrong for plain UI, and the
-   profile surfaces are plain UI: the hub stacked nine cream blocks down an
-   espresso screen, and each spoke laid a full cream sheet over it. (The sheet
-   itself is handled by the --sheet-* tokens up in the theme block; this is the
-   card ink and fill.)
+/* ── Chrome surfaces: the screens that are UI, not photographs ───────────────
+   The aliases above are right for photographs and wrong for plain UI. The
+   profile hub, the five spokes and the Log-play screen are plain UI: left on
+   the paper tokens they handed the user a cream sheet in dark, brighter than
+   the app it belongs to.
 
-   Re-pointing the inherited tokens on those four card families is the whole
-   fix — every rule inside them keeps reading the same token names it always
-   has, so none of the ~45 rules that paint these screens is touched. The
-   color-mix() rules invert on their own once --polaroid-ink flips.
+   Every value here is a var(), so this is NOT theme-scoped — each theme
+   supplies its own and both work by construction. That is the whole point: a
+   dark-only branch is what let three screens drift apart in the first place
+   (#533 and #534 each shipped one, at equal specificity, and the cascade
+   settled it on source order). Only genuinely per-theme values live in the
+   dark block below.
+
+   Card is --bg-1, one step off the ground; fields sink to --well so they read
+   as cut into the card rather than laid on it. Cover art and play thumbnails
+   are untouched — they carry the warmth on these screens now.
 
    Scope note: no .play-card, .game-polaroid or parchment surface is ever
    rendered inside these containers, so paper keeps its cream everywhere it
    actually means "photo".
    ────────────────────────────────────────────────────────────────────────── */
-:root[data-bgb="dark"] :is(.set-card,
-                           .profile-stat-card,
-                           .preview-card,
-                           .bgb-spoke-screen) {
-  --polaroid-bg:       var(--chrome);
-  --polaroid-bg-soft:  var(--chrome);
+:is(.set-card,
+     .profile-stat-card,
+     .preview-card,
+     .bgb-spoke-screen,
+     [data-view="log-play"]) {
+  --polaroid-bg:       var(--bg-1);
+  --polaroid-bg-soft:  var(--bg-2);
   --polaroid-ink:      var(--ink);
   --polaroid-ink-soft: var(--ink-muted);
   --polaroid-muted:    var(--ink-muted);
-  --polaroid-line:     rgba(255, 255, 255, 0.10);
-  --accent-ink:        var(--accent);   /* the paper gold is 1.5:1 on chrome */
-  --card-border:       var(--chrome-line);
-  --ok:                var(--chrome-ok);
+  --polaroid-line:     var(--line);
+
+  --paper:             var(--bg-1);
+  --paper-ink:         var(--ink);
+  --paper-muted:       var(--ink-muted);
+  --paper-line:        var(--line);
+  --card-border:       var(--line);
+
+  --sheet-ink:         var(--ink);
+  --sheet-ink-muted:   var(--ink-muted);
+  --sheet-card:        var(--bg-1);
+  --sheet-line:        var(--line);
+
+  /* Fields, filter chips: a well cut into the card. */
+  --well:              var(--bg-0);
+}
+
+/* The values a re-point cannot supply, because "gold that survives a light
+   card" and "gold on espresso" are genuinely different colours. Light keeps the
+   root values, which are already tuned for a light card. */
+:root[data-bgb="dark"] :is(.set-card,
+     .profile-stat-card,
+     .preview-card,
+     .bgb-spoke-screen,
+     [data-view="log-play"]) {
+  --accent-ink:      var(--accent);   /* the paper gold is 1.5:1 here */
+  --polaroid-accent: #E87B63;         /* terracotta is 3.9:1 here */
+  --ghost-ink:       #C4A987;         /* espresso brown is invisible here */
+  --ok:              #6FBF7F;         /* #1F6B2E is 1.4:1 here */
+  --warn:            #E5A33F;
+  --rust:            #E87B63;
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
@@ -3130,19 +3133,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background: var(--polaroid-bg, #FFFBF1);
+  background: var(--sheet-card, #FFFBF1);
   border-top: 1px solid var(--sheet-line);
   box-shadow:
-    0 -2px 12px rgba(58, 42, 8, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65);
-  z-index: 35;
-}
-/* The footer rides the sheet, so on chrome the cream-tuned pair above reads as
-   a bright white hairline over a warm brown haze. */
-:root[data-bgb="dark"] .spoke-pager-footer {
-  box-shadow:
     0 -2px 12px var(--shadow-c),
-    inset 0 1px 0 var(--chrome-emboss);
+    inset 0 1px 0 var(--card-emboss);
+  z-index: 35;
 }
 
 .spoke-pager-footer__btn {
@@ -3695,10 +3691,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: oklch(0.55 0.15 60 / 0.18);
   color: oklch(0.45 0.15 60);
 }
-/* That rust is 6.2:1 on paper and 1.4:1 on chrome, so the dark hub/spokes need
-   the lamp gold instead. Not --accent-ink: this ink sits on an 18% amber wash,
-   which eats ~1.8:1 of whatever it is given. */
-:root[data-bgb="dark"] .player-type-chip--account { color: var(--accent); }
+/* That rust is 6.2:1 on paper and ~1.4:1 on a chrome card. Both chips sit on an
+   18% amber wash, which eats ~1.8:1 of whatever ink they are given, so they take
+   the lamp gold rather than --accent-ink. */
+:root[data-bgb="dark"] :is(.player-type-chip--account,
+                           .buddies-link-results__chip) { color: var(--accent); }
 .player-type-chip--custom {
   background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
   color: var(--polaroid-muted, #8B7E68);
@@ -5042,15 +5039,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
    The host cascade is untouched: .cascade-card stays a cream polaroid on the
    screens where it actually is one.
+
+   The re-point itself now lives in the shared chrome block under "Polaroid
+   aliases" at the top of the file — this screen is one of its selectors.
    ══════════════════════════════════════════════════════════════════════════ */
-[data-view="log-play"] {
-  --polaroid-bg:       var(--bg-1);
-  --polaroid-bg-soft:  var(--bg-2);
-  --polaroid-ink:      var(--ink);
-  --polaroid-ink-soft: var(--ink-muted);
-  --polaroid-muted:    var(--ink-muted);
-  --polaroid-line:     var(--line);
-}
 
 /* .cascade-card's drop shadow is a hardcoded black pair, weighted for a card
    floating above the page. These sit flat in a list — same lift as .lp-opt. */
@@ -5058,12 +5050,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   box-shadow: var(--sh-1);
 }
 
-/* The session code and the inline error paint with --polaroid-accent (= --win).
-   Terracotta is tuned for paper: #C8553D is 3.9:1 on the raised dark surface,
-   under the floor for 12px tracked type. Light is already 6.2:1 and unchanged. */
-:root[data-bgb="dark"] [data-view="log-play"] {
-  --polaroid-accent: #E87B63;
-}
 
 /* The one thing the token re-point cannot reach: fields inside a .cascade-card
    fill with a literal rgba(255,251,241,.7), a near-white wash drawn to sit on
@@ -7134,7 +7120,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .bgb-spoke-screen .input.input-bordered,
 .set-card .input,
 .set-card .input.input-bordered {
-  background: var(--polaroid-bg, #FFFBF1);
+  background: var(--well, #FFFBF1);
   color: var(--polaroid-ink, #1D1812);
   border: 1px solid var(--sheet-line);
 }
@@ -7220,7 +7206,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* Filter chips (player count / playtime / play mode) */
 .bgb-spoke-screen .filter-chip {
-  background: var(--polaroid-bg, #FFFBF1);
+  background: var(--well, #FFFBF1);
   border-color: var(--sheet-line);
   color: var(--polaroid-ink, #1D1812);
 }
@@ -7268,112 +7254,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    bump its border so it reads on cream. */
 .bgb-spoke-screen .settings-logout__btn {
   border: 1.5px solid color-mix(in srgb, var(--rust, #b23b34) 45%, transparent);
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   The spokes in DARK — real dark screens, not a cream sheet with the lights off
-
-   .bgb-spoke-screen lays one full-bleed sheet of cream paper (--sheet-bg =
-   --paper = #F8F2E5) over the espresso ground on all five spokes — Collection,
-   Wishlist, Plays, Buddies and Settings. That sheet is what separates a spoke
-   from the app ground, and in light it is the page ground itself. In dark it
-   meant every spoke handed the user a brighter surface than the app it belongs
-   to, Settings worst of all.
-
-   Rather than rewrite the ~50 rules under .bgb-spoke-screen, this re-points the
-   TOKENS they read, in dark only. Every rule in that section keeps working
-   untouched; only the surfaces they resolve to move from paper to espresso.
-   The handful of rules a token cannot reach — a hardcoded highlight, two amber
-   chips mixed for a light card — are fixed individually below the block.
-
-   None of the five renders a genuine paper artefact: no .play-card, no
-   .game-polaroid. They use their own list/tile families (.collection-tile,
-   .plays-list__row, .buddies-row, .set-card), which is why re-pointing the
-   paper tokens here is safe. A polaroid stays cream wherever one actually
-   appears, including modals opened from these screens.
-
-   Custom properties substitute where they are DECLARED, not where they are
-   used, so the --polaroid-* aliases (declared on :root from --paper) have to be
-   restated here with literal values — overriding --paper alone would not reach
-   them. See the "Polaroid aliases" block at the top of this file.
-
-   Light is unaffected: there the sheet is already transparent over a warm-paper
-   ground, which is exactly the relationship this gives dark.
-   ══════════════════════════════════════════════════════════════════════════ */
-:root[data-bgb="dark"] .bgb-spoke-screen {
-  /* The sheet drops away and the app ground carries the screen — the same move
-     light already makes, so the two themes now differ only in tone. */
-  --sheet-bg:        transparent;
-  --sheet-ink:       #F0E7D8;
-  --sheet-ink-muted: #B0A18E;
-  --sheet-card:      #261D17;   /* raised card, one step off the ground */
-  --sheet-line:      rgba(255, 255, 255, 0.09);
-
-  /* Paper tokens → dark surfaces. --paper is the card; --polaroid-bg is one
-     step DOWN from it, because in dark a form field reads as a well cut into
-     the card, where on paper it read as a lighter patch laid on top. */
-  --paper:       #261D17;
-  --paper-ink:   #F0E7D8;
-  --paper-muted: #B0A18E;
-  --paper-line:  rgba(255, 255, 255, 0.12);
-  --card-border: rgba(255, 255, 255, 0.09);
-
-  --polaroid-bg:       #1C1510;
-  --polaroid-bg-soft:  #2E231B;
-  --polaroid-ink:      #F0E7D8;
-  --polaroid-ink-soft: #D6C9B4;
-  --polaroid-muted:    #B0A18E;
-  --polaroid-line:     rgba(255, 255, 255, 0.12);
-
-  /* --accent-ink is "gold that survives a light surface" — on espresso the
-     gold can go back to full strength. #E0A94A is 8.4:1 on the card above. */
-  --accent-ink: #E0A94A;
-
-  /* Ghost-player silhouettes: #3B2A1C is espresso brown, drawn to sit on paper.
-     .buddies-row already carried this exact override for the one case that was
-     already on the ground; hoisting it to the screen covers the link-results
-     dropdown and the profile search list too. */
-  --ghost-ink: #C4A987;
-
-  /* The status colours are likewise tuned for paper: --ok #1F6B2E is 1.4:1 on
-     the card and disappears entirely. These are the same hues lifted onto the
-     dark ground. */
-  --ok:   #6FBF7F;
-  --warn: #E5A33F;
-  --rust: #E87B63;
-}
-
-/* ── The rules a token can't reach ─────────────────────────────────────────
-   Cards get their edge back for free: .set-card, .plays-list__row and
-   .collection-tile all already border with --card-border / --sheet-line, which
-   the block above now resolves to a white hairline. Dark shadows separate
-   almost nothing from a dark ground; the hairline carries it instead. What
-   follows is only what the tokens genuinely cannot express. */
-
-/* Form fields read as wells cut into the card rather than patches laid on it —
-   the base rule paints them --polaroid-bg, which the block above already sinks
-   below the card, but the filter chips and the pager share that token and want
-   the same treatment, so it is stated once here for clarity. */
-:root[data-bgb="dark"] .bgb-spoke-screen .input,
-:root[data-bgb="dark"] .bgb-spoke-screen .input.input-bordered {
-  background: #1C1510;
-}
-
-/* The docked pager on Collection / Wishlist is the one --polaroid-bg consumer
-   that wants the CARD tone, not the well — it is a raised strip over the grid.
-   Its inset highlight is a literal white 65%, drawn to catch light on cream. */
-:root[data-bgb="dark"] .bgb-spoke-screen .spoke-pager-footer {
-  background: #261D17;
-  box-shadow:
-    0 -2px 14px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-/* Two amber chips mixed against a light card: oklch(0.45 …) is ~2:1 on
-   espresso. Same hue, lifted to sit on the dark card. */
-:root[data-bgb="dark"] .bgb-spoke-screen .player-type-chip--account,
-:root[data-bgb="dark"] .bgb-spoke-screen .buddies-link-results__chip {
-  color: oklch(0.82 0.13 60);
 }
 
 /* BGG's attribution mark is a fixed-colour lockup (#3F3A60 navy on white) that
