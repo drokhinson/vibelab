@@ -1,9 +1,13 @@
-// domain/expansion-tree.js — Groups a flat owned shelf into base game → the
-// expansions you own, for the Collection spoke's Expansions tab.
+// domain/expansion-tree.js — Groups a flat owned shelf into base game → its
+// expansions, for the Collection spoke's Expansions tab.
 //
-// Pure reshape, no I/O. The rows come from Collection.shelf(target, "owned",
-// { includeExpansions: true }), which already carries everything needed:
-// game.is_expansion, game.base_game_bgg_id and game.bgg_id.
+// Pure reshape, no I/O. The owned rows come from Collection.shelf(target,
+// "owned", { includeExpansions: true }), which already carries everything
+// needed: game.is_expansion, game.base_game_bgg_id and game.bgg_id.
+//
+// In "show all" mode the catalog rows from Collection.expansionCatalog() are
+// merged in as unowned kids, so a group lists everything BgB has for that base
+// game and the ones you don't own yet are greyed out but addable in place.
 //
 // Grouping is client-side rather than in bgb_collection_shelf on purpose.
 // Nesting in SQL would silently drop the two cases the orphan bucket below
@@ -15,22 +19,55 @@
 
 (function () {
   /**
+   * @typedef {Object} ExpansionKid
+   * @property {string} gameId  Expansion game UUID.
+   * @property {any} game       Game-shaped object for the row renderer.
+   * @property {boolean} owned  False for catalog rows shown by "show all".
+   */
+
+  /**
    * @typedef {Object} ExpansionGroup
    * @property {string|null} baseId    Base game UUID, or null for the orphan bucket.
    * @property {string} name           Base game name, or the orphan bucket's label.
    * @property {any|null} base         The base game's CollectionItem, or null.
-   * @property {any[]} kids            Owned expansion CollectionItems under it.
+   * @property {ExpansionKid[]} kids   Owned first, then unowned when showing all.
+   * @property {number} ownedCount     Kids you own — what the tally's left half reads.
    * @property {number} catalogCount   Expansions BgB knows about for this base game.
    * @property {boolean} canAdd        False for the orphan bucket — nothing to add to.
    */
 
   const ORPHAN_LABEL = "Not in your collection";
 
+  /** Normalize a shelf row's game into the kid shape. */
+  function _ownedKid(item) {
+    return { gameId: item.game_id, game: item.game || {}, owned: true };
+  }
+
+  /** Normalize a catalog row (ExpansionListItem) into the kid shape. */
+  function _catalogKid(row) {
+    return {
+      gameId: row.expansion_game_id,
+      game: {
+        id: row.expansion_game_id,
+        bgg_id: row.bgg_id,
+        name: row.name,
+        thumbnail_url: row.thumbnail_url,
+        image_url: row.image_url,
+        is_expansion: true,
+        base_game_bgg_id: row.base_game_bgg_id,
+        expansion_color: row.color,
+        expansion_count: 0,
+      },
+      owned: false,
+    };
+  }
+
   /**
-   * @param {any[]} items Flat rows from the owned shelf, expansions included.
+   * @param {any[]} items Flat owned rows, expansions included.
+   * @param {{catalog?: any[], showAll?: boolean}} [opts]
    * @returns {{groups: ExpansionGroup[], totalOwned: number}}
    */
-  function buildExpansionTree(items) {
+  function buildExpansionTree(items, { catalog = null, showAll = false } = {}) {
     const rows = Array.isArray(items) ? items : [];
     const bases = [];
     const expansions = [];
@@ -55,6 +92,7 @@
         name: g.name || "Unknown",
         base: it,
         kids: [],
+        ownedCount: 0,
         catalogCount: g.expansion_count || 0,
         canAdd: true,
       };
@@ -66,17 +104,38 @@
     for (const it of expansions) {
       const g = it.game || {};
       const group = g.base_game_bgg_id != null ? byBggId.get(g.base_game_bgg_id) : null;
-      if (group) group.kids.push(it);
-      else orphans.push(it);
+      if (group) group.kids.push(_ownedKid(it));
+      else orphans.push(_ownedKid(it));
+    }
+    for (const g of groups) g.ownedCount = g.kids.length;
+
+    // Merge the catalog in as unowned kids. Owned rows keep their shelf order
+    // (last played, then most recently added); the rest follow alphabetically,
+    // so what you have stays at the top of every group.
+    if (showAll && Array.isArray(catalog)) {
+      const seen = new Set();
+      for (const g of groups) for (const k of g.kids) seen.add(k.gameId);
+      const extra = new Map();
+      for (const row of catalog) {
+        if (!row || seen.has(row.expansion_game_id)) continue;
+        const group = row.base_game_bgg_id != null ? byBggId.get(row.base_game_bgg_id) : null;
+        if (!group) continue;
+        if (!extra.has(group)) extra.set(group, []);
+        extra.get(group).push(_catalogKid(row));
+      }
+      for (const [group, kids] of extra) {
+        kids.sort((a, b) => String(a.game.name).localeCompare(String(b.game.name)));
+        group.kids = group.kids.concat(kids);
+      }
     }
 
     // Groups holding something come first — otherwise you scroll past every
     // empty base game to reach the expansions the tab exists to show. Order is
-    // stable within each partition, so the shelf's own ordering (last played,
-    // then most recently added) still shows through.
-    const filled = groups.filter((g) => g.kids.length > 0);
-    const empty = groups.filter((g) => g.kids.length === 0);
-    const ordered = filled.concat(empty);
+    // stable within each partition, so the shelf's own ordering still shows
+    // through. In show-all mode "holding something" means any kid at all,
+    // since an unowned row is the thing you came to tap.
+    const has = (g) => (showAll ? g.kids.length > 0 : g.ownedCount > 0);
+    const ordered = groups.filter(has).concat(groups.filter((g) => !has(g)));
 
     if (orphans.length) {
       ordered.push({
@@ -84,6 +143,7 @@
         name: ORPHAN_LABEL,
         base: null,
         kids: orphans,
+        ownedCount: orphans.length,
         catalogCount: 0,
         canAdd: false,
       });
@@ -92,8 +152,9 @@
     // Counted off the rows themselves, not off Collection's
     // expansion-count-by-base-bgg-id map: that map is keyed by base game, so
     // it can't see the orphans, and the pill has to match what's on screen.
+    // Unowned kids never count — the pill says what you have.
     let totalOwned = 0;
-    for (const g of ordered) totalOwned += g.kids.length;
+    for (const g of ordered) totalOwned += g.ownedCount;
 
     return { groups: ordered, totalOwned };
   }

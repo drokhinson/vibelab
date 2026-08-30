@@ -45,6 +45,19 @@
   const PLAYTIME_BUCKETS = window.ShelfFilter.PLAYTIME_BUCKETS;
   const isActiveBucket = window.ShelfFilter.isActiveBucket;
 
+  // Per-device preference for the Expansions tab. localStorage rather than the
+  // server: it is a view setting, worthless to another device, and reading it
+  // must never be able to fail a render — hence the try/catch on both sides.
+  const SHOW_ALL_KEY = "bgb.collection.expansionsShowAll";
+
+  function _readShowAll() {
+    try { return localStorage.getItem(SHOW_ALL_KEY) === "1"; } catch (_) { return false; }
+  }
+
+  function _writeShowAll(on) {
+    try { localStorage.setItem(SHOW_ALL_KEY, on ? "1" : "0"); } catch (_) {}
+  }
+
   class CollectionView extends window.View {
     constructor() {
       super("collection");
@@ -78,6 +91,12 @@
       this._treeError = null;
       this._treeTruncated = false;
       this._treeLoadedOnce = false;
+      this._treeCatalog = null;
+      this._treeCatalogLoading = false;
+      this._treeCatalogSeq = 0;
+      // A view preference, not data — remembered so the tab doesn't snap back
+      // to owned-only on every navigation.
+      this._treeShowAll = _readShowAll();
       // Monotonic guard: a slow load must not overwrite a newer one, and an
       // add's rollback must not fire after a later add superseded it.
       this._treeSeq = 0;
@@ -103,6 +122,18 @@
         const toggle = e.target.closest("[data-exp-toggle]");
         if (toggle) {
           this._toggleExpGroup(toggle.getAttribute("data-exp-toggle"));
+          return;
+        }
+        const addOne = e.target.closest("[data-exp-add-one]");
+        if (addOne) {
+          // Stop the tap reaching the row beneath, which navigates.
+          e.stopPropagation();
+          this._addExpansionById(addOne.getAttribute("data-exp-add-one"));
+          return;
+        }
+        const imp = e.target.closest("[data-exp-import]");
+        if (imp) {
+          this._openExpansionImport(imp.getAttribute("data-exp-import"));
           return;
         }
         const add = e.target.closest("[data-exp-add]");
@@ -516,20 +547,49 @@
         return `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Loading expansions…" })}</div>`;
       }
       const groups = this._tree.groups || [];
+      if (!groups.length && this._treeShowAll && this._treeCatalogLoading) {
+        return this._renderTreeControls()
+          + `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Loading expansions…" })}</div>`;
+      }
       if (!groups.length) {
         // Distinct from "you own no expansions": a shelf with no base game
         // that HAS any expansions in the catalog has nothing to nest under.
-        return `<div class="profile-empty">Nothing to show yet — expansions appear here under the games you own.</div>`;
+        return this._renderTreeControls()
+          + `<div class="profile-empty">Nothing to show yet — expansions appear here under the games you own.</div>`;
       }
       const truncated = this._treeTruncated
         ? `<p class="exp-tree__truncated">Showing the first slice of a very large collection.</p>`
         : "";
-      return window.renderExpansionTree(this._tree, { open: this._treeOpen }) + truncated;
+      return this._renderTreeControls()
+        + window.renderExpansionTree(this._tree, { open: this._treeOpen, showAll: this._treeShowAll })
+        + truncated;
+    }
+
+    /**
+     * Owned-only vs every expansion BgB has. A switch rather than a fourth
+     * pill: it changes what each group lists, not which tab you are on.
+     */
+    _renderTreeControls() {
+      const on = this._treeShowAll;
+      const busy = on && this._treeCatalogLoading && !this._treeCatalog;
+      return `
+        <div class="exp-tree__controls">
+          <button type="button" class="exp-tree__switch ${on ? "is-on" : ""}"
+                  role="switch" aria-checked="${on}"
+                  onclick="window.collectionView._toggleShowAll()">
+            <span class="exp-tree__switch-track"><span class="exp-tree__switch-knob"></span></span>
+            <span>Show all expansions</span>
+          </button>
+          ${busy ? `<span class="exp-tree__controls-note">Loading…</span>` : ""}
+        </div>`;
     }
 
     /** Regroup from the flat rows, keeping whatever the user has expanded. */
     _rebuildTree() {
-      this._tree = window.buildExpansionTree(this._treeRows || []);
+      this._tree = window.buildExpansionTree(this._treeRows || [], {
+        catalog: this._treeCatalog,
+        showAll: this._treeShowAll,
+      });
       const defaults = window.expansionTreeDefaultOpen(this._tree.groups);
       for (const key of Object.keys(defaults)) {
         if (!(key in this._treeOpen)) this._treeOpen[key] = defaults[key];
@@ -617,6 +677,47 @@
       this.refreshIcons(grid);
     }
 
+    /**
+     * Flip owned-only vs show-all. The catalog is fetched on first turn-on and
+     * kept after that, so toggling back and forth is free.
+     */
+    _toggleShowAll() {
+      this._treeShowAll = !this._treeShowAll;
+      _writeShowAll(this._treeShowAll);
+      this._rebuildTree();
+      this._paintTree();
+      if (this._treeShowAll && !this._treeCatalog && !this._treeCatalogLoading) {
+        this._loadCatalog();
+      }
+    }
+
+    async _loadCatalog({ force = false } = {}) {
+      const seq = ++this._treeCatalogSeq;
+      this._treeCatalogLoading = true;
+      this._paintTree();
+      try {
+        const items = await window.Collection.expansionCatalog(this._shelfTarget(), { force });
+        if (seq !== this._treeCatalogSeq) return;
+        this._treeCatalog = items || [];
+      } catch (e) {
+        if (seq !== this._treeCatalogSeq) return;
+        // Non-fatal: the tab still shows what you own. Turning the switch back
+        // off is the recovery, so it says so rather than blanking the tree.
+        this._treeCatalog = [];
+        this._treeError = null;
+        window.PolaroidPopup.alert({
+          title: "Couldn't load the catalog",
+          body: (e && e.message) || "Showing the expansions you own instead.",
+        });
+        this._treeShowAll = false;
+        _writeShowAll(false);
+      }
+      this._treeCatalogLoading = false;
+      this._rebuildTree();
+      this._paintTree();
+      this._paintCounts();
+    }
+
     _toggleExpGroup(key) {
       const open = !this._treeOpen[key];
       this._treeOpen[key] = open;
@@ -625,13 +726,49 @@
       window.expansionTreeToggle(this.container, key, open);
     }
 
+    /** The + on an unowned row in show-all mode. */
+    _addExpansionById(gameId) {
+      for (const group of this._tree.groups || []) {
+        const kid = group.kids.find((k) => k.gameId === gameId && !k.owned);
+        if (!kid) continue;
+        this._addExpansion(group, {
+          expansion_game_id: kid.gameId,
+          bgg_id: kid.game.bgg_id,
+          name: kid.game.name,
+          thumbnail_url: kid.game.thumbnail_url,
+          image_url: kid.game.image_url,
+          color: kid.game.expansion_color,
+        });
+        return;
+      }
+    }
+
+    /**
+     * Straight to the BGG import popup. Only reachable in show-all mode, where
+     * the picker would only repeat the catalog rows already on screen.
+     */
+    _openExpansionImport(key) {
+      const group = (this._tree.groups || []).find((g) => String(g.baseId) === String(key));
+      if (!group || !group.canAdd) return;
+      window.ImportExpansionsModal.open({
+        gameId: group.baseId,
+        gameName: group.name,
+        onImported: () => {
+          // An import changes the catalog, not anyone's collection, so it
+          // misses Collection.invalidateShelves() — refetch explicitly or the
+          // new expansion won't appear until the cache ages out.
+          this._loadCatalog({ force: true });
+        },
+      });
+    }
+
     _openExpansionPicker(key, trigger) {
       const group = (this._tree.groups || []).find((g) => String(g.baseId) === String(key));
       if (!group || !group.canAdd) return;
       window.ExpansionPickerSheet.open({
         baseGameId: group.baseId,
         baseGameName: group.name,
-        ownedIds: group.kids.map((k) => k.game_id),
+        ownedIds: group.kids.filter((k) => k.owned).map((k) => k.gameId),
         returnFocus: trigger || null,
         onPick: (exp) => this._addExpansion(group, exp),
       });
@@ -746,6 +883,11 @@
         if (!this._treeLoadedOnce && !this._treeLoading) {
           this._treeLoadedOnce = true;
           this._loadTree();
+        }
+        // The switch is a remembered preference, so it can already be on the
+        // first time the tab is opened this session.
+        if (this._treeShowAll && !this._treeCatalog && !this._treeCatalogLoading) {
+          this._loadCatalog();
         }
         return;
       }

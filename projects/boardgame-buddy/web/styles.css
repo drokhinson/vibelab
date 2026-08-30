@@ -2947,10 +2947,79 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .exp-tree__children[hidden] { display: none; }
 .exp-tree__child { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; }
-/* Per-expansion accent, the one legitimate inline-style use (data-driven
-   colour) per .claude/rules/ui-object-design.md §2. */
-.exp-tree__dot { flex: none; width: 10px; height: 10px; border-radius: 999px; }
-.exp-tree__dot--none { background: oklch(var(--b3)); }
+/* An unowned row is legible but visibly not yours: dimmed art and name, with
+   a + that adds it. It still navigates — opening the game page is how you
+   decide whether you want it — so the + is its own target, not the whole row. */
+.exp-tree__child--unowned .game-polaroid { opacity: 0.45; filter: grayscale(0.6); }
+.exp-tree__child--unowned:hover .game-polaroid { opacity: 0.7; filter: grayscale(0.3); }
+.exp-tree__own {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--accent-ink);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.exp-tree__own:hover { background: oklch(var(--b3) / 0.6); }
+.exp-tree__own:active { transform: translateY(1px); }
+
+/* Owned-only vs the whole catalog. */
+.exp-tree__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+}
+.exp-tree__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 0.2rem;
+  background: none;
+  border: none;
+  color: oklch(var(--bc) / 0.7);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.exp-tree__switch.is-on { color: oklch(var(--bc)); }
+.exp-tree__switch-track {
+  flex: none;
+  box-sizing: border-box;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  /* The off-state track sits on a cream page only a few percent lighter than
+     --b3, so it needs the border to read as a control at all. */
+  border: 1px solid oklch(var(--bc) / 0.18);
+  background: oklch(var(--b3));
+  padding: 2px;
+  display: flex;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.exp-tree__switch.is-on .exp-tree__switch-track {
+  background: var(--accent-fill);
+  border-color: transparent;
+}
+.exp-tree__switch-knob {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  /* Pure white, not --b1: --b1 is the page ground, so the knob would vanish
+     into the track's own lightness at this size. */
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.exp-tree__switch.is-on .exp-tree__switch-knob { transform: translateX(16px); }
+.exp-tree__switch:focus-visible .exp-tree__switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.exp-tree__controls-note { font-size: 0.7rem; color: oklch(var(--bc) / 0.55); }
 .exp-tree__add-row { display: flex; }
 .exp-tree__add {
   flex: 1;
@@ -2962,7 +3031,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border: 1px dashed oklch(var(--b3));
   border-radius: 0.5rem;
   background: none;
-  color: oklch(var(--p));
+  color: var(--accent-ink);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;

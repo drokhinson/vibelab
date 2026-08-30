@@ -2,9 +2,18 @@
 // two-level list of base game → the expansions you own, with a per-group
 // affordance for adding another.
 //
-// Render + surgical patching only. The rows come from ExpansionShelf
-// (domain/expansion-tree.js does the grouping); the add flow lives in
-// views/collection-view.js, which owns the optimistic write.
+// Render + surgical patching only. The grouping is domain/expansion-tree.js;
+// the add flow lives in views/collection-view.js, which owns the optimistic
+// write.
+//
+// In "show all" mode a group lists every expansion BgB has for that base game.
+// The ones you don't own are dimmed and carry a + that adds them in place, so
+// the row is both the answer to "what else is there" and the way to get it.
+//
+// Rows carry no expansion-colour dot. That colour is an identity marker whose
+// job is attribution somewhere else — a rule in the reference-guide scroll, an
+// expansion chip on the Gather screen — and it has nothing to attribute here,
+// where the name is already on the row. The space goes to owned-vs-not.
 //
 // Both levels render through window.renderGamePolaroid's "row" variant
 // (.claude/rules/ui-object-design.md §2) rather than a bespoke tile — the
@@ -32,8 +41,8 @@
   function _renderHead(group, open, i) {
     const key = _groupKey(group);
     const tally = group.canAdd
-      ? `${group.kids.length} of ${group.catalogCount}`
-      : `${group.kids.length}`;
+      ? `${group.ownedCount} of ${group.catalogCount}`
+      : `${group.ownedCount}`;
     // The orphan bucket has no base game to show, so it gets a plain label.
     const body = group.base
       ? window.renderGamePolaroid(group.base.game, {
@@ -53,36 +62,49 @@
       </button>`;
   }
 
-  function _renderKid(item, baseName) {
-    const g = (item && item.game) || {};
+  function _renderKid(kid, baseName) {
+    const g = (kid && kid.game) || {};
     // The group header already says the base game, so the leaf drops the
     // prefix — the same trim the game page's expansion reel does.
     const label = baseName ? stripBaseGameName(g.name, baseName) : g.name;
-    const dot = g.expansion_color
-      ? `<span class="exp-tree__dot" style="background:${escapeAttr(g.expansion_color)}"></span>`
-      : `<span class="exp-tree__dot exp-tree__dot--none"></span>`;
+    // An unowned row still navigates: opening the game page is how you decide
+    // whether you want it. The + is a separate target so the two don't fight.
+    const add = kid.owned ? "" : `
+        <button type="button" class="exp-tree__own"
+                data-exp-add-one="${escapeAttr(g.id || "")}"
+                aria-label="Add ${escapeAttr(label || g.name || "")} to your collection">
+          <i data-icon="plus" class="w-4 h-4"></i>
+        </button>`;
     return `
-      <li class="exp-tree__child">
-        ${dot}
+      <li class="exp-tree__child${kid.owned ? "" : " exp-tree__child--unowned"}">
         ${window.renderGamePolaroid({ ...g, name: label }, {
           variant: "row",
           showStatus: false,
           meta: "",
           clickHandler: `window.router.go('game-detail',{gameId:'${jsStr(g.id || "")}',gameName:'${jsStr(g.name || "")}'})`,
         })}
+        ${add}
       </li>`;
   }
 
-  function _renderGroup(group, open, i) {
+  function _renderGroup(group, open, i, showAll) {
     const key = _groupKey(group);
     const kids = group.kids.map((k) => _renderKid(k, group.base ? group.name : "")).join("");
-    const addRow = group.canAdd
+    // Showing all, the catalog is already on screen with a + on each unowned
+    // row, so the picker would just repeat it — the only thing left to reach
+    // is what BgB doesn't have yet. Showing owned only, the picker IS how you
+    // see the rest, and it carries the same BGG route inside itself.
+    const addRow = !group.canAdd ? "" : (showAll
       ? `<li class="exp-tree__add-row">
+           <button type="button" class="exp-tree__add" data-exp-import="${escapeAttr(key)}">
+             <i data-icon="download-simple" class="w-4 h-4"></i><span>Import from BoardGameGeek</span>
+           </button>
+         </li>`
+      : `<li class="exp-tree__add-row">
            <button type="button" class="exp-tree__add" data-exp-add="${escapeAttr(key)}">
              <i data-icon="plus" class="w-4 h-4"></i><span>Add expansion</span>
            </button>
-         </li>`
-      : "";
+         </li>`);
     return `
       <li class="exp-tree__group" style="--i:${Math.min(i, MAX_STAGGER)}">
         ${_renderHead(group, open, i)}
@@ -95,14 +117,14 @@
 
   /**
    * @param {{groups: any[]}} tree
-   * @param {{open?: Object<string, boolean>}} [opts]
+   * @param {{open?: Object<string, boolean>, showAll?: boolean}} [opts]
    */
-  function renderExpansionTree(tree, { open = {} } = {}) {
+  function renderExpansionTree(tree, { open = {}, showAll = false } = {}) {
     const groups = (tree && tree.groups) || [];
     if (!groups.length) return "";
     return `
       <ul class="exp-tree">
-        ${groups.map((g, i) => _renderGroup(g, !!open[_groupKey(g)], i)).join("")}
+        ${groups.map((g, i) => _renderGroup(g, !!open[_groupKey(g)], i, showAll)).join("")}
       </ul>`;
   }
 

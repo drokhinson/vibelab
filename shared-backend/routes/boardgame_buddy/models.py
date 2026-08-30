@@ -558,6 +558,24 @@ class ExpansionListItem(BaseModel):
     color: Optional[str] = None
     is_enabled: bool = False
     rulebook_url: Optional[str] = None
+    # Which base game this expansion extends. Only the catalog endpoint sets
+    # it — /games/{id}/expansions is already scoped to one base game, so there
+    # it would be the same value on every row.
+    base_game_bgg_id: Optional[int] = None
+
+
+class ExpansionCatalogResponse(BaseModel):
+    """Every catalog expansion for every base game the viewer owns.
+
+    Backs the Expansions tree's "show all" toggle. One response rather than a
+    per-base-game call: a shelf of 40 games would otherwise be 40 requests to
+    render one screen.
+
+    `owned` is deliberately absent — the caller is the Collection spoke, which
+    already knows its own shelf and marks the rows itself.
+    """
+
+    items: list[ExpansionListItem]
 
 
 class ExpansionToggleRequest(BaseModel):
