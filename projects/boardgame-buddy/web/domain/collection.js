@@ -114,6 +114,26 @@
         .then((r) => { Collection.invalidateMyStatusMap(); return r; });
     }
 
+    /**
+     * Mark (or unmark) an owned game as played before the user joined, so a
+     * pre-account favourite can leave the Shelf of Shame without a fabricated
+     * play. Migration 059; opened from the Stats spoke's shelf sheet.
+     *
+     * Deliberately does NOT bust the status map: the mark is scoped to the
+     * shelf block of bgb_user_stats_detail, and the game keeps reading as
+     * Owned everywhere else. Busting that cache would imply otherwise.
+     * views/stats-view.js invalidates the stats payload, which is the one
+     * cache this does move.
+     *
+     * @param {string} gameId
+     * @param {boolean} playedBefore
+     */
+    static setPlayedBefore(gameId, playedBefore) {
+      return window.api.patch(`/collection/${gameId}/played-before`, {
+        played_before: playedBefore,
+      });
+    }
+
     static async myStatusMap(opts = {}) {
       const r = await _ensure(opts);
       return r.status;
