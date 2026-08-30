@@ -3497,6 +3497,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-sheet .bgb-sheet__panel {
   width: 100%;
   max-width: 520px;
+  /* Explicit, as .cascade-cta-wrap and .bgb-install — "don't lean on
+     preflight". Without it the max-height below caps the CONTENT box and the
+     panel's 24px of vertical padding plus its 1px top border land outside the
+     cap, so a sheet sized to exactly the visible viewport still overhangs it
+     by 25px — off the top, since the backdrop is align-items:flex-end. */
+  box-sizing: border-box;
   background: var(--polaroid-bg);
   color: var(--polaroid-ink);
   /* The drop shadow below is the only thing separating the panel from the page
@@ -3510,9 +3516,19 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: min(80vh, 660px);
+  /* Percent of the backdrop, which is sized to the VISIBLE viewport
+     (--bgb-vv-h, from ui/viewport-lock.js). `vh` here was a bug: the layout
+     viewport does NOT shrink for the software keyboard, so with the keyboard
+     up an 80vh ceiling exceeded the visible box — and because the backdrop is
+     align-items:flex-end, the excess went off the TOP, carrying the title and
+     the search field off screen. Measured at 390x844 with a 364px keyboard:
+     the panel stood 683px tall in a 480px box and overflowed 203px upward. */
+  max-height: min(80%, 660px);
   animation: sheetIn 260ms var(--ease) both;
 }
+/* Keyboard up: 20% of the visible box held back so the page peeks through is
+   a luxury there is no room for — take all of it. */
+:root.bgb-kb-open .bgb-sheet .bgb-sheet__panel { max-height: 100%; }
 .polaroid-popup__backdrop.bgb-sheet.is-closing { animation: fadeOut 200ms ease-out both; }
 .bgb-sheet.is-closing .bgb-sheet__panel { animation: sheetOut 200ms var(--ease) both; }
 
@@ -3556,7 +3572,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 .bgb-sheet__list {
   flex: 1 1 auto;
-  min-height: 0;
+  /* The picker sheets pin this at the height the list opened with, so filtering
+     can't walk the sheet up and down the screen under the user's thumb. They
+     set the custom property rather than min-height directly, so the rule below
+     can drop the pin when the keyboard arrives without an !important fight
+     against an inline style. */
+  min-height: var(--bgb-sheet-list-min, 0);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -3668,6 +3689,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-sheet__cancel:hover { background: var(--polaroid-line); }
 
 /* Section heading inside a sheet list ("Recently played with", "Selected"). */
+/* A pin taken before the keyboard opened is a floor the shrunken panel cannot
+   honour: it would force the list taller than the box and push the panel's own
+   head off the top. Stability matters less than staying on screen. */
+:root.bgb-kb-open .bgb-sheet__list { min-height: 0; }
+
 .bgb-sheet__sec {
   flex: none;
   padding: 10px 12px 4px;

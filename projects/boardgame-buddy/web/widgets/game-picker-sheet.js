@@ -163,7 +163,10 @@
           // every keystroke that narrows the results and back up on every
           // backspace — with the row under your thumb moving as it goes.
           const list = /** @type {HTMLElement|null} */ (root.querySelector(LIST_SEL));
-          if (list) list.style.minHeight = list.clientHeight + "px";
+          // Written as a custom property, not min-height, so the stylesheet can
+          // drop the pin when the software keyboard shrinks the sheet — an
+          // inline min-height would out-specify any rule trying to.
+          if (list) list.style.setProperty("--bgb-sheet-list-min", list.clientHeight + "px");
           // Focus the current pick, not the search box: opening the sheet
           // shouldn't throw a software keyboard over the list the user came
           // to read. Tapping the field is the opt-in.
