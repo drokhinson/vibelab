@@ -5447,6 +5447,27 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   cursor: pointer;
 }
 .cascade-exp-list { list-style: none; padding: 0; margin: 8px 0 0; }
+/* Rows the device answered with while /games/{id}/expansions is still in the
+   air: real matches for this game, but not yet the final word. Same language
+   the game finder's dropdown uses for the same situation — a thin accent bar
+   sweeping the top of a slightly held-back list, rather than a second kind of
+   loading state. */
+.cascade-exp-list--refreshing { opacity: 0.75; }
+.cascade-exp-list--refreshing::before {
+  content: "";
+  display: block;
+  height: 3px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  background:
+    linear-gradient(90deg, transparent, var(--polaroid-accent), transparent);
+}
+/* The spinner reads as centred on the label; .cascade-card__hint aligns to
+   flex-start for its multi-line warning variants. Both classes are on the same
+   element, so this has to carry BOTH — the bare .cascade-exp-loading ties on
+   specificity with .cascade-card__hint 3000 lines below and loses on source
+   order. */
+.cascade-card__hint.cascade-exp-loading { align-items: center; }
 .cascade-exp-row {
   background: rgba(255, 251, 241, 0.55);
   border: 1px solid var(--polaroid-line);
