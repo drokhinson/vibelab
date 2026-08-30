@@ -9,16 +9,18 @@
 // without that guard a slow save could repaint the card belonging to the
 // NEXT round.
 //
-// Two exits, two destinations. The primary CTA and a backdrop tap route to
-// the feed — that's "show me the play I just saved". The hardware back button
-// is the back-out gesture and means "I'm done with this game", so it drops the
-// user on the Play tab instead. (Web draws a corner X for the same split; on
-// native the system back IS that affordance, so we don't add chrome for it.)
+// The card is NOT modal while the write runs. The outbox guarantees delivery,
+// so there is nothing for the host to wait on: the card goes up with its CTA
+// and its dismiss live in the same frame, carrying no save state. Every exit —
+// the backdrop, the hardware back, a failed card's fallback — shares one
+// destination, so there is one `close`.
 //
-// While `saving` the card is modal: no close affordance, inert backdrop, and
-// the primary CTA spins. A failed photo becomes a `warning` line ON the card
-// rather than a second modal — this popup is a singleton, so an alert() would
-// dismiss the very card it was warning about.
+// One bottom button at a time:
+//   saved → "Another round?"   error → "Retry" (dismiss returns to Settle Up)
+//
+// A failed photo becomes a `warning` line ON the card rather than a second
+// modal — this popup is a singleton, so an alert() would dismiss the very card
+// it was warning about.
 //
 // Not for confirmations — destructive gates go through ConfirmModal (§3c).
 
@@ -37,17 +39,13 @@ let _update = null;
  * @property {string} [title]
  * @property {string} [caption]
  * @property {string|null} [photoUrl]
- * @property {string} [buttonLabel]   primary CTA when settled
- * @property {boolean} [saving]       spinner CTA, no dismiss
- * @property {string|null} [error]    swaps the CTA to Retry
+ * @property {string} [buttonLabel]   fallback CTA when there's no next game
+ * @property {string|null} [error]    takes the button slot, as Retry
  * @property {string|null} [warning]  advisory line (e.g. photo didn't land)
- * @property {() => void} [onAnotherRound]
+ * @property {() => void} [onAnotherRound] owns the button slot when set
  * @property {() => void} [onRetry]
- * @property {() => void} [onDismiss] where the backdrop tap and the primary
- *   CTA go
- * @property {() => void} [onClose] where the hardware back button goes. Falls
- *   back to onDismiss, so a caller that only sets one keeps a single exit
- *   destination rather than silently getting two.
+ * @property {() => void} [onDismiss] every exit's destination — backdrop tap,
+ *   hardware back, and the fallback CTA
  */
 
 /**
@@ -98,34 +96,14 @@ export default function PolaroidHost() {
 
   if (!cfg) return null;
 
-  const saving = !!cfg.saving;
   const close = () => {
-    if (saving) return; // modal until the write resolves
     const onDismiss = cfg.onDismiss;
     setCfg(null);
     if (onDismiss) onDismiss();
   };
-  // Hardware back — see the two-exits note at the top of this file.
-  const backOut = () => {
-    if (saving) return;
-    const fn = cfg.onClose || cfg.onDismiss;
-    setCfg(null);
-    if (fn) fn();
-  };
-
-  const primaryLabel = saving ? 'Saving…' : cfg.error ? 'Retry' : cfg.buttonLabel || 'Go to feed';
-  const primaryIcon = saving ? undefined : cfg.error ? RotateCcw : ArrowRight;
-  const onPrimary = () => {
-    if (saving) return;
-    if (cfg.error && cfg.onRetry) {
-      cfg.onRetry();
-      return;
-    }
-    close();
-  };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={backOut}>
+    <Modal visible transparent animationType="fade" onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close}>
         <Animated.View style={cardStyle}>
           <Pressable style={styles.card} onPress={() => {}}>
@@ -161,16 +139,16 @@ export default function PolaroidHost() {
               </Text>
             ) : null}
 
+            {/* Exactly one button. An error owns the slot until it clears —
+                retrying is the only thing worth doing with a rejected play —
+                and otherwise the card's job is to offer the next game. */}
             <Row gap="sm" style={{ marginTop: SPACING.lg }}>
-              {cfg.onAnotherRound ? (
+              {cfg.error ? (
+                <Button label="Retry" icon={RotateCcw} onPress={() => cfg.onRetry && cfg.onRetry()} style={{ flex: 1 }} />
+              ) : cfg.onAnotherRound ? (
                 <Button
                   label="Another round?"
-                  variant="outline"
                   icon={RotateCcw}
-                  size="sm"
-                  // Only once the play is safely saved — a new session must
-                  // not start on top of an unresolved write.
-                  disabled={saving || !!cfg.error}
                   onPress={() => {
                     const fn = cfg.onAnotherRound;
                     setCfg(null);
@@ -178,14 +156,9 @@ export default function PolaroidHost() {
                   }}
                   style={{ flex: 1 }}
                 />
-              ) : null}
-              <Button
-                label={primaryLabel}
-                icon={primaryIcon}
-                onPress={onPrimary}
-                busy={saving}
-                style={{ flex: 1 }}
-              />
+              ) : (
+                <Button label={cfg.buttonLabel || 'Go to feed'} icon={ArrowRight} onPress={close} style={{ flex: 1 }} />
+              )}
             </Row>
           </Pressable>
         </Animated.View>

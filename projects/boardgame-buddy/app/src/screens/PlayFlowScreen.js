@@ -69,18 +69,17 @@ export default function PlayFlowScreen({ navigation, route }) {
     navigation.goBack();
   }
 
-  // The wrap-up card's two destinations, defined once. The success paths below
-  // have to restore goToFeed explicitly: they clear the failure path's dismiss
-  // override, and a bare `onDismiss: null` would take the feed navigation with
-  // it, leaving "Go to feed" closing the card onto a spent Settle Up screen.
+  // Every exit off the wrap-up card lands here. The failure path overrides it
+  // to stay on Settle Up; the success paths restore it explicitly, because a
+  // bare `onDismiss: null` would take the navigation with it and leave the
+  // card closing onto a spent screen.
   const goToFeed = () => navigation.navigate('Home', { screen: 'FeedTab' });
-  // Backing out means "done with this game", not "show me the feed".
-  const goToPlayTab = () => navigation.navigate('Home', { screen: 'PlayTab' });
 
   // Persist the play behind the wrap-up card. Never awaited by the tap
-  // handler — the card is already up, and it carries the save's state.
+  // handler — the card is already up and fully usable; the outbox guarantees
+  // the play lands, so there is nothing here for the host to wait on.
   async function runSaveBehindCard(snap, cardId) {
-    updatePolaroid({ saving: true, error: null }, cardId);
+    updatePolaroid({ error: null }, cardId);
     const result = await session.runSave(snap);
 
     if (!result.ok) {
@@ -88,7 +87,6 @@ export default function PlayFlowScreen({ navigation, route }) {
       // closing the card lands back on an intact Settle Up.
       updatePolaroid(
         {
-          saving: false,
           error: result.error || 'Failed to save',
           onRetry: () => runSaveBehindCard(snap, cardId),
           onDismiss: () => session.setError(result.error || 'Failed to save'),
@@ -105,7 +103,6 @@ export default function PlayFlowScreen({ navigation, route }) {
       // Retry — the play uploads on the next flush.
       updatePolaroid(
         {
-          saving: false,
           error: null,
           onDismiss: goToFeed,
           caption: 'Saved on this phone — uploads when you’re back online.',
@@ -119,7 +116,7 @@ export default function PlayFlowScreen({ navigation, route }) {
     // already contains this play.
     actions.afterPlaySaved(result.game?.id);
     actions.refreshHostSeeds();
-    updatePolaroid({ saving: false, error: null, onDismiss: goToFeed }, cardId);
+    updatePolaroid({ error: null, onDismiss: goToFeed }, cardId);
 
     // Unblocked on the play landing, not on the photo — the photo has always
     // been best-effort, and it only ever cost the host time to wait on it.
@@ -152,10 +149,11 @@ export default function PlayFlowScreen({ navigation, route }) {
         title: 'Well played!',
         caption: snap.winner ? `${snap.winner.name} takes ${snap.game?.name || 'the game'}` : snap.game?.name || '',
         photoUrl: snap.photoUrl || snap.game?.image_url || snap.game?.thumbnail_url || null,
-        saving: true,
+        // Live in the same frame as the tap, carrying no save state: the
+        // outbox guarantees delivery, so a host who wants the next game
+        // shouldn't be held behind a write they can't influence.
         onAnotherRound: () => session.startAnotherRound(seed),
         onDismiss: goToFeed,
-        onClose: goToPlayTab,
       });
       runSaveBehindCard(snap, cardId);
     }
