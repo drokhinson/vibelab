@@ -47,7 +47,10 @@
       this._resetState();
       this._targetUserId = (this.params && this.params.userId) || null;
       if (this._isOther()) {
-        if (!this._hydrateFromCache()) this._loading = true;
+        this._hydrateFromCache();
+        // A _load always follows, so mark the fetch in flight before the
+        // first paint — otherwise an empty hydrate paints the empty state.
+        this._loading = true;
         this.render();
         window.User.fetch(this._targetUserId)
           .then((p) => { this._targetProfile = p; this.render(); })
@@ -56,6 +59,7 @@
         return;
       }
       this._hydrateFromCache();
+      this._loading = true;
       this.render();
       // Inside the cache's fresh window this resolves with no network call.
       await this._load({ reset: true });
@@ -95,7 +99,8 @@
       // _targetUserId still holds the PREVIOUS mount's target.
       this._resetState();
       this._targetUserId = (this.params && this.params.userId) || null;
-      if (!this._hydrateFromCache()) this._loading = true;
+      this._hydrateFromCache();
+      this._loading = true;
       this.render();
     }
 
@@ -104,11 +109,14 @@
       const activeId = active && active.id;
       const caret = active && active.selectionStart;
 
-      // Cold load — no profile-bundle seed, nothing on screen yet. Show
-      // only the header + bgb logo loader instead of flashing the search
-      // bar and the "No plays logged yet" empty state on top of each
-      // other while the list is still fetching.
-      if (!this._loaded && this._plays.length === 0 && !this._query) {
+      // Cold load — nothing on screen yet. Show only the header + bgb logo
+      // loader instead of flashing the search bar and the "No plays logged
+      // yet" empty state on top of each other while the list is still
+      // fetching. `_loaded` alone isn't enough to detect this: the
+      // profile-bundle seed can hydrate an *empty* list (and a refresh
+      // clears _plays mid-flight), which used to claim there are no plays
+      // while the fetch that would prove otherwise was still running.
+      if (this._plays.length === 0 && !this._query && (!this._loaded || this._loading)) {
         this.container.innerHTML = `
           ${this._renderHead()}
           <div class="profile-loading">
@@ -188,6 +196,9 @@
         return window.buddyLoader({ size: 88 });
       }
       if (this._plays.length === 0) {
+        // Never claim "none" while a fetch is still in flight — that covers
+        // the search path, where the list is cleared before results land.
+        if (this._loading) return window.buddyLoader({ size: 88 });
         return `<div class="profile-empty">${this._query ? "No matches." : "No plays logged yet."}</div>`;
       }
       const groups = groupPlays(this._plays);
