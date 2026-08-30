@@ -240,12 +240,21 @@
    Scope note: no .play-card, .game-polaroid or parchment surface is ever
    rendered inside these containers, so paper keeps its cream everywhere it
    actually means "photo".
+
+   .game-picker-sheet is in the list even though it is not a screen. It is the
+   Stats spoke's By-game picker, and ui/bottom-sheet.js appends it to <body> —
+   so it lands OUTSIDE .bgb-spoke-screen and kept the root paper aliases, which
+   in dark meant tapping "Showing <game>" on an espresso screen threw up a
+   cream sheet. Listing it here re-points the same tokens the spoke behind it
+   already uses, so the sheet matches the screen it was opened from in both
+   themes. The class sits on the backdrop element, so the panel inherits.
    ────────────────────────────────────────────────────────────────────────── */
 :is(.set-card,
      .profile-stat-card,
      .statsblock,
      .preview-card,
      .bgb-spoke-screen,
+     .game-picker-sheet,
      [data-view="log-play"]) {
   --polaroid-bg:       var(--bg-1);
   --polaroid-bg-soft:  var(--bg-2);
@@ -277,6 +286,7 @@
      .statsblock,
      .preview-card,
      .bgb-spoke-screen,
+     .game-picker-sheet,
      [data-view="log-play"]) {
   --accent-ink:      var(--accent);   /* the paper gold is 1.5:1 here */
   --polaroid-accent: #E87B63;         /* terracotta is 3.9:1 here */
@@ -3472,6 +3482,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   max-width: 520px;
   background: var(--polaroid-bg);
   color: var(--polaroid-ink);
+  /* The drop shadow below is the only thing separating the panel from the page
+     in light. On the espresso ground it does no work at all — a dark shadow on
+     a dark backdrop — so the top edge carries the separation instead. Hairline
+     in both themes, from the same token the chrome cards use. */
+  border-top: 1px solid var(--card-border);
   border-radius: 20px 20px 0 0;
   padding: 8px 12px max(16px, env(safe-area-inset-bottom));
   box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.42);
@@ -3511,6 +3526,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .game-picker__search .game-finder__input {
   border-radius: 12px;
   padding-right: 44px;
+  /* .game-finder__input fills with --polaroid-bg, which is the panel's own
+     colour — on paper the border alone was enough to read as a field, but on
+     the espresso panel it left an invisible box. Sink it to the well, the same
+     token the chrome screens use for exactly this. */
+  background: var(--well, var(--polaroid-bg));
 }
 
 .game-picker__list {
