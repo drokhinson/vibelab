@@ -117,7 +117,9 @@ def fetch_hot_games(sb, *, window_days: int = 7, limit: int = 10) -> HotGamesRes
     return HotGamesResponse(games=entries, window_days=window_days)
 
 
-def fetch_suggested_buddies(sb, viewer_id: str, *, limit: int = 10) -> SuggestedBuddiesResponse:
+def fetch_suggested_buddies(sb, viewer_id: str, *, limit: int = 5) -> SuggestedBuddiesResponse:
+    """Friends-of-friends only: every suggestion shares at least one accepted
+    buddy with the viewer, ranked by how many. Top `limit` mutuals first."""
     rows = sb.rpc(
         "bgb_suggested_buddies",
         {"uid": viewer_id, "lim": limit},

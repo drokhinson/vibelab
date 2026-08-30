@@ -73,14 +73,20 @@
 --   Purpose:    Owned games this user hasn't played in N days; powers the
 --               "Featured from your collection" Feed card.
 
--- bgb_suggested_buddies(uid UUID, lim INT DEFAULT 10)
+-- bgb_suggested_buddies(uid UUID, lim INT DEFAULT 5)
 --   → TABLE (user_id UUID, mutual_count BIGINT)
 --   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
+--               db/migrations/boardgamebuddy/057_suggested_buddies_mutuals.sql
+--                 (mutuals-only: an explicit HAVING >= 1 mutual, candidates
+--                  on ANY existing edge with the viewer — pending and blocked
+--                  included, not just accepted — excluded, and lim now
+--                  defaults to 5)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Friends-of-friends candidates not yet connected, ranked by
---               mutual count. Powers the Feed's "Suggested buddies" card. (The standalone
---               GET /suggestions/buddies endpoint was removed as uncalled;
---               feed_service still calls this for the embedded rail.)
+--               mutual count desc, top 5. Powers the Feed's "Buddies you may
+--               know" rail. (The standalone GET /suggestions/buddies endpoint
+--               was removed as uncalled; feed_service still calls this for the
+--               embedded rail.)
 
 -- bgb_distinct_mechanics()
 --   → TABLE (mechanic TEXT)
