@@ -24,10 +24,11 @@
    * @typedef {Object} BottomSheetConfig
    * @property {string} id         DOM id for the backdrop — unique per sheet.
    * @property {string} className  The sheet's own class, e.g. "status-sheet".
-   *   Its CSS must select `.polaroid-popup__backdrop.<className>`, not the bare
-   *   class: the base backdrop rule is LATER in styles.css and sets
-   *   align-items:center, so a single-class selector loses the tie and the
-   *   sheet renders as a centred card.
+   *   The root also gets `bgb-sheet`, which carries the shared panel chrome.
+   *   Any BACKDROP rule this class adds must select
+   *   `.polaroid-popup__backdrop.<className>`, not the bare class: the base
+   *   backdrop rule is LATER in styles.css and sets align-items:center, so a
+   *   single-class selector loses the tie and the sheet renders centred.
    * @property {string} [label]    Default aria-label for the dialog.
    */
 
@@ -96,7 +97,9 @@
 
       const root = document.createElement("div");
       root.id = this._id;
-      root.className = `polaroid-popup__backdrop ${this._className}`;
+      // bgb-sheet carries the shared panel chrome (see styles.css); the
+      // per-sheet class carries only that sheet's own rules.
+      root.className = `polaroid-popup__backdrop bgb-sheet ${this._className}`;
       root.setAttribute("role", "dialog");
       root.setAttribute("aria-modal", "true");
       root.setAttribute("aria-label", opts.label || this._label);

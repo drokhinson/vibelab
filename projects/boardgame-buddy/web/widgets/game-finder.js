@@ -9,7 +9,8 @@
 // (library, DB, BGG). They're added through a base game's expansion
 // section — see widgets/import-expansions-modal.js.
 // Used by:
-//   - play-flow-view.js (Gather screen: pick game for an active session)
+//   - play-flow-view.js, via widgets/game-picker-sheet.js (Gather: pick the
+//     game for a session — mounted inlineDropdown inside the sheet)
 //   - widgets/add-game-modal.js (Add to collection / wishlist from spokes)
 //
 // Each instance owns a unique input + dropdown DOM id so two finders can
@@ -29,6 +30,10 @@
    * @property {(err: Error) => void} [onError]
    * @property {string} [placeholder]
    * @property {boolean} [includeRecentlyPlayed]  Default true.
+   * @property {boolean} [inlineDropdown]  Render results as a block in the
+   *   flow rather than an absolutely-positioned overlay, and skip the
+   *   BgbDropdownFit pass. For a host that already constrains the list —
+   *   the Gather game sheet.
    */
 
   /** @typedef {{ source: "library"|"bgg"|"recent", isExpansion: boolean, dropdownItemEl: Element|null }} PickCtx */
@@ -66,7 +71,7 @@
       this._container = containerEl;
       const placeholder = escapeAttr(this._opts.placeholder || "Search for a game…");
       containerEl.innerHTML = `
-        <div class="game-finder">
+        <div class="game-finder${this._opts.inlineDropdown ? " game-finder--inline" : ""}">
           <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
           <input id="${this.inputId}"
                  class="input input-bordered game-finder__input"
@@ -214,8 +219,14 @@
     // CSS-only max-height overruns the fold whenever the input sits low on
     // screen; BgbDropdownFit measures the space that's actually visible and
     // flips the list above the input when there isn't enough below it.
+    //
+    // inlineDropdown skips all of that: in a bottom sheet the list is an
+    // ordinary block inside a panel already sized to the visible viewport, so
+    // there is no fold to measure against and a fit pass would only clamp a
+    // list that is already in the right place.
     _show(dd) {
       dd.classList.remove("hidden");
+      if (this._opts.inlineDropdown) return;
       if (window.BgbDropdownFit && this._container) {
         window.BgbDropdownFit.fit(dd, this._container.querySelector(".game-finder"));
       }

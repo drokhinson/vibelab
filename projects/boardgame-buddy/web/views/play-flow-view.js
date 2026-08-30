@@ -104,11 +104,9 @@
       // tick so it can't clobber this._lobby (incl. a stale phase) mid
       // transition. Mirrors _pendingDeletes.
       this._pendingPhase = 0;
-      this._buddyInputTimer = null;
       // GameFinder widget instance, lazily constructed in render() when the
       // Gather screen needs the picker. Lives across the 2s lobby-poll
       // re-renders — mount() is idempotent.
-      this._gameFinder = null;
       // Lobby row already fetched by onMount's deep-link host-vs-joiner
       // check. _ensureLobbyOpen consumes (and clears) it so the same code
       // isn't fetched twice back-to-back on a deep-link entry.
@@ -237,9 +235,9 @@
 
       // Preload buddies (accounts), ghosts, and recently-played-with in one
       // cached call. Powers the player picker's empty-state suggestions and
-      // username search without per-mount round-trips. Tracked on `this`
-      // so the buddy dropdown can show a loading state and re-render if
-      // the user focuses the input before this lands.
+      // username search without per-mount round-trips. Tracked on `this` so a
+      // sheet opened before it lands can be filled in place rather than making
+      // the host close and re-open it.
       this._buddyDataReady = false;
       this._buddyPreloadPromise = (async () => {
         let combined;
@@ -261,11 +259,11 @@
         this._ghosts = combined.ghosts || [];
         this._recent = combined.recent || [];
         this._buddyDataReady = true;
-        // If the buddy input is currently focused, refresh the dropdown
-        // so recents appear without the user having to refocus.
-        const input = document.getElementById("play-flow-buddy-input");
-        if (input && document.activeElement === input) {
-          this._renderBuddyDropdown(input.value || "");
+        // The picker sheet can be open on a cold cache, showing its own
+        // "loading" state; hand it the real rows the moment they land rather
+        // than making the host close and re-open it.
+        if (window.PlayerPickerSheet && window.PlayerPickerSheet.isOpen()) {
+          window.PlayerPickerSheet.setCandidates(this._buddyCandidates(), this._recentCandidates());
         }
         return combined;
       })();
@@ -294,7 +292,6 @@
       // and the pointer capture stranded.
       if (window.PlayerReorder) window.PlayerReorder.cancel();
       this._stopLobbyPoll();
-      if (this._gameFinder) { try { this._gameFinder.unmount(); } catch (_) {} this._gameFinder = null; }
       if (this._liveOff) { try { this._liveOff(); } catch (_) {} }
       this._liveOff = null;
       // Fire-and-forget: supabase-js removeChannel awaits an unsubscribe ack
@@ -1211,7 +1208,6 @@
       `;
       this.refreshIcons();
       this._mountReferenceGuide();
-      this._mountGameFinder();
       this._bindPlayerReorder();
       // NOTE: do NOT call _scrollToCurrentPhase() here. render() runs every
       // 2s via the lobby poll and on every player edit — yanking the scroll
@@ -1220,22 +1216,58 @@
       // active phase actually changes (onMount, _advancePhase, _phaseBack).
     }
 
-    _mountGameFinder() {
-      const mount = document.getElementById("play-flow-game-finder-mount");
-      if (!mount) {
-        // Picker is gone (game picked, or we're not on the gather screen).
-        // Tear the widget down so its outside-click handler doesn't leak.
-        if (this._gameFinder) { this._gameFinder.unmount(); this._gameFinder = null; }
-        return;
-      }
-      if (!this._gameFinder) {
-        this._gameFinder = new window.GameFinder({
-          placeholder: "Search for a game…",
-          includeRecentlyPlayed: true,
-          onPick: (game, ctx) => this._onFinderPick(game, ctx),
-        });
-      }
-      this._gameFinder.mount(mount);
+    /**
+     * The unpicked Game card. Recently-played games are tappable right here —
+     * they used to be invisible until the search input took focus, which hid
+     * the shortcut for the commonest case behind a gesture — and search itself
+     * moves into a sheet (widgets/game-search-sheet.js).
+     * @returns {string}
+     */
+    _renderGameChooser() {
+      const recent = this._recentGames();
+      const tiles = recent.slice(0, 3).map((g) => `
+        <button class="cascade-game-quick" type="button"
+                onclick="window.playFlowView._quickPickGame('${jsStr(g.id)}')">
+          <span class="cascade-game-quick__art">${gameArtImg(g, "chip", { alt: "" })}</span>
+          <span class="cascade-game-quick__n">${escapeHtml(g.name || "")}</span>
+        </button>`).join("");
+      return `
+        ${tiles ? `<div class="cascade-game-quicks">${tiles}</div>` : ""}
+        <button class="cascade-game-search" type="button" aria-haspopup="dialog"
+                onclick="window.playFlowView._openGameSearch(event)">
+          <i data-icon="search" class="w-4 h-4"></i>
+          <span>${tiles ? "Search all games…" : "Search for a game…"}</span>
+        </button>
+      `;
+    }
+
+    /**
+     * The games behind the quick-pick tiles. Read straight off the cache
+     * bootstrap seeds at login (and Game.recentlyPlayed refreshes), so the card
+     * paints populated in the tap frame with no round-trip. peek(), not get():
+     * a host in a cabin for a weekend should still see their own recents, which
+     * is what the 7d stale window is for.
+     * @returns {any[]}
+     */
+    _recentGames() {
+      if (!window.bgbCache) return [];
+      const rows = window.bgbCache.peek("game.recent", "self");
+      return Array.isArray(rows) ? rows.filter((g) => g && g.id && !g.is_expansion) : [];
+    }
+
+    /** Tap a quick-pick tile. Same sink as a search result. @param {string} id */
+    _quickPickGame(id) {
+      const game = this._recentGames().find((g) => g.id === id);
+      if (game) this._applyGamePick(game);
+    }
+
+    /** @param {Event} [event] */
+    _openGameSearch(event) {
+      window.GameSearchSheet.open({
+        title: "Pick a game",
+        returnFocus: (event && event.currentTarget) || null,
+        onPick: (game, ctx) => this._onFinderPick(game, ctx),
+      });
     }
 
     _onFinderPick(game, ctx) {
@@ -1383,7 +1415,7 @@
       return `
         <section class="cascade-card">
           <label class="cascade-card__label">Game</label>
-          ${game ? this._renderPickedGameChip() : `<div id="play-flow-game-finder-mount"></div>`}
+          ${game ? this._renderPickedGameChip() : this._renderGameChooser()}
         </section>
 
         ${this._renderInviteCard()}
@@ -1398,21 +1430,11 @@
           <ul class="cascade-players">
             ${ps.players.map((p, i) => this._renderPlayerRow(p, i)).join("")}
           </ul>
-          <div class="cascade-player-add">
-            <div class="cascade-buddy-combo">
-              <input id="play-flow-buddy-input"
-                     class="input input-bordered w-full"
-                     placeholder="Add player (buddy or free-text)"
-                     autocomplete="off"
-                     oninput="window.playFlowView._onBuddyInput(this.value)"
-                     onfocus="window.playFlowView._openBuddyDropdown()"
-                     onblur="window.playFlowView._scheduleCloseBuddyDropdown()"
-                     onkeydown="if(event.key==='Enter'){event.preventDefault();window.playFlowView._addPlayerFromInput();}else if(event.key==='Escape'){window.playFlowView._closeBuddyDropdown();}" />
-              <ul id="play-flow-buddy-dropdown" class="cascade-buddy-dropdown hidden"
-                  onmousedown="event.preventDefault()"></ul>
-            </div>
-            <button class="btn btn-primary" onclick="window.playFlowView._addPlayerFromInput()">Add</button>
-          </div>
+          <button class="cascade-add-player" type="button" aria-haspopup="dialog"
+                  onclick="window.playFlowView._openPlayerPicker(event)">
+            <i data-icon="plus" class="w-4 h-4"></i>
+            <span>${ps.players.length ? "Add players…" : "Add players to the table…"}</span>
+          </button>
         </section>
       `;
     }
@@ -1973,10 +1995,13 @@
       // against a session with nobody in it.
       this._withLobby((code) => window.PlaySession.updateLobby(code, { gameId: null }));
       this.render();
-      // Focus the freshly-mounted finder input so the user lands ready to
-      // type their next pick — no extra tap to refocus.
+      // Clearing the pick is the start of choosing another one, so land on the
+      // chooser rather than making the host hunt for it — but on the card, not
+      // in the search sheet: their next game is usually one of the quick picks
+      // now sitting right there.
       requestAnimationFrame(() => {
-        if (this._gameFinder) this._gameFinder.focus();
+        const el = this.container && this.container.querySelector(".cascade-game-search");
+        if (el) /** @type {HTMLElement} */ (el).focus({ preventScroll: true });
       });
     }
 
@@ -1999,10 +2024,10 @@
       // Push the pick to the lobby so joiners' read-only mirrors swap too.
       // Live lobby only — see _clearGamePick for why not ps.code.
       this._withLobby((code) => window.PlaySession.updateLobby(code, { gameId: game.id }));
-      // The finder + dropdown unmount once a game is picked — the user
-      // changes the pick by tapping the chip's × (which clears state and
-      // re-mounts the search input). The widget's unmount() invalidates
-      // any in-flight search, so a late response can't sneak in.
+      // The user changes the pick by tapping the chip's ×, which clears state
+      // and brings the chooser back. The search sheet unmounts its finder on
+      // close, and unmount() invalidates any in-flight search, so a late
+      // response can't sneak in behind a pick.
       this.render();
       this._loadExpansionsIfNeeded().then(() => {
         this.render();
@@ -2055,23 +2080,12 @@
 
     // ── Players ─────────────────────────────────────────────────────────────
 
-    _addPlayerFromInput() {
-      const input = document.getElementById("play-flow-buddy-input");
-      const name = (input.value || "").trim();
-      if (!name) return;
-      // Match the typed name against the unified candidate list (accounts +
-      // ghosts). If we find an account match, attach the user_id + avatar so
-      // the player goes in as an authed buddy; otherwise it's a ghost row.
-      const candidates = this._buddyCandidates();
-      const hit = candidates.find((c) => c.name.toLowerCase() === name.toLowerCase());
-      this._addPlayer({
-        name: hit ? hit.name : name,
-        user_id: hit ? hit.user_id : null,
-        avatar: hit ? hit.avatar : null,
-      });
-    }
-
-    _addPlayer({ name, user_id, avatar }) {
+    /**
+     * @param {{name: string, user_id: string|null, avatar: string|null}} row
+     * @param {{defer?: boolean}} [opts] `defer` skips the repaint — set it when
+     *   seating several players at once so the screen paints once, not N times.
+     */
+    _addPlayer({ name, user_id, avatar }, opts = {}) {
       const exists = this._ps.players.some(
         (p) => (p.name || "").toLowerCase() === (name || "").toLowerCase()
       );
@@ -2092,8 +2106,7 @@
         // participant_id lands on it without waiting for the poll.
         this._pushParticipantToBackend(row);
       }
-      this._closeBuddyDropdown();
-      this.render();
+      if (!opts.defer) this.render();
     }
 
     // Mirror a player the host just added into the lobby roster.
@@ -2141,24 +2154,6 @@
     // Lookup helper used by the buddy autocomplete dropdown: resolves the
     // buddy row from this._buddies (so we keep their avatar) and forwards
     // to _addPlayer.
-    _addBuddy(userId) {
-      const buddy = (this._buddies || []).find((b) => b.other_user_id === userId);
-      if (!buddy) return;
-      this._addPlayer({
-        name: buddy.other_display_name,
-        user_id: buddy.other_user_id,
-        avatar: buddy.other_avatar || null,
-      });
-    }
-
-    // Pick a ghost-buddy from the dropdown — a free-text name the user has
-    // logged before, with no account. Goes in as a name-only participant.
-    _addGhost(displayName) {
-      const name = String(displayName || "").trim();
-      if (!name) return;
-      this._addPlayer({ name, user_id: null, avatar: null });
-    }
-
     _removePlayer(i) {
       const removed = this._ps.players[i];
       this._ps.players.splice(i, 1);
@@ -2786,44 +2781,14 @@
       if (!keepRender) this.render();
     }
 
-    // ── Buddy combo ────────────────────────────────────────────────────────
-
-    _onBuddyInput(value) {
-      // Debounce typing so we don't re-render the dropdown on every keystroke.
-      // Mirrors the GameFinder pattern (widgets/game-finder.js).
-      if (this._buddyInputTimer) clearTimeout(this._buddyInputTimer);
-      this._buddyInputTimer = setTimeout(() => this._renderBuddyDropdown(value), 180);
-    }
-
-    _openBuddyDropdown() {
-      const input = document.getElementById("play-flow-buddy-input");
-      this._renderBuddyDropdown(input ? input.value : "");
-    }
-
-    _scheduleCloseBuddyDropdown() {
-      setTimeout(() => this._closeBuddyDropdown(), 150);
-    }
-
-    _closeBuddyDropdown() {
-      const dd = document.getElementById("play-flow-buddy-dropdown");
-      if (dd) {
-        dd.classList.add("hidden");
-        dd.innerHTML = "";
-        if (window.BgbDropdownFit) window.BgbDropdownFit.reset(dd);
-      }
-    }
-
-    // Reveal + size in one call. The list is position:absolute inside the
-    // Gather card, so a CSS-only max-height runs off the bottom of the screen
-    // whenever the Players card sits low — which, with a full roster above it,
-    // is the normal case. BgbDropdownFit measures the visible box (keyboard
-    // included) and flips the list above the input when it has to.
-    _showBuddyDropdown(dd) {
-      dd.classList.remove("hidden");
-      if (window.BgbDropdownFit) {
-        window.BgbDropdownFit.fit(dd, dd.closest(".cascade-buddy-combo"));
-      }
-    }
+    // ── Player picker ──────────────────────────────────────────────────────
+    //
+    // The roster is edited through widgets/player-picker-sheet.js. It replaced
+    // an inline combo whose dropdown was position:absolute inside the Players
+    // card — the lowest card on Gather — so ui/dropdown-fit.js had to squeeze
+    // it to a ~132px keyhole over the docked Continue CTA once a few players
+    // were seated. The sheet is position:fixed and sized off --bgb-vv-h, so
+    // there is no fit pass, no flip, and no z-index race with the CTA bar.
 
     // Unified candidate list for the player picker: accounts (accepted
     // buddies, with avatar + username) + ghosts (free-text names from past
@@ -2862,115 +2827,71 @@
       return out;
     }
 
-    async _renderBuddyDropdown(query) {
-      // If the buddy preload from onMount hasn't landed yet, show a loading
-      // hint synchronously, await the preload, then continue with the real
-      // render. Bails if the user moved focus elsewhere during the wait.
-      if (!this._buddyDataReady) {
-        const ddLoading = document.getElementById("play-flow-buddy-dropdown");
-        if (ddLoading) {
-          ddLoading.innerHTML = `<li class="cascade-buddy-dropdown-header">Loading…</li>`;
-          this._showBuddyDropdown(ddLoading);
-        }
-        if (this._buddyPreloadPromise) {
-          try { await this._buddyPreloadPromise; } catch (_) {}
-        }
-        const input = document.getElementById("play-flow-buddy-input");
-        if (!input || document.activeElement !== input) {
-          const ddPost = document.getElementById("play-flow-buddy-dropdown");
-          if (ddPost) {
-            ddPost.innerHTML = "";
-            ddPost.classList.add("hidden");
-            if (window.BgbDropdownFit) window.BgbDropdownFit.reset(ddPost);
-          }
-          return;
-        }
-        query = input.value || "";
-      }
-      const dd = document.getElementById("play-flow-buddy-dropdown");
-      if (!dd) return;
-      const q = (query || "").trim().toLowerCase();
+    /**
+     * The empty-query list: people the host has actually played with, most
+     * frequent first (the server orders `recent` by play count). Cross-
+     * referenced against the candidates so the unified shape is kept and
+     * anyone already seated is excluded; a recent who isn't a buddy yet still
+     * shows, as a name-only add.
+     * @returns {any[]}
+     */
+    _recentCandidates() {
       const candidates = this._buddyCandidates();
-      let rows = [];
-      let header = "";
-
-      if (!q) {
-        // Empty input: surface recently-played-with people. Cross-reference
-        // recent (real accounts, ordered by play_count) against the
-        // candidates so we keep the unified shape and exclude anyone
-        // already in the draft.
-        const candidatesByUserId = new Map(
-          candidates.filter((c) => c.user_id).map((c) => [c.user_id, c])
-        );
-        for (const r of (this._recent || [])) {
-          const hit = candidatesByUserId.get(r.user_id);
-          if (hit) {
-            rows.push(hit);
-            continue;
-          }
-          // Recent person who isn't a buddy yet — still useful to surface
-          // so the host can add them as a name-only player.
-          const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
-          if (!already.has((r.display_name || "").toLowerCase())) {
-            rows.push({
-              source: "account",
-              user_id: r.user_id,
-              name: r.display_name,
-              username: null,
-              avatar: r.avatar || null,
-            });
-          }
+      const byUserId = new Map(candidates.filter((c) => c.user_id).map((c) => [c.user_id, c]));
+      const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
+      const rows = [];
+      for (const r of (this._recent || [])) {
+        const hit = byUserId.get(r.user_id);
+        if (hit) { rows.push(hit); continue; }
+        if (!already.has((r.display_name || "").toLowerCase())) {
+          rows.push({
+            source: "account",
+            user_id: r.user_id,
+            name: r.display_name,
+            username: null,
+            avatar: r.avatar || null,
+          });
         }
-        rows = rows.slice(0, 8);
-        if (rows.length > 0) header = "Recently played with";
-      } else {
-        rows = candidates
-          .filter((c) => {
-            const name = c.name.toLowerCase();
-            const username = (c.username || "").toLowerCase();
-            return name.includes(q) || (username && username.includes(q));
-          })
-          .slice(0, 8);
       }
+      return rows;
+    }
 
-      if (rows.length === 0) {
-        dd.classList.add("hidden");
-        dd.innerHTML = "";
-        if (window.BgbDropdownFit) window.BgbDropdownFit.reset(dd);
-        return;
+    /**
+     * Open the picker. The buddy list is normally already in memory — bootstrap
+     * seeds `buddy:all` at login and onMount reads it synchronously — so the
+     * sheet paints populated. On a cold cache it opens empty and the preload's
+     * `setCandidates` fills it in place.
+     * @param {Event} [event]
+     */
+    _openPlayerPicker(event) {
+      window.PlayerPickerSheet.open({
+        candidates: this._buddyCandidates(),
+        recent: this._recentCandidates(),
+        seated: this._ps.players.length,
+        returnFocus: (event && event.currentTarget) || null,
+        onConfirm: (picks) => this._addPlayers(picks),
+      });
+    }
+
+    /**
+     * Seat everyone the host ticked, in tick order — that order becomes the
+     * roster order and therefore the scoring grid's column order. One repaint
+     * for the whole set, not one per player.
+     * @param {any[]} picks
+     */
+    _addPlayers(picks) {
+      for (const c of picks) {
+        this._addPlayer({ name: c.name, user_id: c.user_id || null, avatar: c.avatar || null },
+                        { defer: true });
       }
-      const headerHtml = header
-        ? `<li class="cascade-buddy-dropdown-header">${escapeHtml(header)}</li>`
-        : "";
-      dd.innerHTML = headerHtml + rows.map((c) => {
-        const handler = c.user_id
-          ? `window.playFlowView._addBuddy('${escapeAttr(c.user_id)}')`
-          : `window.playFlowView._addGhost('${escapeAttr(c.name)}')`;
-        const ghostPill = c.source === "ghost"
-          ? `<span class="cascade-buddy-dropdown-pill">ghost</span>`
-          : "";
-        const subtitle = c.username
-          ? `<span class="cascade-buddy-dropdown-sub">@${escapeHtml(c.username)}</span>`
-          : "";
-        // "sm" (28px), not "xs" — the row is 48px tall now and a 20px badge
-        // floats in it. Purely visual: the whole <li> is the tap target.
-        const badge = window.BgbBadge.render({
-          avatar: c.avatar,
-          displayName: c.name,
-          size: "sm",
-          isGhost: c.source === "ghost",
-        });
-        return `
-          <li class="cascade-buddy-dropdown-item" onclick="${handler}">
-            ${badge}
-            <span class="cascade-buddy-dropdown-name">${escapeHtml(c.name)}</span>
-            ${subtitle}
-            ${ghostPill}
-          </li>
-        `;
-      }).join("");
-      this._showBuddyDropdown(dd);
-      this.refreshIcons();
+      this.render();
+      // render() replaced the trigger the sheet handed focus back to, so a
+      // keyboard user would be left on <body>. Only when focus actually fell
+      // through — never steal it from wherever the user has moved on to.
+      if (document.activeElement === document.body && this.container) {
+        const trigger = this.container.querySelector(".cascade-add-player");
+        if (trigger) trigger.focus({ preventScroll: true });
+      }
     }
 
     // ── Save ───────────────────────────────────────────────────────────────
