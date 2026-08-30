@@ -18,6 +18,13 @@
      row + the 1px bottom rule. Used for scroll-padding-top below so that
      scrollIntoView({block:"start"}) targets clear the pinned header. */
   --bgb-header-height: 53px;
+  /* The pinned .spoke-head's resolved height under .bgb-spoke-screen: a 44px
+     control row + its 0.4rem/0.5rem padding-block + the 1px bottom rule =
+     59.4px. Anything that pins BELOW the back row offsets by header + this.
+     Deliberately floored rather than rounded up: a fraction short tucks the
+     next band a hairline UNDER the back row, where a fraction long would open
+     a sub-pixel seam for list content to show through. */
+  --bgb-spoke-head-height: 59px;
 
   /* The header is sticky, so an unpadded scroll-into-view drops its target
      underneath it. Callers: play-flow-view.js, game-explorer-view.js,
@@ -2937,10 +2944,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border-radius: 999px;
   padding: 0.15rem 0.45rem;
 }
+/* The base game's row content starts at 0.6rem of padding + a 16px chevron +
+   a 0.5rem gap ~= 33.6px. The old flat 1.9rem (30.4px) put children three
+   pixels to the LEFT of their own parent, which read as one flat list. The
+   margin lands the rail under the base game's art and the padding steps the
+   children clear of it. */
 .exp-tree__children {
   list-style: none;
-  margin: 0;
-  padding: 0 0.6rem 0.5rem 1.9rem;
+  margin: 0 0 0 2.1rem;
+  padding: 0 0.6rem 0.5rem 0.9rem;
+  border-left: 2px solid oklch(var(--b3));
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -2968,13 +2981,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .exp-tree__own:hover { background: oklch(var(--b3) / 0.6); }
 .exp-tree__own:active { transform: translateY(1px); }
 
-/* Owned-only vs the whole catalog. */
+/* Owned-only vs the whole catalog, and open-vs-closed. The bottom margin is
+   gone on purpose: the band is pinned by #collection-tree-controls-host, which
+   carries the padding — a margin here would leave a transparent strip under
+   the pinned row for list content to show through. */
 .exp-tree__controls {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 0 0 0.6rem;
 }
+/* Pushes the all-toggle to the trailing edge whether or not the Loading… note
+   is present, without giving the note its own margin rule. */
+.exp-tree__all { margin-left: auto; }
 .exp-tree__switch {
   display: inline-flex;
   align-items: center;
@@ -3020,6 +3038,29 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .exp-tree__switch.is-on .exp-tree__switch-knob { transform: translateX(16px); }
 .exp-tree__switch:focus-visible .exp-tree__switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
 .exp-tree__controls-note { font-size: 0.7rem; color: oklch(var(--bc) / 0.55); }
+/* Expand/collapse every group. Quieter than the switch beside it — that one
+   changes what the tab is showing, this one only changes how much of it you
+   can see at once. */
+.exp-tree__all {
+  flex: none;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.5rem;
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.5rem;
+  background: none;
+  color: oklch(var(--bc) / 0.7);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.exp-tree__all:hover:not(:disabled) { background: oklch(var(--b3) / 0.6); color: oklch(var(--bc)); }
+.exp-tree__all:active:not(:disabled) { transform: translateY(1px); }
+.exp-tree__all:disabled { opacity: 0.45; cursor: default; }
+.exp-tree__all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .exp-tree__add-row { display: flex; }
 .exp-tree__add {
   flex: 1;
@@ -7873,6 +7914,30 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-inline: -1rem;
   padding-inline: 1rem;
   padding-block: 0.4rem 0.5rem;
+  background: oklch(var(--b1) / 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid oklch(var(--b3));
+}
+
+/* The Expansions tab's control band, pinned directly under the back row above
+   it. Same bleed-and-blur treatment, one step down the z ladder so it slides
+   UNDER .spoke-head (20) rather than over it, and above view content.
+
+   It lives in its own shell host rather than inside #collection-grid-host
+   because _paintTree() rewrites that host wholesale — pinning an element that
+   gets swapped out from under the thumb is how a sticky row ends up jumping.
+   The host is empty (and so zero-height) outside tree mode, which is why there
+   is no mode guard here. */
+.bgb-spoke-screen > #collection-tree-controls-host:not(:empty) {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + var(--bgb-spoke-head-height));
+  z-index: 15;
+  display: block;
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+  padding-block: 0.35rem 0.45rem;
+  margin-bottom: 0.6rem;
   background: oklch(var(--b1) / 0.95);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
