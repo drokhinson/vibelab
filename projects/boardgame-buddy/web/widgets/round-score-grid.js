@@ -118,8 +118,8 @@
         </table>
       </div>
       ${editable ? `
-        <div class="flex gap-2 mt-1">
-          <button class="btn btn-ghost btn-xs" onclick="window.${host}._addRound()">
+        <div class="scoring-actions">
+          <button class="btn btn-ghost btn-xs scoring-add-round" onclick="window.${host}._addRound()">
             <i data-icon="plus" class="w-3.5 h-3.5"></i> Round
           </button>
         </div>

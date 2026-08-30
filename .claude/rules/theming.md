@@ -225,8 +225,32 @@ Two corollaries:
 - **Custom properties substitute where they are declared, not where they are
   used.** A re-point restating an alias family has to restate every member it
   wants changed; the ones it omits keep resolving against the outer declaration.
-- **A genuine photo surface must never be nested inside a re-pointed screen** —
-  it will silently inherit the chrome values. Check before you nest.
+- **A genuine photo surface nested inside a re-pointed screen inherits the
+  chrome values silently.** It is safe **iff it reads no alias the re-point
+  moves**, and there are two ways to get there. Either *hoist its ink out of the
+  alias families* — boardgame-buddy's parchment scroll paints from literals
+  except for one link colour, which moved from `--accent-ink` to a never-
+  re-pointed `--accent-on-paper` — or *restore the alias family*, pointing it
+  back at the source tokens:
+
+  ```css
+  /* Keep --paper* OUT of the re-point, so it stays the source of truth.
+     --polaroid-* is the alias a chrome surface moves; an island moves it back. */
+  :root :is([data-view="play-flow"]) .card.card--scorepad {
+    --polaroid-bg: var(--paper);  --polaroid-ink: var(--paper-ink);
+    --accent-ink:  var(--accent-on-paper);
+    --well:        var(--polaroid-bg);   /* a well in paper is not the ground */
+  }
+  ```
+
+  Two things make this work. **Any value the dark branch supplies as a literal
+  needs a source token of its own first** — an island cannot restore what it
+  cannot name; that is why `--accent-ink` and `--ghost-ink` became aliases of
+  `--accent-on-paper` and `--ghost-ink-paper`. And **specificity is
+  load-bearing**: the dark branch is `(0,3,0)`, so a bare island class at
+  `(0,1,0)` loses exactly the tokens it most needs back. Double the class to
+  out-specify it rather than relying on source order — relying on source order
+  is what §7 above is about.
 
 ## 8. Body-level overlays escape their opener's re-point
 
