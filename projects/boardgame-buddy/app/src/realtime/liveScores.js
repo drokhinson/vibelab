@@ -63,6 +63,24 @@ export default class LiveScores {
     return () => this._listeners.delete(fn);
   }
 
+  /**
+   * Fold in a snapshot of the grid — the `scores` block on the session bundle
+   * (migration 054). This is the ONLY way a late spectator ever sees the
+   * host's cells: bgb_join_session writes a participant row only during
+   * Gather, and bgb_session_scores_select is scoped to host-OR-participant, so
+   * someone who joined during Play reads zero rows (not an error) and Realtime
+   * is silent for them under the same policy. Their mirror would otherwise sit
+   * on an empty grid with a 0 total for the whole game.
+   *
+   * Additive and idempotent, so the poll can re-seed on every tick.
+   * @param {Array<{participant_id: string, round_index: number, score: number|null}>} rows
+   */
+  ingestSnapshot(rows) {
+    if (!Array.isArray(rows) || !rows.length) return;
+    for (const row of rows) this._ingest(row);
+    this._emit();
+  }
+
   getScore(participantId, roundIndex) {
     const m = this._byPlayer.get(participantId);
     if (!m) return null;

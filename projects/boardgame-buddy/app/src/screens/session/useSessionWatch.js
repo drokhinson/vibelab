@@ -38,6 +38,11 @@ export default function useSessionWatch({ code, me, onFinalized, onAbandoned }) 
       const s = await api.session(code);
       setSession(s);
       setError(null);
+      // Re-seed every tick: for a spectator with no participant row the socket
+      // never fires, so the poll's snapshot is their only source of new cells.
+      // ingestSnapshot is additive and idempotent, so this is free when the
+      // socket IS working.
+      if (liveRef.current) liveRef.current.ingestSnapshot(s.scores);
       if (s.phase) {
         setPhase(s.phase);
         handleTerminal(s.phase, s);
@@ -87,6 +92,11 @@ export default function useSessionWatch({ code, me, onFinalized, onAbandoned }) 
     liveRef.current = live;
     let off = null;
     live.start().then(() => {
+      // Seed from the bundle before trusting the socket. A spectator who
+      // joined during Play has no participant row, so RLS hands them zero
+      // rows from the scores table and Realtime never fires — the bundle's
+      // snapshot (migration 054) is the only copy of the grid they can read.
+      live.ingestSnapshot(session.scores);
       off = live.subscribe(() => {
         setRounds((r) => Math.max(r, live.maxRound() + 1));
         bump();
