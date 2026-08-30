@@ -3361,18 +3361,19 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  animation: statusSheetIn 260ms var(--ease) both;
+  animation: sheetIn 260ms var(--ease) both;
 }
-@keyframes statusSheetIn {
+@keyframes sheetIn {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
 }
-/* Set by close() for the duration of CLOSE_MS before the node is removed. */
+/* Set by BottomSheet.close() for CLOSE_MS before the node is removed.
+   sheetIn/sheetOut/fadeOut are shared with .game-picker-sheet below. */
 .polaroid-popup__backdrop.status-sheet.is-closing { animation: fadeOut 200ms ease-out both; }
 .status-sheet.is-closing .status-sheet__panel {
-  animation: statusSheetOut 200ms var(--ease) both;
+  animation: sheetOut 200ms var(--ease) both;
 }
-@keyframes statusSheetOut {
+@keyframes sheetOut {
   from { transform: translateY(0); }
   to   { transform: translateY(100%); }
 }
@@ -3449,6 +3450,181 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
 }
 .status-sheet__cancel:hover { background: var(--polaroid-line); }
+
+/* ── Game picker sheet ────────────────────────────────────────────────────
+   "Which game?" for the Stats spoke's By-game breakdown. Same shell as the
+   status sheet above — ui/bottom-sheet.js drives both, and both reuse the
+   sheetIn/sheetOut keyframes — with the two things that sheet never needed:
+   a search field, and a real scroller. Two or three status rows can't
+   overflow; a heavy player's game list runs to a hundred.
+
+   Doubled up on .polaroid-popup__backdrop for the same reason spelled out
+   above the status sheet: the base rule is defined LATER in this file and
+   sets align-items:center, so a bare .game-picker-sheet would lose the tie
+   and render as a centred card. */
+.polaroid-popup__backdrop.game-picker-sheet {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+.game-picker-sheet .game-picker__panel {
+  width: 100%;
+  max-width: 520px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  border-radius: 20px 20px 0 0;
+  padding: 8px 12px max(16px, env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.42);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* A flex column with exactly one growable child (the list), so the sheet
+     stops growing here and the list scrolls inside it — the grip, title and
+     search field stay put. */
+  max-height: min(80vh, 660px);
+  animation: sheetIn 260ms var(--ease) both;
+}
+.polaroid-popup__backdrop.game-picker-sheet.is-closing { animation: fadeOut 200ms ease-out both; }
+.game-picker-sheet.is-closing .game-picker__panel { animation: sheetOut 200ms var(--ease) both; }
+
+.game-picker__grip {
+  width: 44px; height: 4px; border-radius: 4px;
+  background: var(--polaroid-line);
+  margin: 4px auto 8px;
+  flex: none;
+}
+.game-picker__title {
+  margin: 0 0 2px; padding: 0 10px; flex: none;
+  font-family: var(--font-polaroid);
+  font-weight: 700; font-size: 19px; letter-spacing: -0.01em;
+  color: var(--polaroid-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.game-picker__sub {
+  margin: 0 0 8px; padding: 0 10px; flex: none;
+  font-size: 0.78rem; color: var(--polaroid-muted);
+}
+/* Rides the .game-finder chrome (icon + input + clear button) the same way
+   the import-expansions filter does — a bare shell, not a GameFinder: there
+   is nothing to search for over the network here. */
+.game-picker__search { flex: none; margin: 2px 2px 8px; }
+.game-picker__search .game-finder__input {
+  border-radius: 12px;
+  padding-right: 44px;
+}
+
+.game-picker__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Focus rings on the rows are inset, but the scroller would still clip a
+     row's rounded corner against its edge without this breathing room. */
+  margin: 0 -2px;
+  padding: 0 2px;
+}
+
+.game-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  /* 56px, as .status-sheet__opt and .game-finder-dropdown-item — see the
+     comment on the latter about mis-taps landing on the neighbouring row. */
+  min-height: 56px;
+  padding: 6px 10px;
+  flex: none;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.game-picker__row:hover { background: var(--polaroid-bg-soft); }
+.game-picker__row:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: -3px;
+}
+.game-picker__row[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.game-picker__row[aria-selected="true"] .game-picker__name,
+.game-picker__row[aria-selected="true"] .game-picker__rate { color: var(--accent-ink); }
+
+.game-picker__art {
+  width: 44px; height: 44px;
+  flex: none;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--polaroid-line);
+  box-shadow: var(--sh-2);
+}
+.game-picker__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* No cover art: the same dice placeholder .game-finder-dropdown-item uses, so
+   a coverless game reads as a game rather than as a failed image. */
+.game-picker__art--empty {
+  display: grid;
+  place-items: center;
+  color: var(--polaroid-muted);
+  box-shadow: none;
+}
+.game-picker__body { flex: 1 1 auto; min-width: 0; }
+.game-picker__name,
+.game-picker__meta {
+  display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.game-picker__name { font-size: 0.97rem; font-weight: 600; line-height: 1.2; }
+.game-picker__meta {
+  margin-top: 3px;
+  font-size: 0.74rem;
+  color: var(--polaroid-muted);
+}
+.game-picker__rate {
+  flex: none;
+  font-family: var(--font-score);
+  font-size: 0.86rem; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--polaroid-muted);
+}
+/* A co-op game has no win rate to quote, so this cell reads as a label
+   rather than a number — different family, different size. */
+.game-picker__rate--coop {
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.game-picker__check {
+  flex: none;
+  width: 20px;
+  display: grid; place-items: center;
+  color: var(--accent-ink);
+}
+.game-picker__empty {
+  margin: 0;
+  padding: 28px 10px;
+  text-align: center;
+  font-size: 0.86rem;
+  color: var(--polaroid-muted);
+}
+.game-picker__cancel {
+  flex: none;
+  min-height: 52px; margin-top: 6px;
+  border: 1px solid var(--polaroid-line); border-radius: 12px;
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  font-size: 0.94rem; font-weight: 600;
+  cursor: pointer;
+}
+.game-picker__cancel:hover { background: var(--polaroid-line); }
 
 /* Status-tag positioning inside the standard tile shapes ─ pin top-right. */
 .collection-tile { position: relative; }
@@ -8704,58 +8880,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.stats-picker__chev { color: var(--accent-ink); flex: none; display: grid; place-items: center; transition: transform 0.18s ease; }
-.stats-picker[aria-expanded="true"] .stats-picker__chev { transform: rotate(180deg); }
-.stats-picker-list {
-  margin-top: 0.4rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  /* A heavy player has 40+ games in here; cap it and scroll rather than
-     pushing the whole breakdown off the screen. */
-  max-height: 15rem;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.stats-picker-list[hidden] { display: none; }
-.stats-picker-list__item {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  background: var(--polaroid-bg, #FFFBF1);
-  border: 1px solid var(--card-border);
-  border-radius: 0.7rem;
-  padding: 0.4rem 0.55rem;
-  min-height: 46px;
-  color: var(--polaroid-ink, #1D1812);
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-.stats-picker-list__item[aria-selected="true"] {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, var(--polaroid-bg, #FFFBF1));
-}
-.stats-picker-list__item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.stats-picker-list__art {
-  width: 28px; height: 28px;
-  border-radius: 0.35rem;
-  overflow: hidden;
-  flex: none;
-  background: var(--polaroid-line, #DAC9A4);
-}
-.stats-picker-list__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.stats-picker-list__n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stats-picker-list__c {
-  font-family: var(--font-score);
-  font-size: 0.7rem;
-  color: var(--polaroid-muted, #8B7E68);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
+.stats-picker__chev { color: var(--accent-ink); flex: none; display: grid; place-items: center; }
 
 /* ── Spoke: win-rate ring + facts ─────────────────────────────────────────── */
 .stats-ratio { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.85rem; }

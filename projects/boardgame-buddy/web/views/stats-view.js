@@ -38,6 +38,9 @@
   // the markup.
   const RING_R = 44;
   const SHELF_R = 24;
+  // Stable host for the By-game card, so picking a game can swap just that
+  // section instead of the whole screen.
+  const BY_GAME_ID = "stats-by-game";
 
   class StatsView extends window.View {
     constructor() {
@@ -53,7 +56,6 @@
       this._loading = false;
       this._error = null;
       this._selectedGameId = null;
-      this._pickerOpen = false;
     }
 
     async onMount() {
@@ -244,47 +246,38 @@
       return found || games[0];
     }
 
+    // The section is a stable host: `_selectGame` swaps its insides rather
+    // than repainting the screen, so BY_GAME_ID and _renderByGameInner are
+    // split out from the wrapper for the two call sites to share.
     _renderByGame(games) {
       if (!Array.isArray(games) || !games.length) return "";
-      const g = this._selectedGame();
       return `
-        <section class="preview-card">
-          <header class="preview-card__head">
-            <span class="preview-card__icon"><i data-icon="dice-6" class="w-4 h-4"></i></span>
-            <h3 class="preview-card__title font-display">By game</h3>
-            <span class="preview-card__sub">${games.length} played</span>
-          </header>
-
-          <button class="stats-picker" type="button" aria-expanded="${this._pickerOpen}"
-                  aria-controls="stats-picker-list"
-                  onclick="window.statsView._togglePicker()">
-            <span class="stats-picker__art">${gameArtImg(g, "chip", { alt: "" })}</span>
-            <span class="stats-picker__l">
-              <span class="stats-picker__lab">Showing</span>
-              <span class="stats-picker__name">${escapeHtml(g.name || "")}</span>
-            </span>
-            <span class="stats-picker__chev"><i data-icon="chevron-down" class="w-4 h-4"></i></span>
-          </button>
-
-          <div class="stats-picker-list" id="stats-picker-list" role="listbox"
-               aria-label="Choose a game" ${this._pickerOpen ? "" : "hidden"}>
-            ${games.map((row) => this._pickerItem(row, row.game_id === g.game_id)).join("")}
-          </div>
-
-          ${this._renderGamePanel(g)}
+        <section class="preview-card" id="${BY_GAME_ID}">
+          ${this._renderByGameInner(games)}
         </section>
       `;
     }
 
-    _pickerItem(row, selected) {
+    _renderByGameInner(games) {
+      const g = this._selectedGame();
       return `
-        <button class="stats-picker-list__item" type="button" role="option"
-                aria-selected="${selected}"
-                onclick="window.statsView._selectGame('${jsStr(row.game_id)}')">
-          <span class="stats-picker-list__art">${gameArtImg(row, "chip", { alt: "" })}</span>
-          <span class="stats-picker-list__n">${escapeHtml(row.name || "")}</span>
-          <span class="stats-picker-list__c">${row.wins}/${row.plays}</span>
+        <header class="preview-card__head">
+          <span class="preview-card__icon"><i data-icon="dice-6" class="w-4 h-4"></i></span>
+          <h3 class="preview-card__title font-display">By game</h3>
+          <span class="preview-card__sub">${games.length} played</span>
+        </header>
+
+        <button class="stats-picker" type="button" aria-haspopup="dialog"
+                onclick="window.statsView._openPicker(event)">
+          <span class="stats-picker__art">${gameArtImg(g, "chip", { alt: "" })}</span>
+          <span class="stats-picker__l">
+            <span class="stats-picker__lab">Showing</span>
+            <span class="stats-picker__name">${escapeHtml(g.name || "")}</span>
+          </span>
+          <span class="stats-picker__chev"><i data-icon="chevron-down" class="w-4 h-4"></i></span>
         </button>
+
+        ${this._renderGamePanel(g)}
       `;
     }
 
@@ -575,19 +568,40 @@
     }
 
     // ── Interaction ───────────────────────────────────────────────────────────
-    // Both handlers re-render the whole view. That is the wholesale teardown
-    // web-frontend.md warns about for MUTATIONS — but nothing here mutates or
-    // awaits: the payload is already in memory, so the repaint lands in the
-    // same frame as the tap and there is no in-flight state to preserve.
-    _togglePicker() {
-      this._pickerOpen = !this._pickerOpen;
-      this.render();
+
+    // The sheet lives on document.body, so it outlives any repaint in here and
+    // the page behind it never moves — which is the whole reason the picker
+    // stopped being an inline disclosure.
+    _openPicker(event) {
+      const games = this._games();
+      if (!games.length) return;
+      const current = this._selectedGame();
+      window.GamePickerSheet.open({
+        games,
+        selectedId: current ? current.game_id : null,
+        returnFocus: (event && event.currentTarget) || null,
+        onPick: (game) => this._selectGame(game.game_id),
+      });
     }
 
+    // Patch the one card that changed instead of rebuilding all nine sections
+    // (.claude/rules/web-frontend.md, "Re-render surgically, not the whole
+    // screen"). Nothing here awaits — the payload is already in memory — so
+    // the swap lands in the same frame as the tap, and the podium, heatmap and
+    // the reader's scroll position all stay exactly where they were.
     _selectGame(gameId) {
       this._selectedGameId = gameId;
-      this._pickerOpen = false;
-      this.render();
+      const host = this.container && this.container.querySelector(`#${BY_GAME_ID}`);
+      if (!host) { this.render(); return; }
+      host.innerHTML = this._renderByGameInner(this._games());
+      this.refreshIcons(host);
+      // The swap replaced the trigger the sheet had handed focus back to, so
+      // a keyboard user would be left on <body>. Only when focus actually
+      // fell through — never steal it from wherever the user has moved on to.
+      if (document.activeElement === document.body) {
+        const trigger = host.querySelector(".stats-picker");
+        if (trigger) trigger.focus({ preventScroll: true });
+      }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
