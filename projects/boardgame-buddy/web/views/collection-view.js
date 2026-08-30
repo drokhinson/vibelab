@@ -1,7 +1,7 @@
 // views/collection-view.js — Full collection spoke.
 //
-// Toggle between "Owned", "Played, not owned" and "Expansions" + shared
-// search/filters (the first two only — see below).
+// Toggle between "Owned", "Expansions" and "Played" + shared
+// search/filters (Owned and Played only — see below).
 // Wishlist lives at its own /wishlist route. The "+ Add" button in the
 // header opens the AddGameModal (widgets/add-game-modal.js) for searching
 // the BgB library or importing from BGG.
@@ -38,8 +38,8 @@
   // moment a third pill appeared.
   const MODES = [
     { id: MODE_OWNED, label: "Owned", noun: "game" },
-    { id: MODE_PLAYED, label: "Played, not owned", noun: "game" },
     { id: MODE_EXPANSIONS, label: "Expansions", noun: "expansion" },
+    { id: MODE_PLAYED, label: "Played", noun: "game" },
   ];
 
   const PLAYTIME_BUCKETS = window.ShelfFilter.PLAYTIME_BUCKETS;
