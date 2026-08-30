@@ -14,7 +14,12 @@
 // (.claude/rules/ui-object-design.md §4: fix the root cause rather than ship a
 // second copy).
 //
-// Used by: ui/status-tag.js, widgets/game-picker-sheet.js.
+// Used by: ui/status-tag.js, widgets/game-picker-sheet.js,
+// widgets/player-picker-sheet.js, widgets/game-search-sheet.js.
+//
+// A new sheet also needs its class added by name to the theme re-point list in
+// styles.css — a body-level sheet lands outside the screen that opened it and
+// would otherwise keep the root paper aliases. See .claude/rules/theming.md §8.
 
 (function () {
   // Must match the .is-closing animation duration in styles.css.

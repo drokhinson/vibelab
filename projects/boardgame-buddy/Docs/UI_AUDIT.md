@@ -2,14 +2,19 @@
 
 A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code as `path:line` so each finding can be jumped to and verified. The scope is the web frontend only; the React Native app under `app/` is out of scope.
 
-> **Status:** Original audit produced 2026-05-23. **First cleanup pass applied
-> 2026-05-23**: all confirmed-dead JS and CSS deleted; global header avatar
-> migrated to `BgbBadge.render`. **Second cleanup pass applied 2026-08-20** —
-> see §9 at the bottom.
+> **Status:** Original audit produced 2026-05-23. Four passes have been applied
+> since; read the **Cleanup log** at the bottom, newest first:
+> Pass 1 + 2 (dead code) 2026-05-23, Pass 2 2026-08-20 (§9),
+> Pass 3 (feed-card rework) 2026-08-29, **Pass 4 (theme system + sheet system)
+> 2026-08-30**.
 >
 > ⚠️ Every `file:line` citation in §§2-8 dates from 2026-05-23 and has drifted.
-> Treat the *claims* as current only where §9 confirms them; re-grep before
-> acting on any line number.
+> Treat the *claims* as current only where a later pass confirms them; re-grep
+> before acting on any line number. Where a section header says "Updated
+> <date>", that section has been re-verified.
+>
+> For the systems rather than the debt, read `Docs/ARCHITECTURE.md` §4 (design
+> tokens, the three surface kinds, bottom sheets, chrome and layering).
 
 ---
 
@@ -25,14 +30,14 @@ Smaller findings remained or are addressed:
 
 - ~~`.admin-tool*`, `.bgb-filter-panel`, `.book-hint/slot/spine*` are unreferenced.~~ **All deleted.** The cleanup also caught additional dead families adjacent to the original `.book-*` finding: the closet/shelf chrome (`.shelf__*`, `.closet-*`, `.skeleton-book`, `.book-spine__exp*`), the swipe gestures (`.swipe-wrap`, `.swipe-hint*`), and the documentation diagram styles (`.card-anatomy*`). All confirmed dead by grep, all removed.
 - `renderStatusTag` is still called with three option shapes (`{ size: "xs" }`, `{ size: "lg", addLabel: ... }`, `{ compact: true }`). Not addressed in this pass; tracked in §6.
-- Typography remains broadly consistent (Crimson for display, Poppins for chrome, Fraunces for polaroid-style headers, JetBrains Mono for scores), but the `.plays-list__row` view still sidesteps the polaroid look. Tracked in §5b / §8.1.
+- Typography remains broadly consistent (Geist for chrome, Fraunces for display and polaroid headers, JetBrains Mono for scores — see §8.1 for the current map), but the `.plays-list__row` view still sidesteps the polaroid look. Tracked in §5b / §8.1.
 - `.animate-fade` (without `Up`) does not exist (an earlier audit pass had assumed it did).
 
 ---
 
 ## 2. Screens & routes
 
-The app is a single-page shell. `index.html` contains 18 `<main data-view="...">` containers; the router toggles `.hidden` between them. All 17 view classes are constructed and registered in `init.js:11–48`.
+The app is a single-page shell. `index.html` contains 18 `<main data-view="...">` containers; the router toggles `.hidden` between them. All 18 view classes are constructed and registered in `init.js`.
 
 | Route (`data-view`) | View class | File | Lines | How user reaches it | Primary content |
 | --- | --- | --- | --- | --- | --- |
@@ -54,7 +59,9 @@ The app is a single-page shell. `index.html` contains 18 `<main data-view="...">
 | `settings` | `SettingsView` | `views/settings-view.js` | 589 | Tap top-right avatar | Account, avatar customizer, BGG link, admin-key, delete account |
 | `admin` | `AdminView` | `views/admin-view.js` | 297 | Settings → admin tools (gated) | Chapter moderation list |
 
-Bottom navigation is hard-coded in `index.html` and consists of three slots: Feed (route `feed`), Play (route `log-play` — stays lit through `play-flow` and `session-viewer`), Profile (route `profile-self`). The global header is fixed at the top: left side is the brand wordmark routing to `feed`, right side is the user avatar button routing to `settings`.
+Bottom navigation is hard-coded in `index.html` and consists of three slots: Feed (route `feed`), Play (route `log-play` — stays lit through `play-flow` and `session-viewer`), Profile (route `profile-self`). The global header is sticky at the top: left side is the brand wordmark routing to `feed`, right side is a pair of 36px utilities — the outbox indicator and a gear routing to `settings`.
+
+The five spokes off the Profile hub (`collection`, `wishlist`, `plays`, `buddies`, `stats`) plus `settings` share the `.bgb-spoke-screen` class and its pinned back row. Settings carries a trailing-edge close rather than a back arrow, because it is reachable from the global header on any screen — see `ARCHITECTURE.md` §4.4.
 
 ---
 
@@ -184,10 +191,10 @@ Components are global functions / classes attached to `window`. There is no modu
 - **How accessed:** Tap the maximize button on a play card; tap any row in the chronological plays view.
 - **Inconsistency:** Calls `PolaroidPopup.confirm` (`widgets/play-detail-popup.js:646`) for delete-play confirmation but otherwise uses its own modal styling — i.e. the popup is **not** a `PolaroidPopup`, it is a separate modal system. Worth noting for future refactor.
 
-### 3.15 Global header (logo + avatar) — `index.html:36–53`
-- Hard-coded markup, no render function. Logo links to `feed`; avatar button links to `settings`. The avatar is initially `<span class="avatar-bubble avatar-bubble--me">?</span>` and is replaced by `BgbBadge.render` once the user loads (`init.js:143`).
+### 3.15 Global header (brand + utilities) — `index.html`
+- Hard-coded markup, no render function. Sticky at `top: 0`, `z-index: 30`. Left side is the brand lockup routing to `feed`; the right side is **two 36px utility controls** — the outbox indicator and a gear routing to `settings`.
+- The gear replaced the user's avatar in `ad3fe8b`: an avatar there read as "my profile", duplicating the Profile bottom-nav tab while hiding the only entry into Settings. The two right-hand controls now read as a pair of utilities rather than "an icon and an identity".
 - **Reuse count: 1 instance** (only one header).
-- **Recommendation:** Inline-render the avatar through `BgbBadge.render({ size: "sm", isMe: true })` from the start, removing the legacy bubble.
 
 ### 3.16 Bottom nav (Feed / Play / Profile) — `index.html`
 - Hard-coded markup using `.bgb-nav*` classes (`styles.css:2451+`).
@@ -332,14 +339,14 @@ A list of every place where ad-hoc markup duplicates an available (or intended-t
 
 ### 8.1 Typography map
 
-The design has four type roles and one helper:
+**Updated 2026-08-30.** The design now has **three** families, not four: `--font-display` was collapsed into an alias of `--font-polaroid`, so display and polaroid captions are one face.
 
 | Role | Token | Family | Where it lives | Where it's used |
 | --- | --- | --- | --- | --- |
-| Body / chrome | `--font-sans` (`styles.css:23`) | Poppins | Default `body` (`styles.css:64`) | Buttons, list rows, meta text, profile body |
-| Display / headings | `--font-display` (`styles.css:24`) | Crimson Text | `.font-display` (`styles.css:68`) | Profile names, game-detail name, chapter titles, day dividers, profile stat values |
-| Polaroid surfaces | `--font-polaroid` (`styles.css:45`) | Fraunces | `.game-polaroid__name`, `.play-card__caption-name`, `.play-card__back-title`, `.guide-text` body | The polaroid family of cards |
-| Scoring | `--font-score` (`styles.css:46`) | JetBrains Mono | `.scoring-table`, `.scoring-cell`, `.play-card__back-player-score`, `.play-detail__player-score` | Every numeric score |
+| Body / chrome | `--font-sans` | Geist | Default `body` | Buttons, list rows, meta text, profile body |
+| Display / headings | `--font-display` → `var(--font-polaroid)` | Fraunces | `.font-display` | Profile names, game-detail name, chapter titles, day dividers, stat values, sheet titles |
+| Polaroid surfaces | `--font-polaroid` | Fraunces | `.game-polaroid__name`, `.play-card__caption-name`, `.play-card__back-title`, `.guide-text` body | The polaroid family of cards |
+| Scoring | `--font-score` | JetBrains Mono | `.scoring-table`, `.scoring-cell`, `.play-card__back-player-score`, `.play-detail__player-score` | Every numeric score and session code (tabular numerals) |
 | Step indicator | inherits `--font-score` | JetBrains Mono | `.cascade-screen__step` | Cascade screen step counter |
 
 **Findings:**
@@ -366,12 +373,22 @@ Eight sites set CSS variables inline. All eight are either per-game accent color
 
 ### 8.3 Design token coverage
 
-Tokens declared in `:root` at `styles.css:8–53`. Two patterns to flag:
+**Updated for the two-theme system.** Tokens are no longer one `:root` block. They are three, in this order (`styles.css`, top of file):
 
-- **`--game-accent` is declared at `:root` with a default `#6B3FA0`** (`styles.css:12`) and a soft variant `--game-accent-light` (`:13`). But the live overrides set by JS (`ui/game-card.js:20`, `ui/play-card.js:96`, etc.) use the game's `theme_color`. So the default purple is essentially placeholder; if a card ever renders without an inline override it would be purple, which the feed and game-detail surfaces never want. Worth either tightening (`--game-accent: var(--polaroid-accent)` as the default) or removing the default to force callers to supply one.
-- **Hex literals in JS** appear at `views/play-flow-view.js:1295` (`"#C9922A"`) and `widgets/play-detail-popup.js:284` (`"#C9922A"`). Both should reference `var(--accent)` so a brand-color change in CSS propagates.
+1. `:root` — theme-**independent** values only: layout heights, `scroll-padding-top`, the three type families, the spacing and radius scales, `--ease`, and `--ghost-ink` (which is theme-independent precisely because it sits on paper, and paper is light in both themes).
+2. `:root, :root[data-bgb="dark"]` — the dark palette, which is also the default.
+3. `:root[data-bgb="light"]` — the light palette.
 
-Otherwise tokens are used consistently. The cascade flow has its own derived token `--cascade-bottom-pad` (`styles.css:5028`) which is fine. `--warm-taupe`, `--rust`, `--warm-gray-mid` are used widely across guide chrome, destructive buttons, and inactive toggles respectively.
+Then the `--polaroid-*` alias family at `:root`, pointed at the paper tokens, and the theme-agnostic chrome re-point. See `ARCHITECTURE.md` §4.2 / §4.2a for the full table and the rules.
+
+**Auditing rule:** a colour declared outside blocks 2 and 3 is a claim that it is correct in *both* themes. Most such claims are wrong. Check for them by grepping for `#` and `rgba(` between the end of the light block and the end of the file.
+
+Open items:
+
+- **`--game-accent` has a `:root` default of `#6B3FA0`.** The live overrides set by JS (`ui/game-card.js`, `ui/play-card.js`) use the game's `theme_color`, so the default purple is a placeholder; a card rendering without an inline override would be purple, which no surface wants. Either point it at `var(--polaroid-accent)` or remove the default to force callers to supply one.
+- **Hex literals in JS**: `views/play-flow-view.js` and `widgets/play-detail-popup.js` both carry `"#C9922A"` — a value that is no longer either theme's `--accent` (`#E0A94A` dark, `#A87215` light). Both should reference `var(--accent)`.
+
+Otherwise tokens are used consistently. The cascade flow has its own derived token `--cascade-bottom-pad`, which is the right pattern: derive an offset by `calc()` from the height tokens rather than restating a measurement. `--warm-taupe`, `--rust` and `--warm-gray-mid` are used widely across guide chrome, destructive buttons and inactive toggles respectively.
 
 ---
 
@@ -555,3 +572,99 @@ card's cream ground. The collapse to a single scale is still owed.
 
 **Known web/native drift:** `app/src/components/PlayCard.js` has no status
 control and a fixed 180px photo. It does not track this rework.
+
+### Pass 4 (theme system + sheet system) — 2026-08-30
+
+Two app-wide systems landed across ~40 commits. Both are now written up
+properly in `Docs/ARCHITECTURE.md` §4 and generalized to the repo in
+`.claude/rules/theming.md` and `.claude/rules/overlays.md`; this entry records
+what moved and what was deleted.
+
+**Light and dark became two first-class themes.** The lever is `data-bgb` on
+`<html>`, set by a pre-paint inline script in `index.html` and owned thereafter
+by `domain/theme.js`. `data-theme="luxury"` stays frozen — it is DaisyUI's
+attribute, not ours. The palette split into three blocks (theme-independent
+scales, dark, light), and `--b1/--b2/--b3/--bc` are overridden per theme, which
+is what re-themed the ~158 rules painting with `oklch(var(--b*))` without
+touching one of them.
+
+Auto is the *absence* of a stored key rather than a third stored value, so
+Settings needed a three-way segmented control instead of a toggle. Following
+the OS turned out to need more than a `change` listener: WebKit does not
+deliver media-query changes to a frozen or bfcached page, so appearance flipped
+while the app was backgrounded never arrived. `domain/theme.js` re-derives on
+`visibilitychange`, `pageshow` and `focus` instead, and holds its
+`MediaQueryList` at module scope because a list held only in a function local
+can be GC'd in WebKit while its listener is still registered.
+
+**The third surface kind got a name.** Ground / paper / chrome, and the rule
+that paper is light in *both* themes because photo paper is light in any light.
+Five screens plus the profile hub had been borrowing the paper tokens, which
+made the brightest surfaces in the app the ones furthest from its dark
+identity.
+
+**CSS removed / renamed in the theme work:**
+- `.bgb-cream-screen` → `.bgb-spoke-screen`, 67 selectors plus 5 in
+  `index.html`. The class had outlived the cream sheet it was named for.
+- `--sheet-bg` deleted — transparent in both themes, so the declaration reading
+  it was a no-op. `--sheet-ink` stays; it is not redundant with the inherited
+  foreground.
+- The whole `--chrome / --chrome-line / --chrome-emboss / --chrome-ok` family
+  deleted, replaced by the theme-agnostic re-point. One stale comment reference
+  survives in `styles.css` and is worth sweeping.
+- Three overlapping dark-only re-point blocks at identical specificity (0,3,0)
+  collapsed into one theme-agnostic block, net −120 lines. They had been
+  rendering the profile screens at three different card tones with `--ok`
+  defined twice in two different greens. **This is the lesson of the pass:** a
+  dark-only branch is what let them drift; only genuinely per-theme values
+  belong inside `[data-bgb="dark"]`.
+- `.bgb-destructive-icon-btn` fixed — a bare class losing on specificity to
+  `.bgb-cream-screen .btn.btn-ghost`, so remove-buddy's X had been rendering in
+  ordinary ink on every spoke, in both themes. Its companion `i` rule was
+  separately dead: `BgbIcons` swaps the `<i>` for an `<svg>`, so only the
+  button's own colour reaches the glyph via `currentColor`.
+
+**Bottom sheets replaced in-screen dropdowns.** `ui/bottom-sheet.js` was
+extracted when the status sheet stopped being the only one, per
+`.claude/rules/ui-object-design.md` §4. It owns the lifecycle only — body-level
+creation, scroll lock, delegated clicks, capture-phase Escape with an
+`onEscape` first-refusal hook, guarded focus return, close animation, orphan
+teardown — and nothing about appearance. Four consumers: the status sheet
+(`ui/status-tag.js`, its own chrome, deliberately paper in both themes), the
+Stats by-game picker, and both Gather pickers.
+
+When the panel chrome repeated a third time it was promoted from
+`.game-picker__*` to a shared `.bgb-sheet__*` family rather than copied again.
+
+**Deleted with the Gather dropdowns:** the `.cascade-buddy-*` CSS family and
+five combo handlers in `views/play-flow-view.js`. `ui/dropdown-fit.js` survives
+only for the finder in `.add-game-modal` and any finder mounted without
+`inlineDropdown` — its whole reason for existing was to keep absolute dropdowns
+on screen, and a sheet does not need it.
+
+**Behaviour changes worth knowing:** the player picker is multi-select with one
+confirm (a game night is a set of people, not one person picked five times),
+tick order is preserved because the roster array *is* the scoring grid's column
+order, and a typed name with no match gets an explicit "add as a guest" row —
+the old dropdown hid itself on zero matches, which made the guest path
+invisible unless you already knew Enter would do it.
+
+**Two cross-cutting fixes the sheets forced out:**
+- A panel ceiling in `vh` is a bug. `vh` is the layout viewport, which the
+  software keyboard does not shrink, while the backdrop tracks `--bgb-vv-h`,
+  which does — and with `align-items: flex-end` the overhang goes off the
+  **top**, carrying the title and the search field with it. Measured at 390×844
+  with a 364px keyboard: a 683px panel in a 480px box, overhanging 203px.
+- The anti-jump list pin is written as a custom property rather than an inline
+  `min-height`, so a `.bgb-kb-open` rule can drop it without an `!important`
+  fight against inline style.
+
+**Still open after this pass:** everything under "Still open after this pass"
+above — the six bespoke game tiles, `renderStatusTag`'s four option shapes,
+`.plays-list__row` sidestepping the polaroid family, and the two affordances
+for `PlayDetailPopup`. Newly noted: four centred modals
+(`play-detail-popup`, `outbox-modal`, `add-game-modal`,
+`import-expansions-modal`) each re-implement `_previousFocus`, `_escHandler`
+and singleton-by-id — instance #4 of a lifecycle `ui/bottom-sheet.js` already
+solves. And the two `"#C9922A"` hex literals in JS (§8.3) are now doubly wrong:
+that value is neither theme's `--accent`.
