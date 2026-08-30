@@ -4,6 +4,13 @@
 //   - owned / wishlist / played → coloured pill with icon + label
 //   - none → "+" button that opens the picker ("Owned" or "Wishlist")
 //
+// EXCEPT on a corner-of-artwork slot (`corner: true`), where all three states
+// collapse into one neutral chip. A tile's corner restates whatever the screen
+// around it already said — twelve "Owned" pills on the Owned tab — so there it
+// is a control, not a readout: same glyph, same colour, whatever the status.
+// The state itself lives in the accessible name and in the sheet the chip
+// opens. See the .status-tag--corner block in styles.css.
+//
 // The picker is a BOTTOM SHEET: a single body-level element shared across all
 // tiles. Its shell — create, scroll lock, Escape, focus return, close
 // animation — is ui/bottom-sheet.js, which also carries the polaroid modal
@@ -72,28 +79,29 @@
    * @param {string} gameId
    * @param {("owned"|"wishlist"|"played"|null|undefined)} status
    * @param {Object} [opts]
-   * @param {"xs"|"sm-row"|"lg"} [opts.size] Size preset. "sm-row" is the
-   *   labelled pill that sits in a play card's meta row on the cream polaroid
-   *   ground; it takes its colours from .play-card__status-slot.
-   * @param {boolean} [opts.compact] Icon-only circle, for corner banners over
-   *   a boardgame image.
+   * @param {"sm-row"|"lg"} [opts.size] Size preset for the LABELLED pill.
+   *   "sm-row" sits in a play card's meta row on the cream polaroid ground and
+   *   takes its colours from .play-card__status-slot; "lg" is the game-detail
+   *   hero. Ignored by `corner`, which is one fixed size everywhere.
+   * @param {boolean} [opts.corner] This tag is a corner banner over box art —
+   *   collection/wishlist tiles, polaroid photos, plays-list thumbs. Corner
+   *   marks render as ONE neutral chip whatever the status: no colour, no
+   *   word. Only the *visual* is status-free; title/aria-label still name the
+   *   state, so nothing an assistive technology hears changes. Also suppresses
+   *   `addLabel`, so the "+" is a pure icon button.
    * @param {boolean} [opts.pending] The viewer's collection map is still in
    *   flight — render nothing rather than guessing "not owned".
    * @param {string} [opts.addLabel] Inline text beside the "+" (suppressed by
-   *   `compact`).
+   *   `corner`).
    * @param {string} [opts.gameName] Titles the picker sheet. Falls back to a
    *   generic heading when a call site doesn't have the name to hand.
    */
   function renderStatusTag(gameId, status, opts = {}) {
     const sizeCls =
-      opts.size === "xs" ? " status-tag--xs" :
       opts.size === "sm-row" ? " status-tag--sm-row" :
       opts.size === "lg" ? " status-tag--lg" :
       "";
-    // Compact mode is the icon-only chip rendered as a corner banner on a
-    // boardgame image. Picker still opens on tap, so users can flip the
-    // shelf-state from any context — no label, just colour + icon.
-    const compactCls = opts.compact ? " status-tag--compact" : "";
+    const cornerCls = opts.corner ? " status-tag--corner" : "";
     // Values land inside a single-quoted JS string inside an HTML attribute.
     // jsStr backslash-escapes the quote, esc then neutralises the HTML layer
     // (a bare " in a game name would otherwise close the onclick attribute).
@@ -101,14 +109,27 @@
     const name = esc(jsStr(opts.gameName || ""));
     const isStatus = status === "owned" || status === "wishlist" || status === "played";
     if (isStatus) {
-      const label = opts.compact ? "" : LABEL[status];
+      // title/aria-label are computed ONCE, above the branch, so the corner
+      // chip cannot announce anything different from the pill it replaces.
+      // That accessible name is now the only channel carrying the state to a
+      // screen reader, and `title` the only one carrying it to a mouse user;
+      // for touch, the answer is the sheet, which lands focus on the checked
+      // row. Do not fold either into the `corner` branch.
+      const label = LABEL[status];
+      const body = opts.corner
+        ? `<i data-icon="more-horizontal" class="w-3.5 h-3.5"></i>`
+        : `<i data-icon="${ICON[status]}" class="w-3 h-3"></i>${label}`;
+      // No status-tag--${status} on a corner chip: the colour IS the readout,
+      // and dropping it is the point.
+      const cls = opts.corner
+        ? "status-tag status-tag--corner"
+        : `status-tag status-tag--${status}${sizeCls}`;
       return `
-        <button class="status-tag status-tag--${status}${sizeCls}${compactCls}"
-                title="${LABEL[status]} — change status"
-                aria-label="${LABEL[status]} — change status"
+        <button class="${cls}"
+                title="${label} — change status"
+                aria-label="${label} — change status"
                 onclick="event.stopPropagation();window.statusPicker.openFor(event,'${gid}','${status}','${name}')">
-          <i data-icon="${ICON[status]}" class="w-3 h-3"></i>
-          ${label}
+          ${body}
         </button>
       `;
     }
@@ -122,12 +143,18 @@
     // No collection relationship — render the + that opens the picker.
     // Callers can pass opts.addLabel to inline a text label next to the
     // plus (e.g. "Add to collection" on the game-detail action row). The
-    // compact variant suppresses the label so the chip is a pure icon button.
-    const addLabel = opts.addLabel && !opts.compact
+    // corner variant suppresses the label so the chip is a pure icon button.
+    //
+    // The "+" survives this change deliberately: it is not a status readout
+    // but the add affordance, and on the feed rail and the explorer grid it is
+    // the most useful control on the tile. So a corner slot reads "+" for no
+    // relationship and the neutral chip for any relationship — one bit, which
+    // is all a tile carries now.
+    const addLabel = opts.addLabel && !opts.corner
       ? `<span class="status-tag__label">${esc(opts.addLabel)}</span>`
       : "";
     return `
-      <button class="status-tag status-tag--add${sizeCls}${compactCls}"
+      <button class="status-tag status-tag--add${sizeCls}${cornerCls}"
               title="Add to collection"
               aria-label="Add to collection"
               onclick="event.stopPropagation();window.statusPicker.openFor(event,'${gid}','','${name}')">

@@ -747,3 +747,62 @@ the parchment). Every pair moved clears 4.5:1 in both themes.
 - **The parchment's chapter links are 4.30:1 mid-gradient, 3.90:1 at the darkest
   corner.** Unchanged by Pass 5 — `--accent-on-paper` carries exactly the value
   `--accent-ink` had — and left alone deliberately, with the rest of the scroll.
+
+### Pass 6 (the corner chip) — 2026-08-30
+
+The tile status badge said the same thing over and over. On the Collection
+spoke's Owned tab every one of the twelve tiles per page carried a green
+`Owned` pill, restating the tab filter the user had just tapped; and the same
+component rendered a *different* shape — the icon-only `--compact` circle — on
+every other tile surface. Two idioms, four colours, doing a job that on a tile
+is mostly noise over the artwork.
+
+Every corner-of-artwork slot now renders one neutral chip, `--corner`,
+whatever the status. The word and the colour are gone; the state stays in the
+button's `title`/`aria-label`, which are computed above the branch so nothing
+an assistive technology hears changed. The chip is still a `<button>` opening
+the same `statusPicker` sheet — it was, and remains, the only way into that
+sheet from a grid.
+
+**JS**
+- `ui/status-tag.js`: `opts.compact` → `opts.corner`; the `"xs"` size arm
+  removed. `corner` keeps `compact`'s two jobs (circle shape, label
+  suppression) and adds the neutral rendering, so it is a redefinition, not an
+  addition alongside a dead opt.
+- `ui/game-card.js` gains `statusHtml` + `syncGamePolaroidStatus`. Three paths
+  painted `.game-polaroid__status` from hand-written opts — the initial render
+  here, `feed-view._syncStatusPills`, `game-explorer-view._syncCardStatus` —
+  which was instance #3 of five lines free to drift (§4 of the OOD rule). The
+  opts are now written once and the repaint is a function; the explorer's diff
+  guard moved in with it, so the feed gets it too.
+- `ui/icons.js`: one new glyph, `more-horizontal` → Phosphor `dots-three`.
+- Six call sites moved to `{ corner: true }`; the labelled pills on the play
+  card's meta row (`sm-row`) and the game-detail hero (`lg`) are untouched.
+
+**CSS removed:** `.status-tag--xs` and `.status-tag--xs.status-tag--add`
+(~20 lines), the `.status-tag--compact` family and its `--add` padding
+override (~24 lines). Both had lost their last caller. Both were also under the
+44px tap-target floor with no expander, and `--corner` carries one from birth
+(measured 45×45 on the collection tile and the polaroid photo), so two
+long-standing `mobile-web.md` §5 violations closed as a side effect of the
+consolidation rather than as a separate patch.
+
+**Known exception:** `.plays-list__thumb` is 50px square with `overflow:
+hidden` and already hosts the row tap and the image tap, so 44px is
+geometrically unavailable there. That one chip is scoped to a measured 28×28 —
+better than the 21px it had — and the exception is commented at the rule.
+
+**Known cost, accepted deliberately:** a tile no longer distinguishes owned
+from wishlisted from played anywhere in the app. On the Owned tab and the
+Wishlist spoke that is the point. On the feed's "Hot this week" rail and the
+explorer grid it is a real loss — "do I already own this?" was the useful
+signal there, and what survives is one bit (`+` = no relationship, `⋯` = some
+relationship). If the signal is wanted back, the cheap carrier is a
+status-tinted rule under `.game-polaroid__caption`, driven by the `data-status`
+attribute the polaroid already sets — off the artwork, so it needs no opaque
+plate. Not done here.
+
+**Still open:** `_renderTile` remains byte-identical in `views/collection-view.js`
+and `views/wishlist-view.js` — this pass applied the same one-line edit to both
+copies, which is the empirical case for extracting `ui/collection-tile.js`.
+Deliberately left out to keep this diff to the visual change.

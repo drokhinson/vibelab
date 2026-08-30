@@ -3653,11 +3653,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   white-space: nowrap;
 }
-.status-tag--xs {
-  padding: 0.1rem 0.4rem;
-  font-size: 0.62rem;
-  line-height: 1.2;
-}
 /* The labelled pill in a play card's meta row. Sized for a 44px hit box via
    the ::before below rather than 44px of visible chrome, which would tower
    over an 11px winner line. Colours are the shared .status-tag--* fills
@@ -3683,29 +3678,68 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   padding: 0.4rem 0.9rem;
 }
 .status-tag--lg i { width: 1rem; height: 1rem; }
-/* Icon-only chip used as a corner banner on small boardgame images
-   (recent-plays thumbs, photo-less play-card box art). Still clickable —
-   tap opens the status picker. */
-.status-tag--compact {
+/* ── The corner chip — one mark for every state, on every tile ──────────────
+   Every corner-of-artwork slot renders THIS: the collection and wishlist
+   grids, the feed rail and explorer polaroids, the plays-list thumbs. No
+   label, no per-status colour. A tile's corner restates what the screen
+   around it already said — twelve "Owned" pills on the Owned tab — so here it
+   is a control rather than a readout, and the state lives in the button's
+   accessible name and in the sheet the chip opens.
+
+   It replaced two parallel shape idioms doing the same job: a labelled --xs
+   pill on .collection-tile and an icon-only --compact circle everywhere else,
+   each with its own long comment about a way it was subtly wrong.
+
+   Colours are LITERAL, like the .status-tag--* fills below and for the same
+   two reasons. Opaque, because a low-alpha plate lets the box art bleed
+   through (that comment is the record of trying it). And theme-independent,
+   because the ground here is a photograph — box art does not lighten when the
+   viewer switches to light mode, so a token plate would go pale in light and
+   drop a light glyph onto pale cover art. Glyph on plate is 11.5:1, the same
+   in both themes by construction; the ring and shadow carry the separation
+   from the artwork itself, which is the part a contrast ratio can't measure.
+   ────────────────────────────────────────────────────────────────────────── */
+.status-tag--corner {
+  position: relative;
   padding: 0;
   width: 1.5rem;
   height: 1.5rem;
   gap: 0;
-  font-size: 0;
   display: inline-grid;
   place-items: center;
   border-radius: 999px;
+  background: oklch(0.21 0.014 55);
+  color: oklch(0.96 0.006 85);
+  border-color: oklch(1 0 0 / 0.22);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  transition: background 120ms var(--ease), transform 90ms var(--ease);
 }
-.status-tag--compact i { width: 0.85rem; height: 0.85rem; }
-.status-tag--compact .status-tag__label { display: none; }
-/* --compact zeroes the padding to make a real circle, but --add re-declares
-   `padding: 0.18rem 0.4rem` further down at the same specificity and wins on
-   source order. That left the "+" chip with 6.4px of horizontal padding
-   against 2.88px vertical inside a fixed 24px box, squeezing the icon's grid
-   track narrower than the icon and pushing it ~2.4px right of centre — the
-   only status chip that looked off-centre. Compact is a shape modifier, so
-   it has to beat every colour variant regardless of order. */
-.status-tag--compact.status-tag--add { padding: 0; }
+/* No `font-size: 0` here, unlike the --compact chip this replaces. The glyph
+   is sized by its w-3.5/h-3.5 utilities, but the :where([data-icon-name])
+   floor near the end of this file falls back to `1em` — which resolves to
+   ZERO under a zeroed font-size, so a Tailwind hiccup would render an empty
+   disc rather than a smaller one. The chip has no text to suppress (the corner
+   branch of renderStatusTag emits none, and suppresses addLabel), so the hack
+   bought nothing. The rule below is belt-and-braces for a stray label. */
+.status-tag--corner .status-tag__label { display: none; }
+/* Touch has no hover, and a control that doesn't move under the thumb reads
+   as a tap that didn't register (.claude/rules/mobile-web.md §5). */
+.status-tag--corner:active {
+  background: oklch(0.29 0.016 55);
+  transform: scale(0.92);
+}
+@media (hover: hover) {
+  .status-tag--corner:hover { background: oklch(0.29 0.016 55); }
+}
+/* 44x44 hit area without inflating a 24px control. The inset is NOT free to
+   round: .collection-tile, .game-polaroid__photo and .plays-list__thumb all
+   set overflow:hidden and are the chip's containing block, so whatever spills
+   past the host's edge is clipped away and does not receive taps. The chip
+   sits 4px in from the top-right, so only 4 of those 18px survive on the top
+   and trailing sides: 4 + 24 + 18 = 46px on each axis. Tidying this to the
+   -10px that "looks like" 44 would yield 38. Exception below for the plays
+   list, whose thumb is too small to hold 44 at all. */
+.status-tag--corner::before { content: ""; position: absolute; inset: -18px; }
 .status-tag__label { font-weight: 600; }
 
 /* Fully-opaque tag backgrounds so a tag overlaid on a photo / box art
@@ -3735,21 +3769,27 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: #1a0d00;
   border-color: var(--accent);
 }
-/* xs + add: rendered on collection tiles when the viewer has no relationship
-   with the game. The base pill's uneven padding (0.18rem vertical, 0.4rem
-   horizontal) made it an oval — the "+" looked off-centre against the
-   apparent circle. Constrain to a square so border-radius: 999px renders a
-   real circle, with the icon grid-centred in it. */
-.status-tag--xs.status-tag--add {
-  width: 1.35rem;
-  height: 1.35rem;
+/* corner + add: the same chip with a "+" in it, for a game the viewer has no
+   relationship with. Deliberately identical to --corner above rather than
+   inheriting --add's ground-token plate: the two alternate in the same rail,
+   and a white "+" beside a dark chip in light mode reads as two controls.
+   "+" vs the dots is the one bit of collection state a tile still carries.
+
+   Class-doubled on purpose. --add re-declares `padding: 0.18rem 0.4rem` at
+   (0,1,0) LATER in this file, so a single-class rule would tie and lose on
+   source order — which is exactly how the old "+" ended up with 6.4px of
+   horizontal padding against 2.88px vertical inside a fixed 24px box, its
+   icon squeezed off-centre. (.claude/rules/mobile-web.md §3.) */
+.status-tag--corner.status-tag--add {
   padding: 0;
-  display: inline-grid;
-  place-items: center;
+  background: oklch(0.21 0.014 55);
+  color: oklch(0.96 0.006 85);
+  border-color: oklch(1 0 0 / 0.22);
 }
-.status-tag--xs.status-tag--add i {
-  width: 0.85rem;
-  height: 0.85rem;
+.status-tag--corner.status-tag--add:hover {
+  background: var(--accent);
+  color: #1a0d00;
+  border-color: var(--accent);
 }
 
 /* Bottom-right expansion count, pinned to the tile's ART box — the chip is
@@ -8006,6 +8046,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--polaroid-muted, #8B7E68);
 }
 .plays-list__status { position: absolute; top: -3px; right: -3px; z-index: 2; }
+/* Documented exception to the corner chip's 44px expander. This thumb is 50px
+   square with overflow:hidden and already hosts two other targets — the row
+   (opens the play) and the image (opens the game) — so the full expander would
+   swallow both, and 44px is geometrically unavailable either way. This yields
+   a measured 28x28: better than the 21px the old chip offered, and the image
+   keeps the L of the thumb below and left of it. The status is still reachable
+   at full size from the game page. (.claude/rules/mobile-web.md §5.) */
+.plays-list__status .status-tag--corner::before { inset: -8px; }
 .plays-list__body { flex: 1; min-width: 0; }
 .plays-list__top {
   display: flex;

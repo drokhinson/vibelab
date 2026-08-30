@@ -43,6 +43,54 @@
    *   when the bytes are already in cache. Off by default — long scrolling
    *   lists still want lazy.
    */
+  // ── The corner chip: one writer, three callers ────────────────────────────
+  //
+  // Three code paths paint the same .game-polaroid__status host — this file on
+  // the initial render, feed-view's _syncStatusPills and game-explorer-view's
+  // _syncCardStatus on a `status-changed` repaint. All three used to spell the
+  // renderStatusTag opts out by hand, which is instance #3 of five lines that
+  // silently drift apart (.claude/rules/ui-object-design.md §4). The opts are
+  // written once here, and the repaint itself is a function rather than a
+  // recipe, so a fourth surface can't invent a fourth spelling.
+
+  /** @returns {string} */
+  function statusHtml(game, collectionStatus, pending) {
+    return window.renderStatusTag(game && game.id, collectionStatus || null, {
+      corner: true,
+      pending: !!pending,
+      gameName: (game && game.name) || "",
+    });
+  }
+
+  /**
+   * Patch a MOUNTED .game-polaroid's corner chip in place, keeping data-status
+   * in step and re-hydrating the glyph. A no-op when nothing changed — the diff
+   * guard moved here from game-explorer-view so the feed gets it too.
+   *
+   * Re-running the icon pass is not optional: the chip is written as
+   * `<i data-icon>` and stays an empty <i> until BgbIcons hydrates it
+   * (.claude/rules/mobile-web.md §4).
+   *
+   * @param {Element} tile A .game-polaroid — it carries data-game-id/-name.
+   * @param {(string|null)} status
+   * @returns {boolean} Whether the DOM actually changed.
+   */
+  function syncGamePolaroidStatus(tile, status) {
+    if (!tile) return false;
+    const next = status || "";
+    if (tile.getAttribute("data-status") === next) return false;
+    tile.setAttribute("data-status", next);
+    const host = tile.querySelector(".game-polaroid__status");
+    if (!host) return false;
+    host.innerHTML = statusHtml(
+      { id: tile.getAttribute("data-game-id") || "", name: tile.getAttribute("data-game-name") || "" },
+      status || null,
+      false
+    );
+    if (window.BgbIcons) window.BgbIcons.render(host);
+    return true;
+  }
+
   function renderGamePolaroid(game, {
     clickHandler = "",
     collectionStatus = null,
@@ -59,11 +107,11 @@
       : "";
     const time = game.playing_time ? `${game.playing_time}m` : "";
     const meta = metaOverride != null ? metaOverride : [players, time].filter(Boolean).join(" · ");
-    // Compact status pill in the photo's top-right. Wrapper stops the tap
+    // Corner status chip in the photo's top-right. Wrapper stops the tap
     // from bubbling to the article (which would jump into Gather). Matches
     // the play-card's status overlay behaviour.
     const statusOverlay = (game.id && showStatus)
-      ? `<span class="game-polaroid__status" onclick="event.stopPropagation()">${window.renderStatusTag(game.id, collectionStatus, { compact: true, pending, gameName: game.name })}</span>`
+      ? `<span class="game-polaroid__status" onclick="event.stopPropagation()">${statusHtml(game, collectionStatus, pending)}</span>`
       : "";
     return `
       <article class="game-polaroid game-polaroid--${escapeHtml(variant)}"
@@ -132,5 +180,6 @@
   }
 
   window.renderGamePolaroid = renderGamePolaroid;
+  window.syncGamePolaroidStatus = syncGamePolaroidStatus;
   window.scheduleRailTitleFit = scheduleRailTitleFit;
 })();

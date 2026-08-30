@@ -115,18 +115,10 @@
         });
 
       // Hot-games rail tiles render the same game through renderGamePolaroid,
-      // so they carry their own host.
+      // so the patch lives there too — same writer as the initial paint and as
+      // the explorer's, which is what keeps the three from drifting.
       root.querySelectorAll(`.game-polaroid[data-game-id="${sel}"]`)
-        .forEach((tile) => {
-          tile.setAttribute("data-status", status || "");
-          const host = tile.querySelector(".game-polaroid__status");
-          if (!host) return;
-          host.innerHTML = window.renderStatusTag(gameId, status || null, {
-            compact: true,
-            gameName: tile.dataset.gameName || "",
-          });
-          this.refreshIcons(host);
-        });
+        .forEach((tile) => window.syncGamePolaroidStatus(tile, status || null));
     }
 
     /**
