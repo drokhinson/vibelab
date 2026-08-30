@@ -5,9 +5,10 @@
 //   - none → "+" button that opens the picker ("Owned" or "Wishlist")
 //
 // The picker is a BOTTOM SHEET: a single body-level element shared across all
-// tiles, built on the project's polaroid modal chrome so it inherits the
-// visual-viewport sizing that keeps a sheet clear of the iOS keyboard and home
-// indicator (see .polaroid-popup__backdrop in styles.css and ui/viewport-lock.js).
+// tiles. Its shell — create, scroll lock, Escape, focus return, close
+// animation — is ui/bottom-sheet.js, which also carries the polaroid modal
+// chrome that keeps a sheet clear of the iOS keyboard and home indicator.
+// This file owns only the panel's markup and the collection writes.
 // It replaced a popover pinned under whichever chip was tapped — that put ~30px
 // rows wherever the chip happened to sit, often near the top of the screen.
 //
@@ -136,24 +137,19 @@
     `;
   }
 
-  const SHEET_ID = "bgb-status-sheet";
-  const CLOSE_MS = 200;
-
   class StatusPicker {
     constructor() {
-      this._el = null;
       this._gameId = null;
       this._gameName = "";
       this._currentStatus = null;
-      this._returnFocus = null;
-      this._closeTimer = null;
-      this._prevOverflow = "";
-      this._onKeyDown = (e) => {
-        if (e.key !== "Escape" || !this._el) return;
-        e.preventDefault();
-        e.stopPropagation();
-        this.close();
-      };
+      // The shell — create/scroll-lock/Escape/focus-return/close animation —
+      // lives in ui/bottom-sheet.js and is shared with the Stats game picker.
+      // This class only owns the panel markup and the writes.
+      this._sheet = new window.BgbBottomSheet({
+        id: "bgb-status-sheet",
+        className: "status-sheet",
+        label: "Collection status",
+      });
     }
 
     // ── Markup ──────────────────────────────────────────────────────────────
@@ -222,78 +218,34 @@
      */
     openFor(event, gameId, currentStatus, gameName) {
       event.stopPropagation();
-      // A second open while one is closing would otherwise let the pending
-      // teardown remove the new sheet.
-      if (this._closeTimer) { clearTimeout(this._closeTimer); this._closeTimer = null; }
-      this._teardown();
 
       this._gameId = gameId;
       this._gameName = gameName || "";
       this._currentStatus = currentStatus || null;
-      this._returnFocus = (event && event.currentTarget) || null;
 
-      const root = document.createElement("div");
-      root.id = SHEET_ID;
-      root.className = "polaroid-popup__backdrop status-sheet";
-      root.setAttribute("role", "dialog");
-      root.setAttribute("aria-modal", "true");
-      root.setAttribute("aria-label", "Collection status");
-      root.innerHTML = this._renderPanel();
-
-      root.addEventListener("click", (e) => {
-        if (e.target === root) { this.close(); return; }          // backdrop
-        if (e.target.closest('[data-action="close"]')) { this.close(); return; }
-        if (e.target.closest('[data-action="remove"]')) { this._remove(); return; }
-        const setBtn = e.target.closest("[data-status]");
-        if (setBtn) this._choose(setBtn.dataset.status);
+      this._sheet.open({
+        html: this._renderPanel(),
+        returnFocus: (event && event.currentTarget) || null,
+        onClick: (e) => {
+          if (e.target.closest('[data-action="remove"]')) { this._remove(); return; }
+          const setBtn = e.target.closest("[data-status]");
+          if (setBtn) this._choose(setBtn.dataset.status);
+        },
+        // Land focus on the row the user is currently in, so a keyboard or
+        // screen-reader user hears their state before the alternatives.
+        onOpen: (root) => {
+          const focusTarget = root.querySelector('[aria-checked="true"]')
+            || root.querySelector(".status-sheet__opt");
+          if (focusTarget) focusTarget.focus();
+        },
       });
-
-      document.body.appendChild(root);
-      window.BgbIcons.render(root);
-      this._el = root;
-
-      this._prevOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-      document.addEventListener("keydown", this._onKeyDown, true);
-
-      // Land focus on the row the user is currently in, so a keyboard or
-      // screen-reader user hears their state before the alternatives.
-      const focusTarget = root.querySelector('[aria-checked="true"]')
-        || root.querySelector(".status-sheet__opt");
-      if (focusTarget) focusTarget.focus();
     }
 
     close() {
-      const root = this._el;
       this._gameId = null;
       this._gameName = "";
       this._currentStatus = null;
-      if (!root) return;
-      this._el = null;
-      document.removeEventListener("keydown", this._onKeyDown, true);
-      document.body.style.overflow = this._prevOverflow;
-
-      const back = this._returnFocus;
-      this._returnFocus = null;
-      // Only pull focus back if it's still inside the sheet — a pick that
-      // re-rendered the originating pill leaves a detached node behind.
-      if (back && back.isConnected && root.contains(document.activeElement)) {
-        try { back.focus(); } catch (_) {}
-      }
-
-      root.classList.add("is-closing");
-      this._closeTimer = setTimeout(() => {
-        this._closeTimer = null;
-        if (root.parentNode) root.parentNode.removeChild(root);
-      }, CLOSE_MS);
-    }
-
-    _teardown() {
-      if (this._el && this._el.parentNode) this._el.parentNode.removeChild(this._el);
-      const stale = document.getElementById(SHEET_ID);
-      if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
-      this._el = null;
-      document.removeEventListener("keydown", this._onKeyDown, true);
+      this._sheet.close();
     }
 
     // ── Writes ──────────────────────────────────────────────────────────────
