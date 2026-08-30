@@ -456,15 +456,11 @@
       });
     }
 
-    /** Repaint one card's status pill only when it actually changed. */
+    /** Repaint one card's status chip only when it actually changed. The diff
+     *  guard and the repaint both live in ui/game-card.js now — same writer as
+     *  the initial paint and as the feed's. */
     _syncCardStatus(el, g) {
-      const next = this._collectionMap[g.id] || "";
-      if (el.getAttribute("data-status") === next) return;
-      el.setAttribute("data-status", next);
-      const host = el.querySelector(".game-polaroid__status");
-      if (!host) return;
-      host.innerHTML = window.renderStatusTag(g.id, next || null, { compact: true, gameName: g.name });
-      this.refreshIcons(host);
+      window.syncGamePolaroidStatus(el, this._collectionMap[g.id] || null);
     }
 
     /** Refresh the status pill on every visible card that changed. */

@@ -281,7 +281,7 @@
       const expCount = g.expansion_count || 0;
       return `
         <div class="collection-tile" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})">
-          ${window.renderStatusTag(g.id, status, { size: "xs", gameName: g.name })}
+          ${window.renderStatusTag(g.id, status, { corner: true, gameName: g.name })}
           <div class="collection-tile__art">
             ${gameArtImg(g, "card")
               || `<div class="collection-tile__placeholder"><i data-icon="dice-6"></i></div>`}
