@@ -9,8 +9,10 @@
 // then derive every page, filter and search from it locally. A page turn does
 // no I/O at all. Two rules callers must respect:
 //
-//   * Never re-sort. The server returns the shelf pre-sorted and filters only
-//     remove rows, so slicing stays order-identical to /collection/grid.
+//   * Every shelf is presented alphabetically by game name — that is the one
+//     order these screens have (ShelfFilter.sortShelf), applied after the
+//     filters and before the page slice. The server's own recency ordering is
+//     left for the Profile hub's preview strip, which reads the bundle direct.
 //   * A shelf past the endpoint's row cap comes back `truncated`. Narrowing
 //     one of those locally would silently miss games, so those queries fall
 //     back to the server-paginated grid — see serverFallback().
@@ -113,7 +115,9 @@
         this.total[mode] = 0;
         return;
       }
-      const filtered = window.ShelfFilter.filterShelf(sh.items, this.filterSpec());
+      const filtered = window.ShelfFilter.sortShelf(
+        window.ShelfFilter.filterShelf(sh.items, this.filterSpec()),
+      );
       const paged = window.ShelfFilter.pageOf(filtered, this.page[mode], this.perPage);
       this.page[mode] = paged.page;
       this.items[mode] = paged.rows;
@@ -139,7 +143,14 @@
       return true;
     }
 
-    /** Seed from the profile bundle's first page — enough to paint, not to page. */
+    /**
+     * Seed from the profile bundle's first page — enough to paint, not to page.
+     * The bundle's page is the server's recency order, so once derive() sorts
+     * it this is the alphabetical arrangement of a recent slice, not the real
+     * alphabetical page 1. It is a first-frame stand-in for a cache miss and
+     * load() overwrites it with the whole shelf; hydrate() from a cached shelf
+     * is tried first and is exact.
+     */
     seedPartial(mode, items, total) {
       if (!Array.isArray(items) || !items.length) return false;
       this.shelf[mode] = { items, total: total || items.length, truncated: false, partial: true };
@@ -191,6 +202,12 @@
           page: String(this.page[mode]),
           per_page: String(this.perPage),
           exclude_expansions: "true",
+          // Sort on the same axis as the local path above, so crossing the row
+          // cap doesn't reshuffle the grid. The endpoint sorts on a plain
+          // lowercased name, so it differs from the collator on the margins
+          // (accents, "Catan 10" vs "Catan 2") — worth knowing, not worth
+          // reimplementing Intl in Python for a 1000+ game shelf.
+          sort: "alphabetical",
         });
         const other = this._otherUserId();
         if (other) qs.set("user_id", other);
