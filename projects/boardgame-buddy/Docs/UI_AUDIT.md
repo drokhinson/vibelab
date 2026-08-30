@@ -366,10 +366,14 @@ Eight sites set CSS variables inline. All eight are either per-game accent color
 | `views/game-detail-view.js:120` | `--game-accent` | per-game theme color |
 | `widgets/reference-guide-scroll.js:239` | `--exp-color` | expansion's source color |
 | `views/reference-guide-add-view.js:480, 733` | `--exp-color` | expansion's source color |
-| `views/play-flow-view.js:1295` | `--exp-color` | expansion's source color |
-| `widgets/play-detail-popup.js:284` | `--exp-color` | expansion's source color |
+| `views/play-flow-view.js:2717` | `--exp-color` | expansion's source color — **resolved,** see below |
+| `widgets/play-detail-popup.js:260` | `--exp-color` | expansion's source color — **resolved,** see below |
 
-**Verdict: legitimate uses.** Per-game and per-expansion accent colors are data; they must be set per-instance. The fallback `#C9922A` in `ui/game-card.js:20` and `views/play-flow-view.js:1295` matches `--accent` (`styles.css:8`); could be replaced with `var(--accent)` directly so the fallback travels with the design token.
+**Verdict: legitimate uses.** Per-game and per-expansion accent colors are data; they must be set per-instance.
+
+**Resolved in Pass 5** for the two `--exp-color` sites: they emit no `style` attribute at all when the expansion has no colour, so the CSS fallback already present at every consumer (`var(--exp-color, var(--accent))`, and `var(--exp-color, var(--accent-on-paper))` on the parchment) governs instead. That makes the default travel with the token rather than being frozen at a value that is neither theme's accent. The colour is now run through `escapeAttr` on the way in, which also closes a small CSS-injection hole — it was written raw into a `style` attribute.
+
+Still open: `ui/game-card.js:20` and `domain/game.js:150` carry the same literal for `--game-accent`, a different token with its own `:root` default (`#6B3FA0`). See §8.3.
 
 ### 8.3 Design token coverage
 
@@ -386,7 +390,7 @@ Then the `--polaroid-*` alias family at `:root`, pointed at the paper tokens, an
 Open items:
 
 - **`--game-accent` has a `:root` default of `#6B3FA0`.** The live overrides set by JS (`ui/game-card.js`, `ui/play-card.js`) use the game's `theme_color`, so the default purple is a placeholder; a card rendering without an inline override would be purple, which no surface wants. Either point it at `var(--polaroid-accent)` or remove the default to force callers to supply one.
-- **Hex literals in JS**: `views/play-flow-view.js` and `widgets/play-detail-popup.js` both carry `"#C9922A"` — a value that is no longer either theme's `--accent` (`#E0A94A` dark, `#A87215` light). Both should reference `var(--accent)`.
+- ~~**Hex literals in JS**: `views/play-flow-view.js` and `widgets/play-detail-popup.js` both carry `"#C9922A"`.~~ **Resolved in Pass 5** — both now fall through to the CSS token fallback. The `--game-accent` literals in `ui/game-card.js:20` and `domain/game.js:150` remain, and are a separate change: different token, different default.
 
 Otherwise tokens are used consistently. The cascade flow has its own derived token `--cascade-bottom-pad`, which is the right pattern: derive an offset by `calc()` from the height tokens rather than restating a measurement. `--warm-taupe`, `--rust` and `--warm-gray-mid` are used widely across guide chrome, destructive buttons and inactive toggles respectively.
 
@@ -668,3 +672,78 @@ for `PlayDetailPopup`. Newly noted: four centred modals
 and singleton-by-id — instance #4 of a lifecycle `ui/bottom-sheet.js` already
 solves. And the two `"#C9922A"` hex literals in JS (§8.3) are now doubly wrong:
 that value is neither theme's `--accent`.
+
+### Pass 5 (the play cascade joins the ground) — 2026-08-30
+
+The cascade — Gather → Play → Settle Up, and the spectator's mirror — was the
+last place in the app still handing the user a cream sheet in dark. It was never
+an oversight in one rule: `.cascade-card` and ~50 siblings paint with
+`--polaroid-*`, and Pass 4 deliberately left them there, with a comment saying
+so. This pass decides they are UI, not photographs.
+
+It is a **net deletion**, because the interesting part was not the re-point:
+
+- **Two byte-identical `.scoring-*` override blocks deleted**, not edited. The
+  grid renders on paper (the play-detail popup) and, after this, on chrome — so
+  it had been re-skinned twice, once per view, and the popup's copy said
+  outright that it "mirrors the `.cascade-card--scoring` overrides above". The
+  base family now reads the *surface's* alias family per
+  `.claude/rules/ui-object-design.md` §2, so it travels and neither copy is
+  needed. `.play-mode-*` lost a third such block the same way. The base rules
+  they shadowed had been dead on arrival — they only applied where neither
+  override landed, which was nowhere.
+- **`--paper*` stopped being re-pointed.** Exactly one rule in 9700 lines read
+  it directly. Removing it from the chrome block is what makes a paper island
+  expressible at all: `--paper*` is the real thing, `--polaroid-*` is the alias
+  a chrome surface moves, and an island restores by pointing one back at the
+  other. Written up in `ARCHITECTURE.md` §4.2b.
+- **`.cascade-player--drag-clone` was escaping to `<body>`.** Same class of bug
+  as the picker sheets in Pass 4 — `widgets/player-reorder.js` appends the clone
+  to the body, so it left the screen it was lifted out of and kept the root
+  paper aliases. Dragging a player in Gather would have raised a cream row out
+  of an espresso list. It is now named in the re-point list, and the comment
+  there asks for the next body-level *clone or popup*, not just the next sheet.
+- **The parchment had to be made safe before it could be nested.**
+  `.scroll-panel` is self-contained except for one rule: chapter links read
+  `--accent-ink`, which the dark branch lifts to `var(--accent)` — 1.6:1 on
+  parchment. Hoisted to `--accent-on-paper`, which nothing re-points.
+
+Fixed on the way, each a pre-existing defect the re-point would otherwise have
+carried forward or hidden:
+
+- `.cascade-screen__title` / `.cascade-back-row__title` read `var(--polaroid-bg)`
+  as **ink**. In light that is `#FFFFFF` on the `#F7F0E1` ground — 1.16:1. The
+  three cascade headings and the Game Explorer's back-row title were invisible
+  in light mode. Now 14.17:1.
+- `.coop-outcome-*` painted with the DaisyUI base while rendering inside the
+  cream scoring card: a near-black block on the scorepad in dark. Its neighbour
+  `.play-mode-opt` had a paper override; this never did.
+- `.cascade-player__grip` used `--polaroid-line` — a hairline — as ink, at
+  1.2:1 on the row it is drawn on.
+- `.session-viewer__host-tag` used `--accent` inside a player row: 1.96:1 dark.
+- `.cascade-rulebook-cta` is a bare DaisyUI `.btn-outline` with no project CSS,
+  so it painted cream ink on the cream card. Invisible in dark; fixed for free
+  by the re-point.
+- `.scoring-add-round` now sets `background: transparent` explicitly rather than
+  leaning on `.btn-ghost`: a `<button>` with no background paints the UA's
+  `buttonface`, which follows `color-scheme` — a dark block on a cream card.
+- Four `#b4472b`, three `#fff`-on-`--accent` (4.1:1 in light), six
+  `rgba(255,251,241,…)` washes and five `rgba(0,0,0,…)` shadows became tokens.
+
+Verified by rendering `styles.css` headless in both themes and diffing computed
+styles against `HEAD`: no change on any surface this pass did not intend to
+touch (the five spokes, `[data-view="log-play"]`, the Stats and Collection
+sheets, the status sheet, the play card, the game polaroid, the add-game modal,
+the parchment). Every pair moved clears 4.5:1 in both themes.
+
+### Still open after Pass 5
+
+- **`--polaroid-accent` is `var(--win)`, and `--win` is tuned for the ground.**
+  At its dark root value `#C8553D` it is 3.90:1 on `--paper`. That affects
+  `.scoring-total` in the popup, `.cascade-invite__code`, the play card's winner
+  ink and ~9 other rules. Paper is light in both themes, so this alias should be
+  theme-independent the way `--ghost-ink` is; `#A8452F` takes all of them to
+  ≥5.29. Its own change.
+- **The parchment's chapter links are 4.30:1 mid-gradient, 3.90:1 at the darkest
+  corner.** Unchanged by Pass 5 — `--accent-on-paper` carries exactly the value
+  `--accent-ink` had — and left alone deliberately, with the rest of the scroll.

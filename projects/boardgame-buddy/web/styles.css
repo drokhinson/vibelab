@@ -58,8 +58,30 @@
      (the Gather roster, the buddy dropdown, the play card back, the popup, the
      scoring grid), and paper is light in BOTH themes, so this espresso brown is
      theme-independent. The five spoke screens are the exception in dark, where
-     they leave paper for the espresso ground; they override this below. */
-  --ghost-ink: #3B2A1C;
+     they leave paper for the espresso ground; they override this below.
+
+     Declared as an alias of --ghost-ink-paper rather than as the literal so a
+     genuine paper island NESTED inside a re-pointed screen can restore it with
+     a var() — see "Paper islands" below. The source token is the value; this
+     one is what rules read. */
+  --ghost-ink-paper: #3B2A1C;
+  --ghost-ink: var(--ghost-ink-paper);
+
+  /* Rust as ink on a surface that is light in every theme. The negative-score
+     marker and its filled chip live only in the scoring grid, and the grid
+     only ever lands on paper — the play-detail popup, and the scorepad island
+     on the Play step — so this pair never follows the theme. Replaces four
+     #b4472b literals. 6.5:1 on the cell fill; white on it is 5.9:1. */
+  --rust-ink: #A8452F;
+  --on-rust:  #FFFFFF;
+
+  /* A control sitting on top of an uploaded PHOTOGRAPH. The photo is not a
+     surface the token system owns, and it is light under either theme, so the
+     plate AND its ink are both theme-independent. They have to move together:
+     pinning the plate while letting the ink follow the theme is what would put
+     cream ink on a cream plate at 1.2:1. */
+  --photo-plate: rgba(255, 251, 241, 0.9);
+  --on-photo:    #211A12;
 }
 
 /* ── Dark (default) ─────────────────────────────────────────────────────────── */
@@ -85,8 +107,13 @@
   /* Accent on a PAPER surface. --accent/--accent-hover are tuned for the app
      ground; paper is light in BOTH themes, so gold ink on it must be dark in
      both. Using --accent-hover here is what made the Settings section labels
-     render at 1.6:1 on the cream sheet. */
-  --accent-ink:   #8A5F0B;
+     render at 1.6:1 on the cream sheet.
+
+     Same alias split as --ghost-ink above: --accent-on-paper carries the value,
+     --accent-ink is what rules read, so a paper island inside a re-pointed
+     screen restores it with a var() instead of restating a literal. */
+  --accent-on-paper: #8A5F0B;
+  --accent-ink:   var(--accent-on-paper);
   /* Solid-accent chips: the fill, and what is legible on top of it. */
   --accent-fill:  #E0A94A;
   --on-accent:    #2B1E06;
@@ -161,7 +188,8 @@
   /* Accent on a card — same job as in dark. #8E5F10 sat at 4.4:1 once it landed
      on its own 16-18% amber wash (the "See all" pill, the spoke back button),
      so it is a step darker than --accent-hover rather than equal to it. */
-  --accent-ink:   #7F540D;
+  --accent-on-paper: #7F540D;
+  --accent-ink:   var(--accent-on-paper);
   /* --accent itself is too mid-toned to carry text: white on #A87215 is only
      4.1:1, so a solid accent chip fills with the darker gold instead. */
   --accent-fill:  #8E5F10;
@@ -244,9 +272,30 @@
    as cut into the card rather than laid on it. Cover art and play thumbnails
    are untouched — they carry the warmth on these screens now.
 
-   Scope note: no .play-card, .game-polaroid or parchment surface is ever
-   rendered inside these containers, so paper keeps its cream everywhere it
-   actually means "photo".
+   Scope note. No .play-card and no .game-polaroid renders inside any container
+   listed below — verified by grep of the view files. Two genuine paper
+   surfaces DO nest inside the play cascade, and each is safe for a reason
+   worth stating, because "never nest paper in a re-pointed screen" used to be
+   the whole rule here:
+
+     * The parchment reference scroll (.scroll-panel) mounts inside the Play
+       step's guide card, on the host's screen and the spectator's mirror
+       alike. It paints entirely from literals — a fixed gradient and #2B1D0A
+       ink — because a scroll is a photograph and photographs are light in
+       every theme. It read exactly ONE token, --accent-ink on chapter links,
+       which this block lifts to var(--accent): gold tuned for espresso, 1.6:1
+       on parchment. That link now reads --accent-on-paper, which nothing
+       re-points, so the scroll is immune by construction rather than by luck.
+
+     * The scoring grid is a deliberate cream scorepad — a score sheet on the
+       table — and is restored to paper by a counter-re-point on
+       .cascade-card--scoring further down the file.
+
+   Before nesting any other paper surface inside a screen listed below, grep
+   its rules for --polaroid-*, --paper*, --accent-ink, --ghost-ink, --ok,
+   --warn and --rust. If it reads one, either it must not nest, or that value
+   has to leave the alias families the way --accent-on-paper and
+   --ghost-ink-paper did.
 
    The four picker sheets are in the list even though they are not screens.
    ui/bottom-sheet.js appends a sheet to <body>, so it lands OUTSIDE the screen
@@ -266,12 +315,27 @@
    backdrop; that is fine, an element sees the custom properties it declares on
    itself, so the card's own background: var(--polaroid-bg) resolves here.
 
+   --paper* is deliberately NOT re-pointed here, and that is what makes the
+   paper island below possible. The split is: --paper* is the real thing and
+   never moves; --polaroid-* is the alias family a chrome surface re-points.
+   An island restores itself by pointing the alias family back at --paper*,
+   which it could not do if this block had moved --paper* too. Exactly one
+   rule in the file read var(--paper*) directly and it now reads the alias
+   like everything else, so nothing is left behind by the removal.
+
    Named individually rather than by the shared .bgb-sheet class on purpose:
    that class is also on the collection status sheet, which is a deliberate
    sheet of paper (a radio group over a photo-like surface, opened from tiles
    that are themselves photographs) and is cream in both themes today. Sweeping
    it in here would be a silent redesign of an app-wide control, not a fix. Add
-   the next searchable sheet to this list by name.
+   the next searchable sheet — and the next body-level clone or popup — to this
+   list by name.
+
+   .cascade-player--drag-clone is the third body-level entry, for the same
+   reason as the sheets: widgets/player-reorder.js appends the drag clone to
+   <body>, so it leaves the screen it was lifted out of and keeps the root
+   paper aliases. Dragging a player in Gather raised a cream row out of an
+   espresso list.
    ────────────────────────────────────────────────────────────────────────── */
 :is(.set-card,
      .profile-stat-card,
@@ -284,7 +348,10 @@
      .shelf-sheet,
      .exp-picker,
      .import-exp-modal,
-     [data-view="log-play"]) {
+     .cascade-player--drag-clone,
+     [data-view="log-play"],
+     [data-view="play-flow"],
+     [data-view="session-viewer"]) {
   --polaroid-bg:       var(--bg-1);
   --polaroid-bg-soft:  var(--bg-2);
   --polaroid-ink:      var(--ink);
@@ -292,10 +359,6 @@
   --polaroid-muted:    var(--ink-muted);
   --polaroid-line:     var(--line);
 
-  --paper:             var(--bg-1);
-  --paper-ink:         var(--ink);
-  --paper-muted:       var(--ink-muted);
-  --paper-line:        var(--line);
   --card-border:       var(--line);
 
   --sheet-ink:         var(--ink);
@@ -321,13 +384,102 @@
      .shelf-sheet,
      .exp-picker,
      .import-exp-modal,
-     [data-view="log-play"]) {
+     .cascade-player--drag-clone,
+     [data-view="log-play"],
+     [data-view="play-flow"],
+     [data-view="session-viewer"]) {
   --accent-ink:      var(--accent);   /* the paper gold is 1.5:1 here */
   --polaroid-accent: #E87B63;         /* terracotta is 3.9:1 here */
   --ghost-ink:       #C4A987;         /* espresso brown is invisible here */
   --ok:              #6FBF7F;         /* #1F6B2E is 1.4:1 here */
   --warn:            #E5A33F;
   --rust:            #E87B63;
+}
+
+/* ── The play cascade sits one step brighter ─────────────────────────────────
+   Gather / Play / Settle Up and the spectator's mirror take --bg-2 rather than
+   --bg-1, so the three screens you only ever see during a live game read as
+   raised — lit under the lamp, closer to the table — instead of as more of the
+   same surface. Everything else about them comes from the shared block above;
+   this only moves the card and the well it sits over one step each.
+
+   The two sheets are here because they are the two you can open FROM Gather:
+   widgets/player-picker-sheet.js and widgets/game-search-sheet.js have no
+   other call site. Leaving them at --bg-1 would mean tapping "Add player" on a
+   raised card threw up a sheet a step below it — a milder version of the
+   mismatch 4b2a044 fixed. .game-picker-sheet and .exp-picker are NOT here:
+   they belong to Stats and Collection respectively, which are --bg-1 screens.
+   If a sheet ever gains a second call site across that line, it stops being
+   able to sit in either list and needs its tone from the screen that opened it.
+
+   (0,2,0) via the :root prefix, so it beats the (0,1,0) shared block outright
+   rather than on source order — same reason the island below is doubled up.
+   It sets no value the dark-delta block sets, so the two do not interact.
+   ────────────────────────────────────────────────────────────────────────── */
+:root :is([data-view="play-flow"],
+          [data-view="session-viewer"],
+          .cascade-player--drag-clone,
+          .player-picker-sheet,
+          .game-search-sheet) {
+  --polaroid-bg:       var(--bg-2);
+  --sheet-card:        var(--bg-2);
+  /* A well is still one step below whatever it is cut into. */
+  --well:              var(--bg-1);
+  /* --polaroid-bg-soft is the app-wide hover step, so it has to stay distinct
+     from BOTH the card and the well — pointing it at --bg-1 would have made it
+     equal the well and killed every hover on these screens. There is no --bg-3
+     to move up to, so it is synthesized from the card toward --line-strong,
+     which is white-tinted in dark and ink-tinted in light: "one step further
+     from the surface" in either theme, which is what the shared block's
+     --bg-1 → --bg-2 does literally. */
+  --polaroid-bg-soft:  color-mix(in srgb, var(--bg-2) 80%, var(--line-strong));
+}
+
+/* ── Paper islands: a photo surface nested inside a chrome screen ────────────
+   The scoring grid is a score sheet on the table, so it stays cream in BOTH
+   themes even though the cascade around it is now chrome. That is a genuine
+   paper surface nested inside a re-pointed screen, which the two blocks above
+   could not express until now, for a mechanical reason worth remembering:
+   custom properties substitute where they are DECLARED, not where they are
+   used, so a descendant cannot say "revert to root" — the alias family it
+   inherits is already re-pointed.
+
+   The way out is to point the alias family back at the source tokens the
+   re-point never touches. Every value below is a var(), so this is not
+   theme-scoped: each theme supplies its own and both work by construction,
+   exactly like the block above. That needed two values to grow a source token
+   of their own, because the dark block supplies them as literals rather than
+   as var()s: --accent-ink is now an alias of --accent-on-paper, and
+   --ghost-ink of --ghost-ink-paper. Neither source is ever re-pointed.
+
+   SPECIFICITY IS LOAD-BEARING HERE. The dark block above is (0,3,0). A bare
+   .cascade-card--scoring is (0,1,0) and would lose --accent-ink, --ghost-ink
+   and --polaroid-accent to it in dark — the grid would come out cream with
+   espresso-tuned gold on it. The doubled class below makes this (0,4,0), so
+   it wins outright rather than on source order. Do not "simplify" it back:
+   settling this on source order is precisely how #533 and #534 left three
+   screens rendering at three different card tones.
+
+   --well is restated for the same reason: the view re-point sets it to
+   var(--bg-0), and a well cut into cream paper is not the espresso ground.
+   Pointing it at --polaroid-bg makes the cells resolve exactly as they do in
+   the play-detail popup, which declares no --well at all and takes the
+   fallback in var(--well, var(--polaroid-bg)).
+   ────────────────────────────────────────────────────────────────────────── */
+:root :is([data-view="play-flow"], [data-view="session-viewer"])
+      .cascade-card.cascade-card--scoring {
+  --polaroid-bg:       var(--paper);
+  --polaroid-bg-soft:  color-mix(in srgb, var(--paper) 92%, var(--paper-line));
+  --polaroid-ink:      var(--paper-ink);
+  --polaroid-ink-soft: color-mix(in srgb, var(--paper-ink) 78%, var(--paper));
+  --polaroid-muted:    var(--paper-muted);
+  --polaroid-line:     var(--paper-line);
+  --polaroid-accent:   var(--win);
+
+  --accent-ink:        var(--accent-on-paper);
+  --ghost-ink:         var(--ghost-ink-paper);
+
+  --well:              var(--polaroid-bg);
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
@@ -644,8 +796,16 @@ body {
   padding-left: 1.1rem;
   list-style: disc outside;
 }
+/* --accent-on-paper, not --accent-ink. Identical value today, but the chrome
+   re-point lifts --accent-ink to var(--accent) in dark — gold tuned for
+   espresso, ~1.6:1 on parchment — and the scroll now mounts inside a
+   re-pointed screen (the Play step's guide card). The source token is never
+   re-pointed, so this link is immune by construction rather than by luck.
+   Unchanged in both themes: 4.7:1 dark / 5.5:1 light over the chapter plate.
+   The 3.9:1 at the darkest corner of the gradient is pre-existing and left
+   alone with the rest of the parchment. */
 .scroll-chapter__content a {
-  color: var(--accent-ink);
+  color: var(--accent-on-paper);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -703,7 +863,7 @@ body {
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  background: var(--exp-color, #C9922A);
+  background: var(--exp-color, var(--accent-on-paper));
   flex-shrink: 0;
   box-shadow: 0 0 0 1px rgba(43, 29, 10, 0.18);
 }
@@ -3199,7 +3359,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .session-viewer__host-tag {
   display: inline-flex; align-items: center; gap: 0.2rem;
   font-size: 0.7rem; font-weight: 600;
-  color: var(--accent);
+  /* Renders inside a .cascade-player row, not on the ground: 2.0:1 in dark
+     as --accent, 8.7:1 as the surface's accent ink. */
+  color: var(--accent-ink);
 }
 .session-viewer__guide-mount { margin-top: 0.25rem; }
 /* Sits under the "Scoring" label on the spectator's mirror. The grid there is
@@ -3958,8 +4120,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin-top: 4px;
   border: none;
   border-radius: 12px;
-  background: var(--accent);
-  color: #fff;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   font-family: var(--font-polaroid);
   font-size: 0.98rem;
   font-weight: 700;
@@ -4245,7 +4407,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .collection-tile .status-tag { position: absolute; top: 4px; right: 4px; z-index: 2; }
 .expansion-list__row .status-tag { margin-left: auto; }
 
-/* ── Scoring rounds table ─────────────────────────────────────────────────── */
+/* ── Scoring rounds table ─────────────────────────────────────────────────
+   The grid lands on TWO kinds of surface: paper (the play-detail popup, and
+   the scorepad island on the Play step) and chrome (nothing today, but the
+   family has to be able to travel — the cascade around it is chrome now).
+   So every colour below reads the SURFACE's alias family rather than the
+   DaisyUI base, per .claude/rules/ui-object-design.md §2. That is what let
+   two byte-duplicate per-view override blocks be deleted rather than a third
+   one written; do not reintroduce one.
+
+   --well is declared only on chrome surfaces, so the fallback in
+   `var(--well, …)` is what a paper surface actually gets.
+   ────────────────────────────────────────────────────────────────────────── */
 .scoring-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -4258,7 +4431,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .scoring-table th, .scoring-table td {
   padding: 0.3rem 0.4rem;
   text-align: center;
-  border-bottom: 1px solid oklch(var(--b3));
+  border-bottom: 1px solid var(--polaroid-line);
+  color: var(--polaroid-ink);
 }
 .scoring-table thead th {
   font-size: 0.72rem;
@@ -4312,21 +4486,26 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   width: 100%;
   min-width: 3.4rem;
   padding: 0.25rem 0.4rem;
-  background: oklch(var(--b1));
-  border: 1px solid oklch(var(--b3));
+  background: var(--well, var(--polaroid-bg));
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-ink);
   border-radius: 0.35rem;
   text-align: right;
+  font-family: var(--font-score);
   font-variant-numeric: tabular-nums;
   /* Overridden to 16px by the iOS focus-zoom block at the END of this file —
      the computed value is 16px, not 0.8rem. */
   font-size: 0.8rem;
 }
-.scoring-cell:focus { outline: none; border-color: var(--accent); }
+.scoring-cell:focus { outline: none; border-color: var(--accent-ink); }
 
 /* ── Negative scores: per-cell sign toggle + header on/off pill ───────────
-   The grid only ever renders on the cream polaroid surfaces (the play-flow
-   cascade card and the play-detail popup), so these read from the polaroid
-   tokens directly. Rust (#b4472b) marks the active/negative state. */
+   --rust-ink / --on-rust rather than the four #b4472b literals these carried.
+   Both are theme-independent (declared in the bare :root block) because this
+   control only ever lands on paper, and paper is light in every theme —
+   the same reasoning as --ghost-ink beside it. --rust itself is NOT usable
+   here: the chrome block lifts it to #E87B63 for the espresso ground, which
+   is 2.6:1 on cream. */
 .scoring-section__head {
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.5rem; margin-bottom: 0.35rem;
@@ -4335,43 +4514,48 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: flex; align-items: center; gap: 0.25rem; min-width: 0;
 }
 .scoring-cell-wrap .scoring-cell { flex: 1 1 auto; min-width: 2.4rem; }
-.scoring-cell-wrap.is-neg .scoring-cell { color: #b4472b; }
+.scoring-cell-wrap.is-neg .scoring-cell { color: var(--rust-ink); }
 .scoring-sign-btn {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.7rem; height: 1.9rem; padding: 0;
   border: 1px solid var(--polaroid-line);
   border-radius: 0.4rem;
-  background: rgba(255, 251, 241, 0.6);
-  color: rgba(29, 24, 18, 0.55);
+  background: var(--well, var(--polaroid-bg));
+  color: var(--polaroid-muted);
   font-size: 1.15rem; font-weight: 800; line-height: 1; cursor: pointer;
   transition: background .12s, color .12s, border-color .12s;
 }
 .scoring-sign-btn:hover { color: var(--polaroid-ink); }
 .scoring-sign-btn.is-neg {
-  background: #b4472b; border-color: #b4472b; color: #fff;
+  background: var(--rust-ink); border-color: var(--rust-ink); color: var(--on-rust);
 }
 .scoring-sign-toggle {
   display: inline-flex; align-items: center; gap: 0.3rem;
   border: 1px solid var(--polaroid-line);
   border-radius: 999px; padding: 0.2rem 0.6rem;
   font-size: 0.72rem; font-weight: 700; line-height: 1;
-  background: transparent; color: rgba(29, 24, 18, 0.6);
+  background: transparent; color: var(--polaroid-muted);
   cursor: pointer; white-space: nowrap;
   transition: background .12s, color .12s, border-color .12s;
 }
 .scoring-sign-toggle:hover { color: var(--polaroid-ink); }
 .scoring-sign-toggle.is-on {
-  background: #b4472b; border-color: #b4472b; color: #fff;
+  background: var(--rust-ink); border-color: var(--rust-ink); color: var(--on-rust);
 }
 .scoring-sign-toggle__glyph { font-size: 0.95rem; line-height: 1; }
-.scoring-total.is-neg { color: #b4472b; }
+.scoring-total.is-neg { color: var(--rust-ink); }
 
-.scoring-total-row { background: oklch(var(--b2) / 0.5); }
+/* The totals band, as a wash of the surface's own hairline rather than the
+   rgba(218,201,164,.18) tan it carried. Mixing the LINE (not --polaroid-bg-soft)
+   is what keeps it visible on paper: on white, the soft surface is within two
+   units of the card and the band disappeared. On cream this lands within three
+   units of the tan it replaces. */
+.scoring-total-row { background: color-mix(in srgb, var(--polaroid-line) 55%, transparent); }
 .scoring-total {
-  font-family: var(--font-display);
+  font-family: var(--font-score);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--polaroid-accent);
   font-variant-numeric: tabular-nums;
 }
 .scoring-round-th { white-space: nowrap; }
@@ -4384,29 +4568,40 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: transparent;
   border: none;
   border-radius: 999px;
-  color: oklch(var(--bc) / 0.55);
+  color: var(--polaroid-muted);
   cursor: pointer;
   padding: 0;
 }
-.scoring-round-remove:hover { background: oklch(var(--b3)); color: oklch(0.7 0.18 25); }
+.scoring-round-remove:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
 .scoring-total-cell {
   display: inline-flex; align-items: center; gap: 0.35rem;
   justify-content: center;
 }
-.scoring-total-cell--winner { background: oklch(0.7 0.15 75 / 0.18); }
+.scoring-total-cell--winner { background: color-mix(in srgb, var(--accent-ink) 18%, transparent); }
 .scoring-winner-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.4rem; height: 1.4rem;
   background: transparent;
   border: none;
   border-radius: 999px;
-  color: oklch(var(--bc) / 0.35);
+  color: var(--polaroid-muted);
   cursor: pointer;
   padding: 0;
   transition: color 0.15s, background 0.15s;
 }
-.scoring-winner-btn:hover { background: oklch(var(--b3)); color: var(--accent); }
-.scoring-winner-btn.is-winner { color: var(--accent); }
+.scoring-winner-btn:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+.scoring-winner-btn.is-winner { color: var(--polaroid-accent); }
+
+/* The grid's own action row. DaisyUI's .btn-ghost paints oklch(var(--bc)),
+   which is cream ink — invisible on the cream popup it already renders in.
+   Surface ink instead, so it reads on paper and on chrome alike. */
+.scoring-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+/* `background: transparent` explicitly, not left to DaisyUI's .btn-ghost. A
+   <button> with no background declared paints the UA's `buttonface`, which
+   follows `color-scheme` — dark grey on the cream scorepad and the cream
+   popup. Same class of bug as the .cascade-card .input rule below. */
+.scoring-add-round { background: transparent; color: var(--polaroid-ink); }
+.scoring-add-round:hover { background: var(--polaroid-line); color: var(--polaroid-ink); }
 
 /* ── Game type selector (competitive / team / co-op) ────────────────────── */
 .play-mode-selector {
@@ -4416,23 +4611,29 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   flex: 1;
   display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
   padding: 0.45rem 0.6rem;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
+  background: var(--well, var(--polaroid-bg));
+  border: 1px solid var(--polaroid-line);
   border-radius: 0.5rem;
   font-size: 0.82rem;
   font-weight: 500;
-  color: oklch(var(--bc) / 0.85);
+  color: var(--polaroid-ink);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.play-mode-opt:hover { background: oklch(var(--b3)); }
+.play-mode-opt:hover { background: var(--polaroid-bg-soft); }
+/* A solid accent chip, so --accent-fill + --on-accent rather than --accent
+   with a literal #fff: white on light's --accent (#A87215) is 4.1:1. */
 .play-mode-opt.is-active {
-  background: oklch(var(--b1));
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
 }
 
-/* ── Co-op shared-outcome control above the scoring table ──────────────── */
+/* ── Co-op shared-outcome control above the scoring table ────────────────
+   Painted with the DaisyUI base while rendering inside the cream scoring
+   card, so in dark it was a near-black block with near-white text on the
+   scorepad. Its neighbour .play-mode-opt got a paper override and this never
+   did; both read the surface directly now, so neither needs one. */
 .coop-outcome {
   display: flex; flex-direction: column; align-items: stretch;
   margin-bottom: 0.5rem;
@@ -4440,19 +4641,19 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .coop-outcome-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
   padding: 0.55rem 0.8rem;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
+  background: var(--well, var(--polaroid-bg));
+  border: 1px solid var(--polaroid-line);
   border-radius: 0.5rem;
   font-size: 0.9rem;
   font-weight: 600;
-  color: oklch(var(--bc) / 0.85);
+  color: var(--polaroid-ink);
   cursor: pointer;
 }
-.coop-outcome-btn:hover { border-color: var(--accent); color: var(--accent); }
+.coop-outcome-btn:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
 .coop-outcome-btn.is-winner {
-  background: oklch(0.7 0.15 75 / 0.18);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--accent-ink) 18%, transparent);
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
 }
 
 /* ── Buddies view ─────────────────────────────────────────────────────────── */
@@ -4934,7 +5135,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: #eafde9;
   display: grid;
   place-items: center;
-  border: 1.5px solid var(--paper);
+  border: 1.5px solid var(--polaroid-bg);
   box-shadow: var(--sh-2);
 }
 .expansion-polaroid__cap {
@@ -5040,7 +5241,11 @@ main[data-view="session-viewer"].hidden {
   font-weight: 700;
   font-size: 24px;
   line-height: 1.1;
-  color: var(--polaroid-bg);
+  /* --ink, not --polaroid-bg. This heading sits on the app GROUND, not on a
+     card, so it takes the ground's foreground. Reading the paper background
+     as ink happened to work in dark (cream on espresso) and put #FFFFFF on
+     the #F7F0E1 ground in light — 1.1:1, invisible. Now 15:1 in both. */
+  color: var(--ink);
   letter-spacing: -0.01em;
   margin: 0;
 }
@@ -5087,7 +5292,7 @@ main[data-view="session-viewer"].hidden {
 .cascade-back-row__title {
   text-align: center;
   font-size: 22px;
-  color: var(--polaroid-bg);
+  color: var(--ink);   /* same bug as .cascade-screen__title above */
   margin: 0;
 }
 
@@ -5097,8 +5302,7 @@ main[data-view="session-viewer"].hidden {
   color: var(--polaroid-ink);
   border-radius: 14px;
   border: 1px solid var(--polaroid-line);
-  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45),
-              0 2px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--sh-3);
   padding: 14px 14px 16px;
   position: relative;
 }
@@ -5117,7 +5321,9 @@ main[data-view="session-viewer"].hidden {
 .cascade-card__error {
   margin-top: 8px;
   padding: 6px 8px;
-  background: rgba(200, 85, 61, 0.1);
+  /* 9%, not 12%: the wash lightens the card under the ink, and the lamplit
+     card is already a step up from the ground, which put this at 4.3:1. */
+  background: color-mix(in srgb, var(--rust) 9%, transparent);
   color: var(--polaroid-accent);
   border-radius: 6px;
   font-size: 12px;
@@ -5179,9 +5385,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 10px 22px -8px rgba(201, 146, 42, 0.55);
+  /* A solid accent chip: --accent-fill with --on-accent on top. --accent with
+     a literal #fff is 4.1:1 in light, which is exactly why the fill pair
+     exists (see the light block's comment on --accent-fill). */
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  box-shadow: 0 10px 22px -8px color-mix(in srgb, var(--accent-fill) 55%, transparent);
 }
 .cascade-cta:hover { background: var(--accent-hover); }
 /* Disabled state — same warm grey + reduced opacity as
@@ -5292,8 +5501,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--polaroid-ink);
   border-radius: 12px;
   border: 1px solid var(--card-border, var(--polaroid-line));
-  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.45),
-              0 2px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--sh-3);   /* in lockstep with .cascade-card */
   padding: 4px 6px 4px 10px;
 }
 .cascade-gamebar__row {
@@ -5469,7 +5677,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   gap: 6px;
   align-items: center;
   padding: 6px 8px;
-  background: rgba(255, 251, 241, 0.55);
+  background: var(--well, var(--polaroid-bg-soft));
   border: 1px solid var(--polaroid-line);
   border-radius: 8px;
 }
@@ -5519,7 +5727,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   width: 44px;
   height: 44px;
   margin: -6px -4px;
-  color: var(--polaroid-line);
+  /* --polaroid-line is a hairline, not an ink: the grip glyph sat at 1.2:1
+     on the row it is drawn on. */
+  color: var(--polaroid-muted);
 }
 .cascade-player__grip:active { cursor: grabbing; }
 .cascade-player.is-dragging { opacity: 0.35; }
@@ -5539,7 +5749,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   background: var(--polaroid-bg);
   opacity: 0.97;
   rotate: -1.5deg;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 14px 30px var(--shadow-c);
 }
 
 /* Opens the player picker sheet — see widgets/player-picker-sheet.js. This
@@ -5614,10 +5824,16 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    order. */
 .cascade-card__hint.cascade-exp-loading { align-items: center; }
 .cascade-exp-row {
-  background: rgba(255, 251, 241, 0.55);
+  background: var(--well, var(--polaroid-bg-soft));
   border: 1px solid var(--polaroid-line);
 }
-.cascade-exp-row.is-active { background: rgba(201, 146, 42, 0.15); border-color: var(--exp-color, var(--accent)); }
+/* The wash now derives from the same colour as the border on this line, so an
+   expansion's identity carries both instead of a fixed gold behind a coloured
+   edge. */
+.cascade-exp-row.is-active {
+  background: color-mix(in srgb, var(--exp-color, var(--accent)) 15%, transparent);
+  border-color: var(--exp-color, var(--accent));
+}
 .cascade-exp-toggle {
   display: inline-flex;
   align-items: center;
@@ -5630,9 +5846,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border: 1px solid var(--polaroid-line);
 }
 .cascade-exp-toggle--on {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
 }
 
 /* Disabled / placeholder state for the Expansions card: shown on Gather
@@ -5667,12 +5883,16 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border: 1px solid var(--polaroid-line);
 }
 .cascade-photo img { width: 100%; display: block; }
+/* Sits ON the uploaded photograph, so plate and ink are both pinned light —
+   see --photo-plate at :root. They have to move together: the plate was
+   already a literal and correct, but the ink followed the card, which after
+   the re-point put --ink (#F0E7D8) on it at 1.2:1. */
 .cascade-photo__remove {
   position: absolute;
   top: 8px;
   right: 8px;
-  background: rgba(255, 251, 241, 0.9);
-  color: var(--polaroid-ink);
+  background: var(--photo-plate);
+  color: var(--on-photo);
 }
 .cascade-photo__pick {
   display: flex;
@@ -5684,11 +5904,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border-radius: 10px;
   color: var(--polaroid-muted);
   cursor: pointer;
-  background: rgba(255, 251, 241, 0.4);
+  /* The EMPTY dropzone — nothing under it yet, so this one is a well on the
+     card, not a plate on a photo. */
+  background: var(--well, var(--polaroid-bg-soft));
 }
-.cascade-photo__pick:hover { background: rgba(255, 251, 241, 0.7); }
+.cascade-photo__pick:hover { background: var(--polaroid-bg-soft); }
 .cascade-notes {
-  background: rgba(255, 251, 241, 0.6);
+  background: var(--well, var(--polaroid-bg-soft));
   color: var(--polaroid-ink);
   border-color: var(--polaroid-line);
 }
@@ -5886,17 +6108,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 
-/* The one thing the token re-point cannot reach: fields inside a .cascade-card
-   fill with a literal rgba(255,251,241,.7), a near-white wash drawn to sit on
-   parchment. Its `color` and `border-color` are tokens and already followed,
-   which left cream text on a near-white field — the code input was the least
-   legible thing on the screen. A field is a well cut into the card, so it takes
-   the ground the card is raised off, in both themes. */
-[data-view="log-play"] .cascade-card .input,
-[data-view="log-play"] .cascade-card .textarea,
-[data-view="log-play"] .cascade-card input[type="text"] {
-  background: var(--bg-0);
-}
+/* The field-wash override that used to live here is gone: .cascade-card .input
+   reads --well directly now, so every cascade card gets it. */
 
 .polaroid-popup__backdrop {
   position: fixed;
@@ -6077,54 +6290,23 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--polaroid-ink);
 }
 
-/* Scoring table inside a cream polaroid card — recolor to fit the
-   parchment surface (the legacy version sat on the dark page bg). */
-.cascade-card--scoring .scoring-table th,
-.cascade-card--scoring .scoring-table td {
-  border-bottom-color: var(--polaroid-line);
-  color: var(--polaroid-ink);
-}
-.cascade-card--scoring .scoring-cell {
-  background: rgba(255, 251, 241, 0.6);
-  border-color: var(--polaroid-line);
-  color: var(--polaroid-ink);
-  font-family: var(--font-score);
-}
-.cascade-card--scoring .scoring-cell:focus { border-color: var(--accent); }
-.cascade-card--scoring .scoring-total-row { background: rgba(218, 201, 164, 0.18); }
-.cascade-card--scoring .scoring-total {
-  font-family: var(--font-score);
-  color: var(--polaroid-accent);
-}
-.cascade-card--scoring .scoring-total-cell--winner { background: rgba(201, 146, 42, 0.18); }
-.cascade-card--scoring .scoring-winner-btn { color: rgba(29, 24, 18, 0.4); }
-.cascade-card--scoring .scoring-winner-btn:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
-.cascade-card--scoring .scoring-winner-btn.is-winner { color: var(--polaroid-accent); }
-.cascade-card--scoring .scoring-round-remove { color: rgba(29, 24, 18, 0.45); }
-.cascade-card--scoring .scoring-round-remove:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+/* The .scoring-* and .play-mode-* families used to be re-skinned for this card
+   here, in a block byte-identical to the one .play-detail-popup__card carried.
+   Both are gone: the families read the surface's own aliases now, so they
+   travel to paper and chrome without a per-view rule. */
 
-/* Play-mode selector inside the Gather cream card */
-.cascade-card .play-mode-selector { gap: 0.35rem; }
-.cascade-card .play-mode-opt {
-  background: rgba(255, 251, 241, 0.6);
-  border: 1px solid var(--polaroid-line);
-  color: var(--polaroid-ink);
-}
-.cascade-card .play-mode-opt.is-active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-/* Form controls inside a cream polaroid card. The DaisyUI defaults pull
-   from the luxury dark theme, so without these the input chrome reads
-   as a black rectangle on the parchment surface. */
+/* Form controls on a cascade card. The DaisyUI defaults pull from the luxury
+   dark theme, so without these the input chrome reads as a black rectangle.
+   A field is a well cut into the card, so it takes the ground the card is
+   raised off — which is what makes this one rule right on the chrome cascade
+   AND on the scorepad island, and let the [data-view="log-play"] copy of it
+   below be deleted. */
 .cascade-card .input,
 .cascade-card .textarea,
 .cascade-card input[type="date"],
 .cascade-card input[type="number"],
 .cascade-card input[type="text"] {
-  background: rgba(255, 251, 241, 0.7);
+  background: var(--well, var(--polaroid-bg-soft));
   color: var(--polaroid-ink);
   border-color: var(--polaroid-line);
 }
@@ -6133,7 +6315,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .cascade-card input:focus {
   border-color: var(--accent);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(201, 146, 42, 0.15);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 .cascade-card .input::placeholder,
 .cascade-card .textarea::placeholder {
@@ -7190,9 +7372,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   opacity: 1;
 }
 .play-detail-popup__card .play-detail__edit-photo-replace {
-  background: rgba(255, 251, 241, 0.92);
+  background: var(--photo-plate);
   border-color: var(--polaroid-line);
-  color: var(--polaroid-ink);
+  color: var(--on-photo);
 }
 
 /* DaisyUI input / textarea controls (date picker, score, add-player,
@@ -7216,32 +7398,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   outline-color: var(--polaroid-accent);
 }
 
-/* Scoring table inside the cream popup — recolor the DaisyUI tokens to
-   the polaroid palette so the grid reads the same as in the play-flow
-   cream card. Mirrors the .cascade-card--scoring overrides above. */
-.play-detail-popup__card .scoring-table th,
-.play-detail-popup__card .scoring-table td {
-  border-bottom-color: var(--polaroid-line);
-  color: var(--polaroid-ink);
-}
-.play-detail-popup__card .scoring-cell {
-  background: rgba(255, 251, 241, 0.6);
-  border-color: var(--polaroid-line);
-  color: var(--polaroid-ink);
-  font-family: var(--font-score);
-}
-.play-detail-popup__card .scoring-cell:focus { border-color: var(--polaroid-accent); }
-.play-detail-popup__card .scoring-total-row { background: rgba(218, 201, 164, 0.18); }
-.play-detail-popup__card .scoring-total {
-  font-family: var(--font-score);
-  color: var(--polaroid-accent);
-}
-.play-detail-popup__card .scoring-total-cell--winner { background: rgba(201, 146, 42, 0.18); }
-.play-detail-popup__card .scoring-winner-btn { color: rgba(29, 24, 18, 0.4); }
-.play-detail-popup__card .scoring-winner-btn:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
-.play-detail-popup__card .scoring-winner-btn.is-winner { color: var(--polaroid-accent); }
-.play-detail-popup__card .scoring-round-remove { color: rgba(29, 24, 18, 0.45); }
-.play-detail-popup__card .scoring-round-remove:hover { background: var(--polaroid-line); color: var(--polaroid-accent); }
+/* The popup's own copy of the .scoring-* re-skin lived here. Deleted with its
+   twin: this card is paper, it declares no --well, and the family resolves
+   against the root paper aliases on its own. */
 
 /* Read-only score readout shown next to a player row when the rounds
    grid is active (score = sum of rounds, no manual override). */

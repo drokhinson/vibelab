@@ -104,14 +104,18 @@ Declared per theme. Dark is the default; light overrides under `[data-bgb="light
 | `--card-emboss` | white 6% | white 65% | top highlight on a raised strip |
 | `--shadow-c`, `--sh-1/2/3` | `rgba(12,5,0,.62)` | `rgba(120,88,44,.20)` | shadow ramp, tinted to the ground, never pure black |
 | `--well` | `var(--bg-0)` | `var(--bg-0)` | a field sunk *into* a card (set by the re-point, §4.2a) |
-| `--ghost-ink` | `#3B2A1C` | `#3B2A1C` | ghost-player silhouettes — theme-independent, because they sit on paper |
+| `--ghost-ink` | `var(--ghost-ink-paper)` | ← | ghost-player silhouettes. An alias, so a paper island can restore it (§4.2b) |
+| `--accent-on-paper` | `#8A5F0B` | `#7F540D` | the value behind `--accent-ink`, and the one thing a paper island needs back |
+| `--ghost-ink-paper` | `#3B2A1C` | `#3B2A1C` | ditto for `--ghost-ink`; theme-independent, because paper is light in both |
+| `--rust-ink` / `--on-rust` | `#A8452F` / `#FFFFFF` | ← | rust as ink on paper — the negative-score marker. Theme-independent |
+| `--photo-plate` / `--on-photo` | `rgba(255,251,241,.9)` / `#211A12` | ← | a control sitting on an uploaded **photograph**. Never follows the theme |
 | `--b1` / `--b2` / `--b3` / `--bc` | oklch, dark | oklch, light | **the DaisyUI base.** Overriding these per theme is what re-themes the ~158 rules painting with `oklch(var(--b*))` without touching one of them |
 | `--game-accent` | per-game `theme_color`, set inline | ← | the hairline accent on a specific Game's tile / detail / play card |
 | `--exp-color` | per-expansion, set inline | ← | the colored dot identifying a chapter's source expansion |
 
 `--polaroid-*` is an alias family pointed at the paper tokens at `:root`, so the 69 rules that paint with it follow both themes without being edited.
 
-`--game-accent` and `--exp-color` are the only tokens routinely set inline; they have to be, because they are data-derived. Every other color comes from the stylesheet. Two hex literals in JS remain to be cleaned up — see `UI_AUDIT.md` §8.3.
+`--game-accent` and `--exp-color` are the only tokens routinely set inline; they have to be, because they are data-derived. Every other color comes from the stylesheet. The two `#C9922A` literals that used to be set inline for `--exp-color` are gone; the remaining JS literals are `--game-accent`'s, tracked in `UI_AUDIT.md` §8.3.
 
 The repo-wide statement of this vocabulary is `.claude/rules/theming.md`.
 
@@ -136,17 +140,36 @@ There is no separate `--chrome*` token family any more. Chrome is produced by **
 ```css
 :is(.set-card, .profile-stat-card, .statsblock, .preview-card, .bgb-spoke-screen,
     .game-picker-sheet, .player-picker-sheet, .game-search-sheet,
-    [data-view="log-play"]) {
+    .exp-picker, .import-exp-modal, .cascade-player--drag-clone,
+    [data-view="log-play"], [data-view="play-flow"], [data-view="session-viewer"]) {
   --polaroid-bg: var(--bg-1);  --polaroid-ink: var(--ink);  --polaroid-line: var(--line);
-  --paper: var(--bg-1);        --paper-ink: var(--ink);     --card-border: var(--line);
+  --card-border: var(--line);
   --sheet-card: var(--bg-1);   --sheet-ink: var(--ink);     --sheet-line: var(--line);
   --well: var(--bg-0);         /* fields sink into the card, not onto it */
 }
 ```
 
+**`--paper*` is deliberately not in that list.** The split is load-bearing:
+`--paper*` is the real thing and is never re-pointed; `--polaroid-*` is the alias
+family a chrome surface re-points. That is the whole mechanism behind §4.2b —
+an island restores itself by pointing the alias family back at `--paper*`, which
+it could not do if this block moved `--paper*` too.
+
 **Every value is a `var()`, so this block is not theme-scoped** — each theme supplies its own and both work by construction. Only values that genuinely differ by theme live in the `[data-bgb="dark"]` branch beside it (`--accent-ink`, `--polaroid-accent`, `--ghost-ink`, `--ok`, `--warn`, `--rust`), because "gold that survives a light card" and "gold on espresso" are different colours.
 
 This is a rule, not a style preference. Two PRs each shipped a dark-only re-point for the same problem; they targeted overlapping selectors at identical specificity (0,3,0), so the cascade settled it on source order and the profile screens rendered at three different card tones with `--ok` defined in two different greens. Collapsing to one theme-agnostic block was −120 lines.
+
+**The play cascade sits one step brighter.** `[data-view="play-flow"]` and
+`[data-view="session-viewer"]` take everything above and then lift the card from
+`--bg-1` to `--bg-2` in a small second block, so the three screens you only see
+during a live game read as raised under the lamp. It sets four values —
+`--polaroid-bg`, `--polaroid-bg-soft`, `--sheet-card`, `--well` — and nothing the
+dark branch sets, so the two never interact. It carries `.player-picker-sheet`
+and `.game-search-sheet` with it because Gather is their only call site; a sheet
+must never land a step below the card that opened it. `.game-picker-sheet`
+(Stats) and `.exp-picker` (Collection) stay at `--bg-1`. **If a sheet ever gains
+a second call site across that line, it can no longer sit in either list and has
+to take its tone from the screen that opened it.**
 
 **The picker sheets are in that list by name on purpose.** `ui/bottom-sheet.js` appends to `<body>`, so a sheet lands *outside* the screen that opened it and keeps the root paper aliases — which in dark meant tapping a control on an espresso screen threw up a cream sheet. **Add the next searchable sheet to that list by name.** Do not sweep them in by the shared `.bgb-sheet` class: that class is also on the collection status sheet, which is a deliberate sheet of paper and is cream in both themes.
 
@@ -165,7 +188,22 @@ On a paper **or** chrome surface, use the surface tokens rather than the ground 
 
 `--sheet-*` is the `.bgb-spoke-screen` family specifically. Neither theme paints a full-bleed sheet any more — the page ground shows through and the cards carry the separation (white + `--card-border` in light, `--bg-1` + a hairline in dark). The class was called `.bgb-cream-screen` until the cream sheet it was named for stopped existing; the rename was a 67-selector sweep that should have happened when the surface changed.
 
-Because the re-point above sets these aliases, a rule written in polaroid tokens travels correctly onto those screens without knowing it — which is exactly why a *genuine* photo surface must never be nested inside one. None of the re-pointed screens renders a `.play-card`, a `.game-polaroid` or a parchment surface; check before you add the first one.
+Because the re-point above sets these aliases, a rule written in polaroid tokens travels correctly onto those screens without knowing it — which is why a *genuine* photo surface nested inside one used to be flatly forbidden. The play cascade is the first screen that nests two, so the rule is now conditional rather than absolute. See §4.2b.
+
+No re-pointed screen renders a `.play-card` or a `.game-polaroid`; that half still holds, and is still worth checking before you add the first one.
+
+### 4.2b Paper islands — nesting a photo surface inside a chrome screen
+
+A nested paper surface is safe **iff it reads no alias the re-point moves**. There are two ways to get there, and the play cascade uses one of each:
+
+- **Hoist its ink out of the alias families.** The parchment reference scroll (`.scroll-panel`) paints from literals — a fixed gradient and `#2B1D0A` ink — because a scroll is a photograph and photographs are light in every theme. It read exactly one token, `--accent-ink` on chapter links, which the re-point lifts to `var(--accent)`: gold tuned for espresso, ~1.6:1 on parchment. That link now reads `--accent-on-paper`, which nothing re-points, so the scroll is immune by construction rather than by luck.
+- **Restore the alias family, pointing it back at `--paper*`.** The scoring grid is a deliberate cream scorepad — a score sheet on the table — so `.cascade-card--scoring` re-points `--polaroid-*` back onto `--paper*`, plus `--accent-ink` → `--accent-on-paper` and `--ghost-ink` → `--ghost-ink-paper`. Every value is a `var()`, so it is theme-agnostic exactly like the block it counteracts. It must also restate `--well`, which the screen set to `var(--bg-0)`: a well cut into cream paper is not the espresso ground.
+
+Two values needed a source token of their own before this worked at all, because the dark branch supplies them as **literals** rather than as `var()`s — an island cannot restore what it cannot name. Hence `--accent-on-paper` and `--ghost-ink-paper`, with `--accent-ink` and `--ghost-ink` now aliases of them.
+
+**Specificity is load-bearing.** The dark branch is `(0,3,0)`. A bare `.cascade-card--scoring` is `(0,1,0)` and would lose `--accent-ink`, `--ghost-ink` and `--polaroid-accent` to it in dark — a cream grid wearing espresso-tuned gold. The island doubles the class (`.cascade-card.cascade-card--scoring`) to reach `(0,4,0)` and win outright rather than on source order. Do not "simplify" that back: settling this on source order is exactly how #533 and #534 left three screens at three different card tones.
+
+**Before nesting any other paper surface**, grep its rules for `--polaroid-*`, `--paper*`, `--accent-ink`, `--ghost-ink`, `--ok`, `--warn` and `--rust`. If it reads one, either it must not nest, or that value has to leave the alias families the way `--accent-on-paper` did.
 
 **Rule of thumb:** before placing any element on a paper surface, grep its CSS for `oklch(var(--b` and `--accent-hover` — if either is there, re-point it at the paper column above.
 
@@ -180,6 +218,7 @@ Existing canonical overrides to copy — grep the class name rather than trustin
 | `.game-finder-dropdown` (Log play → pick game) | own class family, polaroid tokens by default |
 | `.buddies-link-results` (Buddies → Link ghost) | own class family, polaroid tokens by default |
 | `.bgb-sheet__*` (every bottom sheet) | own class family, plus the sheet's class named in the re-point list |
+| `.scoring-*` (the round grid) | **the cleanest example of the rule below.** Renders on paper (the play-detail popup) *and* chrome, so it is defined once in surface tokens in its own family and travels to both. It used to carry two byte-identical per-view override blocks; both were deleted, not edited |
 
 If a component is **only ever used on one surface** (like `.search-hit` today), the scoped override pattern is fine. If a component is shared across surfaces (like `.game-finder-*`), define it in surface tokens directly in its own class family so it travels.
 

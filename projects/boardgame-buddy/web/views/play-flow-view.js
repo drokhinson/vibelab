@@ -2714,7 +2714,7 @@
             data-exp-id="${escapeAttr(e.expansion_game_id)}"
             onclick="window.playFlowView._toggleExpansion('${e.expansion_game_id}')"
             title="${escapeAttr(e.name || "")}"
-            style="--exp-color:${e.color || "#C9922A"}">
+            style="${e.color ? `--exp-color:${escapeAttr(e.color)}` : ""}">
           <span class="expansion-list__dot"></span>
           ${e.thumbnail_url
             ? `<img src="${escapeAttr(e.thumbnail_url)}" alt="" class="expansion-list__thumb" loading="lazy" />`
