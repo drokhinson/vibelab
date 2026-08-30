@@ -15,7 +15,8 @@
 ## Tech Stack
 | Layer | Technology | Notes |
 |---|---|---|
-| Web frontend | Vanilla HTML/CSS/JS + Pico.css | No build step, deployed to Vercel |
+| Web frontend | Vanilla HTML/CSS/JS + DaisyUI v4 / Tailwind (CDN) | No build step, deployed to Vercel |
+| Theming | Light + dark, `data-{{PROJECT_ID}}` on `<html>` | Pre-paint boot in `index.html`, controller in `theme.js`. See `.claude/rules/theming.md` |
 | Backend | Python FastAPI (shared service) | Routes at `/api/v1/{{PROJECT_ID}}/...` |
 | Database | Supabase (shared project) | Tables prefixed `{{PROJECT_ID}}_` |
 | Native app | React Native / Expo | Not started |
@@ -26,10 +27,21 @@
 ```
 projects/{{PROJECT_ID}}/
 ├── web/              — Static HTML prototype
-│   ├── index.html    — App shell
-│   ├── styles.css    — App-specific overrides (base: _templates/web/styles.css)
+│   ├── index.html    — App shell + the pre-paint theme boot
+│   ├── styles.css    — Design tokens (3 blocks) then class families
 │   ├── config.js     — Sets window.APP_CONFIG.apiBase
-│   └── app.js        — All JS logic
+│   ├── theme.js      — Light / dark controller (window.Theme)
+│   ├── app.js        — All JS logic, until it crosses ~300 lines
+│   └── assets/       — brand / illustrations / sprites (.claude/rules/assets.md)
+│
+│   Once app.js crosses ~300 lines, split into the object-aware layout from
+│   .claude/rules/ui-object-design.md §6:
+│     domain/   one file per core object, plus view.js (View + Router)
+│     ui/       one canonical render fn per object, plus app-wide primitives
+│                 (bottom-sheet.js, icons.js, viewport-lock.js, zoom-lock.js)
+│     widgets/  stateful multi-component widgets (sheets, modals, grids)
+│     views/    one file per screen / route — thin, composes ui/ + widgets/
+│
 ├── app/              — React Native / Expo (add when prototype is live)
 │   └── src/
 │       ├── api/client.js     — fetch wrappers to shared backend

@@ -65,36 +65,59 @@ The rule manifests at three levels:
 
 ## 4. UI styles & design tokens
 
-The visual language has four type roles and a small palette. They are all declared at the top of `styles.css` so any view that needs them can pull them in.
+The design system is called **"Lamplight Study"** — game night under a warm lamp: espresso ground, amber glow, terracotta wins. It has three type families, a small semantic palette, and **two themes**. Everything is declared at the top of `styles.css`, in three blocks and no other order:
 
-### 4.1 Type roles (declared in `styles.css:23–46`)
+```
+:root                          scales + typography (theme-independent)
+:root, :root[data-bgb=dark]    dark palette (the default)
+:root[data-bgb=light]          light palette
+```
+
+### 4.1 Type roles
 
 | Token | Family | Used for |
 | --- | --- | --- |
-| `--font-sans` | Poppins | Body text, button labels, list rows, profile body |
-| `--font-display` | Crimson Text | Page titles, section headings, game / profile names, stat values |
-| `--font-polaroid` | Fraunces | Polaroid-card captions (game tiles, play cards, guide body) |
-| `--font-score` | JetBrains Mono | All numeric scores, cascade step counters |
+| `--font-sans` | Geist | Body text, button labels, list rows, profile body |
+| `--font-polaroid` | Fraunces | Display face — page titles, section headings, game / profile names, polaroid captions |
+| `--font-display` | *alias of `--font-polaroid`* | Kept so every existing `.font-display` call site still works |
+| `--font-score` | JetBrains Mono | All numeric scores, session codes, cascade step counters (tabular numerals) |
 
-The "polaroid family" is the project's signature: cream-paper background, soft drop shadow, tilt animation, Fraunces caption. It is the visual treatment for **Play** in the feed and for **Game** in the Gather grid.
+The "polaroid family" is the project's signature: cream-paper background, soft drop shadow, Fraunces caption. It is the visual treatment for **Play** in the feed and for **Game** in the Gather grid. (The tilt animation was removed — the tiles sit square now.)
 
-### 4.2 Color tokens (declared in `styles.css:8–53`)
+### 4.2 Color tokens
 
-| Token | Default | Used for |
-| --- | --- | --- |
-| `--accent` | `#C9922A` (gold) | Primary brand color, "owned" status, live scoreboards |
-| `--accent-hover` | `#B8820E` | Hover state of accent buttons |
-| `--game-accent` | per-game `theme_color`, set inline | The hairline accent on a specific Game's tile / detail / play card |
-| `--exp-color` | per-expansion, set inline | The colored dot identifying a chapter's source expansion |
-| `--polaroid-bg`, `--polaroid-ink`, `--polaroid-line`, `--polaroid-accent`, `--polaroid-muted` | cream / dark-brown / etc. | The polaroid surface (re-pointed at `--chrome*` on the hub + spokes in dark) |
-| `--warm-taupe`, `--warm-taupe-soft`, `--warm-taupe-strong` | sandy brown | Reference-guide hints, inactive toggles |
-| `--rust`, `--rust-soft`, `--rust-strong` | rust red | Destructive accents (delete, abandon, remove buddy) |
+Declared per theme. Dark is the default; light overrides under `[data-bgb="light"]`.
 
-`--game-accent` and `--exp-color` are the only tokens routinely set inline; they have to be because they are data-derived. Every other color comes from the stylesheet.
+| Token | Dark | Light | Used for |
+| --- | --- | --- | --- |
+| `--bg-0` / `--bg-1` / `--bg-2` | `#1A1310` / `#251C16` / `#33261C` | `#F7F0E1` / `#FFFBF2` / `#FFFFFF` | app ground / raised / elevated |
+| `--ink` / `--ink-muted` / `--ink-faint` | `#F0E7D8` / `#B0A18E` / `#847665` | `#2A2016` / `#6F6252` / `#93856F` | the foreground ramp |
+| `--line` / `--line-strong` | white 8% / 16% | ink 11% / 20% | hairlines |
+| `--accent` / `--accent-hover` | `#E0A94A` / `#EFBC62` | `#A87215` / `#8E5F10` | brand gold **on the ground** |
+| `--accent-quiet` | gold 14% | gold 13% | the amber wash behind pills |
+| `--accent-ink` | `#8A5F0B` | `#7F540D` | gold **as text on a card or paper surface** |
+| `--accent-fill` / `--on-accent` | `#E0A94A` / `#2B1E06` | `#8E5F10` / `#FFFFFF` | a solid gold chip, and what is legible on it |
+| `--win` | `#C8553D` | `#A8452F` | terracotta — winners, in-progress |
+| `--ok` / `--warn` / `--rust` | `#1F6B2E` / `#A05A12` / `#C8553D` | `#1B6029` / `#96520E` / `#A8452F` | success / warning / destructive |
+| `--paper`, `--paper-ink`, `--paper-muted`, `--paper-line` | `#F8F2E5` / `#211A12` / … | `#FFFFFF` / `#2A2016` / … | the photo-paper surface — light in **both** themes |
+| `--card-border` | `transparent` | ink 12% | dark needs no border; light does |
+| `--card-emboss` | white 6% | white 65% | top highlight on a raised strip |
+| `--shadow-c`, `--sh-1/2/3` | `rgba(12,5,0,.62)` | `rgba(120,88,44,.20)` | shadow ramp, tinted to the ground, never pure black |
+| `--well` | `var(--bg-0)` | `var(--bg-0)` | a field sunk *into* a card (set by the re-point, §4.2a) |
+| `--ghost-ink` | `#3B2A1C` | `#3B2A1C` | ghost-player silhouettes — theme-independent, because they sit on paper |
+| `--b1` / `--b2` / `--b3` / `--bc` | oklch, dark | oklch, light | **the DaisyUI base.** Overriding these per theme is what re-themes the ~158 rules painting with `oklch(var(--b*))` without touching one of them |
+| `--game-accent` | per-game `theme_color`, set inline | ← | the hairline accent on a specific Game's tile / detail / play card |
+| `--exp-color` | per-expansion, set inline | ← | the colored dot identifying a chapter's source expansion |
+
+`--polaroid-*` is an alias family pointed at the paper tokens at `:root`, so the 69 rules that paint with it follow both themes without being edited.
+
+`--game-accent` and `--exp-color` are the only tokens routinely set inline; they have to be, because they are data-derived. Every other color comes from the stylesheet. Two hex literals in JS remain to be cleaned up — see `UI_AUDIT.md` §8.3.
+
+The repo-wide statement of this vocabulary is `.claude/rules/theming.md`.
 
 ### 4.2a Ground tokens vs paper vs chrome
 
-The app has two themes, switched by `data-bgb` on `<html>` (`domain/theme.js`). `--b1`/`--b2`/`--b3`/`--bc` are redefined per theme, so anything painting with `oklch(var(--b*))` follows the theme automatically. `<html data-theme="luxury">` is DaisyUI's own attribute and is deliberately *not* the light/dark lever — leave it alone.
+The app has two themes, switched by `data-bgb` on `<html>` (`domain/theme.js`, with a pre-paint boot inline in `index.html`). `--b1`/`--b2`/`--b3`/`--bc` are redefined per theme, so anything painting with `oklch(var(--b*))` follows the theme automatically. `<html data-theme="luxury">` is DaisyUI's own attribute and is deliberately *not* the light/dark lever — leave it alone.
 
 The trap is not dark-vs-light, it is **what kind of surface this is**. There are three:
 
@@ -102,11 +125,32 @@ The trap is not dark-vs-light, it is **what kind of surface this is**. There are
 |---|---|---|---|
 | **Ground** (`--b*`, `--bg-*`, `--ink*`, `--line*`) | the page itself | warm cream | espresso |
 | **Paper** (`--paper*` → `--polaroid-*`) | things that are *photographs* — play cards, the Gather grid, the parchment scroll | cream | **cream** |
-| **Chrome** (`--chrome*` → `--sheet-*`) | plain UI cards — the profile hub, the spokes, Settings | white | espresso |
+| **Chrome** (`--sheet-*`, `--well`) | plain UI cards — the profile hub, the spokes, Settings, the picker sheets | white | espresso |
 
 Paper is the odd one: it is light in **both** themes, because photo paper is light in any light. That is the trap. Point a ground token at a paper surface and it inverts — `oklch(var(--b2))` becomes a black box on cream, `--accent-hover` becomes pale gold text at 1.6:1. Both of those shipped.
 
 Chrome is the counterpart added when the profile hub and spokes were darkened: they had been borrowing the paper tokens, which made the brightest screens in the app the ones furthest from its dark identity. Chrome follows the ground; paper does not.
+
+There is no separate `--chrome*` token family any more. Chrome is produced by **re-pointing** the alias tokens a surface already reads, in one block, at the ground tokens:
+
+```css
+:is(.set-card, .profile-stat-card, .statsblock, .preview-card, .bgb-spoke-screen,
+    .game-picker-sheet, .player-picker-sheet, .game-search-sheet,
+    [data-view="log-play"]) {
+  --polaroid-bg: var(--bg-1);  --polaroid-ink: var(--ink);  --polaroid-line: var(--line);
+  --paper: var(--bg-1);        --paper-ink: var(--ink);     --card-border: var(--line);
+  --sheet-card: var(--bg-1);   --sheet-ink: var(--ink);     --sheet-line: var(--line);
+  --well: var(--bg-0);         /* fields sink into the card, not onto it */
+}
+```
+
+**Every value is a `var()`, so this block is not theme-scoped** — each theme supplies its own and both work by construction. Only values that genuinely differ by theme live in the `[data-bgb="dark"]` branch beside it (`--accent-ink`, `--polaroid-accent`, `--ghost-ink`, `--ok`, `--warn`, `--rust`), because "gold that survives a light card" and "gold on espresso" are different colours.
+
+This is a rule, not a style preference. Two PRs each shipped a dark-only re-point for the same problem; they targeted overlapping selectors at identical specificity (0,3,0), so the cascade settled it on source order and the profile screens rendered at three different card tones with `--ok` defined in two different greens. Collapsing to one theme-agnostic block was −120 lines.
+
+**The picker sheets are in that list by name on purpose.** `ui/bottom-sheet.js` appends to `<body>`, so a sheet lands *outside* the screen that opened it and keeps the root paper aliases — which in dark meant tapping a control on an espresso screen threw up a cream sheet. **Add the next searchable sheet to that list by name.** Do not sweep them in by the shared `.bgb-sheet` class: that class is also on the collection status sheet, which is a deliberate sheet of paper and is cream in both themes.
+
+Also worth knowing: custom properties substitute **where they are declared, not where they are used**, so a re-point has to restate every alias it wants changed.
 
 On a paper **or** chrome surface, use the surface tokens rather than the ground ones:
 
@@ -119,29 +163,66 @@ On a paper **or** chrome surface, use the surface tokens rather than the ground 
 | `--accent`, `--accent-hover` (as text) | `--accent-ink` |
 | `--accent` (as a solid fill) | `--accent-fill` + `--on-accent` for what sits on it |
 
-`--sheet-*` is the `.bgb-spoke-screen` family specifically. Neither theme paints a sheet any more — the page ground shows through and the cards carry the separation (white + `--card-border` in light, `--chrome` + a dimmed-gold hairline in dark).
+`--sheet-*` is the `.bgb-spoke-screen` family specifically. Neither theme paints a full-bleed sheet any more — the page ground shows through and the cards carry the separation (white + `--card-border` in light, `--bg-1` + a hairline in dark). The class was called `.bgb-cream-screen` until the cream sheet it was named for stopped existing; the rename was a 67-selector sweep that should have happened when the surface changed.
 
-Inside `.set-card`, `.profile-stat-card`, `.preview-card` and `.bgb-spoke-screen`, dark re-points `--polaroid-*` at the chrome values (`styles.css:257`). So a rule written in polaroid tokens travels correctly onto those screens without knowing it — but that is exactly why a *genuine* photo surface must never be nested inside one.
+Because the re-point above sets these aliases, a rule written in polaroid tokens travels correctly onto those screens without knowing it — which is exactly why a *genuine* photo surface must never be nested inside one. None of the re-pointed screens renders a `.play-card`, a `.game-polaroid` or a parchment surface; check before you add the first one.
 
 **Rule of thumb:** before placing any element on a paper surface, grep its CSS for `oklch(var(--b` and `--accent-hover` — if either is there, re-point it at the paper column above.
 
 This is **not just an input problem**. Any element whose default styles reach for the DaisyUI base palette will hit it: inputs, textareas, selects, dropdown menus, suggestion rows, autocomplete items, list rows. Even a card written for the dark feed and then rendered inside a spoke screen suffers — which is why ~20 of the `.bgb-spoke-screen X` rules exist purely to undo the DaisyUI base for `X`.
 
-Existing canonical overrides to copy:
+Existing canonical overrides to copy — grep the class name rather than trusting a line number:
 
-| Surface | Override location |
+| Surface | Pattern |
 |---|---|
-| `<input class="input input-bordered">` | `styles.css:6895-6912` (`.bgb-spoke-screen .input`) |
-| `.search-hit` (profile-search suggestion rows in Buddies) | `styles.css:6878-6889` (`.bgb-spoke-screen .search-hit`) |
-| `.cascade-buddy-dropdown` (Play flow → Add player) | `styles.css:4903-4955` (own class family, polaroid by default) |
-| `.game-finder-dropdown` (Log play → pick game) | `styles.css:5486-5566` (own class family, polaroid by default) |
-| `.buddies-link-results` (Buddies → Link ghost) | `styles.css:4122-4163` (own class family, polaroid by default) |
+| `<input class="input input-bordered">` | `.bgb-spoke-screen .input` — scoped override |
+| `.search-hit` (profile-search suggestion rows in Buddies) | `.bgb-spoke-screen .search-hit` — scoped override |
+| `.game-finder-dropdown` (Log play → pick game) | own class family, polaroid tokens by default |
+| `.buddies-link-results` (Buddies → Link ghost) | own class family, polaroid tokens by default |
+| `.bgb-sheet__*` (every bottom sheet) | own class family, plus the sheet's class named in the re-point list |
 
 If a component is **only ever used on one surface** (like `.search-hit` today), the scoped override pattern is fine. If a component is shared across surfaces (like `.game-finder-*`), define it in surface tokens directly in its own class family so it travels.
 
-### 4.3 Motion
+*(`.cascade-buddy-dropdown` used to be listed here. It was deleted when the Gather player picker became a sheet — see §4.4.)*
 
-Two motion patterns are codified in `.claude/rules/web-frontend.md` ("Motion" section) and applied via the `.animate-fadeUp` class with `animation-delay: calc(var(--i) * 40ms)` for staggered entrance. The play card adds a flip animation managed inside `ui/play-card.js` (state Map keyed by `play_id`).
+### 4.2b Contrast
+
+Every colour change states its ratio, in both themes, in the commit that makes it. The comments in `styles.css` carry the failures they fixed — `#1F6B2E is 1.4:1 here`, `the paper gold is 1.5:1 here`, `only 4.2:1 on the cream above` — because a token that reads fine in the theme you happened to have open is the whole failure mode. The theme unification pass recorded a minimum of 4.82 dark / 4.54 light across every pair it touched; treat that as the floor.
+
+### 4.3 Bottom sheets
+
+Every choice list in the app is a **bottom sheet**, not a `position: absolute` dropdown. The shell is `ui/bottom-sheet.js` (`window.BgbBottomSheet`) — 165 lines that own the lifecycle only: body-level creation so the sheet survives a view's `innerHTML` swap, scroll lock, delegated clicks, capture-phase Escape with an `onEscape` first-refusal hook, guarded focus return, the close animation, orphan teardown. **Nothing about how a sheet looks lives there.** Each sheet writes its own markup, on the shared `.bgb-sheet__*` panel chrome plus its own row family.
+
+Four consumers today:
+
+| Sheet | File | Shape |
+|---|---|---|
+| Status picker | `ui/status-tag.js` | radio group, its own `.status-sheet__*` chrome, deliberately paper in both themes |
+| Stats by-game picker | `widgets/game-picker-sheet.js` | single-select, client-side filter |
+| Gather players | `widgets/player-picker-sheet.js` | **multi-select**, footer confirm, tick order preserved |
+| Gather game | `widgets/game-search-sheet.js` | hosts `widgets/game-finder.js` with `inlineDropdown` |
+
+They replaced dropdowns because the dropdown geometry was unwinnable: `ui/dropdown-fit.js` existed only to measure a dropdown against the visible viewport and shrink or flip it, `.cascade-buddy-dropdown` carried an explicit z-index to paint over the docked Continue CTA, and its max-height had already been raised once. Measured: a four-player roster clamped the buddy list to 168px — one and a half rows of seven — sitting on the Continue button and running off the bottom edge, before the keyboard was even up. A sheet is `position: fixed` at z-index 100, sized off `--bgb-vv-h`, so none of that is expressible.
+
+`ui/dropdown-fit.js` survives for the two finders still mounted as dropdowns (inside `.add-game-modal`, and any finder without `inlineDropdown`).
+
+The repo-wide statement is `.claude/rules/overlays.md`.
+
+### 4.4 Chrome, layering and mobile
+
+The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§ App chrome & layering) and `.claude/rules/mobile-web.md`. The parts specific to this app:
+
+- **z-index ladder:** view content < 20 pinned spoke back-row < 30 global header < 35 docked footers (`.spoke-pager-footer`, `.cascade-cta-wrap`, `.bgb-install`) < 36 `.cascade-error` < 40 `.bgb-nav` < 45 toasts < 100 `.polaroid-popup__backdrop` (every modal and sheet).
+- **Heights are tokens:** `--bgb-nav-height: 64px`, `--bgb-header-height: 53px`, with `:root { scroll-padding-top: calc(var(--bgb-header-height) + 8px) }` derived off the second so `scrollIntoView({block:"start"})` clears the sticky header.
+- **The global header is sticky at `top: 0`; each spoke's back row is sticky at `top: var(--bgb-header-height)`**, sharing the header's treatment so the two read as one stack. Scoped to direct children of `<main data-view>` — the same class nested in a card must not pin.
+- **Settings closes, spokes go back.** Settings is reachable from the gear in the global header, i.e. from any screen, so it dismisses with a trailing-edge × calling `router.back('profile-self')`; the fallback only covers a cold `/settings` deep link. The five spokes are reachable only from the hub, so they carry a leading-edge ← .
+- **`body { overflow-x: clip }`, never `hidden`** — see the comment in `styles.css`; `hidden` made `<body>` a scroll container with no height and every `position: sticky` in the app rode off-screen.
+- **`ui/viewport-lock.js`** publishes `--bgb-vv-h` / `--bgb-vv-top` / `--bgb-kb-inset` and the `.bgb-kb-open` root class from `visualViewport`; **`ui/zoom-lock.js`** holds the page at 1x in an iOS Safari tab. Deliberately two modules: one measures, one prevents.
+- **The 16px input floor must stay the last block in `styles.css`** — its selectors tie on specificity with the component rules they override, so the win comes purely from source order.
+
+### 4.5 Motion
+
+Two motion patterns are codified in `.claude/rules/web-frontend.md` ("Motion" section) and applied via the `.animate-fadeUp` class with `animation-delay: calc(var(--i) * 40ms)` for staggered entrance. `--ease` is the project's shared curve. The play card adds a flip animation managed inside `ui/play-card.js` (state Map keyed by `play_id`); sheets animate in and out on `sheetIn` / `sheetOut`, whose duration must stay in step with `CLOSE_MS` in `ui/bottom-sheet.js`. Press feedback is `:active` — the polaroid tilt animation was removed.
 
 ---
 
@@ -301,34 +382,50 @@ projects/boardgame-buddy/web/
 ├── init.js                 ← view construction, router registration, Supabase boot
 ├── helpers.js              ← jsStr, buddyLoader, formatDate, toast
 ├── config.js               ← API base URL
-├── styles.css              ← all CSS (~8,990 lines)
+├── styles.css              ← all CSS: token blocks first, then one section per class family
 │
 ├── domain/                 ← Domain objects (see §2)
-│   ├── api.js              ← HTTP client + auth headers
+│   ├── api.js              ← HTTP client + auth headers + request deadlines
 │   ├── store.js            ← Cross-cutting state with subscribe()
-│   ├── view.js             ← Base View class
-│   ├── game.js, play.js, buddy.js, user.js, collection.js, …
-│   └── play-session.js, session-phase.js, live-scores.js   ← Session state
+│   ├── view.js             ← Base View class + Router
+│   ├── theme.js            ← light/dark controller (see §4.2a)
+│   ├── net.js, cache.js, outbox.js, bootstrap.js          ← Offline + caching
+│   ├── game.js, play.js, buddy.js, user.js, collection.js, profile.js, stats.js, …
+│   ├── shelf-controller.js, shelf-filter.js               ← Client-side shelf paging
+│   └── play-session.js, session-phase.js, live-scores.js, score-write-queue.js  ← Session state
 │
-├── ui/                     ← Canonical render functions per object (see §3)
+├── ui/                     ← Canonical render functions per object (§3) + app-wide primitives
 │   ├── play-card.js         → renderPlayCard         (Play)
 │   ├── user-badge.js        → BgbBadge.render        (User)
 │   ├── game-card.js         → renderGamePolaroid     (Game — Gather grid only)
-│   ├── status-tag.js        → renderStatusTag, renderExpansionBadge (Collection status)
+│   ├── status-tag.js        → renderStatusTag, renderExpansionBadge, the status sheet
+│   ├── buddy-suggestion-rail.js → the rail shared by Feed and Buddies
 │   ├── polaroid-popup.js    → show/dismiss/confirm/alert/avatarCustomizer
 │   ├── markdown.js          → renderMarkdown
-│   └── oauth-buttons.js     → oauthButtons
+│   ├── oauth-buttons.js     → oauthButtons
+│   ├── bottom-sheet.js      → BgbBottomSheet — the shell every sheet shares (§4.3)
+│   ├── icons.js             → BgbIcons — the vendored Phosphor set + render pass
+│   ├── viewport-lock.js     → publishes the visible viewport as CSS properties
+│   ├── zoom-lock.js         → holds the page at 1x on iOS Safari
+│   ├── dropdown-fit.js      → the residual fit pass for the two remaining dropdowns
+│   ├── install-prompt.js    → the PWA install bar
+│   └── outbox-indicator.js  → the queued-writes badge in the header
 │
 ├── widgets/                ← Composite stateful widgets (see §6)
 │   ├── reference-guide-scroll.js   → ReferenceGuideScroll class (Chapter rendering)
 │   ├── round-score-grid.js          → renderRoundGrid (Session scoring)
 │   ├── game-info-bar.js             → renderGameInfoBar (Session header on Play)
+│   ├── game-finder.js               → the network game search, dropdown or inline
+│   ├── player-reorder.js            → drag-to-reorder the Gather roster
+│   ├── game-picker-sheet.js, game-search-sheet.js, player-picker-sheet.js  ← sheets (§4.3)
+│   ├── add-game-modal.js, import-expansions-modal.js, outbox-modal.js      ← modals
+│   ├── join-panel.js
 │   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
 │
-├── views/                  ← One file per screen / route (17 total)
-│   ├── feed-view.js, log-play-view.js, play-flow-view.js, …
+├── views/                  ← One file per screen / route
+│   ├── feed-view.js, log-play-view.js, play-flow-view.js, stats-view.js, …
 │
 └── assets/                 ← Brand, illustrations, credits (per .claude/rules/assets.md)
 ```
 
-`Docs/` next to this file holds the audit (`UI_AUDIT.md`) and release notes.
+`Docs/` next to this file holds the audit (`UI_AUDIT.md`), the standalone screen mocks (`mocks/`) and release notes.

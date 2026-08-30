@@ -21,6 +21,15 @@ Prototype
 - **Auth:** Supabase Auth (email/password + Google OAuth) — pilot for the whole monorepo
 - **External API:** BoardGameGeek XML API v2 (for live search fallback)
 
+## Design system — "Lamplight Study"
+
+Game night under a warm lamp: espresso ground, amber glow, terracotta wins. Full write-up in `Docs/ARCHITECTURE.md` §4; the repo-wide rules are `.claude/rules/theming.md`, `overlays.md` and `mobile-web.md`. The four things to know before touching any UI here:
+
+- **Two themes, equal.** Light and dark, switched by `data-bgb` on `<html>` — set by a pre-paint inline script in `index.html`, owned thereafter by `domain/theme.js`. `data-theme="luxury"` is DaisyUI's attribute and is deliberately *not* the lever; leave it alone. Settings offers Light / Dark / **Auto**, and Auto is the absence of a stored key, so the app keeps following the OS live (including across a backgrounded appearance change, which needs more than a media-query listener on iOS).
+- **Every colour is a token**, declared in one of three blocks at the top of `styles.css`: theme-independent scales, dark, light. The only legitimate inline colour is data-derived (`--game-accent` from a game's `theme_color`, `--exp-color` from an expansion's).
+- **Three kinds of surface, and the trap is picking the wrong one.** *Ground* is the page. *Paper* is anything that is a photograph — play cards, the Gather grid, the parchment scroll — and it is light in **both** themes. *Chrome* is plain UI cards — the profile hub, the five spokes, Settings, the picker sheets — and it follows the ground. Point a ground token at a paper surface and it inverts.
+- **Choice lists are bottom sheets**, on the shared `ui/bottom-sheet.js` shell, never `position: absolute` dropdowns. Four today: the app-wide status sheet, the Stats by-game picker, and both Gather pickers. A new sheet must be added *by name* to the theme re-point list in `styles.css`, because a body-level sheet lands outside the screen that opened it.
+
 ### Native app (`app/`)
 Full feature-parity React Native build. Organized around the repo's one-canonical-component-per-
 core-object rule (`.claude/rules/ui-object-design.md`):
@@ -398,7 +407,7 @@ Path-based routing via the History API (`projects/boardgame-buddy/web/domain/vie
 | `/profile/buddies` | `buddies` | — | — | Accepted buddies + pending requests + search. Buddies and Played-with are paged 6 per page, with the "Buddies you may know" rail between them. |
 | `/profile/stats` | `stats` | — | — | Stats spoke: gold/silver/bronze podium of the most-played games, career strip, a per-game picker showing win/play ratio and the average winning score, then nemesis, play rhythm, shelf of shame, table size, taste, comebacks, co-op record and personal bests. One call. |
 | `/u/:userId` | `profile-other` | `userId` | — | Public profile for another account. Distinct from `/profile/*` so userId can't collide with a subpage name. |
-| `/settings` | `settings` | — | — | Account / theme / logout. |
+| `/settings` | `settings` | — | — | Account / theme (Light-Dark-Auto) / logout. Opened from the header gear on any screen, so it **closes** back to wherever it came from rather than routing to the hub. |
 | `/admin` | `admin` | — | — | Chapter-reports moderation. Only reachable when `is_admin=true`. |
 
 **Routes intentionally not in the URL:**
@@ -509,5 +518,5 @@ Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
 - Reference guides are user-built (migration 018). No curated defaults, no admin seed content, no bulk import. A chapter can be AI-drafted from the editor, but the draft only ever lands in the form — a user reviews and saves it, so every chapter in the pool is still one a person chose to publish.
 - **The chapter authoring guide lives in two places and must stay in sync**: `CHAPTER_AUTHORING_GUIDE` in `web/views/reference-guide-add-view.js` (the in-app modal + the .md download) and `_AUTHORING_GUIDE` in `shared-backend/routes/boardgame_buddy/services/chapter_ai.py` (what "Generate with AI" hands the model). Both must match what `web/ui/markdown.js` actually renders; anything else shows up as literal text.
 - **Testing the chapter editor requires the real DOM.** Every rule that positions the create/edit shell is gated on `main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden)`, so a test that renders the view into a scratch `<div>` matches none of them and validates a layout that does not exist on a phone. The shell is `position: fixed`, sized from `--bgb-vv-h` / `--bgb-vv-top` (published by `web/ui/viewport-lock.js`), and its footer is the last `flex: none` child — which is what falls off-screen when those vars go stale. Mobile Chrome on iOS drops `visualViewport` resize events across toolbar and keyboard transitions, so treat the vars as untrusted: the shell height is clamped with `min(..., calc(100dvh - var(--bgb-vv-top)))`, and `_syncEditorChrome()` re-syncs on every render plus a debounced settle pass for the keyboard-dismiss animation.
-- Game detail pages themed with accent color + header image from box art
+- Game detail pages carry the game's own accent (`--game-accent`, from `theme_color`) over a header image from box art — the one place a colour is set per-instance, because it is data
 - BGG XML API has a daily request quota. Imports prefer bundle metadata (skips the API call when player counts + playtime are present); image refresh is admin-gated and sequential to spread requests across the day.

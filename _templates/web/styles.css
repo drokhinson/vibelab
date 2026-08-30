@@ -1,28 +1,170 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   vibelab design system — base styles
-   Uses DaisyUI v4 + Tailwind CSS. Override per-project below.
+   {{PROJECT_TITLE}} — design system
+   Uses DaisyUI v4 + Tailwind CSS. No build step.
+
+   Structure — keep these three blocks in this order, at the top of the file:
+     :root                          scales + typography (theme-INdependent)
+     :root, [data-{{PROJECT_ID}}=dark]   dark palette (the default)
+     [data-{{PROJECT_ID}}=light]         light palette
+
+   Every colour is a token. The DaisyUI oklch base vars (--b1/--b2/--b3/--bc)
+   are overridden per theme, which is what re-themes every rule that paints
+   with oklch(var(--b*)) without touching any of them individually.
+
+   Read .claude/rules/theming.md before changing the token set. In particular:
+   a colour declared OUTSIDE the two theme blocks is a claim that it is correct
+   in both themes, and most such claims are wrong.
    ───────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Brand accent — override per project (used in custom components) */
-  --accent:        #6c63ff;
-  --accent-hover:  #5a52e0;
-
   /* Layout */
   --app-max-width: 480px;
   --app-padding:   1rem;
+  --nav-height:    64px;
+  --header-height: 53px;
+  /* Derive offsets from the tokens above, never restate the measurement. */
+  scroll-padding-top: calc(var(--header-height) + 8px);
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Spacing — 4px base */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px;
+
+  /* Radius */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-pill: 999px;
+
+  /* Motion */
+  --ease: cubic-bezier(.32, .72, 0, 1);
+}
+
+/* ── Dark (default) ─────────────────────────────────────────────────────────── */
+:root,
+:root[data-{{PROJECT_ID}}="dark"] {
+  color-scheme: dark;
+
+  --bg-0: #14131A;   /* app ground */
+  --bg-1: #1D1B26;   /* raised     */
+  --bg-2: #272433;   /* elevated   */
+
+  --ink:       #EDEBF2;
+  --ink-muted: #A29DB3;
+  --ink-faint: #746F85;
+
+  --line:        rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.18);
+
+  /* Brand accent ON THE GROUND. Override per project. */
+  --accent:       #8C83FF;
+  --accent-hover: #A49CFF;
+  --accent-quiet: rgba(140, 131, 255, 0.16);
+  /* Accent as TEXT on a card. Tuned for a light-ish card, so it differs from
+     --accent in both themes — do not collapse the two. */
+  --accent-ink:   #4B3FD6;
+  /* Solid-accent chips: the fill, and what is legible on top of it. */
+  --accent-fill:  #6C63FF;
+  --on-accent:    #FFFFFF;
+
+  --ok:   #3E9E5A;
+  --warn: #B07A16;
+  --rust: #D0503F;   /* destructive */
+
+  /* Paper — surfaces that are PHOTOGRAPHS. Light in BOTH themes. Delete this
+     group if the project has no such surface. */
+  --paper:       #F7F4EC;
+  --paper-ink:   #1F1B18;
+  --paper-muted: #6C6459;
+  --paper-line:  #E3DCCE;
+
+  --card-border: transparent;              /* dark needs no border; light does */
+  --card-emboss: rgba(255, 255, 255, 0.06);
+  --well:        var(--bg-0);              /* a field cut INTO a card */
+
+  /* Tinted to the ground, never pure black. */
+  --shadow-c: rgba(6, 4, 14, 0.62);
+  --sh-1: 0 1px 2px var(--shadow-c);
+  --sh-2: 0 2px 10px -2px var(--shadow-c);
+  --sh-3: 0 10px 26px -12px var(--shadow-c), 0 2px 6px -2px var(--shadow-c);
+
+  /* DaisyUI oklch base — the single lever for every oklch(var(--b*)) rule. */
+  --b1: 13% 0.015 285;
+  --b2: 10% 0.013 285;
+  --b3: 19% 0.018 285;
+  --bc: 92% 0.010 285;
+}
+
+/* ── Light ──────────────────────────────────────────────────────────────────── */
+:root[data-{{PROJECT_ID}}="light"] {
+  color-scheme: light;
+
+  --bg-0: #F4F3F8;
+  --bg-1: #FFFFFF;
+  --bg-2: #FFFFFF;
+
+  --ink:       #1E1B26;
+  --ink-muted: #5C5670;
+  --ink-faint: #8A849B;
+
+  --line:        rgba(30, 27, 38, 0.11);
+  --line-strong: rgba(30, 27, 38, 0.20);
+
+  --accent:       #5A52E0;
+  --accent-hover: #4B43CC;
+  --accent-quiet: rgba(90, 82, 224, 0.12);
+  --accent-ink:   #443CBE;
+  --accent-fill:  #5A52E0;
+  --on-accent:    #FFFFFF;
+
+  --ok:   #1F7A3C;
+  --warn: #8A5C0C;
+  --rust: #B23A2C;
+
+  /* On a light ground a cream card disappears — go white and add a hairline. */
+  --paper:       #FFFFFF;
+  --paper-ink:   #1E1B26;
+  --paper-muted: #6C6459;
+  --paper-line:  #E7E2D8;
+
+  --card-border: rgba(30, 27, 38, 0.12);
+  --card-emboss: rgba(255, 255, 255, 0.65);
+  --well:        var(--bg-0);
+
+  --shadow-c: rgba(60, 52, 110, 0.16);
+  --sh-1: 0 1px 2px var(--shadow-c);
+  --sh-2: 0 2px 10px -2px var(--shadow-c);
+  --sh-3: 0 10px 26px -12px var(--shadow-c), 0 2px 6px -2px var(--shadow-c);
+
+  --b1: 99% 0.003 285;
+  --b2: 96% 0.005 285;
+  --b3: 90% 0.008 285;
+  --bc: 22% 0.020 285;
 }
 
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
+html {
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  /* Kills double-tap-to-zoom document-wide. On the ROOT on purpose:
+     touch-action intersects upward, so it cannot loosen a drag handle's
+     `none` further down. See .claude/rules/mobile-web.md §2. */
+  touch-action: manipulation;
+}
+
 body {
+  /* `clip`, NOT `hidden`. <html>'s overflow propagates to the viewport, so once
+     it is non-visible, <body>'s own overflow-x applies to <body> itself — which
+     makes it a scroll container with no height, and every position:sticky in
+     the app then resolves against a dead scrollport and rides off-screen. */
+  overflow-x: clip;
   max-width: var(--app-max-width);
   margin: 0 auto;
   padding: var(--app-padding);
-  min-height: 100vh;
+  min-height: 100dvh;
   font-family: var(--font-sans);
+  background: var(--bg-0);
+  color: var(--ink);
 }
 
 /* ── Motion — entrance animation ────────────────────────────────────────────── */
@@ -43,18 +185,26 @@ body {
   animation-delay: calc(var(--i, 0) * 40ms);
 }
 
-/* ── Card hover lift ─────────────────────────────────────────────────────────── */
+/* ── Press feedback ──────────────────────────────────────────────────────────
+   :active is the primary affordance — touch has no hover, and a row with no
+   press feedback reads as "the tap didn't register". Hover lift is a
+   pointer-device enhancement on top, never the only feedback. */
 .card-lift {
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s, box-shadow 0.15s;
   cursor: pointer;
 }
-.card-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+.card-lift:active { transform: translateY(0) scale(0.995); }
+
+@media (hover: hover) {
+  .card-lift:hover { transform: translateY(-2px); box-shadow: var(--sh-3); }
 }
-.card-lift:active {
-  transform: translateY(0);
-}
+
+/* ── Tap targets ─────────────────────────────────────────────────────────────
+   44px floor, 52px commit buttons, 56px list rows.
+   See .claude/rules/mobile-web.md §5. */
+button,
+[role="button"],
+.tap-target { min-height: 44px; }
 
 /* ── Loading screen ──────────────────────────────────────────────────────────── */
 .loading-screen {
@@ -91,18 +241,20 @@ body {
 
 .empty-state .empty-desc {
   font-size: 0.875rem;
-  opacity: 0.6;
+  color: var(--ink-muted);
   margin: 0;
   max-width: 260px;
 }
 
-/* ── Error banner ────────────────────────────────────────────────────────────── */
+/* ── Error banner ────────────────────────────────────────────────────────────
+   A distinct state from "empty" — never let a failed load fall through to the
+   empty state. See .claude/rules/web-frontend.md § Loading, empty and error. */
 .error-banner {
-  background: rgba(220, 53, 69, 0.1);
-  border: 1px solid rgba(220, 53, 69, 0.3);
-  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--rust) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rust) 34%, transparent);
+  border-radius: var(--r-sm);
   padding: 0.75rem 1rem;
-  color: #ff6b6b;
+  color: var(--rust);
   font-size: 0.875rem;
   margin: 1rem 0;
   display: flex;
@@ -117,15 +269,39 @@ body {
   margin: 1rem 0;
 }
 
-/* ── Lucide icon sizing helpers ──────────────────────────────────────────────── */
-[data-lucide] {
+/* ── Icon sizing floor ───────────────────────────────────────────────────────
+   :where() is load-bearing. A bare [data-icon-name] is 0,1,0 — a TIE with
+   Tailwind's .w-5, not a loss for it — and this file is the last stylesheet in
+   the document, so the tie would go to the floor and every utility size would
+   silently do nothing. :where() drops it to 0,0,0, which is what a floor
+   should be. Do NOT unwrap it. */
+:where([data-icon-name]) {
   display: inline-block;
   vertical-align: middle;
   flex-shrink: 0;
+  width: 1em;
+  height: 1em;
 }
 
-.icon-sm  [data-lucide] { width: 16px; height: 16px; }
-.icon-md  [data-lucide] { width: 20px; height: 20px; }
-.icon-lg  [data-lucide] { width: 24px; height: 24px; }
-
 /* ── Project-specific overrides go below ─────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   KEEP LAST IN THE FILE — the 16px input floor.
+   Anything under 16px triggers iOS Safari's focus auto-zoom. These selectors
+   are 0,1,0 and TIE with the component rules they override, so the win comes
+   purely from source order. Adding a new sub-16px input? Add it HERE, not next
+   to its component. A blanket `input, textarea, select { … }` does not work:
+   element selectors are 0,0,1 and lose to every component class.
+   ───────────────────────────────────────────────────────────────────────────── */
+.input,
+.textarea,
+.select,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+textarea,
+select {
+  font-size: 16px;
+}
