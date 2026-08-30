@@ -38,6 +38,15 @@
 
   const ORPHAN_LABEL = "Not in your collection";
 
+  /** The collection screens' one name comparator — see domain/shelf-filter.js. */
+  function compareNames(a, b) {
+    return window.ShelfFilter.compareGameNames(a, b);
+  }
+  function byKidName(a, b) {
+    const byName = compareNames(a.game && a.game.name, b.game && b.game.name);
+    return byName !== 0 ? byName : String(a.gameId || "").localeCompare(String(b.gameId || ""));
+  }
+
   /** Normalize a shelf row's game into the kid shape. */
   function _ownedKid(item) {
     return { gameId: item.game_id, game: item.game || {}, owned: true };
@@ -109,9 +118,15 @@
     }
     for (const g of groups) g.ownedCount = g.kids.length;
 
-    // Merge the catalog in as unowned kids. Owned rows keep their shelf order
-    // (last played, then most recently added); the rest follow alphabetically,
-    // so what you have stays at the top of every group.
+    // The shelf arrives in the server's recency order; every collection screen
+    // shows games by name, and a group's kids are games. Sorted before the
+    // catalog merge so the unowned tail still lands after the owned half.
+    for (const g of groups) g.kids.sort(byKidName);
+    orphans.sort(byKidName);
+
+    // Merge the catalog in as unowned kids, appended after the owned ones so
+    // what you have stays at the top of every group. Both halves are
+    // alphabetical in their own right.
     if (showAll && Array.isArray(catalog)) {
       const seen = new Set();
       for (const g of groups) for (const k of g.kids) seen.add(k.gameId);
@@ -124,18 +139,19 @@
         extra.get(group).push(_catalogKid(row));
       }
       for (const [group, kids] of extra) {
-        kids.sort((a, b) => String(a.game.name).localeCompare(String(b.game.name)));
+        kids.sort(byKidName);
         group.kids = group.kids.concat(kids);
       }
     }
 
     // Groups holding something come first — otherwise you scroll past every
-    // empty base game to reach the expansions the tab exists to show. Order is
-    // stable within each partition, so the shelf's own ordering still shows
-    // through. In show-all mode "holding something" means any kid at all,
+    // empty base game to reach the expansions the tab exists to show. Within
+    // each partition the base games are alphabetical, matching the Owned and
+    // Played grids. In show-all mode "holding something" means any kid at all,
     // since an unowned row is the thing you came to tap.
     const has = (g) => (showAll ? g.kids.length > 0 : g.ownedCount > 0);
-    const ordered = groups.filter(has).concat(groups.filter((g) => !has(g)));
+    const byName = [...groups].sort((a, b) => compareNames(a.name, b.name));
+    const ordered = byName.filter(has).concat(byName.filter((g) => !has(g)));
 
     if (orphans.length) {
       ordered.push({

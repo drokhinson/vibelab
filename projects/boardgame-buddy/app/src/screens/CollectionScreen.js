@@ -33,6 +33,9 @@ export default function CollectionScreen({ navigation, route }) {
         search: searchTerm || undefined,
         user_id: userId,
         exclude_expansions: true,
+        // Alphabetical, matching the web spokes (web/domain/shelf-filter.js).
+        // The endpoint defaults to last_played DESC NULLS LAST.
+        sort: 'alphabetical',
       });
       const next = data.items || [];
       setTotal(data.total || 0);

@@ -78,16 +78,58 @@
   }
 
   /**
-   * Filter a shelf, preserving order. The server returns the shelf already
-   * sorted (last_played DESC NULLS LAST, then added_at DESC; wishlist by
-   * added_at DESC) and filters only remove rows, so the caller must NOT
-   * re-sort — reimplementing that NULLS-LAST tie-break in JS would be a
-   * pointless equivalence risk.
+   * Filter a shelf, preserving the incoming order. Ordering is a separate
+   * step — see sortShelf below, which every collection screen applies after
+   * this one.
    * @param {any[]} items @param {ShelfFilters} f @returns {any[]}
    */
   function filterShelf(items, f) {
     if (!Array.isArray(items)) return [];
     return items.filter((it) => passesShelfFilters(it && it.game, f));
+  }
+
+  // Numeric so "Catan 10" follows "Catan 2" rather than preceding it, and
+  // base sensitivity so case and accents don't split a run ("Café" sits next
+  // to "Cafe", "the Crew" next to "The Crew"). Built once — constructing a
+  // collator per comparison is the expensive part of Intl.
+  const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+  /**
+   * Compare two game names. The one comparator the collection screens sort by
+   * — the expansion tree (domain/expansion-tree.js) sorts its groups and kids
+   * through this too, so a base game and a shelf tile never disagree about
+   * where a name belongs.
+   * @param {any} a @param {any} b @returns {number}
+   */
+  function compareGameNames(a, b) {
+    return NAME_COLLATOR.compare(String(a || ""), String(b || ""));
+  }
+
+  /**
+   * Compare two shelf rows by game name. The game id breaks ties so two rows
+   * that collate equal keep a fixed position across re-derives instead of
+   * swapping places on a repaint.
+   * @param {any} a @param {any} b @returns {number}
+   */
+  function compareShelfRows(a, b) {
+    const byName = compareGameNames(a && a.game && a.game.name, b && b.game && b.game.name);
+    if (byName !== 0) return byName;
+    return String((a && a.game_id) || "").localeCompare(String((b && b.game_id) || ""));
+  }
+
+  /**
+   * A shelf in the order every collection screen shows it: alphabetical by
+   * game name. The server returns shelves by recency (last_played DESC NULLS
+   * LAST then added_at DESC; wishlist by added_at DESC), which is still what
+   * the Profile hub's preview strip and the feed want, so the reordering
+   * happens here rather than at the endpoint.
+   *
+   * Copies rather than sorting in place — `items` is the cached shelf, shared
+   * with every other reader of Collection.shelf().
+   * @param {any[]} items @returns {any[]}
+   */
+  function sortShelf(items) {
+    return (Array.isArray(items) ? items.slice() : []).sort(compareShelfRows);
   }
 
   /**
@@ -110,6 +152,9 @@
     isActiveBucket,
     passesShelfFilters,
     filterShelf,
+    compareGameNames,
+    compareShelfRows,
+    sortShelf,
     pageOf,
   };
 })();
