@@ -29,6 +29,13 @@
     // Profile search — returns ProfileSearchResult[]
     static searchProfiles(q) { return window.api.get("/profiles/search", { q }); }
 
+    // "Buddies you may know" — the same ranked candidates the Feed rail
+    // renders, as a standalone call so the Buddies screen doesn't have to
+    // pull a feed page for them. Uncached: the RPC already excludes anyone
+    // the viewer shares an edge with, so a stale copy would offer an Add
+    // button for a request that's already sent.
+    static suggested() { return window.api.get("/buddies/suggested"); }
+
     // Played-with discovery + ghost-player linking.
     static playedWith()   { return window.api.get("/played-with"); }
     static ghostPlayers() { return window.api.get("/ghost-players"); }

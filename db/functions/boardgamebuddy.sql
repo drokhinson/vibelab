@@ -84,15 +84,17 @@
 --                  included, not just accepted — and candidates with no
 --                  profile row; lim now defaults to 5)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
+--               (embedded Feed rail, lim 5)
+--               shared-backend/routes/boardgame_buddy/buddy_routes.py
+--               (GET /buddies/suggested, lim 12)
 --   Purpose:    Suggestion candidates the viewer is not yet connected to:
 --               people they have shared a play with (ranked first, most plays
---               first) then friends-of-friends (by mutual count), top 5.
+--               first) then friends-of-friends (by mutual count), top `lim`.
 --               Shared plays are counted the same way bgb_play_partners counts
 --               them, so the Feed rail and the Buddies screen's "Played with"
---               list agree. Powers the Feed's "Buddies you may know" rail.
---               (The standalone GET /suggestions/buddies endpoint was removed
---               as uncalled; feed_service still calls this for the embedded
---               rail.)
+--               list agree. Powers the Feed's "Buddies you may know" rail and
+--               the same rail on the Buddies screen, which reads it through
+--               GET /buddies/suggested rather than pulling a feed page.
 
 -- bgb_distinct_mechanics()
 --   → TABLE (mechanic TEXT)

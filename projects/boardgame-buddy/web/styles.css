@@ -2595,6 +2595,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .feed-rail__scroll::-webkit-scrollbar { display: none; }
 
+/* Flush variant — for hosts that already pad their own content. The Feed's
+   <main> is gutterless so the rail supplies its own 1rem; the Buddies screen's
+   <main> carries px-4, where the rail's gutter would read as a double indent
+   against the sections above and below it. The tiles still get 2px of side
+   padding from .feed-rail__scroll so their focus rings aren't clipped. */
+.feed-rail--flush .feed-rail__header { padding-left: 0; padding-right: 0; }
+.feed-rail--flush .feed-rail__scroll { padding-left: 0; padding-right: 0; }
+
 /* Rail variant of the canonical Game tile. Replaces the former
    `.hot-game-tile` family, which was duplicated across two feed renderers.
    Carries the same cream caption as the collection / wishlist tiles (see
@@ -3706,6 +3714,54 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-muted, #8B7E68);
   border: 1px dashed color-mix(in srgb, var(--polaroid-ink) 25%, transparent);
 }
+/* Inline prev / next strip under each paginated buddies list. Not the fixed
+   .spoke-pager-footer the Collection uses — this screen stacks two paged
+   lists plus a rail, so each pager has to sit with the list it drives. */
+.buddies-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.15rem;
+}
+/* .btn-sm is 32px tall; the 44px floor from .claude/rules/web-frontend.md
+   applies to every tappable, pagers included. */
+.buddies-pager .btn {
+  min-height: 44px;
+  min-width: 88px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.buddies-pager__page {
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.65;
+  white-space: nowrap;
+}
+.bgb-cream-screen .buddies-pager__page {
+  color: var(--polaroid-muted, #8B7E68);
+  opacity: 1;
+}
+
+/* The "Buddies you may know" rail on the Buddies screen. Same tiles as the
+   Feed — only the section chrome is re-tuned so the rail sits in the screen's
+   stack of .buddies-section blocks (hairline above, gold heading) instead of
+   reading as a transplant from another page. */
+[data-view="buddies"] .feed-rail--flush {
+  padding: 0.75rem 0;
+  margin: 0;
+  border-top: 1px solid var(--sheet-line);
+}
+[data-view="buddies"] .feed-rail--flush .feed-rail__header { margin-bottom: 0.5rem; }
+[data-view="buddies"] .feed-rail--flush .feed-rail__header h3 {
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: normal;
+  color: var(--accent-ink);
+}
+
 .buddies-row--ghost { flex-wrap: wrap; }
 .buddies-row--ghost.is-expanded {
   background: oklch(var(--b3));

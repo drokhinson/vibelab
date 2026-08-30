@@ -1,7 +1,12 @@
 // views/buddies-view.js — accepted buddies, pending requests, profile search,
-// played-with discovery, and ghost-player → account linking.
+// suggested buddies, played-with discovery, and ghost-player → account linking.
 
 (function () {
+  // Rows per page for the two long lists (Buddies, Played with). Both lists
+  // grow without bound as the user logs plays, and the screen is a phone —
+  // six rows is what fits above the fold beside the section that follows.
+  const PER_PAGE = 6;
+
   class BuddiesView extends window.View {
     constructor() {
       super("buddies");
@@ -10,6 +15,13 @@
       this._search = [];
       this._q = "";
       this._loading = false;
+      this._suggested = [];   // SuggestedBuddy[] — the "may know" rail
+
+      // 1-based page for each paginated list. Clamped in render() so a list
+      // that shrank under the user (unfriend, ghost link) can't strand them
+      // on an empty page.
+      this._buddiesPage = 1;
+      this._playedWithPage = 1;
 
       // Played-with state
       this._playedWith = [];   // PlayedWithUser[]
@@ -26,7 +38,14 @@
       this._linkSearchSeq = 0;
     }
 
-    async onMount() { await this._load(); }
+    async onMount() {
+      // Singleton view — a prior visit's page position must not survive into
+      // the next mount (see .claude/rules/web-frontend.md, "Reset transient
+      // state on every mount of a reused view").
+      this._buddiesPage = 1;
+      this._playedWithPage = 1;
+      await this._load();
+    }
 
     _renderTopbar() {
       return `
@@ -48,6 +67,11 @@
       // first paint on the round-trip.
       const requestsPromise = window.Buddy.requests()
         .catch(() => ({ incoming: [], outgoing: [] }));
+      // Same for the "may know" rail — a separate RPC, deliberately uncached
+      // (see Buddy.suggested), so it rides alongside instead of gating paint.
+      const suggestedPromise = window.Buddy.suggested()
+        .then((r) => (r && r.suggestions) || [])
+        .catch(() => []);
       try {
         // Buddies + ghosts + played-with come from the SWR-cached aggregate
         // (seeded by /bootstrap as 'buddy:all'): usually resolves straight
@@ -62,7 +86,9 @@
         this._loading = false;
         this.render();
       }
-      this._requests = (await requestsPromise) || { incoming: [], outgoing: [] };
+      const [requests, suggested] = await Promise.all([requestsPromise, suggestedPromise]);
+      this._requests = requests || { incoming: [], outgoing: [] };
+      this._suggested = suggested || [];
       this.render();
     }
 
@@ -100,10 +126,11 @@
         playCountByUser[p.user_id] = p.play_count;
       }
 
-      // People who've played with the viewer but aren't already buddies —
-      // the "quick add" section. Existing buddies stay in the Accepted
-      // section to avoid the duplication you'd get if we showed everyone.
-      const playedWithNonBuddies = (this._playedWith || []).filter((p) => !p.is_buddy);
+      // Clamp before slicing: an unfriend or a ghost link can shrink either
+      // list out from under the page the user is on.
+      const buddiesPages = totalPages(this._buddies.length);
+      this._buddiesPage = Math.min(this._buddiesPage, buddiesPages);
+      const buddiesSlice = pageSlice(this._buddies, this._buddiesPage);
 
       this.container.innerHTML = `
         ${this._renderTopbar()}
@@ -169,7 +196,7 @@
           <h3>Buddies (${this._buddies.length})</h3>
           ${this._buddies.length === 0
             ? `<p class="text-sm opacity-60 p-3">No buddies yet — search above to add some.</p>`
-            : `<ul class="buddies-list">${this._buddies.map((b) => {
+            : `<ul class="buddies-list">${buddiesSlice.map((b) => {
                 const plays = playCountByUser[b.other_user_id] || 0;
                 const sub = [
                   plays ? `${plays} ${plays === 1 ? "play" : "plays"} together` : null,
@@ -190,9 +217,15 @@
                   </button>
                 </li>
               `;}).join("")}</ul>`}
+          ${this._renderPager(this._buddiesPage, buddiesPages, "_goBuddiesPage", "Buddies pagination")}
         </section>
 
-        ${this._renderPlayedWithSection(playedWithNonBuddies)}
+        ${window.renderSuggestedBuddiesRail(this._suggested, {
+          addHandler: "window.buddiesView._request",
+          flush: true,
+        })}
+
+        ${this._renderPlayedWithSection()}
       `;
       this.refreshIcons();
 
@@ -208,35 +241,104 @@
       }
     }
 
-    _renderPlayedWithSection(playedWithNonBuddies) {
+    // The Played-with sequence, as one list of tagged rows: real-account rows
+    // first (sorted by play count desc, already done server-side), then ghost
+    // rows. Paged as one sequence so a page always holds PER_PAGE rows rather
+    // than however many of each kind happen to fall in the window — which
+    // also means the pager and the slice must count it identically, hence the
+    // single source of truth here.
+    _playedWithRows() {
       const me = window.store.get("user");
       const myName = (me && me.display_name) ? me.display_name.toLowerCase() : null;
 
-      // Filter ghost rows that match the viewer's own display name — those
-      // are self-references we shouldn't offer to "link to an account".
+      // People who've played with the viewer but aren't already buddies —
+      // existing buddies stay in the Buddies section above, to avoid the
+      // duplication you'd get if we showed everyone.
+      const accounts = (this._playedWith || []).filter((p) => !p.is_buddy);
+
+      // Drop ghost rows that match the viewer's own display name — those are
+      // self-references we shouldn't offer to "link to an account".
       const ghosts = (this._ghosts || []).filter(
         (g) => !myName || (g.display_name || "").toLowerCase() !== myName
       );
 
-      if (playedWithNonBuddies.length === 0 && ghosts.length === 0) return "";
+      return accounts
+        .map((item) => ({ kind: "account", item }))
+        .concat(ghosts.map((item) => ({ kind: "ghost", item })));
+    }
 
-      // One unified list: real-account rows first (sorted by play count desc,
-      // already done server-side), then ghost rows. Each row carries a
-      // type chip so the user can tell accounts from customs at a glance.
-      const accountRows = playedWithNonBuddies.map((p) => this._renderAccountRow(p)).join("");
-      const ghostRows   = ghosts.map((g) => this._renderGhostRow(g)).join("");
+    _renderPlayedWithSection() {
+      // Each row carries a type chip so the user can tell accounts from
+      // customs at a glance.
+      const rows = this._playedWithRows();
+      if (rows.length === 0) return "";
+
+      const pages = totalPages(rows.length);
+      this._playedWithPage = Math.min(this._playedWithPage, pages);
+      const slice = pageSlice(rows, this._playedWithPage);
+
+      const rowHtml = slice
+        .map((r) => (r.kind === "account"
+          ? this._renderAccountRow(r.item)
+          : this._renderGhostRow(r.item)))
+        .join("");
+
+      // The hint is about the Link button, so only show it when a ghost row
+      // is actually on screen.
+      const ghostsOnPage = slice.some((r) => r.kind === "ghost");
 
       return `
         <section class="buddies-section">
-          <h3>Played with</h3>
+          <h3>Played with (${rows.length})</h3>
           <ul class="buddies-list">
-            ${accountRows}${ghostRows}
+            ${rowHtml}
           </ul>
-          ${ghosts.length > 0
+          ${this._renderPager(this._playedWithPage, pages, "_goPlayedWithPage", "Played-with pagination")}
+          ${ghostsOnPage
             ? `<p class="text-xs opacity-60 px-1 mt-1">Tap “Link” on a custom player to point them at a real account — past plays update too.</p>`
             : ""}
         </section>
       `;
+    }
+
+    // Shared prev / next strip for both paginated lists. `handler` is the
+    // method name on this view that takes the target page.
+    _renderPager(page, pages, handler, label) {
+      if (pages <= 1) return "";
+      return `
+        <nav class="buddies-pager" aria-label="${label}">
+          <button class="btn btn-ghost btn-sm" ${page <= 1 ? "disabled" : ""}
+                  aria-label="Previous page"
+                  onclick="window.buddiesView.${handler}(${page - 1})">
+            <i data-icon="chevron-left" class="w-4 h-4"></i> Prev
+          </button>
+          <span class="buddies-pager__page">Page ${page} of ${pages}</span>
+          <button class="btn btn-ghost btn-sm" ${page >= pages ? "disabled" : ""}
+                  aria-label="Next page"
+                  onclick="window.buddiesView.${handler}(${page + 1})">
+            Next <i data-icon="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </nav>
+      `;
+    }
+
+    _goBuddiesPage(n) {
+      const next = clampPage(n, this._buddies.length);
+      if (next === this._buddiesPage) return;
+      this._buddiesPage = next;
+      this.render();
+    }
+
+    _goPlayedWithPage(n) {
+      const next = clampPage(n, this._playedWithRows().length);
+      if (next === this._playedWithPage) return;
+      this._playedWithPage = next;
+      // The open ghost-link panel belongs to a row that is about to scroll
+      // off the page — close it rather than leave invisible state behind.
+      this._linkingGhost = null;
+      this._linkQuery = "";
+      this._linkResults = [];
+      this.render();
     }
 
     _renderAccountRow(p) {
@@ -469,6 +571,17 @@
       if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
       await this._load();
     }
+  }
+
+  function totalPages(count) {
+    return Math.max(1, Math.ceil(count / PER_PAGE));
+  }
+  function pageSlice(list, page) {
+    const start = (page - 1) * PER_PAGE;
+    return list.slice(start, start + PER_PAGE);
+  }
+  function clampPage(n, count) {
+    return Math.min(Math.max(1, n), totalPages(count));
   }
 
   function initials(name) {
