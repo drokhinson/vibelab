@@ -201,7 +201,7 @@ Components are global functions / classes attached to `window`. There is no modu
 
 | Group | Representative classes | Lives at | Fonts / tokens | Dead members |
 | --- | --- | --- | --- | --- |
-| Global layout | `.bgb-global-header*`, `.bgb-nav*`, `.bgb-cream-screen` | `styles.css:2451+` | `--font-display`, `--accent`, `--polaroid-bg` | None |
+| Global layout | `.bgb-global-header*`, `.bgb-nav*`, `.bgb-spoke-screen` | `styles.css:2451+` | `--font-display`, `--accent`, `--polaroid-bg` | None |
 | Game tile — canonical | `.game-card*` | DELETED | n/a | Was never styled or referenced. Function and class family removed in cleanup. |
 | Game tile — Polaroid | `.game-polaroid`, `.game-polaroid__*` | `styles.css:6124–6195` | `--font-polaroid` (Fraunces) | None |
 | Game tile — collection | `.collection-tile`, `.collection-tile__*` | `styles.css:3536–3542`, `:4156–4157` | `--font-sans` | None |
