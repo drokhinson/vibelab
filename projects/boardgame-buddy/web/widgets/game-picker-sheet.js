@@ -13,7 +13,8 @@
 // makes. Matching is case-insensitive substring, not prefix or fuzzy, to agree
 // with domain/shelf-filter.js (and the backend it mirrors).
 //
-// The shell is ui/bottom-sheet.js, shared with the collection status sheet.
+// The shell is ui/bottom-sheet.js and the panel chrome is the shared
+// .bgb-sheet__* family; only the .game-picker__row family is ours.
 
 (function () {
   /**
@@ -97,7 +98,7 @@
     _renderList() {
       const rows = this._matches();
       if (!rows.length) {
-        return `<p class="game-picker__empty">No games match “${escapeHtml(this._query.trim())}”.</p>`;
+        return `<p class="bgb-sheet__empty">No games match “${escapeHtml(this._query.trim())}”.</p>`;
       }
       return rows.map((g) => this._row(g)).join("");
     }
@@ -105,11 +106,11 @@
     _renderPanel(title) {
       const n = this._games.length;
       return `
-        <div class="game-picker__panel">
-          <div class="game-picker__grip" aria-hidden="true"></div>
-          <h3 class="game-picker__title">${escapeHtml(title)}</h3>
-          <p class="game-picker__sub">${n} game${n === 1 ? "" : "s"} with logged plays</p>
-          <div class="game-finder game-picker__search">
+        <div class="bgb-sheet__panel">
+          <div class="bgb-sheet__grip" aria-hidden="true"></div>
+          <h3 class="bgb-sheet__title">${escapeHtml(title)}</h3>
+          <p class="bgb-sheet__sub">${n} game${n === 1 ? "" : "s"} with logged plays</p>
+          <div class="game-finder bgb-sheet__search">
             <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
             <input type="text" id="game-picker-search"
                    class="input input-bordered game-finder__input"
@@ -120,9 +121,9 @@
               <i data-icon="x" class="w-4 h-4"></i>
             </button>
           </div>
-          <div class="game-picker__list" role="listbox" aria-label="${escapeAttr(title)}"
+          <div class="bgb-sheet__list" role="listbox" aria-label="${escapeAttr(title)}"
                data-picker-list>${this._renderList()}</div>
-          <button class="game-picker__cancel" type="button" data-action="close">Cancel</button>
+          <button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>
         </div>
       `;
     }

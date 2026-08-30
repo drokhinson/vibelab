@@ -3461,23 +3461,29 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .status-sheet__cancel:hover { background: var(--polaroid-line); }
 
-/* ── Game picker sheet ────────────────────────────────────────────────────
-   "Which game?" for the Stats spoke's By-game breakdown. Same shell as the
-   status sheet above — ui/bottom-sheet.js drives both, and both reuse the
-   sheetIn/sheetOut keyframes — with the two things that sheet never needed:
-   a search field, and a real scroller. Two or three status rows can't
-   overflow; a heavy player's game list runs to a hundred.
+/* ── Sheet chrome (shared) ────────────────────────────────────────────────
+   Panel, grip, title, sub, search slot, scroller and cancel — everything a
+   bottom sheet has that isn't its rows. ui/bottom-sheet.js stamps .bgb-sheet
+   on every sheet root, so this is the one copy; each sheet then adds only its
+   own row family below. Written for the Stats picker, promoted here when the
+   Gather game + player pickers made it the third and fourth user.
+
+   The status sheet (above) predates this and keeps its own chrome — its panel
+   is a radio group with notes and rules, not a searchable list.
 
    Doubled up on .polaroid-popup__backdrop for the same reason spelled out
    above the status sheet: the base rule is defined LATER in this file and
-   sets align-items:center, so a bare .game-picker-sheet would lose the tie
-   and render as a centred card. */
-.polaroid-popup__backdrop.game-picker-sheet {
+   sets align-items:center, so a bare .bgb-sheet would lose the tie and render
+   as a centred card.
+
+   The list is the only growable child, so the panel stops at its max-height
+   and the list scrolls inside it — grip, title and search field stay put. */
+.polaroid-popup__backdrop.bgb-sheet {
   align-items: flex-end;
   justify-content: center;
   padding: 0;
 }
-.game-picker-sheet .game-picker__panel {
+.bgb-sheet .bgb-sheet__panel {
   width: 100%;
   max-width: 520px;
   background: var(--polaroid-bg);
@@ -3493,37 +3499,34 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  /* A flex column with exactly one growable child (the list), so the sheet
-     stops growing here and the list scrolls inside it — the grip, title and
-     search field stay put. */
   max-height: min(80vh, 660px);
   animation: sheetIn 260ms var(--ease) both;
 }
-.polaroid-popup__backdrop.game-picker-sheet.is-closing { animation: fadeOut 200ms ease-out both; }
-.game-picker-sheet.is-closing .game-picker__panel { animation: sheetOut 200ms var(--ease) both; }
+.polaroid-popup__backdrop.bgb-sheet.is-closing { animation: fadeOut 200ms ease-out both; }
+.bgb-sheet.is-closing .bgb-sheet__panel { animation: sheetOut 200ms var(--ease) both; }
 
-.game-picker__grip {
+.bgb-sheet__grip {
   width: 44px; height: 4px; border-radius: 4px;
   background: var(--polaroid-line);
   margin: 4px auto 8px;
   flex: none;
 }
-.game-picker__title {
+.bgb-sheet__title {
   margin: 0 0 2px; padding: 0 10px; flex: none;
   font-family: var(--font-polaroid);
   font-weight: 700; font-size: 19px; letter-spacing: -0.01em;
   color: var(--polaroid-ink);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.game-picker__sub {
+.bgb-sheet__sub {
   margin: 0 0 8px; padding: 0 10px; flex: none;
   font-size: 0.78rem; color: var(--polaroid-muted);
 }
 /* Rides the .game-finder chrome (icon + input + clear button) the same way
    the import-expansions filter does — a bare shell, not a GameFinder: there
    is nothing to search for over the network here. */
-.game-picker__search { flex: none; margin: 2px 2px 8px; }
-.game-picker__search .game-finder__input {
+.bgb-sheet__search { flex: none; margin: 2px 2px 8px; }
+.bgb-sheet__search .game-finder__input {
   border-radius: 12px;
   padding-right: 44px;
   /* .game-finder__input fills with --polaroid-bg, which is the panel's own
@@ -3533,7 +3536,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: var(--well, var(--polaroid-bg));
 }
 
-.game-picker__list {
+.bgb-sheet__list {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -3627,14 +3630,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: grid; place-items: center;
   color: var(--accent-ink);
 }
-.game-picker__empty {
+.bgb-sheet__empty {
   margin: 0;
   padding: 28px 10px;
   text-align: center;
   font-size: 0.86rem;
   color: var(--polaroid-muted);
 }
-.game-picker__cancel {
+.bgb-sheet__cancel {
   flex: none;
   min-height: 52px; margin-top: 6px;
   border: 1px solid var(--polaroid-line); border-radius: 12px;
@@ -3644,7 +3647,173 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 0.94rem; font-weight: 600;
   cursor: pointer;
 }
-.game-picker__cancel:hover { background: var(--polaroid-line); }
+.bgb-sheet__cancel:hover { background: var(--polaroid-line); }
+
+/* Section heading inside a sheet list ("Recently played with", "Selected"). */
+.bgb-sheet__sec {
+  flex: none;
+  padding: 10px 12px 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted);
+}
+/* Footer slot above Cancel, for a sheet that commits rather than picking one
+   row and closing. Its own host element so the count can be patched without
+   touching the list the user is scrolling. */
+.bgb-sheet__foot { flex: none; }
+.bgb-sheet__confirm {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 4px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-polaroid);
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bgb-sheet__confirm:disabled {
+  background: var(--polaroid-line);
+  color: var(--polaroid-muted);
+  cursor: not-allowed;
+}
+
+/* ── Player picker sheet ──────────────────────────────────────────────────
+   "Who's playing?" on the Gather screen. Multi-select: rows are checkboxes,
+   a footer button commits the set. See widgets/player-picker-sheet.js for why
+   this replaced an inline dropdown rather than growing one. */
+.player-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  /* 56px, as every other sheet row in the app — .status-sheet__opt,
+     .game-picker__row, .game-finder-dropdown-item. */
+  min-height: 56px;
+  padding: 6px 10px;
+  flex: none;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.player-picker__row:hover { background: var(--polaroid-bg-soft); }
+.player-picker__row:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: -3px;
+}
+.player-picker__row[aria-checked="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.player-picker__row[aria-checked="true"] .player-picker__name { color: var(--accent-ink); }
+
+.user-badge.player-picker__avatar { width: 36px; height: 36px; flex: none; }
+.user-badge.player-picker__avatar .user-badge__initials { font-size: 13px; }
+
+.player-picker__body { flex: 1 1 auto; min-width: 0; }
+.player-picker__name,
+.player-picker__meta {
+  display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.player-picker__name { font-size: 0.97rem; font-weight: 600; line-height: 1.2; }
+.player-picker__meta {
+  margin-top: 3px;
+  font-size: 0.74rem;
+  color: var(--polaroid-muted);
+}
+/* Marks a name-only player, the same word the roster and scorecard use. */
+.player-picker__pill {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--polaroid-bg-soft);
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-muted);
+}
+/* Reserved whether or not the row is ticked, so ticking doesn't reflow the
+   name column under the user's thumb. */
+.player-picker__tick {
+  flex: none;
+  width: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--accent-ink);
+}
+
+/* The "add this typed name as a guest" row. Dashed, to read as creating
+   someone rather than picking someone who already exists. */
+.player-picker__row--guest {
+  border: 1px dashed var(--polaroid-line);
+  margin-bottom: 2px;
+}
+.player-picker__plus {
+  flex: none;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px dashed var(--polaroid-line);
+  display: grid; place-items: center;
+  color: var(--polaroid-muted);
+}
+
+/* ── Game search sheet ────────────────────────────────────────────────────
+   The library finder, mounted inside a sheet (widgets/game-search-sheet.js).
+   The panel is already sized to the visible viewport, so the finder's results
+   stop being an absolutely-positioned overlay measured by ui/dropdown-fit.js
+   and become the panel's one growable child. */
+.bgb-sheet__finder {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  margin: 2px 2px 0;
+}
+/* Doubled up on purpose, the same trick as .polaroid-popup__backdrop.status-sheet
+   above: the base `.game-finder` rule is defined LATER in this file and sets
+   align-items:center, so a single-class selector loses the tie on source order
+   and every child shrink-wraps to its content — the results list rendered ~180px
+   wide, centred, instead of filling the sheet. */
+.game-finder.game-finder--inline {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+/* The icon centres on 50% of its positioned ancestor, which inline is the
+   whole column rather than the field — pin it to the middle of the 3rem
+   input instead, or it floats in the results. */
+.game-finder--inline .game-finder__icon { top: 1.5rem; }
+.game-finder--inline .game-finder__input {
+  flex: none;
+  border-radius: 12px;
+}
+.game-finder--inline .game-finder-dropdown {
+  position: static;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;      /* the panel is the ceiling now */
+  margin-top: 8px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+/* The flip has nothing to flip against once the list is in the flow. */
+.game-finder--inline .game-finder-dropdown.is-flipped {
+  top: auto;
+  bottom: auto;
+}
 
 /* Status-tag positioning inside the standard tile shapes ─ pin top-right. */
 .collection-tile { position: relative; }
@@ -4948,86 +5117,38 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25);
 }
 
-.cascade-player-add {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px;
-  margin-top: 8px;
-}
-.cascade-buddy-combo { position: relative; }
-.cascade-buddy-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
-  background: var(--polaroid-bg);
-  color: var(--polaroid-ink);
-  border: 1px solid var(--polaroid-line);
-  border-radius: 8px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-  list-style: none;
-  padding: 4px;
-  /* Must outrank `.cascade-cta-wrap` (z-index: 35) so the buddy list
-     overlays the sticky Continue-to-Play button when expanded. */
-  z-index: 40;
-  /* Was a flat 220px, which showed ~6 of the 8 rows through a keyhole. The vh
-     term keeps it off the bottom of a short phone viewport; the 360px ceiling
-     stops it from swallowing the Gather card on a tall one. */
-  max-height: min(52vh, 360px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-.cascade-buddy-dropdown-item {
+/* Opens the player picker sheet — see widgets/player-picker-sheet.js. This
+   replaced an inline combo whose dropdown was position:absolute inside this
+   card, which is the lowest one on Gather: with a few players seated,
+   ui/dropdown-fit.js had to squeeze the list to its own 132px "keyhole" floor
+   on top of the docked Continue CTA, and it still ran off the bottom edge. */
+.cascade-add-player {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  /* 48px floor: these rows are picked one-handed mid-session, and the old
-     6px/13px row measured ~32px — under every touch-target guideline and
-     easy to miss into the row above. */
   min-height: 48px;
-  border-radius: 8px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border: 1px dashed var(--polaroid-line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--polaroid-muted);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
   cursor: pointer;
 }
-.cascade-buddy-dropdown-item:hover { background: var(--polaroid-bg-soft); }
-/* Touch has no hover, so :active is the only press feedback a phone gets. */
-.cascade-buddy-dropdown-item:active { background: var(--polaroid-bg-soft); }
-.cascade-buddy-dropdown-name { font-size: 15px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cascade-buddy-dropdown-sub {
-  font-size: 12px;
-  opacity: 0.6;
-  margin-left: 4px;
-  flex-shrink: 0;
-}
-.cascade-buddy-dropdown-pill {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--polaroid-bg-soft);
-  border: 1px solid var(--polaroid-line);
+.cascade-add-player:hover {
+  border-color: var(--accent);
   color: var(--polaroid-ink);
-  opacity: 0.7;
 }
-/* Set by ui/dropdown-fit.js when there's more room above the input than
-   below it — anchor to the input's top edge instead of its bottom. */
-.cascade-buddy-dropdown.is-flipped {
-  top: auto;
-  bottom: 100%;
-  margin-top: 0;
-  margin-bottom: 4px;
+.cascade-add-player:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
-.cascade-buddy-dropdown-header {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 8px 12px 4px;
-  opacity: 0.55;
-  pointer-events: none;
-}
+
 
 /* Expansions list in Gather reuses the regular expansion-list rows but
    sits inside the cream polaroid card. */
@@ -5646,14 +5767,15 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding: 6px;
   margin: 0;
   z-index: 25;
-  /* See the buddy dropdown above — same reasoning, one row taller because
-     these rows carry box art. */
+  /* One row taller than a plain list row because these carry box art. Only
+     governs the overlay form; inside a sheet the panel is the ceiling. */
   max-height: min(56vh, 400px);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
-/* See .cascade-buddy-dropdown.is-flipped — same flip, set by the same helper. */
+/* Set by ui/dropdown-fit.js when there is more room above the input than
+   below it — anchor to the input's top edge instead of its bottom. */
 .game-finder-dropdown.is-flipped {
   top: auto;
   bottom: calc(100% + 4px);
@@ -6049,7 +6171,83 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding-top: 10px;
 }
 
-/* Picked-game chip (above the input) */
+/* Recently-played quick picks on the unpicked Game card. These used to live
+   inside the finder's dropdown, invisible until the input took focus — the
+   shortcut for the commonest case was behind a gesture. */
+.cascade-game-quicks {
+  display: grid;
+  /* minmax(0,1fr), not 1fr: a long title would otherwise widen its own column
+     and knock the row out of alignment. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.cascade-game-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 5px;
+  border-radius: 10px;
+  border: 1px solid var(--polaroid-line);
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.cascade-game-quick:hover { border-color: var(--accent); }
+.cascade-game-quick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cascade-game-quick__art {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--polaroid-line);
+  display: grid;
+  place-items: center;
+}
+.cascade-game-quick__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cascade-game-quick__n {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Opens the library search sheet — see widgets/game-search-sheet.js. */
+.cascade-game-search {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 10px;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-muted);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.cascade-game-search:hover {
+  border-color: var(--accent);
+  color: var(--polaroid-ink);
+}
+.cascade-game-search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Picked-game chip — replaces the chooser above once a game is set. */
 .cascade-game-chip {
   display: grid;
   grid-template-columns: 40px 1fr 44px 44px;

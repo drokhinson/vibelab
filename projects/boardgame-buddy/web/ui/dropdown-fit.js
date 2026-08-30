@@ -1,12 +1,17 @@
 // ui/dropdown-fit.js — size an absolutely-positioned combo dropdown to the
 // space actually on screen, and flip it above its input when there isn't any.
 //
-// Why this exists: both search combos (the GameFinder and the Gather player
-// picker) anchor their <ul> at `top: 100%` with a CSS max-height. That works
-// while the input sits high in the viewport and silently fails when it
-// doesn't — the list is `position: absolute`, so it does not extend the page
-// and the rows past the fold are simply unreachable. The taller, easier-to-hit
-// rows made that failure mode more likely, not less, so the two ship together.
+// Why this exists: the GameFinder anchors its <ul> at `top: 100%` with a CSS
+// max-height. That works while the input sits high in the viewport and
+// silently fails when it doesn't — the list is `position: absolute`, so it
+// does not extend the page and the rows past the fold are simply unreachable.
+// The taller, easier-to-hit rows made that failure mode more likely, not less,
+// so the two ship together.
+//
+// The Gather screen's two combos, which is what this was written for, are both
+// bottom sheets now: a sheet is position:fixed and sized off --bgb-vv-h, so
+// there is no fold to measure against. What is left is the finder in
+// .add-game-modal, and the finder mounted WITHOUT `inlineDropdown`.
 //
 // CSS keeps the ceiling. This only ever shrinks a dropdown below its own
 // max-height or flips it to the other side of the input, so a context that
@@ -18,7 +23,7 @@
 // viewport, so innerHeight would happily hand back space the keyboard covers).
 // Browsers without it fall back to innerHeight.
 //
-// Used by: widgets/game-finder.js, views/play-flow-view.js.
+// Used by: widgets/game-finder.js (overlay form only).
 
 // @ts-check
 
