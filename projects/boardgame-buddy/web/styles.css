@@ -7142,6 +7142,40 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--sheet-ink);
 }
 
+/* ── Pinned back-nav row ──────────────────────────────────────────────────
+   Every spoke opens with a back row (.spoke-head, or .search-topbar on
+   Buddies). It used to scroll away with the list, so partway down a long
+   collection — or down Settings — the only way back to the hub was the
+   browser/OS back gesture. Pin it directly under .bgb-global-header, which
+   is itself sticky at top:0 and --bgb-header-height tall, so the two read as
+   one stack of chrome and "back to profile" is always one tap.
+
+   The row is a direct child of <main data-view=…>, which carries Tailwind's
+   px-4 — hence the negative inline margin plus the matching padding: the
+   pinned band bleeds out to the app column's edges, exactly like the header
+   above it, so list rows can't slide past it through the gutters. Direct
+   children only, on purpose — a .search-topbar nested inside a card or a
+   modal on one of these screens must not pin.
+
+   min-height:0 drops .search-topbar's 52px floor so Buddies' bar matches the
+   other five (a 44px control plus this padding). z-index 20 clears view
+   content and stays below the global header (30), the docked spoke pager
+   (35) and the nav (40). */
+.bgb-spoke-screen > .spoke-head,
+.bgb-spoke-screen > .search-topbar {
+  position: sticky;
+  top: var(--bgb-header-height);
+  z-index: 20;
+  min-height: 0;
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+  padding-block: 0.4rem 0.5rem;
+  background: oklch(var(--b1) / 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid oklch(var(--b3));
+}
+
 /* Spoke head chrome (back/close button + title + count) */
 .bgb-spoke-screen .spoke-head__back,
 .bgb-spoke-screen .spoke-head__close {
