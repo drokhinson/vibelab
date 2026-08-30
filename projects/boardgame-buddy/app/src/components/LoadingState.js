@@ -1,19 +1,19 @@
-// LoadingState — the one branded loader used on every screen while data loads.
+// Full-surface loading placeholder — boot gate and screen-level waits. List
+// screens should prefer inline <Skeleton> rows in their real layout; this is
+// for surfaces that have nothing to shape yet.
 
 import React from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { COLORS, FONTS, SPACING } from '../theme';
+import { ActivityIndicator, View } from 'react-native';
+import { COLORS, SPACING } from '../theme';
+import { Text } from '../ui';
 
-export default function LoadingState({ label = 'Loading…', style }) {
+export default function LoadingState({ label = 'Loading…' }) {
   return (
-    <View style={[styles.wrap, style]}>
+    <View style={{ alignItems: 'center', gap: SPACING.md, padding: SPACING.xl }}>
       <ActivityIndicator size="large" color={COLORS.accent} />
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      <Text variant="small" center>
+        {label}
+      </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl },
-  label: { fontFamily: FONTS.display, color: COLORS.textSoft, fontSize: 16, marginTop: SPACING.md },
-});

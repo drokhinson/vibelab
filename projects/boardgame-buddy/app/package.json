@@ -1,6 +1,6 @@
 {
   "name": "boardgame-buddy",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "main": "App.js",
   "scripts": {
     "start": "expo start",
@@ -23,7 +23,9 @@
     "expo": "^54.0.34",
     "expo-auth-session": "~7.0.11",
     "expo-crypto": "~15.0.9",
+    "expo-file-system": "~19.0.0",
     "expo-font": "~14.0.12",
+    "expo-image-manipulator": "~14.0.8",
     "expo-image-picker": "~17.0.11",
     "expo-linking": "~8.0.12",
     "expo-secure-store": "~15.0.8",

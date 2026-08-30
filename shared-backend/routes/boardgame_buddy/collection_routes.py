@@ -31,18 +31,24 @@ from .services._helpers import game_select_clause
 
 
 # Deliberately narrower than game_select_clause(): /collection renders plain
-# tiles, so it skips the expansion and rulebook columns the grid and detail
-# surfaces need. image_url IS carried: the tiles crop square with object-fit,
-# which upscales BGG's ~200px thumbnail on any modern DPR.
+# tiles, so it skips the rulebook column the detail surfaces need. Everything
+# else is load-bearing:
+#   * image_url — the tiles crop square with object-fit, which upscales BGG's
+#     ~200px thumbnail on any modern DPR (migration 055);
+#   * is_expansion / base_game_bgg_id / expansion_color / play_mode — the
+#     native app persists this response as its offline shelf, and without them
+#     an offline game picker can't tell an expansion from a base game, and a
+#     co-op game logged in airplane mode would be saved as competitive.
 #
 # The web client no longer reads this endpoint at all — it derives its status
-# map and expansion counts from /collection/status-map, which is one bounded
-# round trip instead of three unbounded ones. What remains here serves the
-# native app, whose only consumer (app/src/store/AppContext.js:262) reads
-# `status` and `game_id`.
+# map and expansion counts from /collection/status-map, one bounded round trip
+# instead of three unbounded ones. So native is the only consumer left, and it
+# reads the whole nested `game` (offline/collectionStore.collectionGames), not
+# just status/game_id — trim these columns and the offline shelf goes blank.
 _TILE_GAME_FIELDS = (
     "id, bgg_id, name, year_published, min_players, max_players, "
-    "playing_time, thumbnail_url, image_url, theme_color"
+    "playing_time, thumbnail_url, image_url, theme_color, is_expansion, "
+    "base_game_bgg_id, expansion_color, play_mode"
 )
 
 

@@ -31,19 +31,158 @@ Game night under a warm lamp: espresso ground, amber glow, terracotta wins. Full
 - **Choice lists are bottom sheets**, on the shared `ui/bottom-sheet.js` shell, never `position: absolute` dropdowns. Four today: the app-wide status sheet, the Stats by-game picker, and both Gather pickers. A new sheet must be added *by name* to the theme re-point list in `styles.css`, because a body-level sheet lands outside the screen that opened it.
 
 ### Native app (`app/`)
-Full feature-parity React Native build. Organized around the repo's one-canonical-component-per-
-core-object rule (`.claude/rules/ui-object-design.md`):
-- **Core-object components** (`app/src/components/`): `GameTile` (variants tile/preview/hero/thumb),
-  `PlayCard` (flip card), `UserBadge` (avatars + 11 icon glyphs), `BuddyRow`, `StatusTag`/
-  `ExpansionBadge`. Shared chrome: `AppHeader`, `LoadingState`, `EmptyState`, `ConfirmModal`
-  (the single app-wide destructive-confirm surface), `OAuthButtons`, `Markdown`, `AvatarCustomizer`,
-  `StatsStrip`.
-- **Widgets** (`app/src/widgets/`): `ReferenceGuideScroll`, `RoundScoreGrid`, `GameFinder`,
-  `PlayDetailPopup` (the single "open a play" destination).
-- **Realtime** (`app/src/realtime/`): `liveScores`, `sessionPhase` (Supabase channels for the live
-  host/join cascade); draft model in `app/src/models/playSession.js` (AsyncStorage-persisted).
-- **API client** (`app/src/api/client.js`): all ~80 endpoints, 401 refresh-retry, multipart photo
-  upload. Boot seeds first paint via `GET /bootstrap`.
+Rebuilt from scratch (2026-08) as one coherent design system — full feature parity with the web
+app except chapter *authoring* (reference guides are read-only on native: view + add/remove
+community pool chapters; writing chapters stays on web). That exclusion covers the whole
+editor, so "Generate with AI" (`POST /games/{id}/chapters/generate`) is web-only too — it
+drafts into an editor form, and native has no form to draft into. Organized around the repo's
+one-canonical-component-per-core-object rule (`.claude/rules/ui-object-design.md`):
+
+> **Known debt — theming.** `.claude/rules/theming.md` and `.claude/rules/react-native.md` now
+> bind `projects/*/app/**`: theme tokens must mirror the web vocabulary name for name
+> (`bg0`/`bg1`/`bg2`, `ink`/`inkMuted`/`inkFaint`, `line`/`lineStrong`, `accent*`, `paper*`) and
+> the app must ship **both** light and dark, resolved through `useColorScheme()` plus a stored
+> override, with no colour literal in a `StyleSheet`. Native satisfies none of that yet: it is
+> dark-only on the pre-rename vocabulary (`bg`/`card`/`text`/`border`/`polaroid*`), across 439
+> references in 56 files, and its styles are static `StyleSheet.create` calls that cannot react
+> to a theme switch at all. This is a tracked follow-up, not an oversight — it is pure refactor
+> with no behaviour change, and folding it into the rebuild PR would have made both halves
+> unreviewable. The three-surface rule already holds by accident: the polaroid play card is a
+> photograph and stays light in both modes.
+
+- **Design system** (`app/src/ui/` + `app/src/theme.js`): primitive kit — `Screen` (safe-area +
+  keyboard handling + a `FooterBar` slot that always stays above the keyboard), `Text` (semantic
+  variants over the 4-family type system), `Button`, `Card`, `Input`, `Sheet`, `Skeleton`,
+  `RefreshHint`, `Row`/`Stack`. Screens compose primitives; no color/font literals in screens.
+- **Core-object components** (`app/src/components/`): `GameTile` (variants
+  tile/preview/hero/thumb/polaroid), `PlayCard` (flip card), `UserBadge` (avatars + 11 icon
+  glyphs), `BuddyRow`, `StatusTag`/`ExpansionBadge`, `SessionCard`, `StatsStrip`. Shared chrome:
+  `AppHeader`, `LoadingState`, `EmptyState`, `ConfirmModal` (the single app-wide
+  destructive-confirm surface), `PolaroidPopup` (winner-splash surface), `OAuthButtons`,
+  `Markdown`, `AvatarCustomizer`.
+- **Widgets** (`app/src/widgets/`): `ReferenceGuideScroll` (read-only + community pool),
+  `RoundScoreGrid`, `GameFinder`, `PlayDetailPopup` (the single "open a play" destination;
+  view/edit/delete own plays, leave tagged plays), `ImportExpansionsSheet` (the native
+  counterpart of `web/widgets/import-expansions-modal.js` — same client-side filter over
+  name + BGG `full_name`, per-row import that fails only its own row; opened from the
+  expansions card on both Game Detail and Gather, which render for every base game since
+  expansions are hidden from search).
+- **Offline + speed** (`app/src/offline/collectionStore.js`, `app/src/domain/gameSearch.js`):
+  the owned/wishlist collection persists to AsyncStorage and hydrates before any network call.
+  Rows keep `GET /collection`'s shape verbatim — a nested `game` object, *not* the flat `game_*`
+  columns `boardgamebuddy_collections` denormalizes (that endpoint joins the games table and
+  never selects them). `collection_routes._TILE_GAME_FIELDS` is the exact column list that comes
+  back, and it carries `is_expansion` / `base_game_bgg_id` / `expansion_color` / `play_mode`
+  specifically so the offline shelf can tell an expansion from a base game and score a co-op
+  game correctly at an offline table;
+  game search falls through **owned (instant, offline) → BGB `/search` → BGG import**. Screen
+  data uses a 10-min-TTL serve-then-refresh cache (`app/src/store/cache.js`) with a visible
+  RefreshHint while revalidating; `GET /bootstrap` seeds first paint and its `bootstrap_version`
+  wipes the cache on a mismatch. The per-game detail bundles come from the deferred
+  `GET /bootstrap/game-bundles`, fired from `InteractionManager.runAfterInteractions` once the
+  first screen has settled — Game Detail force-fetches its own bundle, so a miss is harmless.
+- **Wrap-up card** (`app/src/components/PolaroidPopup.js`): Save puts the "Well played!" polaroid
+  up in the same frame and runs the write behind it. `showPolaroid()` returns a card id and
+  `updatePolaroid(patch, id)` no-ops once a newer card replaced it. The card is **not modal
+  while the write runs** — the outbox guarantees delivery, so there is nothing to wait on and
+  holding the host behind a write they can't influence is the only cost. **One bottom button at
+  a time**: an error owns the slot as **Retry** (dismissing lands back on an intact Settle Up),
+  otherwise the host gets **Another round?** and everyone else a plain feed link. Every exit —
+  backdrop, hardware back, fallback CTA — shares one destination. A failed photo becomes a
+  warning line on the card, and a network failure settles to "Saved on this phone".
+  **Another round?** reseeds a new session with the same game/expansions/mode/roster (teams kept,
+  scores reset) under a new code and pushes the roster as participants.
+- **Connectivity** (`app/src/offline/net.js`): one app-wide answer to "are we offline?",
+  the native port of `web/domain/net.js`. Automatic — there is no switch. A completed HTTP
+  response of any status proves reachability and outranks everything; failing that, **two
+  consecutive** network failures flip the app offline (two, because one request can fail for
+  reasons unrelated to the link). `api/client.js` records the evidence in one place
+  (`_trackedFetch`), so this and the app's "an error without `.status` means the network died"
+  convention are two views of one fact. `OfflineBanner` (Feed + Play) shows the state and
+  offers the app's only active probe, `GET /health`. `net.js` is a strict leaf — the client
+  reports into it, so the probe and the reconnect handler are injected by `AppContext`. Going
+  offline gates new behaviour only: it never signs the user out, abandons a lobby, or re-mints
+  a session code.
+- **Offline play recording** (`app/src/offline/playOutbox.js`): when the lobby can't be opened
+  (network failure), the cascade runs as an **offline table** — phases flip locally, ghost
+  players + persisted host seeds, no invite code — and Save queues the play (photo copied to
+  a stable file via `expo-file-system`) in an AsyncStorage outbox. The outbox auto-flushes on
+  sign-in, app foreground, and the offline→online edge (finalize the original lobby when it
+  still exists, else plain `POST /plays`, then photo attach); `PendingUploadsBar` on Feed +
+  Play shows the queue with retry/discard. Network failures retry silently; server rejections
+  surface per-play. A cached profile + host seeds make this work from an offline cold start.
+  Two invariants that are easy to break:
+  - **Every queued play carries a `client_key`** (migration 048), minted once at enqueue and
+    re-sent on every attempt, so a lost response returns the original play instead of writing
+    a duplicate. Mint it per *entry*, never per attempt. Both upload paths carry it —
+    `bgb_finalize_session` delegates to `bgb_log_play`, so the lobby path inherits the guard,
+    and `session_routes.finalize_session` resolves the `{"duplicate": true, "id": …}` envelope
+    the same way `play_routes.log_play` does. Live saves stay keyless on purpose: two identical
+    live POSTs legitimately mean two plays.
+  - **The queue survives sign-out.** Entries are scoped to the account that recorded them and
+    the flush filters on it, rather than being wiped — a queued play is a game somebody
+    actually played, and an expired token must not destroy it. It also stops a shared device
+    from filing one user's play into another's history.
+- **Play cascade** (`app/src/screens/play/`): `PlayFlowScreen` hosts a non-swipeable pager over
+  Gather → Play → Settle; `usePlaySession` owns the draft, 2s lobby poll, LiveScores channel and
+  the `_phaseSeq`-guarded optimistic phase machine (ported from `web/views/play-flow-view.js`).
+  Joiners: `SessionRouter` (host/joiner hop on `/play/:code`), `SessionViewerScreen` +
+  `useSessionWatch` (Realtime phase + poll safety net, **view-only** scoreboard, winner splash).
+- **Realtime** (`app/src/realtime/`): `liveScores`, `sessionPhase` (Supabase channels);
+  draft model in `app/src/models/playSession.js` (AsyncStorage-persisted). Live cells are keyed
+  by **participant row, not account** (migration 053) — which is what lets a guest's column
+  stream — so `addPlayer` pushes *every* player to the lobby, guests included. `RoundScoreGrid`
+  has exactly two modes, editable or not; there is no per-column gate any more. Entering Play
+  calls `syncGrid()` to publish the host's whole grid, since a resumed draft can hold cells the
+  table has never seen and spectators can no longer fill the gaps in themselves. Removing a
+  round `DELETE`s its rows — writing NULLs leaves them behind and `maxRound()`, which spectators
+  size their grid from, grows the round straight back. Two rules that are easy to break:
+  - **The host's local draft outranks the live overlay on the host's own device.** This device is
+    the only writer, so the overlay carries nothing but our own echoes — and typing "36" fires two
+    independent upserts (3, then 36) with no ordering between them. Let the overlay win and the 3
+    landing last rewrites the cell. The overlay stays authoritative on the spectator's screen,
+    which has no draft of its own.
+  - **A spectator who joined after Gather has no participant row**, so the scores table's RLS
+    hands them zero rows and Realtime is silent for them. `useSessionWatch` seeds `LiveScores`
+    from the bundle's `scores` snapshot (migration 054) and re-seeds on every poll tick — for
+    that viewer the poll, not the socket, is the update channel.
+  - **Participant array order IS the grid's column order** (migration 056; the bundle sorts by
+    `position NULLS LAST, joined_at` and `position` never reaches the wire, so never re-sort it
+    client-side). `pushRosterToLobby` seats the roster with a `Promise.all` — the rows land in
+    completion order — then publishes the host's order via
+    `PUT /sessions/{code}/participants/order`. Host-side drag-to-reorder is not built yet; the
+    endpoint is wired, so it is UI only.
+- **The lobby never blocks the host** (`usePlaySession`): recording the play is the must-have,
+  the live session is not. Continue needs only a game pick; the phase flips locally and the
+  lobby catches up; a refused mint is a line on the invite card rather than an error over the
+  cascade; and **Host a game always starts a fresh session** (Resume is the one path that
+  continues one — reusing the draft handed the host a closed lobby's code). Every session write
+  goes through `withLobby()`, which on a *definitive* 404/410 mints a replacement and retries
+  once. `healLobby()` is single-flight because `bgb_create_session` abandons the host's other
+  open sessions, so parallel mints would each kill the one before it. `onLobbyReplaced()` then
+  clears the stale `participant_id`s, re-pushes the roster, walks the new lobby up to the host's
+  phase and restarts live scores — in that order, since participants are Gather-only and RLS
+  only accepts score writes while `phase='play'`.
+- **API client** (`app/src/api/client.js`): 401 refresh-retry, multipart photo upload, and one
+  wrapper per endpoint the app actually calls — 67 of the backend's 79 routes, with no `raw`
+  escape hatch, so `grep` over this file is a complete inventory of what native can reach.
+  Response typedefs live in `app/src/api/types.js` and are kept field-for-field with
+  `shared-backend/routes/boardgame_buddy/models.py`. The photo attaches via
+  `PATCH /plays/{id}/photo` and its upload runs *alongside* the create/finalize, so the blocking
+  save path is two round trips. The Play-history filter sheet builds its own option lists
+  (`/games/recently-played` + `play_partners.recent`) rather than calling a filter-options
+  endpoint; `/plays` still takes `game_id` and `buddy_id`.
+- **Shared vocabularies:** `app/src/domain/playMode.js` holds the play-mode strings
+  (`competitive` / `coop` / `team`) mirrored from the `PlayMode` StrEnum and the
+  `boardgamebuddy_games.play_mode` CHECK constraint. Co-op is `coop` — compare through
+  `isCoop()`, and normalize anything inbound with `normalizePlayMode()`, since `PlayCreate`
+  422s an off-vocabulary value.
+- **Expansion labels** (`app/src/domain/expansionName.js`): `stripBaseGameName()` is the native
+  twin of `web/helpers.js` and the backend's `_strip_base_prefix` — keep the three in sync. Applied
+  where the base game is already the context (game page list, Gather chips, a play's chips); every
+  other surface keeps the full stored name. The Gather picker gains a filter past five expansions
+  and caps its height; collection tiles show `game.expansion_count` (catalog-wide) as a
+  `git-fork N` badge.
 - **Auth/OAuth prerequisites (web-side, not in `app/`):** Google sign-in routes through a hosted
   `web/auth-callback.html` bridge page on the BGB Vercel deploy, allowlisted in Supabase → Auth →
   URL Configuration. Store submission also needs `web/privacy.html` + `web/delete-account.html`.
@@ -93,8 +232,15 @@ Linked to Supabase Auth `auth.users`.
 | game_id | UUID FK | → games |
 | status | TEXT | owned / wishlist. Migration 010 dropped `played` — played-ness is derived from `boardgamebuddy_plays` |
 | added_at | TIMESTAMPTZ | |
+| bgg_* | various | nullable; BGG-sync provenance (comment, acquisition, price, quantity, location) |
+| game_* | various | nullable; denormalized game fields (migration 020) so the shelf can filter without a join |
 | played_before_at | TIMESTAMPTZ | Migration 059. Non-null = the owner hand-marked this as played before joining, so it leaves the Shelf of Shame without a fabricated play. Read ONLY by the `shelf` block of `bgb_user_stats_detail` — never counted as a play |
 | UNIQUE(user_id, game_id) | | |
+
+The `game_*` denormalized columns are a **shelf-filtering** optimization, not
+the API shape. `GET /collection` ignores them and joins `boardgamebuddy_games`,
+returning a nested `game` object — see `_TILE_GAME_FIELDS` for the exact
+columns. Read the nested object, never `row.game_name`.
 
 ### boardgamebuddy_buddy_edges
 The mutual friendship graph (migration 008). One row per pair, stored
@@ -137,7 +283,7 @@ do not have an account.
 | play_mode | TEXT | `competitive` / `coop` / `team` — what the user actually played, which may differ from the game's intrinsic mode |
 | game_name | TEXT | denormalized off games (migration 020) so play lists are a single-table read |
 | game_thumbnail_url | TEXT | denormalized off games |
-| client_key | UUID | nullable; idempotency key for offline-queued plays (migration 048). Partial-unique per (user_id, client_key). NULL for every live write — two identical online POSTs legitimately mean two plays. |
+| client_key | UUID | nullable; idempotency key for offline-queued plays (migration 048), set by the web and native outboxes and re-sent on every retry. Partial-unique per (user_id, client_key); `bgb_log_play` returns the existing row rather than writing a second, so a lost response can't duplicate a game. NULL for every live write — two identical online POSTs legitimately mean two plays. |
 | created_at | TIMESTAMPTZ | |
 
 Migration 020 also cached `game_image_url` and `game_play_mode` here; migration

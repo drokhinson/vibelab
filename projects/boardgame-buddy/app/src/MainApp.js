@@ -17,12 +17,13 @@ import { CrimsonText_400Regular, CrimsonText_600SemiBold, CrimsonText_700Bold } 
 import { Fraunces_400Regular_Italic, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
 import { JetBrainsMono_500Medium, JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono';
 
-import { AppProvider, useAppState } from './store/AppContext';
+import { AppProvider, useAppActions, useAppState } from './store/AppContext';
 import { handleAuthDeepLink } from './auth/oauth';
 import { COLORS, FONTS } from './theme';
 import LoadingState from './components/LoadingState';
 import ConfirmHost from './components/ConfirmModal';
-import { PlayDetailHost } from './widgets/PlayDetailPopup';
+import PolaroidHost from './components/PolaroidPopup';
+import PlayDetailPopup, { PlayDetailHost } from './widgets/PlayDetailPopup';
 
 import FeedScreen from './screens/FeedScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -32,7 +33,6 @@ import SessionViewerScreen from './screens/SessionViewerScreen';
 import JoinSessionScreen from './screens/JoinSessionScreen';
 import SessionRouter from './screens/SessionRouter';
 import GameDetailScreen from './screens/GameDetailScreen';
-import ChapterEditorScreen from './screens/ChapterEditorScreen';
 import ProfileSelfScreen from './screens/ProfileSelfScreen';
 import ProfileOtherScreen from './screens/ProfileOtherScreen';
 import CollectionScreen from './screens/CollectionScreen';
@@ -91,6 +91,18 @@ function HomeTabs() {
   );
 }
 
+// When a play is edited/deleted/left inside PlayDetailPopup, run the same
+// cache invalidation as saving a play — feed, stats, and the game's bundle
+// must not go stale.
+function PlayMutationBridge() {
+  const actions = useAppActions();
+  useEffect(() => {
+    PlayDetailPopup.setMutationListener((gameId) => actions.afterPlaySaved(gameId));
+    return () => PlayDetailPopup.setMutationListener(null);
+  }, [actions]);
+  return null;
+}
+
 function BootGate({ children }) {
   const { authReady } = useAppState();
   if (!authReady) {
@@ -129,7 +141,6 @@ function NavRoot() {
         <Stack.Screen name="Home" component={HomeTabs} />
         <Stack.Screen name="Search" component={SearchScreen} />
         <Stack.Screen name="GameDetail" component={GameDetailScreen} />
-        <Stack.Screen name="ChapterEditor" component={ChapterEditorScreen} />
         <Stack.Screen name="PlayFlow" component={PlayFlowScreen} />
         <Stack.Screen name="SessionViewer" component={SessionViewerScreen} />
         <Stack.Screen name="SessionRouter" component={SessionRouter} />
@@ -140,7 +151,10 @@ function NavRoot() {
         <Stack.Screen name="Buddies" component={BuddiesScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="Admin" component={AdminScreen} />
-        <Stack.Screen name="Auth" component={AuthScreen} options={{ presentation: 'modal' }} />
+        {/* NOTE: Auth intentionally has no presentation:'modal' — modal screens
+            sit above the root providers on iOS and would also block the
+            bottom-sheet hosts mounted at root (sauceboss lesson). */}
+        <Stack.Screen name="Auth" component={AuthScreen} options={{ animation: 'slide_from_bottom' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -194,8 +208,12 @@ export default function MainApp() {
             <BootGate>
               <NavRoot />
             </BootGate>
+            {/* Imperative hosts — siblings of BootGate so popups outlive
+                navigation. */}
             <PlayDetailHost />
+            <PlayMutationBridge />
             <ConfirmHost />
+            <PolaroidHost />
           </BottomSheetModalProvider>
         </AppProvider>
       </SafeAreaProvider>

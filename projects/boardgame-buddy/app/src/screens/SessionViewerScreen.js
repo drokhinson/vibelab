@@ -1,131 +1,130 @@
-// SessionViewerScreen — the joiner's read-only mirror of a live session. Phase
-// auto-advances via Supabase Realtime; the joiner can edit only their own
-// scoring column. On finalize the host's Play is created and the viewer sees a
-// wrap-up. Ported from web/views/session-viewer-view.js. Race guards: poll
-// gated, fire-and-forget channel teardown, participant patch-in-place.
+// SessionViewerScreen — the joiner's live mirror of a session. The phase
+// follows the host via Realtime (+ poll safety net) and the scoreboard is
+// VIEW-ONLY: since migration 053 the host types every cell and everybody else
+// watches. Finalize → winner polaroid splash → Feed; abandoned → notice →
+// back to the Play tab.
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, FONTS, RADII, SPACING } from '../theme';
-import { useAppState } from '../store/AppContext';
+import React, { useCallback } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { COLORS, RADII, SPACING } from '../theme';
+import { Row, Screen, Text } from '../ui';
+import { useAppActions, useAppState } from '../store/AppContext';
 import AppHeader from '../components/AppHeader';
 import GameTile from '../components/GameTile';
 import UserBadge from '../components/UserBadge';
-import RoundScoreGrid from '../widgets/RoundScoreGrid';
-import ReferenceGuideScroll from '../widgets/ReferenceGuideScroll';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
 import { alert as alertModal } from '../components/ConfirmModal';
-import LiveScores from '../realtime/liveScores';
-import { subscribePhase } from '../realtime/sessionPhase';
+import { showPolaroid } from '../components/PolaroidPopup';
+import RoundScoreGrid from '../widgets/RoundScoreGrid';
+import ReferenceGuideScroll from '../widgets/ReferenceGuideScroll';
 import api from '../api/client';
+import useSessionWatch from './session/useSessionWatch';
 
 export default function SessionViewerScreen({ navigation, route }) {
   const code = route.params?.code;
   const me = useAppState().currentUser;
-  const [session, setSession] = useState(null);
-  const [phase, setPhase] = useState('gather');
-  const [rounds, setRounds] = useState(1);
-  const liveRef = useRef(null);
-  const [, tick] = useState(0);
-  const finishedRef = useRef(false);
+  const actions = useAppActions();
 
-  // Load + poll session (gated by nothing here; viewer is read-only on roster).
-  const loadSession = useCallback(async () => {
-    try {
-      const s = await api.session(code);
-      setSession(s);
-      if (s.phase) setPhase(s.phase);
-      if ((s.phase === 'finalized') && !finishedRef.current) {
-        finishedRef.current = true;
-        await alertModal({ title: 'Game logged! 🎲', body: 'The host finalized this play. Check your feed.' });
-        navigation.navigate('Home');
+  const onFinalized = useCallback(
+    async (row) => {
+      // Pull the finalized play for the real winner + photo; fall back to a
+      // generic splash if it isn't readable yet.
+      let title = 'Game logged!';
+      let caption = 'The host wrapped up the play — it’s on your feed.';
+      let photoUrl = null;
+      const playId = row?.finalized_play_id;
+      if (playId) {
+        try {
+          const play = await api.play(playId);
+          const winners = (play.players || []).filter((p) => p.is_winner);
+          if (winners.length) {
+            title = winners.length > 1 ? 'What a table!' : `${winners[0].name} wins!`;
+            caption = play.game_name || caption;
+          }
+          photoUrl = play.photo_url || null;
+        } catch {}
       }
-    } catch {}
-  }, [code]);
+      actions.afterPlaySaved(null);
+      navigation.navigate('Home', { screen: 'FeedTab' });
+      // The joiner is already on the feed by now — this card just celebrates.
+      showPolaroid({ title, caption, photoUrl, buttonLabel: 'Nice!' });
+    },
+    [actions, navigation],
+  );
 
-  useEffect(() => { loadSession(); }, [loadSession]);
-  useEffect(() => {
-    const id = setInterval(loadSession, 3000);
-    return () => clearInterval(id);
-  }, [loadSession]);
+  const onAbandoned = useCallback(async () => {
+    await alertModal({ title: 'Session ended', body: 'The host closed this table before finishing.' });
+    navigation.navigate('Home', { screen: 'PlayTab' });
+  }, [navigation]);
 
-  // Realtime phase subscription (auto-advance the joiner's view).
-  useEffect(() => {
-    if (!session) return undefined;
-    const off = subscribePhase(session.id, (newPhase) => {
-      setPhase(newPhase);
-      if (newPhase === 'finalized' && !finishedRef.current) {
-        finishedRef.current = true;
-        alertModal({ title: 'Game logged! 🎲', body: 'The host finalized this play.' }).then(() => navigation.navigate('Home'));
-      }
-    });
-    return () => { Promise.resolve().then(off).catch(() => {}); };
-  }, [session?.id]);
-
-  // Live scores once playing.
-  useEffect(() => {
-    if (phase !== 'play' || !session) return undefined;
-    const live = new LiveScores({ sessionId: session.id, isHost: false });
-    liveRef.current = live;
-    let off = null;
-    live.start().then(() => {
-      off = live.subscribe(() => { setRounds((r) => Math.max(r, live.maxRound() + 1)); tick((t) => t + 1); });
-    });
-    return () => {
-      if (off) off();
-      Promise.resolve().then(() => live.stop()).catch(() => {});
-      liveRef.current = null;
-    };
-  }, [phase, session?.id]);
+  const { session, phase, rounds, live, error } = useSessionWatch({ code, me, onFinalized, onAbandoned });
 
   if (!session) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <AppHeader title="Session" onBack={() => navigation.goBack()} />
-        <LoadingState label="Joining…" />
-      </SafeAreaView>
+      <Screen pad={false} edges={{ top: false, bottom: false }} header={<AppHeader title={`Session · ${code || ''}`} onBack={() => navigation.goBack()} />}>
+        {error ? <EmptyState tone="error" title="Can't reach the table" body={error} /> : <LoadingState label="Joining the table…" />}
+      </Screen>
     );
   }
 
-  const participants = session.participants || [];
-  // Build the players list from participants. Nothing here is editable — the
-  // host is the only person who scores (migration 053) — and cells are keyed
-  // by participant id, so guests appear on the same footing as accounts.
-  const players = participants.map((p) => ({
+  // Keyed by participant row, not account: since migration 053 that's what
+  // live cells are keyed by, and it's what puts a guest on the same footing as
+  // an account holder rather than leaving them off the board.
+  const players = (session.participants || []).map((p) => ({
     key: p.id,
     participant_id: p.id,
     name: p.display_name,
     user_id: p.user_id || null,
     avatar: p.avatar || null,
   }));
-  const live = liveRef.current;
+
+  const phaseLabel = phase === 'gather' ? 'Gathering' : phase === 'play' ? 'In play' : 'Settling up';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <AppHeader title={`Session · ${code}`} subtitle={cap(phase)} onBack={() => navigation.goBack()} />
-      <ScrollView contentContainerStyle={styles.body}>
+    <Screen
+      pad={false}
+      edges={{ top: false, bottom: false }}
+      header={<AppHeader title={session.game?.name || `Session ${code}`} subtitle={`${code} · ${phaseLabel}`} onBack={() => navigation.goBack()} />}
+    >
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         {session.game ? <GameTile game={session.game} variant="thumb" showStatus={false} /> : null}
 
         {phase === 'gather' ? (
           <View style={styles.section}>
-            <Text style={styles.title}>Waiting for the host to start…</Text>
-            <Text style={styles.sub}>Players at the table</Text>
-            <View style={styles.roster}>
+            <Text variant="title" center>
+              Waiting for the host to start…
+            </Text>
+            <Text variant="label" style={{ marginTop: SPACING.sm }}>
+              At the table
+            </Text>
+            <Row gap="sm" wrap>
               {players.map((p) => (
                 <View key={p.key} style={styles.rosterChip}>
-                  <UserBadge avatar={p.avatar} displayName={p.name} size="xs" isGhost={!p.user_id} isMe={p.user_id === me.id} />
-                  <Text style={styles.rosterName}>{p.name}</Text>
+                  <UserBadge avatar={p.avatar} displayName={p.name} size="xs" isGhost={!p.user_id} isMe={p.user_id === me?.id} />
+                  <Text variant="bodyMedium" style={{ fontSize: 13 }}>
+                    {p.name}
+                  </Text>
                 </View>
               ))}
-            </View>
+            </Row>
           </View>
         ) : null}
 
-        {phase === 'play' && live ? (
+        {(phase === 'play' || phase === 'settle') && live ? (
           <View style={styles.section}>
-            <Text style={styles.hint}>View only — the host is keeping score.</Text>
+            {phase === 'settle' ? (
+              <View style={styles.settleBanner}>
+                <Text variant="polaroid" center>
+                  The host is settling up
+                </Text>
+                <Text variant="polaroidItalic" center>
+                  Final scores and the table photo land on your feed in a moment.
+                </Text>
+              </View>
+            ) : (
+              <Text variant="small">View only — the host is keeping score.</Text>
+            )}
             <RoundScoreGrid
               players={players}
               rounds={rounds}
@@ -133,28 +132,35 @@ export default function SessionViewerScreen({ navigation, route }) {
               getTotal={(pi) => live.totalFor(players[pi].participant_id, rounds)}
               editable={false}
             />
-            {session.game ? <ReferenceGuideScroll gameId={session.game.id} gameName={session.game.name} /> : null}
+            {session.game ? <ReferenceGuideScroll gameId={session.game.id} /> : null}
           </View>
         ) : null}
-
-        {phase === 'settle' ? (
-          <EmptyState title="Wrapping up" body="The host is settling the final scores. Hang tight — your play will be logged shortly." />
-        ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
-function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bg },
-  body: { padding: SPACING.lg, gap: SPACING.lg },
+  body: { padding: SPACING.lg, gap: SPACING.lg, paddingBottom: 40 },
   section: { gap: SPACING.md },
-  title: { fontFamily: FONTS.display, color: COLORS.text, fontSize: 20, textAlign: 'center' },
-  sub: { fontFamily: FONTS.sansSemibold, color: COLORS.textMuted, fontSize: 13, marginTop: SPACING.sm },
-  hint: { fontFamily: FONTS.sans, color: COLORS.textSoft, fontSize: 13 },
-  roster: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
-  rosterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.card, paddingVertical: 6, paddingHorizontal: 10, borderRadius: RADII.pill, borderWidth: 1, borderColor: COLORS.borderSoft },
-  rosterName: { fontFamily: FONTS.sansMedium, color: COLORS.text, fontSize: 13 },
+  rosterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.card,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: RADII.pill,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    minHeight: 36,
+  },
+  settleBanner: {
+    backgroundColor: COLORS.polaroidBg,
+    borderRadius: RADII.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.polaroidLine,
+    gap: 4,
+  },
 });

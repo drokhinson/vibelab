@@ -1,140 +1,142 @@
 // GameDetailScreen — game hero + collection status + expansions + reference
-// guide + recent plays. Seeds from the gameBundles cache for instant paint,
-// then refreshes. Mirrors web/views/game-detail-view.js.
+// guide + recent plays. Serves the cached bundle instantly (bootstrap or a
+// previous visit), then refreshes in the background with a visible hint —
+// never a blank screen for a game we've seen before, never silently stale.
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Linking, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ExternalLink, BookOpen, ChevronDown, ChevronRight } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING, gameAccent } from '../theme';
-import { useAppState, useAppActions } from '../store/AppContext';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ExternalLink, BookOpen, Dices } from 'lucide-react-native';
+import { COLORS, RADII, SPACING } from '../theme';
+import { RefreshHint, Row, Skeleton, Text } from '../ui';
+import { useAppActions, useAppState } from '../store/AppContext';
 import AppHeader from '../components/AppHeader';
 import GameTile from '../components/GameTile';
 import StatusTag from '../components/StatusTag';
 import PlayCard from '../components/PlayCard';
-import LoadingState from '../components/LoadingState';
 import ReferenceGuideScroll from '../widgets/ReferenceGuideScroll';
 import PlayDetailPopup from '../widgets/PlayDetailPopup';
-import api from '../api/client';
+import ExpansionsSection from './gameDetail/ExpansionsSection';
+import { insertExpansion } from '../domain/expansionName';
+import AdminTools from './gameDetail/AdminTools';
 
 export default function GameDetailScreen({ navigation, route }) {
   const { gameId, gameName } = route.params || {};
   const state = useAppState();
   const actions = useAppActions();
-  const [bundle, setBundle] = useState(state.gameBundles[gameId] || null);
-  const [expOpen, setExpOpen] = useState(false);
+  const cached = state.gameBundles[gameId]?.bundle || null;
+  const [bundle, setBundle] = useState(cached);
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Monotonic token: two overlapping loads (mount + an onChanged refresh)
+  // can land out of order, and the earlier one would paint the pre-mutation
+  // bundle over the newer one.
+  const seqRef = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++seqRef.current;
+    setRefreshing(true);
     try {
       const b = await actions.loadGameBundle(gameId, { force: true });
+      if (seq !== seqRef.current) return;
       setBundle(b);
     } catch {}
+    if (seq === seqRef.current) setRefreshing(false);
   }, [gameId, actions]);
 
-  useEffect(() => { load(); }, [load]);
+  // An import returns the finished row, so the expansions section can show it
+  // in the same frame; the forced bundle refetch reconciles behind it.
+  const addExpansion = useCallback(
+    (expansion) => {
+      setBundle((b) => (b ? { ...b, expansions: insertExpansion(b.expansions, expansion) } : b));
+      load();
+    },
+    [load],
+  );
 
-  if (!bundle) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <AppHeader title={gameName || 'Game'} onBack={() => navigation.goBack()} />
-        <LoadingState label="Loading game…" />
-      </SafeAreaView>
-    );
-  }
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const game = bundle.game || bundle;
-  const expansions = bundle.expansions || [];
-  const recentPlays = bundle.recent_plays || [];
+  const game = bundle?.game || bundle;
   const me = state.currentUser;
-  const enabledExpIds = expansions.filter((e) => e.is_enabled).map((e) => e.expansion_game_id);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <AppHeader title={game.name || 'Game'} onBack={() => navigation.goBack()} />
-      <ScrollView contentContainerStyle={styles.body}>
-        <GameTile game={game} variant="hero" showStatus={false} />
-
-        <View style={styles.actionRow}>
-          <StatusTag gameId={game.id} addLabel="Add to collection" />
+    <View style={styles.safe}>
+      <AppHeader title={game?.name || gameName || 'Game'} onBack={() => navigation.goBack()} />
+      {!game ? (
+        <View style={styles.body}>
+          <Skeleton height={150} width={150} radius={RADII.lg} style={{ alignSelf: 'center' }} />
+          <Skeleton height={24} width="60%" style={{ alignSelf: 'center', marginTop: SPACING.lg }} />
+          <Skeleton height={40} style={{ marginTop: SPACING.xl }} />
         </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.body}>
+          <RefreshHint visible={refreshing && !!cached} />
+          <GameTile game={game} variant="hero" showStatus={false} />
 
-        <View style={styles.linkRow}>
-          {game.bgg_id ? (
-            <Pressable style={styles.linkChip} onPress={() => Linking.openURL(`https://boardgamegeek.com/boardgame/${game.bgg_id}`)}>
-              <ExternalLink size={14} color={COLORS.accent} />
-              <Text style={styles.linkChipLabel}>BoardGameGeek</Text>
-            </Pressable>
-          ) : null}
-          {game.rulebook_url ? (
-            <Pressable style={styles.linkChip} onPress={() => Linking.openURL(game.rulebook_url)}>
-              <BookOpen size={14} color={COLORS.accent} />
-              <Text style={styles.linkChipLabel}>Rulebook</Text>
-            </Pressable>
-          ) : null}
-        </View>
+          <View style={styles.actionRow}>
+            <StatusTag gameId={game.id} game={game} addLabel="Add to collection" />
+          </View>
 
-        {expansions.length > 0 ? (
-          <View style={styles.section}>
-            <Pressable style={styles.expHeader} onPress={() => setExpOpen((v) => !v)}>
-              <Text style={styles.sectionTitle}>Expansions ({expansions.length})</Text>
-              {expOpen ? <ChevronDown size={18} color={COLORS.textMuted} /> : <ChevronRight size={18} color={COLORS.textMuted} />}
-            </Pressable>
-            {expOpen ? (
-              <View style={styles.expList}>
-                {expansions.map((exp) => (
-                  <ExpansionRow key={exp.expansion_game_id} exp={exp} baseId={game.id} onChanged={load} />
-                ))}
-              </View>
+          <Row gap="sm" justify="center" style={{ marginTop: SPACING.md }}>
+            {me ? (
+              <LinkChip Icon={Dices} label="Log a play" onPress={() => navigation.navigate('PlayFlow', { game })} />
             ) : null}
-          </View>
-        ) : null}
+            {game.bgg_id ? (
+              <LinkChip
+                Icon={ExternalLink}
+                label="BoardGameGeek"
+                onPress={() => Linking.openURL(`https://boardgamegeek.com/boardgame/${game.bgg_id}`)}
+              />
+            ) : null}
+            {game.rulebook_url ? (
+              <LinkChip Icon={BookOpen} label="Rulebook" onPress={() => Linking.openURL(game.rulebook_url)} />
+            ) : null}
+          </Row>
 
-        <View style={styles.section}>
-          <ReferenceGuideScroll
-            gameId={game.id}
-            gameName={game.name}
-            expansionIds={enabledExpIds}
-            onAddChapter={() => navigation.navigate('ChapterEditor', { gameId: game.id, gameName: game.name, expansionIds: enabledExpIds })}
-          />
-        </View>
+          <ExpansionsSection game={game} expansions={bundle?.expansions || []} onChanged={load} onImported={addExpansion} />
 
-        {recentPlays.length > 0 ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent plays</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playScroll}>
-              {recentPlays.map((p) => (
-                <PlayCard key={p.play_id || p.id} card={{ ...p, play_id: p.play_id || p.id, game }} variant="strip" meId={me?.id} meName={me?.display_name} onOpenGame={() => {}} onOpenDetail={(id) => PlayDetailPopup.show(id)} style={styles.playCard} />
-              ))}
-            </ScrollView>
+            <ReferenceGuideScroll
+              gameId={game.id}
+              expansionIds={(bundle?.expansions || []).filter((e) => e.is_enabled).map((e) => e.expansion_game_id)}
+            />
           </View>
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+
+          {(bundle?.recent_plays || []).length > 0 ? (
+            <View style={styles.section}>
+              <Text variant="heading" style={{ fontSize: 18 }}>
+                Recent plays
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.playScroll}>
+                {bundle.recent_plays.map((p) => (
+                  <PlayCard
+                    key={p.play_id || p.id}
+                    card={{ ...p, play_id: p.play_id || p.id, game }}
+                    variant="strip"
+                    meId={me?.id}
+                    meName={me?.display_name}
+                    onOpenGame={() => {}}
+                    onOpenDetail={(id) => PlayDetailPopup.show(id)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {me?.is_admin ? <AdminTools game={game} onChanged={load} /> : null}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
-function ExpansionRow({ exp, baseId, onChanged }) {
-  const [enabled, setEnabled] = useState(exp.is_enabled);
-  const [busy, setBusy] = useState(false);
-  async function toggle() {
-    setBusy(true);
-    const next = !enabled;
-    setEnabled(next);
-    try {
-      await api.toggleExpansion(baseId, exp.expansion_game_id, next);
-      onChanged && onChanged();
-    } catch {
-      setEnabled(!next);
-    }
-    setBusy(false);
-  }
+function LinkChip({ Icon, label, onPress }) {
   return (
-    <Pressable style={styles.expRow} onPress={toggle} disabled={busy}>
-      {exp.color ? <View style={[styles.expDot, { backgroundColor: exp.color }]} /> : null}
-      <Text style={styles.expName} numberOfLines={1}>{exp.name}</Text>
-      <View style={[styles.toggle, enabled && styles.toggleOn]}>
-        <View style={[styles.knob, enabled && styles.knobOn]} />
-      </View>
+    <Pressable style={styles.linkChip} onPress={onPress}>
+      <Icon size={14} color={COLORS.accent} />
+      <Text variant="caption" color={COLORS.accent} style={{ textTransform: 'none', letterSpacing: 0 }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -143,20 +145,18 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   body: { padding: SPACING.lg, paddingBottom: 40 },
   actionRow: { alignItems: 'center', marginTop: SPACING.lg },
-  linkRow: { flexDirection: 'row', justifyContent: 'center', gap: SPACING.sm, marginTop: SPACING.md },
-  linkChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.card, paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADII.pill, borderWidth: 1, borderColor: COLORS.border },
-  linkChipLabel: { fontFamily: FONTS.sansSemibold, color: COLORS.accent, fontSize: 12 },
+  linkChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: RADII.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    minHeight: 36,
+  },
   section: { marginTop: SPACING.xl },
-  sectionTitle: { fontFamily: FONTS.display, color: COLORS.text, fontSize: 18 },
-  expHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  expList: { marginTop: SPACING.sm, gap: 2 },
-  expRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 10 },
-  expDot: { width: 10, height: 10, borderRadius: 5 },
-  expName: { flex: 1, fontFamily: FONTS.sansMedium, color: COLORS.text, fontSize: 14 },
-  toggle: { width: 42, height: 24, borderRadius: 12, backgroundColor: COLORS.border, padding: 3, justifyContent: 'center' },
-  toggleOn: { backgroundColor: COLORS.accent },
-  knob: { width: 18, height: 18, borderRadius: 9, backgroundColor: COLORS.textSoft },
-  knobOn: { backgroundColor: COLORS.bg, alignSelf: 'flex-end' },
   playScroll: { gap: SPACING.md, paddingRight: SPACING.lg, marginTop: SPACING.sm },
-  playCard: {},
 });

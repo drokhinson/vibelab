@@ -1,89 +1,279 @@
-// PlaysScreen — chronological plays log. Each row → PlayDetailPopup (the same
-// "open a play" destination as PlayCard's maximize). Mirrors web/views/plays-view.js.
+// PlaysScreen — chronological play history (own + shared), searchable, with a
+// game/buddy filter sheet (entry stays out of the dense list — D6). Rows open
+// PlayDetailPopup, the same affordance as everywhere else. Server pages via
+// useCachedResource per (search, filter, page-1) key; pagination appends.
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { History } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../theme';
+import React, { useMemo, useRef, useState } from 'react';
+import { FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
+import { Search, SlidersHorizontal, Star, History } from 'lucide-react-native';
+import { COLORS, RADII, SPACING } from '../theme';
+import { Input, RefreshHint, Row, Screen, Sheet, Skeleton, Text } from '../ui';
 import AppHeader from '../components/AppHeader';
-import GameTile from '../components/GameTile';
-import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
 import PlayDetailPopup from '../widgets/PlayDetailPopup';
 import api from '../api/client';
+import { useAppState } from '../store/AppContext';
+import { useCachedResource } from '../store/cache';
 
 export default function PlaysScreen({ navigation, route }) {
   const userId = route.params?.userId || undefined;
-  const [plays, setPlays] = useState(null);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
+  const { playPartners } = useAppState();
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [gameFilter, setGameFilter] = useState(null); // {value,label}
+  const [buddyFilter, setBuddyFilter] = useState(null);
+  const [extra, setExtra] = useState([]); // appended pages
   const [loadingMore, setLoadingMore] = useState(false);
+  const sheetRef = useRef(null);
+  const debounceTimer = useRef(null);
 
-  const load = useCallback(
-    async (pageNum) => {
-      const data = await api.plays({ page: pageNum, per_page: 20, user_id: userId });
-      const next = data.plays || [];
-      setTotal(data.total || 0);
-      setPlays((prev) => (pageNum === 1 ? next : [...(prev || []), ...next]));
-    },
-    [userId],
+  function onSearch(v) {
+    setSearch(v);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setExtra([]);
+      setDebounced(v.trim());
+    }, 300);
+  }
+
+  const filterKey = `${debounced}|${gameFilter?.value || ''}|${buddyFilter?.value || ''}|${userId || ''}`;
+  const { data: firstPage, loading, refreshing } = useCachedResource(`plays:${filterKey}`, () =>
+    api.plays({
+      page: 1,
+      per_page: 20,
+      search: debounced || undefined,
+      game_id: gameFilter?.value,
+      buddy_id: buddyFilter?.value,
+      user_id: userId,
+    }),
+  );
+  // Filter options, assembled client-side. The backend's /plays/filter-options
+  // is gone, but /plays still takes game_id + buddy_id, and both option sets
+  // are already available: recently-played is the games you've actually
+  // logged or been in, and playPartners.recent (GET /played-with) is exactly
+  // "accounts who appear in plays you're part of".
+  const { data: recentGames } = useCachedResource(
+    userId ? null : 'plays:filter-games',
+    () => api.recentlyPlayedGames({ limit: 30 }),
+  );
+  const filterOptions = useMemo(
+    () => ({
+      games: (recentGames || []).map((g) => ({ value: g.id, label: g.name })),
+      buddies: (playPartners.recent || []).map((u) => ({
+        value: u.user_id || u.id,
+        label: u.display_name,
+      })),
+    }),
+    [recentGames, playPartners.recent],
   );
 
-  useEffect(() => {
-    load(1).catch(() => setPlays([]));
-  }, [load]);
+  const plays = useMemo(() => [...(firstPage?.plays || []), ...extra], [firstPage, extra]);
+  const total = firstPage?.total || 0;
 
   async function loadMore() {
-    if (loadingMore || !plays || plays.length >= total) return;
+    if (loadingMore || !firstPage || plays.length >= total) return;
     setLoadingMore(true);
-    const next = page + 1;
     try {
-      await load(next);
-      setPage(next);
+      const page = Math.floor(plays.length / 20) + 1;
+      const next = await api.plays({
+        page,
+        per_page: 20,
+        search: debounced || undefined,
+        game_id: gameFilter?.value,
+        buddy_id: buddyFilter?.value,
+        user_id: userId,
+      });
+      setExtra((prev) => [...prev, ...(next.plays || [])]);
     } catch {}
     setLoadingMore(false);
   }
 
+  const hasFilter = !!(gameFilter || buddyFilter);
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <AppHeader title="Plays" onBack={() => navigation.goBack()} />
-      {plays === null ? (
-        <LoadingState label="Loading plays…" />
+    <Screen
+      pad={false}
+      edges={{ top: false, bottom: false }}
+      header={<AppHeader title={userId ? 'Their plays' : 'Play history'} onBack={() => navigation.goBack()} />}
+    >
+      <View style={styles.controls}>
+        <Row gap="sm">
+          <Row gap="sm" style={styles.searchRow}>
+            <Search size={18} color={COLORS.textMuted} />
+            <Input
+              placeholder="Game or player…"
+              value={search}
+              onChangeText={onSearch}
+              autoCorrect={false}
+              style={{ flex: 1 }}
+              inputStyle={styles.bareInput}
+            />
+          </Row>
+          {!userId ? (
+            <Pressable style={[styles.filterBtn, hasFilter && styles.filterBtnOn]} onPress={() => sheetRef.current?.present()} hitSlop={6}>
+              <SlidersHorizontal size={18} color={hasFilter ? COLORS.bg : COLORS.textSoft} />
+            </Pressable>
+          ) : null}
+        </Row>
+        {hasFilter ? (
+          <Row gap="xs" style={{ marginTop: SPACING.sm }}>
+            {[gameFilter, buddyFilter].filter(Boolean).map((f) => (
+              <Pressable
+                key={f.value}
+                onPress={() => {
+                  setExtra([]);
+                  if (f === gameFilter) setGameFilter(null);
+                  else setBuddyFilter(null);
+                }}
+                style={styles.activeFilter}
+              >
+                <Text variant="caption" color={COLORS.accent}>
+                  {f.label} ✕
+                </Text>
+              </Pressable>
+            ))}
+          </Row>
+        ) : null}
+      </View>
+
+      <RefreshHint visible={refreshing && plays.length > 0} />
+
+      {loading ? (
+        <View style={{ padding: SPACING.lg, gap: SPACING.sm }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} height={64} radius={12} />
+          ))}
+        </View>
       ) : (
         <FlatList
           data={plays}
-          keyExtractor={(p) => p.id || p.play_id}
+          keyExtractor={(p) => p.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => <PlayRow play={item} />}
+          renderItem={({ item }) => <PlayRow play={item} onPress={() => PlayDetailPopup.show(item.id)} />}
           onEndReachedThreshold={0.4}
           onEndReached={loadMore}
-          ListEmptyComponent={<EmptyState icon={History} title="No plays logged" body="Plays you record show up here." />}
+          windowSize={7}
+          removeClippedSubviews
+          ListEmptyComponent={
+            <EmptyState icon={History} title="No plays found" body={debounced || hasFilter ? 'Try a different search or filter.' : 'Log your first game from the Play tab.'} />
+          }
         />
       )}
-    </SafeAreaView>
+
+      <Sheet ref={sheetRef} title="Filter plays" snap="70%">
+        <FilterGroup label="By game" options={filterOptions?.games || []} active={gameFilter} onPick={(f) => { setExtra([]); setGameFilter(f); sheetRef.current?.dismiss(); }} />
+        <FilterGroup label="By buddy" options={filterOptions?.buddies || []} active={buddyFilter} onPick={(f) => { setExtra([]); setBuddyFilter(f); sheetRef.current?.dismiss(); }} />
+      </Sheet>
+    </Screen>
   );
 }
 
-function PlayRow({ play }) {
-  const g = play.game || { name: play.game_name, id: play.game_id, thumbnail_url: play.game_thumbnail_url };
-  const winners = (play.players || []).filter((p) => p.is_winner).map((p) => p.name);
+// The play-history row: thumb + game + date + winner. Tap = detail popup.
+function PlayRow({ play, onPress }) {
+  const winner = (play.players || []).find((p) => p.is_winner);
   return (
-    <Pressable style={styles.row} onPress={() => PlayDetailPopup.show(play.id || play.play_id)}>
-      <GameTile game={g} variant="thumb" showStatus={false} onPress={() => PlayDetailPopup.show(play.id || play.play_id)} />
-      <View style={styles.rowMeta}>
-        <Text style={styles.date}>{play.played_at}</Text>
-        {winners.length ? <Text style={styles.winner} numberOfLines={1}>🏆 {winners.join(', ')}</Text> : null}
+    <Pressable style={styles.playRow} onPress={onPress}>
+      {play.game_thumbnail ? (
+        <Image source={{ uri: play.game_thumbnail }} style={styles.thumb} />
+      ) : (
+        <View style={[styles.thumb, { backgroundColor: COLORS.cardSoft }]} />
+      )}
+      <View style={{ flex: 1 }}>
+        <Text variant="bodyMedium" numberOfLines={1}>
+          {play.game_name}
+        </Text>
+        <Text variant="caption">
+          {[play.played_at, `${(play.players || []).length} players`, !play.is_own ? `by ${play.logged_by_name}` : null]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
       </View>
+      {winner ? (
+        <Row gap={3} style={styles.winnerCell}>
+          <Star size={12} color={COLORS.accent} fill={COLORS.accent} />
+          {/* No width cap: the winner is the short half of the row and must
+              read in full. The game name above is the shrinkable one. */}
+          <Text variant="caption" color={COLORS.textSoft} numberOfLines={1}>
+            {winner.name}
+          </Text>
+        </Row>
+      ) : null}
     </Pressable>
   );
 }
 
+function FilterGroup({ label, options, active, onPick }) {
+  if (!options.length) return null;
+  return (
+    <View style={{ marginBottom: SPACING.lg }}>
+      <Text variant="label" style={{ marginBottom: SPACING.sm }}>
+        {label}
+      </Text>
+      <Row gap="xs" wrap>
+        {options.map((o) => (
+          <Pressable
+            key={o.value}
+            onPress={() => onPick(active?.value === o.value ? null : { value: o.value, label: o.label })}
+            style={[styles.optChip, active?.value === o.value && styles.optChipOn]}
+          >
+            <Text variant="small" color={active?.value === o.value ? COLORS.bg : COLORS.textSoft}>
+              {o.label}
+            </Text>
+          </Pressable>
+        ))}
+      </Row>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bg },
-  list: { padding: SPACING.lg, gap: SPACING.md },
-  row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, backgroundColor: COLORS.card, borderRadius: RADII.md, padding: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderSoft },
-  rowMeta: { alignItems: 'flex-end' },
-  date: { fontFamily: FONTS.score, color: COLORS.textMuted, fontSize: 11 },
-  winner: { fontFamily: FONTS.sansMedium, color: COLORS.textSoft, fontSize: 12, marginTop: 2, maxWidth: 120 },
+  controls: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm },
+  searchRow: {
+    flex: 1,
+    backgroundColor: COLORS.card,
+    borderRadius: RADII.md,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  bareInput: { backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 0, minHeight: 40 },
+  filterBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: RADII.md,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBtnOn: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  activeFilter: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.accent + '22',
+  },
+  list: { padding: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: 40, gap: SPACING.xs },
+  playRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingVertical: SPACING.sm,
+    minHeight: 64,
+  },
+  thumb: { width: 48, height: 48, borderRadius: RADII.sm },
+  // Caps the winner at half the row so a very long name can't squeeze the
+  // game name out entirely; short names like "You" are unaffected.
+  winnerCell: { flexShrink: 1, maxWidth: '45%' },
+  optChip: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 7,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    minHeight: 34,
+  },
+  optChipOn: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
 });

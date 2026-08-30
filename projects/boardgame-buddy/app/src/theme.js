@@ -56,6 +56,16 @@ export const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
 export const RADII = { sm: 8, md: 12, lg: 16, xl: 22, pill: 999 };
 
+export const FONT_SIZES = {
+  caption: 11,
+  small: 12,
+  body: 14,
+  heading: 16,
+  title: 20,
+  display: 26,
+  jumbo: 34,
+};
+
 // Font family map → @expo-google-fonts names loaded in MainApp.
 //   sans     = Poppins        (UI chrome, buttons, body)
 //   display  = Crimson Text   (page/game/profile titles, stat values)
@@ -72,6 +82,14 @@ export const FONTS = {
   polaroidItalic: 'Fraunces_400Regular_Italic',
   score: 'JetBrainsMono_500Medium',
   scoreBold: 'JetBrainsMono_700Bold',
+};
+
+// Motion durations (ms). Every animated transition in the app picks one of
+// these — no ad-hoc timing values, so the whole app moves at one tempo.
+export const MOTION = {
+  fast: 120, // taps, presses, toggles
+  base: 220, // card entrances, sheet slides
+  slow: 380, // pager phase slides, polaroid splash
 };
 
 export const SHADOWS = {
@@ -106,4 +124,4 @@ export const SHADOWS = {
   },
 };
 
-export default { COLORS, SPACING, RADII, FONTS, SHADOWS, gameAccent };
+export default { COLORS, SPACING, RADII, FONT_SIZES, FONTS, MOTION, SHADOWS, gameAccent };

@@ -5,6 +5,7 @@
 // client organized by domain namespace.
 
 import { supabase } from '../auth/supabase';
+import * as net from '../offline/net';
 
 const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
 const PREFIX = '/api/v1/boardgame_buddy';
@@ -70,13 +71,31 @@ function _buildUrl(path, query) {
   return url;
 }
 
+// The one place connectivity evidence is recorded. A completed response —
+// ANY status — proves the link works, so a 404 or a 500 counts as success
+// here; only a fetch rejection is a network failure. That keeps offline/net.js
+// and the "error without .status means the network died" convention the rest
+// of the app already follows as two views of the same fact, rather than two
+// definitions that can disagree.
+async function _trackedFetch(url, init) {
+  let res;
+  try {
+    res = await fetch(url, init);
+  } catch (e) {
+    net.noteFailure();
+    throw e;
+  }
+  net.noteSuccess();
+  return res;
+}
+
 async function _request(method, path, { body, query, headers, _retried } = {}) {
   const init = { method, headers: { ...(await _authHeader()), ...(headers || {}) } };
   if (body !== undefined) {
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(_buildUrl(path, query), init);
+  const res = await _trackedFetch(_buildUrl(path, query), init);
   if (!res.ok) {
     if (res.status === 401 && !_retried && (await _refreshSession())) {
       return _request(method, path, { body, query, headers, _retried: true });
@@ -98,7 +117,7 @@ async function _request(method, path, { body, query, headers, _retried } = {}) {
 
 // Multipart upload (play photo). In RN the file part is { uri, name, type }.
 async function _upload(path, formData, _retried) {
-  const res = await fetch(BASE_URL + PREFIX + path, {
+  const res = await _trackedFetch(BASE_URL + PREFIX + path, {
     method: 'POST',
     headers: await _authHeader(),
     body: formData,
@@ -127,12 +146,25 @@ function csv(ids) {
   return ids && ids.length ? ids.join(',') : undefined;
 }
 
+// Every method here has a call site. A wrapper with no caller is how a route
+// that no longer exists stays invisible until it 404s in someone's hands, so
+// prune rather than keep "just in case" — and there is deliberately no `raw`
+// escape hatch, because a route reachable outside this list can't be audited.
 export const api = {
-  raw: { get, post, put, patch, del },
   formatErrorDetail,
+
+  // ── Connectivity ───────────────────────────────────────────────────────
+  // Unauthenticated and trivial, so a failure can only mean the link. This is
+  // what offline/net.js probes when the user taps "Try again"; every project
+  // has one (.claude/rules/backend-python.md).
+  health: () => get('/health'),
 
   // ── Bootstrap ──────────────────────────────────────────────────────────
   bootstrap: () => get('/bootstrap'),
+  // Deferred second stage. Building these is an N+1 in SQL and nothing on
+  // the first screen reads them, so the server split them out — we pull them
+  // after the user has landed. Game Detail falls back to its own fetch.
+  bootstrapGameBundles: () => get('/bootstrap/game-bundles'),
 
   // ── Profile / user ─────────────────────────────────────────────────────
   getProfile: () => get('/profile'),
@@ -141,38 +173,45 @@ export const api = {
   becomeAdmin: (admin_key) => post('/profile/become-admin', { admin_key }),
   searchProfiles: (q) => get('/profiles/search', { q }),
   publicProfile: (userId) => get(`/users/${userId}/profile`),
-  profileBundle: (targetUserId, { colPerPage = 12, playsPerPage = 10 } = {}) =>
-    get('/profile/bundle', {
-      target_user_id: targetUserId || undefined,
-      col_per_page: colPerPage,
-      plays_per_page: playsPerPage,
-    }),
 
   // ── Stats ──────────────────────────────────────────────────────────────
   myStats: () => get('/users/me/stats'),
   userStats: (userId) => get(`/users/${userId}/stats`),
 
   // ── Feed ───────────────────────────────────────────────────────────────
+  // The hot-games / suggested-buddies / featured-from-collection rails are
+  // embedded in this response; they have no standalone endpoints.
   feed: ({ cursor, limit = 20 } = {}) => get('/feed', { cursor, limit }),
-    get('/hot-games', { window_days: windowDays, limit }),
-    get('/suggestions/featured-from-collection', { days_since: daysSince, limit }),
 
   // ── Search ─────────────────────────────────────────────────────────────
-  search: (q, { includeBgg = false, limit = 20 } = {}) =>
-    get('/search', { q, limit, include_bgg: includeBgg ? 'true' : 'false' }),
-    get('/games/search-bgg', { query, include_expansions: includeExpansions ? 'true' : 'false' }),
+  // Expansions are excluded from every source by default (migration 041) —
+  // they belong to a base game's expansion section, not the game picker.
+  search: (q, { includeBgg = false, includeExpansions = false, limit = 20 } = {}) =>
+    get('/search', {
+      q,
+      limit,
+      include_bgg: includeBgg ? 'true' : 'false',
+      include_expansions: includeExpansions ? 'true' : 'false',
+    }),
 
   // ── Games ──────────────────────────────────────────────────────────────
-  games: (params = {}) => get('/games', params),
-  game: (id) => get(`/games/${id}`),
+  // Game Detail reads the bundle, which carries the game, its expansions and
+  // its recent plays — hence no plain /games/{id}, /plays or /play-count here.
   gameBundle: (id, { playsLimit = 5 } = {}) => get(`/games/${id}/bundle`, { plays_limit: playsLimit }),
   recentlyPlayedGames: ({ limit = 6 } = {}) => get('/games/recently-played', { limit }),
+  // Idempotent: returns the pre-existing row when the bgg_id is already in
+  // the catalog, so no lookup-first round trip.
   importBgg: (bggId) => post(`/games/import-bgg/${bggId}`),
 
   // ── Expansions ─────────────────────────────────────────────────────────
   expansions: (baseId) => get(`/games/${baseId}/expansions`),
   toggleExpansion: (baseId, expansionId, isEnabled) =>
     post(`/games/${baseId}/expansions/${expansionId}/toggle`, { is_enabled: isEnabled }),
+  // BGG-linked expansions this base game doesn't have in the catalog yet.
+  // Since expansions are hidden from search, importing from here is the only
+  // way one enters the catalog.
+  availableExpansions: (baseId) => get(`/games/${baseId}/expansions/available`),
+  importExpansion: (baseId, bggId) => post(`/games/${baseId}/expansions/import/${bggId}`),
 
   // ── Collection ─────────────────────────────────────────────────────────
   collection: (status) => get('/collection', { status }),
@@ -184,13 +223,14 @@ export const api = {
   // ── Plays ──────────────────────────────────────────────────────────────
   plays: (params = {}) => get('/plays', params),
   play: (id) => get(`/plays/${id}`),
-  // No screen calls these three yet: native only writes plays by finalizing a
-  // session (PlayFlowScreen), so there is no standalone log / edit / delete
-  // flow the way the web app has. Kept because that is a feature gap to close,
-  // not dead code — the endpoints are live.
   createPlay: (payload) => post('/plays', payload),
   updatePlay: (id, payload) => put(`/plays/${id}`, payload),
+  // Writes just the one column. Attaching through updatePlay instead is a
+  // FULL replacement — it deletes and re-inserts every player and expansion
+  // row to set a string.
+  attachPlayPhoto: (id, photoUrl) => patch(`/plays/${id}/photo`, { photo_url: photoUrl }),
   deletePlay: (id) => del(`/plays/${id}`),
+  leavePlay: (id) => post(`/plays/${id}/leave`, {}),
   uploadPlayPhoto: (photo) => {
     const fd = new FormData();
     // RN file part shape.
@@ -208,7 +248,9 @@ export const api = {
   unfriend: (edgeId) => del(`/buddies/${edgeId}`),
   playedWith: () => get('/played-with'),
   ghostPlayers: () => get('/ghost-players'),
+  linkGhost: (displayName, targetUserId) =>
     post('/ghost-players/link', { display_name: displayName, target_user_id: targetUserId }),
+  mergeGhosts: (sourceDisplayName, targetDisplayName) =>
     post('/ghost-players/merge', { source_display_name: sourceDisplayName, target_display_name: targetDisplayName }),
 
   // ── Sessions (live host/join) ─────────────────────────────────────────
@@ -218,9 +260,13 @@ export const api = {
   joinSession: (code, displayName) => post(`/sessions/${code}/join`, { display_name: displayName || null }),
   addParticipant: (code, { userId, displayName }) =>
     post(`/sessions/${code}/participants`, { user_id: userId || null, display_name: displayName }),
+  removeParticipant: (code, participantId) => del(`/sessions/${code}/participants/${participantId}`),
+  // The scoring grid's columns ARE the roster order, on every surface
+  // (migration 056). Gather-only — once Play starts the order is frozen.
+  reorderParticipants: (code, participantIds) =>
+    put(`/sessions/${code}/participants/order`, { participant_ids: participantIds }),
   updateSession: (code, gameId) => patch(`/sessions/${code}`, { game_id: gameId || null }),
   updateSessionPhase: (code, phase) => patch(`/sessions/${code}/phase`, { phase }),
-  abandonSession: (code) => del(`/sessions/${code}`),
   finalizeSession: (code, payload) => post(`/sessions/${code}/finalize`, payload),
 
   // ── Chapters (reference guide) ─────────────────────────────────────────
@@ -229,11 +275,9 @@ export const api = {
     get(`/games/${gameId}/chapter-pool`, { q, chapter_type: chapterType, expansion_ids: csv(expansionIds) }),
   myChapters: (gameId, { expansionIds } = {}) =>
     get(`/games/${gameId}/my-chapters`, { expansion_ids: csv(expansionIds) }),
-  createChapter: (gameId, payload) => post(`/games/${gameId}/chapters`, payload),
   addChapter: (gameId, chapterId) => post(`/games/${gameId}/my-chapters`, { chapter_id: chapterId }),
   removeChapter: (gameId, chapterId) => del(`/games/${gameId}/my-chapters/${chapterId}`),
   deleteChapter: (chapterId) => del(`/chapters/${chapterId}`),
-  reportChapter: (chapterId, reason) => post(`/chapters/${chapterId}/report`, { reason: reason || null }),
 
   // ── BGG sync ───────────────────────────────────────────────────────────
   bggStatus: () => get('/bgg/sync/status'),
@@ -244,6 +288,10 @@ export const api = {
   // ── Admin ──────────────────────────────────────────────────────────────
   adminChapterReports: (status = 'open') => get('/admin/chapter-reports', { status }),
   adminResolveReport: (reportId) => post(`/admin/chapter-reports/${reportId}/resolve`),
+  adminMissingImages: () => get('/games/admin/missing-images'),
+  adminRefreshGameImages: (gameId) => post(`/games/admin/${gameId}/refresh-images`),
+  adminRefreshAllImages: () => post('/games/refresh-images'),
+  adminSetRulebookUrl: (gameId, rulebookUrl) =>
+    patch(`/games/admin/${gameId}/rulebook-url`, { rulebook_url: rulebookUrl || null }),
 };
-
 export default api;

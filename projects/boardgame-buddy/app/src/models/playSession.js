@@ -10,6 +10,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = 'bgb.activeSession';
 
+// The cascade's ordered phases. PlayFlowScreen indexes into this for the
+// pager and the back button, so it lives with the draft rather than in the
+// screen — one list, not two that can disagree.
 export const PHASES = ['gather', 'play', 'settle'];
 
 export function emptyDraft() {
@@ -24,6 +27,9 @@ export function emptyDraft() {
     playMode: 'competitive',
     notes: '',
     photo: null, // { uri, name, type } — in-memory only
+    // True when the lobby couldn't be opened (offline): phases flip locally
+    // and the finished play queues in the outbox.
+    offlineTable: false,
   };
 }
 
@@ -50,29 +56,41 @@ export async function clearDraft() {
   try { await AsyncStorage.removeItem(KEY); } catch {}
 }
 
-// Build the PlayCreate payload the backend expects from a draft + the live
-// score map (host-typed + Realtime joiner cells merged).
-export function toPlayPayload(draft, { scoresByUser } = {}) {
-  const players = (draft.players || []).map((p) => {
-    const roundScores = p.round_scores || (p.user_id && scoresByUser ? scoresByUser[p.user_id] : null);
-    const total = Array.isArray(roundScores)
-      ? roundScores.reduce((s, v) => s + (Number(v) || 0), 0)
-      : p.score;
-    return {
-      name: p.name,
-      user_id: p.user_id || null,
-      is_winner: !!p.is_winner,
-      score: total != null && total !== '' ? Number(total) : null,
-      round_scores: Array.isArray(roundScores) ? roundScores : null,
-    };
-  });
-  return {
-    game_id: draft.game?.id,
-    played_at: new Date().toISOString().slice(0, 10),
-    players,
-    notes: draft.notes || null,
-    photo_url: draft.photoUrl || null,
-    expansion_ids: draft.expansionIds || [],
-    play_mode: draft.playMode || null,
+/**
+ * Build a fresh Gather-phase draft from a finished play row — the "Another
+ * Round" path on the Play tab. Native twin of web's
+ * PlaySession.seedFromPlayRow.
+ *
+ * Carries the group and the setup, drops the results: scores, winners and
+ * the photo all belong to the game that just ended. `cachedGame` fills in what
+ * a play row doesn't carry (rulebook_url, is_expansion, theme_color) when the
+ * bundle happens to be warm; the host flow resolves the rest either way.
+ *
+ * @param {Object} play  PlayResponse
+ * @param {Object} [cachedGame]  GameSummary from a warm bundle, if any
+ * @returns {Object|null} a draft ready for saveDraft(), or null if unusable
+ */
+export function draftFromPlayRow(play, cachedGame) {
+  if (!play?.game_id) return null;
+  const d = emptyDraft();
+  d.game = {
+    ...(cachedGame || {}),
+    id: play.game_id,
+    name: play.game_name || cachedGame?.name || '',
+    thumbnail_url: play.game_thumbnail || cachedGame?.thumbnail_url || null,
   };
+  d.playMode = play.play_mode || 'competitive';
+  // Expansion rows on a play carry the expansion GAME's id, which is the same
+  // id the Gather toggle list keys on.
+  d.expansionIds = (play.expansions || []).map((e) => e.id || e.expansion_game_id).filter(Boolean);
+  d.players = (play.players || []).map((p) => ({
+    name: p.name,
+    user_id: p.user_id || null,
+    avatar: p.avatar || null,
+    team: '',
+    is_winner: false,
+    score: null,
+    round_scores: [],
+  }));
+  return d;
 }

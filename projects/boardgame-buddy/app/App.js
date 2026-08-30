@@ -11,7 +11,7 @@ import { registerRootComponent } from 'expo';
 // Defer the real app to a require() inside try/catch. If any module-level
 // import in the dependency tree throws, we render the actual stack trace
 // onscreen instead of producing the opaque "main has not been registered"
-// Invariant Violation. Tiny indirection; big debug payoff. Keep permanently.
+// Invariant Violation. Tiny indirection; big debug payoff.
 let RealApp = null;
 let bootError = null;
 
@@ -21,17 +21,19 @@ try {
   bootError = e;
 }
 
-function BootErrorScreen({ error, label = 'Boot error' }) {
+function BootErrorScreen({ error }) {
   const message = error?.message || String(error);
   const stack = error?.stack || '(no stack)';
   return (
-    <View style={{ flex: 1, backgroundColor: '#0d0d14', paddingTop: 56, paddingHorizontal: 16 }}>
-      <Text style={{ fontSize: 18, fontWeight: '800', color: '#E07A5F', marginBottom: 8 }}>
-        {label}
+    <View style={{ flex: 1, backgroundColor: '#FAF4E8', paddingTop: 56, paddingHorizontal: 16 }}>
+      <Text style={{ fontSize: 18, fontWeight: '800', color: '#991B1B', marginBottom: 8 }}>
+        Boot error
       </Text>
-      <Text style={{ fontSize: 13, color: '#FFFBF1', marginBottom: 12 }}>{message}</Text>
+      <Text style={{ fontSize: 13, color: '#2A211C', marginBottom: 12 }}>
+        {message}
+      </Text>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 60 }}>
-        <Text selectable style={{ fontSize: 11, color: '#C9C2B0', fontFamily: 'monospace' }}>
+        <Text selectable style={{ fontSize: 11, color: '#374151', fontFamily: 'monospace' }}>
           {stack}
         </Text>
       </ScrollView>
@@ -39,32 +41,10 @@ function BootErrorScreen({ error, label = 'Boot error' }) {
   );
 }
 
-// Runtime error boundary — catches errors thrown DURING render/lifecycle of the
-// app tree (the import-time try/catch above only covers module load). Without
-// this, a render-phase throw falls through to Expo Go's opaque "Something went
-// wrong" screen; here we surface the real message + stack on-device instead.
-class RootErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { error: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { error };
-  }
-  render() {
-    if (this.state.error) return <BootErrorScreen error={this.state.error} label="Render error" />;
-    return this.props.children;
-  }
-}
-
 function App() {
   if (bootError) return <BootErrorScreen error={bootError} />;
   if (!RealApp) return <BootErrorScreen error={new Error('MainApp is null with no recorded error')} />;
-  return (
-    <RootErrorBoundary>
-      <RealApp />
-    </RootErrorBoundary>
-  );
+  return <RealApp />;
 }
 
 registerRootComponent(App);

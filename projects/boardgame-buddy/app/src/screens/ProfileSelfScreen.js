@@ -1,85 +1,107 @@
-// ProfileSelfScreen — own profile hub (also the ProfileTab). Avatar + stats +
-// collection preview + recent plays + nav into Collection/Wishlist/Plays/
-// Buddies/Settings/Admin. Mirrors web/views/profile-self-view.js.
+// ProfileSelfScreen — own profile hub (the ProfileTab). Identity + stats +
+// shelf preview + nav links. Stats seed from bootstrap; shelf preview comes
+// straight from the offline collection store, so this paints with zero
+// network.
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Settings, ChevronRight, LibraryBig, Star, History, Users, Shield } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../theme';
+import { COLORS, RADII, SPACING } from '../theme';
+import { Row, Text } from '../ui';
 import { useAppState } from '../store/AppContext';
 import UserBadge from '../components/UserBadge';
 import StatsStrip from '../components/StatsStrip';
 import GameTile from '../components/GameTile';
 import EmptyState from '../components/EmptyState';
 import api from '../api/client';
+import { collectionGames, refreshCollection, subscribeCollection } from '../offline/collectionStore';
 
 export default function ProfileSelfScreen({ navigation }) {
   const state = useAppState();
   const me = state.currentUser;
   const [stats, setStats] = useState(state.stats);
-  const [preview, setPreview] = useState(null);
+  const [shelf, setShelf] = useState(() => ownedPreview());
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!me) return;
-    const [s, grid] = await Promise.all([
-      api.myStats().catch(() => null),
-      api.collectionGrid({ status: 'owned', page: 1, per_page: 6, exclude_expansions: true }).catch(() => ({ items: [] })),
-    ]);
-    if (s) setStats(s);
-    setPreview(grid.items || []);
-  }, [me]);
+  useEffect(() => {
+    setStats(state.stats);
+  }, [state.stats]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const unsub = subscribeCollection(() => setShelf(ownedPreview()));
+    return unsub;
+  }, []);
 
   async function onRefresh() {
     setRefreshing(true);
-    await load();
+    await Promise.all([
+      api.myStats().then(setStats).catch(() => {}),
+      refreshCollection(),
+    ]);
     setRefreshing(false);
   }
 
   if (!me) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <EmptyState title="Your profile" body="Sign in to track your plays, shelf, and buddies." ctaLabel="Sign in" onCta={() => navigation.navigate('Auth')} />
+        <EmptyState
+          title="Your profile"
+          body="Sign in to track your plays, shelf, and buddies."
+          ctaLabel="Sign in"
+          onCta={() => navigation.navigate('Auth')}
+        />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />}>
-        <View style={styles.headerRow}>
-          <View style={styles.identity}>
+      <ScrollView
+        contentContainerStyle={styles.body}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />}
+      >
+        <Row justify="space-between" style={{ marginBottom: SPACING.lg }}>
+          <Row gap="md" style={{ flex: 1 }}>
             <UserBadge avatar={me.avatar} displayName={me.display_name} size="lg" isMe />
-            <View style={styles.nameBlock}>
-              <Text style={styles.name}>{me.display_name}</Text>
-              {me.username ? <Text style={styles.username}>@{me.username}</Text> : null}
+            <View style={{ flex: 1 }}>
+              <Text variant="display" style={{ fontSize: 24 }}>
+                {me.display_name}
+              </Text>
+              {me.username ? <Text variant="small">@{me.username}</Text> : null}
             </View>
-          </View>
+          </Row>
           <Pressable style={styles.iconBtn} onPress={() => navigation.navigate('Settings')} hitSlop={8}>
             <Settings size={22} color={COLORS.textSoft} />
           </Pressable>
-        </View>
+        </Row>
 
         <StatsStrip stats={stats} />
 
-        <View style={styles.previewHead}>
-          <Text style={styles.sectionTitle}>Your shelf</Text>
+        <Row justify="space-between" style={{ marginTop: SPACING.xl, marginBottom: SPACING.sm }}>
+          <Text variant="heading" style={{ fontSize: 18 }}>
+            Your shelf
+          </Text>
           <Pressable onPress={() => navigation.navigate('Collection', { status: 'owned' })} hitSlop={8}>
-            <Text style={styles.seeAll}>See all</Text>
+            <Text variant="bodyMedium" color={COLORS.accent} style={{ fontSize: 13 }}>
+              See all
+            </Text>
           </Pressable>
-        </View>
-        {preview && preview.length ? (
+        </Row>
+        {shelf.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewScroll}>
-            {preview.map((it) => {
-              const g = it.game || it;
-              return <View key={g.id} style={styles.previewCell}><GameTile game={g} variant="preview" onPress={() => navigation.navigate('GameDetail', { gameId: g.id, gameName: g.name })} /></View>;
-            })}
+            {shelf.map((g) => (
+              <View key={g.id} style={styles.previewCell}>
+                <GameTile
+                  game={g}
+                  variant="preview"
+                  onPress={() => navigation.navigate('GameDetail', { gameId: g.id, gameName: g.name })}
+                />
+              </View>
+            ))}
           </ScrollView>
         ) : (
-          <Text style={styles.muted}>No owned games yet.</Text>
+          <Text variant="small">No owned games yet.</Text>
         )}
 
         <View style={styles.links}>
@@ -94,11 +116,19 @@ export default function ProfileSelfScreen({ navigation }) {
   );
 }
 
+function ownedPreview() {
+  return collectionGames()
+    .filter((g) => g.status === 'owned' && !g.is_expansion)
+    .slice(0, 8);
+}
+
 function LinkRow({ Icon, label, onPress }) {
   return (
     <Pressable style={styles.linkRow} onPress={onPress}>
       <Icon size={20} color={COLORS.accent} />
-      <Text style={styles.linkLabel}>{label}</Text>
+      <Text variant="bodyMedium" style={{ flex: 1, fontSize: 15 }}>
+        {label}
+      </Text>
       <ChevronRight size={18} color={COLORS.textMuted} />
     </Pressable>
   );
@@ -107,19 +137,25 @@ function LinkRow({ Icon, label, onPress }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   body: { padding: SPACING.lg, paddingBottom: 40 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.lg },
-  identity: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, flex: 1 },
-  nameBlock: { flex: 1 },
-  name: { fontFamily: FONTS.displayBold, color: COLORS.text, fontSize: 24 },
-  username: { fontFamily: FONTS.sans, color: COLORS.textMuted, fontSize: 13 },
   iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  previewHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SPACING.xl, marginBottom: SPACING.sm },
-  sectionTitle: { fontFamily: FONTS.display, color: COLORS.text, fontSize: 18 },
-  seeAll: { fontFamily: FONTS.sansSemibold, color: COLORS.accent, fontSize: 13 },
   previewScroll: { gap: SPACING.md, paddingRight: SPACING.lg },
   previewCell: { width: 96 },
-  muted: { fontFamily: FONTS.sans, color: COLORS.textMuted, fontSize: 14 },
-  links: { marginTop: SPACING.xl, backgroundColor: COLORS.card, borderRadius: RADII.lg, borderWidth: 1, borderColor: COLORS.borderSoft, overflow: 'hidden' },
-  linkRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: 14, paddingHorizontal: SPACING.lg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border },
-  linkLabel: { flex: 1, fontFamily: FONTS.sansSemibold, color: COLORS.text, fontSize: 15 },
+  links: {
+    marginTop: SPACING.xl,
+    backgroundColor: COLORS.card,
+    borderRadius: RADII.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    overflow: 'hidden',
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingVertical: 14,
+    paddingHorizontal: SPACING.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+    minHeight: 48,
+  },
 });

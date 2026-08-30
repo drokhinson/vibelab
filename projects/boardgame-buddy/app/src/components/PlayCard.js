@@ -11,6 +11,7 @@ import { Maximize2, Star } from 'lucide-react-native';
 import { COLORS, FONTS, RADII, SPACING, SHADOWS, gameAccent } from '../theme';
 import UserBadge from './UserBadge';
 import api from '../api/client';
+import { isCoop } from '../domain/playMode';
 
 function countWinners(raw) {
   if (!raw) return 0;
@@ -28,7 +29,7 @@ function WinnerBlock({ card, meId, meName }) {
   const total = card.participant_count || 0;
   const everyoneWon = total > 0 && winnerCount >= total;
   const nobodyWon = winnerCount === 0;
-  const teamBucket = playMode === 'cooperative' || everyoneWon || nobodyWon;
+  const teamBucket = isCoop(playMode) || everyoneWon || nobodyWon;
   const we = viewerInPlay(card, meId) ? 'We' : 'They';
 
   if (teamBucket) {
@@ -170,9 +171,12 @@ const styles = StyleSheet.create({
   photoImg: { width: '100%', height: 180 },
   photoPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   caption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, paddingHorizontal: 2, gap: 8 },
-  captionNameWrap: { flex: 1 },
+  // flex:1 alone lets a long winner name collapse the title to nothing (RN
+  // children default to flexShrink:0, so the winner never gives ground). The
+  // floor keeps the game readable; the winner is capped in winRow instead.
+  captionNameWrap: { flex: 1, minWidth: 64 },
   captionName: { fontFamily: FONTS.polaroid, color: COLORS.polaroidInk, fontSize: 15 },
-  winRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  winRow: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 1 },
   win: { fontFamily: FONTS.sansSemibold, color: COLORS.polaroidAccent, fontSize: 13 },
   winLoss: { fontFamily: FONTS.polaroidItalic, color: COLORS.polaroidMuted, fontSize: 13, fontStyle: 'italic' },
 

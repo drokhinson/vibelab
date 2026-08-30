@@ -19,11 +19,14 @@ const META = {
 /**
  * @param {Object} props
  * @param {string} props.gameId
+ * @param {Object} [props.game]  GameSummary — enriches the offline collection
+ *                               store on a status flip so search stays useful
+ *                               before the next server reconcile
  * @param {'sm'|'xs'|'lg'} [props.size]
  * @param {boolean} [props.compact] icon-only corner chip
  * @param {string} [props.addLabel] label next to + when no status
  */
-export default function StatusTag({ gameId, size = 'sm', compact = false, addLabel }) {
+export default function StatusTag({ gameId, game, size = 'sm', compact = false, addLabel }) {
   const state = useAppState();
   const actions = useAppActions();
   const [open, setOpen] = useState(false);
@@ -35,7 +38,7 @@ export default function StatusTag({ gameId, size = 'sm', compact = false, addLab
   async function choose(next) {
     setBusy(true);
     try {
-      await actions.setCollectionStatus(gameId, next);
+      await actions.setCollectionStatus(gameId, next, game);
     } catch {}
     setBusy(false);
     setOpen(false);

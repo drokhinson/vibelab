@@ -1,20 +1,28 @@
-// PlayDetailPopup — the single "open a play" destination (.claude/rules/
-// ui-object-design.md §3b). Opened from PlayCard's maximize AND from a row tap
-// in PlaysScreen, so the affordance is consistent. Imperative singleton:
-// PlayDetailPopup.show(playId). Host mounted once at app root.
+// PlayDetailPopup — the single "open a play" destination (ui-object-design
+// §3b): PlayCard's maximize, plays-list rows, and feed all land here.
+// Imperative singleton: PlayDetailPopup.show(playId). Host mounted at root.
+// Owner plays can be edited (date / notes / scores / winner) and deleted;
+// plays you're only tagged in can be left. Content lives in
+// PlayDetailContent.js to keep this file inside the 300-line budget.
 
-import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, Image, Pressable, ScrollView, Modal, ActivityIndicator, StyleSheet } from 'react-native';
-import { X, Star } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING, SHADOWS } from '../theme';
+import React, { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { X } from 'lucide-react-native';
+import { COLORS, RADII, SHADOWS, SPACING } from '../theme';
 import api from '../api/client';
-import UserBadge from '../components/UserBadge';
+import { confirm } from '../components/ConfirmModal';
+import PlayDetailContent from './PlayDetailContent';
 
 let _show = null;
+let _onMutated = null;
 
 const PlayDetailPopup = {
   show(playId) {
     if (_show) _show(playId);
+  },
+  /** AppRoot wires this to actions.afterPlaySaved-style invalidation. */
+  setMutationListener(fn) {
+    _onMutated = fn;
   },
 };
 
@@ -22,12 +30,14 @@ export function PlayDetailHost() {
   const [playId, setPlayId] = useState(null);
   const [play, setPlay] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState(false);
   const reqRef = useRef(0);
 
   const open = useCallback(async (id) => {
     const seq = ++reqRef.current;
     setPlayId(id);
     setPlay(null);
+    setEditing(false);
     setLoading(true);
     try {
       const p = await api.play(id);
@@ -42,16 +52,47 @@ export function PlayDetailHost() {
     reqRef.current++;
     setPlayId(null);
     setPlay(null);
+    setEditing(false);
   };
 
-  if (!playId) return null;
+  async function handleDelete() {
+    const ok = await confirm({
+      title: 'Delete this play?',
+      body: 'The play and its scores are removed for everyone. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await api.deletePlay(play.id);
+      if (_onMutated) _onMutated(play.game_id);
+      close();
+    } catch {}
+  }
 
-  const photo = play && (play.photo_url || (play.game && (play.game.image_url || play.game.thumbnail_url)));
-  const players = play ? (play.players || []).slice().sort((a, b) => {
-    const sa = a.score == null ? -Infinity : Number(a.score);
-    const sb = b.score == null ? -Infinity : Number(b.score);
-    return sb - sa;
-  }) : [];
+  async function handleLeave() {
+    const ok = await confirm({
+      title: 'Leave this play?',
+      body: "You'll be removed from the player list. The play stays in the logger's history.",
+      confirmLabel: 'Leave',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await api.leavePlay(play.id);
+      if (_onMutated) _onMutated(play.game_id);
+      close();
+    } catch {}
+  }
+
+  async function handleSave(payload) {
+    const updated = await api.updatePlay(play.id, payload);
+    setPlay(updated);
+    setEditing(false);
+    if (_onMutated) _onMutated(play.game_id);
+  }
+
+  if (!playId) return null;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={close}>
@@ -63,27 +104,16 @@ export function PlayDetailHost() {
           {loading || !play ? (
             <ActivityIndicator color={COLORS.polaroidAccent} style={{ paddingVertical: 60 }} />
           ) : (
-            <ScrollView contentContainerStyle={styles.scroll}>
-              {photo ? <Image source={{ uri: photo }} style={styles.photo} resizeMode="cover" /> : null}
-              <Text style={styles.title}>{play.game_name || (play.game && play.game.name) || 'Play'}</Text>
-              <Text style={styles.meta}>
-                {[play.played_at, play.duration_minutes ? `${play.duration_minutes} min` : null].filter(Boolean).join('  ·  ')}
-              </Text>
-              <View style={styles.scoreboard}>
-                {players.length === 0 ? (
-                  <Text style={styles.empty}>No players recorded.</Text>
-                ) : (
-                  players.map((pl, i) => (
-                    <View key={i} style={[styles.row, pl.is_winner && styles.winnerRow]}>
-                      <UserBadge avatar={pl.avatar} displayName={pl.name} size="sm" isGhost={!pl.user_id} />
-                      <Text style={styles.name} numberOfLines={1}>{pl.name}</Text>
-                      {pl.is_winner ? <Star size={14} color={COLORS.accent} fill={COLORS.accent} /> : null}
-                      <Text style={styles.score}>{pl.score != null ? String(pl.score) : ''}</Text>
-                    </View>
-                  ))
-                )}
-              </View>
-              {play.notes ? <Text style={styles.notes}>{play.notes}</Text> : null}
+            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+              <PlayDetailContent
+                play={play}
+                editing={editing}
+                onStartEdit={() => setEditing(true)}
+                onCancelEdit={() => setEditing(false)}
+                onSave={handleSave}
+                onDelete={handleDelete}
+                onLeave={handleLeave}
+              />
             </ScrollView>
           )}
         </View>
@@ -94,19 +124,15 @@ export function PlayDetailHost() {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'flex-end' },
-  card: { backgroundColor: COLORS.polaroidBg, borderTopLeftRadius: RADII.xl, borderTopRightRadius: RADII.xl, maxHeight: '88%', ...SHADOWS.lg },
+  card: {
+    backgroundColor: COLORS.polaroidBg,
+    borderTopLeftRadius: RADII.xl,
+    borderTopRightRadius: RADII.xl,
+    maxHeight: '88%',
+    ...SHADOWS.lg,
+  },
   close: { position: 'absolute', top: SPACING.md, right: SPACING.md, zIndex: 2, padding: 6 },
-  scroll: { padding: SPACING.xl },
-  photo: { width: '100%', height: 220, borderRadius: RADII.md, backgroundColor: COLORS.polaroidBgSoft },
-  title: { fontFamily: FONTS.displayBold, color: COLORS.polaroidInk, fontSize: 24, marginTop: SPACING.md },
-  meta: { fontFamily: FONTS.sans, color: COLORS.polaroidMuted, fontSize: 13, marginTop: 2 },
-  scoreboard: { marginTop: SPACING.lg, gap: 2 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 6, paddingHorizontal: 8, borderRadius: RADII.sm },
-  winnerRow: { backgroundColor: COLORS.accent + '22' },
-  name: { flex: 1, fontFamily: FONTS.sansMedium, color: COLORS.polaroidInk, fontSize: 15 },
-  score: { fontFamily: FONTS.scoreBold, color: COLORS.polaroidInk, fontSize: 16, minWidth: 28, textAlign: 'right' },
-  empty: { fontFamily: FONTS.polaroidItalic, color: COLORS.polaroidMuted, fontSize: 14 },
-  notes: { fontFamily: FONTS.polaroidItalic, color: COLORS.polaroidInkSoft, fontSize: 15, lineHeight: 22, marginTop: SPACING.lg, fontStyle: 'italic' },
+  scroll: { padding: SPACING.xl, paddingBottom: SPACING.xxl },
 });
 
 export default PlayDetailPopup;

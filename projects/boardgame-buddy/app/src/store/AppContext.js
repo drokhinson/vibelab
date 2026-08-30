@@ -1,164 +1,26 @@
-// Central app state — mirrors web/domain/store.js shape. Reducer + provider.
-// Read state, dispatch, and actions are split into three contexts so screens
-// that only dispatch/act don't re-render on read changes.
+// Provider + three contexts (state / dispatch / actions) so screens that only
+// dispatch or act don't re-render on read changes. A stateRef keeps live state
+// readable from actions and non-React code.
+//
+// Boot order (speed contract):
+//   1. hydrate the offline collection from AsyncStorage — search works
+//      immediately, even offline
+//   2. resolve the Supabase session (authReady gates the nav tree)
+//   3. one GET /bootstrap seeds feed/stats/collection-map for first paint
+//   4. background: refresh the offline collection from the network
 
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { AppState, InteractionManager } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, setAuthTokenGetter } from '../api/client';
 import { supabase, isAuthConfigured } from '../auth/supabase';
-import { signInWithGoogleOAuth } from '../auth/oauth';
-
-// ── Initial state ───────────────────────────────────────────────────────────
-export const initialState = {
-  // Auth / boot
-  authReady: false, // false until Supabase getSession() resolves
-  authBusy: false,
-  authError: null,
-  session: null,
-  currentUser: null, // { id, display_name, username, avatar, is_admin }
-  becomeAdminBusy: false,
-  becomeAdminError: null,
-
-  // Bootstrap-seeded first paint
-  bootstrapped: false,
-  feed: null, // FeedPageResponse
-  feedCursor: null,
-  feedLoading: false,
-  myCollectionMap: {}, // gameId -> 'owned' | 'wishlist' | 'played'
-  expansionCounts: {}, // base_game_bgg_id -> owned expansion count
-  stats: null,
-  profileBundle: null,
-  gameBundles: {}, // gameId -> detail bundle (cache)
-  recentlyPlayedGames: [], // host game-picker seed
-  playPartners: { accounts: [], ghosts: [], recent: [] }, // host player-picker seed
-
-  // Lookups
-  chapterTypes: [],
-
-  // Live session draft (host flow). Persisted to AsyncStorage by playSession model.
-  activeSession: null,
-};
-
-// ── Action types ──────────────────────────────────────────────────────────
-const A = {
-  SET_AUTH_READY: 'SET_AUTH_READY',
-  SET_SESSION: 'SET_SESSION',
-  SET_CURRENT_USER: 'SET_CURRENT_USER',
-  SET_AUTH_BUSY: 'SET_AUTH_BUSY',
-  SET_AUTH_ERROR: 'SET_AUTH_ERROR',
-  CLEAR_AUTH: 'CLEAR_AUTH',
-  SET_BECOME_ADMIN: 'SET_BECOME_ADMIN',
-
-  BOOTSTRAP_LOADED: 'BOOTSTRAP_LOADED',
-  SET_FEED: 'SET_FEED',
-  APPEND_FEED: 'APPEND_FEED',
-  SET_FEED_LOADING: 'SET_FEED_LOADING',
-  SET_COLLECTION_STATUS: 'SET_COLLECTION_STATUS',
-  SET_COLLECTION_MAP: 'SET_COLLECTION_MAP',
-  SET_STATS: 'SET_STATS',
-  CACHE_GAME_BUNDLE: 'CACHE_GAME_BUNDLE',
-  SET_CHAPTER_TYPES: 'SET_CHAPTER_TYPES',
-  SET_HOST_SEEDS: 'SET_HOST_SEEDS',
-  SET_ACTIVE_SESSION: 'SET_ACTIVE_SESSION',
-};
-
-function reducer(state, action) {
-  switch (action.type) {
-    case A.SET_AUTH_READY:
-      return { ...state, authReady: action.value };
-    case A.SET_SESSION:
-      return { ...state, session: action.session };
-    case A.SET_CURRENT_USER:
-      return { ...state, currentUser: action.user, authError: null };
-    case A.SET_AUTH_BUSY:
-      return { ...state, authBusy: action.value };
-    case A.SET_AUTH_ERROR:
-      return { ...state, authError: action.error, authBusy: false };
-    case A.CLEAR_AUTH:
-      return {
-        ...state,
-        session: null,
-        currentUser: null,
-        feed: null,
-        feedCursor: null,
-        myCollectionMap: {},
-        expansionCounts: {},
-        stats: null,
-        profileBundle: null,
-        gameBundles: {},
-        recentlyPlayedGames: [],
-        playPartners: { accounts: [], ghosts: [], recent: [] },
-        bootstrapped: false,
-        activeSession: null,
-      };
-    case A.SET_BECOME_ADMIN:
-      return { ...state, becomeAdminBusy: !!action.busy, becomeAdminError: action.error || null };
-
-    case A.BOOTSTRAP_LOADED: {
-      const p = action.payload || {};
-      const pb = p.profile_bundle || {};
-      return {
-        ...state,
-        bootstrapped: true,
-        feed: p.feed_first_page || state.feed,
-        feedCursor: p.feed_cursor || null,
-        myCollectionMap: pb.status_map || state.myCollectionMap,
-        expansionCounts: pb.expansion_counts || state.expansionCounts,
-        stats: pb.stats || state.stats,
-        profileBundle: p.profile_bundle || state.profileBundle,
-        gameBundles: { ...state.gameBundles, ...(p.game_detail_bundles || {}) },
-        recentlyPlayedGames: p.recently_played_games || [],
-        playPartners: p.play_partners || state.playPartners,
-        currentUser: p.current_user
-          ? {
-              id: p.current_user.id,
-              display_name: p.current_user.display_name,
-              username: p.current_user.username,
-              avatar: p.current_user.avatar || null,
-              is_admin: !!p.current_user.is_admin,
-            }
-          : state.currentUser,
-      };
-    }
-    case A.SET_FEED:
-      return { ...state, feed: action.feed, feedCursor: action.cursor ?? null, feedLoading: false };
-    case A.APPEND_FEED: {
-      const prev = state.feed && Array.isArray(state.feed.cards) ? state.feed.cards : [];
-      const next = action.feed && Array.isArray(action.feed.cards) ? action.feed.cards : [];
-      return {
-        ...state,
-        feed: { ...(state.feed || {}), cards: [...prev, ...next] },
-        feedCursor: action.cursor ?? null,
-        feedLoading: false,
-      };
-    }
-    case A.SET_FEED_LOADING:
-      return { ...state, feedLoading: action.value };
-    case A.SET_COLLECTION_STATUS: {
-      const next = { ...state.myCollectionMap };
-      if (action.status) next[action.gameId] = action.status;
-      else delete next[action.gameId];
-      return { ...state, myCollectionMap: next };
-    }
-    case A.SET_COLLECTION_MAP:
-      return { ...state, myCollectionMap: action.map || {} };
-    case A.SET_STATS:
-      return { ...state, stats: action.stats };
-    case A.CACHE_GAME_BUNDLE:
-      return { ...state, gameBundles: { ...state.gameBundles, [action.gameId]: action.bundle } };
-    case A.SET_CHAPTER_TYPES:
-      return { ...state, chapterTypes: action.types || [] };
-    case A.SET_HOST_SEEDS:
-      return {
-        ...state,
-        recentlyPlayedGames: action.games ?? state.recentlyPlayedGames,
-        playPartners: action.partners ?? state.playPartners,
-      };
-    case A.SET_ACTIVE_SESSION:
-      return { ...state, activeSession: action.session };
-    default:
-      return state;
-  }
-}
+import { initialState, ACTIONS as A } from './initialState';
+import { reducer, EXPECTED_BOOTSTRAP_VERSION } from './reducer';
+import cache from './cache';
+import { buildActions, normUser, PROFILE_CACHE_KEY, HOST_SEEDS_KEY } from './actions';
+import { hydrateCollection, refreshCollection, clearCollection } from '../offline/collectionStore';
+import { flushOutbox, hydrateOutbox } from '../offline/playOutbox';
+import * as net from '../offline/net';
 
 const StateContext = createContext(initialState);
 const DispatchContext = createContext(null);
@@ -176,6 +38,34 @@ export function useAppActions() {
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const actions = useMemo(() => buildActions(dispatch, stateRef), []);
+
+  // Offline stores hydrate before anything network-bound: the collection
+  // (search), the play outbox (pending uploads), and the host seeds
+  // (Gather's player/recents suggestions).
+  useEffect(() => {
+    hydrateCollection();
+    hydrateOutbox();
+    AsyncStorage.getItem(HOST_SEEDS_KEY)
+      .then((raw) => {
+        if (!raw) return;
+        const { games, partners } = JSON.parse(raw);
+        dispatch({ type: A.SET_HOST_SEEDS, games: games || [], partners: partners || undefined });
+      })
+      .catch(() => {});
+  }, []);
+
+  // Keep the profile cache fresh so an offline cold start can still unlock
+  // the Play/Profile tabs (cleared on sign-out in actions.signOut).
+  const currentUser = state.currentUser;
+  useEffect(() => {
+    if (currentUser) {
+      AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(currentUser)).catch(() => {});
+    }
+  }, [currentUser]);
 
   // Wire the API client to read the token directly from Supabase (not React
   // state) — going through state races the SET_SESSION dispatch.
@@ -192,7 +82,8 @@ export function AppProvider({ children }) {
   }, []);
 
   // Auth bootstrap: subscribe to Supabase session changes. On sign-in fetch
-  // profile (auto-create on 404). On sign-out clear everything.
+  // profile (auto-create on 404). Only a definitive SIGNED_OUT clears state —
+  // a transient null session from a wake-up refresh must not nuke the app.
   useEffect(() => {
     if (!isAuthConfigured || !supabase) {
       dispatch({ type: A.SET_AUTH_READY, value: true });
@@ -201,10 +92,7 @@ export function AppProvider({ children }) {
     let cancelled = false;
 
     async function hydrate(session) {
-      if (!session) {
-        dispatch({ type: A.CLEAR_AUTH });
-        return;
-      }
+      if (!session) return;
       try {
         const profile = await api.getProfile();
         if (cancelled) return;
@@ -212,15 +100,23 @@ export function AppProvider({ children }) {
       } catch (e) {
         if (e.status === 404) {
           try {
-            const created = await api.upsertProfile(
-              session.user?.email?.split('@')[0] || 'Player',
-            );
+            const created = await api.upsertProfile(session.user?.email?.split('@')[0] || 'Player');
             if (!cancelled) dispatch({ type: A.SET_CURRENT_USER, user: normUser(created) });
           } catch (e2) {
-            if (!cancelled) {
-              dispatch({ type: A.SET_AUTH_ERROR, error: `Profile creation failed: ${e2.message}` });
-            }
+            if (!cancelled) dispatch({ type: A.SET_AUTH_ERROR, error: `Profile creation failed: ${e2.message}` });
           }
+        } else if (e.status == null) {
+          // Network failure with a live Supabase session — fall back to the
+          // cached profile so an offline cold start can still record plays.
+          try {
+            const raw = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+            const cached = raw ? JSON.parse(raw) : null;
+            if (!cancelled && cached?.id === session.user?.id) {
+              dispatch({ type: A.SET_CURRENT_USER, user: cached });
+              return;
+            }
+          } catch {}
+          if (!cancelled) dispatch({ type: A.SET_AUTH_ERROR, error: `Couldn't load your profile: ${e.message}` });
         } else if (!cancelled) {
           dispatch({ type: A.SET_AUTH_ERROR, error: `Couldn't load your profile: ${e.message}` });
         }
@@ -236,9 +132,18 @@ export function AppProvider({ children }) {
       });
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       dispatch({ type: A.SET_SESSION, session });
-      hydrate(session);
+      if (event === 'SIGNED_OUT') {
+        clearCollection();
+        // The outbox deliberately survives: a queued play is a game somebody
+        // actually played, and an expired token must not destroy it. Entries
+        // are account-scoped, so they wait for their owner.
+        AsyncStorage.multiRemove([PROFILE_CACHE_KEY, HOST_SEEDS_KEY]).catch(() => {});
+        dispatch({ type: A.CLEAR_AUTH });
+      } else {
+        hydrate(session);
+      }
     });
 
     return () => {
@@ -247,143 +152,88 @@ export function AppProvider({ children }) {
     };
   }, []);
 
+  // Outbox flush: whenever we're plausibly back online — sign-in resolved,
+  // or the app returns to the foreground — drain any plays recorded offline
+  // (sauceboss attachAppStateListener pattern). Flushed plays run the same
+  // invalidation as a live save so feed/plays/stats catch up.
+  const flushUserId = state.currentUser?.id;
+  useEffect(() => {
+    if (!flushUserId) return undefined;
+    const runFlush = async () => {
+      try {
+        const { flushed } = await flushOutbox(flushUserId);
+        for (const f of flushed) actions.afterPlaySaved(f.gameId);
+      } catch {}
+    };
+    runFlush();
+    // This is the composition root: net.js is a leaf that knows how to count
+    // evidence but not how to check or what to do about it, so both halves get
+    // wired here. The reconnect edge is the trigger the app was missing — it
+    // used to drain only on sign-in and foreground, so signal returning while
+    // the user sat on the Feed left the queue parked.
+    net.setProbe(() => api.health());
+    net.onReconnect(runFlush);
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') {
+        // Whatever we learned before the phone went in a pocket is stale; let
+        // the next real request re-decide rather than showing the banner over
+        // a connection that came back while we weren't looking.
+        net.resetEvidence();
+        runFlush();
+      }
+    });
+    return () => {
+      sub?.remove?.();
+      net.onReconnect(null);
+    };
+  }, [flushUserId, actions]);
+
   // Bootstrap seed: once currentUser lands, one GET /bootstrap warms first
-  // paint. Falls back to lazy per-screen fetches if it fails.
+  // paint, and the offline collection refreshes in the background.
   const currentUserId = state.currentUser?.id;
   useEffect(() => {
     if (!currentUserId || state.bootstrapped) return undefined;
     let cancelled = false;
     api.bootstrap().then(
-      (payload) => !cancelled && dispatch({ type: A.BOOTSTRAP_LOADED, payload }),
+      (payload) => {
+        if (cancelled) return;
+        if (payload?.bootstrap_version != null && payload.bootstrap_version !== EXPECTED_BOOTSTRAP_VERSION) {
+          cache.invalidate(''); // server shape changed — don't mix two shapes
+        }
+        dispatch({ type: A.BOOTSTRAP_LOADED, payload });
+        refreshCollection();
+        // Second stage: the per-owned-game detail bundles. Deferred until
+        // after the first screen has settled — nothing on it reads them, and
+        // Game Detail force-fetches its own bundle on a miss anyway.
+        InteractionManager.runAfterInteractions(() => {
+          if (cancelled) return;
+          api.bootstrapGameBundles().then(
+            (r) => !cancelled && dispatch({ type: A.SEED_GAME_BUNDLES, bundles: r?.game_detail_bundles }),
+            () => {},
+          );
+        });
+      },
       () => {
+        if (cancelled) return;
         // Fallback: pull the essentials individually.
         api.feed().then((f) => !cancelled && dispatch({ type: A.SET_FEED, feed: f, cursor: f?.next_cursor }), () => {});
         api.myStats().then((s) => !cancelled && dispatch({ type: A.SET_STATS, stats: s }), () => {});
-        api.collection().then((items) => {
-          if (cancelled) return;
+        refreshCollection().then((col) => {
+          if (cancelled || !col) return;
           const map = {};
-          (Array.isArray(items) ? items : items?.items || []).forEach((it) => {
+          col.items.forEach((it) => {
             if (it.status) map[it.game_id] = it.status;
           });
           dispatch({ type: A.SET_COLLECTION_MAP, map });
-        }, () => {});
+        });
       },
     );
     // Chapter types (lookup) — cheap, load once.
     api.chapterTypes().then((t) => !cancelled && dispatch({ type: A.SET_CHAPTER_TYPES, types: t }), () => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [currentUserId, state.bootstrapped]);
-
-  // Actions — screens never call fetch directly for auth/feed/collection.
-  const actions = useMemo(
-    () => ({
-      async signInEmail(email, password) {
-        if (!supabase) return { ok: false, error: 'Sign-in is not configured.' };
-        dispatch({ type: A.SET_AUTH_BUSY, value: true });
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        dispatch({ type: A.SET_AUTH_BUSY, value: false });
-        if (error) {
-          dispatch({ type: A.SET_AUTH_ERROR, error: error.message });
-          return { ok: false, error: error.message };
-        }
-        return { ok: true };
-      },
-      async signUpEmail(email, password) {
-        if (!supabase) return { ok: false, error: 'Sign-in is not configured.' };
-        dispatch({ type: A.SET_AUTH_BUSY, value: true });
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        dispatch({ type: A.SET_AUTH_BUSY, value: false });
-        if (error) {
-          dispatch({ type: A.SET_AUTH_ERROR, error: error.message });
-          return { ok: false, error: error.message };
-        }
-        // If email confirmation is OFF, signUp returns a session → auto signed in.
-        return { ok: true, needsConfirm: !data?.session };
-      },
-      async signInGoogle() {
-        dispatch({ type: A.SET_AUTH_BUSY, value: true });
-        const r = await signInWithGoogleOAuth();
-        dispatch({ type: A.SET_AUTH_BUSY, value: false });
-        if (!r.ok && !r.cancelled) dispatch({ type: A.SET_AUTH_ERROR, error: r.error });
-        return r;
-      },
-      async signOut() {
-        if (supabase) await supabase.auth.signOut();
-        dispatch({ type: A.CLEAR_AUTH });
-      },
-      async becomeAdmin(key) {
-        dispatch({ type: A.SET_BECOME_ADMIN, busy: true });
-        try {
-          const u = await api.becomeAdmin(key);
-          dispatch({ type: A.SET_CURRENT_USER, user: normUser(u) });
-          dispatch({ type: A.SET_BECOME_ADMIN, busy: false });
-          return { ok: true };
-        } catch (e) {
-          dispatch({ type: A.SET_BECOME_ADMIN, busy: false, error: e.message });
-          return { ok: false, error: e.message };
-        }
-      },
-      async refreshFeed() {
-        dispatch({ type: A.SET_FEED_LOADING, value: true });
-        try {
-          const f = await api.feed();
-          dispatch({ type: A.SET_FEED, feed: f, cursor: f?.next_cursor });
-        } catch {
-          dispatch({ type: A.SET_FEED_LOADING, value: false });
-        }
-      },
-      async loadMoreFeed(cursor) {
-        if (!cursor) return;
-        dispatch({ type: A.SET_FEED_LOADING, value: true });
-        try {
-          const f = await api.feed({ cursor });
-          dispatch({ type: A.APPEND_FEED, feed: f, cursor: f?.next_cursor });
-        } catch {
-          dispatch({ type: A.SET_FEED_LOADING, value: false });
-        }
-      },
-      // Collection status — the one place tiles flip shelf state, app-wide.
-      async setCollectionStatus(gameId, status) {
-        const prev = state.myCollectionMap[gameId] || null;
-        dispatch({ type: A.SET_COLLECTION_STATUS, gameId, status });
-        try {
-          if (!status) await api.removeFromCollection(gameId);
-          else if (prev) await api.updateCollection(gameId, status);
-          else await api.addToCollection(gameId, status);
-        } catch (e) {
-          // Roll back on failure.
-          dispatch({ type: A.SET_COLLECTION_STATUS, gameId, status: prev });
-          throw e;
-        }
-      },
-      async loadGameBundle(gameId, { force = false } = {}) {
-        if (!force && state.gameBundles[gameId]) return state.gameBundles[gameId];
-        const bundle = await api.gameBundle(gameId);
-        dispatch({ type: A.CACHE_GAME_BUNDLE, gameId, bundle });
-        return bundle;
-      },
-      async refreshHostSeeds() {
-        try {
-          const [games, accounts, ghosts, recent] = await Promise.all([
-            api.recentlyPlayedGames().catch(() => []),
-            api.buddies().catch(() => []),
-            api.ghostPlayers().catch(() => []),
-            api.playedWith().catch(() => []),
-          ]);
-          dispatch({
-            type: A.SET_HOST_SEEDS,
-            games,
-            partners: { accounts: accounts || [], ghosts: ghosts || [], recent: recent || [] },
-          });
-        } catch {}
-      },
-      setActiveSession(session) {
-        dispatch({ type: A.SET_ACTIVE_SESSION, session });
-      },
-      dispatch,
-    }),
-    [state.myCollectionMap, state.gameBundles],
-  );
 
   return (
     <StateContext.Provider value={state}>
@@ -392,17 +242,6 @@ export function AppProvider({ children }) {
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
-}
-
-function normUser(raw) {
-  if (!raw) return null;
-  return {
-    id: raw.id,
-    display_name: raw.display_name,
-    username: raw.username,
-    avatar: raw.avatar || null,
-    is_admin: !!raw.is_admin,
-  };
 }
 
 export { A as ACTIONS };

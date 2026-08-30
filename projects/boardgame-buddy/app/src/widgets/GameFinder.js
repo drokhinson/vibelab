@@ -1,117 +1,170 @@
-// GameFinder — search input + results: library/collection hits first, then a
-// "Search BoardGameGeek" fallback that imports a game on tap. Debounced with a
-// stale-response guard. Ported from web/widgets/game-finder.js.
+// GameFinder — the one game-search surface (Search screen, Gather step,
+// LogPlay quick-pick). Three tiers via domain/gameSearch:
+//   1. your collection — instant, synchronous, works offline
+//   2. the BGB catalog — debounced backend search
+//   3. BoardGameGeek — explicit fallback that imports on pick
 // Props: onPick(game, { source }), includeRecentlyPlayed, placeholder.
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
-import { Search, Plus, Download } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../theme';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Search, Plus, Download, WifiOff } from 'lucide-react-native';
+import { COLORS, RADII, SPACING } from '../theme';
+import { Input, Row, Text } from '../ui';
 import { useAppState } from '../store/AppContext';
-import api from '../api/client';
+import { searchLocal, searchRemote, resolveBggGame } from '../domain/gameSearch';
 import GameTile from '../components/GameTile';
 
-export default function GameFinder({ onPick, includeRecentlyPlayed = false, placeholder = 'Search games…', autoFocus }) {
+export default function GameFinder({ onPick, includeRecentlyPlayed = false, includeExpansions = false, placeholder = 'Search games…', autoFocus }) {
   const state = useAppState();
   const [q, setQ] = useState('');
-  const [results, setResults] = useState(null); // {results, bgg_results}
+  const [remote, setRemote] = useState(null); // { results, bggResults, bggSearched }
   const [loading, setLoading] = useState(false);
   const [bggLoading, setBggLoading] = useState(false);
+  const [offline, setOffline] = useState(false);
   const [importing, setImporting] = useState(null);
   const seqRef = useRef(0);
   const timer = useRef(null);
 
-  const runSearch = useCallback((term, includeBgg) => {
-    const seq = ++seqRef.current;
-    if (includeBgg) setBggLoading(true);
-    else setLoading(true);
-    api.search(term, { includeBgg, limit: 20 }).then(
-      (data) => {
-        if (seq !== seqRef.current) return; // stale
-        setResults(data);
-        setLoading(false);
-        setBggLoading(false);
-      },
-      () => {
-        if (seq !== seqRef.current) return;
-        setLoading(false);
-        setBggLoading(false);
-      },
-    );
-  }, []);
+  // Tier 1 — synchronous, recomputed every keystroke. Zero latency.
+  const localHits = useMemo(
+    () => searchLocal(q, { limit: 6, includeExpansions }),
+    [q, includeExpansions],
+  );
+  const localIds = useMemo(() => new Set(localHits.map((g) => g.id)), [localHits]);
+
+  const runRemote = useCallback(
+    (term, includeBgg) => {
+      const seq = ++seqRef.current;
+      if (includeBgg) setBggLoading(true);
+      else setLoading(true);
+      searchRemote(term, { includeBgg, includeExpansions, limit: 20, localIds }).then(
+        (data) => {
+          if (seq !== seqRef.current) return; // stale
+          setRemote(data);
+          setOffline(false);
+          setLoading(false);
+          setBggLoading(false);
+        },
+        () => {
+          if (seq !== seqRef.current) return;
+          // Network down — the local tier keeps working; say so instead of
+          // failing silently.
+          setOffline(true);
+          setLoading(false);
+          setBggLoading(false);
+        },
+      );
+    },
+    [localIds],
+  );
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     const term = q.trim();
     if (term.length < 2) {
       seqRef.current++;
-      setResults(null);
+      setRemote(null);
       setLoading(false);
+      setOffline(false);
       return;
     }
-    timer.current = setTimeout(() => runSearch(term, false), 280);
+    timer.current = setTimeout(() => runRemote(term, false), 280);
     return () => timer.current && clearTimeout(timer.current);
-  }, [q, runSearch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, includeExpansions]);
 
   async function importAndPick(bggHit) {
     setImporting(bggHit.bgg_id);
     try {
-      const game = await api.importBgg(bggHit.bgg_id);
+      const game = await resolveBggGame(bggHit.bgg_id);
       onPick && onPick(game, { source: 'bgg' });
     } catch {}
     setImporting(null);
   }
 
-  const libraryHits = (results && results.results) || [];
-  const bggHits = (results && results.bgg_results) || [];
-  const showRecent = includeRecentlyPlayed && q.trim().length < 2 && state.recentlyPlayedGames.length > 0;
+  const remoteHits = (remote?.results || []).map((r) => r.game || r);
+  const bggHits = remote?.bggResults || [];
+  const searching = q.trim().length >= 2;
+  const showRecent = includeRecentlyPlayed && !searching && state.recentlyPlayedGames.length > 0;
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.inputRow}>
+      <Row gap="sm" style={styles.inputRow}>
         <Search size={18} color={COLORS.textMuted} />
-        <TextInput
-          style={styles.input}
+        <Input
           placeholder={placeholder}
-          placeholderTextColor={COLORS.textMuted}
           value={q}
           onChangeText={setQ}
           autoFocus={autoFocus}
           autoCorrect={false}
+          style={{ flex: 1 }}
+          inputStyle={styles.bareInput}
         />
         {loading ? <ActivityIndicator color={COLORS.accent} /> : null}
-      </View>
+      </Row>
 
       {showRecent ? (
         <>
-          <Text style={styles.sectionLabel}>Recently played</Text>
+          <Text variant="label">Recently played</Text>
           {state.recentlyPlayedGames.map((g) => (
             <ResultRow key={g.id} game={g} onPress={() => onPick && onPick(g, { source: 'recent' })} />
           ))}
         </>
       ) : null}
 
-      {libraryHits.map((g) => (
-        <ResultRow key={g.id} game={g} onPress={() => onPick && onPick(g, { source: 'library' })} />
-      ))}
+      {searching && localHits.length > 0 ? (
+        <>
+          <Text variant="label">In your collection</Text>
+          {localHits.map((g) => (
+            <ResultRow key={g.id} game={g} onPress={() => onPick && onPick(g, { source: 'collection' })} />
+          ))}
+        </>
+      ) : null}
 
-      {q.trim().length >= 2 ? (
+      {searching && remoteHits.length > 0 ? (
+        <>
+          {localHits.length > 0 ? <Text variant="label">More games</Text> : null}
+          {remoteHits.map((g) => (
+            <ResultRow key={g.id} game={g} onPress={() => onPick && onPick(g, { source: 'library' })} />
+          ))}
+        </>
+      ) : null}
+
+      {searching && offline ? (
+        <Row gap="xs" justify="center" style={{ paddingVertical: SPACING.sm }}>
+          <WifiOff size={13} color={COLORS.textMuted} />
+          <Text variant="caption">Offline — showing your collection only</Text>
+        </Row>
+      ) : null}
+
+      {searching && !offline ? (
         <View style={styles.bggSection}>
-          {!results || !results.bgg_searched ? (
-            <Pressable style={styles.bggBtn} onPress={() => runSearch(q.trim(), true)} disabled={bggLoading}>
+          {!remote?.bggSearched ? (
+            <Pressable style={styles.bggBtn} onPress={() => runRemote(q.trim(), true)} disabled={bggLoading}>
               {bggLoading ? <ActivityIndicator color={COLORS.accent} /> : <Search size={15} color={COLORS.accent} />}
-              <Text style={styles.bggBtnLabel}>Search BoardGameGeek</Text>
+              <Text variant="bodyMedium" color={COLORS.accent}>
+                Search BoardGameGeek
+              </Text>
             </Pressable>
           ) : null}
           {bggHits.map((h) => (
             <Pressable key={h.bgg_id} style={styles.bggRow} onPress={() => importAndPick(h)} disabled={importing === h.bgg_id}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.bggName} numberOfLines={1}>{h.name}</Text>
-                <Text style={styles.bggMeta}>{[h.year_published, h.is_expansion ? 'expansion' : null].filter(Boolean).join(' · ')}</Text>
+                <Text variant="bodyMedium" numberOfLines={1}>
+                  {h.name}
+                </Text>
+                <Text variant="caption">
+                  {[h.year_published, h.already_in_db ? 'in library' : null].filter(Boolean).join(' · ')}
+                </Text>
               </View>
               {importing === h.bgg_id ? <ActivityIndicator color={COLORS.accent} /> : <Download size={18} color={COLORS.accent} />}
             </Pressable>
           ))}
+          {remote?.bggSearched && !bggHits.length ? (
+            <Text variant="caption" center style={{ paddingVertical: SPACING.sm }}>
+              Nothing on BGG for “{q.trim()}”.
+            </Text>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -121,7 +174,9 @@ export default function GameFinder({ onPick, includeRecentlyPlayed = false, plac
 function ResultRow({ game, onPress }) {
   return (
     <Pressable style={styles.row} onPress={onPress}>
-      <GameTile game={game} variant="thumb" onPress={onPress} showStatus={false} />
+      <View style={{ flex: 1 }}>
+        <GameTile game={game} variant="thumb" onPress={onPress} showStatus={false} />
+      </View>
       <Plus size={20} color={COLORS.accent} />
     </Pressable>
   );
@@ -129,14 +184,26 @@ function ResultRow({ game, onPress }) {
 
 const styles = StyleSheet.create({
   wrap: { gap: SPACING.sm },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: COLORS.card, borderRadius: RADII.md, paddingHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.border },
-  input: { flex: 1, color: COLORS.text, fontFamily: FONTS.sans, fontSize: 15, paddingVertical: 11 },
-  sectionLabel: { fontFamily: FONTS.sansSemibold, color: COLORS.textMuted, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: SPACING.sm },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.md, paddingVertical: SPACING.sm },
+  inputRow: {
+    backgroundColor: COLORS.card,
+    borderRadius: RADII.md,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  bareInput: { backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 0 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm },
   bggSection: { marginTop: SPACING.sm },
-  bggBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.accent + '66', borderStyle: 'dashed' },
-  bggBtnLabel: { fontFamily: FONTS.sansSemibold, color: COLORS.accent, fontSize: 14 },
-  bggRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm },
-  bggName: { fontFamily: FONTS.sansSemibold, color: COLORS.text, fontSize: 14 },
-  bggMeta: { fontFamily: FONTS.sans, color: COLORS.textMuted, fontSize: 12, marginTop: 1 },
+  bggBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '66',
+    borderStyle: 'dashed',
+  },
+  bggRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm, minHeight: 44 },
 });

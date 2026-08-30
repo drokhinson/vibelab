@@ -1,97 +1,209 @@
-// LogPlayScreen — the Play tab landing: Host-or-Join chooser + "resume hosting"
-// banner from a persisted draft. Mirrors web/views/log-play-view.js. Hosting a
-// game creates a live session and routes into the PlayFlow cascade.
+// LogPlayScreen — the Play tab: host a session (fast path: quick-pick an
+// owned/recent game, offline-capable), resume an in-progress draft, join by
+// code, and see buddies' joinable live sessions.
 
-import React, { useState, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Image, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Dices, LogIn, Play } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../theme';
-import { useAppState, useAppActions } from '../store/AppContext';
+import { Dices, Repeat2, RotateCcw, Ticket, X } from 'lucide-react-native';
+import { COLORS, RADII, SPACING } from '../theme';
+import { Button, Card, Row, Screen, Text } from '../ui';
 import EmptyState from '../components/EmptyState';
-import { loadDraft } from '../models/playSession';
+import PendingUploadsBar from '../components/PendingUploadsBar';
+import OfflineBanner from '../components/OfflineBanner';
+import SessionCard from '../components/SessionCard';
+import GameFinder from '../widgets/GameFinder';
+import { confirm } from '../components/ConfirmModal';
+import { useAppActions, useAppState } from '../store/AppContext';
 import api from '../api/client';
+import { loadDraft, clearDraft, saveDraft, draftFromPlayRow } from '../models/playSession';
 
 export default function LogPlayScreen({ navigation }) {
-  const state = useAppState();
+  const { currentUser, gameBundles } = useAppState();
   const actions = useAppActions();
-  const me = state.currentUser;
   const [draft, setDraft] = useState(null);
-  const [creating, setCreating] = useState(false);
+  const [joinable, setJoinable] = useState([]);
+  // The most recent play this account logged — backs the Another Round card.
+  const [lastPlay, setLastPlay] = useState(null);
 
+  // Refresh the resume banner + joinable list on every focus — both change
+  // outside this screen (sessions expire, buddies start games).
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      loadDraft().then((d) => active && setDraft(d && d.sessionId ? d : null));
-      if (me) actions.refreshHostSeeds();
-      return () => { active = false; };
-    }, [me]),
+      let alive = true;
+      if (currentUser) {
+        loadDraft().then((d) => alive && setDraft(d));
+        api.joinableSessions().then(
+          (r) => alive && setJoinable(r?.sessions || []),
+          () => {},
+        );
+        api.plays({ page: 1, per_page: 1 }).then(
+          (r) => alive && setLastPlay((r?.plays || [])[0] || null),
+          () => {},
+        );
+        actions.refreshHostSeeds();
+      }
+      return () => {
+        alive = false;
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUser?.id]),
   );
 
-  if (!me) {
+  if (!currentUser) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <EmptyState icon={Dices} title="Log a play" body="Sign in to host or join a game session." ctaLabel="Sign in" onCta={() => navigation.navigate('Auth')} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }} edges={['top']}>
+        <EmptyState
+          icon={Dices}
+          title="Ready to play?"
+          body="Sign in to host live score sessions and log your plays."
+          ctaLabel="Sign in"
+          onCta={() => navigation.navigate('Auth')}
+        />
       </SafeAreaView>
     );
   }
 
-  async function host() {
-    setCreating(true);
-    try {
-      const session = await api.createSession(null);
-      navigation.navigate('PlayFlow', { code: session.code });
-    } catch {}
-    setCreating(false);
+  async function discardDraft() {
+    const ok = await confirm({
+      title: 'Discard the saved session?',
+      body: `Your in-progress ${draft?.game?.name || 'play'} draft will be lost.`,
+      confirmLabel: 'Discard',
+      destructive: true,
+    });
+    if (!ok) return;
+    if (draft?.code) api.updateSessionPhase(draft.code, 'abandoned').catch(() => {});
+    await clearDraft();
+    setDraft(null);
+  }
+
+  // Stage the previous game + roster into a fresh draft and drop the host on
+  // Gather — the same destination the wrap-up card's "Another round?" reaches,
+  // for the host who dismissed that card and came back later.
+  async function anotherRound() {
+    if (!lastPlay?.game_id) return;
+    if (draft) {
+      // A new round replaces the persisted draft, so an in-progress session
+      // has to be closed out deliberately — same gate as discardDraft.
+      const ok = await confirm({
+        title: 'Start a new round?',
+        body: 'Your session in progress will be abandoned and its lobby closed.',
+        confirmLabel: 'Start new round',
+        cancelLabel: 'Keep playing',
+      });
+      if (!ok) return;
+      if (draft.code) api.updateSessionPhase(draft.code, 'abandoned').catch(() => {});
+    }
+    // A play row doesn't carry rulebook_url / is_expansion / theme_color.
+    // Bootstrap warms the bundle for owned games, so this is usually a free
+    // sync hit; on a miss the host flow resolves them later.
+    const cachedGame = gameBundles[lastPlay.game_id]?.bundle?.game || null;
+    const next = draftFromPlayRow(lastPlay, cachedGame);
+    if (!next) return;
+    await saveDraft(next);
+    setDraft(next);
+    navigation.navigate('PlayFlow', {});
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.title}>Log a play</Text>
-        <Text style={styles.subtitle}>Host a session at your table, or join one by code.</Text>
+    <Screen scroll edges={{ top: true, bottom: false }}>
+      <Text variant="display" style={{ marginTop: SPACING.sm }}>
+        Play
+      </Text>
 
-        {draft ? (
-          <Pressable style={styles.resume} onPress={() => navigation.navigate('PlayFlow', { code: draft.code })}>
-            <Play size={20} color={COLORS.bg} fill={COLORS.bg} />
+      <OfflineBanner style={{ marginTop: SPACING.sm }} />
+      <PendingUploadsBar style={{ marginTop: SPACING.sm }} />
+
+      {draft ? (
+        <Card variant="polaroid" pad="md" style={{ marginTop: SPACING.md }}>
+          <Row gap="md">
+            <RotateCcw size={20} color={COLORS.polaroidAccent} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.resumeTitle}>Resume hosting</Text>
-              <Text style={styles.resumeSub}>{draft.game?.name || 'Session in progress'}</Text>
+              <Text variant="polaroid">Session in progress</Text>
+              <Text variant="polaroidItalic">
+                {draft.game?.name || 'No game picked yet'} · code {draft.code || '—'}
+              </Text>
             </View>
-          </Pressable>
-        ) : null}
+          </Row>
+          <Row gap="sm" justify="flex-end" style={{ marginTop: SPACING.sm }}>
+            <Button label="Discard" variant="outline" size="sm" icon={X} onPress={discardDraft} />
+            <Button label="Resume" size="sm" onPress={() => navigation.navigate('PlayFlow', {})} />
+          </Row>
+        </Card>
+      ) : null}
 
-        <Pressable style={[styles.bigBtn, styles.hostBtn, creating && styles.disabled]} onPress={host} disabled={creating}>
-          {creating ? <ActivityIndicator color={COLORS.bg} /> : <Dices size={28} color={COLORS.bg} />}
-          <Text style={styles.hostLabel}>Host a game</Text>
-          <Text style={styles.hostSub}>Start a session — invite players by code</Text>
-        </Pressable>
+      <Card pad="md" style={{ marginTop: SPACING.md }}>
+        <Row gap="md">
+          <Dices size={22} color={COLORS.accent} />
+          <View style={{ flex: 1 }}>
+            <Text variant="heading">Host a game night</Text>
+            <Text variant="caption">Open a table, share the code, score live.</Text>
+          </View>
+          {/* Always a NEW session — Resume above is the only thing that
+              continues one. Reusing the draft here handed the host the
+              previous game's code, so every write went to a closed lobby. */}
+          <Button label="Host" size="sm" onPress={() => navigation.navigate('PlayFlow', { fresh: true })} />
+        </Row>
+      </Card>
 
-        <Pressable style={[styles.bigBtn, styles.joinBtn]} onPress={() => navigation.navigate('JoinSession')}>
-          <LogIn size={28} color={COLORS.accent} />
-          <Text style={styles.joinLabel}>Join a game</Text>
-          <Text style={styles.joinSub}>Enter a code or pick a live session</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+      <Card pad="md" style={{ marginTop: SPACING.sm }}>
+        <Row gap="md">
+          <Ticket size={22} color={COLORS.accent} />
+          <View style={{ flex: 1 }}>
+            <Text variant="heading">Join with a code</Text>
+            <Text variant="caption">Got a 5-letter code from the host?</Text>
+          </View>
+          <Button label="Join" variant="secondary" size="sm" onPress={() => navigation.navigate('JoinSession')} />
+        </Row>
+      </Card>
+
+      {lastPlay?.game_id ? (
+        <Card pad="md" style={{ marginTop: SPACING.sm }}>
+          <Row gap="md">
+            {lastPlay.game_thumbnail ? (
+              <Image source={{ uri: lastPlay.game_thumbnail }} style={{ width: 34, height: 34, borderRadius: RADII.sm }} />
+            ) : (
+              <Repeat2 size={22} color={COLORS.accent} />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text variant="heading">Another round</Text>
+              <Text variant="caption" numberOfLines={1}>
+                {(lastPlay.players || []).map((p) => p.name).filter(Boolean).join(', ') ||
+                  `${lastPlay.game_name} — same game, fresh scores.`}
+              </Text>
+            </View>
+            <Button label="Set up" variant="secondary" size="sm" onPress={anotherRound} />
+          </Row>
+        </Card>
+      ) : null}
+
+      {joinable.length > 0 ? (
+        <View style={{ marginTop: SPACING.lg }}>
+          <Text variant="label" style={{ marginBottom: SPACING.sm }}>
+            Live now
+          </Text>
+          {joinable.map((s) => (
+            <SessionCard
+              key={s.id}
+              session={s}
+              style={{ marginBottom: SPACING.sm }}
+              onPress={() => navigation.navigate('SessionRouter', { code: s.code })}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      <View style={{ marginTop: SPACING.lg }}>
+        <Text variant="label" style={{ marginBottom: SPACING.sm }}>
+          Start with a game
+        </Text>
+        <GameFinder
+          includeRecentlyPlayed
+          placeholder="Search your shelf — works offline"
+          onPick={(game) => navigation.navigate('PlayFlow', { game, fresh: true })}
+        />
+      </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bg },
-  body: { padding: SPACING.lg, paddingTop: SPACING.xl },
-  title: { fontFamily: FONTS.displayBold, color: COLORS.text, fontSize: 28 },
-  subtitle: { fontFamily: FONTS.sans, color: COLORS.textMuted, fontSize: 14, marginTop: 4, marginBottom: SPACING.xl },
-  resume: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, backgroundColor: COLORS.accent, borderRadius: RADII.lg, padding: SPACING.lg, marginBottom: SPACING.lg },
-  resumeTitle: { fontFamily: FONTS.sansBold, color: COLORS.bg, fontSize: 16 },
-  resumeSub: { fontFamily: FONTS.sans, color: COLORS.bg, fontSize: 13, opacity: 0.85 },
-  bigBtn: { borderRadius: RADII.xl, padding: SPACING.xl, alignItems: 'center', gap: 6, marginBottom: SPACING.lg },
-  hostBtn: { backgroundColor: COLORS.accent },
-  hostLabel: { fontFamily: FONTS.displayBold, color: COLORS.bg, fontSize: 22, marginTop: SPACING.sm },
-  hostSub: { fontFamily: FONTS.sans, color: COLORS.bg, fontSize: 13, opacity: 0.85, textAlign: 'center' },
-  joinBtn: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.accent + '66' },
-  joinLabel: { fontFamily: FONTS.displayBold, color: COLORS.text, fontSize: 22, marginTop: SPACING.sm },
-  joinSub: { fontFamily: FONTS.sans, color: COLORS.textMuted, fontSize: 13, textAlign: 'center' },
-  disabled: { opacity: 0.7 },
-});

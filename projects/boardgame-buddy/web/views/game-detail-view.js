@@ -139,7 +139,7 @@
               ${g.is_expansion ? `<span class="game-detail__meta-pill"><i data-icon="puzzle" class="w-3.5 h-3.5"></i> Expansion</span>` : ""}
               ${g.playerRangeText() ? `<span class="game-detail__meta-pill"><i data-icon="users" class="w-3.5 h-3.5"></i> ${g.playerRangeText()}</span>` : ""}
               ${g.playTimeText() ? `<span class="game-detail__meta-pill"><i data-icon="clock" class="w-3.5 h-3.5"></i> ${g.playTimeText()}</span>` : ""}
-              ${g.play_mode === "cooperative" ? `<span class="game-detail__meta-pill"><i data-icon="handshake" class="w-3.5 h-3.5"></i> Co-op</span>` : ""}
+              ${g.play_mode === "coop" ? `<span class="game-detail__meta-pill"><i data-icon="handshake" class="w-3.5 h-3.5"></i> Co-op</span>` : ""}
             </div>
             <div class="game-detail__actions">
               ${g.is_expansion ? "" : `
