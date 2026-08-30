@@ -74,19 +74,25 @@
 --               "Featured from your collection" Feed card.
 
 -- bgb_suggested_buddies(uid UUID, lim INT DEFAULT 5)
---   → TABLE (user_id UUID, mutual_count BIGINT)
+--   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT)
 --   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
 --               db/migrations/boardgamebuddy/057_suggested_buddies_mutuals.sql
---                 (mutuals-only: an explicit HAVING >= 1 mutual, candidates
+--                 (DROP + CREATE — the return type gained play_count. Adds
+--                  played-with candidates alongside friends-of-friends and
+--                  ranks shared plays above graph paths; excludes candidates
 --                  on ANY existing edge with the viewer — pending and blocked
---                  included, not just accepted — excluded, and lim now
---                  defaults to 5)
+--                  included, not just accepted — and candidates with no
+--                  profile row; lim now defaults to 5)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
---   Purpose:    Friends-of-friends candidates not yet connected, ranked by
---               mutual count desc, top 5. Powers the Feed's "Buddies you may
---               know" rail. (The standalone GET /suggestions/buddies endpoint
---               was removed as uncalled; feed_service still calls this for the
---               embedded rail.)
+--   Purpose:    Suggestion candidates the viewer is not yet connected to:
+--               people they have shared a play with (ranked first, most plays
+--               first) then friends-of-friends (by mutual count), top 5.
+--               Shared plays are counted the same way bgb_play_partners counts
+--               them, so the Feed rail and the Buddies screen's "Played with"
+--               list agree. Powers the Feed's "Buddies you may know" rail.
+--               (The standalone GET /suggestions/buddies endpoint was removed
+--               as uncalled; feed_service still calls this for the embedded
+--               rail.)
 
 -- bgb_distinct_mechanics()
 --   → TABLE (mechanic TEXT)
