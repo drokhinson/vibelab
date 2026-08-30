@@ -4937,7 +4937,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--polaroid-muted);
   border: 1px solid var(--polaroid-line);
 }
-.cascade-join__badge--rejoin { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* --accent with #fff is 4.3:1 in light and 1.9:1 in dark — the badge label was
+   barely there on the very theme its gold is brightest in. --accent-fill /
+   --on-accent is the pair the system keeps for a solid accent chip. */
+.cascade-join__badge--rejoin {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
+}
 .cascade-join__empty {
   background: var(--polaroid-bg);
   color: var(--polaroid-muted);
@@ -4956,6 +4963,60 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    fallbacks for browsers without visualViewport. This one rule covers every
    modal built on the polaroid chrome — confirms, the avatar customizer, the
    add-game modal and the chapter authoring guide. */
+/* ══════════════════════════════════════════════════════════════════════════
+   Play tab, Join half — surfaces follow the theme
+
+   JoinPanel builds its code card, its session rows and its empty state out of
+   .cascade-card, which is deliberately "cream polaroid on the dark page bg":
+   right for the host cascade it was written for (play-flow, session-viewer),
+   wrong here. The Join half sits directly beneath the .lp-opt cards, which are
+   app-ground chrome — so in dark the Play screen broke in two, a dark top half
+   over a cream bottom half, and the divider between them was a cream hairline.
+
+   Re-pointing the paper tokens on this screen — rather than overriding the ten
+   rules that read them — makes every Join surface resolve through the same
+   tokens .lp-opt already uses, so the two halves match in BOTH themes by
+   construction rather than by a dark-only patch. Every value here is a var(),
+   so each theme supplies its own; in light the shift is imperceptible
+   (#FFFFFF paper → #FFFBF2 raised), which is the point.
+
+   The host cascade is untouched: .cascade-card stays a cream polaroid on the
+   screens where it actually is one.
+   ══════════════════════════════════════════════════════════════════════════ */
+[data-view="log-play"] {
+  --polaroid-bg:       var(--bg-1);
+  --polaroid-bg-soft:  var(--bg-2);
+  --polaroid-ink:      var(--ink);
+  --polaroid-ink-soft: var(--ink-muted);
+  --polaroid-muted:    var(--ink-muted);
+  --polaroid-line:     var(--line);
+}
+
+/* .cascade-card's drop shadow is a hardcoded black pair, weighted for a card
+   floating above the page. These sit flat in a list — same lift as .lp-opt. */
+[data-view="log-play"] .cascade-card {
+  box-shadow: var(--sh-1);
+}
+
+/* The session code and the inline error paint with --polaroid-accent (= --win).
+   Terracotta is tuned for paper: #C8553D is 3.9:1 on the raised dark surface,
+   under the floor for 12px tracked type. Light is already 6.2:1 and unchanged. */
+:root[data-bgb="dark"] [data-view="log-play"] {
+  --polaroid-accent: #E87B63;
+}
+
+/* The one thing the token re-point cannot reach: fields inside a .cascade-card
+   fill with a literal rgba(255,251,241,.7), a near-white wash drawn to sit on
+   parchment. Its `color` and `border-color` are tokens and already followed,
+   which left cream text on a near-white field — the code input was the least
+   legible thing on the screen. A field is a well cut into the card, so it takes
+   the ground the card is raised off, in both themes. */
+[data-view="log-play"] .cascade-card .input,
+[data-view="log-play"] .cascade-card .textarea,
+[data-view="log-play"] .cascade-card input[type="text"] {
+  background: var(--bg-0);
+}
+
 .polaroid-popup__backdrop {
   position: fixed;
   top: var(--bgb-vv-top, 0px);
