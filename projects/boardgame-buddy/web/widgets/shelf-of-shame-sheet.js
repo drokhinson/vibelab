@@ -41,6 +41,8 @@
   /**
    * @typedef {Object} ShelfSheetOpts
    * @property {ShelfGame[]} games            Owned base games with no logged plays.
+   * @property {boolean} [loading]            Rows are still on their way; the
+   *   opener calls setGames() / setError() when they land.
    * @property {boolean} [truncated]          The RPC capped the list.
    * @property {Element|null} [returnFocus]   Focus goes back here on close.
    * @property {(gameId: string, playedBefore: boolean) => void} [onToggle]
@@ -62,6 +64,9 @@
       /** @type {ShelfGame[]} */
       this._games = [];
       this._truncated = false;
+      this._loading = false;
+      /** @type {string|null} */
+      this._error = null;
       this._query = "";
       /** @type {"unplayed"|"marked"} */
       this._tab = "unplayed";
@@ -140,7 +145,17 @@
       `;
     }
 
+    // Loading, error and empty are three branches, not one: an empty state
+    // painted while the rows are still in flight says "there is nothing here"
+    // about a list nobody has looked at yet, and a failed load is not an empty
+    // shelf (.claude/rules/web-frontend.md § Loading, empty and error states).
     _renderList() {
+      if (this._loading) {
+        return `<div class="bgb-sheet__empty">${window.buddyLoader({ size: 72, label: "Reading your shelf…" })}</div>`;
+      }
+      if (this._error) {
+        return `<p class="bgb-sheet__empty">${escapeHtml(this._error)}</p>`;
+      }
       const rows = this._matches();
       if (!rows.length) {
         if (this._query.trim()) {
@@ -162,6 +177,7 @@
      *  when nothing is marked yet — revealing the strip on the first tick
      *  would shove the list down a row at the exact moment a thumb is on it. */
     _renderTabs() {
+      if (this._loading || this._error) return "";
       const unplayed = this._games.filter((g) => !g.played_before).length;
       const marked = this._games.length - unplayed;
       const tab = (key, label, n) => `
@@ -179,14 +195,11 @@
     }
 
     _renderPanel() {
-      const n = this._games.filter((g) => !g.played_before).length;
       return `
         <div class="bgb-sheet__panel">
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
           <h3 class="bgb-sheet__title">Shelf of shame</h3>
-          <p class="bgb-sheet__sub">
-            ${n} owned ${n === 1 ? "game has" : "games have"} never hit the table
-          </p>
+          <p class="bgb-sheet__sub" data-shelf-sub>${this._sub()}</p>
           <div class="game-finder bgb-sheet__search">
             <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
             <input type="text" id="shelf-sheet-search"
@@ -201,12 +214,23 @@
           <div data-shelf-tabs>${this._renderTabs()}</div>
           <div class="bgb-sheet__list" role="listbox" aria-multiselectable="true"
                aria-label="Games you've never played" data-shelf-list>${this._renderList()}</div>
-          ${this._truncated
-            ? `<p class="shelf-sheet__note">Showing the first 300 — mark a few off and the rest will follow.</p>`
-            : ""}
+          <div data-shelf-note>${this._renderNote()}</div>
           <button class="bgb-sheet__cancel" type="button" data-action="close">Done</button>
         </div>
       `;
+    }
+
+    _renderNote() {
+      return this._truncated
+        ? `<p class="shelf-sheet__note">Showing the first 300 — mark a few off and the rest will follow.</p>`
+        : "";
+    }
+
+    _sub() {
+      if (this._loading) return "Counting the boxes you haven't opened…";
+      if (this._error) return "";
+      const n = this._games.filter((g) => !g.played_before).length;
+      return `${n} owned ${n === 1 ? "game has" : "games have"} never hit the table`;
     }
 
     // ── Open / close ────────────────────────────────────────────────────────
@@ -218,6 +242,8 @@
       // not be the same objects.
       this._games = (Array.isArray(opts.games) ? opts.games : []).map((g) => ({ ...g }));
       this._truncated = !!opts.truncated;
+      this._loading = !!opts.loading;
+      this._error = null;
       this._onToggle = opts.onToggle || null;
       this._query = "";
       this._tab = "unplayed";
@@ -254,9 +280,9 @@
           if (list) list.style.setProperty("--bgb-sheet-list-min", list.clientHeight + "px");
           // Focus the first row, not the search box: this is a sheet you open
           // to read a list of 63 games, and throwing a software keyboard over
-          // it is the wrong default. Tapping the field is the opt-in.
-          const first = root.querySelector(".shelf-sheet__row");
-          if (first) /** @type {HTMLElement} */ (first).focus();
+          // it is the wrong default. Tapping the field is the opt-in. Nothing
+          // to focus while the rows are still loading — setGames does it then.
+          this._focusFirstRow(root);
         },
         onClose: () => {
           this._games = [];
@@ -264,12 +290,58 @@
           this._query = "";
           this._seq = {};
           this._pinned = new Set();
+          this._loading = false;
+          this._error = null;
         },
       });
     }
 
     close() {
       this._sheet.close();
+    }
+
+    get isOpen() {
+      return this._sheet.isOpen;
+    }
+
+    /**
+     * Hand the sheet its rows after an async load. Repaints the sub line, the
+     * tab strip and the list; the search field is left alone in case the user
+     * started typing into it while the rows were in flight.
+     *
+     * @param {ShelfGame[]} games
+     */
+    setGames(games, { truncated = false } = {}) {
+      this._games = (Array.isArray(games) ? games : []).map((g) => ({ ...g }));
+      this._truncated = !!truncated;
+      this._loading = false;
+      this._error = null;
+      const root = this._sheet.el;
+      if (!root) return;
+      this._patchHead(root);
+      this._patchList(root, { keepScroll: false });
+      this._patchNote(root);
+      // The rows arrived after the sheet did, so nothing inside it has been
+      // focusable until now: focus is still on the trigger behind the sheet, or
+      // on <body>. Either way it belongs in here. Anything already inside the
+      // sheet — the search field the user tapped while waiting — is left alone.
+      if (!root.contains(document.activeElement)) this._focusFirstRow(root);
+    }
+
+    /** @param {string} message */
+    setError(message) {
+      this._loading = false;
+      this._error = message || "Couldn't load your shelf.";
+      const root = this._sheet.el;
+      if (!root) return;
+      this._patchHead(root);
+      this._patchList(root, { keepScroll: false });
+    }
+
+    /** @param {HTMLElement} root */
+    _focusFirstRow(root) {
+      const first = /** @type {HTMLElement|null} */ (root.querySelector(".shelf-sheet__row"));
+      if (first) first.focus();
     }
 
     // ── Filtering ───────────────────────────────────────────────────────────
@@ -307,6 +379,20 @@
     }
 
     // ── Repaint ─────────────────────────────────────────────────────────────
+
+    /** Sub line + tab strip — everything above the list that reports counts. */
+    /** @param {HTMLElement} root */
+    _patchHead(root) {
+      const sub = root.querySelector("[data-shelf-sub]");
+      if (sub) sub.textContent = this._sub();
+      this._patchTabs(root);
+    }
+
+    /** @param {HTMLElement} root */
+    _patchNote(root) {
+      const host = root.querySelector("[data-shelf-note]");
+      if (host) host.innerHTML = this._renderNote();
+    }
 
     /** @param {HTMLElement} root */
     _patchTabs(root) {
