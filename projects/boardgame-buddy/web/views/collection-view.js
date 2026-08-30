@@ -7,8 +7,11 @@
 // the BgB library or importing from BGG.
 //
 // Data lives in ShelfController (domain/shelf-controller.js): a whole shelf is
-// fetched once and cached, and every page, filter and search is derived from
-// it locally. Page turns do no I/O. This file owns markup and painting only.
+// fetched once and cached, and the visible window, filter and search are all
+// derived from it locally. The grid scrolls rather than pages — an
+// IntersectionObserver on a sentinel below the last row (ui/infinite-scroll.js)
+// reveals the next batch, which on the local path costs no I/O at all. This
+// file owns markup and painting only.
 //
 // The Expansions tab is deliberately NOT a ShelfController mode. That class is
 // paging-and-filtering machinery over one flat, server-ordered list per
@@ -21,12 +24,15 @@
 // domain/expansion-tree.js.
 //
 // Repaints are surgical: render() rebuilds the shell only when something
-// structural changes, and a page turn rewrites just the grid and pager hosts.
-// A full container.innerHTML per page turn is itself the "laggy" feel
-// (.claude/rules/web-frontend.md), independent of the network.
+// structural changes, and revealing a batch rewrites just the grid and
+// sentinel hosts. A full container.innerHTML per batch is itself the "laggy"
+// feel (.claude/rules/web-frontend.md), independent of the network — and here
+// it would also throw away the scroll position the user is reading from.
 
 (function () {
-  const PER_PAGE = 12;
+  // Seven rows of the 3-up grid. Deep enough that one batch is a couple of
+  // screens on a phone, so the sentinel is well below the fold when it arms.
+  const BATCH_SIZE = 21;
   const MODE_OWNED = "owned";
   const MODE_PLAYED = "played";
   const MODE_EXPANSIONS = "expansions";
@@ -63,11 +69,15 @@
       super("collection");
       this.ctl = new window.ShelfController({
         modes: [MODE_OWNED, MODE_PLAYED],
-        perPage: PER_PAGE,
+        batchSize: BATCH_SIZE,
         target: () => this._shelfTarget(),
         otherUserId: () => (this._isOther() ? this._targetUserId : null),
         onChange: () => this.render(),
+        onNarrow: () => this._scrollToListTop(),
       });
+      // Built once for the life of the singleton, not per mount: _armInfinite
+      // re-points it after every paint, and onUnmount parks it on nothing.
+      this._infinite = new window.InfiniteScroll({ onLoadMore: () => this._loadMore() });
       this._resetState();
     }
 
@@ -166,11 +176,18 @@
       await this._initFromParams();
     }
 
+    onUnmount() {
+      // The container keeps its markup while the view is hidden, so without
+      // this the sentinel stays observed and a navigation away from a
+      // half-scrolled shelf would keep pulling batches nobody is looking at.
+      this._infinite.observe(null);
+    }
+
     /**
-     * Paint before awaiting anything: a cached shelf renders page 1 in this
-     * frame, and survives a hard reload because bgbCache writes through to
-     * localStorage. Falls back to the profile bundle's first page, then to a
-     * spinner.
+     * Paint before awaiting anything: a cached shelf renders its first batch
+     * in this frame, and survives a hard reload because bgbCache writes
+     * through to localStorage. Falls back to the profile bundle's first page
+     * (`owned_page` — the bundle's own field name), then to a spinner.
      */
     _hydrateFromCache() {
       if (this.ctl.hydrate(MODE_OWNED)) return true;
@@ -238,13 +255,13 @@
     // ── Painting ──────────────────────────────────────────────────────────────
     /**
      * Only things that change the shell's *structure* belong here. Filter
-     * chips, the filter badge, counts, the grid and the pager are all patched
-     * in place, so they must stay out of this signature.
+     * chips, the filter badge, counts, the grid and the scroll strip are all
+     * patched in place, so they must stay out of this signature.
      */
     _structuralSig() {
-      // In tree mode the shell has no controls, filters or pager, so the
+      // In tree mode the shell has no controls, filters or sentinel, so the
       // cold->loaded transition is structural: without it the first paint
-      // falls into _paintPage against an empty tree and never rebuilds.
+      // falls into _paintList against an empty tree and never rebuilds.
       const treeState = this._mode === MODE_EXPANSIONS
         ? (this._treeRows ? "tree-warm" : "tree-cold")
         : "";
@@ -268,7 +285,7 @@
       }
       this._paintCounts();
       this._paintFilters();
-      this._paintPage();
+      this._paintList();
     }
 
     _renderShell() {
@@ -284,6 +301,7 @@
           </div>
         `;
         this.refreshIcons();
+        this._armInfinite();
         return;
       }
 
@@ -299,10 +317,11 @@
         ${other ? "" : this._renderToggle()}
         <div id="collection-tree-controls-host">${tree ? this._renderTreeControls() : ""}</div>
         <div id="collection-filters-host">${!tree && this._filtersOpen ? this._renderFilters() : ""}</div>
-        <div id="collection-grid-host">${this._renderBody(this._hasPager())}</div>
-        <div id="collection-pager-host">${this._renderPager()}</div>
+        <div id="collection-grid-host">${this._renderBody()}</div>
+        <div id="collection-more-host">${this._renderMore()}</div>
       `;
       this.refreshIcons();
+      this._armInfinite();
 
       if (activeId) {
         const el = document.getElementById(activeId);
@@ -315,20 +334,41 @@
       }
     }
 
-    _hasPager() {
-      if (this._mode === MODE_EXPANSIONS) return false;
-      return this.ctl.totalPages(this._mode) > 1;
+    /** The reveal-a-batch path: two subtree writes, no shell teardown. */
+    _paintList() {
+      const grid = this.container.querySelector("#collection-grid-host");
+      const more = this.container.querySelector("#collection-more-host");
+      if (!grid || !more) return;
+      grid.innerHTML = this._renderBody();
+      more.innerHTML = this._renderMore();
+      this.refreshIcons(grid);
+      this.refreshIcons(more);
+      this._armInfinite();
     }
 
-    /** The page-turn path: two subtree writes, no shell teardown. */
-    _paintPage() {
-      const grid = this.container.querySelector("#collection-grid-host");
-      const pager = this.container.querySelector("#collection-pager-host");
-      if (!grid || !pager) return;
-      grid.innerHTML = this._renderBody(this._hasPager());
-      pager.innerHTML = this._renderPager();
-      this.refreshIcons(grid);
-      this.refreshIcons(pager);
+    /**
+     * Put the viewport back at the head of a just-narrowed list. Only when it
+     * is already past that point, so typing in the search box — which is at
+     * the top of the grid anyway — never yanks the page around.
+     */
+    _scrollToListTop() {
+      const grid = this.container && this.container.querySelector("#collection-grid-host");
+      if (!grid) return;
+      const top = grid.getBoundingClientRect().top + window.scrollY;
+      // :root carries scroll-padding-top, so block:"start" clears the pinned
+      // header without this having to know how tall it is.
+      if (window.scrollY > top) grid.scrollIntoView({ block: "start" });
+    }
+
+    /**
+     * Re-point the sentinel after every paint — see ui/infinite-scroll.js on
+     * why re-observing is what keeps the list moving rather than a leak.
+     * Resolves to null whenever the list is finished (or the tree is up), and
+     * observe(null) is how the observer is stood down.
+     */
+    _armInfinite() {
+      const host = this.container;
+      this._infinite.observe(host && host.querySelector("#collection-scroll-sentinel"));
     }
 
     _modeTotal(mode) {
@@ -490,7 +530,7 @@
       `;
     }
 
-    _renderBody(hasPager = false) {
+    _renderBody() {
       const mode = this._mode;
       if (mode === MODE_EXPANSIONS) return this._renderTreeBody();
       if (this.ctl.error[mode]) {
@@ -514,9 +554,8 @@
         return `<div class="profile-empty">${escapeHtml(empty)}</div>`;
       }
       const reloading = this.ctl.loading[mode] ? "is-reloading" : "";
-      const paginated = hasPager ? "is-paginated" : "";
       return `
-        <div class="profile-collection-grid ${reloading} ${paginated}">
+        <div class="profile-collection-grid ${reloading}">
           ${items.map((it) => this._renderTile(it)).join("")}
         </div>
       `;
@@ -899,35 +938,37 @@
       document.dispatchEvent(new CustomEvent("status-changed", { detail: { gameId, status } }));
     }
 
-    _renderPager() {
-      // The tree isn't paged. Without this guard totalPages("expansions")
-      // divides an undefined total and the `<= 1` early-return loses to NaN,
-      // rendering a live "Page undefined of NaN" nav.
-      if (this._mode === MODE_EXPANSIONS) return "";
-      const totalPages = this.ctl.totalPages(this._mode);
-      if (totalPages <= 1) return "";
-      const page = this.ctl.page[this._mode];
-      return `
-        <nav class="spoke-pager-footer" aria-label="Collection pagination">
-          <button class="btn btn-primary spoke-pager-footer__btn" ${page <= 1 ? "disabled" : ""}
-                  onclick="window.collectionView._goPage(${page - 1})"
-                  aria-label="Previous page">
-            <i data-icon="chevron-left" class="w-4 h-4"></i><span>Prev</span>
-          </button>
-          <span class="spoke-pager-footer__page">Page ${page} of ${totalPages}</span>
-          <button class="btn btn-primary spoke-pager-footer__btn" ${page >= totalPages ? "disabled" : ""}
-                  onclick="window.collectionView._goPage(${page + 1})"
-                  aria-label="Next page">
-            <span>Next</span><i data-icon="chevron-right" class="w-4 h-4"></i>
-          </button>
-        </nav>
-      `;
+    /** The strip below the grid: sentinel, retry, or the end-of-list line. */
+    _renderMore() {
+      // The tree renders every group it has, so it has no window to grow and
+      // must not carry a sentinel — the controller doesn't track "expansions"
+      // as a mode, and asking it for one writes junk keys under that name.
+      const mode = this._mode;
+      if (mode === MODE_EXPANSIONS) return "";
+      if (this.ctl.error[mode]) return "";
+      const shown = (this.ctl.items[mode] || []).length;
+      return window.InfiniteScroll.renderFooter({
+        id: "collection-scroll-sentinel",
+        hasMore: this.ctl.hasMore(mode),
+        loading: this.ctl.loadingMore[mode],
+        error: this.ctl.moreError[mode],
+        onRetry: "window.collectionView._retryMore()",
+        // Only worth saying once the list actually ran past a batch; on a
+        // twelve-game shelf the end of the list is self-evident.
+        endLabel: shown > BATCH_SIZE ? `That's all ${this._countLabel(mode)}.` : "",
+      });
     }
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     _setMode(mode) {
       if (this._mode === mode) return;
       this._mode = mode;
+      // Each tab keeps its own scroll window, so a tab arrived at from deep in
+      // another one must start at its head — otherwise the viewport lands on
+      // the new tab's sentinel and unrolls a list the user hasn't looked at.
+      // Measured before the repaint on purpose: the grid host sits at the same
+      // document position in all three tabs, and this only ever scrolls UP.
+      this._scrollToListTop();
       if (mode === MODE_EXPANSIONS) {
         // Lazy, like the Played tab. Paint whatever is cached in the frame the
         // pill was tapped in, then let SWR correct it — _loadTree still runs
@@ -957,12 +998,18 @@
       this._filtersOpen = !this._filtersOpen;
       this._paintFilters();
     }
-    _goPage(n) {
-      // Zero network: derive the page, then rewrite just the grid and pager.
-      if (this.ctl.goPage(n, this._mode)) {
-        this._paintPage();
-        this._paintCounts();
-      }
+    _loadMore() {
+      // Zero network on the local path: widen the window, then rewrite just
+      // the grid and the strip under it. The server fallback returns false and
+      // repaints through the controller's onChange when its batch lands.
+      if (this.ctl.loadMore(this._mode)) this._paintList();
+    }
+
+    _retryMore() {
+      // Repaint either way: a local retry has already widened the window, and
+      // a server retry needs the strip to swap the error out for the spinner.
+      this.ctl.retryMore(this._mode);
+      this._paintList();
     }
   }
 

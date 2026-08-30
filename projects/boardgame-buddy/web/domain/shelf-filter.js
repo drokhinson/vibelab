@@ -4,8 +4,8 @@
 //
 // The Profile games list used to ask /collection/grid for every page, filter
 // tap and debounced keystroke. It now pulls a whole shelf once (see
-// Collection.shelf) and derives pages locally, which means these predicates
-// have to agree with the backend exactly. `_passesShelfFilters` is a
+// Collection.shelf) and derives the visible rows locally, which means these
+// predicates have to agree with the backend exactly. `_passesShelfFilters` is a
 // line-for-line port of `_passes_grid_filters`
 // (shared-backend/routes/boardgame_buddy/collection_routes.py:254-282) and
 // must be kept in step with it — three behaviours look like bugs and are not:
@@ -16,8 +16,11 @@
 //   3. `playing_time || 0` means a game with no playtime recorded PASSES a
 //      playtime_max filter but FAILS a playtime_min one.
 //
-// Both collection-view and wishlist-view call this, so the two spokes cannot
-// drift apart the way their duplicated PLAYTIME_BUCKETS arrays did.
+// Both collection-view and wishlist-view call this (through ShelfController),
+// so the two spokes cannot drift apart the way their duplicated
+// PLAYTIME_BUCKETS arrays did. Those two scroll rather than page and slice the
+// window themselves; `pageOf` below is left for the Game Explorer, which is
+// still paged.
 
 (function () {
   /**

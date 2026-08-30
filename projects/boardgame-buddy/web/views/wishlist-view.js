@@ -5,11 +5,13 @@
 // BgB library or importing from BGG.
 //
 // Data lives in ShelfController (domain/shelf-controller.js) — the same
-// fetch-once-and-page-locally model collection-view uses, so the two spokes
-// can no longer drift apart the way their duplicated filter code did.
+// fetch-once-and-window-locally model collection-view uses, right down to the
+// scroll sentinel (ui/infinite-scroll.js), so the two spokes can no longer
+// drift apart the way their duplicated filter code did.
 
 (function () {
-  const PER_PAGE = 12;
+  // Seven rows of the 3-up grid — the same batch collection-view reveals.
+  const BATCH_SIZE = 21;
   const MODE = "wishlist";
 
   const PLAYTIME_BUCKETS = window.ShelfFilter.PLAYTIME_BUCKETS;
@@ -20,10 +22,14 @@
       super("wishlist");
       this.ctl = new window.ShelfController({
         modes: [MODE],
-        perPage: PER_PAGE,
+        batchSize: BATCH_SIZE,
         target: () => this._shelfTarget(),
         onChange: () => this.render(),
+        onNarrow: () => this._scrollToListTop(),
       });
+      // Built once for the life of the singleton — _armInfinite re-points it
+      // after every paint, onUnmount parks it on nothing.
+      this._infinite = new window.InfiniteScroll({ onLoadMore: () => this._loadMore() });
       this._filtersOpen = false;
       this._statusMap = {};
       this._lastSig = null;
@@ -51,13 +57,20 @@
       await Promise.all([this.ctl.load(MODE), this._refreshMaps()]);
     }
 
-    /** Paint page 1 from cache in the first frame; bundle seed as fallback. */
+    /** Paint the first batch from cache in the first frame; bundle seed as fallback. */
     _hydrateFromCache() {
       if (this.ctl.hydrate(MODE)) return true;
       const seed = window.store.get("profileBundle");
       if (!seed) return false;
       this._statusMap = seed.status_map || this._statusMap;
       return this.ctl.seedPartial(MODE, seed.wishlist_page, seed.wishlist_total);
+    }
+
+    onUnmount() {
+      // The container keeps its markup while the view is hidden, so without
+      // this the sentinel stays observed and a navigation away from a
+      // half-scrolled wishlist would keep pulling batches nobody is reading.
+      this._infinite.observe(null);
     }
 
     renderLoading() {
@@ -88,7 +101,7 @@
       }
       this._paintCounts();
       this._paintFilters();
-      this._paintPage();
+      this._paintList();
     }
 
     _renderShell() {
@@ -102,6 +115,7 @@
           <div class="p-4 grid place-items-center">${window.buddyLoader({ size: 64 })}</div>
         `;
         this.refreshIcons();
+        this._armInfinite();
         return;
       }
 
@@ -109,10 +123,11 @@
         ${this._renderHead()}
         ${this._renderControls()}
         <div id="wishlist-filters-host">${this._filtersOpen ? this._renderFilters() : ""}</div>
-        <div id="wishlist-grid-host">${this._renderBody(this._hasPager())}</div>
-        <div id="wishlist-pager-host">${this._renderPager()}</div>
+        <div id="wishlist-grid-host">${this._renderBody()}</div>
+        <div id="wishlist-more-host">${this._renderMore()}</div>
       `;
       this.refreshIcons();
+      this._armInfinite();
 
       if (activeId) {
         const el = document.getElementById(activeId);
@@ -125,19 +140,41 @@
       }
     }
 
-    _hasPager() {
-      return this.ctl.totalPages(MODE) > 1;
+    /** The reveal-a-batch path: two subtree writes, no shell teardown. */
+    _paintList() {
+      const grid = this.container.querySelector("#wishlist-grid-host");
+      const more = this.container.querySelector("#wishlist-more-host");
+      if (!grid || !more) return;
+      grid.innerHTML = this._renderBody();
+      more.innerHTML = this._renderMore();
+      this.refreshIcons(grid);
+      this.refreshIcons(more);
+      this._armInfinite();
     }
 
-    /** The page-turn path: two subtree writes, no shell teardown. */
-    _paintPage() {
-      const grid = this.container.querySelector("#wishlist-grid-host");
-      const pager = this.container.querySelector("#wishlist-pager-host");
-      if (!grid || !pager) return;
-      grid.innerHTML = this._renderBody(this._hasPager());
-      pager.innerHTML = this._renderPager();
-      this.refreshIcons(grid);
-      this.refreshIcons(pager);
+    /**
+     * Put the viewport back at the head of a just-narrowed list. Only when it
+     * is already past that point, so typing in the search box — which is at
+     * the top of the grid anyway — never yanks the page around.
+     */
+    _scrollToListTop() {
+      const grid = this.container && this.container.querySelector("#wishlist-grid-host");
+      if (!grid) return;
+      const top = grid.getBoundingClientRect().top + window.scrollY;
+      // :root carries scroll-padding-top, so block:"start" clears the pinned
+      // header without this having to know how tall it is.
+      if (window.scrollY > top) grid.scrollIntoView({ block: "start" });
+    }
+
+    /**
+     * Re-point the sentinel after every paint — see ui/infinite-scroll.js on
+     * why re-observing is what keeps the list moving rather than a leak.
+     * Resolves to null once the list is finished; observe(null) stands the
+     * observer down.
+     */
+    _armInfinite() {
+      const host = this.container;
+      this._infinite.observe(host && host.querySelector("#wishlist-scroll-sentinel"));
     }
 
     _paintCounts() {
@@ -253,7 +290,7 @@
       `;
     }
 
-    _renderBody(hasPager = false) {
+    _renderBody() {
       if (this.ctl.error[MODE]) {
         return `<div class="alert alert-error text-sm">${escapeHtml(this.ctl.error[MODE])}</div>`;
       }
@@ -266,9 +303,8 @@
         return `<div class="profile-empty">${isSearchingOrFiltering ? "No wishlist matches." : "Wishlist is empty — tap the + Add button to add a game."}</div>`;
       }
       const reloading = this.ctl.loading[MODE] ? "is-reloading" : "";
-      const paginated = hasPager ? "is-paginated" : "";
       return `
-        <div class="profile-collection-grid ${reloading} ${paginated}">
+        <div class="profile-collection-grid ${reloading}">
           ${items.map((it) => this._renderTile(it)).join("")}
         </div>
       `;
@@ -292,25 +328,21 @@
       `;
     }
 
-    _renderPager() {
-      const totalPages = this.ctl.totalPages(MODE);
-      if (totalPages <= 1) return "";
-      const page = this.ctl.page[MODE];
-      return `
-        <nav class="spoke-pager-footer" aria-label="Wishlist pagination">
-          <button class="btn btn-primary spoke-pager-footer__btn" ${page <= 1 ? "disabled" : ""}
-                  onclick="window.wishlistView._goPage(${page - 1})"
-                  aria-label="Previous page">
-            <i data-icon="chevron-left" class="w-4 h-4"></i><span>Prev</span>
-          </button>
-          <span class="spoke-pager-footer__page">Page ${page} of ${totalPages}</span>
-          <button class="btn btn-primary spoke-pager-footer__btn" ${page >= totalPages ? "disabled" : ""}
-                  onclick="window.wishlistView._goPage(${page + 1})"
-                  aria-label="Next page">
-            <span>Next</span><i data-icon="chevron-right" class="w-4 h-4"></i>
-          </button>
-        </nav>
-      `;
+    /** The strip below the grid: sentinel, retry, or the end-of-list line. */
+    _renderMore() {
+      if (this.ctl.error[MODE]) return "";
+      const shown = (this.ctl.items[MODE] || []).length;
+      const total = this.ctl.total[MODE];
+      return window.InfiniteScroll.renderFooter({
+        id: "wishlist-scroll-sentinel",
+        hasMore: this.ctl.hasMore(MODE),
+        loading: this.ctl.loadingMore[MODE],
+        error: this.ctl.moreError[MODE],
+        onRetry: "window.wishlistView._retryMore()",
+        // Only worth saying once the list ran past a batch — on a short
+        // wishlist the end of it is self-evident.
+        endLabel: shown > BATCH_SIZE ? `That's all ${total} game${total === 1 ? "" : "s"}.` : "",
+      });
     }
 
     // ── Handlers ──────────────────────────────────────────────────────────────
@@ -322,12 +354,18 @@
       this._filtersOpen = !this._filtersOpen;
       this._paintFilters();
     }
-    _goPage(n) {
-      // Zero network: derive the page, then rewrite just the grid and pager.
-      if (this.ctl.goPage(n, MODE)) {
-        this._paintPage();
-        this._paintCounts();
-      }
+    _loadMore() {
+      // Zero network on the local path: widen the window, then rewrite just
+      // the grid and the strip under it. The server fallback returns false and
+      // repaints through the controller's onChange when its batch lands.
+      if (this.ctl.loadMore(MODE)) this._paintList();
+    }
+
+    _retryMore() {
+      // Repaint either way: a local retry has already widened the window, and
+      // a server retry needs the strip to swap the error out for the spinner.
+      this.ctl.retryMore(MODE);
+      this._paintList();
     }
   }
 
