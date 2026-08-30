@@ -311,8 +311,8 @@
 
   // Background profile recovery after a deferred load (valid session, server
   // unreachable on wake). Spaced retries that stop as soon as a live profile
-  // lands — store.subscribe('user') then refreshes the header avatar. The exit
-  // condition is _profileLoaded, not store.get('user'): the optimistic boot
+  // lands and the screens bound to it repaint. The exit condition is
+  // _profileLoaded, not store.get('user'): the optimistic boot
   // fills the store from cache, so a user being present proves nothing about
   // whether we've reached the server.
   let _profileRecovering = false;
@@ -376,27 +376,6 @@
       });
     });
   }
-
-  // Keep the global header's avatar in sync with the current user's
-  // customization. Lives at this level (not in a View) because the
-  // header persists across every screen.
-  function syncGlobalAvatar(user) {
-    const el = document.getElementById("bgb-global-avatar");
-    if (!el) return;
-    // Single render path: always BgbBadge. Signed-out / logged-out state uses
-    // the default brown+gold badge with "?" initials; signed-in uses the user's
-    // chosen avatar with isMe=true so the gold rim appears on the header.
-    const html = window.BgbBadge.render({
-      avatar: user ? user.avatar : null,
-      displayName: user ? user.display_name : "",
-      initials: user ? null : "?",
-      size: "sm",
-      isMe: !!user,
-      extraClass: "bgb-global-header__badge",
-    }).replace("<span ", '<span id="bgb-global-avatar" ');
-    el.outerHTML = html;
-  }
-  window.store.subscribe("user", syncGlobalAvatar);
 
   // Pending uploads live in the header. Two keys drive it: the count itself,
   // and connectivity (which changes what the dialog offers).

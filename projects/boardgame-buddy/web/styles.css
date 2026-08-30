@@ -50,8 +50,8 @@
      Same job as --accent-ink: nearly every ghost badge sits on a PAPER surface
      (the Gather roster, the buddy dropdown, the play card back, the popup, the
      scoring grid), and paper is light in BOTH themes, so this espresso brown is
-     theme-independent. The buddies list is the one screen where the badge sits
-     on the app ground instead; it overrides this below. */
+     theme-independent. The five spoke screens are the exception in dark, where
+     they leave paper for the espresso ground; they override this below. */
   --ghost-ink: #3B2A1C;
 }
 
@@ -1809,17 +1809,43 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   white-space: nowrap;
   line-height: 1.1;
 }
-.bgb-global-header__avatar {
-  background: transparent; border: none; padding: 0;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.bgb-global-header__avatar .user-badge {
+/* Settings gear at the right end. Deliberately the same 36px chrome box as
+   .bgb-outbox next to it — the two header controls read as one pair of
+   utilities rather than "an icon and an identity". */
+.bgb-global-header__settings {
+  position: relative;
   width: 36px; height: 36px;
-  border: 2px solid oklch(var(--b3));
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--accent);
+  cursor: pointer;
+  transition: color 160ms var(--ease), border-color 160ms var(--ease),
+              transform 260ms var(--ease);
 }
-.bgb-global-header__avatar .user-badge__initials { font-size: 14px; }
-.bgb-global-header__avatar:hover .user-badge { border-color: var(--accent); }
+/* 44x44 hit area without inflating the visible control — same trick as
+   .bgb-outbox::before. */
+.bgb-global-header__settings::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+.bgb-global-header__settings:hover {
+  border-color: var(--accent);
+  transform: rotate(30deg);
+}
+.bgb-global-header__settings:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bgb-global-header__settings { transition: color 160ms var(--ease), border-color 160ms var(--ease); }
+  .bgb-global-header__settings:hover { transform: none; }
+}
 
 /* DaisyUI's .btm-nav is position:fixed left:0 right:0 — fine on a phone but
    on a desktop browser it stretches the full viewport while the app itself
@@ -3623,14 +3649,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: oklch(var(--b3));
   border-color: var(--accent);
 }
-/* The buddies list is the ONE surface where a ghost badge sits on the app
-   ground rather than on paper (.buddies-row is oklch(var(--b2)) — near-white in
-   light, near-black espresso in dark). In dark theme the paper brown would be
-   invisible on it, so the ink flips to a warm tan there and only there.
-   This row used to paint its own fill + dashed border, which is why the buddies
+/* This row used to paint its own fill + dashed border, which is why the buddies
    screen was the one place a ghost badge didn't look like the others; the
-   silhouette is now the whole mark, so both are gone. */
-:root[data-bgb="dark"] .buddies-row { --ghost-ink: #C4A987; }
+   silhouette is now the whole mark, so both are gone.
+   The dark-theme --ghost-ink flip that used to live here (the buddies row was
+   then the one surface where a ghost sat on a dark fill rather than on paper)
+   now covers every spoke at once — see "The spokes in DARK" below. */
 .buddies-link-panel {
   flex-basis: 100%;
   margin-top: 0.55rem;
@@ -6910,12 +6934,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .set-card__bgg-status--warn { color: var(--warn); }
 
-/* Soft gold rim when the user-badge "me" sits on the dark global header so it
-   reads as a single coin rather than dissolving into the bar. */
-.bgb-global-header__avatar .user-badge--me {
-  border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
 /* ────────────────────────────────────────────────────────────────────────────
    Cream screen — secondary views (Settings + spokes)
    Every spoke the hub routes into (Collection / Wishlist / Plays / Buddies /
@@ -7048,6 +7066,18 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .bgb-cream-screen .btn.btn-ghost {
   color: var(--polaroid-ink, #1D1812);
 }
+/* ...except the destructive one. .bgb-destructive-icon-btn is a bare class
+   (0,1,0) and loses to the 0,3,0 selector above, so remove-buddy's X has been
+   rendering in ordinary ink on every spoke — the one affordance on these
+   screens that must not look ordinary. Its `i` companion rule is separately
+   dead: BgbIcons swaps the <i> for an <svg>, so only the button's own colour
+   reaches the glyph via currentColor. */
+.bgb-cream-screen .btn.btn-ghost.bgb-destructive-icon-btn {
+  color: var(--rust);
+}
+.bgb-cream-screen .btn.btn-ghost.bgb-destructive-icon-btn:hover {
+  color: var(--rust-strong);
+}
 .bgb-cream-screen .btn.btn-ghost:hover {
   background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
 }
@@ -7117,6 +7147,123 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    bump its border so it reads on cream. */
 .bgb-cream-screen .settings-logout__btn {
   border: 1.5px solid color-mix(in srgb, var(--rust, #b23b34) 45%, transparent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   The spokes in DARK — real dark screens, not a cream sheet with the lights off
+
+   .bgb-cream-screen lays one full-bleed sheet of cream paper (--sheet-bg =
+   --paper = #F8F2E5) over the espresso ground on all five spokes — Collection,
+   Wishlist, Plays, Buddies and Settings. That sheet is what separates a spoke
+   from the app ground, and in light it is the page ground itself. In dark it
+   meant every spoke handed the user a brighter surface than the app it belongs
+   to, Settings worst of all.
+
+   Rather than rewrite the ~50 rules under .bgb-cream-screen, this re-points the
+   TOKENS they read, in dark only. Every rule in that section keeps working
+   untouched; only the surfaces they resolve to move from paper to espresso.
+   The handful of rules a token cannot reach — a hardcoded highlight, two amber
+   chips mixed for a light card — are fixed individually below the block.
+
+   None of the five renders a genuine paper artefact: no .play-card, no
+   .game-polaroid. They use their own list/tile families (.collection-tile,
+   .plays-list__row, .buddies-row, .set-card), which is why re-pointing the
+   paper tokens here is safe. A polaroid stays cream wherever one actually
+   appears, including modals opened from these screens.
+
+   Custom properties substitute where they are DECLARED, not where they are
+   used, so the --polaroid-* aliases (declared on :root from --paper) have to be
+   restated here with literal values — overriding --paper alone would not reach
+   them. See the "Polaroid aliases" block at the top of this file.
+
+   Light is unaffected: there the sheet is already transparent over a warm-paper
+   ground, which is exactly the relationship this gives dark.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root[data-bgb="dark"] .bgb-cream-screen {
+  /* The sheet drops away and the app ground carries the screen — the same move
+     light already makes, so the two themes now differ only in tone. */
+  --sheet-bg:        transparent;
+  --sheet-ink:       #F0E7D8;
+  --sheet-ink-muted: #B0A18E;
+  --sheet-card:      #261D17;   /* raised card, one step off the ground */
+  --sheet-line:      rgba(255, 255, 255, 0.09);
+
+  /* Paper tokens → dark surfaces. --paper is the card; --polaroid-bg is one
+     step DOWN from it, because in dark a form field reads as a well cut into
+     the card, where on paper it read as a lighter patch laid on top. */
+  --paper:       #261D17;
+  --paper-ink:   #F0E7D8;
+  --paper-muted: #B0A18E;
+  --paper-line:  rgba(255, 255, 255, 0.12);
+  --card-border: rgba(255, 255, 255, 0.09);
+
+  --polaroid-bg:       #1C1510;
+  --polaroid-bg-soft:  #2E231B;
+  --polaroid-ink:      #F0E7D8;
+  --polaroid-ink-soft: #D6C9B4;
+  --polaroid-muted:    #B0A18E;
+  --polaroid-line:     rgba(255, 255, 255, 0.12);
+
+  /* --accent-ink is "gold that survives a light surface" — on espresso the
+     gold can go back to full strength. #E0A94A is 8.4:1 on the card above. */
+  --accent-ink: #E0A94A;
+
+  /* Ghost-player silhouettes: #3B2A1C is espresso brown, drawn to sit on paper.
+     .buddies-row already carried this exact override for the one case that was
+     already on the ground; hoisting it to the screen covers the link-results
+     dropdown and the profile search list too. */
+  --ghost-ink: #C4A987;
+
+  /* The status colours are likewise tuned for paper: --ok #1F6B2E is 1.4:1 on
+     the card and disappears entirely. These are the same hues lifted onto the
+     dark ground. */
+  --ok:   #6FBF7F;
+  --warn: #E5A33F;
+  --rust: #E87B63;
+}
+
+/* ── The rules a token can't reach ─────────────────────────────────────────
+   Cards get their edge back for free: .set-card, .plays-list__row and
+   .collection-tile all already border with --card-border / --sheet-line, which
+   the block above now resolves to a white hairline. Dark shadows separate
+   almost nothing from a dark ground; the hairline carries it instead. What
+   follows is only what the tokens genuinely cannot express. */
+
+/* Form fields read as wells cut into the card rather than patches laid on it —
+   the base rule paints them --polaroid-bg, which the block above already sinks
+   below the card, but the filter chips and the pager share that token and want
+   the same treatment, so it is stated once here for clarity. */
+:root[data-bgb="dark"] .bgb-cream-screen .input,
+:root[data-bgb="dark"] .bgb-cream-screen .input.input-bordered {
+  background: #1C1510;
+}
+
+/* The docked pager on Collection / Wishlist is the one --polaroid-bg consumer
+   that wants the CARD tone, not the well — it is a raised strip over the grid.
+   Its inset highlight is a literal white 65%, drawn to catch light on cream. */
+:root[data-bgb="dark"] .bgb-cream-screen .spoke-pager-footer {
+  background: #261D17;
+  box-shadow:
+    0 -2px 14px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Two amber chips mixed against a light card: oklch(0.45 …) is ~2:1 on
+   espresso. Same hue, lifted to sit on the dark card. */
+:root[data-bgb="dark"] .bgb-cream-screen .player-type-chip--account,
+:root[data-bgb="dark"] .bgb-cream-screen .buddies-link-results__chip {
+  color: oklch(0.82 0.13 60);
+}
+
+/* BGG's attribution mark is a fixed-colour lockup (#3F3A60 navy on white) that
+   we must not recolour, and the navy vanishes on espresso. Give it the light
+   plate it was drawn for instead of filtering it. */
+:root[data-bgb="dark"] .bgb-cream-screen .settings-bgg-credit__logo {
+  filter: none;
+  background: #FFFFFF;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  box-sizing: content-box;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
