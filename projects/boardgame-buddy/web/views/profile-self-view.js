@@ -74,7 +74,7 @@
 
     // ── Account card ──────────────────────────────────────────────────────────
     // Same .set-card markup Settings used to render — the hub is not a
-    // .bgb-cream-screen, but .set-card reads the --polaroid-* tokens directly,
+    // .bgb-spoke-screen, but .set-card reads the --polaroid-* tokens directly,
     // which is what .profile-stat-card and .preview-card below already use.
     _renderAccountCard(me) {
       const badge = window.BgbBadge.render({

@@ -86,21 +86,31 @@ The "polaroid family" is the project's signature: cream-paper background, soft d
 | `--accent-hover` | `#B8820E` | Hover state of accent buttons |
 | `--game-accent` | per-game `theme_color`, set inline | The hairline accent on a specific Game's tile / detail / play card |
 | `--exp-color` | per-expansion, set inline | The colored dot identifying a chapter's source expansion |
-| `--polaroid-bg`, `--polaroid-ink`, `--polaroid-line`, `--polaroid-accent`, `--polaroid-muted` | cream / dark-brown / etc. | The polaroid surface |
+| `--polaroid-bg`, `--polaroid-ink`, `--polaroid-line`, `--polaroid-accent`, `--polaroid-muted` | cream / dark-brown / etc. | The polaroid surface (re-pointed at `--chrome*` on the hub + spokes in dark) |
 | `--warm-taupe`, `--warm-taupe-soft`, `--warm-taupe-strong` | sandy brown | Reference-guide hints, inactive toggles |
 | `--rust`, `--rust-soft`, `--rust-strong` | rust red | Destructive accents (delete, abandon, remove buddy) |
 
 `--game-accent` and `--exp-color` are the only tokens routinely set inline; they have to be because they are data-derived. Every other color comes from the stylesheet.
 
-### 4.2a Ground tokens vs paper tokens
+### 4.2a Ground tokens vs paper vs chrome
 
 The app has two themes, switched by `data-bgb` on `<html>` (`domain/theme.js`). `--b1`/`--b2`/`--b3`/`--bc` are redefined per theme, so anything painting with `oklch(var(--b*))` follows the theme automatically. `<html data-theme="luxury">` is DaisyUI's own attribute and is deliberately *not* the light/dark lever — leave it alone.
 
-The trap is not dark-vs-light, it is **ground vs paper**. `--b*`, `--ink*`, `--line*` and `--accent`/`--accent-hover` describe the app *ground*, which is espresso in dark and cream in light. But the polaroid/paper surfaces — play cards, `.set-card`, the `.bgb-cream-screen` sheet — are light in **both** themes. Point a ground token at one of those and it inverts: `oklch(var(--b2))` becomes a black box on cream, and `--accent-hover` becomes pale gold text on cream at 1.6:1. Both of those shipped.
+The trap is not dark-vs-light, it is **what kind of surface this is**. There are three:
 
-On a paper surface, use the paper tokens instead:
+| Surface | What it is | Light | Dark |
+|---|---|---|---|
+| **Ground** (`--b*`, `--bg-*`, `--ink*`, `--line*`) | the page itself | warm cream | espresso |
+| **Paper** (`--paper*` → `--polaroid-*`) | things that are *photographs* — play cards, the Gather grid, the parchment scroll | cream | **cream** |
+| **Chrome** (`--chrome*` → `--sheet-*`) | plain UI cards — the profile hub, the spokes, Settings | white | espresso |
 
-| Ground token | Paper equivalent |
+Paper is the odd one: it is light in **both** themes, because photo paper is light in any light. That is the trap. Point a ground token at a paper surface and it inverts — `oklch(var(--b2))` becomes a black box on cream, `--accent-hover` becomes pale gold text at 1.6:1. Both of those shipped.
+
+Chrome is the counterpart added when the profile hub and spokes were darkened: they had been borrowing the paper tokens, which made the brightest screens in the app the ones furthest from its dark identity. Chrome follows the ground; paper does not.
+
+On a paper **or** chrome surface, use the surface tokens rather than the ground ones:
+
+| Ground token | Paper / chrome equivalent |
 |---|---|
 | `oklch(var(--b1))`, `oklch(var(--b2))` | `--polaroid-bg`, `--polaroid-bg-soft`, `--sheet-card` |
 | `oklch(var(--bc))`, `--ink` | `--polaroid-ink` |
@@ -109,23 +119,25 @@ On a paper surface, use the paper tokens instead:
 | `--accent`, `--accent-hover` (as text) | `--accent-ink` |
 | `--accent` (as a solid fill) | `--accent-fill` + `--on-accent` for what sits on it |
 
-`--sheet-*` is the `.bgb-cream-screen` family specifically: dark lays a cream sheet over the espresso ground, light drops the sheet (`--sheet-bg: transparent`) because the page ground is already warm paper, and the cards carry the separation instead (white + `--card-border`).
+`--sheet-*` is the `.bgb-spoke-screen` family specifically. Neither theme paints a sheet any more — the page ground shows through and the cards carry the separation (white + `--card-border` in light, `--chrome` + a dimmed-gold hairline in dark).
+
+Inside `.set-card`, `.profile-stat-card`, `.preview-card` and `.bgb-spoke-screen`, dark re-points `--polaroid-*` at the chrome values (`styles.css:257`). So a rule written in polaroid tokens travels correctly onto those screens without knowing it — but that is exactly why a *genuine* photo surface must never be nested inside one.
 
 **Rule of thumb:** before placing any element on a paper surface, grep its CSS for `oklch(var(--b` and `--accent-hover` — if either is there, re-point it at the paper column above.
 
-This is **not just an input problem**. Any element whose default styles reach for the DaisyUI base palette will hit it: inputs, textareas, selects, dropdown menus, suggestion rows, autocomplete items, list rows. Even a card written for the dark feed and then rendered inside a cream screen suffers.
+This is **not just an input problem**. Any element whose default styles reach for the DaisyUI base palette will hit it: inputs, textareas, selects, dropdown menus, suggestion rows, autocomplete items, list rows. Even a card written for the dark feed and then rendered inside a spoke screen suffers — which is why ~20 of the `.bgb-spoke-screen X` rules exist purely to undo the DaisyUI base for `X`.
 
 Existing canonical overrides to copy:
 
 | Surface | Override location |
 |---|---|
-| `<input class="input input-bordered">` | `styles.css:6895-6912` (`.bgb-cream-screen .input`) |
-| `.search-hit` (profile-search suggestion rows in Buddies) | `styles.css:6878-6889` (`.bgb-cream-screen .search-hit`) |
+| `<input class="input input-bordered">` | `styles.css:6895-6912` (`.bgb-spoke-screen .input`) |
+| `.search-hit` (profile-search suggestion rows in Buddies) | `styles.css:6878-6889` (`.bgb-spoke-screen .search-hit`) |
 | `.cascade-buddy-dropdown` (Play flow → Add player) | `styles.css:4903-4955` (own class family, polaroid by default) |
 | `.game-finder-dropdown` (Log play → pick game) | `styles.css:5486-5566` (own class family, polaroid by default) |
 | `.buddies-link-results` (Buddies → Link ghost) | `styles.css:4122-4163` (own class family, polaroid by default) |
 
-If a component is **only ever used on cream** (like `.search-hit` today), the scoped override pattern is fine. If a component is shared across surfaces (like `.game-finder-*`), define it in polaroid tokens directly in its own class family so it travels.
+If a component is **only ever used on one surface** (like `.search-hit` today), the scoped override pattern is fine. If a component is shared across surfaces (like `.game-finder-*`), define it in surface tokens directly in its own class family so it travels.
 
 ### 4.3 Motion
 
