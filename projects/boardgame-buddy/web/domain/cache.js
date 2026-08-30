@@ -288,9 +288,14 @@
      * Keys currently readable via peek() in a namespace, i.e. still inside
      * their stale window. Purely synchronous; never touches the network.
      *
-     * Exists for the offline game picker: `game.bundle` is warmed for every
-     * owned game by Bootstrap.warmGameBundles(), which makes enumerating it
-     * the only way to see the user's whole library with no server to search.
+     * Exists for the game picker, which has two uses for enumeration and no
+     * way to serve either from a known key:
+     *   • `game.bundle` is warmed for every owned game by
+     *     Bootstrap.warmGameBundles(), which makes walking it the only way to
+     *     see the user's whole library — the pool the picker paints from
+     *     before (and offline, instead of) asking the server.
+     *   • `game.search` is keyed by query, and answering "did we already fetch
+     *     a shorter query this one extends?" means looking at the keys.
      * Nothing else should reach for this — a view that knows which key it
      * wants should peek() that key directly.
      *

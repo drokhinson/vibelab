@@ -5,6 +5,13 @@
 // Game.importBgg(). Picking a result fires the caller-supplied onPick
 // callback — the widget itself never mutates collection/session state.
 //
+// The network is never what the user waits on to see a list. Every keystroke
+// paints synchronously first — from an exact cached answer, a cached answer to
+// a shorter query this one extends, or the device's own warmed library — and
+// /search then refines that in place. Which is why the Gather picker feels
+// instant: the game a host is reaching for is nearly always one of their own,
+// and every one of those is already on the phone.
+//
 // Expansions never appear here: /search excludes them from every source
 // (library, DB, BGG). They're added through a base game's expansion
 // section — see widgets/import-expansions-modal.js.
@@ -20,6 +27,32 @@
 
 (function () {
   let _seq = 0;
+
+  // How long after the last keystroke the network search fires. The dropdown
+  // is never empty while it waits — every keystroke repaints synchronously
+  // from cached results + the device's own library first (see
+  // _paintProvisional) — so this budget only delays the refinement.
+  const SEARCH_DEBOUNCE_MS = 180;
+
+  // Below this, /search is not called at all.
+  //
+  // The catalog ILIKE '%q%' is served by a pg_trgm GIN index, and pg_trgm has
+  // nothing to match on under three characters — so a 1- or 2-character query
+  // is the single most expensive shape the endpoint can be asked for (a seq
+  // scan of the whole catalog plus the collection join) in exchange for an
+  // alphabetical slice of hundreds of matches that nobody wants. Those two
+  // keystrokes are served from the device instead.
+  const MIN_REMOTE_QUERY_LEN = 3;
+
+  // Rows painted before the server answers. Matches /search's default limit so
+  // the provisional list and the real one are the same length.
+  const PROVISIONAL_LIMIT = 20;
+
+  // The device pool (recents + every warmed game bundle) is rebuilt at most
+  // this often, so a fast typer walks an already-built index instead of
+  // re-reading the cache on every keystroke. Short enough that bundles warmed
+  // by the background loader show up while the sheet is still open.
+  const DEVICE_POOL_TTL_MS = 5000;
 
   /**
    * @typedef {Object} GameFinderOpts
@@ -54,6 +87,9 @@
       this._recentGamesPromise = null; // in-flight load, single-flight + retry-on-error
       this._queryToken = 0;         // increments on every search; stale responses are dropped
       this._searchTimer = null;
+      this._searchAbort = null;     // AbortController for the in-flight /search
+      this._devicePoolRows = null;  // memoized {game, lower}[] — see _devicePool
+      this._devicePoolAt = 0;
       this._bggMode = false;
       this._gameById = new Map();   // gameId → game object (so _pickById has the row data)
       this._outsideHandler = this._onOutsideClick.bind(this);
@@ -125,7 +161,8 @@
 
     unmount() {
       clearTimeout(this._searchTimer);
-      this._queryToken++; // invalidate any in-flight search
+      this._supersede(); // invalidate AND abort any in-flight search
+      this._devicePoolRows = null;
       if (this._docHandlerBound) {
         document.removeEventListener("click", this._outsideHandler, true);
         this._docHandlerBound = false;
@@ -144,7 +181,7 @@
 
     reset() {
       this._bggMode = false;
-      this._queryToken++;
+      this._supersede();
       const input = /** @type {HTMLInputElement|null} */ (document.getElementById(this.inputId));
       if (input) input.value = "";
       this._close();
@@ -152,26 +189,53 @@
 
     // ── Internal ──────────────────────────────────────────────────────────
 
+    // Every keystroke paints SOMETHING synchronously. The network is only ever
+    // the refinement pass, never the thing the user waits on before seeing a
+    // list: the host picking a game on Gather is almost always picking one of
+    // their own, and those are already on the device.
     _onInput(value) {
       clearTimeout(this._searchTimer);
+      // The previous keystroke's answer is not wanted any more — drop the
+      // response AND the request, so a superseded search stops competing for
+      // the connection the current one needs.
+      this._supersede();
+      this._bggMode = false;
       const q = (value || "").trim();
-      if (!q) {
-        this._bggMode = false;
-        this._renderDropdown("");
+
+      // Empty query and offline both resolve with no request at all.
+      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
+      if (!q || offline) {
+        this._renderDropdown(q);
         return;
       }
+
       // Instant path: a query the user already searched is served from cache
       // with no debounce and no loading flash (backspace / re-type feel live).
-      if (window.Game && window.Game.cachedSearch && window.Game.cachedSearch(q)) {
-        this._bggMode = false;
-        this._renderDropdown(q);
+      const cached = (window.Game && window.Game.cachedSearch)
+        ? window.Game.cachedSearch(q) : null;
+      if (cached) {
+        const dd = document.getElementById(this.dropdownId);
+        if (dd) {
+          dd.classList.remove("game-finder-dropdown--loading");
+          this._renderResults(dd, cached, q);
+        }
         return;
       }
-      // 180ms debounce so a fast typer doesn't fire one query per keystroke.
-      this._searchTimer = setTimeout(() => {
-        this._bggMode = false;
-        this._renderDropdown(q);
-      }, 180);
+
+      const willFetch = q.length >= MIN_REMOTE_QUERY_LEN;
+      this._paintProvisional(q, { willFetch });
+      if (!willFetch) return;
+      // Debounce only the network call — the list above is already on screen.
+      this._searchTimer = setTimeout(() => this._renderDropdown(q), SEARCH_DEBOUNCE_MS);
+    }
+
+    /** Invalidate the in-flight search: drop its response and abort it. */
+    _supersede() {
+      this._queryToken++;
+      if (this._searchAbort) {
+        try { this._searchAbort.abort(); } catch (_) {}
+        this._searchAbort = null;
+      }
     }
 
     _ensureRecentGamesLoad() {
@@ -252,7 +316,8 @@
       const dd = document.getElementById(this.dropdownId);
       if (!dd) return;
       const q = (query || "").trim();
-      const token = ++this._queryToken;
+      this._supersede();
+      const token = this._queryToken;
 
       // Empty query → recently-played seed (or hint). No BGG footer (nothing
       // to search for yet).
@@ -275,10 +340,10 @@
       }
 
       // Offline: /search is server-side, so filter what's already on the
-      // device instead. See _offlineMatches for what that pool is.
+      // device instead. See _devicePool for what that pool is.
       if (window.BgbNet && window.BgbNet.isOffline()) {
         dd.classList.remove("game-finder-dropdown--loading");
-        this._renderOfflineResults(dd, this._offlineMatches(q));
+        this._renderOfflineResults(dd, this._deviceMatches(q));
         return;
       }
 
@@ -291,27 +356,23 @@
         return;
       }
 
-      // Cache miss → REFRESH IN PLACE. Keep whatever results are already
-      // showing and flag the dropdown as loading (top bar + dimmed rows) so
-      // the list visibly refreshes instead of blanking. Only when the
-      // dropdown is cold (no rows) do we show a spinner row.
-      this._show(dd);
-      if (dd.querySelector(".game-finder-dropdown-item")) {
-        dd.classList.add("game-finder-dropdown--loading");
-      } else {
-        dd.classList.remove("game-finder-dropdown--loading");
-        dd.innerHTML =
-          `<li class="game-finder-dropdown__loading-row">
-             <span class="game-finder-spinner" aria-hidden="true"></span>
-             <span>Searching…</span>
-           </li>`;
-      }
+      // Cache miss → paint what the device already knows, then refine over the
+      // network. _onInput has usually painted this already; repeating it here
+      // covers the other entry point (focus with a query still in the box).
+      this._paintProvisional(q, { willFetch: q.length >= MIN_REMOTE_QUERY_LEN });
+      // Too short for the trigram index to help — the device pool above is the
+      // whole answer until another character arrives.
+      if (q.length < MIN_REMOTE_QUERY_LEN) return;
 
+      const ctl = typeof AbortController === "function" ? new AbortController() : null;
+      this._searchAbort = ctl;
       let data;
       try {
-        data = await window.Game.search(q);
+        data = await window.Game.search(q, ctl ? { signal: ctl.signal } : undefined);
       } catch (e) {
-        if (token !== this._queryToken) return;
+        if (this._searchAbort === ctl) this._searchAbort = null;
+        // An abort is this widget superseding itself, not a failure to report.
+        if (token !== this._queryToken || (e && e.aborted)) return;
         dd.classList.remove("game-finder-dropdown--loading");
         dd.innerHTML =
           `<li class="game-finder-dropdown__hint">Search failed. Try again.</li>` +
@@ -321,9 +382,75 @@
         if (this._opts.onError) this._opts.onError(e);
         return;
       }
+      if (this._searchAbort === ctl) this._searchAbort = null;
       if (token !== this._queryToken) return;
       dd.classList.remove("game-finder-dropdown--loading");
       this._renderResults(dd, data, q);
+    }
+
+    /**
+     * Paint the answer the device can give right now, before any request.
+     *
+     * Two sources, both free: results already cached for a shorter query that
+     * `q` extends (Game.cachedSearchPrefix — typing "catan" asks five separate
+     * questions whose answers all live inside the first one), and the device
+     * pool of the viewer's own games (_deviceMatches). Neither is authoritative
+     * — both are capped lists — so when a request is on its way the rows are
+     * flagged as refreshing and get replaced by _renderResults.
+     *
+     * @param {string} q
+     * @param {{willFetch: boolean}} opts
+     */
+    _paintProvisional(q, { willFetch }) {
+      const dd = document.getElementById(this.dropdownId);
+      if (!dd) return;
+      const games = this._provisionalMatches(q);
+      this._gameById.clear();
+      games.forEach((g) => this._gameById.set(g.id, g));
+
+      let rows;
+      if (games.length) {
+        rows = games.map((g) => this._renderRow(g, "library")).join("");
+      } else if (willFetch) {
+        rows =
+          `<li class="game-finder-dropdown__loading-row">
+             <span class="game-finder-spinner" aria-hidden="true"></span>
+             <span>Searching…</span>
+           </li>`;
+      } else {
+        // Nothing on the device matches and we deliberately aren't asking the
+        // server yet — say which of those it is rather than "no matches".
+        rows = `<li class="game-finder-dropdown__hint">Keep typing to search the full library.</li>`;
+      }
+      dd.innerHTML = rows + this._bggFooter(q);
+      // The dimmed/refreshing treatment only reads as "these are being
+      // replaced" when there is something to dim.
+      dd.classList.toggle("game-finder-dropdown--loading", !!willFetch && games.length > 0);
+      this._show(dd);
+      this._wireRowClicks(dd);
+      window.BgbIcons.render(dd);
+    }
+
+    /**
+     * Provisional match list: cached-prefix hits (which carry the server's own
+     * collection-first ranking, and can include catalog games the device never
+     * owned) followed by device matches not already in it.
+     *
+     * @param {string} q
+     * @returns {Array<Object>}
+     */
+    _provisionalMatches(q) {
+      const byId = new Map();
+      const add = (g) => {
+        if (!g || !g.id || byId.has(g.id) || g.is_expansion) return;
+        if (byId.size >= PROVISIONAL_LIMIT) return;
+        byId.set(g.id, g);
+      };
+      if (window.Game && window.Game.cachedSearchPrefix) {
+        window.Game.cachedSearchPrefix(q).forEach(add);
+      }
+      this._deviceMatches(q).forEach(add);
+      return Array.from(byId.values());
     }
 
     // Render library results + the always-visible sticky BGG footer. Shared
@@ -344,7 +471,8 @@
     }
 
     /**
-     * Every game the device can offer with no server, filtered by `q`.
+     * Every game the device can offer with no server, name-ordered, each row
+     * carrying its lower-cased name so a keystroke is one indexOf per entry.
      *
      * Two sources, both already on disk:
      *   • `game.recent:self` — the host-flow seed bootstrap warms (24h/7d).
@@ -352,39 +480,71 @@
      *     Bootstrap.warmGameBundles() from an idle callback after login.
      *
      * That second one is the real library: it's the user's whole collection,
-     * which is overwhelmingly what a group is playing when they're somewhere
-     * with no signal. Read through peek() so entries past their fresh window
-     * still count — a stale name and thumbnail are fine, and the game row
-     * itself is immutable after BGG import anyway.
+     * which is overwhelmingly what a group is playing — offline in a cabin, and
+     * equally at a table with signal, which is why this pool now backs the
+     * online first paint too and not just the offline branch. Read through
+     * peek() so entries past their fresh window still count — a stale name and
+     * thumbnail are fine, and the game row itself is immutable after BGG
+     * import anyway.
+     *
+     * Memoized for DEVICE_POOL_TTL_MS: rebuilding walks up to 250 cache
+     * entries, which is wasted work at typing speed but must still pick up
+     * bundles the background warm-up finishes while the sheet is open.
+     *
+     * @returns {Array<{game: Object, lower: string}>}
+     */
+    _devicePool() {
+      const now = Date.now();
+      if (this._devicePoolRows && now - this._devicePoolAt < DEVICE_POOL_TTL_MS) {
+        return this._devicePoolRows;
+      }
+      const cache = window.bgbCache;
+      const rows = [];
+      if (cache) {
+        const seen = new Set();
+        const consider = (g) => {
+          if (!g || !g.id || seen.has(g.id) || !g.name) return;
+          // Expansions are excluded from /search on every source; this pool
+          // has to agree or the picker would start offering them here and
+          // nowhere else. They attach via the Expansions card instead.
+          if (g.is_expansion) return;
+          seen.add(g.id);
+          rows.push({ game: g, lower: g.name.toLowerCase() });
+        };
+        const recent = cache.peek("game.recent", "self");
+        if (Array.isArray(recent)) recent.forEach(consider);
+        for (const gameId of cache.keys("game.bundle")) {
+          const bundle = cache.peek("game.bundle", gameId);
+          if (bundle && bundle.game) consider(bundle.game);
+        }
+        rows.sort((a, b) => a.lower.localeCompare(b.lower));
+      }
+      this._devicePoolRows = rows;
+      this._devicePoolAt = now;
+      return rows;
+    }
+
+    /**
+     * Device-pool games matching `q`, prefix matches first.
+     *
+     * Matching stays case-insensitive substring to agree with the backend's
+     * ILIKE '%q%'; the prefix-first split is ranking only, so "cat" leads with
+     * Catan rather than whatever sorts first alphabetically.
      *
      * @param {string} q
-     * @returns {Array<Object>} GameSummary-ish rows, name-ordered
+     * @returns {Array<Object>} GameSummary-ish rows
      */
-    _offlineMatches(q) {
-      const cache = window.bgbCache;
-      if (!cache) return [];
-      const needle = q.toLowerCase();
-      const byId = new Map();
-
-      const consider = (g) => {
-        if (!g || !g.id || byId.has(g.id)) return;
-        // Expansions are excluded from /search on every source; the offline
-        // pool has to agree or the picker would start offering them here and
-        // nowhere else. They attach via the Expansions card instead.
-        if (g.is_expansion) return;
-        if (!(g.name || "").toLowerCase().includes(needle)) return;
-        byId.set(g.id, g);
-      };
-
-      const recent = cache.peek("game.recent", "self");
-      if (Array.isArray(recent)) recent.forEach(consider);
-      for (const gameId of cache.keys("game.bundle")) {
-        const bundle = cache.peek("game.bundle", gameId);
-        if (bundle && bundle.game) consider(bundle.game);
+    _deviceMatches(q) {
+      const needle = (q || "").toLowerCase();
+      if (!needle) return [];
+      const starts = [];
+      const contains = [];
+      for (const row of this._devicePool()) {
+        const at = row.lower.indexOf(needle);
+        if (at === 0) starts.push(row.game);
+        else if (at > 0) contains.push(row.game);
       }
-
-      return Array.from(byId.values())
-        .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      return starts.concat(contains);
     }
 
     /**

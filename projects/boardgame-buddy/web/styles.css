@@ -5910,9 +5910,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 /* ── Refresh-in-place loading ─────────────────────────────────────────────
-   On a cache miss the previous results stay visible (dimmed) while a thin
-   accent bar sweeps across the top — the list "refreshes" instead of
-   blanking to a "Searching…" line. */
+   On a cache miss the rows the device could answer with immediately stay
+   visible while a thin accent bar sweeps across the top — the list
+   "refreshes" instead of blanking to a "Searching…" line. */
 .game-finder-dropdown--loading::before {
   content: "";
   position: sticky;
@@ -5928,7 +5928,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   animation: gameFinderBar 0.9s ease-in-out infinite;
   z-index: 2;
 }
-.game-finder-dropdown--loading .game-finder-dropdown-item { opacity: 0.5; }
+/* Barely dimmed on purpose. These rows are real matches for the query the
+   user has typed — the viewer's own collection, painted before the request
+   goes out — and they are tappable right now; the fade says "more may follow",
+   not "don't trust these". (It was 0.5 back when the rows under this class
+   were the PREVIOUS query's leftovers.) */
+.game-finder-dropdown--loading .game-finder-dropdown-item { opacity: 0.75; }
 @keyframes gameFinderBar {
   0%   { background-position: -40% 0; }
   100% { background-position: 140% 0; }
