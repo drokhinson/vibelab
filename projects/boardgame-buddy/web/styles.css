@@ -241,13 +241,20 @@
    rendered inside these containers, so paper keeps its cream everywhere it
    actually means "photo".
 
-   .game-picker-sheet is in the list even though it is not a screen. It is the
-   Stats spoke's By-game picker, and ui/bottom-sheet.js appends it to <body> —
-   so it lands OUTSIDE .bgb-spoke-screen and kept the root paper aliases, which
-   in dark meant tapping "Showing <game>" on an espresso screen threw up a
-   cream sheet. Listing it here re-points the same tokens the spoke behind it
-   already uses, so the sheet matches the screen it was opened from in both
-   themes. The class sits on the backdrop element, so the panel inherits.
+   The three picker sheets are in the list even though they are not screens.
+   ui/bottom-sheet.js appends a sheet to <body>, so it lands OUTSIDE the screen
+   that opened it and kept the root paper aliases — which in dark meant tapping
+   "Showing <game>" on an espresso screen threw up a cream sheet. Listing them
+   here re-points the same tokens the surface behind them already uses, so each
+   sheet matches the screen it was opened from in both themes. The classes sit
+   on the backdrop element, so the panels inherit.
+
+   Named individually rather than by the shared .bgb-sheet class on purpose:
+   that class is also on the collection status sheet, which is a deliberate
+   sheet of paper (a radio group over a photo-like surface, opened from tiles
+   that are themselves photographs) and is cream in both themes today. Sweeping
+   it in here would be a silent redesign of an app-wide control, not a fix. Add
+   the next searchable sheet to this list by name.
    ────────────────────────────────────────────────────────────────────────── */
 :is(.set-card,
      .profile-stat-card,
@@ -255,6 +262,8 @@
      .preview-card,
      .bgb-spoke-screen,
      .game-picker-sheet,
+     .player-picker-sheet,
+     .game-search-sheet,
      [data-view="log-play"]) {
   --polaroid-bg:       var(--bg-1);
   --polaroid-bg-soft:  var(--bg-2);
@@ -287,6 +296,8 @@
      .preview-card,
      .bgb-spoke-screen,
      .game-picker-sheet,
+     .player-picker-sheet,
+     .game-search-sheet,
      [data-view="log-play"]) {
   --accent-ink:      var(--accent);   /* the paper gold is 1.5:1 here */
   --polaroid-accent: #E87B63;         /* terracotta is 3.9:1 here */
@@ -3529,10 +3540,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-sheet__search .game-finder__input {
   border-radius: 12px;
   padding-right: 44px;
-  /* .game-finder__input fills with --polaroid-bg, which is the panel's own
-     colour — on paper the border alone was enough to read as a field, but on
-     the espresso panel it left an invisible box. Sink it to the well, the same
-     token the chrome screens use for exactly this. */
+}
+/* .game-finder__input fills with --polaroid-bg, which is the panel's own
+   colour — on paper the border alone was enough to read as a field, but on the
+   espresso panel it left an invisible box. Sink it to the well, the same token
+   the chrome screens use for exactly this.
+
+   Scoped to the sheet rather than to one slot inside it: the game search sheet
+   mounts a real GameFinder (widgets/game-search-sheet.js), whose input is its
+   own markup under .bgb-sheet__finder, not .bgb-sheet__search. (0,2,0) beats
+   the widget's own .game-finder__input rule wherever that lands in the file. */
+.bgb-sheet .game-finder__input {
   background: var(--well, var(--polaroid-bg));
 }
 
@@ -3676,9 +3694,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 700;
   cursor: pointer;
 }
+/* Matches .cascade-cta:disabled — a filled, muted block, not an outlined
+   ghost. The comment on that rule says out loud that it exists so inactive
+   states read consistently, and --polaroid-line as a fill is nearly invisible
+   on the espresso panel, which left this indistinguishable from Cancel below
+   it. */
 .bgb-sheet__confirm:disabled {
-  background: var(--polaroid-line);
-  color: var(--polaroid-muted);
+  background: var(--polaroid-muted);
+  color: var(--polaroid-bg);
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
