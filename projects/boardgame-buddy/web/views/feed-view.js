@@ -514,6 +514,13 @@
       });
     }
 
+    // Why this person is being suggested, not how much. A candidate is here
+    // for a shared play or a shared buddy; when it's both, the shared play is
+    // the one worth saying — it's also what ranked them (migration 057).
+    _suggestionReason(s) {
+      return (s.play_count || 0) > 0 ? "Played with" : "Mutual buddy";
+    }
+
     _renderSuggestedBuddiesCard(card) {
       const tiles = (card.suggestions || []).map((s) => `
         <div class="buddy-tile">
@@ -522,7 +529,7 @@
             ${window.BgbBadge.render({ avatar: s.avatar, displayName: s.display_name, size: "md", extraClass: "buddy-tile__avatar" })}
           </div>
           <div class="buddy-tile__name">${escapeHtml(s.display_name)}</div>
-          <div class="buddy-tile__mutual">${s.mutual_count} mutual</div>
+          <div class="buddy-tile__reason">${this._suggestionReason(s)}</div>
           <button class="btn btn-xs btn-primary mt-1"
                   onclick="window.feedView._addBuddy('${s.user_id}', this)">Add</button>
         </div>

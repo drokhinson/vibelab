@@ -883,7 +883,11 @@ class FeedSuggestedBuddy(BaseModel):
     user_id: str
     display_name: str
     avatar: Optional[Avatar] = None
+    # Accepted buddies shared with the viewer, and plays shared with them.
+    # A suggestion has at least one of the two; the rail labels whichever
+    # it has. play_count is what ranks the rail — see migration 057.
     mutual_count: int
+    play_count: int = 0
 
 
 class FeedSuggestedBuddiesCard(BaseModel):

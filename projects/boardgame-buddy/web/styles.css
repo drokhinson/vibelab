@@ -2602,7 +2602,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .user-badge.buddy-tile__avatar .user-badge__initials { font-size: 20px; }
 .buddy-tile__name { font-size: 0.85rem; font-weight: 600; line-height: 1.2; color: var(--polaroid-ink); }
-.buddy-tile__mutual { font-size: 0.72rem; color: var(--polaroid-muted); margin-top: 0.15rem; }
+.buddy-tile__reason { font-size: 0.72rem; color: var(--polaroid-muted); margin-top: 0.15rem; }
 .bgg-link-form { display: flex; flex-direction: column; gap: 0.4rem; }
 
 /* BGG sync log. Sits inside .bgg-card as the live readout while the
