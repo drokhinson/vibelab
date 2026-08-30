@@ -6,9 +6,9 @@
 <style>
 /* ══════════════════════════════════════════════════════════════════════════
    Harness palette — a neutral studio wall, deliberately NOT the app's own
-   espresso, so the two candidate card tones are judged against each other
-   rather than against the page they sit on. Warm-biased neutrals (they lean
-   toward the app's gold) so the frames don't read as pasted onto cold grey.
+   espresso, so the candidate card tones are judged against each other rather
+   than against the page they sit on. Warm-biased neutrals so the frames don't
+   read as pasted onto cold grey.
    ══════════════════════════════════════════════════════════════════════════ */
 :root {
   --wall:      #EFEBE3;
@@ -17,6 +17,8 @@
   --wall-mute: #6C645A;
   --wall-line: #D8D1C5;
   --wall-mark: #8E5F10;
+  --wall-ok:   #4E7A46;
+  --wall-no:   #A8452F;
   --wall-sh:   0 1px 2px rgba(120, 96, 60, .10), 0 12px 32px -18px rgba(120, 96, 60, .40);
 }
 @media (prefers-color-scheme: dark) {
@@ -27,6 +29,8 @@
     --wall-mute: #9A9285;
     --wall-line: #2F2A22;
     --wall-mark: #E0A94A;
+    --wall-ok:   #6FBF7F;
+    --wall-no:   #E87B63;
     --wall-sh:   0 1px 2px rgba(0, 0, 0, .5), 0 12px 32px -18px rgba(0, 0, 0, .8);
   }
 }
@@ -37,6 +41,8 @@
   --wall-mute: #9A9285;
   --wall-line: #2F2A22;
   --wall-mark: #E0A94A;
+  --wall-ok:   #6FBF7F;
+  --wall-no:   #E87B63;
   --wall-sh:   0 1px 2px rgba(0, 0, 0, .5), 0 12px 32px -18px rgba(0, 0, 0, .8);
 }
 
@@ -52,7 +58,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.page { max-width: 1180px; margin: 0 auto; padding: 40px 24px 88px; }
+.page { max-width: 1340px; margin: 0 auto; padding: 40px 24px 96px; }
 
 /* ── Masthead ─────────────────────────────────────────────────────────── */
 .masthead { display: flex; flex-direction: column; gap: 14px; padding-bottom: 26px; border-bottom: 1px solid var(--wall-line); }
@@ -64,12 +70,11 @@ body {
 h1 {
   font-family: "Fraunces", Georgia, serif;
   font-weight: 600; font-size: clamp(28px, 4vw, 40px); line-height: 1.08;
-  letter-spacing: -.02em; margin: 0; text-wrap: balance; max-width: 20ch;
+  letter-spacing: -.02em; margin: 0; text-wrap: balance; max-width: 22ch;
 }
-.standfirst { margin: 0; max-width: 66ch; color: var(--wall-mute); font-size: 15.5px; }
+.standfirst { margin: 0; max-width: 70ch; color: var(--wall-mute); font-size: 15.5px; }
 .standfirst strong { color: var(--wall-ink); font-weight: 600; }
 
-/* ── Theme switch — mirrors the app's own segmented control idiom ──────── */
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 24px 0 0; }
 .seg {
   display: inline-flex; padding: 3px; gap: 3px;
@@ -83,525 +88,583 @@ h1 {
 }
 .seg button[aria-pressed="true"] { background: var(--wall-mark); color: var(--wall); }
 .seg button:focus-visible { outline: 2px solid var(--wall-mark); outline-offset: 2px; }
-.controls .note { font-size: 13px; color: var(--wall-mute); }
+.controls .note { font-size: 13px; color: var(--wall-mute); max-width: 46ch; }
 
 /* ── Comparison grid ──────────────────────────────────────────────────── */
-.compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; margin-top: 40px; }
-@media (max-width: 860px) { .compare { grid-template-columns: minmax(0, 1fr); } }
+.compare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 36px; align-items: start; }
+@media (max-width: 1080px) { .compare { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px)  { .compare { grid-template-columns: minmax(0, 1fr); } }
 
-.option { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.option__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.option__key {
-  font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 700;
-  letter-spacing: .1em; color: var(--wall-mark);
-}
-.option__name { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 21px; margin: 0; letter-spacing: -.01em; }
-.option__swatch {
-  display: inline-flex; align-items: center; gap: 7px;
-  font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--wall-mute);
-  font-variant-numeric: tabular-nums;
-}
-.option__swatch i { width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--wall-line); }
-.chosen {
-  font-family: "JetBrains Mono", monospace; font-size: 10px; font-weight: 700;
+.option { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.option--out { opacity: .62; }
+.option__head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.option__name { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 19px; margin: 0; letter-spacing: -.01em; }
+.pick {
+  font-family: "JetBrains Mono", monospace; font-size: 9.5px; font-weight: 700;
   letter-spacing: .1em; text-transform: uppercase;
   background: var(--wall-mark); color: var(--wall);
-  border-radius: 999px; padding: 3px 9px; align-self: center;
+  border-radius: 999px; padding: 3px 9px;
 }
-.option--out { opacity: .58; }
-.option--out .phone { filter: saturate(.85); }
-.option__body { margin: 0; font-size: 14px; color: var(--wall-mute); max-width: 46ch; }
+.option__body { margin: 0; font-size: 13.5px; color: var(--wall-mute); }
 .option__body b { color: var(--wall-ink); font-weight: 600; }
 
-.tradeoff { display: flex; flex-direction: column; gap: 7px; margin: 2px 0 0; padding: 0; list-style: none; }
-.tradeoff li { display: grid; grid-template-columns: 15px 1fr; gap: 9px; font-size: 13.5px; color: var(--wall-mute); align-items: start; }
-.tradeoff li::before { content: "+"; font-family: "JetBrains Mono", monospace; color: #4E7A46; font-weight: 700; line-height: 1.5; }
-.tradeoff li.cost::before { content: "\2212"; color: #A8452F; }
+/* Measured ratios under each frame */
+.metrics { border-top: 1px solid var(--wall-line); padding-top: 11px; display: flex; flex-direction: column; gap: 5px; }
+.metric { display: grid; grid-template-columns: 1fr auto; gap: 10px; font-size: 12.5px; align-items: baseline; }
+.metric span { color: var(--wall-mute); }
+.metric b {
+  font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.metric.up b   { color: var(--wall-ok); }
+.metric.flat b { color: var(--wall-mute); }
+.metric.low b  { color: var(--wall-no); }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   The app itself. Every token below is copied verbatim from
-   projects/boardgame-buddy/web/styles.css so the mock cannot flatter the
-   real thing. --card and --well are the ONLY two values that differ between
-   option A and option B.
+   The app. Tokens copied verbatim from projects/boardgame-buddy/web/styles.css
+   so the mock cannot flatter the real thing. Only --card, --edge and --emboss
+   differ between the three candidates.
    ══════════════════════════════════════════════════════════════════════════ */
 .bgb {
-  --bg-0: #1A1310; --bg-1: #251C16; --bg-2: #33261C;
+  --bg-0: #1A1310; --bg-1: #251C16; --bg-2: #33261C; --bg-3: #423225;
   --ink: #F0E7D8; --ink-muted: #B0A18E;
   --line: rgba(255, 255, 255, .08);
+  --line-strong: rgba(255, 255, 255, .16);
+  --emboss-tok: rgba(255, 255, 255, .06);
   --accent: #E0A94A; --accent-fill: #E0A94A; --on-accent: #2B1E06;
   --accent-quiet: rgba(224, 169, 74, .14);
   --win: #C8553D;
   --paper: #F8F2E5; --paper-ink: #211A12; --paper-muted: #6F6556; --paper-line: #E6DCC8;
-  --card-sh: 0 10px 26px -12px rgba(12, 5, 0, .62), 0 2px 6px -2px rgba(12, 5, 0, .62);
+  --sh-3: 0 10px 26px -12px rgba(12, 5, 0, .62), 0 2px 6px -2px rgba(12, 5, 0, .62);
 
   font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
   color: var(--ink);
   background: var(--bg-0);
 }
 .bgb[data-mode="light"] {
-  --bg-0: #F7F0E1; --bg-1: #FFFBF2; --bg-2: #FFFFFF;
+  --bg-0: #F7F0E1; --bg-1: #FFFBF2; --bg-2: #FFFFFF; --bg-3: #FFFFFF;
   --ink: #2A2016; --ink-muted: #6F6252;
   --line: rgba(36, 28, 20, .11);
+  --line-strong: rgba(36, 28, 20, .20);
+  --emboss-tok: rgba(255, 255, 255, .65);
   --accent: #A87215; --accent-fill: #8E5F10; --on-accent: #FFFFFF;
   --accent-quiet: rgba(168, 114, 21, .13);
   --win: #A8452F;
   --paper: #FFFFFF; --paper-ink: #2A2016; --paper-muted: #7C7263; --paper-line: #E8DFCD;
-  --card-sh: 0 10px 26px -12px rgba(120, 88, 44, .20), 0 2px 6px -2px rgba(120, 88, 44, .20);
+  --sh-3: 0 10px 26px -12px rgba(120, 88, 44, .20), 0 2px 6px -2px rgba(120, 88, 44, .20);
 }
-/* The one decision this page exists to make. */
-.bgb[data-tone="b1"] { --card: var(--bg-1); --well: var(--bg-0); }
-.bgb[data-tone="b2"] { --card: var(--bg-2); --well: var(--bg-1); }
+
+/* ── The three candidates. This is the entire difference. ─────────────── */
+.bgb[data-tone="now"]  { --card: var(--bg-2); --well: var(--bg-1); --edge: var(--line);        --emboss: transparent; }
+.bgb[data-tone="lift"] { --card: var(--bg-3); --well: var(--bg-1); --edge: var(--line);        --emboss: transparent; }
+.bgb[data-tone="edge"] { --card: var(--bg-3); --well: var(--bg-1); --edge: var(--line-strong); --emboss: var(--emboss-tok); }
 
 /* ── Phone frame ──────────────────────────────────────────────────────── */
 .phone {
-  width: 100%; max-width: 390px; margin: 0 auto;
-  border-radius: 26px; overflow: hidden;
+  width: 100%; max-width: 360px; margin: 0 auto;
+  border-radius: 24px; overflow: hidden;
   border: 1px solid var(--wall-line);
   box-shadow: var(--wall-sh);
 }
-.screen { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 520px; }
+.screen { padding: 11px 14px 15px; display: flex; flex-direction: column; gap: 11px; min-height: 560px; }
 
-/* Screen header — .cascade-screen__header */
-.c-head { display: grid; grid-template-columns: 32px 1fr 32px; align-items: center; gap: 6px; padding-top: 2px; }
+.c-head { display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; gap: 6px; padding-top: 2px; }
 .c-back {
-  width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center;
   background: color-mix(in srgb, var(--bg-2) 70%, transparent);
-  border: 1px solid var(--line); color: var(--ink);
+  border: 1px solid var(--edge); color: var(--ink); font-size: 15px;
 }
 .c-head__body { text-align: center; }
-/* THE FIX: was color: var(--polaroid-bg) — white-on-cream in light mode. */
-.c-title { font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 23px; line-height: 1.1; letter-spacing: -.01em; margin: 0; color: var(--ink); }
+.c-title { font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 22px; line-height: 1.1; letter-spacing: -.01em; margin: 0; color: var(--ink); }
 .c-step {
-  display: block; font-family: "JetBrains Mono", monospace; font-size: 10px;
+  display: block; font-family: "JetBrains Mono", monospace; font-size: 9.5px;
   letter-spacing: .1em; text-transform: uppercase; opacity: .55; margin-top: 2px; color: var(--ink);
 }
 
-/* Cards — .cascade-card */
+/* Cards — the whole subject of the page */
 .c-card {
   background: var(--card); color: var(--ink);
-  border-radius: 14px; border: 1px solid var(--line);
-  box-shadow: var(--card-sh); padding: 13px 13px 15px;
+  border-radius: 14px; border: 1px solid var(--edge);
+  box-shadow: inset 0 1px 0 var(--emboss), var(--sh-3);
+  padding: 12px 12px 14px;
 }
 .c-label {
   display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
-  font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 12px;
+  font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 11.5px;
   letter-spacing: .04em; text-transform: uppercase; color: var(--ink);
 }
-.c-label span { margin-left: auto; text-transform: none; letter-spacing: 0; font-family: "Geist", sans-serif; font-weight: 500; font-size: 11.5px; color: var(--ink-muted); }
+.c-label span { margin-left: auto; text-transform: none; letter-spacing: 0; font-family: "Geist", sans-serif; font-weight: 500; font-size: 11px; color: var(--ink-muted); }
 
-/* Game pick row */
-.c-game { display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 10px; }
-.c-game__art {
-  width: 44px; height: 44px; border-radius: 6px;
-  background: linear-gradient(150deg, #4E6B4A, #2F4630 70%);
-  display: grid; place-items: center; color: #DCE6D4; font-size: 17px;
-  font-family: "Fraunces", Georgia, serif; font-weight: 700;
-}
-.c-game__name { font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 15.5px; }
-.c-game__sub { font-size: 11px; color: var(--ink-muted); }
-
-/* Player rows — the well */
-.c-players { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.c-player {
-  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
-  padding: 7px 9px; background: var(--well); border: 1px solid var(--line); border-radius: 8px;
-}
-.c-bubble {
-  width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center;
-  font-family: "JetBrains Mono", monospace; font-size: 11px; font-weight: 700;
-  background: var(--accent-quiet); color: var(--accent); border: 1px solid var(--line);
-}
-.c-player__name { font-weight: 600; font-size: 13px; }
-.c-player__grip { color: var(--ink-muted); opacity: .5; font-size: 13px; letter-spacing: -2px; }
-.c-add {
-  width: 100%; margin-top: 8px; min-height: 42px; padding: 0 12px;
-  display: flex; align-items: center; gap: 9px;
-  border: 1px dashed var(--line); border-radius: 10px; background: transparent;
-  color: var(--ink-muted); font-family: inherit; font-size: 13.5px; font-weight: 600; text-align: left;
-}
-
-/* Session code card */
+/* 1 — Session code, now first */
 .c-code { text-align: center; }
 .c-code__n {
   font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 21px;
   letter-spacing: .18em; color: var(--win);
 }
-.c-code__hint { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
+.c-code__n--pending { color: var(--ink-muted); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .45 } }
+.c-code__hint { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
 
-/* Collapsed section header */
-.c-collapse { display: flex; justify-content: space-between; align-items: center; font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 12.5px; color: var(--ink); }
-.c-collapse em { font-style: normal; color: var(--ink-muted); font-family: "Geist", sans-serif; font-weight: 500; font-size: 11.5px; }
+/* 2 — Game */
+.c-game { display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 10px; }
+.c-game__art {
+  width: 42px; height: 42px; border-radius: 6px;
+  background: linear-gradient(150deg, #4E6B4A, #2F4630 70%);
+  display: grid; place-items: center; color: #DCE6D4; font-size: 16px;
+  font-family: "Fraunces", Georgia, serif; font-weight: 700;
+}
+.c-game__name { font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 15px; }
+.c-game__sub { font-size: 10.5px; color: var(--ink-muted); }
 
-/* Docked CTA */
-.c-cta {
-  margin-top: auto; width: 100%; height: 46px; border: 0; border-radius: 8px;
-  font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 15px;
-  background: var(--accent-fill); color: var(--on-accent);
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+/* 3 — Expansions */
+.c-collapse { display: flex; justify-content: space-between; align-items: center; font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 12px; color: var(--ink); }
+.c-collapse em { font-style: normal; color: var(--ink-muted); font-family: "Geist", sans-serif; font-weight: 500; font-size: 11px; }
+.c-exp { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 5px; }
+.c-exp li {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: var(--well); border: 1px solid var(--edge); border-radius: 8px; font-size: 12px;
+}
+.c-exp li.on { background: color-mix(in srgb, var(--xc) 15%, transparent); border-color: var(--xc); }
+.c-exp .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--xc); flex: none; }
+
+/* 4 — Game type */
+.c-modes { display: flex; gap: 6px; }
+.c-mode {
+  flex: 1; text-align: center; padding: 7px 6px; font-size: 11.5px; font-weight: 500;
+  border-radius: 8px; background: var(--well); border: 1px solid var(--edge); color: var(--ink);
+}
+.c-mode.on { background: var(--accent-fill); color: var(--on-accent); border-color: var(--accent-fill); }
+
+/* 5 — Players */
+.c-players { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
+.c-player {
+  display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center;
+  padding: 6px 8px; background: var(--well); border: 1px solid var(--edge); border-radius: 8px;
+}
+.c-bubble {
+  width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center;
+  font-family: "JetBrains Mono", monospace; font-size: 10px; font-weight: 700;
+  background: var(--accent-quiet); color: var(--accent); border: 1px solid var(--edge);
+}
+.c-player__name { font-weight: 600; font-size: 12.5px; }
+.c-player__grip { color: var(--ink-muted); font-size: 12px; letter-spacing: -2px; }
+.c-add {
+  width: 100%; margin-top: 8px; min-height: 40px; padding: 0 12px;
+  display: flex; align-items: center; gap: 9px;
+  border: 1px dashed var(--edge); border-radius: 10px; background: transparent;
+  color: var(--ink-muted); font-family: inherit; font-size: 12.5px; font-weight: 600; text-align: left;
 }
 
-/* ── The scorepad: a deliberate PAPER island, cream in both themes ─────── */
-.c-card--pad { background: var(--paper); color: var(--paper-ink); border-color: var(--paper-line); }
+.c-cta {
+  margin-top: auto; width: 100%; height: 44px; border: 0; border-radius: 8px;
+  font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 14.5px;
+  background: var(--accent-fill); color: var(--on-accent);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* ── The scorepad: paper, cream in BOTH themes ────────────────────────── */
+.c-card--pad { background: var(--paper); color: var(--paper-ink); border-color: var(--paper-line); box-shadow: var(--sh-3); }
 .c-card--pad .c-label { color: var(--paper-ink); }
-.c-card--pad .c-label span { color: var(--paper-muted); }
 .pad-tag {
-  font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .09em;
+  font-family: "JetBrains Mono", monospace; font-size: 8.5px; letter-spacing: .09em;
   text-transform: uppercase; color: var(--paper-muted);
   border: 1px solid var(--paper-line); border-radius: 999px; padding: 2px 7px; margin-left: auto;
 }
 .grid-wrap { overflow-x: auto; }
-table.pad { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
-table.pad th, table.pad td { padding: 4px 5px; text-align: center; border-bottom: 1px solid var(--paper-line); color: var(--paper-ink); }
-table.pad thead th { font-size: 10.5px; }
-table.pad tbody th { text-align: left; font-size: 10.5px; color: var(--paper-muted); font-weight: 600; }
+table.pad { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+table.pad th, table.pad td { padding: 3px 4px; text-align: center; border-bottom: 1px solid var(--paper-line); color: var(--paper-ink); }
+table.pad tbody th { text-align: left; font-size: 10px; color: var(--paper-muted); font-weight: 600; }
 .pad-head {
-  width: 27px; height: 27px; border-radius: 999px; display: inline-grid; place-items: center;
-  font-family: "JetBrains Mono", monospace; font-size: 11px; font-weight: 700;
+  width: 25px; height: 25px; border-radius: 999px; display: inline-grid; place-items: center;
+  font-family: "JetBrains Mono", monospace; font-size: 10px; font-weight: 700;
   background: #EFE6D2; color: #6B4A0A; border: 1px solid var(--paper-line);
 }
 .pad-cell {
-  display: block; width: 100%; min-width: 40px; padding: 3px 5px;
-  background: #FFFDF6; border: 1px solid var(--paper-line); border-radius: 5px;
-  text-align: right; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--paper-ink);
+  display: block; width: 100%; min-width: 34px; padding: 3px 5px;
+  background: var(--paper); border: 1px solid var(--paper-line); border-radius: 5px;
+  text-align: right; font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--paper-ink);
 }
 .pad-total { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--win); }
-tr.totals td, tr.totals th { background: rgba(218, 201, 164, .18); border-bottom: 0; }
+tr.totals td, tr.totals th { background: color-mix(in srgb, var(--paper-line) 55%, transparent); border-bottom: 0; }
 
-/* ── The parchment scroll: unchanged, its own gradient, no theme tokens ── */
+/* ── Parchment: its own gradient, untouched by the theme ──────────────── */
 .scroll {
-  position: relative; margin: 10px 2px 4px; padding: 11px 9px; border-radius: 4px;
+  position: relative; margin: 9px 2px 3px; padding: 10px 8px; border-radius: 4px;
   background: radial-gradient(ellipse at center, #E8D5A8 0%, #D9BF8A 75%, #C9A76A 100%);
   color: #2B1D0A;
   box-shadow: inset 0 0 28px rgba(139, 111, 60, .28), 0 4px 12px rgba(0, 0, 0, .35);
 }
 .scroll::before, .scroll::after {
-  content: ""; position: absolute; left: -4px; right: -4px; height: 11px; border-radius: 4px;
+  content: ""; position: absolute; left: -4px; right: -4px; height: 10px; border-radius: 4px;
   background: linear-gradient(180deg, #B89556 0%, #8B6F3C 60%, #6B532A 100%);
   box-shadow: 0 3px 6px rgba(0, 0, 0, .45);
 }
 .scroll::before { top: -5px; }
-.scroll::after { bottom: -5px; }
-.scroll ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.scroll::after  { bottom: -5px; }
+.scroll ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .scroll li {
   background: rgba(255, 250, 235, .55); border: 1px solid rgba(139, 111, 60, .3);
-  border-radius: 3px; padding: 5px 8px; font-size: 12.5px; font-weight: 500;
-  display: flex; align-items: center; gap: 7px;
+  border-radius: 3px; padding: 4px 7px; font-size: 11.5px; font-weight: 500;
 }
-.scroll .dot { width: 7px; height: 7px; border-radius: 999px; flex: none; }
 .c-rulebook {
-  width: 100%; height: 36px; border-radius: 8px; border: 1px solid var(--line);
-  background: var(--well); color: var(--ink); font-family: inherit; font-weight: 600; font-size: 13px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; height: 34px; border-radius: 8px; border: 1px solid var(--edge);
+  background: var(--well); color: var(--ink); font-family: inherit; font-weight: 600; font-size: 12.5px;
+  display: inline-flex; align-items: center; justify-content: center;
 }
-
-/* Game-info strip on the Play step */
 .c-gamebar {
-  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-  padding: 9px 11px; display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center;
-  box-shadow: var(--card-sh);
+  background: var(--card); border: 1px solid var(--edge); border-radius: 12px;
+  padding: 8px 10px; display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center;
+  box-shadow: inset 0 1px 0 var(--emboss), var(--sh-3);
 }
-.c-gamebar__art { width: 34px; height: 34px; border-radius: 5px; background: linear-gradient(150deg, #4E6B4A, #2F4630 70%); }
-.c-gamebar__n { font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 14px; }
-.c-gamebar__sub { font-size: 10.5px; color: var(--ink-muted); font-family: "JetBrains Mono", monospace; letter-spacing: .08em; }
+.c-gamebar__art { width: 32px; height: 32px; border-radius: 5px; background: linear-gradient(150deg, #4E6B4A, #2F4630 70%); }
+.c-gamebar__n { font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 13.5px; }
+.c-gamebar__sub { font-size: 10px; color: var(--ink-muted); font-family: "JetBrains Mono", monospace; letter-spacing: .08em; }
 
-/* ── Section rule between the two screen rows ─────────────────────────── */
-.rule { display: flex; align-items: center; gap: 16px; margin: 56px 0 8px; }
+/* ── Section rules ────────────────────────────────────────────────────── */
+.rule { display: flex; align-items: baseline; gap: 16px; margin: 58px 0 4px; }
 .rule h2 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 20px; margin: 0; letter-spacing: -.01em; white-space: nowrap; }
+.rule p { margin: 0; font-size: 13.5px; color: var(--wall-mute); max-width: 52ch; }
 .rule::after { content: ""; flex: 1; height: 1px; background: var(--wall-line); }
-.rule p { margin: 0; font-size: 13.5px; color: var(--wall-mute); max-width: 44ch; }
 
-.caption { font-size: 13px; color: var(--wall-mute); text-align: center; margin: 0; }
-.caption code { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--wall-ink); }
+/* ── Order strip ──────────────────────────────────────────────────────── */
+.order { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 22px; font-size: 13px; }
+.order__row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.order__lbl { font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--wall-mute); min-width: 74px; }
+.chip {
+  border: 1px solid var(--wall-line); border-radius: 999px; padding: 4px 11px;
+  font-size: 12.5px; background: var(--wall-2);
+}
+.chip--moved { border-color: var(--wall-mark); color: var(--wall-mark); font-weight: 600; }
+.chip--held { opacity: .6; }
+.order__arrow { color: var(--wall-mute); }
 
 .footnote {
-  margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--wall-line);
-  font-size: 13.5px; color: var(--wall-mute); max-width: 72ch;
+  margin-top: 50px; padding-top: 22px; border-top: 1px solid var(--wall-line);
+  font-size: 13.5px; color: var(--wall-mute); max-width: 76ch;
 }
 .footnote strong { color: var(--wall-ink); font-weight: 600; }
 .footnote code { font-family: "JetBrains Mono", monospace; font-size: 12.5px; }
 
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 
 <div class="page">
 
   <header class="masthead">
-    <p class="eyebrow">BoardgameBuddy · Lamplight Study</p>
-    <h1>Which tone should the cascade cards take?</h1>
+    <p class="eyebrow">BoardgameBuddy · Lamplight Study · round 2</p>
+    <h1>Enough contrast yet?</h1>
     <p class="standfirst">
-      Gather, Play and Settle Up currently paint with the <strong>paper</strong> tokens, so every card
-      is cream in dark mode. Both options move them onto the app's ground. They differ by exactly one
-      declaration — the card's background token — and everything else in the change is identical
-      either way. The scoring grid stays a cream scorepad and the parchment scroll is untouched, as
-      decided.
+      The shipped cascade separates its cards from the ground by <strong>1.25 : 1</strong>. Before the
+      dark-mode change, cream on espresso separated them by <strong>16.45 : 1</strong> — so moving off
+      cream gave up all of it and nothing took over the job. <strong>Fill alone cannot fix it:</strong>
+      two steps brighter is the ceiling before the muted ink drops under 4.5 : 1. The middle frame
+      spends the whole budget on fill so you can see how far that gets on its own; the right-hand
+      frame splits it between fill and edge.
     </p>
     <div class="controls">
       <div class="seg" role="group" aria-label="Preview theme">
         <button type="button" data-mode="dark" aria-pressed="true">Dark</button>
         <button type="button" data-mode="light" aria-pressed="false">Light</button>
       </div>
-      <span class="note">Both options are shown at the same theme so the difference is the tone, not the mode.</span>
+      <span class="note">All three are shown at the same theme, so the only variable is the card.
+        The ratios under each frame are measured from the rendered pixels and follow the switch.</span>
     </div>
   </header>
 
   <div class="rule">
     <h2>Gather</h2>
-    <p>The first screen of the cascade — four stacked cards over the app ground.</p>
+    <p>In the new order — session code first, then game, expansions, game type, players.</p>
   </div>
 
   <div class="compare">
 
-    <!-- ═══ OPTION A ═══ -->
+    <!-- ═══ SHIPPED NOW ═══ -->
     <section class="option option--out">
-      <div class="option__head">
-        <span class="option__key">A</span>
-        <h3 class="option__name">Match the app</h3>
-        <span class="option__swatch"><i style="background:#251C16"></i> --bg-1 · #251C16</span>
-      </div>
-      <p class="option__body">
-        The cards take <b>the same tone as everything else you've already darkened</b> — Settings, the
-        five profile spokes, the picker sheets, and the Play-tab hub you tapped "Host a game" from one
-        screen earlier.
-      </p>
-      <div class="phone bgb" data-mode="dark" data-tone="b1">
+      <div class="option__head"><h3 class="option__name">Shipped now</h3></div>
+      <p class="option__body"><b>#33261C</b> · hairline white 8%</p>
+      <div class="phone bgb" data-mode="dark" data-tone="now">
         <div class="screen">
           <div class="c-head">
             <div class="c-back" aria-hidden="true">&#8249;</div>
-            <div class="c-head__body">
-              <h4 class="c-title">Gather</h4>
-              <span class="c-step">Step 1 of 3</span>
-            </div>
+            <div class="c-head__body"><h4 class="c-title">Gather</h4><span class="c-step">Step 1 of 3</span></div>
             <div></div>
           </div>
-
-          <div class="c-card">
-            <div class="c-label">Game</div>
-            <div class="c-game">
-              <div class="c-game__art">W</div>
-              <div>
-                <div class="c-game__name">Wingspan</div>
-                <div class="c-game__sub">40–70 min · 1–5 players</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="c-card">
-            <div class="c-label">Players <span>4 seated</span></div>
-            <ul class="c-players">
-              <li class="c-player"><span class="c-bubble">DR</span><span class="c-player__name">Dan</span><span class="c-player__grip">&#8801;</span></li>
-              <li class="c-player"><span class="c-bubble">AL</span><span class="c-player__name">Alex</span><span class="c-player__grip">&#8801;</span></li>
-              <li class="c-player"><span class="c-bubble">MK</span><span class="c-player__name">Mika</span><span class="c-player__grip">&#8801;</span></li>
-              <li class="c-player"><span class="c-bubble">JO</span><span class="c-player__name">Jo</span><span class="c-player__grip">&#8801;</span></li>
-            </ul>
-            <button class="c-add" type="button">+&ensp;Add a player</button>
-          </div>
-
-          <div class="c-card">
-            <div class="c-collapse">Expansions <em>2 of 3 active</em></div>
-          </div>
-
           <div class="c-card c-code">
             <div class="c-label" style="justify-content:center">Session code</div>
             <div class="c-code__n">4 7 K 2</div>
             <div class="c-code__hint">Read this out and buddies can watch live</div>
           </div>
-
+          <div class="c-card">
+            <div class="c-label">Game</div>
+            <div class="c-game"><div class="c-game__art">W</div>
+              <div><div class="c-game__name">Wingspan</div><div class="c-game__sub">40–70 min · 1–5 players</div></div></div>
+          </div>
+          <div class="c-card">
+            <div class="c-collapse">Expansions <em>2 of 3 active</em></div>
+            <ul class="c-exp">
+              <li class="on" style="--xc:#C8553D"><span class="dot"></span>European</li>
+              <li class="on" style="--xc:#4E7A46"><span class="dot"></span>Oceania</li>
+            </ul>
+          </div>
+          <div class="c-card">
+            <div class="c-label">Game type</div>
+            <div class="c-modes"><span class="c-mode on">Competitive</span><span class="c-mode">Team</span><span class="c-mode">Co-op</span></div>
+          </div>
+          <div class="c-card">
+            <div class="c-label">Players <span>4 seated</span></div>
+            <ul class="c-players">
+              <li class="c-player"><span class="c-bubble">DR</span><span></span><span class="c-player__name">Dan</span><span class="c-player__grip">&#8801;</span></li>
+              <li class="c-player"><span class="c-bubble">AL</span><span></span><span class="c-player__name">Alex</span><span class="c-player__grip">&#8801;</span></li>
+              <li class="c-player"><span class="c-bubble">MK</span><span></span><span class="c-player__name">Mika</span><span class="c-player__grip">&#8801;</span></li>
+            </ul>
+            <button class="c-add" type="button">+&ensp;Add a player</button>
+          </div>
           <button class="c-cta" type="button">Continue</button>
         </div>
       </div>
-      <ul class="tradeoff">
-        <li>One card tone across the whole app — the hub and the cascade are a continuous surface</li>
-        <li>Adds nothing new: it is the existing re-point block, with two selectors appended</li>
-        <li class="cost">A live session looks like any other screen; nothing signals "you're in a game"</li>
-      </ul>
+      <div class="metrics">
+        <div class="metric flat"><span>card vs ground</span><b>1.25 : 1</b></div>
+        <div class="metric flat"><span>well vs card</span><b>1.14 : 1</b></div>
+        <div class="metric low"><span>hairline vs card</span><b>1.28 : 1</b></div>
+        <div class="metric flat"><span>body ink on card</span><b>11.94 : 1</b></div>
+        <div class="metric flat"><span>muted ink on card</span><b>5.81 : 1</b></div>
+      </div>
     </section>
 
-    <!-- ═══ OPTION B ═══ -->
+    <!-- ═══ LIFT ONLY ═══ -->
+    <section class="option option--out">
+      <div class="option__head"><h3 class="option__name">Lift only</h3></div>
+      <p class="option__body"><b>#423225</b> · hairline still white 8%</p>
+      <div class="phone bgb" data-mode="dark" data-tone="lift">
+        <div class="screen">
+          <div class="c-head">
+            <div class="c-back" aria-hidden="true">&#8249;</div>
+            <div class="c-head__body"><h4 class="c-title">Gather</h4><span class="c-step">Step 1 of 3</span></div>
+            <div></div>
+          </div>
+          <div class="c-card c-code">
+            <div class="c-label" style="justify-content:center">Session code</div>
+            <div class="c-code__n">4 7 K 2</div>
+            <div class="c-code__hint">Read this out and buddies can watch live</div>
+          </div>
+          <div class="c-card">
+            <div class="c-label">Game</div>
+            <div class="c-game"><div class="c-game__art">W</div>
+              <div><div class="c-game__name">Wingspan</div><div class="c-game__sub">40–70 min · 1–5 players</div></div></div>
+          </div>
+          <div class="c-card">
+            <div class="c-collapse">Expansions <em>2 of 3 active</em></div>
+            <ul class="c-exp">
+              <li class="on" style="--xc:#C8553D"><span class="dot"></span>European</li>
+              <li class="on" style="--xc:#4E7A46"><span class="dot"></span>Oceania</li>
+            </ul>
+          </div>
+          <div class="c-card">
+            <div class="c-label">Game type</div>
+            <div class="c-modes"><span class="c-mode on">Competitive</span><span class="c-mode">Team</span><span class="c-mode">Co-op</span></div>
+          </div>
+          <div class="c-card">
+            <div class="c-label">Players <span>4 seated</span></div>
+            <ul class="c-players">
+              <li class="c-player"><span class="c-bubble">DR</span><span></span><span class="c-player__name">Dan</span><span class="c-player__grip">&#8801;</span></li>
+              <li class="c-player"><span class="c-bubble">AL</span><span></span><span class="c-player__name">Alex</span><span class="c-player__grip">&#8801;</span></li>
+              <li class="c-player"><span class="c-bubble">MK</span><span></span><span class="c-player__name">Mika</span><span class="c-player__grip">&#8801;</span></li>
+            </ul>
+            <button class="c-add" type="button">+&ensp;Add a player</button>
+          </div>
+          <button class="c-cta" type="button">Continue</button>
+        </div>
+      </div>
+      <div class="metrics">
+        <div class="metric up"><span>card vs ground</span><b>1.50 : 1</b></div>
+        <div class="metric up"><span>well vs card</span><b>1.36 : 1</b></div>
+        <div class="metric low"><span>hairline vs card</span><b>1.28 : 1</b></div>
+        <div class="metric flat"><span>body ink on card</span><b>9.99 : 1</b></div>
+        <div class="metric flat"><span>muted ink on card</span><b>4.86 : 1</b></div>
+      </div>
+    </section>
+
+    <!-- ═══ LIFT + EDGE ═══ -->
     <section class="option">
-      <div class="option__head">
-        <span class="option__key">B</span>
-        <h3 class="option__name">Lamplit</h3>
-        <span class="chosen">Shipped</span>
-        <span class="option__swatch"><i style="background:#33261C"></i> --bg-2 · #33261C</span>
-      </div>
-      <p class="option__body">
-        The cards sit <b>one step brighter than the rest of the app</b>, so the three screens you only
-        see during a live game read as raised — lit under the lamp, closer to the table.
-      </p>
-      <div class="phone bgb" data-mode="dark" data-tone="b2">
+      <div class="option__head"><h3 class="option__name">Lift + edge</h3><span class="pick">Your pick</span></div>
+      <p class="option__body"><b>#423225</b> · hairline white 16% · lit top edge</p>
+      <div class="phone bgb" data-mode="dark" data-tone="edge">
         <div class="screen">
           <div class="c-head">
             <div class="c-back" aria-hidden="true">&#8249;</div>
-            <div class="c-head__body">
-              <h4 class="c-title">Gather</h4>
-              <span class="c-step">Step 1 of 3</span>
-            </div>
+            <div class="c-head__body"><h4 class="c-title">Gather</h4><span class="c-step">Step 1 of 3</span></div>
             <div></div>
           </div>
-
+          <div class="c-card c-code">
+            <div class="c-label" style="justify-content:center">Session code</div>
+            <div class="c-code__n c-code__n--pending">— — — —</div>
+            <div class="c-code__hint">Getting your code…</div>
+          </div>
           <div class="c-card">
             <div class="c-label">Game</div>
-            <div class="c-game">
-              <div class="c-game__art">W</div>
-              <div>
-                <div class="c-game__name">Wingspan</div>
-                <div class="c-game__sub">40–70 min · 1–5 players</div>
-              </div>
-            </div>
+            <div class="c-game"><div class="c-game__art">W</div>
+              <div><div class="c-game__name">Wingspan</div><div class="c-game__sub">40–70 min · 1–5 players</div></div></div>
           </div>
-
+          <div class="c-card">
+            <div class="c-collapse">Expansions <em>2 of 3 active</em></div>
+            <ul class="c-exp">
+              <li class="on" style="--xc:#C8553D"><span class="dot"></span>European</li>
+              <li class="on" style="--xc:#4E7A46"><span class="dot"></span>Oceania</li>
+            </ul>
+          </div>
+          <div class="c-card">
+            <div class="c-label">Game type</div>
+            <div class="c-modes"><span class="c-mode on">Competitive</span><span class="c-mode">Team</span><span class="c-mode">Co-op</span></div>
+          </div>
           <div class="c-card">
             <div class="c-label">Players <span>4 seated</span></div>
             <ul class="c-players">
-              <li class="c-player"><span class="c-bubble">DR</span><span class="c-player__name">Dan</span><span class="c-player__grip">&#8801;</span></li>
-              <li class="c-player"><span class="c-bubble">AL</span><span class="c-player__name">Alex</span><span class="c-player__grip">&#8801;</span></li>
-              <li class="c-player"><span class="c-bubble">MK</span><span class="c-player__name">Mika</span><span class="c-player__grip">&#8801;</span></li>
-              <li class="c-player"><span class="c-bubble">JO</span><span class="c-player__name">Jo</span><span class="c-player__grip">&#8801;</span></li>
+              <li class="c-player"><span class="c-bubble">DR</span><span></span><span class="c-player__name">Dan</span><span class="c-player__grip">&#8801;</span></li>
+              <li class="c-player"><span class="c-bubble">AL</span><span></span><span class="c-player__name">Alex</span><span class="c-player__grip">&#8801;</span></li>
+              <li class="c-player"><span class="c-bubble">MK</span><span></span><span class="c-player__name">Mika</span><span class="c-player__grip">&#8801;</span></li>
             </ul>
             <button class="c-add" type="button">+&ensp;Add a player</button>
           </div>
-
-          <div class="c-card">
-            <div class="c-collapse">Expansions <em>2 of 3 active</em></div>
-          </div>
-
-          <div class="c-card c-code">
-            <div class="c-label" style="justify-content:center">Session code</div>
-            <div class="c-code__n">4 7 K 2</div>
-            <div class="c-code__hint">Read this out and buddies can watch live</div>
-          </div>
-
           <button class="c-cta" type="button">Continue</button>
         </div>
       </div>
-      <ul class="tradeoff">
-        <li>The cascade reads as its own place — the screens lift off the ground during a session</li>
-        <li>More separation between card and page without leaning on a border</li>
-        <li>The two sheets reachable from Gather — the player picker and the game
-            search — come with it, so a sheet never lands a step below the card that
-            opened it</li>
-        <li class="cost">A second card tone the app has to keep in step from here on</li>
-        <li class="cost">Wells drop to <code>--bg-1</code>, so fields are a shallower cut than elsewhere</li>
-      </ul>
+      <div class="metrics">
+        <div class="metric up"><span>card vs ground</span><b>1.50 : 1</b></div>
+        <div class="metric up"><span>well vs card</span><b>1.36 : 1</b></div>
+        <div class="metric up"><span>hairline vs card</span><b>1.65 : 1</b></div>
+        <div class="metric flat"><span>body ink on card</span><b>9.99 : 1</b></div>
+        <div class="metric flat"><span>muted ink on card</span><b>4.86 : 1</b></div>
+      </div>
     </section>
+  </div>
+
+  <p class="footnote" style="margin-top:34px;border-top:0;padding-top:0">
+    This frame deliberately shows the <strong>minting placeholder</strong> — the pulsing
+    <code>— — — —</code> — because leading with the session code means a host on a cold start can
+    open on it. That is the one real cost of the reorder, and it is easier to judge here than to
+    argue about.
+  </p>
+
+  <div class="rule">
+    <h2>Card order</h2>
+    <p>One card moves. Game type stays put, because Team mode adds a column to every roster row.</p>
+  </div>
+
+  <div class="order">
+    <div class="order__row">
+      <span class="order__lbl">Now</span>
+      <span class="chip">Game</span><span class="order__arrow">→</span>
+      <span class="chip chip--moved">Session code</span><span class="order__arrow">→</span>
+      <span class="chip">Expansions</span><span class="order__arrow">→</span>
+      <span class="chip chip--held">Game type</span><span class="order__arrow">→</span>
+      <span class="chip">Players</span>
+    </div>
+  </div>
+  <div class="order">
+    <div class="order__row">
+      <span class="order__lbl">After</span>
+      <span class="chip chip--moved">Session code</span><span class="order__arrow">→</span>
+      <span class="chip">Game</span><span class="order__arrow">→</span>
+      <span class="chip">Expansions</span><span class="order__arrow">→</span>
+      <span class="chip chip--held">Game type</span><span class="order__arrow">→</span>
+      <span class="chip">Players</span>
+    </div>
   </div>
 
   <div class="rule">
     <h2>Play</h2>
-    <p>Where the two decisions already made are visible: the cream scorepad, and the parchment left alone.</p>
+    <p>The check that matters for the brighter card: the cream scorepad has to still read as a separate object on it.</p>
   </div>
 
   <div class="compare">
-
     <section class="option option--out">
-      <div class="option__head">
-        <span class="option__key">A</span>
-        <h3 class="option__name">Match the app</h3>
-      </div>
-      <div class="phone bgb" data-mode="dark" data-tone="b1">
+      <div class="option__head"><h3 class="option__name">Shipped now</h3></div>
+      <div class="phone bgb" data-mode="dark" data-tone="now">
         <div class="screen">
           <div class="c-head">
             <div class="c-back" aria-hidden="true">&#8249;</div>
-            <div class="c-head__body">
-              <h4 class="c-title">Play</h4>
-              <span class="c-step">Step 2 of 3</span>
-            </div>
+            <div class="c-head__body"><h4 class="c-title">Play</h4><span class="c-step">Step 2 of 3</span></div>
             <div></div>
           </div>
-
-          <div class="c-gamebar">
-            <div class="c-gamebar__art"></div>
-            <div>
-              <div class="c-gamebar__n">Wingspan</div>
-              <div class="c-gamebar__sub">4 7 K 2</div>
-            </div>
-            <div class="c-bubble">3</div>
-          </div>
-
+          <div class="c-gamebar"><div class="c-gamebar__art"></div>
+            <div><div class="c-gamebar__n">Wingspan</div><div class="c-gamebar__sub">4 7 K 2</div></div>
+            <div class="c-bubble">3</div></div>
           <div class="c-card c-card--pad">
             <div class="c-label">Scoring <span class="pad-tag">Paper, both themes</span></div>
-            <div class="grid-wrap">
-              <table class="pad">
-                <thead>
-                  <tr><th></th><th><span class="pad-head">DR</span></th><th><span class="pad-head">AL</span></th><th><span class="pad-head">MK</span></th><th><span class="pad-head">JO</span></th></tr>
-                </thead>
-                <tbody>
-                  <tr><th>R1</th><td><span class="pad-cell">12</span></td><td><span class="pad-cell">8</span></td><td><span class="pad-cell">15</span></td><td><span class="pad-cell">9</span></td></tr>
-                  <tr><th>R2</th><td><span class="pad-cell">9</span></td><td><span class="pad-cell">14</span></td><td><span class="pad-cell">6</span></td><td><span class="pad-cell">11</span></td></tr>
-                  <tr><th>R3</th><td><span class="pad-cell">21</span></td><td><span class="pad-cell">7</span></td><td><span class="pad-cell">11</span></td><td><span class="pad-cell">4</span></td></tr>
-                  <tr class="totals"><th>Total</th><td class="pad-total">42</td><td class="pad-total">29</td><td class="pad-total">32</td><td class="pad-total">24</td></tr>
-                </tbody>
-              </table>
-            </div>
+            <div class="grid-wrap"><table class="pad">
+              <thead><tr><th></th><th><span class="pad-head">DR</span></th><th><span class="pad-head">AL</span></th><th><span class="pad-head">MK</span></th></tr></thead>
+              <tbody>
+                <tr><th>R1</th><td><span class="pad-cell">12</span></td><td><span class="pad-cell">8</span></td><td><span class="pad-cell">15</span></td></tr>
+                <tr><th>R2</th><td><span class="pad-cell">9</span></td><td><span class="pad-cell">14</span></td><td><span class="pad-cell">6</span></td></tr>
+                <tr class="totals"><th>Total</th><td class="pad-total">42</td><td class="pad-total">29</td><td class="pad-total">32</td></tr>
+              </tbody></table></div>
           </div>
-
           <div class="c-card">
             <div class="c-label">Reference guide</div>
             <button class="c-rulebook" type="button">Rulebook</button>
-            <div class="scroll">
-              <ul>
-                <li><span class="dot" style="background:#8B6F3C"></span>Setup &amp; first turn</li>
-                <li><span class="dot" style="background:#C8553D"></span>Scoring the round</li>
-                <li><span class="dot" style="background:#4E6B4A"></span>End of game</li>
-              </ul>
-            </div>
+            <div class="scroll"><ul><li>Setup &amp; first turn</li><li>Scoring the round</li><li>End of game</li></ul></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="option option--out">
+      <div class="option__head"><h3 class="option__name">Lift only</h3></div>
+      <div class="phone bgb" data-mode="dark" data-tone="lift">
+        <div class="screen">
+          <div class="c-head">
+            <div class="c-back" aria-hidden="true">&#8249;</div>
+            <div class="c-head__body"><h4 class="c-title">Play</h4><span class="c-step">Step 2 of 3</span></div>
+            <div></div>
+          </div>
+          <div class="c-gamebar"><div class="c-gamebar__art"></div>
+            <div><div class="c-gamebar__n">Wingspan</div><div class="c-gamebar__sub">4 7 K 2</div></div>
+            <div class="c-bubble">3</div></div>
+          <div class="c-card c-card--pad">
+            <div class="c-label">Scoring <span class="pad-tag">Paper, both themes</span></div>
+            <div class="grid-wrap"><table class="pad">
+              <thead><tr><th></th><th><span class="pad-head">DR</span></th><th><span class="pad-head">AL</span></th><th><span class="pad-head">MK</span></th></tr></thead>
+              <tbody>
+                <tr><th>R1</th><td><span class="pad-cell">12</span></td><td><span class="pad-cell">8</span></td><td><span class="pad-cell">15</span></td></tr>
+                <tr><th>R2</th><td><span class="pad-cell">9</span></td><td><span class="pad-cell">14</span></td><td><span class="pad-cell">6</span></td></tr>
+                <tr class="totals"><th>Total</th><td class="pad-total">42</td><td class="pad-total">29</td><td class="pad-total">32</td></tr>
+              </tbody></table></div>
+          </div>
+          <div class="c-card">
+            <div class="c-label">Reference guide</div>
+            <button class="c-rulebook" type="button">Rulebook</button>
+            <div class="scroll"><ul><li>Setup &amp; first turn</li><li>Scoring the round</li><li>End of game</li></ul></div>
           </div>
         </div>
       </div>
     </section>
 
     <section class="option">
-      <div class="option__head">
-        <span class="option__key">B</span>
-        <h3 class="option__name">Lamplit</h3>
-      </div>
-      <div class="phone bgb" data-mode="dark" data-tone="b2">
+      <div class="option__head"><h3 class="option__name">Lift + edge</h3><span class="pick">Your pick</span></div>
+      <div class="phone bgb" data-mode="dark" data-tone="edge">
         <div class="screen">
           <div class="c-head">
             <div class="c-back" aria-hidden="true">&#8249;</div>
-            <div class="c-head__body">
-              <h4 class="c-title">Play</h4>
-              <span class="c-step">Step 2 of 3</span>
-            </div>
+            <div class="c-head__body"><h4 class="c-title">Play</h4><span class="c-step">Step 2 of 3</span></div>
             <div></div>
           </div>
-
-          <div class="c-gamebar">
-            <div class="c-gamebar__art"></div>
-            <div>
-              <div class="c-gamebar__n">Wingspan</div>
-              <div class="c-gamebar__sub">4 7 K 2</div>
-            </div>
-            <div class="c-bubble">3</div>
-          </div>
-
+          <div class="c-gamebar"><div class="c-gamebar__art"></div>
+            <div><div class="c-gamebar__n">Wingspan</div><div class="c-gamebar__sub">4 7 K 2</div></div>
+            <div class="c-bubble">3</div></div>
           <div class="c-card c-card--pad">
             <div class="c-label">Scoring <span class="pad-tag">Paper, both themes</span></div>
-            <div class="grid-wrap">
-              <table class="pad">
-                <thead>
-                  <tr><th></th><th><span class="pad-head">DR</span></th><th><span class="pad-head">AL</span></th><th><span class="pad-head">MK</span></th><th><span class="pad-head">JO</span></th></tr>
-                </thead>
-                <tbody>
-                  <tr><th>R1</th><td><span class="pad-cell">12</span></td><td><span class="pad-cell">8</span></td><td><span class="pad-cell">15</span></td><td><span class="pad-cell">9</span></td></tr>
-                  <tr><th>R2</th><td><span class="pad-cell">9</span></td><td><span class="pad-cell">14</span></td><td><span class="pad-cell">6</span></td><td><span class="pad-cell">11</span></td></tr>
-                  <tr><th>R3</th><td><span class="pad-cell">21</span></td><td><span class="pad-cell">7</span></td><td><span class="pad-cell">11</span></td><td><span class="pad-cell">4</span></td></tr>
-                  <tr class="totals"><th>Total</th><td class="pad-total">42</td><td class="pad-total">29</td><td class="pad-total">32</td><td class="pad-total">24</td></tr>
-                </tbody>
-              </table>
-            </div>
+            <div class="grid-wrap"><table class="pad">
+              <thead><tr><th></th><th><span class="pad-head">DR</span></th><th><span class="pad-head">AL</span></th><th><span class="pad-head">MK</span></th></tr></thead>
+              <tbody>
+                <tr><th>R1</th><td><span class="pad-cell">12</span></td><td><span class="pad-cell">8</span></td><td><span class="pad-cell">15</span></td></tr>
+                <tr><th>R2</th><td><span class="pad-cell">9</span></td><td><span class="pad-cell">14</span></td><td><span class="pad-cell">6</span></td></tr>
+                <tr class="totals"><th>Total</th><td class="pad-total">42</td><td class="pad-total">29</td><td class="pad-total">32</td></tr>
+              </tbody></table></div>
           </div>
-
           <div class="c-card">
             <div class="c-label">Reference guide</div>
             <button class="c-rulebook" type="button">Rulebook</button>
-            <div class="scroll">
-              <ul>
-                <li><span class="dot" style="background:#8B6F3C"></span>Setup &amp; first turn</li>
-                <li><span class="dot" style="background:#C8553D"></span>Scoring the round</li>
-                <li><span class="dot" style="background:#4E6B4A"></span>End of game</li>
-              </ul>
-            </div>
+            <div class="scroll"><ul><li>Setup &amp; first turn</li><li>Scoring the round</li><li>End of game</li></ul></div>
           </div>
         </div>
       </div>
@@ -609,27 +672,82 @@ tr.totals td, tr.totals th { background: rgba(218, 201, 164, .18); border-bottom
   </div>
 
   <p class="footnote">
-    <strong>What is the same in both.</strong> Cards move off <code>--polaroid-*</code> onto the ground
-    tokens; player rows, the notes field and the photo dropzone become <code>--well</code>; the
-    "Gather / Play / Settle Up" heading stops being <code>var(--polaroid-bg)</code>, which renders it
-    white-on-cream at about 1.05:1 in light mode today; the Continue button moves from a literal
-    <code>#fff</code> to <code>--on-accent</code>; card shadows move off hardcoded black onto the
-    shadow ramp; and the co-op outcome buttons stop being near-black blocks on the scorepad. Flip the
-    switch above to Light to check the second theme — the difference between A and B is nearly
-    imperceptible there, which is the point.
-  </p>
-
-  <p class="footnote" style="margin-top:22px;border-top:0;padding-top:0">
-    <strong>Decided: B, Lamplit.</strong> Shipped as a small tone block layered over the shared
-    chrome re-point rather than a second copy of it, so the cascade still inherits every other
-    value from one place. <code>.player-picker-sheet</code> and <code>.game-search-sheet</code>
-    move with it because Gather is their only call site; <code>.game-picker-sheet</code> (Stats)
-    and <code>.exp-picker</code> (Collection) stay at <code>--bg-1</code>.
+    <strong>What changes in code.</strong> A third ground step, <code>--bg-3</code>
+    (<code>#423225</code> dark, <code>#FFFFFF</code> light — the light ladder tops out at white, so
+    light gets its improvement from the edge instead). Then four values repoint in the tone block
+    the last change already added, and cascade cards gain an inset top highlight from
+    <code>--card-emboss</code>, which already exists per theme. Re-pointing the hairline to
+    <code>--line-strong</code> is what firms up the rows and fields <em>inside</em> the cards too —
+    the other half of "not enough contrast". <strong>The scorepad is untouched by all of it:</strong>
+    the paper island restates its own hairline, so the stronger edge cannot leak in.
+    <strong>Flip to Light</strong> — the fill is identical across all three there, and only the edge
+    moves, which is the honest picture of what light gets out of this.
   </p>
 </div>
 
 <script>
 (function () {
+  /* Ratios are MEASURED from the rendered frames rather than typed in, so the
+     arithmetic under each phone cannot drift from the pixels above it — and so
+     it follows the light/dark switch. Colours are resolved through a canvas
+     pixel, which handles color-mix() and any alpha the same way the compositor
+     does. */
+  var cv = document.createElement("canvas"); cv.width = cv.height = 1;
+  var cx = cv.getContext("2d", { willReadFrequently: true });
+  function rgba(str) {
+    cx.clearRect(0, 0, 1, 1);
+    cx.fillStyle = "#000"; cx.fillStyle = str;
+    cx.fillRect(0, 0, 1, 1);
+    var d = cx.getImageData(0, 0, 1, 1).data;
+    return [d[0], d[1], d[2], d[3] / 255];
+  }
+  function chan(c) { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  function lum(c) { return 0.2126 * chan(c[0]) + 0.7152 * chan(c[1]) + 0.0722 * chan(c[2]); }
+  function over(f, bg) { return [0, 1, 2].map(function (i) { return f[i] * f[3] + bg[i] * (1 - f[3]); }); }
+  function ratio(f, bg) {
+    var a = lum(f), b = lum(bg), hi = Math.max(a, b), lo = Math.min(a, b);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  function measure() {
+    document.querySelectorAll(".option").forEach(function (sec) {
+      var rows = sec.querySelectorAll(".metric");
+      if (!rows.length) return;
+      var frame = sec.querySelector(".bgb");
+      var card  = sec.querySelector(".c-card");
+      var row   = sec.querySelector(".c-player");
+      /* Sample ink from an element that actually sits ON the card (the card's
+         own label), not from a row inside a well — the label under this number
+         says "on card", and a mismatched pair is worse than no number. */
+      var name  = sec.querySelector(".c-label");
+      var sub   = sec.querySelector(".c-game__sub");
+      if (!frame || !card || !row || !name || !sub) return;
+
+      var cs = getComputedStyle(card);
+      var ground = rgba(getComputedStyle(frame).backgroundColor).slice(0, 3);
+      var cardBg = rgba(cs.backgroundColor).slice(0, 3);
+      var wellBg = rgba(getComputedStyle(row).backgroundColor).slice(0, 3);
+      var edge   = over(rgba(cs.borderTopColor), cardBg);
+      var ink    = rgba(getComputedStyle(name).color).slice(0, 3);
+      var muted  = rgba(getComputedStyle(sub).color).slice(0, 3);
+
+      var vals = [
+        ratio(cardBg, ground), ratio(wellBg, cardBg), ratio(edge, cardBg),
+        ratio(ink, cardBg),    ratio(muted, cardBg)
+      ];
+      /* Surface separation and text legibility are different jobs with
+         different floors: a card only has to be TELLABLE from its ground,
+         while text has to be readable on it. Colour-code each against the
+         floor that applies to it. */
+      var floors = [1.4, 1.25, 1.5, 4.5, 4.5];
+      vals.forEach(function (v, i) {
+        if (!rows[i]) return;
+        rows[i].querySelector("b").textContent = v.toFixed(2) + " : 1";
+        rows[i].className = "metric " + (v >= floors[i] ? "up" : v >= floors[i] * 0.85 ? "flat" : "low");
+      });
+    });
+  }
+
   var buttons = document.querySelectorAll(".seg button");
   var frames = document.querySelectorAll(".bgb");
   buttons.forEach(function (btn) {
@@ -637,7 +755,11 @@ tr.totals td, tr.totals th { background: rgba(218, 201, 164, .18); border-bottom
       var mode = btn.dataset.mode;
       buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
       frames.forEach(function (f) { f.dataset.mode = mode; });
+      measure();
     });
   });
+
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+  measure();
 })();
 </script>
