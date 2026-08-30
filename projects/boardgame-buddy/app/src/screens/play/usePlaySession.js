@@ -58,12 +58,20 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
   // which is what lets a guest's column stream. A player without a
   // participant_id yet (offline table, or the poll hasn't matched them) simply
   // reads from the local draft.
+  // The LOCAL draft wins, always. This device is the only writer under
+  // host-only scoring (migration 053), so the overlay carries nothing but our
+  // own echoes — and typing "36" fires two independent upserts, 3 then 36,
+  // with no ordering between them. Letting the overlay win means the 3 landing
+  // last silently rewrites the cell, and on web that reached the saved play.
+  // The overlay stays authoritative on the spectator's screen, which has no
+  // draft of its own; here it's only a fallback for a cell we never typed.
   const resolvedScore = useCallback((player, roundIndex) => {
+    const local = player.round_scores && player.round_scores[roundIndex];
+    if (local != null && local !== '') return parseRoundScore(local);
     if (liveRef.current && player.participant_id) {
       const live = liveRef.current.getScore(player.participant_id, roundIndex);
       if (live != null) return live;
     }
-    const local = player.round_scores && player.round_scores[roundIndex];
     return parseRoundScore(local);
   }, []);
 
@@ -246,6 +254,30 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
   );
   withLobbyRef.current = withLobby;
 
+  /**
+   * Give every local player a participant row. POST /sessions seats only the
+   * host, so a roster the draft already carried — "Another Round", a resumed
+   * draft, a healed lobby — has none. Since migration 053 keys live scores by
+   * participant, a player without one has no column on any spectator's grid.
+   *
+   * Best-effort per player: a failed write costs a spectator that column, and
+   * costs the host nothing. The host themselves is seated by the mint.
+   */
+  const pushRosterToLobby = useCallback(async () => {
+    const d = draftRef.current;
+    const code = lobbyRef.current?.code;
+    if (!d || !code) return;
+    const pending = (d.players || []).filter(
+      (p) => !p.participant_id && !(me && p.user_id === me.id),
+    );
+    if (!pending.length) return;
+    await Promise.all(
+      pending.map((p) =>
+        api.addParticipant(code, { userId: p.user_id || null, displayName: p.name }).catch(() => {}),
+      ),
+    );
+  }, [me]);
+
   const lobbyPollTick = useCallback(async () => {
     const d = draftRef.current;
     if (!lobbyRef.current || !d) return;
@@ -334,6 +366,11 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
       draftRef.current = d;
       saveDraft(d);
       await ensureLobbyOpen();
+      // A draft can arrive already holding a roster — the Play tab's "Another
+      // Round" card seeds every player from the last play — and POST /sessions
+      // seats only the host. Since 053 keys live scores by participant, a
+      // player with no participant row has no column on any spectator's grid.
+      await pushRosterToLobby();
       if (!mountedRef.current) return;
       setReady(true);
       repaint();
@@ -577,11 +614,7 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
     (async () => {
       const code = lobbyRef.current?.code;
       if (!code) return;
-      await Promise.all(
-        (d.players || [])
-          .filter((p) => !p.participant_id && !(me && p.user_id === me.id))
-          .map((p) => api.addParticipant(code, { userId: p.user_id || null, displayName: p.name }).catch(() => {})),
-      );
+      await pushRosterToLobby();
       // bgb_advance_phase validates transitions, so walk rather than jump.
       const target = d.phase || 'gather';
       for (const step of PHASE_ORDER) {
@@ -592,7 +625,7 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
       if (hadLive && d.phase === 'play') await startLiveScores();
       repaint();
     })().catch(() => {});
-  }, [me, persist, repaint, startLiveScores]);
+  }, [me, persist, repaint, startLiveScores, pushRosterToLobby]);
   onLobbyReplacedRef.current = onLobbyReplaced;
 
   const abandon = useCallback(async () => {
@@ -725,25 +758,12 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
       repaint();
 
       await ensureLobbyOpen();
-      // POST /sessions seats only the host, so the carried roster needs
-      // explicit participant rows before joiners can see the group.
-      const code = lobbyRef.current?.code;
-      if (code) {
-        await Promise.all(
-          d.players
-            .filter((p) => !p.participant_id && !(me && p.user_id === me.id))
-            .map((p) =>
-              api
-                .addParticipant(code, { userId: p.user_id || null, displayName: p.name })
-                .catch(() => {}),
-            ),
-        );
-      }
+      await pushRosterToLobby();
       repaint();
       pollRef.current = setInterval(lobbyPollTick, 2000);
       await startLiveScores();
     },
-    [me, repaint, ensureLobbyOpen, lobbyPollTick, startLiveScores],
+    [me, repaint, ensureLobbyOpen, pushRosterToLobby, lobbyPollTick, startLiveScores],
   );
 
   return {
