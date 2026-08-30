@@ -136,6 +136,7 @@
         { name: "wishlist",            pattern: /^\/profile\/wishlist\/?$/,       build: () => "/profile/wishlist" },
         { name: "plays",               pattern: /^\/profile\/plays\/?$/,          build: () => "/profile/plays" },
         { name: "buddies",             pattern: /^\/profile\/buddies\/?$/,        build: () => "/profile/buddies" },
+        { name: "stats",               pattern: /^\/profile\/stats\/?$/,          build: () => "/profile/stats" },
         { name: "profile-self",        pattern: /^\/profile\/?$/,                 build: () => "/profile" },
         { name: "profile-other",       pattern: /^\/u\/([^/]+)\/?$/,
           consume: ["userId"],

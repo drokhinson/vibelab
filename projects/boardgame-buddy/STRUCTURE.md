@@ -338,6 +338,7 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/feed?cursor=&limit=20` — Strava-style mixed feed (plays + hot games + suggested buddies). Cursor-paginated via `created_at`. Both rails are composed into this response by `feed_service.build_feed_page`; they have no standalone endpoints.
 - `GET /api/v1/boardgame_buddy/users/me/stats` — Strava-style aggregate stats for the current user
 - `GET /api/v1/boardgame_buddy/users/{user_id}/stats` — same shape for any user (profiles are public)
+- `GET /api/v1/boardgame_buddy/users/me/stats/detail` — everything the Stats spoke draws, in one call (podium, per-game win/score breakdown, nemesis, 26-week play rhythm, unplayed shelf, table size, taste, comebacks, co-op record, personal bests). Backed by `bgb_user_stats_detail`. Self-only, unlike the two above.
 - `GET /api/v1/boardgame_buddy/users/{user_id}/profile` — public profile + buddy-relation flags
 - `GET /api/v1/boardgame_buddy/search?q=&include_bgg=false` — unified game search (collection → DB; BGG only when `include_bgg=true`). Expansions are excluded from every source unless `include_expansions=true` — they aren't pickable as a session's main game and are added through the base game's expansion section instead.
 - `POST /api/v1/boardgame_buddy/sessions` — open a short-code play session (body `{game_id?}`). Closes any prior open session for the same host first.
@@ -389,11 +390,12 @@ Path-based routing via the History API (`projects/boardgame-buddy/web/domain/vie
 | `/games` | `game-explorer` | — | — | Game Explorer: My Collection ↔ All BgB Games toggle + players / play time / type filters over a paginated polaroid grid. Tapping a game stages it and opens Gather prefilled. |
 | `/game/:gameId` | `game-detail` | `gameId` | `gameName` | Game hero, status toggle, reference scroll, recent plays. |
 | `/game/:gameId/chapters` | `reference-guide-add` | `gameId` | `gameName`, `expansionIds`, `mode` (`"edit"` for prefill), `chapterId` | Three-mode chapter editor (browse / create / edit). When opened with `mode=edit`, the scroll widget stashes the chapter on the view singleton (`_prefillChapter`) so the deep-link parent never re-fetches it. |
-| `/profile` | `profile-self` | — | — | Own profile: stats strip + collection grid + recent plays. Bottom-nav Profile tab. |
+| `/profile` | `profile-self` | — | — | Own profile: account card, a tappable **Your stats** block (plays / wins / top game) routing to `/profile/stats`, then Collection / Wishlist / Recent plays / Buddies preview cards. Bottom-nav Profile tab. |
 | `/profile/collection` | `collection` | — | `userId` (when viewing another user — though `/u/:userId` is preferred for that) | Collection grid. |
 | `/profile/wishlist` | `wishlist` | — | `userId` | Wishlist grid. |
 | `/profile/plays` | `plays` | — | `userId` | Plays log. |
 | `/profile/buddies` | `buddies` | — | — | Accepted buddies + pending requests + search. Buddies and Played-with are paged 6 per page, with the "Buddies you may know" rail between them. |
+| `/profile/stats` | `stats` | — | — | Stats spoke: gold/silver/bronze podium of the most-played games, career strip, a per-game picker showing win/play ratio and the average winning score, then nemesis, play rhythm, shelf of shame, table size, taste, comebacks, co-op record and personal bests. One call. |
 | `/u/:userId` | `profile-other` | `userId` | — | Public profile for another account. Distinct from `/profile/*` so userId can't collide with a subpage name. |
 | `/settings` | `settings` | — | — | Account / theme / logout. |
 | `/admin` | `admin` | — | — | Chapter-reports moderation. Only reachable when `is_admin=true`. |

@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 056 (participant `position` — the host's roster order
---               reaches the spectators' grid)
+-- Last updated: migration 058 (bgb_user_stats_detail — the Stats spoke's whole
+--               payload in one call)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,31 @@
 --   Purpose:    Per-user stats card on the Profile view (Played Games,
 --               Owned Games, Wins, Favorite Game). owned_games excludes
 --               expansions; owned_expansions is the secondary counter.
+
+-- bgb_user_stats_detail(uid UUID)
+--   → JSONB { career, podium, games, nemesis, rhythm, shelf, table_size,
+--             taste, comeback, coop, personal_bests }
+--   Defined in: db/migrations/boardgamebuddy/058_user_stats_detail.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/stats_routes.py
+--               (GET /users/me/stats/detail)
+--   Purpose:    Everything on the Stats spoke (/profile/stats) in one call —
+--               the most-played podium, a per-game win/score breakdown for
+--               the picker, nemesis, a 26-week play heatmap with streaks,
+--               the unplayed-shelf count, table-size distribution, category
+--               taste, comeback-from-behind wins, the co-op record and
+--               personal bests. Composed as one function for the same reason
+--               bgb_profile_bundle is: every block reads the same "my plays"
+--               set (logged-by-me OR I'm a participant, per migration 045),
+--               so they share one materialized CTE instead of twelve round
+--               trips. Written as a single SQL statement rather than plpgsql
+--               + temp tables so it can stay STABLE — PostgREST runs a
+--               non-volatile RPC inside a READ ONLY transaction.
+--               Blocks needing a per-player row (wins, scores, comebacks,
+--               co-op) can only speak for plays the user actually sat in, so
+--               career carries rated_plays/rated_wins as their denominator
+--               alongside total_plays/win_count. nemesis, table_size.avg and
+--               rhythm.busiest_weekday are null when there is nothing to
+--               compute; every other key is always present.
 
 -- bgb_feed_plays(viewer UUID, before_played_at DATE DEFAULT NULL,
 --                before_created_at TIMESTAMPTZ DEFAULT NULL, lim INT DEFAULT 20)

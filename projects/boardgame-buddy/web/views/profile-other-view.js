@@ -1,12 +1,17 @@
 // views/profile-other-view.js — Public profile hub for another user.
 //
-// Mirrors profile-self-view's layout (identity row → four stat tiles →
-// warm-cream preview cards) but trimmed to Collection and Recent plays
-// only — no Wishlist, no Buddies sections. The settings gear slot is
-// replaced by a buddy-relation button (Buddy up / Accept / Request sent
-// / Buddies). "See all →" deep-links into the shared collection / plays
-// views, parameterized by ?userId=<them>. Seeded from one /profile/bundle
-// round trip so first paint is instant.
+// Identity row → four static stat tiles → warm-cream preview cards, trimmed
+// to Collection and Recent plays only — no Wishlist, no Buddies sections.
+// The settings gear slot is replaced by a buddy-relation button (Buddy up /
+// Accept / Request sent / Buddies). "See all →" deep-links into the shared
+// collection / plays views, parameterized by ?userId=<them>. Seeded from one
+// /profile/bundle round trip so first paint is instant.
+//
+// The four tiles used to mirror the hub's. The hub has since collapsed its
+// own into one tappable .statsblock opening /profile/stats, which is
+// self-only — those numbers are about you, not a stranger — so this screen
+// is now the sole owner of the .profile-stat-card family rather than a copy
+// of it.
 
 (function () {
   const PREVIEW_COVERS = 4;

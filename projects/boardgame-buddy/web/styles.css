@@ -118,6 +118,13 @@
   --nav-bg:   #241809;
   --auth-bg:  #2D1A0A;
 
+  /* Podium medals (Stats spoke). Silver and bronze are warm-shifted into the
+     espresso/gold family — a cold grey and a red-brown both read as foreign
+     objects next to --accent. --plinth is the block the art stands on. */
+  --medal-gold:   #E0A94A;
+  --medal-silver: #BFB4A4;
+  --medal-bronze: #A9682F;
+
   /* DaisyUI oklch base — the single lever for every oklch(var(--b*)) rule */
   --b1: 12% 0.014 48;
   --b2: 9%  0.012 48;
@@ -186,6 +193,13 @@
   --nav-bg:  #FFFBF2;
   --auth-bg: #F2E7D2;
 
+  /* Light needs its own three: the dark values are tuned to sit ON espresso,
+     and gold-on-white at #E0A94A is 1.9:1 — the numerals inside each plinth
+     would be unreadable. --plinth goes white so the block reads as paper. */
+  --medal-gold:   #B07F1C;
+  --medal-silver: #8C8172;
+  --medal-bronze: #8A5222;
+
   --b1: 96% 0.010 85;
   --b2: 99% 0.005 85;
   --b3: 89% 0.014 80;
@@ -229,6 +243,7 @@
    ────────────────────────────────────────────────────────────────────────── */
 :is(.set-card,
      .profile-stat-card,
+     .statsblock,
      .preview-card,
      .bgb-spoke-screen,
      [data-view="log-play"]) {
@@ -259,6 +274,7 @@
    root values, which are already tuned for a light card. */
 :root[data-bgb="dark"] :is(.set-card,
      .profile-stat-card,
+     .statsblock,
      .preview-card,
      .bgb-spoke-screen,
      [data-view="log-play"]) {
@@ -3734,7 +3750,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   opacity: 0.65;
   white-space: nowrap;
 }
-.bgb-cream-screen .buddies-pager__page {
+.bgb-spoke-screen .buddies-pager__page {
   color: var(--polaroid-muted, #8B7E68);
   opacity: 1;
 }
@@ -6402,7 +6418,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* ────────────────────────────────────────────────────────────────────────────
    Profile hub — card aesthetic
-   Identity row + four stat tiles + warm-cream preview cards on the hub,
+   Identity row + preview cards on the hub (the stat tiles it used to carry are
+   now .statsblock, at the end of this file — .profile-stat-card below stays
+   because profile-other-view still renders another person's numbers with it),
    with shared chrome (.spoke-head, .spoke-toggle) for the Collection /
    Wishlist / Plays / Buddies spokes. Settings reuses the same card system.
    Reuses --polaroid-* tokens so the whole surface matches the parchment /
@@ -6441,7 +6459,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-top: 0.2rem;
   font-weight: 700;
 }
-/* ── Hub: 4 stat tiles ─────────────────────────────────────────────────── */
+/* ── 4 stat tiles — profile-other ONLY ─────────────────────────────────────
+   The hub moved to .statsblock; another user's profile still shows four
+   static tiles, so this family is live, not dead. ─────────────────────── */
 .profile-hub__stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -8354,4 +8374,557 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .cascade-exp-filter__input,
 .avatar-cust__name-input {
   font-size: 16px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Stats — the hub's "Your stats" block and the /profile/stats spoke
+   ══════════════════════════════════════════════════════════════════════════
+   The hub block replaced four standalone .profile-stat-card tiles that each
+   routed somewhere different; it is one card with one destination, so the
+   three cells inside are display-only and the SECTION carries the tap.
+   .profile-stat-card itself is still live — profile-other-view renders another
+   person's numbers with it.
+
+   Everything on the spoke reuses .preview-card / .preview-card__head for its
+   section chrome, so the Stats screen reads as the same family of cards as the
+   hub it came from, and it inherits the --polaroid-* re-point for free (the
+   container is a .bgb-spoke-screen).
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Hub: the "Your stats" block ──────────────────────────────────────────── */
+.statsblock {
+  /* No `width: 100%` — this is a <section>, so it already fills the column, and
+     the explicit width would add padding + border on top of it. */
+  cursor: pointer;
+  background: var(--polaroid-bg, #FFFBF1);
+  color: var(--polaroid-ink, #1D1812);
+  border: 1px solid var(--card-border);
+  border-radius: 1.1rem;
+  padding: 0.9rem 0.95rem 0.95rem;
+  margin-top: 0.75rem;
+  box-shadow: var(--sh-3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.statsblock:hover { transform: translateY(-2px); box-shadow: var(--sh-3), 0 6px 18px -10px var(--shadow-c); }
+.statsblock:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.statsblock__row {
+  display: grid;
+  /* The top-game cell is wider: it holds a name, not a two-digit number, and
+     at 1fr "Brass: Birmingham" ellipsises to "Brass:…". */
+  grid-template-columns: 1fr 1fr 1.25fr;
+  gap: 0.5rem;
+}
+.statsblock__cell {
+  --stat-value-size: 1.6rem;
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+  padding: 0.6rem 0.4rem 0.5rem;
+  text-align: center;
+  min-height: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+}
+.statsblock__v {
+  font-family: var(--font-display);
+  font-size: var(--stat-value-size);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+.statsblock__v--text {
+  /* Same box height as the numeric value beside it (font-size x line-height 1)
+     so "Top game" sits on the label line its neighbours do. `display: block` is
+     load-bearing — text-overflow needs a block container. */
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: var(--stat-value-size);
+  color: var(--polaroid-ink, #1D1812);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.statsblock__k {
+  font-size: 0.6rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.statsblock__crown { color: var(--medal-gold); display: block; line-height: 0; }
+
+/* ── Spoke: podium ────────────────────────────────────────────────────────── */
+.stats-podium {
+  /* The block each plinth's art stands on. Derived from the card surface, not
+     named as a colour: the --polaroid-* re-point decides what that surface is
+     per theme, and a literal here would drift the next time it moves. */
+  --plinth: color-mix(in srgb, var(--polaroid-ink) 7%, var(--polaroid-bg));
+  margin-top: 0.5rem;
+  border-radius: 1.2rem;
+  padding: 1rem 0.85rem 0.85rem;
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 8%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+    var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--sh-3);
+  overflow: hidden;
+}
+.stats-podium__eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted, #8B7E68);
+  margin-bottom: 0.85rem;
+}
+.stats-podium__eyebrow svg { color: var(--medal-gold); }
+.stats-podium__stage {
+  display: grid;
+  /* Gold is wider as well as taller — rank reads before any number does. */
+  grid-template-columns: 1fr 1.16fr 1fr;
+  align-items: end;
+  gap: 0.45rem;
+}
+.stats-podium__floor {
+  height: 6px;
+  border-radius: 0 0 5px 5px;
+  margin-top: -1px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--medal-silver) 40%, transparent),
+    color-mix(in srgb, var(--medal-gold) 55%, transparent),
+    color-mix(in srgb, var(--medal-bronze) 40%, transparent));
+}
+.stats-plinth {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.stats-plinth:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 0.6rem; }
+.stats-plinth__art {
+  position: relative;
+  width: 100%;
+  /* Square, not 3:4 — board-game box art is roughly square, and the taller
+     ratio made the podium alone eat half the first screen. */
+  aspect-ratio: 1;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  box-shadow: var(--sh-3);
+  border: 2px solid var(--medal);
+  background: var(--polaroid-line, #DAC9A4);
+}
+.stats-plinth__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.stats-plinth__art-fallback {
+  width: 100%; height: 100%;
+  display: grid; place-items: center;
+  padding: 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  line-height: 1.15;
+  color: var(--polaroid-muted, #8B7E68);
+  overflow: hidden;
+}
+.stats-plinth__name {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.15;
+  margin-top: 0.45rem;
+  color: var(--polaroid-ink, #1D1812);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.stats-plinth__plays {
+  font-family: var(--font-score);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--medal);
+  margin-top: 0.15rem;
+}
+.stats-plinth__base {
+  margin-top: 0.4rem;
+  width: 100%;
+  border-radius: 0.4rem 0.4rem 0 0;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--medal) 42%, var(--plinth)),
+    color-mix(in srgb, var(--medal) 14%, var(--plinth)));
+  border: 1px solid color-mix(in srgb, var(--medal) 45%, transparent);
+  border-bottom: none;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #FFF 35%, transparent);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: color-mix(in srgb, var(--medal) 78%, var(--polaroid-ink));
+}
+.stats-plinth--1 { --medal: var(--medal-gold); }
+.stats-plinth--1 .stats-plinth__base { height: 66px; }
+.stats-plinth--2 { --medal: var(--medal-silver); }
+.stats-plinth--2 .stats-plinth__base { height: 44px; }
+.stats-plinth--3 { --medal: var(--medal-bronze); }
+.stats-plinth--3 .stats-plinth__base { height: 30px; }
+/* One or two games played: the empty columns collapse rather than render as
+   floating bases with nothing on them. */
+.stats-podium__stage--1 { grid-template-columns: minmax(0, 56%); justify-content: center; }
+.stats-podium__stage--2 { grid-template-columns: 1fr 1.16fr; }
+
+/* ── Spoke: career strip ──────────────────────────────────────────────────── */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+.stats-strip__c {
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--card-border);
+  border-radius: 0.85rem;
+  padding: 0.55rem 0.2rem;
+  text-align: center;
+  box-shadow: var(--sh-2);
+}
+.stats-strip__v {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stats-strip__k {
+  font-size: 0.55rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.28rem;
+}
+
+/* ── Spoke: game picker ───────────────────────────────────────────────────── */
+.stats-picker {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 0.85rem;
+  padding: 0.5rem 0.7rem;
+  min-height: 56px;
+  font-family: var(--font-sans);
+  color: var(--polaroid-ink, #1D1812);
+  text-align: left;
+}
+.stats-picker:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stats-picker__art {
+  width: 38px; height: 38px;
+  border-radius: 0.45rem;
+  overflow: hidden;
+  flex: none;
+  box-shadow: var(--sh-2);
+  background: var(--polaroid-line, #DAC9A4);
+}
+.stats-picker__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.stats-picker__l { flex: 1; min-width: 0; }
+.stats-picker__lab {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.stats-picker__name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats-picker__chev { color: var(--accent-ink); flex: none; display: grid; place-items: center; transition: transform 0.18s ease; }
+.stats-picker[aria-expanded="true"] .stats-picker__chev { transform: rotate(180deg); }
+.stats-picker-list {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  /* A heavy player has 40+ games in here; cap it and scroll rather than
+     pushing the whole breakdown off the screen. */
+  max-height: 15rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.stats-picker-list[hidden] { display: none; }
+.stats-picker-list__item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--card-border);
+  border-radius: 0.7rem;
+  padding: 0.4rem 0.55rem;
+  min-height: 46px;
+  color: var(--polaroid-ink, #1D1812);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.stats-picker-list__item[aria-selected="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--polaroid-bg, #FFFBF1));
+}
+.stats-picker-list__item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stats-picker-list__art {
+  width: 28px; height: 28px;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  flex: none;
+  background: var(--polaroid-line, #DAC9A4);
+}
+.stats-picker-list__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.stats-picker-list__n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stats-picker-list__c {
+  font-family: var(--font-score);
+  font-size: 0.7rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Spoke: win-rate ring + facts ─────────────────────────────────────────── */
+.stats-ratio { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.85rem; }
+.stats-ring { position: relative; width: 104px; height: 104px; flex: none; }
+.stats-ring svg { transform: rotate(-90deg); display: block; }
+.stats-ring__track { stroke: var(--polaroid-ink, #1D1812); opacity: 0.15; }
+.stats-ring__arc { stroke: var(--accent); transition: stroke-dashoffset 0.35s ease; }
+.stats-ring__mid { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+.stats-ring__pct {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stats-ring__lab {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted, #8B7E68);
+  margin-top: 0.15rem;
+}
+.stats-facts { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.stats-fact { display: flex; align-items: baseline; gap: 0.5rem; }
+.stats-fact__k { font-size: 0.72rem; color: var(--polaroid-muted, #8B7E68); font-weight: 600; flex: 1; }
+.stats-fact__v {
+  font-family: var(--font-score);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--polaroid-ink, #1D1812);
+  font-variant-numeric: tabular-nums;
+}
+.stats-fact__v--gold { color: var(--accent-ink); }
+.stats-fact__v--none {
+  font-family: var(--font-sans);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--polaroid-muted, #8B7E68);
+  font-style: italic;
+}
+
+/* ── Spoke: split bars (won/lost, nemesis) ────────────────────────────────── */
+.stats-split {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 0.7rem;
+  background: color-mix(in srgb, var(--polaroid-ink) 10%, transparent);
+}
+.stats-split > i { display: block; height: 100%; }
+.stats-split__win { background: var(--accent-fill-grad); }
+.stats-split__loss { background: color-mix(in srgb, var(--polaroid-ink) 16%, transparent); }
+.stats-split__them { background: var(--win); }
+.stats-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.stats-legend b { color: var(--accent-ink); font-family: var(--font-score); font-variant-numeric: tabular-nums; }
+.stats-foot {
+  font-size: 0.66rem;
+  color: var(--polaroid-muted, #8B7E68);
+  line-height: 1.45;
+  margin-top: 0.65rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--polaroid-line, #DAC9A4);
+}
+
+/* ── Spoke: small stat cards ──────────────────────────────────────────────── */
+/* align-items:start, not stretch: a 3-row Taste card beside a two-block
+   Comeback card would otherwise stretch to match and show a half-empty
+   box. A ragged bottom edge reads as a stat grid; dead space reads as a
+   bug. */
+.stats-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.75rem; align-items: start; }
+.stats-mini {
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
+  padding: 0.7rem 0.75rem 0.75rem;
+  box-shadow: var(--sh-2);
+  min-width: 0;
+}
+.stats-mini--flat { background: transparent; box-shadow: none; border-color: var(--polaroid-line, #DAC9A4); }
+.stats-mini__k {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.stats-mini__k svg { color: var(--accent-ink); flex: none; }
+.stats-mini__v {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--polaroid-ink, #1D1812);
+  line-height: 1.1;
+  margin-top: 0.35rem;
+}
+.stats-mini__v--sm { font-size: 1.02rem; }
+.stats-mini__v small { font-size: 0.8rem; font-weight: 600; color: var(--polaroid-muted, #8B7E68); }
+.stats-mini__d { font-size: 0.68rem; color: var(--polaroid-muted, #8B7E68); line-height: 1.4; margin-top: 0.25rem; }
+.stats-mini__d b { color: var(--accent-ink); font-family: var(--font-score); font-weight: 700; }
+
+/* ── Spoke: nemesis ───────────────────────────────────────────────────────── */
+.stats-nemesis { display: flex; align-items: center; gap: 0.6rem; }
+.user-badge.stats-nemesis__av { width: 44px; height: 44px; flex: none; }
+.user-badge.stats-nemesis__av .user-badge__initials { font-size: 16px; }
+.stats-nemesis__body { flex: 1; min-width: 0; }
+.stats-nemesis__n { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; }
+.stats-nemesis__s { font-size: 0.68rem; color: var(--polaroid-muted, #8B7E68); margin-top: 0.1rem; line-height: 1.4; }
+
+/* ── Spoke: play-rhythm heatmap ───────────────────────────────────────────── */
+.stats-heat {
+  /* One cell per WEEK. grid-auto-columns keeps every cell the same width
+     whatever the window length, and the row is 26 wide at most, so no
+     horizontal scroll on a 320px phone. */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2.5px;
+  margin-top: 0.6rem;
+}
+.stats-heat i {
+  display: block;
+  height: 22px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
+}
+.stats-heat i[data-l="1"] { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.stats-heat i[data-l="2"] { background: color-mix(in srgb, var(--accent) 58%, transparent); }
+.stats-heat i[data-l="3"] { background: var(--accent); }
+.stats-heat-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 700;
+  margin-top: 0.4rem;
+}
+
+/* ── Spoke: bar rows (table size, taste, personal bests) ──────────────────── */
+.stats-bars { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.55rem; }
+.stats-bar { display: grid; grid-template-columns: 5.2rem 1fr 2rem; align-items: center; gap: 0.5rem; }
+.stats-bar__k {
+  font-size: 0.7rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats-bar__track { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--polaroid-ink) 9%, transparent); overflow: hidden; }
+.stats-bar__track i { display: block; height: 100%; border-radius: 999px; background: var(--accent-fill-grad); }
+.stats-bar__v {
+  font-family: var(--font-score);
+  font-size: 0.72rem;
+  color: var(--polaroid-ink, #1D1812);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* Personal bests: a name and a record, no bar between them. */
+.stats-bar--record { grid-template-columns: 1fr auto; }
+.stats-bar--record .stats-bar__k { color: var(--polaroid-ink, #1D1812); font-weight: 600; }
+
+/* ── Spoke: shelf-of-shame dial ───────────────────────────────────────────── */
+.stats-shelf { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; }
+.stats-shelf__ring { position: relative; width: 58px; height: 58px; flex: none; }
+.stats-shelf__ring svg { transform: rotate(-90deg); display: block; }
+.stats-shelf__mid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-score);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Spoke: empty state ───────────────────────────────────────────────────── */
+.stats-empty {
+  text-align: center;
+  padding: 2.5rem 1.25rem;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.stats-empty__h {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--polaroid-ink, #1D1812);
+  margin-bottom: 0.4rem;
+}
+.stats-empty__p { font-size: 0.85rem; line-height: 1.5; max-width: 30ch; margin: 0 auto 1.1rem; }
+
+/* Narrow phones: 4-up strips and two-up cards get cramped under ~340px. */
+@media (max-width: 350px) {
+  .stats-strip { grid-template-columns: repeat(2, 1fr); }
+  .stats-duo { grid-template-columns: 1fr; }
+  .statsblock__row { grid-template-columns: 1fr 1fr; }
+  .statsblock__cell:last-child { grid-column: 1 / -1; }
 }
