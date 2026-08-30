@@ -47,6 +47,23 @@ function Highlighted({ text, query }) {
   );
 }
 
+/**
+ * Most-owned first. A big game's BGG expansion list is mostly promos and
+ * micro-packs, so alphabetical buries the two or three anyone actually plays.
+ * `bgg_owned` is null when BGG's stats lookup failed or was skipped — those
+ * rows sort last and fall back to alphabetical among themselves rather than
+ * being read as "owned by nobody".
+ */
+function byPopularity(list) {
+  if (!Array.isArray(list)) return [];
+  return [...list].sort((a, b) => {
+    const ao = a.bgg_owned == null ? -1 : a.bgg_owned;
+    const bo = b.bgg_owned == null ? -1 : b.bgg_owned;
+    if (ao !== bo) return bo - ao;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+}
+
 const ImportExpansionsSheet = forwardRef(function ImportExpansionsSheet({ gameId, gameName, onImported }, ref) {
   const sheetRef = useRef(null);
   const [candidates, setCandidates] = useState(null); // null = not loaded yet
@@ -66,7 +83,7 @@ const ImportExpansionsSheet = forwardRef(function ImportExpansionsSheet({ gameId
     try {
       const list = await api.availableExpansions(gameId);
       if (seq !== seqRef.current) return; // superseded by a newer open
-      setCandidates(Array.isArray(list) ? list : []);
+      setCandidates(byPopularity(list));
     } catch (e) {
       if (seq !== seqRef.current) return;
       setError(e.message || "Couldn't reach BoardGameGeek.");

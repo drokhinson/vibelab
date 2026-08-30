@@ -1,12 +1,12 @@
-// FeedScreen — home: chronological play feed + hot-games / suggested-buddies /
-// featured-from-collection rails, one heterogeneous FlatList over state.feed.
+// FeedScreen — home: chronological play feed + hot-games / suggested-buddies
+// rails, one heterogeneous FlatList over state.feed.
 // Bootstrap seeds the first page so this paints instantly after boot;
 // pull-to-refresh + cursor pagination after that.
 
 import React, { memo, useCallback } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Flame, Users, RotateCcw } from 'lucide-react-native';
+import { Search, Flame, Users } from 'lucide-react-native';
 import { COLORS, SPACING } from '../theme';
 import { Row, Skeleton, Text } from '../ui';
 import { useAppActions, useAppState } from '../store/AppContext';
@@ -114,8 +114,6 @@ const FeedCard = memo(function FeedCard({ card, me, openGame, navigation }) {
     }
     case 'hot_games':
       return <GameRail title="Hot this week" Icon={Flame} entries={card.games} openGame={openGame} countKey="play_count" countSuffix="plays" />;
-    case 'featured_from_collection':
-      return <GameRail title="Time to revisit" Icon={RotateCcw} entries={card.games} openGame={openGame} />;
     case 'suggested_buddies': {
       const list = card.suggestions || [];
       if (!list.length) return null;

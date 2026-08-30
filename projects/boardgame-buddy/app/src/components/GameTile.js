@@ -32,12 +32,37 @@ function metaText(game) {
   return [playerRange(game), playTime(game)].filter(Boolean).join(' · ');
 }
 
+/**
+ * Box art for a surface that CROPS. Tiles are ~145pt wide and render with
+ * `cover`, so at 2-3x DPR they ask 290-435 device px of BGG's ~200px
+ * <thumbnail> — that upscale is the blur. Migration 055 is what finally hands
+ * the re-hosted full-size <image> to these endpoints, so prefer it.
+ *
+ * Both are drawn, full art stacked over the thumbnail: the thumbnail is small
+ * and usually already cached, so it paints immediately and the larger one
+ * replaces it when it lands. Loading only the full art would leave the tile
+ * empty until then, which is worse than a moment of soft.
+ */
+function CoverImage({ game, style }) {
+  const full = game.image_url || null;
+  const thumb = game.thumbnail_url || null;
+  if (!full && !thumb) return null;
+  return (
+    <>
+      {thumb ? <Image source={{ uri: thumb }} style={style} resizeMode="cover" /> : null}
+      {full ? (
+        <Image source={{ uri: full }} style={[style, thumb ? StyleSheet.absoluteFill : null]} resizeMode="cover" />
+      ) : null}
+    </>
+  );
+}
+
 function Cover({ game, height, radius = RADII.md, showStatus, expansionCount }) {
-  const img = game.thumbnail_url || game.image_url;
+  const hasArt = !!(game.image_url || game.thumbnail_url);
   return (
     <View style={[styles.cover, { height, borderRadius: radius }]}>
-      {img ? (
-        <Image source={{ uri: img }} style={styles.coverImg} resizeMode="cover" />
+      {hasArt ? (
+        <CoverImage game={game} style={styles.coverImg} />
       ) : (
         <View style={[styles.coverPlaceholder, { backgroundColor: gameAccent(game) + '33' }]}>
           <Dice6 size={28} color={gameAccent(game)} />
@@ -82,11 +107,11 @@ export default function GameTile({ game, variant = 'tile', onPress, showStatus =
   }
 
   if (variant === 'hero') {
-    const img = game.thumbnail_url || game.image_url;
+    const hasArt = !!(game.image_url || game.thumbnail_url);
     return (
       <View style={[styles.hero, style]}>
-        {img ? (
-          <Image source={{ uri: img }} style={styles.heroImg} resizeMode="cover" />
+        {hasArt ? (
+          <CoverImage game={game} style={styles.heroImg} />
         ) : (
           <View style={[styles.heroImg, styles.coverPlaceholder, { backgroundColor: gameAccent(game) + '33' }]}>
             <Dice6 size={48} color={gameAccent(game)} />

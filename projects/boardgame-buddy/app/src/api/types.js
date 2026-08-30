@@ -119,11 +119,22 @@
 
 /**
  * @typedef {Object} SessionParticipant
+ *   The ARRAY ORDER is the roster order the host set — the bundle sorts by
+ *   (position NULLS LAST, joined_at) since migration 056, and `position`
+ *   itself never reaches the wire. The scoring grid's columns are this order
+ *   on every surface, so don't re-sort it.
  * @property {string} id
  * @property {string|null} user_id
  * @property {string} display_name
  * @property {string} joined_at
  * @property {Object|null} avatar
+ */
+
+/**
+ * @typedef {Object} SessionScoreRow  one cell of the live grid (migration 053)
+ * @property {string} participant_id
+ * @property {number} round_index
+ * @property {number|null} score
  */
 
 /**
@@ -137,6 +148,11 @@
  * @property {string|null} finalized_play_id
  * @property {GameSummary|null} game
  * @property {SessionParticipant[]} participants
+ * @property {SessionScoreRow[]} scores
+ *   Live-grid snapshot, populated only while phase='play' (migration 054);
+ *   empty — never absent — otherwise. This is the ONLY way a spectator who
+ *   joined after Gather sees the host's cells: without a participant row, the
+ *   scores table's RLS returns them nothing and Realtime is silent for them.
  * @property {string} created_at
  * @property {string} expires_at
  */
@@ -150,6 +166,12 @@
  * @property {string|null} color
  * @property {boolean} is_enabled
  * @property {string|null} rulebook_url
+ * @property {string|null} image_url  full-size art; the reel crops, so prefer it
+ * @property {number|null} base_game_bgg_id  catalog endpoint only
+ * @property {number|null} bgg_owned
+ *   How many BGG users own it — the import list's sort key. Null when BGG's
+ *   stats lookup failed or was skipped; those rows sort last and fall back to
+ *   alphabetical rather than reading as "owned by nobody".
  */
 
 /**
