@@ -130,14 +130,20 @@
       }
     }
 
+    // Settings is reachable from the gear in the global header, i.e. from any
+    // screen — so it dismisses rather than navigating. A close button calling
+    // router.back() returns the user to wherever they opened it from; the old
+    // back arrow hardcoded profile-self and stranded anyone who arrived from
+    // the feed, a game page or a session. profile-self is only the fallback
+    // for a cold /settings deep link, where there is no previous screen and
+    // the bottom nav already highlights the Profile tab.
     _renderHead() {
       return `
         <header class="spoke-head">
-          <button class="spoke-head__back" onclick="window.router.go('profile-self')" aria-label="Back to profile">
-            <i data-icon="arrow-left" class="w-4 h-4"></i>
-          </button>
           <h2 class="spoke-head__title font-display">Settings</h2>
-          <span></span>
+          <button class="spoke-head__close" onclick="window.router.back('profile-self')" aria-label="Close settings">
+            <i data-icon="x" class="w-4 h-4"></i>
+          </button>
         </header>
       `;
     }

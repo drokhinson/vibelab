@@ -6729,14 +6729,15 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-size: 0.78rem;
 }
 
-/* ── Spoke shared chrome (back arrow + title + count) ───────────────────── */
+/* ── Spoke shared chrome (back/close button + title + count) ───────────────────── */
 .spoke-head {
   display: flex;
   align-items: center;
   gap: 0.65rem;
   padding: 0.25rem 0 0.65rem;
 }
-.spoke-head__back {
+.spoke-head__back,
+.spoke-head__close {
   width: 44px; height: 44px;
   border-radius: 0.7rem;
   border: none;
@@ -6748,7 +6749,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   transition: background 0.15s, transform 0.15s;
 }
 .spoke-head__back:hover { background: oklch(var(--bc) / 0.14); transform: translateX(-2px); }
-.spoke-head__back:focus-visible {
+/* The close variant sits at the trailing edge and dismisses rather than
+   stepping back, so it stays put on hover instead of sliding leftward. */
+.spoke-head__close:hover { background: oklch(var(--bc) / 0.14); }
+.spoke-head__back:focus-visible,
+.spoke-head__close:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -7137,12 +7142,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--sheet-ink);
 }
 
-/* Spoke head chrome (back arrow + title + count) */
-.bgb-spoke-screen .spoke-head__back {
+/* Spoke head chrome (back/close button + title + count) */
+.bgb-spoke-screen .spoke-head__back,
+.bgb-spoke-screen .spoke-head__close {
   background: color-mix(in srgb, var(--polaroid-ink) 6%, transparent);
   color: var(--accent-ink);
 }
-.bgb-spoke-screen .spoke-head__back:hover {
+.bgb-spoke-screen .spoke-head__back:hover,
+.bgb-spoke-screen .spoke-head__close:hover {
   background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
 }
 .bgb-spoke-screen .spoke-head__title { color: var(--accent-ink); }
