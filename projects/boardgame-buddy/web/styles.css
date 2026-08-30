@@ -2888,6 +2888,88 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .collection-tile__placeholder { width: 100%; aspect-ratio: 1; display: grid; place-items: center; background: oklch(var(--b3)); }
 .collection-tile__name { padding: 0.3rem 0.4rem; font-size: 0.75rem; font-weight: 600; line-height: 1.15; text-align: left; }
 
+/* ── Expansions tree (Collection spoke, third tab) ────────────────────────── */
+.exp-tree { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.exp-tree__group {
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.6rem;
+  background: oklch(var(--b2));
+  overflow: hidden;
+  animation: fadeUp 200ms ease both;
+  animation-delay: calc(var(--i) * 40ms);
+}
+/* The header is the disclosure control, so the whole row is the tap target —
+   which clears 44x44 without padding gymnastics. It deliberately does NOT
+   navigate: the base game is already one tap away on the Owned tab, and two
+   nested tap targets in one row is the thing that gets mis-tapped. */
+.exp-tree__head {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+.exp-tree__chev {
+  flex: none;
+  color: oklch(var(--bc) / 0.55);
+  transition: transform 0.15s ease;
+}
+.exp-tree__head[aria-expanded="true"] .exp-tree__chev { transform: rotate(90deg); }
+.exp-tree__orphan-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.7);
+}
+.exp-tree__tally {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: oklch(var(--bc) / 0.6);
+  background: oklch(var(--b3));
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+}
+.exp-tree__children {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.6rem 0.5rem 1.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.exp-tree__children[hidden] { display: none; }
+.exp-tree__child { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; }
+/* Per-expansion accent, the one legitimate inline-style use (data-driven
+   colour) per .claude/rules/ui-object-design.md §2. */
+.exp-tree__dot { flex: none; width: 10px; height: 10px; border-radius: 999px; }
+.exp-tree__dot--none { background: oklch(var(--b3)); }
+.exp-tree__add-row { display: flex; }
+.exp-tree__add {
+  flex: 1;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px dashed oklch(var(--b3));
+  border-radius: 0.5rem;
+  background: none;
+  color: oklch(var(--p));
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.exp-tree__add:hover { background: oklch(var(--b3) / 0.5); }
+.exp-tree__truncated { font-size: 0.7rem; color: oklch(var(--bc) / 0.55); margin-top: 0.5rem; text-align: center; }
+
 .recent-plays { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 
 /* ── Play detail page ─────────────────────────────────────────────────────── */
@@ -3687,6 +3769,30 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
 }
 .bgb-sheet__cancel:hover { background: var(--polaroid-line); }
+
+/* ── Expansion picker sheet ───────────────────────────────────────────────── */
+/* Rows reuse .game-picker__row and the panel reuses .bgb-sheet__*; only these
+   two affordances are the picker's own. */
+.exp-picker__import {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px dashed var(--polaroid-line);
+  border-radius: 12px;
+  background: none;
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.exp-picker__import:hover { background: var(--polaroid-bg-soft); }
+.exp-picker__dot { flex: none; width: 10px; height: 10px; border-radius: 999px; }
+.exp-picker__error { color: #b3492f; }
 
 /* Section heading inside a sheet list ("Recently played with", "Selected"). */
 /* A pin taken before the keyboard opened is a floor the shrunken panel cannot
@@ -6583,6 +6689,50 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-overflow: ellipsis;
 }
 
+/* "row" variant — horizontal list row for the Collection spoke's Expansions
+   tree. Same markup as the polaroid; only the axis and the photo size change,
+   which is the whole point of doing this as a variant rather than a seventh
+   bespoke tile (.claude/rules/ui-object-design.md §2). The tile carries no
+   surface of its own here — the tree row it sits in owns that. */
+.game-polaroid.game-polaroid--row {
+  display: flex;
+  /* The base tile is a column (photo over caption); the row variant is the
+     same markup turned on its side, so this has to be stated explicitly or
+     the base's flex-direction still wins. */
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+.game-polaroid.game-polaroid--row .game-polaroid__photo {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+}
+.game-polaroid.game-polaroid--row .game-polaroid__photo-img,
+.game-polaroid.game-polaroid--row .game-polaroid__photo-placeholder {
+  width: 38px;
+  height: 38px;
+}
+.game-polaroid.game-polaroid--row .game-polaroid__caption {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+.game-polaroid.game-polaroid--row .game-polaroid__name {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  font-size: 0.85rem;
+}
+.game-polaroid.game-polaroid--row:hover { transform: none; box-shadow: none; }
+
 /* ── Expanded play-detail popup ──────────────────────────────────────────
    In-place modal opened from the polaroid play-card's maximize button.
    Holds the full play record + edit form so the user doesn't have to
@@ -7302,6 +7452,21 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-weight: 800;
 }
 .spoke-toggle__pill.is-active .spoke-toggle__count { opacity: 0.95; }
+
+/* Three pills in the 480px column need tighter metrics than two — at the
+   two-pill padding "Played, not owned" alone eats half the row. The label
+   wraps to two lines rather than truncating, and min-height stays 44px, so
+   the padding shrinks but the tap target never does. */
+.spoke-toggle--3 .spoke-toggle__pill {
+  padding: 0.4rem 0.4rem;
+  font-size: 0.72rem;
+  gap: 0.3rem;
+}
+.spoke-toggle--3 .spoke-toggle__label {
+  line-height: 1.15;
+  text-align: center;
+}
+.spoke-toggle--3 .spoke-toggle__count { font-size: 0.66rem; }
 
 /* ── Day-bucket divider ──────────────────────────────────────────────────
    Shared by the Plays list (This week / Last week / Earlier) and the Feed

@@ -245,9 +245,14 @@ class CollectionItem(BaseModel):
     last_played_at: Optional[date] = None
     play_count: int = 0
     game: GameSummary
-    # When this row is a base game and the user owns/has-wishlisted/has-played
-    # one or more of its expansions on the same shelf, those expansion rows
-    # ride along here so the FE can show them nested without a follow-up call.
+    # Always empty today: both branches of bgb_collection_shelf hard-code
+    # 'expansions', '[]'::jsonb, and /collection/grid never sets it either.
+    # The web client asks for the flat shelf with expansions included
+    # (exclude_expansions=false) and nests them itself, in
+    # web/domain/expansion-tree.js — nesting in SQL would silently drop the
+    # two cases that grouping surfaces: an owned expansion whose base game the
+    # viewer doesn't own, and one whose denormalized base_game_bgg_id is null.
+    # Kept on the wire because the native app reads this shape.
     expansions: list["CollectionItem"] = Field(default_factory=list)
 
 

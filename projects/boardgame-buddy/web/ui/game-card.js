@@ -3,6 +3,8 @@
 // Surfaces differ by `variant`, never by a parallel implementation:
 //   "polaroid" (default) — cream tile for the Game Explorer / Find-a-Game grid
 //   "rail"               — compact tile for the feed's horizontal rails
+//   "row"                — horizontal list row for the Collection spoke's
+//                          Expansions tree (same markup, different axis)
 // The feed rails used to ship two byte-identical copies of a bespoke
 // `.hot-game-tile`; both now come through here.
 
@@ -18,7 +20,14 @@
    * @param {Object} [opts]
    * @param {string} [opts.clickHandler] Raw JS run on tap.
    * @param {string|null} [opts.collectionStatus] owned / wishlist / played / null.
-   * @param {"polaroid"|"rail"} [opts.variant] Surface preset. Default "polaroid".
+   * @param {"polaroid"|"rail"|"row"} [opts.variant] Surface preset. Default "polaroid".
+   * @param {boolean} [opts.showStatus] Render the corner status pill. The
+   *   Expansions tree turns this off: every row there is owned by definition,
+   *   so the pill would be a column of identical badges.
+   * @param {boolean} [opts.interactive] Whether the tile is itself a tap
+   *   target. Off for a tile nested inside another interactive element — the
+   *   tree's group headers are disclosure buttons, and a role="button" tile
+   *   inside a <button> is invalid. Default true.
    * @param {string} [opts.meta] Override the derived "3–5P · 60m" meta line
    *   (the rails show play counts or a last-played date instead).
    * @param {string} [opts.badgeHtml] Extra corner badge markup, e.g. the
@@ -42,6 +51,8 @@
     meta: metaOverride = null,
     badgeHtml = "",
     pending = false,
+    showStatus = true,
+    interactive = true,
   } = {}) {
     const players = game.min_players
       ? `${game.min_players}${game.max_players && game.max_players !== game.min_players ? "–" + game.max_players : ""}P`
@@ -51,16 +62,16 @@
     // Compact status pill in the photo's top-right. Wrapper stops the tap
     // from bubbling to the article (which would jump into Gather). Matches
     // the play-card's status overlay behaviour.
-    const statusOverlay = game.id
+    const statusOverlay = (game.id && showStatus)
       ? `<span class="game-polaroid__status" onclick="event.stopPropagation()">${window.renderStatusTag(game.id, collectionStatus, { compact: true, pending, gameName: game.name })}</span>`
       : "";
     return `
       <article class="game-polaroid game-polaroid--${escapeHtml(variant)}"
-               role="button" tabindex="0"
+               ${interactive ? `role="button" tabindex="0"` : ""}
                data-game-id="${escapeHtml(game.id || "")}"
                data-game-name="${escapeHtml(game.name || "")}"
                data-status="${escapeHtml(collectionStatus || "")}"
-               onclick="${clickHandler}">
+               ${interactive ? `onclick="${clickHandler}"` : ""}>
         <div class="game-polaroid__photo">
           ${gameArtImg(game, "card", { cls: "game-polaroid__photo-img", eager })
             || `<div class="game-polaroid__photo-placeholder"><i data-icon="dice-6"></i></div>`}
