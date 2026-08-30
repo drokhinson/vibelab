@@ -24,6 +24,7 @@
   window.playsView       = new window.PlaysView();
   window.sessionViewerView = new window.SessionViewerView();
   window.buddiesView     = new window.BuddiesView();
+  window.statsView       = new window.StatsView();
   window.settingsView    = new window.SettingsView();
   window.adminView       = new window.AdminView();
 
@@ -47,6 +48,7 @@
   window.router.register("plays",         window.playsView);
   window.router.register("session-viewer", window.sessionViewerView);
   window.router.register("buddies",       window.buddiesView);
+  window.router.register("stats",         window.statsView);
   window.router.register("settings",      window.settingsView);
   window.router.register("admin",         window.adminView);
 

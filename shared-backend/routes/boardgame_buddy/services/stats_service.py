@@ -28,3 +28,16 @@ def fetch_stats(sb, user_id: str) -> StatsResponse:
         owned_expansions=int(r.get("owned_expansions") or 0),
         favorite_game=fav,
     )
+
+
+def fetch_stats_detail(sb, user_id: str) -> dict:
+    """Return the whole Stats spoke payload in one call.
+
+    Thin by design: `bgb_user_stats_detail` composes every block server-side
+    (podium, per-game breakdown, nemesis, rhythm, shelf, table size, taste,
+    comeback, co-op record, personal bests) so there is nothing to reshape
+    here. Every top-level key is always present; `nemesis`,
+    `table_size.avg` and `rhythm.busiest_weekday` are null when there is
+    nothing to compute from.
+    """
+    return sb.rpc("bgb_user_stats_detail", {"uid": user_id}).execute().data or {}

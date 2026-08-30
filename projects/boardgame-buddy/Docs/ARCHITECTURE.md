@@ -213,9 +213,10 @@ Bottom-nav "Profile"
         │
         ↓
 ┌─────────────────┐
-│  profile-self   │ ◀── stats hub
+│  profile-self   │ ◀── the hub
 └────────┬────────┘
          │
+         ├── Your stats  → stats     (podium + per-game breakdown)
          ├── See all → collection
          ├── See all → wishlist
          ├── See all → plays
@@ -300,7 +301,7 @@ projects/boardgame-buddy/web/
 ├── init.js                 ← view construction, router registration, Supabase boot
 ├── helpers.js              ← jsStr, buddyLoader, formatDate, toast
 ├── config.js               ← API base URL
-├── styles.css              ← all CSS (~7,145 lines after 2026-05-23 cleanup)
+├── styles.css              ← all CSS (~8,990 lines)
 │
 ├── domain/                 ← Domain objects (see §2)
 │   ├── api.js              ← HTTP client + auth headers

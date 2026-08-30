@@ -1,10 +1,10 @@
 // views/profile-self-view.js — Profile Hub.
 //
-// Account card → four tappable stat tiles → warm-cream preview cards
+// Account card → a tappable "Your stats" block → warm-cream preview cards
 // (Collection / Wishlist / Recent plays / Buddies). Each preview's
-// "See all →" routes to a dedicated full-screen spoke. Settings is
-// reachable via the avatar in the global header. All cards seed from
-// a single /profile/bundle call.
+// "See all →" routes to a dedicated full-screen spoke, and the stats block
+// routes to /profile/stats. Settings is reachable via the avatar in the
+// global header. All cards seed from a single /profile/bundle call.
 //
 // The account card (identity + "Edit profile") used to live in Settings.
 // It sits here instead so the hub's own identity block is the thing you
@@ -75,7 +75,7 @@
     // ── Account card ──────────────────────────────────────────────────────────
     // Same .set-card markup Settings used to render — the hub is not a
     // .bgb-spoke-screen, but .set-card reads the --polaroid-* tokens directly,
-    // which is what .profile-stat-card and .preview-card below already use.
+    // which is what .statsblock and .preview-card below already use.
     _renderAccountCard(me) {
       const badge = window.BgbBadge.render({
         avatar: me.avatar,
@@ -138,35 +138,54 @@
       }
     }
 
-    // ── Four stat tiles ───────────────────────────────────────────────────────
+    // ── Stats block ───────────────────────────────────────────────────────────
+    // One card, one destination. This used to be four separate tiles routing
+    // to four different places (Games→Collection, Plays→Plays, Buddies→
+    // Buddies, Top game→Game detail), which put four small tap targets in a
+    // row that read as one control. Games and Buddies are not lost: the
+    // Collection and Buddies preview cards below already print those totals in
+    // their own sub-heads, and every number here is shown in fuller form on the
+    // Stats spoke.
+    //
+    // Plays / Wins / Top game all come off the bundle's stats block, so the hub
+    // still makes no call of its own — the spoke is what fetches the detail.
     _renderStats(b) {
       const stats = (b && b.stats) || {};
-      const owned = stats.owned_games || 0;
       const plays = (b && b.recent_plays_total) || stats.total_plays || 0;
-      const buds = (b && b.buddies && b.buddies.length) || 0;
+      const wins = stats.win_count || 0;
       const fav = stats.favorite_game || null;
       const favName = fav ? fav.name : "—";
-      const favClick = fav
-        ? `onclick="window.router.go('game-detail',{gameId:'${fav.game_id}',gameName:'${jsStr(fav.name || "")}'})"`
-        : "";
+      const last = stats.last_played_at
+        ? `Last played ${formatDateShort(stats.last_played_at)}`
+        : "No plays yet";
       return `
-        <section class="profile-hub__stats">
-          <button class="profile-stat-card" onclick="window.router.go('collection')">
-            <div class="profile-stat-card__v">${owned}</div>
-            <div class="profile-stat-card__k">Games</div>
-          </button>
-          <button class="profile-stat-card" onclick="window.router.go('plays')">
-            <div class="profile-stat-card__v">${plays}</div>
-            <div class="profile-stat-card__k">Plays</div>
-          </button>
-          <button class="profile-stat-card" onclick="window.router.go('buddies')">
-            <div class="profile-stat-card__v">${buds}</div>
-            <div class="profile-stat-card__k">Buddies</div>
-          </button>
-          <button class="profile-stat-card profile-stat-card--fav" ${favClick}>
-            <div class="profile-stat-card__v profile-stat-card__v--text" title="${escapeAttr(favName)}">${escapeHtml(favName)}</div>
-            <div class="profile-stat-card__k">Top game</div>
-          </button>
+        <section class="statsblock" role="button" tabindex="0"
+                 aria-label="Your stats — open the stats screen"
+                 onclick="window.router.go('stats')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.router.go('stats')}">
+          <header class="preview-card__head">
+            <span class="preview-card__icon"><i data-icon="trophy" class="w-4 h-4"></i></span>
+            <h3 class="preview-card__title font-display">Your stats</h3>
+            <span class="preview-card__sub">${escapeHtml(last)}</span>
+            <span class="preview-card__seeall">
+              See all <i data-icon="chevron-right" class="w-3 h-3"></i>
+            </span>
+          </header>
+          <div class="statsblock__row">
+            <div class="statsblock__cell">
+              <div class="statsblock__v">${plays}</div>
+              <div class="statsblock__k">Plays</div>
+            </div>
+            <div class="statsblock__cell">
+              <div class="statsblock__v">${wins}</div>
+              <div class="statsblock__k">Wins</div>
+            </div>
+            <div class="statsblock__cell">
+              <span class="statsblock__crown"><i data-icon="crown" class="w-3.5 h-3.5"></i></span>
+              <div class="statsblock__v statsblock__v--text" title="${escapeAttr(favName)}">${escapeHtml(favName)}</div>
+              <div class="statsblock__k">Top game</div>
+            </div>
+          </div>
         </section>
       `;
     }
