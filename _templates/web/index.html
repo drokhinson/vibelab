@@ -1,8 +1,12 @@
 <!DOCTYPE html>
+<!-- data-theme is DaisyUI's own attribute and is deliberately FROZEN — it is not
+     the light/dark lever. The lever is data-{{PROJECT_ID}}, set by the theme boot
+     below and owned thereafter by theme.js. See .claude/rules/theming.md. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#14131A" />
   <title>{{PROJECT_TITLE}}</title>
   <link rel="icon" type="image/svg+xml" href="assets/brand/{{PROJECT_ID}}-logo.svg" />
 
@@ -10,33 +14,47 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Lucide Icons (SVG icon set) -->
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
 
-  <!-- vibelab design system + project overrides -->
+  <!-- Theme boot. Runs before first paint so there is no flash of the wrong
+       theme: stored choice wins, otherwise the OS preference. Kept inline and
+       dependency-free on purpose — a script at the end of <body> is far too
+       late for this. Keep the colours in step with --bg-0 in styles.css. -->
+  <script>
+    (function () {
+      var stored = null;
+      try { stored = localStorage.getItem("{{PROJECT_ID}}.theme"); } catch (e) {}
+      var mode = stored === "light" || stored === "dark"
+        ? stored
+        : (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+            ? "light" : "dark");
+      document.documentElement.setAttribute("data-{{PROJECT_ID}}", mode);
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", mode === "light" ? "#F4F3F8" : "#14131A");
+    })();
+  </script>
+
+  <!-- Project styles. Must be the LAST stylesheet so the token blocks and the
+       16px input floor win their specificity ties on source order. -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="app">
     <div class="loading-screen">
       <span class="loading loading-spinner loading-lg"></span>
-      <p class="text-base-content/50 mt-3 text-sm">Loading…</p>
+      <p class="mt-3 text-sm" style="color: var(--ink-muted)">Loading…</p>
     </div>
   </div>
 
   <!-- API config (update apiBase for production) -->
   <script src="config.js"></script>
-  <!-- App state -->
-  <script src="state.js"></script>
-  <!-- Helpers & API fetch functions -->
-  <script src="helpers.js"></script>
-  <!-- Feature modules (one per view) -->
-  <!-- <script src="[feature].js"></script> -->
-  <!-- Init: event listeners + startup logic (load last) -->
-  <script src="init.js"></script>
+  <!-- Light / dark controller -->
+  <script src="theme.js"></script>
+  <!-- App: state, fetch, render, init. Split into state.js / helpers.js /
+       [feature].js / init.js once this passes ~300 lines — see
+       .claude/rules/web-frontend.md § Modular Frontend File Structure. -->
+  <script src="app.js"></script>
 </body>
 </html>
