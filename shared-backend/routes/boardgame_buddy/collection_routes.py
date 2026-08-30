@@ -13,6 +13,7 @@ from .models import (
     CollectionAdd,
     CollectionItem,
     CollectionPageResponse,
+    CollectionPlayedBefore,
     CollectionShelfResponse,
     CollectionStatusMapResponse,
     CollectionUpdate,
@@ -213,6 +214,47 @@ async def update_collection(
     """Change the status of a game in the user's collection."""
     _upsert_collection(get_supabase(), user.user_id, game_id, body.status.value)
     return MessageResponse(message=f"Status updated to {body.status.value}")
+
+
+@router.patch(
+    "/collection/{game_id}/played-before",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Mark an owned game as played before joining",
+)
+async def set_played_before(
+    body: CollectionPlayedBefore,
+    game_id: str = Path(..., description="Game UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Clear an owned game off the Shelf of Shame without logging a play."""
+    # An UPDATE, not the upsert _upsert_collection does: a mark must never
+    # bring a game INTO the collection, and the status filter keeps it off
+    # wishlist rows. A match of zero rows is therefore the 404 — there is
+    # nothing to mark.
+    #
+    # Nothing else in the app reads played_before_at: the game keeps reading
+    # as Owned in the status map, on its detail page and in every play count.
+    # The only consumer is the 'shelf' block of bgb_user_stats_detail.
+    stamp = datetime.now(timezone.utc).isoformat() if body.played_before else None
+    result = (
+        get_supabase()
+        .table("boardgamebuddy_collections")
+        .update({"played_before_at": stamp})
+        .eq("user_id", user.user_id)
+        .eq("game_id", game_id)
+        .eq("status", "owned")
+        .execute()
+    )
+
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Game is not on your owned shelf")
+
+    return MessageResponse(
+        message="Marked as played before you joined"
+        if body.played_before
+        else "Mark removed"
+    )
 
 
 @router.delete(

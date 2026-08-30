@@ -105,6 +105,12 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
   bgg_purchase_currency TEXT,
   bgg_inventory_location TEXT,
   bgg_quantity INTEGER,
+  -- Migration 059. Set when the owner hand-marks an owned game as played
+  -- before they joined BoardgameBuddy, so a pre-account favourite can leave
+  -- the Shelf of Shame without a fabricated play. Read ONLY by the 'shelf'
+  -- block of bgb_user_stats_detail — it is not a play, and no status map,
+  -- bundle or play count sees it.
+  played_before_at TIMESTAMPTZ,
   -- Denormalized game fields (migration 020) so the shelf can render +
   -- filter without joining boardgamebuddy_games. Games are immutable post-
   -- import; admin re-host paths call _sync_denormalized_game_fields to
