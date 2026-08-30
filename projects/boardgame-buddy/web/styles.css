@@ -248,13 +248,23 @@
    rendered inside these containers, so paper keeps its cream everywhere it
    actually means "photo".
 
-   The three picker sheets are in the list even though they are not screens.
+   The four picker sheets are in the list even though they are not screens.
    ui/bottom-sheet.js appends a sheet to <body>, so it lands OUTSIDE the screen
    that opened it and kept the root paper aliases — which in dark meant tapping
    "Showing <game>" on an espresso screen threw up a cream sheet. Listing them
    here re-points the same tokens the surface behind them already uses, so each
    sheet matches the screen it was opened from in both themes. The classes sit
    on the backdrop element, so the panels inherit.
+
+   .import-exp-modal is the one entry here that is not a screen OR a sheet: it
+   is a .polaroid-popup__card, and popups are otherwise deliberate paper (see
+   .add-game-modal). It joins on what it CONTAINS, which is the rule the whole
+   list actually follows — a searchable list of catalog rows, the same object
+   the expansion picker sheet holds, reached from the same two places and often
+   one tap apart from it. A cream popup thrown up over the espresso sheet that
+   opened it was the visible tell. Its class sits on the card rather than the
+   backdrop; that is fine, an element sees the custom properties it declares on
+   itself, so the card's own background: var(--polaroid-bg) resolves here.
 
    Named individually rather than by the shared .bgb-sheet class on purpose:
    that class is also on the collection status sheet, which is a deliberate
@@ -271,6 +281,8 @@
      .game-picker-sheet,
      .player-picker-sheet,
      .game-search-sheet,
+     .exp-picker,
+     .import-exp-modal,
      [data-view="log-play"]) {
   --polaroid-bg:       var(--bg-1);
   --polaroid-bg-soft:  var(--bg-2);
@@ -305,6 +317,8 @@
      .game-picker-sheet,
      .player-picker-sheet,
      .game-search-sheet,
+     .exp-picker,
+     .import-exp-modal,
      [data-view="log-play"]) {
   --accent-ink:      var(--accent);   /* the paper gold is 1.5:1 here */
   --polaroid-accent: #E87B63;         /* terracotta is 3.9:1 here */
@@ -3902,7 +3916,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .exp-picker__import:hover { background: var(--polaroid-bg-soft); }
 .exp-picker__dot { flex: none; width: 10px; height: 10px; border-radius: 999px; }
-.exp-picker__error { color: #b3492f; }
+.exp-picker__error { color: var(--rust); }
 
 /* Section heading inside a sheet list ("Recently played with", "Selected"). */
 /* A pin taken before the keyboard opened is a floor the shrunken panel cannot
@@ -6262,6 +6276,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-bottom: 10px;
 }
 .import-exp-search[hidden] { display: none; }
+/* Mirrors the .bgb-sheet rule above: on a chrome-coloured card the field has
+   to sink, or it inherits --polaroid-bg and vanishes into the card it sits on.
+   --well is only defined on the chrome surfaces, so paper contexts fall back
+   to today's fill. */
+.import-exp-modal .game-finder__input { background: var(--well, var(--polaroid-bg)); }
 .import-exp-search__input {
   /* Explicit floor so the field clears the 44px tap target even if DaisyUI's
      .input sizing isn't in play. */
@@ -6316,7 +6335,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border-radius: 8px;
   background: var(--polaroid-bg-soft);
 }
-.import-exp-row--error { border-color: #b3492f; }
+.import-exp-row--error { border-color: var(--rust); }
 .import-exp-row__body {
   flex: 1;
   min-width: 0;
@@ -6331,7 +6350,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .import-exp-row__error {
   font-size: 11px;
-  color: #b3492f;
+  color: var(--rust);
 }
 /* Owner-count chip. The list is ordered by this number descending, so the
    chip exists to make that order legible — without it the sort reads as
