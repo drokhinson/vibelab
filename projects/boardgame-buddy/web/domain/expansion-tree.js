@@ -159,12 +159,24 @@
     return { groups: ordered, totalOwned };
   }
 
-  /** Which groups start expanded: the ones with something in them. */
+  /**
+   * Which groups start expanded: none of them.
+   *
+   * They used to open whenever they held anything, which on a real shelf meant
+   * the tab opened as one undifferentiated wall of rows — and in "show all"
+   * mode, where every group lists the entire catalog for its base game, there
+   * was no way to see what you own without scrolling past everything you
+   * don't. Closed by default makes the tab an index you drill into, and the
+   * expand-all control next to the show-all switch reaches the old view in one
+   * tap.
+   *
+   * Every group is named explicitly rather than returning {}: the caller
+   * merges this with `if (!(key in open))`, so an absent key would leave a
+   * newly-appearing group undefined rather than closed.
+   */
   function defaultOpenState(groups) {
     const open = {};
-    for (const g of groups || []) {
-      if (g.kids.length > 0) open[String(g.baseId)] = true;
-    }
+    for (const g of groups || []) open[String(g.baseId)] = false;
     return open;
   }
 

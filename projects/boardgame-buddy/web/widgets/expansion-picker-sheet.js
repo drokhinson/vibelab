@@ -142,7 +142,7 @@
           <div class="bgb-sheet__list" role="listbox" aria-label="Expansions to add"
                data-exp-picker-list>${this._renderBody()}</div>
           <button class="exp-picker__import" type="button" data-exp-picker-action="import">
-            <i data-icon="download-simple" class="w-4 h-4"></i>
+            <i data-icon="download" class="w-4 h-4"></i>
             <span>Import from BoardGameGeek</span>
           </button>
           <button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>

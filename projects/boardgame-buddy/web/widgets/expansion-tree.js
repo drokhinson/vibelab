@@ -97,7 +97,7 @@
     const addRow = !group.canAdd ? "" : (showAll
       ? `<li class="exp-tree__add-row">
            <button type="button" class="exp-tree__add" data-exp-import="${escapeAttr(key)}">
-             <i data-icon="download-simple" class="w-4 h-4"></i><span>Import from BoardGameGeek</span>
+             <i data-icon="download" class="w-4 h-4"></i><span>Import from BoardGameGeek</span>
            </button>
          </li>`
       : `<li class="exp-tree__add-row">

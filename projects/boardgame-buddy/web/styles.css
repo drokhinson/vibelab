@@ -18,6 +18,13 @@
      row + the 1px bottom rule. Used for scroll-padding-top below so that
      scrollIntoView({block:"start"}) targets clear the pinned header. */
   --bgb-header-height: 53px;
+  /* The pinned .spoke-head's resolved height under .bgb-spoke-screen: a 44px
+     control row + its 0.4rem/0.5rem padding-block + the 1px bottom rule =
+     59.4px. Anything that pins BELOW the back row offsets by header + this.
+     Deliberately floored rather than rounded up: a fraction short tucks the
+     next band a hairline UNDER the back row, where a fraction long would open
+     a sub-pixel seam for list content to show through. */
+  --bgb-spoke-head-height: 59px;
 
   /* The header is sticky, so an unpadded scroll-into-view drops its target
      underneath it. Callers: play-flow-view.js, game-explorer-view.js,
@@ -241,13 +248,23 @@
    rendered inside these containers, so paper keeps its cream everywhere it
    actually means "photo".
 
-   The three picker sheets are in the list even though they are not screens.
+   The four picker sheets are in the list even though they are not screens.
    ui/bottom-sheet.js appends a sheet to <body>, so it lands OUTSIDE the screen
    that opened it and kept the root paper aliases — which in dark meant tapping
    "Showing <game>" on an espresso screen threw up a cream sheet. Listing them
    here re-points the same tokens the surface behind them already uses, so each
    sheet matches the screen it was opened from in both themes. The classes sit
    on the backdrop element, so the panels inherit.
+
+   .import-exp-modal is the one entry here that is not a screen OR a sheet: it
+   is a .polaroid-popup__card, and popups are otherwise deliberate paper (see
+   .add-game-modal). It joins on what it CONTAINS, which is the rule the whole
+   list actually follows — a searchable list of catalog rows, the same object
+   the expansion picker sheet holds, reached from the same two places and often
+   one tap apart from it. A cream popup thrown up over the espresso sheet that
+   opened it was the visible tell. Its class sits on the card rather than the
+   backdrop; that is fine, an element sees the custom properties it declares on
+   itself, so the card's own background: var(--polaroid-bg) resolves here.
 
    Named individually rather than by the shared .bgb-sheet class on purpose:
    that class is also on the collection status sheet, which is a deliberate
@@ -264,6 +281,8 @@
      .game-picker-sheet,
      .player-picker-sheet,
      .game-search-sheet,
+     .exp-picker,
+     .import-exp-modal,
      [data-view="log-play"]) {
   --polaroid-bg:       var(--bg-1);
   --polaroid-bg-soft:  var(--bg-2);
@@ -298,6 +317,8 @@
      .game-picker-sheet,
      .player-picker-sheet,
      .game-search-sheet,
+     .exp-picker,
+     .import-exp-modal,
      [data-view="log-play"]) {
   --accent-ink:      var(--accent);   /* the paper gold is 1.5:1 here */
   --polaroid-accent: #E87B63;         /* terracotta is 3.9:1 here */
@@ -2937,10 +2958,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border-radius: 999px;
   padding: 0.15rem 0.45rem;
 }
+/* The base game's row content starts at 0.6rem of padding + a 16px chevron +
+   a 0.5rem gap ~= 33.6px. The old flat 1.9rem (30.4px) put children three
+   pixels to the LEFT of their own parent, which read as one flat list. The
+   margin lands the rail under the base game's art and the padding steps the
+   children clear of it. */
 .exp-tree__children {
   list-style: none;
-  margin: 0;
-  padding: 0 0.6rem 0.5rem 1.9rem;
+  margin: 0 0 0 2.1rem;
+  padding: 0 0.6rem 0.5rem 0.9rem;
+  border-left: 2px solid oklch(var(--b3));
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -2968,13 +2995,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .exp-tree__own:hover { background: oklch(var(--b3) / 0.6); }
 .exp-tree__own:active { transform: translateY(1px); }
 
-/* Owned-only vs the whole catalog. */
+/* Owned-only vs the whole catalog, and open-vs-closed. The bottom margin is
+   gone on purpose: the band is pinned by #collection-tree-controls-host, which
+   carries the padding — a margin here would leave a transparent strip under
+   the pinned row for list content to show through. */
 .exp-tree__controls {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 0 0 0.6rem;
 }
+/* Pushes the all-toggle to the trailing edge whether or not the Loading… note
+   is present, without giving the note its own margin rule. */
+.exp-tree__all { margin-left: auto; }
 .exp-tree__switch {
   display: inline-flex;
   align-items: center;
@@ -2989,6 +3021,19 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
 }
 .exp-tree__switch.is-on { color: oklch(var(--bc)); }
+/* On a 320px phone the row can hold the switch, the Loading… note AND
+   "Collapse all" only if something gives. The switch's label is the one thing
+   here that stays understandable when trimmed — the track already says what
+   the control is — so it shrinks and ellipses rather than pushing the toggle
+   past the gutter. min-width:0 on both, or a flex item refuses to shrink below
+   its content. */
+.exp-tree__switch { min-width: 0; }
+.exp-tree__switch > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .exp-tree__switch-track {
   flex: none;
   box-sizing: border-box;
@@ -3020,6 +3065,29 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .exp-tree__switch.is-on .exp-tree__switch-knob { transform: translateX(16px); }
 .exp-tree__switch:focus-visible .exp-tree__switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
 .exp-tree__controls-note { font-size: 0.7rem; color: oklch(var(--bc) / 0.55); }
+/* Expand/collapse every group. Quieter than the switch beside it — that one
+   changes what the tab is showing, this one only changes how much of it you
+   can see at once. */
+.exp-tree__all {
+  flex: none;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.5rem;
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.5rem;
+  background: none;
+  color: oklch(var(--bc) / 0.7);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.exp-tree__all:hover:not(:disabled) { background: oklch(var(--b3) / 0.6); color: oklch(var(--bc)); }
+.exp-tree__all:active:not(:disabled) { transform: translateY(1px); }
+.exp-tree__all:disabled { opacity: 0.45; cursor: default; }
+.exp-tree__all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .exp-tree__add-row { display: flex; }
 .exp-tree__add {
   flex: 1;
@@ -3861,7 +3929,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .exp-picker__import:hover { background: var(--polaroid-bg-soft); }
 .exp-picker__dot { flex: none; width: 10px; height: 10px; border-radius: 999px; }
-.exp-picker__error { color: #b3492f; }
+.exp-picker__error { color: var(--rust); }
 
 /* Section heading inside a sheet list ("Recently played with", "Selected"). */
 /* A pin taken before the keyboard opened is a floor the shrunken panel cannot
@@ -5392,6 +5460,27 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   cursor: pointer;
 }
 .cascade-exp-list { list-style: none; padding: 0; margin: 8px 0 0; }
+/* Rows the device answered with while /games/{id}/expansions is still in the
+   air: real matches for this game, but not yet the final word. Same language
+   the game finder's dropdown uses for the same situation — a thin accent bar
+   sweeping the top of a slightly held-back list, rather than a second kind of
+   loading state. */
+.cascade-exp-list--refreshing { opacity: 0.75; }
+.cascade-exp-list--refreshing::before {
+  content: "";
+  display: block;
+  height: 3px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  background:
+    linear-gradient(90deg, transparent, var(--polaroid-accent), transparent);
+}
+/* The spinner reads as centred on the label; .cascade-card__hint aligns to
+   flex-start for its multi-line warning variants. Both classes are on the same
+   element, so this has to carry BOTH — the bare .cascade-exp-loading ties on
+   specificity with .cascade-card__hint 3000 lines below and loses on source
+   order. */
+.cascade-card__hint.cascade-exp-loading { align-items: center; }
 .cascade-exp-row {
   background: rgba(255, 251, 241, 0.55);
   border: 1px solid var(--polaroid-line);
@@ -6221,6 +6310,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-bottom: 10px;
 }
 .import-exp-search[hidden] { display: none; }
+/* Mirrors the .bgb-sheet rule above: on a chrome-coloured card the field has
+   to sink, or it inherits --polaroid-bg and vanishes into the card it sits on.
+   --well is only defined on the chrome surfaces, so paper contexts fall back
+   to today's fill. */
+.import-exp-modal .game-finder__input { background: var(--well, var(--polaroid-bg)); }
 .import-exp-search__input {
   /* Explicit floor so the field clears the 44px tap target even if DaisyUI's
      .input sizing isn't in play. */
@@ -6275,7 +6369,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border-radius: 8px;
   background: var(--polaroid-bg-soft);
 }
-.import-exp-row--error { border-color: #b3492f; }
+.import-exp-row--error { border-color: var(--rust); }
 .import-exp-row__body {
   flex: 1;
   min-width: 0;
@@ -6290,7 +6384,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .import-exp-row__error {
   font-size: 11px;
-  color: #b3492f;
+  color: var(--rust);
 }
 /* Owner-count chip. The list is ordered by this number descending, so the
    chip exists to make that order legible — without it the sort reads as
@@ -7873,6 +7967,30 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-inline: -1rem;
   padding-inline: 1rem;
   padding-block: 0.4rem 0.5rem;
+  background: oklch(var(--b1) / 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid oklch(var(--b3));
+}
+
+/* The Expansions tab's control band, pinned directly under the back row above
+   it. Same bleed-and-blur treatment, one step down the z ladder so it slides
+   UNDER .spoke-head (20) rather than over it, and above view content.
+
+   It lives in its own shell host rather than inside #collection-grid-host
+   because _paintTree() rewrites that host wholesale — pinning an element that
+   gets swapped out from under the thumb is how a sticky row ends up jumping.
+   The host is empty (and so zero-height) outside tree mode, which is why there
+   is no mode guard here. */
+.bgb-spoke-screen > #collection-tree-controls-host:not(:empty) {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + var(--bgb-spoke-head-height));
+  z-index: 15;
+  display: block;
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+  padding-block: 0.35rem 0.45rem;
+  margin-bottom: 0.6rem;
   background: oklch(var(--b1) / 0.95);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);

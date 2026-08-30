@@ -69,6 +69,15 @@
       this._codeReplaced = false;
       this._expansions = [];
       this._expansionsLoadedFor = null;
+      // The game whose cached bundle _expansions was painted from, before any
+      // server answer. Distinct from _expansionsLoadedFor, which means "the
+      // server has spoken for this game" and alone gates the prune.
+      this._expansionsSeededFor = null;
+      // The game a refine is currently in flight for, so an empty list can say
+      // "loading" instead of asserting there are none.
+      this._expansionsInflightFor = null;
+      // Monotonic guard: two quick picks must not let the slower response win.
+      this._expansionsSeq = 0;
       this._expansionsOpen = false;
       this._expansionQuery = "";
       this._guideWidget = null;
@@ -267,6 +276,8 @@
         }
         return combined;
       })();
+      // Synchronous, so the lobby-driven render below already has the rows.
+      this._seedExpansionsFromCache(this._ps && this._ps.gameId);
       const expansionsPromise = this._loadExpansionsIfNeeded();
       // The session code is the one thing the Gather screen visibly lacks, so
       // it gets its own repaint rather than riding the slowest of the three
@@ -2024,6 +2035,9 @@
       // Push the pick to the lobby so joiners' read-only mirrors swap too.
       // Live lobby only — see _clearGamePick for why not ps.code.
       this._withLobby((code) => window.PlaySession.updateLobby(code, { gameId: game.id }));
+      // Before the render, not inside the loader: this paint is the one the
+      // seed exists to fill, and _loadExpansionsIfNeeded only resolves after it.
+      this._seedExpansionsFromCache(game.id);
       // The user changes the pick by tapping the chip's ×, which clears state
       // and brings the chooser back. The search sheet unmounts its finder on
       // close, and unmount() invalidates any in-flight search, so a late
@@ -2423,11 +2437,48 @@
 
     // ── Expansions ──────────────────────────────────────────────────────────
 
+    /**
+     * Paint the expansions the device already holds, synchronously, before any
+     * await — so the card is populated in the same frame as the pick.
+     *
+     * bgb_game_detail_bundle carries the same ExpansionListItem[] the endpoint
+     * returns, key for key, and Bootstrap.warmGameBundles() has it for every
+     * owned game. This used to be read only when BgbNet reported offline,
+     * which had it backwards the same way the game picker did before 46fba90:
+     * a host on Gather is reaching for a game they own whether or not there is
+     * signal, and the ticks come from _ps.expansionIds rather than the rows,
+     * so a cached paint shows the right selections immediately.
+     *
+     * peek(), not get(): peek serves anything still inside the stale window
+     * without kicking its own refresh, which is exactly the "paint from it,
+     * then fire your own read" contract in domain/cache.js. A miss means "not
+     * warmed" (the game isn't owned), never "no expansions" — hence this can
+     * seed the list but can never make it authoritative.
+     *
+     * @returns {boolean} whether anything was painted.
+     */
+    _seedExpansionsFromCache(gameId) {
+      if (!gameId || this._expansionsSeededFor === gameId) return false;
+      if (this._expansionsLoadedFor === gameId) return false;
+      const snap = this._ps && this._ps.gameSnapshot;
+      if (snap && snap.is_expansion) return false;
+      const bundle = window.bgbCache && window.bgbCache.peek("game.bundle", gameId);
+      const rows = bundle && Array.isArray(bundle.expansions) ? bundle.expansions : null;
+      if (!rows) return false;
+      this._expansions = rows;
+      this._expansionsSeededFor = gameId;
+      // A filter typed for the previous pick would silently hide everything.
+      this._expansionQuery = "";
+      return true;
+    }
+
     async _loadExpansionsIfNeeded() {
       const gameId = this._ps && this._ps.gameId;
       if (!gameId) {
         this._expansions = [];
         this._expansionsLoadedFor = null;
+        this._expansionsSeededFor = null;
+        this._expansionsInflightFor = null;
         return;
       }
       if (this._expansionsLoadedFor === gameId) return;
@@ -2438,27 +2489,40 @@
       if (snap && snap.is_expansion) {
         this._expansions = [];
         this._expansionsLoadedFor = gameId;
+        this._expansionsInflightFor = null;
         return;
       }
+      // Callers on the paint path seed before rendering; this covers the ones
+      // that don't (the import modal's reload) so no path pays a blank card.
+      const seeded = this._seedExpansionsFromCache(gameId) || this._expansionsSeededFor === gameId;
+      if (!seeded) this._expansions = [];
       // `authoritative` gates the prune below. The list is only trustworthy
       // enough to delete the host's picks against when it came from the
       // server — bootstrap warms game.bundle for owned games only, so a cache
       // read that finds nothing means "not warmed", not "no expansions".
       let authoritative = false;
       if (this._isOffline()) {
-        // bgb_game_detail_bundle carries the same ExpansionListItem[] the
-        // endpoint returns, and Bootstrap.warmGameBundles() has it for every
-        // owned game — enough to run the picker with no server.
-        const bundle = window.bgbCache && window.bgbCache.peek("game.bundle", gameId);
-        this._expansions = (bundle && Array.isArray(bundle.expansions)) ? bundle.expansions : [];
+        // Nothing more to reach for: the seed above is the whole answer.
+        this._expansionsInflightFor = null;
       } else {
+        // Two quick picks can resolve out of order and leave the earlier
+        // game's expansions on screen, so only the latest call reconciles
+        // (.claude/rules/web-frontend.md, "Async state & race conditions").
+        const seq = ++this._expansionsSeq;
+        this._expansionsInflightFor = gameId;
         try {
           const list = await window.api.get(`/games/${gameId}/expansions`);
+          if (seq !== this._expansionsSeq) return;
           this._expansions = Array.isArray(list) ? list : [];
           authoritative = true;
         } catch (_) {
-          this._expansions = [];
+          if (seq !== this._expansionsSeq) return;
+          // Keep whatever the cache seeded. A failed refine over a good list
+          // must not be worse than no refine at all — and !authoritative
+          // already stops the prune below from acting on it.
+          if (!seeded) this._expansions = [];
         }
+        this._expansionsInflightFor = null;
       }
       this._expansionsLoadedFor = gameId;
       // Drop picks the game no longer offers — but ONLY against a list we
@@ -2508,6 +2572,11 @@
       // five visible rows and scrolls, with a filter above it; Import sits
       // below the scroll box so it never drifts out of reach mid-list.
       const showFilter = list.length > EXPANSION_FILTER_THRESHOLD;
+      // Rows the device answered with, while the server is still being asked:
+      // real matches, but not yet the final word. Same treatment the game
+      // finder's dropdown uses for the same situation.
+      // snap is non-null past the disabled branch above, so gameId is too.
+      const refreshing = list.length > 0 && this._expansionsInflightFor === this._ps.gameId;
       return `
         <section class="cascade-card cascade-card--expansions">
           <button class="collapsible-header" aria-expanded="${open}"
@@ -2521,7 +2590,8 @@
           ${open ? `
             ${showFilter ? this._renderExpansionFilter() : ""}
             <div class="cascade-exp-scroll">
-              <ul class="expansion-list cascade-exp-list" id="cascade-exp-list">
+              <ul class="expansion-list cascade-exp-list${refreshing ? " cascade-exp-list--refreshing" : ""}"
+                  id="cascade-exp-list">
                 ${this._renderExpansionRows(list, baseName)}
               </ul>
             </div>
@@ -2558,6 +2628,16 @@
     /** Rows for the current filter, or the right hint when there are none. */
     _renderExpansionRows(list, baseName) {
       if (!list.length) {
+        // Only say there are none once someone has actually looked. With a
+        // request still in the air this asserted "none" and then contradicted
+        // itself a round trip later.
+        if (this._expansionsInflightFor && this._expansionsInflightFor === (this._ps && this._ps.gameId)) {
+          return `
+            <li class="cascade-card__hint cascade-exp-loading">
+              <span class="game-finder-spinner" aria-hidden="true"></span>
+              <span>Loading expansions…</span>
+            </li>`;
+        }
         return `<li class="cascade-card__hint">No expansions in BoardgameBuddy yet.</li>`;
       }
       const q = (this._expansionQuery || "").trim();

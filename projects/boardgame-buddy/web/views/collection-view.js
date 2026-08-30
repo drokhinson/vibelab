@@ -119,6 +119,10 @@
       // #collection-grid-host wholesale, so per-row handlers would need
       // re-binding on every paint.
       const onTreeClick = (e) => {
+        if (e.target.closest("[data-exp-toggle-all]")) {
+          this._toggleAllGroups();
+          return;
+        }
         const toggle = e.target.closest("[data-exp-toggle]");
         if (toggle) {
           this._toggleExpGroup(toggle.getAttribute("data-exp-toggle"));
@@ -293,6 +297,7 @@
         ${this._renderHead()}
         ${other || tree ? "" : this._renderControls()}
         ${other ? "" : this._renderToggle()}
+        <div id="collection-tree-controls-host">${tree ? this._renderTreeControls() : ""}</div>
         <div id="collection-filters-host">${!tree && this._filtersOpen ? this._renderFilters() : ""}</div>
         <div id="collection-grid-host">${this._renderBody(this._hasPager())}</div>
         <div id="collection-pager-host">${this._renderPager()}</div>
@@ -548,30 +553,38 @@
       }
       const groups = this._tree.groups || [];
       if (!groups.length && this._treeShowAll && this._treeCatalogLoading) {
-        return this._renderTreeControls()
-          + `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Loading expansions…" })}</div>`;
+        return `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Loading expansions…" })}</div>`;
       }
       if (!groups.length) {
         // Distinct from "you own no expansions": a shelf with no base game
         // that HAS any expansions in the catalog has nothing to nest under.
-        return this._renderTreeControls()
-          + `<div class="profile-empty">Nothing to show yet — expansions appear here under the games you own.</div>`;
+        return `<div class="profile-empty">Nothing to show yet — expansions appear here under the games you own.</div>`;
       }
       const truncated = this._treeTruncated
         ? `<p class="exp-tree__truncated">Showing the first slice of a very large collection.</p>`
         : "";
-      return this._renderTreeControls()
-        + window.renderExpansionTree(this._tree, { open: this._treeOpen, showAll: this._treeShowAll })
+      return window.renderExpansionTree(this._tree, { open: this._treeOpen, showAll: this._treeShowAll })
         + truncated;
     }
 
     /**
-     * Owned-only vs every expansion BgB has. A switch rather than a fourth
-     * pill: it changes what each group lists, not which tab you are on.
+     * The tree's pinned control band: what each group lists (owned-only vs the
+     * whole catalog) on the left, and whether the groups are open on the
+     * right. It sits in its own shell host — #collection-tree-controls-host —
+     * rather than inside the body, for two reasons: _paintTree() rewrites the
+     * body wholesale, which would tear the pinned row down under the user's
+     * thumb, and the body has three separate return paths that would each have
+     * had to remember to prepend it (the cold-load one didn't).
      */
     _renderTreeControls() {
       const on = this._treeShowAll;
       const busy = on && this._treeCatalogLoading && !this._treeCatalog;
+      const groups = (this._tree && this._tree.groups) || [];
+      const anyOpen = this._anyGroupOpen();
+      // One control, two directions: with anything open it closes everything,
+      // otherwise it opens everything. Derived from _treeOpen on every paint
+      // rather than stored, so a per-group tap can't leave it lying.
+      const allLabel = anyOpen ? "Collapse all" : "Expand all";
       return `
         <div class="exp-tree__controls">
           <button type="button" class="exp-tree__switch ${on ? "is-on" : ""}"
@@ -581,7 +594,42 @@
             <span>Show all expansions</span>
           </button>
           ${busy ? `<span class="exp-tree__controls-note">Loading…</span>` : ""}
+          <button type="button" class="exp-tree__all" data-exp-toggle-all
+                  aria-label="${allLabel} expansion groups" ${groups.length ? "" : "disabled"}>
+            <i data-icon="${anyOpen ? "chevron-up" : "chevron-down"}" class="w-4 h-4"></i>
+            <span>${allLabel}</span>
+          </button>
         </div>`;
+    }
+
+    /** True when at least one group is currently disclosed. */
+    _anyGroupOpen() {
+      const groups = (this._tree && this._tree.groups) || [];
+      return groups.some((g) => !!this._treeOpen[String(g.baseId)]);
+    }
+
+    /**
+     * Open or close every group at once. Surgical on purpose: _paintTree()
+     * would rebuild the whole body — and, since the controls row is pinned,
+     * would also swap the very element the user just tapped mid-gesture.
+     */
+    _toggleAllGroups() {
+      const open = !this._anyGroupOpen();
+      const groups = (this._tree && this._tree.groups) || [];
+      for (const g of groups) {
+        const key = String(g.baseId);
+        this._treeOpen[key] = open;
+        window.expansionTreeToggle(this.container, key, open);
+      }
+      this._paintTreeControls();
+    }
+
+    /** Repaint just the pinned band — switch state, note, all-toggle label. */
+    _paintTreeControls() {
+      const host = this.container.querySelector("#collection-tree-controls-host");
+      if (!host) return;
+      host.innerHTML = this._mode === MODE_EXPANSIONS ? this._renderTreeControls() : "";
+      this.refreshIcons(host);
     }
 
     /** Regroup from the flat rows, keeping whatever the user has expanded. */
@@ -669,12 +717,15 @@
       this._rebuildTree();
     }
 
-    /** Grid host only — no shell teardown, so the scroll position holds. */
+    /** Tree hosts only — no shell teardown, so the scroll position holds. */
     _paintTree() {
       const grid = this.container.querySelector("#collection-grid-host");
       if (!grid) return;
       grid.innerHTML = this._renderTreeBody();
       this.refreshIcons(grid);
+      // The band reads state the body just changed — the show-all switch, the
+      // Loading… note, and whether anything is open — so it repaints with it.
+      this._paintTreeControls();
     }
 
     /**
@@ -724,6 +775,9 @@
       // Surgical: flipping one group must not rebuild the tree under the
       // user's thumb (.claude/rules/web-frontend.md).
       window.expansionTreeToggle(this.container, key, open);
+      // Opening the first group has to flip the band's control to "Collapse
+      // all", and closing the last one back to "Expand all".
+      this._paintTreeControls();
     }
 
     /** The + on an unowned row in show-all mode. */
