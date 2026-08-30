@@ -270,12 +270,36 @@ export default function usePlaySession({ me, initialCode, initialGame, fresh }) 
     const pending = (d.players || []).filter(
       (p) => !p.participant_id && !(me && p.user_id === me.id),
     );
-    if (!pending.length) return;
-    await Promise.all(
-      pending.map((p) =>
-        api.addParticipant(code, { userId: p.user_id || null, displayName: p.name }).catch(() => {}),
-      ),
-    );
+    if (pending.length) {
+      await Promise.all(
+        pending.map((p) =>
+          api.addParticipant(code, { userId: p.user_id || null, displayName: p.name }).catch(() => {}),
+        ),
+      );
+    }
+    // Then publish the order. The grid's columns ARE the roster order on every
+    // surface, and the push above is a Promise.all — the rows land in whatever
+    // order the writes complete, so a spectator's columns would otherwise be
+    // shuffled against the host's Gather list. The server sorts by
+    // (position NULLS LAST, joined_at), so this is the only thing that makes
+    // the two agree. Gather-only; best-effort, since a wrong column order
+    // costs a spectator legibility and the host nothing.
+    const fresh = lobbyRef.current?.participants || [];
+    const byKey = new Map();
+    for (const part of fresh) {
+      byKey.set(part.user_id || `ghost:${(part.display_name || '').toLowerCase()}`, part.id);
+    }
+    const ordered = (d.players || [])
+      .map((p) => p.participant_id || byKey.get(p.user_id || `ghost:${(p.name || '').toLowerCase()}`))
+      .filter(Boolean);
+    if (ordered.length > 1) {
+      await api.reorderParticipants(code, ordered).then(
+        (updated) => {
+          if (updated) lobbyRef.current = updated;
+        },
+        () => {},
+      );
+    }
   }, [me]);
 
   const lobbyPollTick = useCallback(async () => {

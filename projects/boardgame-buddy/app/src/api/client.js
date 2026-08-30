@@ -261,6 +261,10 @@ export const api = {
   addParticipant: (code, { userId, displayName }) =>
     post(`/sessions/${code}/participants`, { user_id: userId || null, display_name: displayName }),
   removeParticipant: (code, participantId) => del(`/sessions/${code}/participants/${participantId}`),
+  // The scoring grid's columns ARE the roster order, on every surface
+  // (migration 056). Gather-only — once Play starts the order is frozen.
+  reorderParticipants: (code, participantIds) =>
+    put(`/sessions/${code}/participants/order`, { participant_ids: participantIds }),
   updateSession: (code, gameId) => patch(`/sessions/${code}`, { game_id: gameId || null }),
   updateSessionPhase: (code, phase) => patch(`/sessions/${code}/phase`, { phase }),
   finalizeSession: (code, payload) => post(`/sessions/${code}/finalize`, payload),
