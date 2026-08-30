@@ -64,7 +64,7 @@ Each canonical component should:
 - **Take an `opts` object as its second argument** with documented variants and JSDoc `@typedef`.
 - **Return an HTML string** (no DOM manipulation, no side effects). This keeps it usable inside `view.render()` template literals and inside `view.innerHTML =`.
 - **Own its CSS class family** — `.play-card`, `.play-card--strip`, `.play-card__photo`, etc. The class family lives in one section of `styles.css` and is not redefined elsewhere.
-- **Read tokens, not literals.** Colors and fonts come from CSS variables (`var(--accent)`, `var(--font-display)`). Data-driven accents (per-game theme color, per-expansion source color) are the only legitimate inline-style use.
+- **Read the *surface's* token family, not literals.** Colors and fonts come from CSS variables. Which variables depends on what kind of surface the component lands on — ground, paper or chrome — because a token tuned for the app ground inverts on a light card and vice versa. If the component is used on exactly one surface, a scoped override is fine; if it is shared across surfaces, define it in surface tokens in its own class family so it travels. See `.claude/rules/theming.md` §6 for the substitution table. Data-driven accents (per-game theme color, per-expansion source color) are the only legitimate inline-style use, and they are set as a custom property, never as a literal `color:`.
 
 ## 3. Visual continuity contract
 
@@ -84,7 +84,17 @@ The boardgame-buddy audit caught one case: `PlayDetailPopup` opens from the play
 
 ### 3c. Destructive actions are confirmed through one project-wide surface
 
-Every destructive action requires a secondary user confirmation (see `.claude/rules/web-frontend.md`). Pick one confirmation surface for the whole project and use it everywhere: either `window.confirm()` for every destructive gate, or a single shared modal API (e.g. `PolaroidPopup.confirm()` in boardgame-buddy) for every destructive gate. Mixing per-screen bespoke dialogs is the anti-pattern.
+Every destructive action requires a secondary user confirmation (see `.claude/rules/web-frontend.md`). Pick one confirmation surface for the whole project and use it everywhere: `window.confirm()` for every destructive gate, or a single shared modal API (e.g. `PolaroidPopup.confirm()` in boardgame-buddy), or a single bottom sheet (`.claude/rules/overlays.md`) — but one of them, for all of them. Mixing per-screen bespoke dialogs is the anti-pattern.
+
+### 3d. A list that grows without bound is paginated
+
+Any list that grows with user activity — plays, buddies, a collection — gets pagination rather than an ever-longer scroll. Three rules that are easy to miss:
+
+- **Clamp the page on every render**, not just on the page-turn handler. A delete under the user, or a filter that narrows the result set, otherwise strands them on a page that no longer exists.
+- **Render the pager only when there is more than one page.**
+- **Paging away closes any open inline panel**, or the user is left with invisible state attached to a row they can no longer see.
+
+Heterogeneous rows (accounts and ghosts, owned and wishlisted) page **as one sequence** so every page is a full page. Factor one `_renderPager(page, pages, handler, label)` and reuse it — see `views/buddies-view.js` in boardgame-buddy.
 
 ## 4. When duplicates appear
 
@@ -93,6 +103,19 @@ When a code review (or `/ultrareview` run) reveals two implementations of the sa
 1. **Find the canonical component.** Does one already exist in `ui/`? If so, why didn't the second surface use it? Migrate the second surface.
 2. **If no canonical exists, decide whether one should.** Apply the "core object" test from §1. If yes, extract the more-complete implementation into `ui/`, delete the other, then add `variant` opts as the third surface needs them.
 3. **Document the canonical choice.** If the project has a `Docs/ARCHITECTURE.md`, update §3 ("One object → One canonical UI component"). Otherwise add a sentence to `STRUCTURE.md`.
+
+### Extract at instance #2
+
+The moment to extract is the **second** occurrence, not the fourth. By instance #4 the copies have diverged and the extraction becomes a redesign.
+
+When you extract, split along **lifecycle vs appearance**, not along "the shared bits":
+
+- The extracted shell owns the *lifecycle* — construction, mounting, scroll lock, delegated events, keyboard handling, focus, teardown. It is the part that is genuinely identical and genuinely hard to get right twice.
+- Each caller keeps its **own markup and its own CSS family**. Nothing about how the thing *looks* moves into the shell. That is what lets the third and fourth callers differ visually without forking the shell or growing an options matrix.
+
+`projects/boardgame-buddy/web/ui/bottom-sheet.js` is the reference: 165 lines, four consumers, and its header states outright that "nothing about how a sheet LOOKS lives here." It was extracted when the status sheet stopped being the only one — and when the panel chrome then repeated a third time, that too was promoted out of one sheet's class family into a shared `.bgb-sheet__*` family rather than copied.
+
+A corollary for naming: when a module's job splits in two, split the module. `ui/viewport-lock.js` *measures* the visible viewport and `ui/zoom-lock.js` *prevents* the scale changing; folding the second into the first would have made the first file's name a lie.
 
 ## 5. When deleting dead components
 
@@ -103,7 +126,9 @@ Components that no surface uses are not free — they grow stale, propose themse
 - If the component had its own CSS family, delete that too. Check for orphan host classes (e.g. `.profile-hub__avatar` sizing a now-deleted `.avatar-bubble`).
 - Update any `Docs/UI_AUDIT.md` "Cleanup log" section so the deletion is traceable.
 
-The boardgame-buddy cleanup pass (2026-05-23) is the reference for what this looks like end-to-end: dead function, dead CSS family, dead script tag, stale comment, all removed in one commit.
+The boardgame-buddy cleanup log in `Docs/UI_AUDIT.md` is the reference for what this looks like end-to-end — dead function, dead CSS family, dead script tag, stale comment, all removed in one commit. Read the most recent pass, not the first.
+
+A class name that describes a surface which no longer exists is the same kind of debt: `.bgb-cream-screen` outlived the cream sheet it was named for by two themes. Renaming it to `.bgb-spoke-screen` was a 67-selector sweep that should have happened when the surface changed.
 
 ## 6. Object-aware file layout
 
@@ -111,14 +136,23 @@ Every web project follows the same module shape so the OOD intent is visible fro
 
 ```
 projects/<app>/web/
-├── domain/         ← One file per core object: <object>.js (Game.js, Play.js, …)
-├── ui/             ← One canonical render function per object: <object>-card.js, <object>-row.js, …
-├── widgets/        ← Stateful multi-component widgets (scoring grid, parchment scroll)
+├── domain/         ← One file per core object: <object>.js (game.js, play.js, …)
+│   ├── view.js         the View base class + Router
+│   └── theme.js        light/dark controller (.claude/rules/theming.md)
+├── ui/             ← Canonical render functions AND app-wide primitives
+│   ├── <object>-card.js, <object>-row.js, …   one per core object
+│   ├── bottom-sheet.js     the sheet shell (.claude/rules/overlays.md)
+│   ├── icons.js            the vendored icon set + render pass
+│   ├── viewport-lock.js    publishes the visible viewport
+│   └── zoom-lock.js        holds the page at 1x on iOS
+├── widgets/        ← Stateful multi-component widgets (scoring grid, picker sheets, modals)
 ├── views/          ← One file per screen / route — thin, composes ui/ + widgets/
-├── index.html      ← Shell only (header, nav, view containers)
+├── index.html      ← Shell only (theme boot, header, nav, view containers)
 ├── init.js         ← Router registration, view construction, auth boot
-└── styles.css      ← All CSS — one section per object's class family
+└── styles.css      ← All CSS — tokens first, then one section per class family
 ```
+
+`ui/` holds two kinds of thing: the canonical component per core object, and the app-wide primitives every surface leans on. Both belong there because both have exactly one implementation by construction.
 
 If a project does not have this layout yet (e.g. early prototype), add it as soon as the project crosses the 300-line-per-file threshold from `.claude/rules/web-frontend.md`.
 
@@ -127,6 +161,8 @@ If a project does not have this layout yet (e.g. early prototype), add it as soo
 - [ ] Is there a canonical render function in `ui/` for this object? If yes, use it.
 - [ ] Does the surface need a tweak the canonical function doesn't support? Add an `opts` variant — do not write a parallel implementation.
 - [ ] Are typography, color, and status badge unchanged? If you reached for a new font or accent, stop and reconsider.
+- [ ] Does it read correctly in **both** themes, on the surface it actually lands on? Grep its CSS for ground tokens on a paper surface (`.claude/rules/theming.md` §6).
+- [ ] Is any choice list a bottom sheet rather than an absolute dropdown (`.claude/rules/overlays.md`)?
 - [ ] Is the navigation affordance (tap to open detail, etc.) consistent with the other surfaces that route to the same destination?
 - [ ] Is any destructive action wired through the project's shared confirm modal?
 - [ ] If a parallel implementation already exists somewhere else, did this change make it the second one — or did you delete the duplicate?
@@ -135,6 +171,9 @@ If a project does not have this layout yet (e.g. early prototype), add it as soo
 ## Related rules
 
 - `.claude/rules/web-frontend.md` — vanilla-JS conventions, accessibility, motion.
+- `.claude/rules/theming.md` — the token vocabulary a component must read.
+- `.claude/rules/overlays.md` — the sheet shell, and the shell/appearance split above.
+- `.claude/rules/mobile-web.md` — tap-target sizes for rows and commit buttons.
 - `.claude/rules/assets.md` — asset directory + naming.
 - `.claude/rules/typed-js.md` — JSDoc `@typedef` for component option contracts.
 - `.claude/rules/auth-ui.md` — auth screen visual standard (a specific instance of the "same object, same look" rule applied to OAuth buttons).

@@ -46,6 +46,33 @@ The brand mark is always called `<prefix>-logo.svg`. If a separate small-scale f
 
 DB seed tables for option sets store an `icon` **slug** (text), never an emoji character. Existing projects that ship emoji data marks are grandfathered — migrate them opportunistically via `/ui-polish`, and never introduce new emoji usage. The one exception: `registry.json`'s landing-page `icon` field keeps its existing emoji convention until the landing page migrates.
 
+## Assets Read on Both Grounds
+
+Every app ships light and dark (`.claude/rules/theming.md`), so an asset drawn
+against one ground is half-broken by construction. In order of preference:
+
+1. **`fill="currentColor"` / `stroke="currentColor"`.** The mark inherits the ink
+   of whatever surface it lands on and needs no per-theme rule at all. This is
+   the default for every chrome icon and every single-colour mark.
+2. **Token fills** — `fill="var(--accent)"` on an inline SVG, so the mark follows
+   the palette. Works only for inline SVG; a file loaded via `<img>` cannot see
+   the page's custom properties.
+3. **A per-theme variant file** — `<prefix>-logo.svg` plus
+   `<prefix>-logo-dark.svg`, swapped by a CSS rule under the theme attribute.
+   Use this only when the mark is genuinely two drawings (a wordmark that needs a
+   different weight on a dark ground), not to work around (1) and (2).
+
+**A fixed third-party brand lockup is never recoloured and never
+brightness-filtered.** The Google `G`, a BoardGameGeek attribution mark, an
+app-store badge — these have colours their owner specifies. If the lockup
+disappears against the app's ground, give it the **plate it was drawn for** (a
+white or light rounded rectangle behind it) rather than filtering the artwork.
+
+Illustrations and sprites: check both grounds before committing. A hero
+illustration with a white-ish background plate reads as a bright rectangle in
+dark; either make the background transparent and let the ground show through, or
+give the plate a token fill.
+
 ## Inline SVG vs File SVG
 
 Keep the existing rule from `web-frontend.md`:

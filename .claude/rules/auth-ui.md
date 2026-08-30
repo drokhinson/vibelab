@@ -2,6 +2,8 @@
 paths:
   - "projects/*/web/auth.js"
   - "projects/*/web/styles.css"
+  - "projects/*/web/ui/**"
+  - "projects/*/web/views/auth-view.js"
 ---
 
 # Auth UI Standard — OAuth Buttons & Email Divider
@@ -42,7 +44,18 @@ Every web auth screen that offers Google / Apple sign-in uses the same visuals s
 
 ## Canonical CSS
 
-The CSS uses `var(--bg)`, `var(--bg-card)`, `var(--text-primary)`, `var(--text-muted)`, `var(--border)` — define these in your project's stylesheet to match its palette. If your project doesn't have CSS custom properties, substitute literal colors that fit the theme.
+Written in the canonical token vocabulary from `.claude/rules/theming.md`. Every
+colour here is a token — there is no literal-colour fallback, because a literal
+is wrong in one of the two themes by definition. If a project is still on the
+legacy names, alias them at `:root` rather than editing this block:
+
+| Legacy | Canonical |
+|---|---|
+| `--bg` | `--bg-0` |
+| `--bg-card` | `--bg-1` |
+| `--text-primary` | `--ink` |
+| `--text-muted` | `--ink-muted` |
+| `--border` | `--line` |
 
 ```css
 /* OAuth provider buttons (Google / Apple) */
@@ -52,9 +65,10 @@ The CSS uses `var(--bg)`, `var(--bg-card)`, `var(--text-primary)`, `var(--text-m
   justify-content: center;
   gap: 10px;
   width: 100%;
-  background: var(--bg);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  min-height: 44px;                 /* tap-target floor */
+  background: var(--bg-1);
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 999px;
   padding: 11px 16px;
   font-size: 15px;
@@ -63,21 +77,22 @@ The CSS uses `var(--bg)`, `var(--bg-card)`, `var(--text-primary)`, `var(--text-m
   margin-bottom: 10px;
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
+/* One step further from the ground in BOTH themes — not "lighter". */
 .auth-oauth-btn:hover:not(:disabled) {
-  background: var(--bg-card);
-  border-color: var(--text-muted);
+  background: var(--bg-2);
+  border-color: var(--line-strong);
 }
 .auth-oauth-btn:active:not(:disabled) { transform: translateY(1px); }
 .auth-oauth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .auth-oauth-logo { width: 18px; height: 18px; flex-shrink: 0; }
-.auth-oauth-apple .auth-oauth-logo { color: var(--text-primary); }
+.auth-oauth-apple .auth-oauth-logo { color: var(--ink); }
 
 .auth-divider {
   display: flex;
   align-items: center;
   text-align: center;
   margin: 18px 0 16px;
-  color: var(--text-muted);
+  color: var(--ink-muted);
   font-size: 13px;
   font-weight: 400;
 }
@@ -85,17 +100,34 @@ The CSS uses `var(--bg)`, `var(--bg-card)`, `var(--text-primary)`, `var(--text-m
 .auth-divider::after {
   content: "";
   flex: 1;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
 }
 .auth-divider span { padding: 0 12px; }
 ```
 
+## Both themes
+
+The auth screen is the first screen a new user sees, in whichever mode their
+device is in. Three things to get right:
+
+- **The Apple glyph is `fill="currentColor"`** so it inherits the button's ink —
+  dark on a light button, light on a dark one — with no per-theme rule.
+- **The Google mark keeps its four official hex fills in both themes.** It is a
+  fixed brand mark; do not recolour it, and do not apply a brightness filter. If
+  it needs more separation on a dark ground, give the button a lighter plate, not
+  the logo a filter. Same rule for any third-party attribution lockup (see
+  `.claude/rules/assets.md`).
+- **`:hover` means "one step further from the ground", not "lighter".** A hover
+  hardcoded to a lighter surface reads as a highlight in dark and as a wash-out
+  in light. Tokens make the direction follow the theme.
+
 ## Anti-patterns
 
-These exist on the branch today (boardgame-buddy) and should be migrated to the canonical pattern whenever those auth screens are next touched:
+Migrate any auth screen showing these whenever it is next touched. (Boardgame-buddy has already migrated — it ships `web/ui/oauth-buttons.js`. Sauceboss has not: its classes are `auth-modal__oauth*`, its buttons are `border-radius: 10px` rather than the pill, and its divider copy is "or".)
 
 - ❌ Text-only OAuth buttons (no logo).
 - ❌ A generic chrome icon (e.g. `<i data-icon="chrome">`, `<i data-icon="apple">`) instead of inline SVG. An icon set's `chrome` is not the Google brand mark, and its `apple` is a fruit, not the logo.
 - ❌ Emoji (🍎, etc.) for provider marks. Looks unprofessional and renders inconsistently.
 - ❌ Squared / lightly-rounded buttons. Use the full pill (`border-radius: 999px`).
 - ❌ Divider copy other than "or use email". Keep it consistent across apps.
+- ❌ Literal colours anywhere in the auth CSS. Every value is a token, so the screen follows the theme the device asked for.
