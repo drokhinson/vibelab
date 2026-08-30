@@ -3573,52 +3573,58 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 600;
 }
 
-/* Fixed pager footer for Collection / Wishlist views.
-   Docked flush against the top of the bottom tab nav and spans the
-   viewport edge-to-edge. Nothing from the nav protrudes into this strip,
-   so the centered "Page N of M" sits on a clear background. */
-.spoke-pager-footer {
-  position: fixed;
-  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
-  left: 0;
-  right: 0;
-  width: 100%;
-  max-width: none;
+/* Scroll strip under the Collection / Wishlist grids (ui/infinite-scroll.js).
+   This is where the docked prev/next pager used to be. It sits in normal
+   flow rather than fixed to the nav on purpose: it belongs to the end of the
+   list, it is what the IntersectionObserver watches, and a docked copy of it
+   would be permanently on screen saying "Loading more…" about rows the user
+   is nowhere near. The 64px floor keeps the sentinel a real target — a strip
+   that collapsed to nothing could sit inside the observer's margin
+   permanently on a short viewport. */
+.shelf-more {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: var(--sheet-card, #FFFBF1);
-  border-top: 1px solid var(--sheet-line);
-  box-shadow:
-    0 -2px 12px var(--shadow-c),
-    inset 0 1px 0 var(--card-emboss);
-  z-index: 35;
-}
-
-.spoke-pager-footer__btn {
-  min-height: 44px;
-  min-width: 96px;
-  padding: 0 1rem;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.spoke-pager-footer__page {
+  min-height: 64px;
+  padding: 0.75rem 1rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--polaroid-muted, #8B7E68);
-  white-space: nowrap;
   text-align: center;
 }
 
-/* When the fixed pager footer is visible, the grid needs extra bottom
-   padding so the last row of tiles isn't hidden behind the docked strip. */
-.profile-collection-grid.is-paginated {
-  padding-bottom: calc(60px + 12px);
+.shelf-more--end {
+  margin: 0;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.shelf-more--error { color: var(--rust); flex-wrap: wrap; }
+
+/* Same ring as .profile-collection-grid.is-reloading, at the size of a line
+   of text, and driven by the same keyframe. */
+.shelf-more__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid oklch(var(--bc) / 0.15);
+  border-top-color: oklch(var(--p));
+  border-radius: 50%;
+  animation: search-results-spin 720ms linear infinite;
+}
+
+/* The 44px floor from .claude/rules/mobile-web.md — these two only appear
+   when the observer is unavailable or a batch failed, but they are still the
+   only way forward when they do. */
+.shelf-more__btn,
+.shelf-more__retry {
+  min-height: 44px;
+  padding: 0 1rem;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shelf-more__spinner { animation-duration: 2400ms; }
 }
 .search-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
 .search-hit {
@@ -4744,9 +4750,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-muted, #8B7E68);
   border: 1px dashed color-mix(in srgb, var(--polaroid-ink) 25%, transparent);
 }
-/* Inline prev / next strip under each paginated buddies list. Not the fixed
-   .spoke-pager-footer the Collection uses — this screen stacks two paged
-   lists plus a rail, so each pager has to sit with the list it drives. */
+/* Inline prev / next strip under each paginated buddies list. The Collection
+   and Wishlist grids scroll instead (.shelf-more); this screen stays paged
+   because it stacks two lists plus a rail, so each pager has to sit with the
+   list it drives rather than one sentinel serving all three. */
 .buddies-pager {
   display: flex;
   align-items: center;
@@ -5367,8 +5374,8 @@ main[data-view="session-viewer"].hidden {
    scroll sit below the section — scrolling into them lifted the button
    64px clear of the line it was meant to hold (measured: 27px above the
    nav at rest, 91px at the end of every screen). Fixed positioning has
-   no release point to keep in sync, and matches how .spoke-pager-footer
-   and .bgb-install already dock to this nav. */
+   no release point to keep in sync, and matches how .bgb-install already
+   docks to this nav. */
 .cascade-cta-wrap {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
@@ -8275,8 +8282,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
    min-height:0 drops .search-topbar's 52px floor so Buddies' bar matches the
    other five (a 44px control plus this padding). z-index 20 clears view
-   content and stays below the global header (30), the docked spoke pager
-   (35) and the nav (40). */
+   content and stays below the global header (30), the docked footers such as
+   .bgb-install (35) and the nav (40). */
 .bgb-spoke-screen > .spoke-head,
 .bgb-spoke-screen > .search-topbar {
   position: sticky;
@@ -8497,7 +8504,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    block above; these just polish the text contrast on cream). */
 .bgb-spoke-screen .day-divider { color: var(--accent-ink); }
 
-/* Empty-state and pager captions */
+/* Empty-state, pager and scroll-strip captions */
 .bgb-spoke-screen .profile-empty { color: var(--sheet-ink-muted); opacity: 1; }
 .bgb-spoke-screen .opacity-60 { color: var(--sheet-ink-muted); opacity: 1; }
 
@@ -8962,7 +8969,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    PWA install prompt (ui/install-prompt.js)
 
    Docked flush above the bottom tab nav using the same anchor as
-   .spoke-pager-footer / .chapter-add__fab, and pinned to the app's 480px
+   .chapter-add__fab, and pinned to the app's 480px
    column the way .btm-nav is so it never spans a desktop viewport. Warm
    polaroid surface so it reads as part of the app, not browser chrome.
    z-index 35: above content, below .bgb-nav (40), toasts (45) and modals (90+).

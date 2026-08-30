@@ -251,7 +251,7 @@ The repo-wide statement is `.claude/rules/overlays.md`.
 
 The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§ App chrome & layering) and `.claude/rules/mobile-web.md`. The parts specific to this app:
 
-- **z-index ladder:** view content < 20 pinned spoke back-row < 30 global header < 35 docked footers (`.spoke-pager-footer`, `.cascade-cta-wrap`, `.bgb-install`) < 36 `.cascade-error` < 40 `.bgb-nav` < 45 toasts < 100 `.polaroid-popup__backdrop` (every modal and sheet).
+- **z-index ladder:** view content < 20 pinned spoke back-row < 30 global header < 35 docked footers (`.cascade-cta-wrap`, `.bgb-install`) < 36 `.cascade-error` < 40 `.bgb-nav` < 45 toasts < 100 `.polaroid-popup__backdrop` (every modal and sheet).
 - **Heights are tokens:** `--bgb-nav-height: 64px`, `--bgb-header-height: 53px`, with `:root { scroll-padding-top: calc(var(--bgb-header-height) + 8px) }` derived off the second so `scrollIntoView({block:"start"})` clears the sticky header.
 - **The global header is sticky at `top: 0`; each spoke's back row is sticky at `top: var(--bgb-header-height)`**, sharing the header's treatment so the two read as one stack. Scoped to direct children of `<main data-view>` — the same class nested in a card must not pin.
 - **Settings closes, spokes go back.** Settings is reachable from the gear in the global header, i.e. from any screen, so it dismisses with a trailing-edge × calling `router.back('profile-self')`; the fallback only covers a cold `/settings` deep link. The five spokes are reachable only from the hub, so they carry a leading-edge ← .

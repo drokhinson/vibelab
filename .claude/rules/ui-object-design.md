@@ -86,15 +86,26 @@ The boardgame-buddy audit caught one case: `PlayDetailPopup` opens from the play
 
 Every destructive action requires a secondary user confirmation (see `.claude/rules/web-frontend.md`). Pick one confirmation surface for the whole project and use it everywhere: `window.confirm()` for every destructive gate, or a single shared modal API (e.g. `PolaroidPopup.confirm()` in boardgame-buddy), or a single bottom sheet (`.claude/rules/overlays.md`) — but one of them, for all of them. Mixing per-screen bespoke dialogs is the anti-pattern.
 
-### 3d. A list that grows without bound is paginated
+### 3d. A list that grows without bound is windowed
 
-Any list that grows with user activity — plays, buddies, a collection — gets pagination rather than an ever-longer scroll. Three rules that are easy to miss:
+Any list that grows with user activity — plays, buddies, a collection — reveals a bounded window rather than rendering everything it has. Two shapes, and the list's own shape picks between them:
+
+**Infinite scroll** for a single uniform run of rows or tiles the user reads top to bottom — a collection grid, a wishlist, a feed. An `IntersectionObserver` on a sentinel below the last row reveals the next batch; the batch is sized in **rows of the grid** (6–8 of them), not in items, so it fills a comparable amount of screen whatever the column count. The reference implementation is `ui/infinite-scroll.js` in boardgame-buddy, shared by `collection-view.js` and `wishlist-view.js`. Four rules that are easy to miss:
+
+- **Re-observe the sentinel after every paint.** An observer whose target stays intersecting never fires a second time on its own, so a batch too short to push the sentinel past the observer's margin stalls the list. A fresh `observe()` always delivers one initial callback with the current state, which is what makes the check repeat.
+- **Compare against what the client can actually draw from**, not against the reported total. A partial seed (a bundle's first page) knows the real size while holding one page of it; a sentinel gated on the total then asks forever for rows nobody has.
+- **Guard against re-entry.** The sentinel re-arms on every paint and so can fire while a batch is still in the air; and a *failed* batch must block the sentinel until the user asks again, or the list retries the same failing request on every scroll.
+- **Stand the observer down on unmount.** A hidden view keeps its markup, so an unparked sentinel keeps pulling batches nobody is looking at.
+
+**Pagination** for anything else — a screen that stacks several lists (each pager has to sit with the list it drives), or a list the user navigates by position rather than by reading. Three rules there:
 
 - **Clamp the page on every render**, not just on the page-turn handler. A delete under the user, or a filter that narrows the result set, otherwise strands them on a page that no longer exists.
 - **Render the pager only when there is more than one page.**
 - **Paging away closes any open inline panel**, or the user is left with invisible state attached to a row they can no longer see.
 
 Heterogeneous rows (accounts and ghosts, owned and wishlisted) page **as one sequence** so every page is a full page. Factor one `_renderPager(page, pages, handler, label)` and reuse it — see `views/buddies-view.js` in boardgame-buddy.
+
+Either shape narrows back to the first window on a search or filter change. Leaving a deep window over a freshly narrowed list drops the user into the middle of results they never scrolled to.
 
 ## 4. When duplicates appear
 
