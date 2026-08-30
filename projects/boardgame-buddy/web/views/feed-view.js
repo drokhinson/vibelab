@@ -514,16 +514,11 @@
       });
     }
 
-    // A suggestion carries whichever signals earned it a slot: shared plays,
-    // shared buddies, or both. Label the ones it has — "0 mutual" under
-    // someone you've played six games with reads like a snub.
+    // Why this person is being suggested, not how much. A candidate is here
+    // for a shared play or a shared buddy; when it's both, the shared play is
+    // the one worth saying — it's also what ranked them (migration 057).
     _suggestionReason(s) {
-      const parts = [];
-      const plays = s.play_count || 0;
-      const mutual = s.mutual_count || 0;
-      if (plays) parts.push(`${plays} ${plays === 1 ? "play" : "plays"}`);
-      if (mutual) parts.push(`${mutual} mutual`);
-      return parts.join(" · ");
+      return (s.play_count || 0) > 0 ? "Played with" : "Mutual buddy";
     }
 
     _renderSuggestedBuddiesCard(card) {
@@ -534,7 +529,7 @@
             ${window.BgbBadge.render({ avatar: s.avatar, displayName: s.display_name, size: "md", extraClass: "buddy-tile__avatar" })}
           </div>
           <div class="buddy-tile__name">${escapeHtml(s.display_name)}</div>
-          <div class="buddy-tile__mutual">${this._suggestionReason(s)}</div>
+          <div class="buddy-tile__reason">${this._suggestionReason(s)}</div>
           <button class="btn btn-xs btn-primary mt-1"
                   onclick="window.feedView._addBuddy('${s.user_id}', this)">Add</button>
         </div>
