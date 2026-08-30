@@ -490,11 +490,18 @@
     // sheet closes. The button's presence depends only on games.length, which
     // a mark never changes.
     _renderShelf(shelf) {
-      const games = Array.isArray(shelf.games) ? shelf.games : [];
+      // Gated on the very numbers this card just quoted, NOT on shelf.games.
+      // The card saying "63 of 74 games have never hit the table" beside no way
+      // to see those 63 is incoherent on its face — and gating on the array
+      // made that failure silent: an older bgb_user_stats_detail (pre-059)
+      // returns the counts without the list, so the button vanished while the
+      // sentence above it still promised 63 games. _openShelfSheet fetches the
+      // rows when the payload didn't carry them.
+      const canShow = (shelf.unplayed || 0) > 0 || (shelf.marked || 0) > 0;
       return `
         <div class="stats-mini__k"><i data-icon="layers" class="w-3 h-3"></i> Shelf of shame</div>
         <div data-shelf-body>${this._renderShelfBody(shelf)}</div>
-        ${games.length ? `
+        ${canShow ? `
           <button class="stats-mini__more" type="button" aria-haspopup="dialog"
                   onclick="window.statsView._openShelfSheet(event)">
             Show <i data-icon="chevron-right" class="w-3 h-3"></i>
@@ -630,19 +637,62 @@
       });
     }
 
-    // The shelf sheet needs no fetch: detail.shelf.games came down with the
-    // rest of this screen, which is also what makes the sheet's list and the
-    // "63 of 74" sentence on the card that opened it impossible to disagree.
+    // Normally no fetch: detail.shelf.games comes down with the rest of this
+    // screen, which is what makes the sheet's rows and the "63 of 74" sentence
+    // on the card that opened it impossible to disagree.
+    //
+    // The fallback is for the window where the frontend is ahead of the
+    // database. Migrations here are applied by hand while the frontend
+    // auto-deploys on merge, so "new JS, old RPC" is a state this app WILL sit
+    // in, and an unplayed shelf the user cannot open is a poor way to spend it.
+    // /collection/shelf already returns play_count per owned base game under
+    // the same visibility rule, and needs no migration. It self-heals: once the
+    // payload carries games, this never fires again.
     _openShelfSheet(event) {
       const shelf = (this._detail && this._detail.shelf) || null;
-      const games = (shelf && Array.isArray(shelf.games) && shelf.games) || [];
-      if (!games.length) return;
+      if (!shelf) return;
+      const games = Array.isArray(shelf.games) ? shelf.games : null;
+
+      // Open in the same frame as the tap either way — a sheet that waits on a
+      // request before appearing reads as a dead button.
       window.ShelfOfShameSheet.open({
-        games,
+        games: games || [],
+        loading: !games,
         truncated: !!shelf.games_truncated,
         returnFocus: (event && event.currentTarget) || null,
         onToggle: (gameId, playedBefore) => this._applyShelfMark(gameId, playedBefore),
       });
+      if (!games) this._loadShelfGames();
+    }
+
+    /** Derive the unplayed shelf from /collection/shelf, for the pre-059
+     *  payload that carries the counts but not the list. */
+    async _loadShelfGames() {
+      const sheet = window.ShelfOfShameSheet;
+      try {
+        const r = await window.Collection.shelf(null, "owned");
+        const rows = ((r && r.items) || [])
+          .filter((it) => !it.play_count)
+          .map((it) => ({
+            game_id: it.game_id,
+            name: (it.game && it.game.name) || "",
+            thumbnail_url: (it.game && it.game.thumbnail_url) || null,
+            year_published: (it.game && it.game.year_published) || null,
+            // The old RPC cannot report marks, because pre-059 there is no
+            // column to hold one. Nothing is marked, so false is the truth.
+            played_before: false,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        // Cache on the payload so a re-open, and _applyShelfMark, both find
+        // them where they normally live.
+        if (this._detail && this._detail.shelf) {
+          this._detail.shelf.games = rows;
+          this._detail.shelf.games_truncated = !!(r && r.truncated);
+        }
+        if (sheet.isOpen) sheet.setGames(rows, { truncated: !!(r && r.truncated) });
+      } catch (e) {
+        if (sheet.isOpen) sheet.setError((e && e.offline) ? "You're offline." : "Couldn't load your shelf.");
+      }
     }
 
     /**
@@ -663,6 +713,9 @@
       if (!row || row.played_before === playedBefore) return;
 
       row.played_before = playedBefore;
+      // `marked` is absent on a pre-059 payload; the counts still have to move,
+      // so seed it from the row that just changed rather than leaving NaN.
+      if (typeof shelf.marked !== "number") shelf.marked = 0;
       const d = playedBefore ? 1 : -1;
       shelf.played = (shelf.played || 0) + d;
       shelf.unplayed = (shelf.unplayed || 0) - d;
