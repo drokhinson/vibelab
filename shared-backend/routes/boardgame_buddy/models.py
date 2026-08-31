@@ -636,6 +636,32 @@ class BuddyRequestCreate(BaseModel):
     target_user_id: str
 
 
+# ── Add a buddy by QR code ────────────────────────────────────────────────────
+
+class BuddyQrTokenResponse(BaseModel):
+    """A short-lived signed token the caller's QR encodes. Nothing is persisted.
+
+    The frontend composes the scannable payload as `{origin}/b/{token}` — the
+    backend deliberately does not, since it cannot know which origin (localhost,
+    Vercel) the client is served from.
+    """
+
+    token: str
+    expires_at: datetime
+    ttl_seconds: int
+
+
+class BuddyQrAddRequest(BaseModel):
+    token: str
+
+
+class BuddyQrAddResponse(BaseModel):
+    """The resulting accepted edge, plus whether this scan is what created it."""
+
+    edge: BuddyEdgeResponse
+    created: bool
+
+
 # ── Played-with discovery (real accounts + ghost players) ─────────────────────
 
 class PlayedWithUser(BaseModel):

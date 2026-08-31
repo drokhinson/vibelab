@@ -1,6 +1,24 @@
 """Constants and enums for BoardgameBuddy."""
 
+import os
 from enum import StrEnum
+
+
+# ── Add-a-buddy QR tokens ────────────────────────────────────────────────────
+# Signs the short-lived tokens the add-a-buddy QR code encodes (see
+# services/buddy_qr_service.py). A dedicated secret rather than a reused app
+# one: it is the only thing giving these tokens domain separation, so a token
+# minted here can never validate against another endpoint and no other app's
+# token validates here. Rotating this value is also the revocation lever — it
+# invalidates every outstanding code at once, which is why the tokens
+# themselves carry no server-side state.
+BGB_QR_SECRET = os.environ.get("BGB_QR_SECRET", "dev-secret-change-me")
+QR_TOKEN_ALGORITHM = "HS256"
+# Three minutes. Long enough for three people around a table to each get their
+# phone out; short enough that a screenshot or a shoulder-surfed photo is worth
+# nothing by the time anyone acts on it. The frontend re-mints at 150s so a
+# sheet left open never shows a dead code.
+QR_TOKEN_TTL_SECONDS = 180
 
 
 class CollectionStatus(StrEnum):

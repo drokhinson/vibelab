@@ -16,21 +16,7 @@ from ..models import (
     BuddyRequestResponse,
     BuddyRequestsResponse,
 )
-from ._helpers import canonical_edge_pair, fetch_profiles_by_ids
-
-
-def _edge_response(edge: dict[str, Any], viewer_id: str, profiles: dict[str, dict]) -> BuddyEdgeResponse:
-    other_id = edge["user_b"] if edge["user_a"] == viewer_id else edge["user_a"]
-    other = profiles.get(other_id) or {}
-    return BuddyEdgeResponse(
-        id=edge["id"],
-        other_user_id=other_id,
-        other_display_name=other.get("display_name") or "Unknown",
-        other_username=other.get("username"),
-        other_avatar=other.get("avatar"),
-        accepted_at=edge.get("accepted_at"),
-        created_at=edge["created_at"],
-    )
+from ._helpers import canonical_edge_pair, edge_response, fetch_profiles_by_ids
 
 
 def _request_response(
@@ -63,7 +49,7 @@ def list_accepted_buddies(sb, viewer_id: str) -> list[BuddyEdgeResponse]:
     edges = rows.data or []
     other_ids = [e["user_b"] if e["user_a"] == viewer_id else e["user_a"] for e in edges]
     profiles = fetch_profiles_by_ids(sb, other_ids)
-    out = [_edge_response(e, viewer_id, profiles) for e in edges]
+    out = [edge_response(e, viewer_id, profiles) for e in edges]
     out.sort(key=lambda b: b.other_display_name.lower())
     return out
 
@@ -184,7 +170,7 @@ def accept_request(sb, viewer_id: str, request_id: str) -> BuddyEdgeResponse:
         .eq("id", request_id)
         .execute()
     )
-    return _edge_response((refreshed.data or [edge])[0], viewer_id, profiles)
+    return edge_response((refreshed.data or [edge])[0], viewer_id, profiles)
 
 
 def reject_request(sb, viewer_id: str, request_id: str) -> None:

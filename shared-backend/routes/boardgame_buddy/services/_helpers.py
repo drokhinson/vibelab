@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from ..models import GameSummary
+from ..models import BuddyEdgeResponse, GameSummary
 from ..constants import PlayMode
 
 
@@ -109,5 +109,29 @@ def fetch_profiles_by_ids(sb, user_ids: list[str]) -> dict[str, dict[str, Any]]:
 def canonical_edge_pair(a: str, b: str) -> tuple[str, str]:
     """Return (lo, hi) so the pair maps to a canonical buddy_edges row."""
     return (a, b) if a < b else (b, a)
+
+
+def edge_response(
+    edge: dict[str, Any],
+    viewer_id: str,
+    profiles: dict[str, dict],
+) -> BuddyEdgeResponse:
+    """Shape a buddy_edges row from the viewer's side.
+
+    Lives here rather than in buddy_service because both buddy_service and
+    buddy_qr_service return accepted edges, and it pairs with
+    fetch_profiles_by_ids above — the `profiles` argument is that call's output.
+    """
+    other_id = edge["user_b"] if edge["user_a"] == viewer_id else edge["user_a"]
+    other = profiles.get(other_id) or {}
+    return BuddyEdgeResponse(
+        id=edge["id"],
+        other_user_id=other_id,
+        other_display_name=other.get("display_name") or "Unknown",
+        other_username=other.get("username"),
+        other_avatar=other.get("avatar"),
+        accepted_at=edge.get("accepted_at"),
+        created_at=edge["created_at"],
+    )
 
 
