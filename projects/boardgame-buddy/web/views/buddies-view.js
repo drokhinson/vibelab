@@ -43,8 +43,21 @@
       // cancelled (.claude/rules/web-frontend.md, "Async state & race
       // conditions").
       this._mutationSeq = 0;
-      // user_ids with an in-flight send, so a double-tap can't open two edges.
-      this._sending = new Set();
+      // Keys with a write in flight — "req:<userId>", "accept:<edgeId>", etc.
+      // A second tap on the same control is dropped rather than firing twice.
+      // Every mutation takes one; only _request used to.
+      this._busy = new Set();
+      // What this session DID to a person, keyed by user_id:
+      // "sent" | "accepted" | "declined" | "cancelled".
+      //
+      // Deliberately a verb, not a state. A mutation does not restructure the
+      // lists (see the continuity-break rule below), so the row stays where it
+      // is — and a row inside "Incoming requests" whose button reads "Buddies"
+      // is a lie about the section, not just the row. "Accepted" is a true
+      // statement about what happened in this session and makes no claim about
+      // which list the row belongs to. Cleared by _load(), which is where the
+      // lists actually re-form.
+      this._resolved = new Map();
     }
 
     async onMount() {
@@ -103,7 +116,14 @@
         const combined = await window.Buddy.allBuddies()
           .catch(() => ({ accounts: [], ghosts: [], recent: [] }));
         if (seq === this._mutationSeq) {
-          this._buddies = combined.accounts || [];
+          // Sorted here as well as in _accept. Necessary in both places:
+          // _goBuddiesPage renders without loading, so if only one side sorted,
+          // a page turn would show a newly-accepted buddy appended at the end
+          // and the next load would move it — reintroducing exactly the motion
+          // this change removes.
+          this._buddies = this._sortBuddies(combined.accounts || []);
+          // The lists are re-forming, so the session's past-tense chips retire.
+          this._resolved.clear();
           this._ghosts = combined.ghosts || [];
           this._playedWith = combined.recent || [];
         }
@@ -207,8 +227,7 @@
                     <div class="buddies-row__name">${escapeHtml(r.other_display_name)}</div>
                     <div class="buddies-row__when">Requested ${formatDate(r.created_at)}</div>
                   </div>
-                  <button class="btn btn-primary btn-xs" onclick="window.buddiesView._accept('${r.id}')">Accept</button>
-                  <button class="btn btn-ghost btn-xs" onclick="window.buddiesView._reject('${r.id}')">Decline</button>
+                  ${this._relationControl(r.other_user_id, this._incomingActions(r))}
                 </li>
               `).join("")}
             </ul>
@@ -220,16 +239,13 @@
             <h3>Sent</h3>
             <ul class="buddies-list">
               ${this._requests.outgoing.map((r) => `
-                <li class="buddies-row" onclick="window.router.go('profile-other',{userId:'${r.other_user_id}'})">
+                <li class="buddies-row${this._resolved.has(r.other_user_id) ? " buddies-row--resolved" : ""}" onclick="window.router.go('profile-other',{userId:'${r.other_user_id}'})">
                   ${window.BgbBadge.render({ avatar: r.other_avatar, displayName: r.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
                     <div class="buddies-row__name">${escapeHtml(r.other_display_name)}</div>
                     <div class="buddies-row__when">Awaiting reply</div>
                   </div>
-                  <button class="btn btn-ghost btn-xs" ${r._inFlight ? "disabled" : ""}
-                          aria-label="Cancel request"
-                          title="Cancel your request"
-                          onclick="event.stopPropagation();window.buddiesView._cancel('${r.id}')">Cancel</button>
+                  ${this._relationControl(r.other_user_id, this._sentActions(r))}
                 </li>
               `).join("")}
             </ul>
@@ -266,7 +282,9 @@
 
         ${window.renderSuggestedBuddiesRail(this._suggested, {
           addHandler: "window.buddiesView._request",
+          cancelHandler: "window.buddiesView._cancelFromTile",
           flush: true,
+          stateFor: (id) => this._tileStateFor(id),
         })}
 
         ${this._renderPlayedWithSection()}
@@ -527,7 +545,64 @@
       return { kind: "none" };
     }
 
+    // Past-tense chip for a person this session has already acted on. Wrapped
+    // by _relationAction below, so every surface showing that person agrees.
+    _resolvedChip(userId) {
+      const LABEL = { sent: "Sent", accepted: "Accepted",
+                      declined: "Declined", cancelled: "Cancelled" };
+      const label = LABEL[this._resolved.get(userId)];
+      if (!label) return null;
+      return `<button class="btn btn-ghost btn-xs" disabled>${label}</button>`;
+    }
+
+    // The Incoming row's pair. Not _relationAction: that renders Accept alone,
+    // and this row needs Decline beside it.
+    _incomingActions(r) {
+      const chip = this._resolvedChip(r.other_user_id);
+      if (chip) return chip;
+      if (this._busy.has("accept:" + r.id) || this._busy.has("reject:" + r.id)) {
+        return `<button class="btn btn-ghost btn-xs btn-disabled" aria-disabled="true">Working…</button>`;
+      }
+      return `<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();window.buddiesView._accept('${r.id}','${r.other_user_id}')">Accept</button>
+              <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();window.buddiesView._reject('${r.id}')">Decline</button>`;
+    }
+
+    // The Sent row's Cancel.
+    _sentActions(r) {
+      const chip = this._resolvedChip(r.other_user_id);
+      if (chip) return chip;
+      if (this._busy.has("cancel:" + r.id)) {
+        return `<button class="btn btn-ghost btn-xs btn-disabled" aria-disabled="true">Working…</button>`;
+      }
+      if (r._inFlight || !r.id || String(r.id).startsWith("tmp:")) {
+        return `<button class="btn btn-ghost btn-xs" disabled>Sent</button>`;
+      }
+      return `<button class="btn btn-ghost btn-xs" aria-label="Cancel request"
+                      title="Cancel your request"
+                      onclick="event.stopPropagation();window.buddiesView._cancel('${r.id}')">Cancel</button>`;
+    }
+
+    // Every relation control carries the user it belongs to, so a mutation can
+    // repaint ALL of them rather than only the one that was tapped. The same
+    // person can be on screen three times at once — a search hit, a played-with
+    // row and a suggestion tile — and patching just the tapped control would
+    // leave the others offering an affordance that now errors.
+    _relationControl(userId, inner) {
+      return `<span data-rel-control data-user-id="${escapeAttr(userId)}">${inner}</span>`;
+    }
+
     _relationAction(userId) {
+      return this._relationControl(userId, this._relationActionInner(userId));
+    }
+
+    _relationActionInner(userId) {
+      const chip = this._resolvedChip(userId);
+      if (chip) return chip;
+      if (this._busy.has("req:" + userId)) {
+        // aria-disabled rather than disabled: a disabled button can't hold
+        // focus, so it drops a keyboard user mid-write.
+        return `<button class="btn btn-ghost btn-xs btn-disabled" aria-disabled="true">Sending…</button>`;
+      }
       const rel = this._relationFor(userId);
       if (rel.kind === "buddies") {
         return `<button class="btn btn-ghost btn-xs" disabled>Buddies</button>`;
@@ -561,10 +636,31 @@
     // cache is invalidated rather than re-fetched, so the next cold mount is
     // honest without this one flickering.
     //
-    // These all change list MEMBERSHIP (a person moves between Sent, Buddies,
-    // Played-with and the suggestion rail), which is the structural case the
-    // surgical-repaint rule exempts — hence a full render() rather than a
-    // per-row patch.
+    // These all change list MEMBERSHIP — a person moves between Sent, Buddies,
+    // Played-with and the suggestion rail — which web-frontend.md exempts from
+    // the surgical-repaint rule. That exemption is about the SCOPE of a
+    // structural repaint and says nothing about its TIMING, and the timing was
+    // the bug: a full render() in the tap's own frame moved the rows, so a user
+    // reaching for the next suggestion landed on whoever slid into that slot
+    // and sent an invite to the wrong person.
+    //
+    // So the rule here is:
+    //
+    //   Restructure only on an interaction that has ALREADY broken continuity
+    //   — a mount, a page turn, a search, a confirm dialog. Patch in place on
+    //   one that hasn't: a single tap on a list control.
+    //
+    // In practice that means a mutation updates every control bound to that
+    // person (_syncRelationControls) and leaves the lists alone; the lists
+    // re-form on the next _load(), which is a continuity break by definition.
+    // The four existing breaks are onMount->_load(), _goBuddiesPage,
+    // _goPlayedWithPage and _searchInput. _unfriend restructures immediately
+    // and that follows from the rule rather than excepting it — see its note.
+    //
+    // Because the row does not move, its control must not claim it has. That is
+    // what _resolved holds: a VERB for what this session did ("Accepted"), not
+    // a state ("Buddies"), which inside a section headed "Incoming requests"
+    // would be a lie about the section as well as the row.
 
     // The display fields for a user, from whichever list the tap came off.
     _personFor(userId) {
@@ -596,6 +692,64 @@
       return () => Object.assign(row, before);
     }
 
+    // Repaint just this person's controls, in place. No render(): a full
+    // repaint is what moves rows out from under a finger.
+    _syncRelationControls(userId) {
+      const root = this.container;
+      if (!root) return;
+      const esc = (window.CSS && CSS.escape) ? CSS.escape(userId) : userId;
+      const nodes = root.querySelectorAll(`[data-rel-control][data-user-id="${esc}"]`);
+      nodes.forEach((node) => {
+        const hadFocus = !!(document.activeElement && node.contains(document.activeElement));
+        node.innerHTML = this._relationActionInner(userId);
+        this.refreshIcons(node);
+        // The row's own "settled" treatment has to be toggled here too. It is
+        // applied by the row template, and the whole point of this path is that
+        // the template does not re-run — so without this the class could only
+        // ever appear after a full repaint, which is the thing being avoided.
+        const row = node.closest(".buddies-row");
+        if (row) row.classList.toggle("buddies-row--resolved", this._resolved.has(userId));
+        if (hadFocus) {
+          const btn = node.querySelector("button:not([disabled])") || node.querySelector("button");
+          if (btn) { try { btn.focus({ preventScroll: true }); } catch (_) { btn.focus(); } }
+        }
+      });
+      this._syncSuggestionTile(userId);
+    }
+
+    // One decision for what a rail tile shows, read by the full render (via
+    // stateFor) and by the patch below, so the two can't disagree.
+    _tileStateFor(userId) {
+      const done = this._resolved.get(userId);
+      const rel = this._relationFor(userId);
+      let state = "none";
+      if (this._busy.has("req:" + userId)) state = "sending";
+      else if (done === "accepted" || rel.kind === "buddies") state = "buddies";
+      else if (done === "sent" || rel.kind === "outgoing") state = "sent";
+      return { state, requestId: rel.kind === "outgoing" ? rel.id : null };
+    }
+
+    // The rail tile for this person, through the shared component so the Feed
+    // and the Buddies screen cannot disagree about what a Sent tile looks like.
+    _syncSuggestionTile(userId) {
+      if (!this.container || !window.patchBuddySuggestionTile) return;
+      const sug = (this._suggested || []).find((x) => x.user_id === userId);
+      if (!sug) return;
+      const st = this._tileStateFor(userId);
+      window.patchBuddySuggestionTile(this.container, sug, {
+        mode: "add",
+        addHandler: "window.buddiesView._request",
+        cancelHandler: "window.buddiesView._cancelFromTile",
+        state: st.state,
+        requestId: st.requestId,
+      });
+    }
+
+    // The rail's Cancel passes (requestId, userId); _cancel takes the id alone.
+    _cancelFromTile(requestId, userId) {
+      return this._cancel(requestId);
+    }
+
     _sortBuddies(list) {
       return list.slice().sort((a, b) =>
         (a.other_display_name || "").toLowerCase()
@@ -603,8 +757,9 @@
     }
 
     async _request(userId) {
-      if (this._sending.has(userId)) return;
-      this._sending.add(userId);
+      const key = "req:" + userId;
+      if (this._busy.has(key)) return;
+      this._busy.add(key);
       this._mutationSeq++;
 
       // A placeholder id until the echo brings the real edge id — Cancel stays
@@ -626,18 +781,19 @@
         pending_request_direction: "outgoing",
         pending_request_id: tempId,
       });
-      // The suggestion RPC excludes anyone the viewer shares an edge with, so
-      // a refetch would drop this tile anyway — drop it now and let the Sent
-      // row be where they show up.
-      const sugIdx = (this._suggested || []).findIndex((x) => x.user_id === userId);
-      const sug = sugIdx >= 0 ? this._suggested[sugIdx] : null;
-      if (sug) this._suggested.splice(sugIdx, 1);
-      this.render();
+      // The tile STAYS. Splicing it out here is what caused the reported bug:
+      // the rail repainted in the tap's own frame, every tile to the right slid
+      // left one width, and the next tap — already on its way down — landed on
+      // whoever moved into that slot and sent them a request. The suggestion
+      // RPC excludes anyone the viewer shares an edge with, so the tile drops
+      // itself on the next _load(); until then it reads "Sent".
+      this._resolved.set(userId, "sent");
+      this._syncRelationControls(userId);
 
       const undo = () => {
         this._requests.outgoing = (this._requests.outgoing || []).filter((r) => r.id !== tempId);
         undoPlayed();
-        if (sug) this._suggested.splice(sugIdx, 0, sug);
+        this._resolved.delete(userId);
       };
 
       let res;
@@ -645,13 +801,14 @@
         res = await window.Buddy.sendRequest(userId);
       } catch (e) {
         undo();
-        this.render();
+        this._busy.delete(key);
+        this._syncRelationControls(userId);
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't send that request", "error");
         }
         return;
       } finally {
-        this._sending.delete(userId);
+        this._busy.delete(key);
       }
 
       // The relation flags ride on the cached played-with bundle — drop it so
@@ -663,6 +820,9 @@
       // waiting. Two lists change shape — reload rather than guess.
       if (res && res.direction === "incoming") {
         undo();
+        // Two lists change shape at once. _load() is a continuity break by
+        // definition — it is the moment the lists re-form — so restructuring
+        // here is the rule, not an exception to it.
         await this._load();
         if (typeof showToast === "function") showToast("You're buddies now", "success");
         return;
@@ -675,7 +835,7 @@
         if (live) { live.id = realId; live._inFlight = false; }
         this._patchPlayedWith(userId, { pending_request_id: realId });
       }
-      this.render();
+      this._syncRelationControls(userId);
     }
 
     // Withdraw a request we sent. Reversible in one tap from the same row, so
@@ -683,6 +843,11 @@
     // destructive gates (unfriend), per .claude/rules/ui-object-design.md §3c.
     async _cancel(requestId) {
       if (!requestId || requestId.startsWith("tmp:")) return;
+      const key = "cancel:" + requestId;
+      // Had no guard at all: a double-tap 404'd the second call and toasted
+      // "Couldn't cancel that request" for a cancel that had just succeeded.
+      if (this._busy.has(key)) return;
+      this._busy.add(key);
       this._mutationSeq++;
 
       const outgoing = this._requests.outgoing || [];
@@ -700,26 +865,42 @@
             pending_request_id: null,
           })
         : () => {};
-      this.render();
+      const who = (removed && removed.other_user_id) || (played && played.user_id) || null;
+      if (who) {
+        this._resolved.set(who, "cancelled");
+        this._syncRelationControls(who);
+      }
 
       try {
         await window.Buddy.cancel(requestId);
       } catch (e) {
         if (removed) outgoing.splice(idx, 0, removed);
         undoPlayed();
-        this.render();
+        if (who) this._resolved.delete(who);
+        this._busy.delete(key);
+        if (who) this._syncRelationControls(who);
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't cancel that request", "error");
         }
         return;
+      } finally {
+        this._busy.delete(key);
       }
       window.Buddy.invalidate();
     }
 
     async _accept(requestId, userId) {
-      this._mutationSeq++;
+      const key = "accept:" + requestId;
+      if (this._busy.has(key)) return;
       const incoming = this._requests.incoming || [];
       const idx = incoming.findIndex((r) => r.id === requestId);
+      // Guard the miss like _reject does. Without it a double-tap ran with
+      // req = null and otherId = undefined, and _personFor(undefined) falls
+      // through to its placeholder — pushing a row literally named "Buddy",
+      // with a duplicate id, into _buddies until the 404 rolled it back.
+      if (idx < 0 && !userId) return;
+      this._busy.add(key);
+      this._mutationSeq++;
       const req = idx >= 0 ? incoming[idx] : null;
       if (req) incoming.splice(idx, 1);
 
@@ -736,6 +917,9 @@
         created_at: (req && req.created_at) || new Date().toISOString(),
       };
       const buddiesBefore = this._buddies;
+      // Sorted on the way in, and _load() sorts too, so the row lands in its
+      // final position first time. Without both, the first accept of a session
+      // re-ordered every buddy row and changed which six were on the page.
       this._buddies = this._sortBuddies([...this._buddies, optimistic]);
       const undoPlayed = this._patchPlayedWith(otherId, {
         is_buddy: true,
@@ -743,7 +927,8 @@
         pending_request_direction: null,
         pending_request_id: null,
       });
-      this.render();
+      this._resolved.set(otherId, "accepted");
+      this._syncRelationControls(otherId);
 
       let edge;
       try {
@@ -752,18 +937,24 @@
         if (req) incoming.splice(idx, 0, req);
         this._buddies = buddiesBefore;
         undoPlayed();
-        this.render();
+        this._resolved.delete(otherId);
+        this._busy.delete(key);
+        this._syncRelationControls(otherId);
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't accept that request", "error");
         }
         return;
+      } finally {
+        this._busy.delete(key);
       }
       window.Buddy.invalidate();
       if (edge && edge.id) {
+        // Reconcile the authoritative edge into local state. No paint: the row
+        // is not on screen in its new list yet by design, and the controls
+        // already read "Accepted".
         this._buddies = this._sortBuddies(
           this._buddies.map((b) => (b.id === requestId ? edge : b))
         );
-        this.render();
       }
     }
 
@@ -792,50 +983,85 @@
     }
 
     async _reject(requestId) {
-      this._mutationSeq++;
+      const key = "reject:" + requestId;
+      if (this._busy.has(key)) return;
       const incoming = this._requests.incoming || [];
       const idx = incoming.findIndex((r) => r.id === requestId);
+      // Bail BEFORE bumping _mutationSeq — a no-op reject used to invalidate a
+      // legitimate in-flight _load().
       if (idx < 0) return;
+      this._busy.add(key);
+      this._mutationSeq++;
       const [req] = incoming.splice(idx, 1);
       const undoPlayed = this._patchPlayedWith(req.other_user_id, {
         has_pending_request: false,
         pending_request_direction: null,
         pending_request_id: null,
       });
-      this.render();
+      this._resolved.set(req.other_user_id, "declined");
+      this._syncRelationControls(req.other_user_id);
       try {
         await window.Buddy.reject(requestId);
       } catch (e) {
         incoming.splice(idx, 0, req);
         undoPlayed();
-        this.render();
+        this._resolved.delete(req.other_user_id);
+        this._busy.delete(key);
+        this._syncRelationControls(req.other_user_id);
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't decline that request", "error");
         }
         return;
+      } finally {
+        this._busy.delete(key);
       }
       window.Buddy.invalidate();
     }
 
+    // The one mutation here that DOES restructure immediately, and it falls
+    // out of the rule rather than being an exception to it: a confirm dialog
+    // has already broken continuity. The finger has left the screen, a
+    // sentence has been read, and a deliberate second tap has happened on a
+    // different surface — there is no tap rhythm left to protect. Deferring
+    // would also read worst here: "I removed them and they're still listed" is
+    // a bug report; "I accepted and the row hasn't changed sections yet" is not.
     async _unfriend(edgeId) {
-      if (!confirm("Remove this buddy?")) return;
-      this._mutationSeq++;
+      const key = "unfriend:" + edgeId;
+      if (this._busy.has(key)) return;
       const idx = this._buddies.findIndex((b) => b.id === edgeId);
+      // Bail before the seq bump, as _reject does.
       if (idx < 0) return;
-      const [removed] = this._buddies.splice(idx, 1);
+      // The project's one destructive-confirm surface
+      // (.claude/rules/ui-object-design.md §3c); this was a bare confirm().
+      const yes = await window.PolaroidPopup.confirm({
+        title: "Remove this buddy?",
+        body: "You'll both drop off each other's buddy lists. You can send a new request any time.",
+        confirmLabel: "Remove",
+        cancelLabel: "Keep",
+      });
+      if (!yes) return;
+      // Re-read the index: the confirm is async now, so the list can have moved
+      // under it while the dialog was up.
+      const at = this._buddies.findIndex((b) => b.id === edgeId);
+      if (at < 0) return;
+      this._busy.add(key);
+      this._mutationSeq++;
+      const [removed] = this._buddies.splice(at, 1);
       // They drop back into Played with, if they're on that list at all.
       const undoPlayed = this._patchPlayedWith(removed.other_user_id, { is_buddy: false });
       this.render();
       try {
         await window.Buddy.unfriend(edgeId);
       } catch (e) {
-        this._buddies.splice(idx, 0, removed);
+        this._buddies.splice(at, 0, removed);
         undoPlayed();
         this.render();
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't remove that buddy", "error");
         }
         return;
+      } finally {
+        this._busy.delete(key);
       }
       window.Buddy.invalidate();
     }
