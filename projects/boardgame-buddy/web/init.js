@@ -26,6 +26,7 @@
   window.sessionViewerView = new window.SessionViewerView();
   window.buddiesView     = new window.BuddiesView();
   window.statsView       = new window.StatsView();
+  window.achievementsView = new window.AchievementsView();
   window.settingsView    = new window.SettingsView();
   window.adminView       = new window.AdminView();
 
@@ -51,6 +52,7 @@
   window.router.register("session-viewer", window.sessionViewerView);
   window.router.register("buddies",       window.buddiesView);
   window.router.register("stats",         window.statsView);
+  window.router.register("achievements",  window.achievementsView);
   window.router.register("settings",      window.settingsView);
   window.router.register("admin",         window.adminView);
 
@@ -450,7 +452,11 @@
     _bootRouted = false;
     _profileLoaded = false;
     // Wipe persisted cache for this user BEFORE store.reset() so the unbind
-    // sees the still-bound uid.
+    // sees the still-bound uid. The achievement receipts (which badges this
+    // device has shown, whether the install was reported) are keyed by user
+    // but live outside bgbCache, so they need their own line — otherwise the
+    // next account on this phone inherits them.
+    if (window.Achievements) window.Achievements.forget();
     if (window.bgbCache) window.bgbCache.unbindUser();
     window.store.reset();
     window.router.go("auth");
@@ -585,6 +591,32 @@
     // gating (phone viewport, signed in, not already installed, settle delay)
     // and no-ops on browsers that never report the app as installable.
     if (window.BgbInstallPrompt) window.BgbInstallPrompt.init();
+
+    // Pocket Buddy. An installed PWA is indistinguishable from a browser tab
+    // to the backend, so the app has to say so itself — from a cold start in
+    // standalone display-mode (which covers every launch of an already
+    // installed copy, including one installed on another device or before this
+    // feature shipped) and from the `appinstalled` event that fires the moment
+    // the user accepts. Both go through Achievements.reportInstalled(), which
+    // keeps its own once-per-device receipt, so the pair cannot double-post.
+    const reportInstall = () => {
+      if (!window.Achievements) return;
+      if (!window.store.get("user")) return;
+      window.Achievements.reportInstalled();
+    };
+    const isStandalone = () => {
+      try {
+        return window.matchMedia("(display-mode: standalone)").matches
+          || window.navigator.standalone === true;
+      } catch (_) { return false; }
+    };
+    // Auth resolves after boot, so this waits for a user rather than firing at
+    // load: subscribe() calls back on the sign-in that lands the session.
+    if (isStandalone()) {
+      reportInstall();
+      window.store.subscribe("user", reportInstall);
+    }
+    window.addEventListener("appinstalled", reportInstall);
 
     if (window.api) window.api.trackEvent("page_view");
   });

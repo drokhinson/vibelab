@@ -1009,3 +1009,46 @@ class GameBundlesResponse(BaseModel):
     # True when the viewer owns more base games than max_bundles; the overflow
     # falls back to Game Detail's own fetch.
     truncated: bool = False
+
+
+# ── Achievements (migration 061) ──────────────────────────────────────────────
+
+class AchievementGroup(BaseModel):
+    """One section heading on the Achievements spoke."""
+
+    id: str
+    label: str
+    blurb: str
+
+
+class AchievementItem(BaseModel):
+    """One badge, resolved against the viewer's own progress."""
+
+    id: str
+    group_id: str
+    name: str
+    tagline: str
+    # What you have to do, in plain language. Printed on locked badges.
+    requirement: str
+    # Sprite slug, never an emoji (.claude/rules/assets.md). The web app
+    # resolves it to assets/sprites/achievements/bgb-ach-<icon>.svg.
+    icon: str
+    metric: str
+    threshold: int
+    # Clamped to `threshold` so the progress bar never overshoots; the
+    # response's `metrics` map carries the raw counts.
+    progress: int
+    earned: bool
+    unlocked_at: Optional[datetime] = None
+
+
+class AchievementsResponse(BaseModel):
+    """The whole Achievements spoke, from one bgb_sync_achievements call."""
+
+    total: int = 0
+    earned_count: int = 0
+    # metric name → raw count, for copy like "312 plays" that wants the real
+    # number rather than the clamped per-badge progress.
+    metrics: dict[str, int] = {}
+    groups: list[AchievementGroup] = []
+    achievements: list[AchievementItem] = []

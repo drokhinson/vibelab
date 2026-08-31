@@ -19,6 +19,7 @@ from . import buddy_routes     # noqa: F401, E402
 from . import session_routes   # noqa: F401, E402
 from . import feed_routes      # noqa: F401, E402
 from . import stats_routes     # noqa: F401, E402
+from . import achievement_routes  # noqa: F401, E402
 from . import search_routes    # noqa: F401, E402
 from . import chapter_routes   # noqa: F401, E402
 from . import expansion_routes  # noqa: F401, E402

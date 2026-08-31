@@ -331,6 +331,10 @@
    the next searchable sheet — and the next body-level clone or popup — to this
    list by name.
 
+   .ach-sheet is a body-level sheet too, and joins for the same reason: the
+   Achievements spoke is a .bgb-spoke-screen, so a badge's detail sheet has to
+   land on the same surface the shelf it was tapped on is drawn against.
+
    .cascade-player--drag-clone is the third body-level entry, for the same
    reason as the sheets: widgets/player-reorder.js appends the drag clone to
    <body>, so it leaves the screen it was lifted out of and keeps the root
@@ -347,6 +351,7 @@
      .game-search-sheet,
      .shelf-sheet,
      .buddy-qr-sheet,
+     .ach-sheet,
      .exp-picker,
      .import-exp-modal,
      .cascade-player--drag-clone,
@@ -384,6 +389,7 @@
      .game-search-sheet,
      .shelf-sheet,
      .buddy-qr-sheet,
+     .ach-sheet,
      .exp-picker,
      .import-exp-modal,
      .cascade-player--drag-clone,
@@ -10561,4 +10567,241 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .stats-duo { grid-template-columns: 1fr; }
   .statsblock__row { grid-template-columns: 1fr 1fr; }
   .statsblock__cell:last-child { grid-column: 1 / -1; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACHIEVEMENTS  (views/achievements-view.js — the /profile/achievements spoke)
+
+   The badges are medallions: dark coins with a metal rim, carrying their own
+   ground in both themes on purpose (.claude/rules/assets.md — a coin on the
+   table, not a mark drawn against the page). So nothing here re-colours the
+   art; the only thing CSS does to a sprite is dim and desaturate a locked one,
+   which is why there is no second "locked" sprite per badge.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Hub card + spoke summary ─────────────────────────────────────────────── */
+.ach-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: var(--polaroid-bg, #FFFBF1);
+  color: var(--polaroid-ink, #1D1812);
+  border: 1px solid var(--card-border);
+  border-radius: 1.1rem;
+  padding: 0.9rem 1rem;
+  margin-top: 0.75rem;
+  box-shadow: var(--sh-3);
+}
+.ach-summary--fresh { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.ach-summary__ring { position: relative; flex: 0 0 80px; height: 80px; }
+.ach-summary__track { stroke: color-mix(in srgb, var(--polaroid-ink) 12%, transparent); }
+.ach-summary__arc {
+  stroke: var(--accent-fill);
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 0.6s var(--ease);
+}
+/* Stacked, not side by side: "12 / 15" laid out on one line does not fit
+   inside an 80px ring at a size worth reading. */
+.ach-summary__ring-mid {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  line-height: 1;
+  font-family: var(--font-score);
+  font-variant-numeric: tabular-nums;
+}
+.ach-summary__earned { font-size: 1.4rem; font-weight: 700; color: var(--polaroid-ink); }
+.ach-summary__of { font-size: 0.6rem; font-weight: 700; color: var(--polaroid-muted); margin-top: 2px; }
+.ach-summary__body { min-width: 0; }
+.ach-summary__h { margin: 0 0 0.2rem; font-size: 1.05rem; font-weight: 600; }
+.ach-summary__p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--polaroid-muted, #8B7E68);
+}
+
+/* ── One card per group ───────────────────────────────────────────────────── */
+.ach-group__blurb {
+  margin: -0.35rem 0 0.7rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+}
+
+/* ── One badge ────────────────────────────────────────────────────────────── */
+.ach-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.22rem;
+  padding: 0.4rem 0.15rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.85rem;
+  background: transparent;
+  cursor: pointer;
+  /* The grid is the tap target grid — 44px minimum comes free from the art. */
+  min-height: 44px;
+  text-align: center;
+  transition: transform 0.15s var(--ease), background 0.15s;
+}
+.ach-tile:hover { background: var(--polaroid-bg-soft); transform: translateY(-2px); }
+.ach-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ach-tile__art { position: relative; display: block; width: 100%; }
+.ach-tile__art img {
+  width: 100%;
+  height: auto;
+  display: block;
+  aspect-ratio: 1 / 1;
+}
+/* Locked: the same art, held back. Desaturating the medallion is what makes
+   "not yours yet" read at a glance without hiding what the badge IS. */
+.ach-tile.is-locked .ach-tile__art img { filter: grayscale(0.85) brightness(0.62); opacity: 0.75; }
+.ach-tile.is-locked:hover .ach-tile__art img { filter: grayscale(0.55) brightness(0.78); opacity: 0.9; }
+.ach-tile__lock {
+  position: absolute;
+  right: 4%; bottom: 4%;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border-radius: 999px;
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-muted);
+}
+.ach-tile__new {
+  position: absolute;
+  top: 0.1rem; right: 0.05rem;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 0.1rem 0.34rem;
+  box-shadow: var(--sh-1);
+}
+.ach-tile__name {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--polaroid-ink, #1D1812);
+  /* Two lines' worth, always. "Hundred Crowns" wraps and "Crowned" does not,
+     and without a floor the date and the progress bar beside them sit at two
+     different heights across one row. */
+  min-height: 2.3em;
+}
+.ach-tile.is-locked .ach-tile__name { color: var(--polaroid-muted, #8B7E68); }
+.ach-tile__meta {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+.ach-tile__meta--locked { color: var(--polaroid-muted, #8B7E68); }
+.ach-tile__bar {
+  display: block;
+  width: 76%;
+  height: 3px;
+  border-radius: 3px;
+  margin-top: 0.15rem;
+  background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+  overflow: hidden;
+}
+.ach-tile__bar-fill { display: block; height: 100%; background: var(--accent-fill); }
+
+/* ── Detail sheet ─────────────────────────────────────────────────────────── */
+.ach-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0.4rem 1rem 0.2rem;
+}
+.ach-detail__art { width: 132px; height: 132px; display: block; }
+.ach-detail.is-locked .ach-detail__art { filter: grayscale(0.85) brightness(0.62); opacity: 0.8; }
+.ach-detail__name {
+  margin: 0.55rem 0 0.2rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--polaroid-ink);
+}
+.ach-detail__tagline {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-polaroid);
+  font-style: italic;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--polaroid-muted);
+  max-width: 30ch;
+}
+.ach-detail__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
+  color: var(--polaroid-muted);
+}
+.ach-detail__status--earned {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+.ach-detail__progress { width: 100%; max-width: 260px; margin-top: 0.8rem; }
+.ach-detail__bar {
+  height: 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+  overflow: hidden;
+}
+.ach-detail__bar-fill { height: 100%; background: var(--accent-fill); }
+.ach-detail__count {
+  margin-top: 0.3rem;
+  font-family: var(--font-score);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--polaroid-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* The Close button is the shared .bgb-sheet__cancel (52px, per
+   .claude/rules/mobile-web.md §5) — the sheet family already owns that
+   affordance, so this only gives it a little air under the badge. */
+.ach-detail + .bgb-sheet__cancel { margin: 0.9rem 0.2rem 0.2rem; }
+
+/* ── Hub preview card ─────────────────────────────────────────────────────── */
+/* Four badges at a glance: the most recently unlocked first, then whatever is
+   closest to landing — so the card is never four grey discs on a new account. */
+.preview-card__badges {
+  display: flex;
+  gap: 0.5rem;
+}
+.preview-card__badge {
+  flex: 0 0 calc((100% - 3 * 0.5rem) / 4);
+  position: relative;
+}
+.preview-card__badge img { width: 100%; height: auto; display: block; aspect-ratio: 1 / 1; }
+.preview-card__badge.is-locked img { filter: grayscale(0.85) brightness(0.62); opacity: 0.7; }
+.preview-card__seeall-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: var(--accent-fill);
+  margin-left: 0.15rem;
+}
+
+/* Narrow phones: three medallions plus their captions get tight under ~340px. */
+@media (max-width: 350px) {
+  .ach-grid { grid-template-columns: repeat(3, 1fr); }
+  .ach-summary { gap: 0.7rem; }
 }

@@ -1,10 +1,12 @@
 // views/profile-self-view.js — Profile Hub.
 //
 // Account card → a tappable "Your stats" block → warm-cream preview cards
-// (Collection / Wishlist / Recent plays / Buddies). Each preview's
-// "See all →" routes to a dedicated full-screen spoke, and the stats block
-// routes to /profile/stats. Settings is reachable via the avatar in the
-// global header. All cards seed from a single /profile/bundle call.
+// (Achievements / Collection / Wishlist / Recent plays / Buddies). Each
+// preview's "See all →" routes to a dedicated full-screen spoke, and the stats
+// block routes to /profile/stats. Settings is reachable via the avatar in the
+// global header. Every card but Achievements seeds from a single
+// /profile/bundle call; Achievements paints from its own cached payload and
+// refreshes in the background, so first paint still costs exactly one call.
 //
 // The account card (identity + "Edit profile") used to live in Settings.
 // It sits here instead so the hub's own identity block is the thing you
@@ -14,6 +16,11 @@
   const PREVIEW_COVERS = 4;
   const PREVIEW_PLAYS = 2;
   const PREVIEW_BUDDIES = 5;
+  const PREVIEW_BADGES = 4;
+  // The Achievements card repaints in place rather than through render(), so
+  // the background fetch that fills it can't blow away a scroll position or a
+  // half-open sheet elsewhere on the hub.
+  const ACH_HOST_ID = "profile-ach-card";
 
   class ProfileSelfView extends window.View {
     constructor() {
@@ -21,12 +28,27 @@
       this._bundle = null;
       this._loading = true;
       this._error = null;
+      // Achievements are NOT part of /profile/bundle: the hub's one-call
+      // promise stays intact because this card paints from the cached payload
+      // (bgbCache, write-through to localStorage) and only then refreshes in
+      // the background.
+      this._ach = null;
     }
 
     async onMount() {
       this.listen("user", () => this.render());
       this._loading = true;
+      this._ach = window.Achievements.cached();
       this.render();
+      // Fire alongside the bundle, not after it — the card is already on
+      // screen from cache, so this only ever upgrades what is painted.
+      window.Achievements.all()
+        .then((payload) => {
+          if (!payload) return;
+          this._ach = payload;
+          this._paintAchievements();
+        })
+        .catch(() => { /* the card falls back to its cached copy, or hides */ });
       try {
         const me = window.store.get("user");
         const bundle = await window.Profile.bundle(me.id);
@@ -63,6 +85,7 @@
         ${this._renderAccountCard(me)}
         ${this._renderStats(b)}
         ${this._error ? `<div class="alert alert-error text-sm mt-3">${escapeHtml(this._error)}</div>` : ""}
+        ${this._renderAchievementsPreview()}
         ${this._renderCollectionPreview(b)}
         ${this._renderWishlistPreview(b)}
         ${this._renderPlaysPreview(b)}
@@ -147,8 +170,8 @@
     // their own sub-heads, and every number here is shown in fuller form on the
     // Stats spoke.
     //
-    // Plays / Wins / Top game all come off the bundle's stats block, so the hub
-    // still makes no call of its own — the spoke is what fetches the detail.
+    // Plays / Wins / Top game all come off the bundle's stats block, so this
+    // block costs nothing of its own — the spoke is what fetches the detail.
     _renderStats(b) {
       const stats = (b && b.stats) || {};
       const plays = (b && b.recent_plays_total) || stats.total_plays || 0;
@@ -188,6 +211,65 @@
           </div>
         </section>
       `;
+    }
+
+    // ── Achievements ──────────────────────────────────────────────────────────
+    // Four medallions: everything newly earned first, then whatever is closest
+    // to landing — so a brand-new account gets "here is what is within reach"
+    // rather than four grey discs.
+    _renderAchievementsPreview() {
+      const a = this._ach;
+      if (!a || !Array.isArray(a.achievements) || !a.achievements.length) {
+        // Nothing cached and nothing fetched yet: render the host empty rather
+        // than a skeleton. The card slides in when the payload lands.
+        return `<div id="${ACH_HOST_ID}"></div>`;
+      }
+      return `<div id="${ACH_HOST_ID}">${this._achCardInner(a)}</div>`;
+    }
+
+    _paintAchievements() {
+      const host = this.container && this.container.querySelector(`#${ACH_HOST_ID}`);
+      if (!host || !this._ach) return;
+      host.innerHTML = this._achCardInner(this._ach);
+      this.refreshIcons(host);
+    }
+
+    _achCardInner(a) {
+      const unseen = window.Achievements.unseen(a).length;
+      const picks = this._badgePicks(a.achievements);
+      const body = `
+        <div class="preview-card__badges">
+          ${picks.map((b) => `
+            <span class="preview-card__badge ${b.earned ? "is-earned" : "is-locked"}"
+                  title="${escapeAttr(b.earned ? b.name : `${b.name} — ${b.requirement}`)}">
+              <img src="${escapeAttr(window.Achievements.spriteUrl(b.icon))}" alt=""
+                   width="160" height="160" loading="lazy" decoding="async" />
+            </span>
+          `).join("")}
+        </div>
+      `;
+      return `
+        <section class="preview-card">
+          <header class="preview-card__head">
+            <span class="preview-card__icon"><i data-icon="trophy" class="w-4 h-4"></i></span>
+            <h3 class="preview-card__title font-display">Achievements</h3>
+            <span class="preview-card__sub">${a.earned_count} of ${a.total}</span>
+            <button class="preview-card__seeall" onclick="window.router.go('achievements')">
+              See all${unseen ? `<span class="preview-card__seeall-dot" aria-hidden="true"></span><span class="sr-only">, ${unseen} new</span>` : ""}
+              <i data-icon="chevron-right" class="w-3 h-3"></i>
+            </button>
+          </header>
+          <div class="preview-card__body">${body}</div>
+        </section>
+      `;
+    }
+
+    _badgePicks(all) {
+      const earned = all.filter((x) => x.earned)
+        .sort((x, y) => new Date(y.unlocked_at || 0) - new Date(x.unlocked_at || 0));
+      const locked = all.filter((x) => !x.earned)
+        .sort((x, y) => (y.progress / y.threshold) - (x.progress / x.threshold));
+      return earned.concat(locked).slice(0, PREVIEW_BADGES);
     }
 
     // ── Preview cards ─────────────────────────────────────────────────────────

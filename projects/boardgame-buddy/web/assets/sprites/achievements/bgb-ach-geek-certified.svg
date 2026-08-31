@@ -1,0 +1,34 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Geek Certified badge — Buddy presenting a certified rosette">
+  <title>Geek Certified badge — Buddy presenting a certified rosette</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold. -->
+  <defs>
+    <linearGradient id="geek-certified-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="geek-certified-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="geek-certified-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#geek-certified-disc)"/>
+  <g clip-path="url(#geek-certified-clip)">
+    <g transform="translate(12.00 31.20) scale(0.48)">
+    <path d="M84 152 L54 146" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><path d="M116 146 L162 116" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><circle cx="100" cy="148" r="14" fill="url(#geek-certified-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#geek-certified-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#geek-certified-gold)"/>
+    <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M78 100 Q100 124 122 100" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g><path d="M112 96 L106 128 L120 120 L132 130 L128 96 Z" fill="#C8553D"/><circle cx="120" cy="88" r="20" fill="url(#geek-certified-gold)"/><circle cx="120" cy="88" r="14" fill="#F8F2E5"/><path d="M113 88 L118 94 L128 82" stroke="#1F6B2E" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M40 28 Q41.3 32.7 46 34 Q41.3 35.3 40 40 Q38.7 35.3 34 34 Q38.7 32.7 40 28 Z" fill="#F0C662" opacity="0.9"/>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#E0A94A" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#E0A94A" stroke-width="1.4" opacity="0.34"/>
+</svg>

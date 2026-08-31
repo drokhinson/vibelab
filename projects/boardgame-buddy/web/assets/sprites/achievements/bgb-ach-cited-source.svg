@@ -1,0 +1,34 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cited Source badge — Buddy passing a written page along">
+  <title>Cited Source badge — Buddy passing a written page along</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold. -->
+  <defs>
+    <linearGradient id="cited-source-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="cited-source-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="cited-source-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#cited-source-disc)"/>
+  <g clip-path="url(#cited-source-clip)">
+    <g transform="translate(2.00 37.40) scale(0.46)">
+    <path d="M84 152 L54 146" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><path d="M116 146 L162 116" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><circle cx="100" cy="148" r="14" fill="url(#cited-source-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#cited-source-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#cited-source-gold)"/>
+    <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M78 100 Q100 124 122 100" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g><g transform="translate(96 46) rotate(8)"><rect x="0" y="0" width="26" height="33.8" rx="2.6" fill="#F8F2E5"/><rect x="4.2" y="8.8" width="17.7" height="2.4" rx="1.2" fill="#1A0F0B" opacity="0.42"/><rect x="4.2" y="15.2" width="17.7" height="2.4" rx="1.2" fill="#1A0F0B" opacity="0.42"/><rect x="4.2" y="21.6" width="11.4" height="2.4" rx="1.2" fill="#1A0F0B" opacity="0.42"/></g><g transform="translate(120 84) rotate(-14)"><rect x="0" y="0" width="18" height="23.4" rx="1.8" fill="#F8F2E5"/><rect x="2.9" y="6.1" width="12.2" height="1.6" rx="0.8" fill="#1A0F0B" opacity="0.42"/><rect x="2.9" y="10.5" width="12.2" height="1.6" rx="0.8" fill="#1A0F0B" opacity="0.42"/><rect x="2.9" y="15.0" width="7.9" height="1.6" rx="0.8" fill="#1A0F0B" opacity="0.42"/></g><path d="M78 60 Q94 44 108 52" stroke="#F0C662" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-dasharray="4 5" opacity="0.85"/><path d="M120 29 Q121.1 32.9 125 34 Q121.1 35.1 120 39 Q118.9 35.1 115 34 Q118.9 32.9 120 29 Z" fill="#F0C662" opacity="0.9"/>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#E0A94A" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#E0A94A" stroke-width="1.4" opacity="0.34"/>
+</svg>

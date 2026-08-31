@@ -99,6 +99,8 @@
     // (which may add new ghost names or bump play counts).
     static invalidate() {
       if (window.bgbCache) window.bgbCache.clear(CACHE_NS);
+      // Buddy System turns on the first accepted edge.
+      if (window.Achievements && window.Achievements.invalidate) window.Achievements.invalidate();
     }
   }
 
