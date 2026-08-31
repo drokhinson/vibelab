@@ -3,14 +3,15 @@
 // web/views/collection-view.js + wishlist-view.js (one screen, status param).
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, TextInput, FlatList, StyleSheet } from 'react-native';
+import { View, FlatList, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, LibraryBig, Star } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../theme';
+import { LibraryBig, Star } from 'lucide-react-native';
+import { COLORS, SPACING } from '../theme';
 import AppHeader from '../components/AppHeader';
 import GameTile from '../components/GameTile';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import SearchField from '../components/SearchField';
 import api from '../api/client';
 
 export default function CollectionScreen({ navigation, route }) {
@@ -74,17 +75,13 @@ export default function CollectionScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader title={title} onBack={() => navigation.goBack()} />
-      <View style={styles.searchRow}>
-        <Search size={18} color={COLORS.textMuted} />
-        <TextInput
-          style={styles.input}
-          placeholder={`Search ${title.toLowerCase()}…`}
-          placeholderTextColor={COLORS.textMuted}
-          value={search}
-          onChangeText={setSearch}
-          autoCorrect={false}
-        />
-      </View>
+      <SearchField
+        style={styles.searchRow}
+        value={search}
+        onChangeText={setSearch}
+        placeholder={`Search ${title.toLowerCase()}…`}
+        clearLabel={`Clear ${title.toLowerCase()} search`}
+      />
       {items === null ? (
         <LoadingState label={`Loading ${title.toLowerCase()}…`} />
       ) : (
@@ -124,8 +121,7 @@ export default function CollectionScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: COLORS.card, borderRadius: RADII.md, paddingHorizontal: SPACING.md, marginHorizontal: SPACING.lg, marginVertical: SPACING.sm, borderWidth: 1, borderColor: COLORS.border },
-  input: { flex: 1, color: COLORS.text, fontFamily: FONTS.sans, fontSize: 15, paddingVertical: 10 },
+  searchRow: { marginHorizontal: SPACING.lg, marginVertical: SPACING.sm },
   list: { padding: SPACING.lg, paddingTop: SPACING.sm },
   col: { gap: SPACING.md, marginBottom: SPACING.md },
   cell: { flex: 1 },
