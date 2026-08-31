@@ -1,8 +1,7 @@
 // views/profile-other-view.js — Public profile hub for another user.
 //
-// Identity row → four static stat tiles → warm-cream preview cards, trimmed
-// to Collection and Recent plays only — no Wishlist, no Buddies sections.
-// The settings gear slot is replaced by a buddy-relation button (Buddy up /
+// Identity row → four static stat tiles → warm-cream preview cards. The
+// settings gear slot is replaced by a buddy-relation button (Buddy up /
 // Accept / Request sent / Buddies). "See all →" deep-links into the shared
 // collection / plays views, parameterized by ?userId=<them>. Seeded from one
 // /profile/bundle round trip so first paint is instant.
@@ -12,6 +11,22 @@
 // self-only — those numbers are about you, not a stranger — so this screen
 // is now the sole owner of the .profile-stat-card family rather than a copy
 // of it.
+//
+// TWO AUDIENCES. What this screen draws depends on whether the viewer is
+// actually a buddy of the person they are looking at:
+//
+//   stranger  identity + the four stats + Collection. That is the whole
+//             public profile: what they own, and four headline numbers.
+//   buddy     the above, plus Head to head (the pair's shared record, drawn
+//             as the same split bar the Stats spoke's Nemesis card uses),
+//             Top games (their three most-played), and Recent plays.
+//
+// The gate is `this._profile.is_buddy` from /users/{id}/profile, which is
+// fetched fresh on every mount — NOT the bundle, which is cached for up to
+// five minutes and could hand back a pre-buddy copy. The RPC enforces the
+// same rule server-side (migration 064 nulls recent_plays / together /
+// top_games for a stranger), so the client gate is presentation rather than
+// the enforcement — GET /plays?user_id= is 403 for a stranger too.
 
 (function () {
   const PREVIEW_COVERS = 4;
@@ -89,11 +104,18 @@
         ${this._renderBack()}
         ${this._renderIdRow(this._profile)}
         ${this._renderStats(b)}
+        ${this._renderTogether(b)}
+        ${this._renderTopGames(b)}
         ${this._renderCollectionPreview(b)}
         ${this._renderPlaysPreview(b)}
         <div style="height: 1rem"></div>
       `;
       this.refreshIcons();
+    }
+
+    /** True once the viewer and this profile are accepted buddies. */
+    _isBuddy() {
+      return !!(this._profile && this._profile.is_buddy);
     }
 
     _renderBack() {
@@ -187,6 +209,7 @@
             pending_request_direction: null,
             pending_request_id: null,
           });
+          this._refreshBundle();
         } else {
           p.pending_request_id = (res && res.id) || null;
         }
@@ -222,6 +245,7 @@
         if (!id) throw new Error("That request is no longer pending");
         await window.Buddy.accept(id);
         if (window.Buddy.invalidate) window.Buddy.invalidate();
+        this._refreshBundle();
       } catch (e) {
         Object.assign(p, before);
         this.render();
@@ -253,6 +277,29 @@
           showToast(e.message || "Couldn't cancel that request", "error");
         }
       }
+    }
+
+    // Becoming buddies unlocks three blocks the cached bundle was never given
+    // (head to head, top games, recent plays), so pull a fresh one. Force,
+    // because the cached copy is still inside its fresh window and SWR would
+    // hand back the stranger's payload without going to the network. Fire and
+    // forget: the relation button has already flipped, and a failure here just
+    // leaves the new blocks to the next mount.
+    _refreshBundle() {
+      const userId = this._userId();
+      if (!userId) return;
+      window.Profile
+        .bundle(userId, { force: true, colPerPage: PREVIEW_COVERS, playsPerPage: PREVIEW_PLAYS })
+        .then((b) => {
+          // Guard against landing after the user has navigated to someone else.
+          if (this._userId() !== userId) return;
+          this._bundle = b;
+          this._seedViewerMaps(b);
+          this.render();
+        })
+        .catch((e) => {
+          if (window.console) console.warn("profile bundle refresh failed", e);
+        });
     }
 
     // ── Four stat tiles ───────────────────────────────────────────────────────
@@ -288,6 +335,97 @@
       `;
     }
 
+    // ── Buddy-only: head to head ──────────────────────────────────────────────
+    //
+    // Deliberately the Nemesis card from the Stats spoke, re-pointed at a pair
+    // the viewer chose instead of the one the RPC ranked — same split bar, same
+    // legend, same three segments. Where Nemesis leads with the other person's
+    // avatar (it is introducing someone), this one leads with the count: you
+    // already know who you are looking at, so the news is how the record stands.
+    //
+    // `together` is competitive-only and counts plays you both SAT IN, so a
+    // co-op night or a play one of you merely logged is out — see migration 064.
+    _renderTogether(b) {
+      const t = b && b.together;
+      // Null for a stranger, and for a buddy the two have never actually sat
+      // down against each other — a brand-new buddy has no record to show.
+      if (!this._isBuddy() || !t) return "";
+      const shared = t.shared_plays || 0;
+      const yours = t.your_wins || 0;
+      const theirs = t.their_wins || 0;
+      const other = Math.max(0, shared - yours - theirs);
+      // A play the table called a tie has two winners, so the three segments can
+      // sum past `shared` — divide by whichever is larger or the bar overflows.
+      const total = Math.max(shared, yours + theirs + other) || 1;
+      const pctOf = (v) => (v / total) * 100;
+      const them = this._firstName(this._profile.display_name);
+      return `
+        <section class="preview-card">
+          <header class="preview-card__head">
+            <span class="preview-card__icon"><i data-icon="handshake" class="w-4 h-4"></i></span>
+            <h3 class="preview-card__title font-display">Head to head</h3>
+            <span class="preview-card__sub">${shared} shared ${shared === 1 ? "play" : "plays"}</span>
+          </header>
+          <div class="profile-h2h">
+            <div class="profile-h2h__v">${yours}<span class="profile-h2h__sep">/</span>${theirs}</div>
+            <div class="profile-h2h__s">
+              You've won ${yours} of the ${shared} ${shared === 1 ? "game" : "games"}
+              you and ${escapeHtml(them)} have both sat down for.
+            </div>
+          </div>
+          <div class="stats-split">
+            <i class="stats-split__win" style="width:${pctOf(yours).toFixed(1)}%"></i>
+            <i class="stats-split__them" style="width:${pctOf(theirs).toFixed(1)}%"></i>
+            <i class="stats-split__loss" style="width:${pctOf(other).toFixed(1)}%"></i>
+          </div>
+          <div class="stats-legend">
+            <span>You <b>${yours}</b></span>
+            <span>${escapeHtml(them)} <b>${theirs}</b></span>
+            ${other ? `<span>Someone else <b>${other}</b></span>` : ""}
+          </div>
+        </section>
+      `;
+    }
+
+    // ── Buddy-only: their top three ───────────────────────────────────────────
+    _renderTopGames(b) {
+      const games = (b && b.top_games) || [];
+      if (!this._isBuddy() || !games.length) return "";
+      return `
+        <section class="preview-card">
+          <header class="preview-card__head">
+            <span class="preview-card__icon"><i data-icon="trophy" class="w-4 h-4"></i></span>
+            <h3 class="preview-card__title font-display">Top games</h3>
+            <span class="preview-card__sub">Most played</span>
+          </header>
+          <div class="preview-card__body">
+            <div class="profile-topgames">${games.slice(0, 3).map((g) => this._topGame(g)).join("")}</div>
+          </div>
+        </section>
+      `;
+    }
+
+    _topGame(g) {
+      const plays = g.play_count || 0;
+      // gameArtImg() wants the Game shape the collection rows carry; top_games
+      // is a flat row, so hand it the two art fields under the names it reads.
+      const art = gameArtImg(
+        { name: g.name, thumbnail_url: g.thumbnail_url, image_url: g.image_url },
+        "card",
+        { alt: g.name || "" },
+      );
+      return `
+        <button class="profile-topgames__item"
+                onclick="window.router.go('game-detail',{gameId:'${g.game_id}',gameName:'${jsStr(g.name || "")}'})">
+          <span class="profile-topgames__art">
+            ${art || `<span class="preview-card__cover-fallback">${escapeHtml((g.name || "?").slice(0, 14))}</span>`}
+          </span>
+          <span class="profile-topgames__n" title="${escapeAttr(g.name || "")}">${escapeHtml(g.name || "")}</span>
+          <span class="profile-topgames__c">${plays} ${plays === 1 ? "play" : "plays"}</span>
+        </button>
+      `;
+    }
+
     // ── Preview cards ─────────────────────────────────────────────────────────
     _renderCollectionPreview(b) {
       const items = (b && b.owned_page) || [];
@@ -305,7 +443,11 @@
       });
     }
 
+    // Buddies only. `recent_plays` is null rather than [] for a stranger, and
+    // the empty state below would otherwise announce "hasn't logged any plays
+    // yet" about someone who has logged plenty.
     _renderPlaysPreview(b) {
+      if (!this._isBuddy()) return "";
       const plays = (b && b.recent_plays) || [];
       const total = (b && b.recent_plays_total) || 0;
       const body = plays.length
@@ -365,6 +507,11 @@
           <div class="preview-card__play-date">${formatDateShort(p.played_at)}</div>
         </li>
       `;
+    }
+
+    // "Ada Lovelace" → "Ada", for the legend and the sentence above it.
+    _firstName(name) {
+      return String(name || "They").trim().split(/\s+/)[0] || "They";
     }
   }
 

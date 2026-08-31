@@ -8261,6 +8261,104 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border-radius: 0.5rem;
 }
 
+/* ── Profile Other: the two buddy-only cards ────────────────────────────────
+   Both land inside .preview-card, which the theme re-point turns into a chrome
+   surface — so every colour here reads the --polaroid-* family, never a ground
+   token (.claude/rules/theming.md §6).
+
+   Head to head deliberately has no bar or legend CSS of its own: it reuses
+   .stats-split / .stats-legend from the Stats spoke, because it IS the Nemesis
+   card pointed at a pair the viewer chose. Only the headline is local. */
+.profile-h2h {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.profile-h2h__v {
+  flex: none;
+  font-family: var(--font-score);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent-ink);
+}
+.profile-h2h__sep {
+  margin: 0 0.12rem;
+  font-weight: 400;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.profile-h2h__s {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--polaroid-muted, #8B7E68);
+}
+
+/* Top games — three-up, sized to the 3-column width whatever the count, so a
+   two-game shelf leaves space on the right instead of blowing its covers up
+   (same reasoning as .preview-card__cover). */
+.profile-topgames {
+  display: flex;
+  gap: 0.5rem;
+}
+.profile-topgames__item {
+  flex: 0 0 calc((100% - 2 * 0.5rem) / 3);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.profile-topgames__item:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 3px;
+  border-radius: 0.6rem;
+}
+.profile-topgames__art {
+  display: block;
+  aspect-ratio: 3 / 4;
+  border-radius: 0.55rem;
+  overflow: hidden;
+  background: var(--polaroid-line, #DAC9A4);
+  box-shadow: var(--sh-2);
+  transition: transform 0.15s var(--ease);
+}
+.profile-topgames__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Touch has no hover, so the press state is the one that must exist. */
+.profile-topgames__item:active .profile-topgames__art { transform: scale(0.97); }
+@media (hover: hover) {
+  .profile-topgames__item:hover .profile-topgames__art { transform: translateY(-2px); }
+}
+.profile-topgames__n {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--polaroid-ink, #1D1812);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.profile-topgames__c {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--polaroid-muted, #8B7E68);
+}
+
 /* play rows shown in the Recent plays preview card */
 .preview-card__plays {
   list-style: none;

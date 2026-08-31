@@ -185,7 +185,8 @@ async def get_profile_bundle(
         description=(
             "User whose profile to load. Defaults to the caller (Profile Self). "
             "Pass another user's id for Profile Other — buddies / requests are "
-            "omitted from the response in that case."
+            "omitted from the response in that case, and the recent-plays log, "
+            "the shared record and the top-three games are buddies-only."
         ),
     ),
     col_per_page: int = Query(12, ge=1, le=100, description="Per-page size for each shelf's first page"),
@@ -197,6 +198,12 @@ async def get_profile_bundle(
     Backed by the `bgb_profile_bundle` RPC; the shape mirrors what the FE
     currently destructures from /users/{id}/stats + /collection/grid (×3) +
     /plays + /collection + /buddies + /buddies/requests.
+
+    Visibility (migration 064): a viewer who is neither the target nor an
+    accepted buddy gets `recent_plays`, `together` and `top_games` as null.
+    They still get the collection shelves and the stats block — the four
+    headline numbers a public profile has always shown — plus
+    `recent_plays_total`, which is one of them.
     """
     sb = get_supabase()
     target = target_user_id or viewer.user_id
