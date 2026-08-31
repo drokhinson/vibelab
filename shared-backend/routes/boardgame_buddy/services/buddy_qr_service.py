@@ -28,7 +28,7 @@ from ..constants import (
     QR_TOKEN_TTL_SECONDS,
     BuddyEdgeStatus,
 )
-from ..models import BuddyEdgeResponse
+from ..models import BuddyEdgeResponse, BuddyQrPeekResponse
 from ._helpers import canonical_edge_pair, edge_response, fetch_profiles_by_ids
 
 
@@ -64,6 +64,59 @@ def issuer_from_qr_token(token: str) -> str:
     if not issuer_id:
         raise HTTPException(status_code=410, detail="This code isn't valid.")
     return issuer_id
+
+
+def peek_qr_issuer(sb, viewer_id: str, other_id: str) -> BuddyQrPeekResponse:
+    """Name the person behind a scanned code, and say where the viewer stands.
+
+    The read half of add_buddy_mutually below, and it exists because that
+    function used to be the only thing a scan could do: the token was verified
+    and the edge written in one round trip, so there was no way to learn WHO a
+    code belonged to without becoming their buddy. The scan screen now asks
+    first, which needs an answer that writes nothing.
+
+    Same token, same verification, no side effects — so calling this is not a
+    weaker version of consent, it is the same grant used to identify rather
+    than to act. `relation` is what lets the caller show "Already buddies"
+    instead of offering a button that would no-op.
+    """
+    if other_id == viewer_id:
+        raise HTTPException(status_code=400, detail="That's your own code")
+
+    profiles = fetch_profiles_by_ids(sb, [other_id])
+    profile = profiles.get(other_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_a, user_b = canonical_edge_pair(viewer_id, other_id)
+    existing = (
+        sb.table("boardgamebuddy_buddy_edges")
+        .select("status, requested_by")
+        .eq("user_a", user_a)
+        .eq("user_b", user_b)
+        .execute()
+    )
+    relation = "none"
+    if existing.data:
+        row = existing.data[0]
+        status = row.get("status")
+        if status == BuddyEdgeStatus.ACCEPTED.value:
+            relation = "buddies"
+        elif status == BuddyEdgeStatus.BLOCKED.value:
+            relation = "blocked"
+        elif status == BuddyEdgeStatus.PENDING.value:
+            # Direction matters to the caller: a request THEY sent us is about
+            # to be auto-accepted by the scan, which is a different sentence
+            # from one we are still waiting on.
+            relation = "outgoing" if row.get("requested_by") == viewer_id else "incoming"
+
+    return BuddyQrPeekResponse(
+        user_id=other_id,
+        display_name=profile.get("display_name") or "Unknown",
+        username=profile.get("username"),
+        avatar=profile.get("avatar"),
+        relation=relation,
+    )
 
 
 def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResponse, bool]:

@@ -737,6 +737,27 @@ class BuddyQrAddResponse(BaseModel):
     created: bool
 
 
+class BuddyQrPeekRequest(BaseModel):
+    token: str
+
+
+class BuddyQrPeekResponse(BaseModel):
+    """Who a scanned code belongs to, and where the viewer already stands.
+
+    Deliberately narrow: a verified token proves its owner had the code on
+    screen seconds ago, which is consent to be IDENTIFIED, not a licence to
+    read their profile. So this carries the same three fields any suggestion
+    tile shows, plus the relation the scanner needs to know whether "Buddy up"
+    has anything to do.
+    """
+
+    user_id: str
+    display_name: str
+    username: Optional[str] = None
+    avatar: Optional[Avatar] = None
+    relation: Literal["none", "buddies", "outgoing", "incoming", "blocked"] = "none"
+
+
 # ── Played-with discovery (real accounts + ghost players) ─────────────────────
 
 class PlayedWithUser(BaseModel):

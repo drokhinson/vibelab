@@ -38,9 +38,16 @@
     // stored copy outlives the consent it stands for.
     static qrToken() { return window.api.post("/buddies/qr-token", {}); }
 
+    // Resolve a scanned token to the person who minted it, WITHOUT adding
+    // them — the scan screen shows who it is and lets the user choose. Same
+    // token, same verification, no write. Resolves
+    // { user_id, display_name, username, avatar, relation }.
+    static peekQr(token) { return window.api.post("/buddies/qr-peek", { token }); }
+
     // Redeem a scanned token: both users become buddies immediately, no
     // pending request. 410 = expired or forged, 400 = your own code,
-    // 403 = blocked, 404 = the account is gone.
+    // 403 = blocked, 404 = the account is gone. Called with the same token
+    // peekQr() just resolved, so the code is read once and used twice.
     static addByQr(token) { return window.api.post("/buddies/qr-add", { token }); }
 
     // "Buddies you may know" — the same ranked candidates the Feed rail

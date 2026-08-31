@@ -16,6 +16,8 @@ from .models import (
     BuddyEdgeResponse,
     BuddyQrAddRequest,
     BuddyQrAddResponse,
+    BuddyQrPeekRequest,
+    BuddyQrPeekResponse,
     BuddyQrTokenResponse,
     BuddyRequestCreate,
     BuddyRequestResponse,
@@ -154,6 +156,27 @@ async def mint_buddy_qr_token(
         expires_at=expires_at,
         ttl_seconds=QR_TOKEN_TTL_SECONDS,
     )
+
+
+@router.post(
+    "/buddies/qr-peek",
+    response_model=BuddyQrPeekResponse,
+    status_code=200,
+    summary="Resolve a scanned QR code to the person who minted it",
+)
+async def peek_buddy_qr(
+    body: BuddyQrPeekRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> BuddyQrPeekResponse:
+    """Say who a scanned code belongs to. Writes nothing.
+
+    The scan screen shows the person and lets the scanner choose — open their
+    profile, or become buddies — so it needs to resolve a token without
+    redeeming it. /buddies/qr-add below still does both in one call and is what
+    "Buddy up" calls with the same token.
+    """
+    issuer_id = buddy_qr_service.issuer_from_qr_token(body.token)
+    return buddy_qr_service.peek_qr_issuer(get_supabase(), user.user_id, issuer_id)
 
 
 @router.post(

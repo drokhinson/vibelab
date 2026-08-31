@@ -119,15 +119,46 @@
                   ${escapeHtml(me.username)}
                 </div>` : ""}
             </div>
-            <button class="set-card__avatar-btn" type="button"
-                    title="Edit your profile" aria-label="Edit your profile"
-                    onclick="window.profileSelfView._openEditProfile()">
-              <i data-icon="palette" class="w-4 h-4"></i>
-              Edit profile
-            </button>
+            <div class="set-card__acct-actions">
+              <button class="set-card__acct-btn" type="button"
+                      title="Add a buddy by QR code" aria-label="Add a buddy by QR code"
+                      onclick="window.profileSelfView._openQr(this)">
+                <i data-icon="qr-code" class="w-5 h-5"></i>
+              </button>
+              <button class="set-card__acct-btn" type="button"
+                      title="Edit your profile" aria-label="Edit your profile"
+                      onclick="window.profileSelfView._openEditProfile()">
+                <i data-icon="pencil" class="w-5 h-5"></i>
+              </button>
+            </div>
           </div>
         </div>
       `;
+    }
+
+    // The same add-a-buddy sheet the Buddies screen opens — show your code, or
+    // scan theirs. It sits here because this card is the app's answer to "how
+    // do people find me", and the QR is the fastest one.
+    _openQr(btn) {
+      if (!window.BuddyQrSheet) return;
+      window.BuddyQrSheet.open({
+        returnFocus: btn || null,
+        onAdded: () => this._afterQrAdd(),
+        // Same unconditional hook the Buddies screen passes: it no-ops when no
+        // first-run hold is active, and one code path beats two.
+        onClose: () => { if (window.bgbQrFlowEnded) window.bgbQrFlowEnded(); },
+      });
+    }
+
+    /** The hub's Buddies preview is drawn from the profile bundle, so a QR add
+     *  behind the sheet leaves it a person short until something drops it. */
+    async _afterQrAdd() {
+      window.Buddy.invalidate();
+      if (window.Profile.invalidate) {
+        const me = window.store.get("user");
+        if (me) window.Profile.invalidate(me.id);
+      }
+      await this.onMount();
     }
 
     async _openEditProfile() {
