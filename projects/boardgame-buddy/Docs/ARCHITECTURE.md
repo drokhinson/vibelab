@@ -296,7 +296,7 @@ button to the parchment's own ink.
 
 Two more extractions of the same shape, both landed when the first-run
 "Link BoardGameGeek" step (`widgets/onboarding-bgg-modal.js`) became the second
-place that needed something Settings already had. Instance #2 is the moment
+place in the app that needed something Settings already had. Instance #2 is the moment
 (`.claude/rules/ui-object-design.md` §4), not instance #4.
 
 **`ui/bgg-import-log.js` (`window.renderBggImportLog`)** is the live readout of a
@@ -580,8 +580,8 @@ projects/boardgame-buddy/web/
 │   │     is. It survives as that page's BGG-import escape hatch.
 
 │   ├── join-panel.js
-│   ├── onboarding-bgg-modal.js      → first-run step 2: link BGG, then watch the import
-│   ├── onboarding-buddies-modal.js  → first-run step 3: pick buddies, one batched send
+│   ├── onboarding-buddies-modal.js  → first-run step 2: pick buddies, one batched send
+│   ├── onboarding-bgg-modal.js      → first-run step 3: link BGG, then watch the import
 │   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
 │
 ├── views/                  ← One file per screen / route

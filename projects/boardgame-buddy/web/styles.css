@@ -9396,7 +9396,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
 
-/* ── Onboarding step three: "Add buddies" ────────────────────────────────────
+/* ── Onboarding step two: "Add buddies" ──────────────────────────────────────
    Sibling of .avatar-cust and .onboarding-bgg — same polaroid card, same
    trimmed padding, same inner scroll — because the three are consecutive
    screens of one flow and any difference between their chrome reads as a jump.
@@ -9456,7 +9456,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   height: auto;
 }
 
-/* ── Onboarding step two: "Link BoardGameGeek" ───────────────────────────────
+/* ── Onboarding step three: "Link BoardGameGeek" ─────────────────────────────
    Third sibling of .avatar-cust / .onboarding-buddies — same polaroid card,
    same trimmed padding, same inner scroll, because the three are consecutive
    screens of one flow and any difference between their chrome reads as a jump.

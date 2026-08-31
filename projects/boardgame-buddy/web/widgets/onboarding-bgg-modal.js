@@ -1,10 +1,15 @@
 // @ts-check
 // widgets/onboarding-bgg-modal.js — the onboarding "Link BoardGameGeek" step.
 //
-// Second screen of first-time setup, between the profile card
+// Third and last screen of first-time setup, after the profile card
 // (PolaroidPopup.avatarCustomizer) and "Add buddies": offer to pull the user's
 // BGG collection, wishlist and play history across so their first minute in
 // the app has their own shelf in it rather than an empty one.
+//
+// Last of the three deliberately. The two steps before it are a tap and a
+// batch of taps; this one can sit on screen for minutes while a large
+// collection imports, and what waits behind the last card is the user's own
+// feed rather than another step.
 //
 // Two states in one card:
 //
@@ -21,10 +26,10 @@
 // same import, same readout (.claude/rules/ui-object-design.md §2).
 //
 // Why a modal and not a router view: same reasoning as the sibling
-// widgets/onboarding-buddies-modal.js — this is one step of a sequence that
+// widgets/onboarding-buddies-modal.js — this is step 3 of 3 in a sequence that
 // begins in a modal, it has no URL worth deep-linking, and a real view would
 // need a back-stack entry that means nothing once setup is done. It borrows
-// the .polaroid-popup__* chrome so the steps read as one flow.
+// the .polaroid-popup__* chrome so the three steps read as one flow.
 
 (function () {
   const BACKDROP_ID = "bgb-onboarding-bgg";

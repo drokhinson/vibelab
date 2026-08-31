@@ -373,29 +373,11 @@
       // whole modal returns on the next load (needs_setup is still true).
       return;
     }
-    await promptLinkBgg();
     await promptAddBuddies();
+    await promptLinkBgg();
   }
 
-  // Step two of first-time setup: offer to link BoardGameGeek and, if they do,
-  // watch the import land. Runs before Add buddies deliberately — a shelf full
-  // of the user's own games is what makes the buddy suggestions (and the feed
-  // behind this whole sequence) worth looking at.
-  //
-  // Best-effort in exactly the same way as step three: the modal never
-  // rejects, an absent widget is a no-op, and every exit leaves the user on
-  // their feed with a finished profile. Skipping costs nothing — the same
-  // link lives in Settings → Connections.
-  async function promptLinkBgg() {
-    if (!window.OnboardingBggModal) return;
-    try {
-      await window.OnboardingBggModal.open();
-    } catch (e) {
-      console.warn("Link-BoardGameGeek step failed:", e);
-    }
-  }
-
-  // Step three of first-time setup: offer a few people to add, multi-select,
+  // Step two of first-time setup: offer a few people to add, multi-select,
   // one batch of requests or skip. Runs only on this path — an established
   // account meets the same suggestions as the Feed and Buddies rails.
   //
@@ -438,6 +420,29 @@
           ? `${first.detail}. You can add buddies any time from the Buddies screen.`
           : "You can add buddies any time from the Buddies screen.",
       });
+    }
+  }
+
+  // Step three of first-time setup: offer to link BoardGameGeek and, if they
+  // do, watch the import land.
+  //
+  // Last of the three deliberately. The two steps before it are a tap and a
+  // batch of taps — seconds each — whereas this one can legitimately sit on
+  // screen for minutes while a large collection imports, and whatever is
+  // behind the last card is the user's feed, which needs nobody's permission
+  // to wait. Putting it second would have parked "Add buddies" behind an
+  // import nobody asked to watch to the end.
+  //
+  // Best-effort in exactly the same way as step two: the modal never rejects,
+  // an absent widget is a no-op, and every exit leaves the user on their feed
+  // with a finished profile. Skipping costs nothing — the same link lives in
+  // Settings → Connections.
+  async function promptLinkBgg() {
+    if (!window.OnboardingBggModal) return;
+    try {
+      await window.OnboardingBggModal.open();
+    } catch (e) {
+      console.warn("Link-BoardGameGeek step failed:", e);
     }
   }
 
