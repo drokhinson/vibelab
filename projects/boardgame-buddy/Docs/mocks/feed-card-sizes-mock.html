@@ -1,0 +1,866 @@
+<title>Feed Card Sizes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=JetBrains+Mono:wght@500;700&display=swap" />
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   FEED CARD SIZES — design board
+   Same chrome as stats-mock.html: a dark "pin-up wall" that holds on either
+   host ground. The PHONE SCREENS carry the real BGB token palettes (both
+   themes, verbatim from web/styles.css) and are flipped by the toggle.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: dark;
+  --board-bg:    #140F0C;
+  --board-panel: #1C1511;
+  --board-line:  rgba(224, 169, 74, 0.16);
+  --board-ink:   #EFE5D6;
+  --board-dim:   #A2937F;
+  --board-faint: #756455;
+  --gold:        #E0A94A;
+  --gold-deep:   #B9832C;
+  --terra:       #C8553D;
+  --sans:  'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --disp:  'Fraunces', Georgia, serif;
+  --mono:  'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(ellipse 120% 60% at 50% -8%, rgba(224,169,74,0.12), transparent 60%),
+    var(--board-bg);
+  color: var(--board-ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  padding: 0 0 6rem;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
+
+/* ── Board header ─────────────────────────────────────────────────────── */
+.board-head { padding: 3.5rem 0 1.5rem; display: flex; align-items: flex-end; gap: 2rem; flex-wrap: wrap; }
+.board-head__text { flex: 1; min-width: 300px; }
+.eyebrow {
+  font-size: 0.7rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--gold); display: flex; align-items: center; gap: 0.5rem;
+}
+.eyebrow::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, var(--board-line), transparent); }
+h1 {
+  font-family: var(--disp); font-weight: 700; font-size: clamp(2.1rem, 5vw, 3.1rem);
+  line-height: 1.02; margin: 0.7rem 0 0; letter-spacing: -0.01em; text-wrap: balance;
+}
+.board-head p { color: var(--board-dim); font-size: 0.98rem; line-height: 1.62; margin: 0.85rem 0 0; max-width: 68ch; }
+.board-head p b { color: var(--board-ink); font-weight: 600; }
+
+.controls { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-end; }
+.controls__label { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--board-faint); }
+.toggle { display: flex; gap: 0.3rem; background: var(--board-panel); border: 1px solid var(--board-line); border-radius: 999px; padding: 0.3rem; }
+.toggle button {
+  font-family: var(--sans); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+  border: none; background: transparent; color: var(--board-dim); cursor: pointer;
+  padding: 0.5rem 1rem; border-radius: 999px; min-height: 40px; transition: background .16s, color .16s;
+}
+.toggle button[aria-pressed="true"] { background: var(--gold); color: #2B1E06; }
+
+/* ── Sections ─────────────────────────────────────────────────────────── */
+.wrap > section { margin-top: 4rem; }
+.sec-head { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.sec-num {
+  font-family: var(--mono); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--gold); border: 1px solid var(--board-line); border-radius: 6px; padding: 0.2rem 0.5rem;
+}
+h2 { font-family: var(--disp); font-weight: 700; font-size: 1.7rem; margin: 0; letter-spacing: -0.01em; }
+.sec-head .verdict {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 0.25rem 0.6rem; border-radius: 999px;
+}
+.verdict--rec  { background: rgba(224,169,74,0.16); color: var(--gold); border: 1px solid rgba(224,169,74,0.4); }
+.verdict--bad  { background: rgba(200,85,61,0.16); color: #E9917C; border: 1px solid rgba(200,85,61,0.4); }
+.verdict--ok   { background: rgba(255,255,255,0.05); color: var(--board-dim); border: 1px solid var(--board-line); }
+.sec-lede { color: var(--board-dim); font-size: 0.95rem; line-height: 1.65; max-width: 78ch; margin: 0.55rem 0 1.6rem; }
+.sec-lede b { color: var(--board-ink); font-weight: 600; }
+.sec-lede code, .inline-code {
+  font-family: var(--mono); font-size: 0.85em; color: var(--gold);
+  background: rgba(224,169,74,0.10); padding: 0.1em 0.35em; border-radius: 4px;
+}
+
+/* ── Stage: the row of phones ─────────────────────────────────────────── */
+.stage { display: flex; gap: 2.25rem; flex-wrap: wrap; align-items: flex-start; }
+.stage__item { display: flex; flex-direction: column; gap: 0.75rem; }
+.stage__info { flex: 1 1 340px; min-width: 320px; max-width: 560px; padding-top: 1.9rem; }
+.stage__cap {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--board-dim); display: flex; align-items: center; gap: 0.5rem;
+}
+.stage__cap .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); flex: 0 0 auto; }
+.stage__note { font-size: 0.9rem; color: var(--board-dim); line-height: 1.6; max-width: 56ch; margin: 0 0 1.4rem; }
+.stage__note b { color: var(--board-ink); font-weight: 600; }
+dl.facts { display: grid; grid-template-columns: 128px 1fr; gap: 0.05rem 1rem; margin: 0; font-size: 0.85rem; }
+dl.facts dt {
+  font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--board-faint); padding: 0.55rem 0; border-top: 1px solid var(--board-line);
+}
+dl.facts dd {
+  margin: 0; padding: 0.5rem 0; color: var(--board-dim); line-height: 1.5;
+  border-top: 1px solid var(--board-line);
+}
+dl.facts dd b { color: var(--board-ink); font-weight: 600; }
+dl.facts dd code { font-family: var(--mono); font-size: 0.82em; color: var(--gold); }
+dl.facts dd .flag-good { color: #6FBF7F; font-weight: 700; }
+dl.facts dd .flag-bad  { color: #E9917C; font-weight: 700; }
+
+/* Phone shell */
+.phone {
+  width: 392px; flex: 0 0 392px;
+  border-radius: 30px; padding: 8px;
+  background: linear-gradient(160deg, #2B211A, #17110D);
+  box-shadow: 0 30px 60px -24px rgba(0,0,0,0.85), 0 0 0 1px rgba(224,169,74,0.14);
+}
+.screen {
+  border-radius: 23px; overflow: hidden;
+  background: var(--bg-0); color: var(--ink);
+  font-family: var(--font-sans, var(--sans));
+  padding: 0 0 18px;
+}
+.screen__bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px 8px; border-bottom: 1px solid var(--line);
+  background: var(--nav-bg);
+}
+.screen__brand { font-family: var(--font-polaroid); font-weight: 700; font-size: 15px; color: var(--accent); letter-spacing: -0.01em; }
+.screen__dots { display: flex; gap: 5px; }
+.screen__dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); display: block; }
+.screen__body { padding: 12px 0 4px; }
+
+/* ── BGB token palettes, copied from web/styles.css ───────────────────── */
+[data-bgb="dark"] .tokens {
+  color-scheme: dark;
+  --bg-0:#1A1310; --bg-1:#251C16; --bg-2:#33261C;
+  --ink:#F0E7D8; --ink-muted:#B0A18E; --ink-faint:#847665;
+  --line:rgba(255,255,255,0.08); --line-strong:rgba(255,255,255,0.16);
+  --accent:#E0A94A; --accent-quiet:rgba(224,169,74,0.14); --accent-ink:#8A5F0B;
+  --win:#C8553D;
+  --paper:#F8F2E5; --paper-ink:#211A12; --paper-muted:#6F6556; --paper-line:#E6DCC8;
+  --card-border:transparent;
+  --shadow-c:rgba(12,5,0,0.62);
+  --nav-bg:#241809;
+}
+[data-bgb="light"] .tokens {
+  color-scheme: light;
+  --bg-0:#F7F0E1; --bg-1:#FFFBF2; --bg-2:#FFFFFF;
+  --ink:#2A2016; --ink-muted:#6F6252; --ink-faint:#93856F;
+  --line:rgba(36,28,20,0.11); --line-strong:rgba(36,28,20,0.20);
+  --accent:#A87215; --accent-quiet:rgba(168,114,21,0.13); --accent-ink:#7F540D;
+  --win:#A8452F;
+  --paper:#FFFFFF; --paper-ink:#2A2016; --paper-muted:#7C7263; --paper-line:#E8DFCD;
+  --card-border:rgba(48,34,20,0.12);
+  --shadow-c:rgba(120,88,44,0.20);
+  --nav-bg:#FFFBF2;
+}
+.tokens {
+  --font-sans:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font-polaroid:'Fraunces',Georgia,serif;
+  --font-score:'JetBrains Mono',ui-monospace,monospace;
+  --polaroid-bg:var(--paper); --polaroid-ink:var(--paper-ink);
+  --polaroid-ink-soft:color-mix(in srgb, var(--paper-ink) 78%, var(--paper));
+  --polaroid-muted:var(--paper-muted); --polaroid-line:var(--paper-line);
+  --polaroid-bg-soft:color-mix(in srgb, var(--paper) 92%, var(--paper-line));
+  --sh-3:0 10px 26px -12px var(--shadow-c), 0 2px 6px -2px var(--shadow-c);
+}
+
+/* ── Feed chrome inside the screen ────────────────────────────────────── */
+.screen__body { position: relative; }
+.day-divider {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 6px 16px 2px;
+}
+.sess { padding: 6px 0 8px; }
+.sess__head { padding: 0 16px; margin-bottom: 8px; }
+.sess__title { font-size: 13.5px; color: var(--ink-muted); letter-spacing: -0.005em; }
+.sess__title b { color: var(--ink); font-weight: 600; }
+.sess__rail {
+  display: flex; gap: 16px; align-items: center;
+  overflow-x: auto; overflow-y: hidden;
+  padding: 4px 16px 12px; scrollbar-width: none;
+}
+.sess__rail::-webkit-scrollbar { display: none; }
+.sess--solo .sess__rail { justify-content: center; }
+
+/* ── The play card — everything shared by all four options ────────────── */
+.pc {
+  background: var(--polaroid-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 12px 12px 16px;
+  box-shadow: var(--sh-3);
+  color: var(--polaroid-ink);
+  flex: 0 0 auto;
+}
+.pc__photo {
+  position: relative; width: 100%;
+  border-radius: 3px; overflow: hidden;
+  background: var(--polaroid-line);
+}
+.pc__photo img.fg { position: relative; z-index: 1; width: 100%; height: 100%; display: block; }
+.pc__photo img.bg { display: none; }
+.pc__badge {
+  position: absolute; right: 8px; bottom: 8px; z-index: 3;
+  height: 52px; width: auto; max-width: 45%;
+  border-radius: 7px; overflow: hidden; line-height: 0;
+  background: var(--polaroid-bg); border: 2px solid var(--polaroid-bg);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,0,0,0.18);
+}
+.pc__badge img { height: 52px; width: auto; display: block; }
+.pc__cap { width: 100%; padding: 10px 2px 0; display: flex; flex-direction: column; gap: 5px; }
+.pc__title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pc__name {
+  font-family: var(--font-polaroid); font-weight: 700; font-size: 17px; line-height: 1.15;
+  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--polaroid-ink); letter-spacing: -0.01em;
+}
+.pc__open {
+  flex: 0 0 auto; width: 28px; height: 28px; border-radius: 8px;
+  border: 1px solid var(--polaroid-line); background: transparent;
+  color: var(--polaroid-ink-soft); display: grid; place-items: center;
+}
+.pc__open svg { width: 14px; height: 14px; }
+.pc__meta-row {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  padding-top: 6px; border-top: 1px solid var(--polaroid-line);
+}
+.win {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0;
+  font-size: 11px; font-weight: 700; color: var(--win);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.win em { font-style: normal; font-weight: 600; color: var(--polaroid-muted); letter-spacing: 0.02em; }
+.win .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--polaroid-line); flex: 0 0 auto; }
+.win .score { font-family: var(--font-score); font-weight: 700; color: var(--polaroid-ink-soft); }
+.win--loss { color: var(--polaroid-muted); font-style: italic; font-weight: 600; }
+
+/* The status pill — rendered ONLY in the "today" panel, struck through. */
+.pill {
+  flex: 0 0 auto; margin-left: auto;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--polaroid-line); color: var(--polaroid-ink-soft);
+}
+.pill--owned { background: rgba(31,107,46,0.14); border-color: rgba(31,107,46,0.4); color: #2C7A3C; }
+.pill--wish  { background: rgba(224,169,74,0.16); border-color: rgba(224,169,74,0.45); color: var(--accent-ink); }
+.pill--played{ background: rgba(107,63,160,0.14); border-color: rgba(107,63,160,0.4); color: #7A4FB0; }
+
+/* ═══ OPTION SCOPES — the whole delta between the four panels ════════════ */
+
+/* 0 · TODAY — three widths, and a photo height that follows the image. */
+.opt-now .pc--solo  { width: 100%; }
+.opt-now .pc--wide  { width: 260px; }
+.opt-now .pc--tall  { width: 220px; }
+.opt-now .pc__photo { aspect-ratio: var(--ar); }
+.opt-now .pc__photo img.fg { object-fit: cover; }
+.opt-now .pc--boxart .pc__photo { aspect-ratio: auto; background: var(--polaroid-bg-soft); }
+.opt-now .pc--boxart .pc__photo img.fg { height: auto; max-height: 220px; object-fit: contain; }
+.opt-now .pc--boxart.pc--wide .pc__photo img.fg,
+.opt-now .pc--boxart.pc--tall .pc__photo img.fg { max-height: 150px; }
+
+/* A · TWO FOOTPRINTS — wide 280 / tall 208, each with a locked frame. */
+.opt-a .pc { width: 280px; }
+.opt-a .pc--tall, .opt-a .pc--boxart { width: 208px; }
+.opt-a .pc__photo { aspect-ratio: 3 / 2; }
+.opt-a .pc--tall .pc__photo, .opt-a .pc--boxart .pc__photo { aspect-ratio: 4 / 5; }
+.opt-a .pc__photo img.fg { object-fit: cover; }
+/* Box art is artwork, not a snapshot: it is never sliced, it letterboxes on
+   the soft paper ground inside the same locked 4:5 tile. */
+.opt-a .pc--boxart .pc__photo { background: var(--polaroid-bg-soft); }
+.opt-a .pc--boxart .pc__photo img.fg { object-fit: contain; }
+
+/* B · ONE FOOTPRINT, FILL — 264 wide, 4:3 frame, centre-crop everything. */
+.opt-b .pc { width: 264px; }
+.opt-b .pc__photo { aspect-ratio: 4 / 3; }
+.opt-b .pc__photo img.fg { object-fit: cover; }
+
+/* C · ONE FOOTPRINT, FIT — 264 wide, 4:3 frame, the image sits whole on a
+   blurred, dimmed copy of itself. Nothing is ever cropped. */
+.opt-c .pc { width: 264px; }
+.opt-c .pc__photo { aspect-ratio: 4 / 3; background: #1b1512; }
+.opt-c .pc__photo img.fg { object-fit: contain; }
+.opt-c .pc__photo img.bg {
+  display: block; position: absolute; inset: -12%; z-index: 0;
+  width: 124%; height: 124%; object-fit: cover;
+  filter: blur(16px) saturate(1.35) brightness(0.66);
+}
+
+/* ── Callout / annotation bits ────────────────────────────────────────── */
+.tally { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.2rem; }
+.chip {
+  font-family: var(--mono); font-size: 0.7rem; font-weight: 700;
+  padding: 0.3rem 0.6rem; border-radius: 6px;
+  border: 1px solid var(--board-line); background: var(--board-panel); color: var(--board-dim);
+}
+.chip b { color: var(--gold); font-weight: 700; }
+.chip--bad { border-color: rgba(200,85,61,0.4); color: #E9917C; }
+.chip--bad b { color: #E9917C; }
+
+/* ── Spec table ───────────────────────────────────────────────────────── */
+.spec { width: 100%; border-collapse: collapse; margin-top: 1.2rem; font-size: 0.88rem; }
+.spec th, .spec td { text-align: left; padding: 0.8rem 0.9rem; border-bottom: 1px solid var(--board-line); vertical-align: top; }
+.spec th { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--board-faint); font-weight: 800; }
+.spec td { color: var(--board-dim); line-height: 1.55; }
+.spec td:first-child { color: var(--board-ink); font-weight: 600; white-space: nowrap; }
+.spec tr[data-rec] td { background: rgba(224,169,74,0.06); }
+.spec .yes { color: #6FBF7F; font-weight: 700; }
+.spec .no  { color: #E9917C; font-weight: 700; }
+
+pre.code {
+  font-family: var(--mono); font-size: 0.78rem; line-height: 1.65;
+  background: var(--board-panel); border: 1px solid var(--board-line); border-left: 3px solid var(--gold);
+  border-radius: 0 8px 8px 0; padding: 1rem 1.1rem; overflow-x: auto; color: var(--board-dim);
+  margin: 1.1rem 0 0;
+}
+pre.code b { color: var(--gold); font-weight: 700; }
+pre.code i { color: var(--board-faint); font-style: normal; }
+pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
+
+@media (max-width: 900px) { .phone { width: 100%; flex: 1 1 auto; max-width: 392px; } }
+</style>
+
+<div class="wrap">
+
+  <header class="board-head">
+    <div class="board-head__text">
+      <div class="eyebrow">BoardgameBuddy · Feed</div>
+      <h1>One card, two sizes — or one?</h1>
+      <p>
+        The feed card has <b>no fixed size at all</b> today. Width comes from one of three
+        variants (full-width solo, 260px landscape strip, 220px portrait strip) and height
+        comes from whatever aspect the decoded image happens to have — so every session is a
+        different shape. Below: what's on screen now, then three ways to collapse it.
+        <b>The collection-status pill is gone from all three options.</b>
+      </p>
+    </div>
+    <div class="controls">
+      <span class="controls__label">Theme</span>
+      <div class="toggle" role="group" aria-label="Theme">
+        <button type="button" data-theme="dark" aria-pressed="true">Dark</button>
+        <button type="button" data-theme="light" aria-pressed="false">Light</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── 0 · TODAY ──────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">00</span>
+      <h2>Where we are</h2>
+      <span class="verdict verdict--bad">the problem</span>
+    </div>
+    <p class="sec-lede">
+      Three width variants multiplied by a free-running photo height. A solo play with a tall
+      snapshot is over 500px of card; the same play inside a two-game session is 220px wide with
+      a squat letterboxed cover. Nothing lines up, and the rail has to centre its cards
+      vertically because neighbours never match.
+    </p>
+    <div class="tally">
+      <span class="chip chip--bad">widths <b>3</b></span>
+      <span class="chip chip--bad">photo heights <b>unbounded</b></span>
+      <span class="chip chip--bad">box-art caps <b>220px / 150px</b></span>
+      <span class="chip chip--bad">status pill <b>present</b></span>
+    </div>
+    <div class="stage" style="margin-top:1.5rem" data-panel="now"></div>
+  </section>
+
+  <!-- ── A ──────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">A</span>
+      <h2>Two footprints — wide and tall</h2>
+      <span class="verdict verdict--ok">what you asked for</span>
+    </div>
+    <p class="sec-lede">
+      The full-width solo variant retires: <b>every card is a tile</b>, and a solo play is just
+      one tile centred in the column. A tile is either <b>280 × 261</b> with a locked 3:2 frame,
+      or <b>208 × 320</b> with a locked 4:5 frame. Orientation is picked once from the decoded
+      image and never changes after. Box art takes the tall tile and letterboxes rather than crops — and since BGG
+      covers sit at roughly 0.75–0.80 against a 0.80 frame, the bars are hairlines.
+    </p>
+    <div class="tally">
+      <span class="chip">widths <b>2</b></span>
+      <span class="chip">heights <b>2</b></span>
+      <span class="chip">cropping <b>centre-crop</b></span>
+      <span class="chip">rail alignment <b>still needs centring</b></span>
+    </div>
+    <div class="stage" style="margin-top:1.5rem" data-panel="a"></div>
+  </section>
+
+  <!-- ── B ──────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">B</span>
+      <h2>One footprint — fill the frame</h2>
+      <span class="verdict verdict--ok">your option, the blunt version</span>
+    </div>
+    <p class="sec-lede">
+      One tile: <b>264 × 270</b>, a 4:3 frame, every image centre-cropped to fill it. Perfectly
+      uniform, and the rail finally lines up on a single baseline. The price is real: a portrait
+      snapshot loses exactly half its height, and box art gets its title bar and publisher
+      strip sliced off — which is exactly the artwork people recognise a game by.
+    </p>
+    <div class="tally">
+      <span class="chip">widths <b>1</b></span>
+      <span class="chip">heights <b>1</b></span>
+      <span class="chip chip--bad">tall images <b>half cropped</b></span>
+      <span class="chip chip--bad">box art <b>title cropped</b></span>
+    </div>
+    <div class="stage" style="margin-top:1.5rem" data-panel="b"></div>
+  </section>
+
+  <!-- ── C ──────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">C</span>
+      <h2>One footprint — fit on its own blur</h2>
+      <span class="verdict verdict--rec">recommended</span>
+    </div>
+    <p class="sec-lede">
+      Same single <b>264 × 270</b> tile and same 4:3 frame as B — but the image sits <i>whole</i>
+      inside it, over a blurred, dimmed, scaled-up copy of itself. This is the answer to
+      "I'm not sure how to best fit that": the frame is uniform, and <b>nothing is ever cropped</b>
+      — a wide photo, a tall photo and a portrait box cover all land in the same box with their
+      full composition intact, each carrying its own colour into the letterbox so the card still
+      reads as a photograph rather than as art on a grey plate.
+    </p>
+    <div class="tally">
+      <span class="chip">widths <b>1</b></span>
+      <span class="chip">heights <b>1</b></span>
+      <span class="chip">cropping <b>none</b></span>
+      <span class="chip">extra cost <b>1 img + 1 filter</b></span>
+    </div>
+    <div class="stage" style="margin-top:1.5rem" data-panel="c"></div>
+  </section>
+
+  <!-- ── FRAME STUDY ────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2>The same four images, all four ways</h2>
+    </div>
+    <p class="sec-lede">
+      Rows are the content cases you named — a horizontal snapshot, a vertical snapshot, and two
+      plays with no photo at all where the box art <i>is</i> the picture. Columns are the options.
+      This is where the crop damage in B and the shape sprawl in Today are easiest to see.
+    </p>
+    <!-- data-bgb sits on the host, not on .study itself: the token blocks are
+         descendant selectors, so an element cannot theme itself. -->
+    <div class="study-host" data-bgb="dark">
+      <div class="study tokens" data-study></div>
+    </div>
+  </section>
+
+  <!-- ── SPEC ───────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2>Pick one</h2>
+    </div>
+    <table class="spec">
+      <thead>
+        <tr><th>Option</th><th>Card sizes</th><th>Tall photo</th><th>Box art</th><th>Rail lines up</th><th>Trade</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Today</td><td>3 widths × free height</td>
+          <td class="no">no crop, any height</td><td class="no">letterboxed, 2 caps</td><td class="no">no</td>
+          <td>Nothing is predictable; the solo card dwarfs everything.</td>
+        </tr>
+        <tr>
+          <td>A · two</td><td>280×261 / 208×320</td>
+          <td class="yes">4:5, ~17% cropped</td><td class="yes">whole, hairline bars</td><td class="no">no — two heights</td>
+          <td>Honest to the source images, but the rail still mixes heights.</td>
+        </tr>
+        <tr>
+          <td>B · one, fill</td><td>264×270</td>
+          <td class="no">half cropped</td><td class="no">title/publisher lost</td><td class="yes">yes</td>
+          <td>Maximum order, real content loss.</td>
+        </tr>
+        <tr data-rec>
+          <td>C · one, fit</td><td>264×270</td>
+          <td class="yes">whole, letterboxed</td><td class="yes">whole, letterboxed</td><td class="yes">yes</td>
+          <td>One size and no crop; a tall image is smaller on screen than in A.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <pre class="code"><i>/* C · the entire CSS delta in web/styles.css */</i>
+.play-card--single, .play-card--strip.is-portrait,
+.play-card--strip.is-landscape   <i>→ collapse to one</i>  <b>.play-card { width: 264px }</b>
+
+.play-card__photo {
+  <s>aspect-ratio: var(--photo-aspect, 1);</s>   <b>aspect-ratio: 4 / 3;</b>
+}
+.play-card__photo-img { <s>object-fit: cover;</s> <b>object-fit: contain;</b> }
+<b>.play-card__photo-bg</b> { position:absolute; inset:-12%; width:124%; height:124%;
+                        object-fit:cover; filter:blur(16px) saturate(1.35) brightness(.66) }
+
+<i>/* and in ui/play-card.js */</i>
+<s>orientFor() / aspectCache / onPhotoLoad</s>  <i>— all three die with the free-running frame</i>
+<s>play-card__status-slot + renderStatusTag(...)</s>  <i>— pill removed from the card</i>
+<i>/* views/feed-view.js: _syncStatusPills keeps its hot-games branch, drops the play-card one */</i></pre>
+
+    <p class="sec-lede" style="margin-top:1.4rem">
+      <b>On the pill.</b> Removing it takes the meta row down to one thing — the winner — so it
+      gets the full card width and stops fighting an ellipsis on a 220px tile. It also removes the
+      only reason the feed needed a per-game collection map on screen, and the only tap target on
+      the card that wasn't "open this game" or "flip this card". Every other surface that shows
+      owned / played / wishlist — the collection grid, wishlist, game detail, the hot-games rail —
+      keeps its pill untouched.
+    </p>
+  </section>
+
+</div>
+
+<style>
+.study {
+  display: grid;
+  grid-template-columns: repeat(4, 296px);
+  gap: 0.9rem 0.5rem;
+  align-items: start;
+  justify-content: space-between;
+  margin-top: 1.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.8rem;
+}
+.study__h {
+  position: sticky; top: 0;
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--board-faint); padding: 0.5rem 0; text-align: center;
+  border-bottom: 1px solid var(--board-line);
+  background: var(--board-bg);
+}
+.study__h.is-rec { color: var(--gold); border-bottom-color: rgba(224,169,74,0.5); }
+/* Row label spans the full width so each content case reads as a band rather
+   than as a fifth column competing with the cards for room. */
+.study__lab {
+  grid-column: 1 / -1;
+  display: flex; align-items: baseline; gap: 0.6rem;
+  font-size: 0.84rem; font-weight: 700; color: var(--board-ink);
+  margin-top: 1.6rem; padding-bottom: 0.45rem;
+  border-bottom: 1px dashed var(--board-line);
+}
+.study__lab span { font-family: var(--mono); font-size: 0.7rem; font-weight: 500; color: var(--board-faint); }
+.study__lab .rule { flex: 1; }
+.study__cell { display: flex; justify-content: center; padding-top: 0.9rem; }
+</style>
+
+<script>
+(function () {
+  // ── Placeholder artwork ──────────────────────────────────────────────────
+  // Everything is generated inline so the board is self-contained (no network,
+  // no BGG hotlinks). Aspect ratios match what the real feed sees: table
+  // snapshots at 3:2 and 2:3, BGG covers at ~0.78 and 1.0.
+  const svg = (w, h, inner) =>
+    "data:image/svg+xml," + encodeURIComponent(
+      `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w} ${h}' width='${w}' height='${h}'>${inner}</svg>`
+    );
+
+  const woodDefs = (id, top, bot) => `
+    <linearGradient id='w${id}' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='${top}'/><stop offset='1' stop-color='${bot}'/></linearGradient>
+    <radialGradient id='l${id}' cx='50%' cy='2%' r='88%'>
+      <stop offset='0' stop-color='#FFDCA0' stop-opacity='.55'/>
+      <stop offset='1' stop-color='#FFDCA0' stop-opacity='0'/></radialGradient>
+    <radialGradient id='v${id}' cx='50%' cy='50%' r='72%'>
+      <stop offset='.55' stop-color='#000' stop-opacity='0'/>
+      <stop offset='1' stop-color='#000' stop-opacity='.42'/></radialGradient>`;
+
+  // Horizontal snapshot — a game in progress, shot from above. 3:2.
+  const ART_WIDE = svg(300, 200, `
+    <defs>${woodDefs("A", "#7A5637", "#33200E")}</defs>
+    <rect width='300' height='200' fill='url(#wA)'/>
+    <rect width='300' height='200' fill='url(#lA)'/>
+    <g transform='rotate(-4 150 100)'>
+      <rect x='60' y='38' width='180' height='124' rx='9' fill='#1E3B36'/>
+      <rect x='70' y='48' width='160' height='104' rx='4' fill='#2E5A50'/>
+      <g stroke='#44796B' stroke-width='2' opacity='.9'>
+        <path d='M70 82h160M70 116h160M123 48v104M177 48v104'/>
+      </g>
+      <circle cx='96' cy='65' r='9' fill='#E0A94A'/>
+      <circle cx='150' cy='99' r='9' fill='#C8553D'/>
+      <circle cx='204' cy='133' r='9' fill='#EFE5D2'/>
+      <circle cx='150' cy='65' r='5.5' fill='#8FBFA8'/>
+      <circle cx='96' cy='133' r='5.5' fill='#8FBFA8'/>
+      <g transform='rotate(14 196 68)'>
+        <rect x='186' y='58' width='21' height='21' rx='5' fill='#F6EEDD'/>
+        <circle cx='191.5' cy='63.5' r='2.1' fill='#3A2A18'/>
+        <circle cx='201.5' cy='73.5' r='2.1' fill='#3A2A18'/>
+      </g>
+    </g>
+    <g transform='rotate(-17 44 172)'>
+      <rect x='6' y='138' width='42' height='60' rx='5' fill='#EADFC6'/>
+      <rect x='22' y='143' width='42' height='60' rx='5' fill='#F2E8D3'/>
+      <rect x='38' y='148' width='42' height='60' rx='5' fill='#FAF3E3'/>
+    </g>
+    <circle cx='266' cy='34' r='27' fill='#E0A94A' opacity='.16'/>
+    <circle cx='266' cy='34' r='15' fill='#E9BC6B'/>
+    <rect width='300' height='200' fill='url(#vA)'/>`);
+
+  // Vertical snapshot — the lamp, the table below it. 2:3.
+  const ART_TALL = svg(200, 300, `
+    <defs>${woodDefs("B", "#5E4028", "#241608")}</defs>
+    <rect width='200' height='300' fill='url(#wB)'/>
+    <path d='M100 0v34' stroke='#1C1108' stroke-width='4'/>
+    <path d='M72 34h56l20 30H52z' fill='#E0A94A'/>
+    <ellipse cx='100' cy='64' rx='48' ry='9' fill='#FFE3AE'/>
+    <ellipse cx='100' cy='150' rx='118' ry='96' fill='#FFDCA0' opacity='.24'/>
+    <rect width='200' height='300' fill='url(#lB)' opacity='.5'/>
+    <g transform='rotate(3 100 210)'>
+      <rect x='16' y='148' width='168' height='140' rx='9' fill='#1E3B36'/>
+      <rect x='26' y='158' width='148' height='120' rx='4' fill='#2E5A50'/>
+      <g stroke='#44796B' stroke-width='2' opacity='.9'>
+        <path d='M26 198h148M26 238h148M75 158v120M125 158v120'/>
+      </g>
+      <circle cx='50' cy='178' r='9' fill='#C8553D'/>
+      <circle cx='100' cy='218' r='9' fill='#E0A94A'/>
+      <circle cx='150' cy='258' r='9' fill='#EFE5D2'/>
+      <circle cx='100' cy='178' r='5.5' fill='#8FBFA8'/>
+    </g>
+    <g transform='rotate(-9 40 118)'>
+      <rect x='18' y='96' width='40' height='54' rx='5' fill='#F2E8D3'/>
+      <rect x='30' y='101' width='40' height='54' rx='5' fill='#FAF3E3'/>
+    </g>
+    <circle cx='162' cy='112' r='15' fill='#31241A'/>
+    <circle cx='162' cy='112' r='11' fill='#6B4A2F'/>
+    <path d='M177 106q12 6 0 12' stroke='#31241A' stroke-width='4' fill='none'/>
+    <rect width='200' height='300' fill='url(#vB)'/>`);
+
+  // BGG-shaped cover, portrait (0.78) — sky, peaks, title band, publisher strip.
+  const ART_BOX_TALL = svg(156, 200, `
+    <defs>
+      <linearGradient id='sky' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#23324F'/><stop offset='.55' stop-color='#3E5A72'/>
+        <stop offset='1' stop-color='#C08B52'/></linearGradient>
+    </defs>
+    <rect width='156' height='200' fill='#101725'/>
+    <rect x='5' y='5' width='146' height='190' rx='4' fill='url(#sky)'/>
+    <circle cx='108' cy='58' r='20' fill='#F2C46A'/>
+    <circle cx='108' cy='58' r='30' fill='#F2C46A' opacity='.18'/>
+    <path d='M5 132l38-46 30 34 22-24 61 62v37H5z' fill='#1E2C3D'/>
+    <path d='M5 152l32-30 34 30 30-20 55 40v23H5z' fill='#14202E'/>
+    <path d='M43 86l12 15H31zM95 96l10 11H85z' fill='#DCE6EF' opacity='.85'/>
+    <g opacity='.9'>
+      <path d='M28 42q10-9 20 0t20 0' stroke='#DCE6EF' stroke-width='2.5' fill='none' opacity='.5'/>
+    </g>
+    <rect x='16' y='16' width='124' height='30' rx='3' fill='#F6EEDD' opacity='.95'/>
+    <rect x='24' y='24' width='84' height='7' rx='2' fill='#23324F'/>
+    <rect x='24' y='35' width='52' height='4' rx='2' fill='#7C8A9C'/>
+    <rect x='5' y='176' width='146' height='19' fill='#111A28' opacity='.85'/>
+    <rect x='14' y='183' width='44' height='5' rx='2.5' fill='#C9A15E'/>
+    <circle cx='134' cy='185.5' r='6' fill='none' stroke='#C9A15E' stroke-width='1.6'/>
+    <rect x='5' y='5' width='146' height='190' rx='4' fill='none' stroke='#0A1018' stroke-width='2'/>`);
+
+  // BGG-shaped cover, square (1.0) — a warmer, graphic cover.
+  const ART_BOX_SQ = svg(200, 200, `
+    <defs>
+      <linearGradient id='och' x1='0' y1='0' x2='1' y2='1'>
+        <stop offset='0' stop-color='#B4521F'/><stop offset='1' stop-color='#6E2A16'/></linearGradient>
+    </defs>
+    <rect width='200' height='200' fill='#2A1109'/>
+    <rect x='5' y='5' width='190' height='190' rx='4' fill='url(#och)'/>
+    <g fill='none' stroke='#F3C77C' stroke-width='2.4' opacity='.55'>
+      <path d='M100 44l40 23v46l-40 23-40-23V67z'/>
+      <path d='M100 68l19 11v22l-19 11-19-11V79z'/>
+    </g>
+    <circle cx='100' cy='90' r='9' fill='#F3C77C'/>
+    <g fill='#F3C77C' opacity='.35'>
+      <circle cx='38' cy='38' r='4'/><circle cx='162' cy='38' r='4'/>
+      <circle cx='38' cy='142' r='4'/><circle cx='162' cy='142' r='4'/>
+    </g>
+    <rect x='22' y='150' width='156' height='30' rx='3' fill='#F6EEDD'/>
+    <rect x='32' y='158' width='96' height='8' rx='2.5' fill='#6E2A16'/>
+    <rect x='32' y='170' width='58' height='4' rx='2' fill='#B08A6A'/>
+    <rect x='5' y='5' width='190' height='190' rx='4' fill='none' stroke='#1C0B05' stroke-width='2'/>`);
+
+  const ARROW = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M7 17 17 7M7 7h10v10'/></svg>";
+
+  // ── Content cases ────────────────────────────────────────────────────────
+  // `photo` null → the play has no snapshot, so the box art IS the picture.
+  const CASES = {
+    wide: { name: "Brass: Birmingham", winner: "Sam", score: 142, photo: ART_WIDE, ar: 1.5,   box: ART_BOX_TALL, pill: "owned" },
+    tall: { name: "Wingspan",          winner: "You", score: 87,  photo: ART_TALL, ar: 0.667, box: ART_BOX_SQ,   pill: "played" },
+    boxT: { name: "Ark Nova",          winner: "Maya", score: 118, photo: null,    ar: 0.78,  box: ART_BOX_TALL, pill: "wishlist" },
+    boxS: { name: "The Crew",          team: "won",                 photo: null,    ar: 1.0,   box: ART_BOX_SQ,   pill: "owned" },
+  };
+
+  const PILL_LABEL = { owned: "Owned", played: "Played", wishlist: "Wishlist" };
+
+  // Size class per option. This is the whole argument in one table:
+  //   now → three widths, a → two, b/c → one (no class at all).
+  function sizeClass(opt, c) {
+    const portrait = c.ar < 0.95;
+    if (opt === "now") return portrait ? "tall" : "wide";
+    if (opt === "a")   return (portrait || !c.photo) ? "tall" : "wide";
+    return "";
+  }
+
+  function winHtml(c) {
+    if (c.team === "won")  return "<span class='win'>We won!</span>";
+    if (c.team === "lost") return "<span class='win win--loss'>We lost</span>";
+    return `<span class="win"><em>Won by</em>&nbsp;${c.winner}<i class="sep"></i><span class="score">${c.score}</span></span>`;
+  }
+
+  function cardHtml(opt, key, opts) {
+    const c = CASES[key];
+    const isBox = !c.photo;
+    const src = isBox ? c.box : c.photo;
+    const cls = ["pc"];
+    const sz = (opts && opts.solo) ? "solo" : sizeClass(opt, c);
+    if (sz) cls.push("pc--" + sz);
+    if (isBox) cls.push("pc--boxart");
+    // The status pill survives only in the "today" panel — the whole point of
+    // the other three is that the meta row carries the winner and nothing else.
+    const pill = (opt === "now")
+      ? `<span class="pill pill--${c.pill === "wishlist" ? "wish" : c.pill}">${PILL_LABEL[c.pill]}</span>`
+      : "";
+    return `
+      <article class="${cls.join(" ")}" style="--ar:${c.ar}">
+        <div class="pc__photo">
+          <img class="bg" src="${src}" alt="" aria-hidden="true"/>
+          <img class="fg" src="${src}" alt=""/>
+          ${isBox ? "" : `<div class="pc__badge"><img src="${c.box}" alt=""/></div>`}
+        </div>
+        <div class="pc__cap">
+          <div class="pc__title-row">
+            <span class="pc__name">${c.name}</span>
+            <button class="pc__open" type="button" aria-label="Open ${c.name}">${ARROW}</button>
+          </div>
+          <div class="pc__meta-row">${winHtml(c)}${pill}</div>
+        </div>
+      </article>`;
+  }
+
+  // ── A phone screen: one solo session, then a three-card session rail ─────
+  function phoneHtml(opt) {
+    // In "today" a solo play takes the full-width variant; in every option
+    // below it is simply one tile, centred.
+    const solo = cardHtml(opt, "tall", { solo: opt === "now" });
+    const rail = ["wide", "boxT", "boxS"].map((k) => cardHtml(opt, k)).join("");
+    return `
+      <div class="screen tokens">
+        <div class="screen__bar">
+          <span class="screen__brand">BoardgameBuddy</span>
+          <span class="screen__dots"><i></i><i></i><i></i></span>
+        </div>
+        <div class="screen__body opt-${opt}">
+          <h3 class="day-divider">Today</h3>
+          <section class="sess sess--solo">
+            <header class="sess__head"><span class="sess__title"><b>You and Sam</b> played <b>Wingspan</b></span></header>
+            <div class="sess__rail">${solo}</div>
+          </section>
+          <section class="sess">
+            <header class="sess__head"><span class="sess__title"><b>Maya</b> and 2 others played <b>3 games</b></span></header>
+            <div class="sess__rail">${rail}</div>
+          </section>
+        </div>
+      </div>`;
+  }
+
+  const PANELS = {
+    now: {
+      cap: "Today",
+      note: "The solo play at the top is <b>344 × 576</b> of card for one game. Scroll down to the three-game session and the same content is a 260px tile, a 220px tile, and a 220px tile with a squat letterboxed cover — <b>four different footprints on one screen</b>.",
+      facts: [
+        ["Footprints", "<b class='flag-bad'>4 on this screen</b>, unbounded in general"],
+        ["Frame", "<code>aspect-ratio: var(--photo-aspect)</code> — set from the decoded image"],
+        ["Photos", "centre-cropped into a frame that already matches them"],
+        ["Box art", "letterboxed, capped at <code>220px</code> solo / <code>150px</code> in a rail"],
+        ["Meta row", "winner, then the status pill — the winner takes the ellipsis"],
+      ],
+    },
+    a: {
+      cap: "A · two footprints",
+      note: "The full-width solo variant is gone: a solo play is <b>one tile, centred</b>. Orientation is read once from the image and picks one of two locked frames. Box art always takes the tall tile and letterboxes rather than crops, because a sliced cover is a cover you stop recognising.",
+      facts: [
+        ["Footprints", "<b>2</b> — 280 × 261 wide, 208 × 320 tall"],
+        ["Frame", "<code>3 / 2</code> or <code>4 / 5</code>, locked"],
+        ["Photos", "centre-cropped to the nearer frame — ~17% off a 2:3 shot"],
+        ["Box art", "<span class='flag-good'>whole</span> — 4:5 is 0.80, a BGG cover is ~0.78"],
+        ["Rail", "<span class='flag-bad'>still ragged</span> — two heights sit side by side"],
+      ],
+    },
+    b: {
+      cap: "B · one footprint, fill",
+      note: "One tile, one frame, every image cropped to fill it. The rail finally sits on a single baseline. Watch the two covers in the session below: <b>Ark Nova loses its title band and its publisher strip</b>, and the vertical snapshot loses its lamp.",
+      facts: [
+        ["Footprints", "<b class='flag-good'>1</b> — 264 × 270"],
+        ["Frame", "<code>4 / 3</code>, locked"],
+        ["Photos", "<span class='flag-bad'>a 2:3 shot loses exactly half its height</span>"],
+        ["Box art", "<span class='flag-bad'>title and publisher strip cropped off</span>"],
+        ["Rail", "<span class='flag-good'>perfectly aligned</span>"],
+      ],
+    },
+    c: {
+      cap: "C · one footprint, fit",
+      note: "The same single tile as B, but the image is <b>contained</b> in the frame and the leftover space is filled by a blurred, dimmed, scaled-up copy of that same image. One size everywhere, nothing cropped, and each card still reads as a photograph because the letterbox carries the photo's own colour.",
+      facts: [
+        ["Footprints", "<b class='flag-good'>1</b> — 264 × 270"],
+        ["Frame", "<code>4 / 3</code>, locked"],
+        ["Photos", "<span class='flag-good'>never cropped</span> — a tall shot just sits smaller"],
+        ["Box art", "<span class='flag-good'>whole</span>, on its own colour rather than grey"],
+        ["Cost", "one extra <code>&lt;img&gt;</code> (same URL, cached) + one blur filter"],
+      ],
+    },
+  };
+
+  document.querySelectorAll("[data-panel]").forEach((host) => {
+    const opt = host.getAttribute("data-panel");
+    const p = PANELS[opt];
+    const facts = p.facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+    host.innerHTML = `
+      <div class="stage__item">
+        <div class="stage__cap"><span class="dot"></span>${p.cap}</div>
+        <div class="phone tokens" data-bgb="dark">${phoneHtml(opt)}</div>
+      </div>
+      <div class="stage__info">
+        <p class="stage__note">${p.note}</p>
+        <dl class="facts">${facts}</dl>
+      </div>`;
+  });
+
+  // ── Frame study: four content cases × four options ───────────────────────
+  const STUDY_ROWS = [
+    ["wide", "Horizontal snapshot", "3:2 · 300×200"],
+    ["tall", "Vertical snapshot",   "2:3 · 200×300"],
+    ["boxT", "No photo · portrait cover", "0.78 · 156×200"],
+    ["boxS", "No photo · square cover",   "1.00 · 200×200"],
+  ];
+  const STUDY_COLS = [
+    ["now", "Today", false],
+    ["a",   "A · two", false],
+    ["b",   "B · one, fill", false],
+    ["c",   "C · one, fit", true],
+  ];
+  const study = document.querySelector("[data-study]");
+  if (study) {
+    let html = "";
+    STUDY_COLS.forEach(([, label, rec]) => {
+      html += `<div class="study__h${rec ? " is-rec" : ""}">${label}</div>`;
+    });
+    STUDY_ROWS.forEach(([key, label, meta]) => {
+      html += `<div class="study__lab">${label}<span>${meta}</span><span class="rule"></span></div>`;
+      STUDY_COLS.forEach(([opt]) => {
+        html += `<div class="study__cell opt-${opt}">${cardHtml(opt, key)}</div>`;
+      });
+    });
+    study.innerHTML = html;
+  }
+
+  // ── Theme toggle ─────────────────────────────────────────────────────────
+  const buttons = document.querySelectorAll(".toggle button");
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const theme = btn.dataset.theme;
+      buttons.forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+      document.querySelectorAll("[data-bgb]").forEach((host) => host.setAttribute("data-bgb", theme));
+    });
+  });
+})();
+</script>
