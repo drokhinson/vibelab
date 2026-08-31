@@ -1,13 +1,24 @@
-// widgets/onboarding-buddies-modal.js — the onboarding "Add buddies" step.
+// widgets/add-buddies-modal.js — the "Add buddies" card, shared by two callers.
 //
-// Second screen of first-time setup: the user has just saved a display name
-// and a badge in PolaroidPopup.avatarCustomizer, and this offers a grid of
-// people they may know before the BoardGameGeek step closes the sequence
-// (widgets/onboarding-bgg-modal.js). Tiles multi-select; one button sends
-// every tick as a single batch (POST /buddies/requests/bulk), the other skips.
+// Both of them put the same question to the user — who do you want to add? —
+// so they get the same screen rather than two that drift:
+//   • first-run setup, as step 2 of 3: the user has just saved a display name
+//     and a badge in PolaroidPopup.avatarCustomizer, and this offers a grid of
+//     people they may know before the BoardGameGeek step closes the sequence
+//     (widgets/onboarding-bgg-modal.js).
+//   • the Buddies screen's Add button, which replaced the profile-search bar
+//     that used to sit at the top of that page (views/buddies-view.js).
 //
-// Why a modal and not a router view: this is step 2 of 3 in a sequence that
-// begins in a modal, it has no URL worth deep-linking, and a real view would
+// Tiles multi-select; one button sends every tick as a single batch
+// (POST /buddies/requests/bulk), the other backs out. The search field above
+// the grid reaches past the ranked suggestions to anyone in the app, by display
+// name or username (GET /profiles/search).
+//
+// What the two callers do NOT share is the dismiss wording — see dismissLabel.
+// "Skip" is honest inside a sequence and wrong outside one.
+//
+// Why a modal and not a router view: it began as step 2 of 3 in a sequence that
+// starts in a modal, it has no URL worth deep-linking, and a real view would
 // need a back-stack entry that means nothing once setup is done. It borrows
 // the .polaroid-popup__* chrome so the three steps read as one flow — the same
 // thing widgets/onboarding-bgg-modal.js does.
@@ -18,7 +29,7 @@
 // .claude/rules/ui-object-design.md §2.
 
 (function () {
-  const BACKDROP_ID = "bgb-onboarding-buddies";
+  const BACKDROP_ID = "bgb-add-buddies";
   // Must match the .is-closing animation duration in styles.css.
   const CLOSE_MS = 200;
 
@@ -73,24 +84,24 @@
       root.id = BACKDROP_ID;
       root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--confirm";
       root.innerHTML = `
-        <div class="polaroid-popup__card polaroid-popup__card--confirm onboarding-buddies"
+        <div class="polaroid-popup__card polaroid-popup__card--confirm add-buddies"
              role="dialog" aria-modal="true" aria-label="Add buddies" tabindex="-1">
           <button class="polaroid-popup__close" aria-label="Skip for now" data-act="skip">
             <i data-icon="x" class="w-4 h-4"></i>
           </button>
-          <div class="onboarding-buddies__body">
+          <div class="add-buddies__body">
             <div class="polaroid-popup__title">Add buddies</div>
             <p class="polaroid-popup__body">
               Pick anyone you know. They'll get a request, and once they accept
               their plays show up in your feed.
             </p>
-            <div class="onboarding-buddies__grid" role="group" aria-label="Suggested buddies">
+            <div class="add-buddies__grid" role="group" aria-label="Suggested buddies">
               ${list.map((s) => window.renderBuddySuggestionTile(s, { mode: "select" })).join("")}
             </div>
-            <div class="onboarding-buddies__error" role="alert" hidden></div>
-            <div class="polaroid-popup__actions onboarding-buddies__actions">
-              <button class="btn btn-ghost btn-sm onboarding-buddies__skip" data-act="skip">Skip</button>
-              <button class="btn btn-primary btn-sm onboarding-buddies__send" data-act="send" disabled>
+            <div class="add-buddies__error" role="alert" hidden></div>
+            <div class="polaroid-popup__actions add-buddies__actions">
+              <button class="btn btn-ghost btn-sm add-buddies__skip" data-act="skip">Skip</button>
+              <button class="btn btn-primary btn-sm add-buddies__send" data-act="send" disabled>
                 Send requests
               </button>
             </div>
@@ -104,10 +115,10 @@
       document.body.style.overflow = "hidden";
       window.BgbIcons.render(root);
 
-      const grid = root.querySelector(".onboarding-buddies__grid");
-      const sendBtn = root.querySelector(".onboarding-buddies__send");
-      const skipBtn = root.querySelector(".onboarding-buddies__skip");
-      const errorEl = root.querySelector(".onboarding-buddies__error");
+      const grid = root.querySelector(".add-buddies__grid");
+      const sendBtn = root.querySelector(".add-buddies__send");
+      const skipBtn = root.querySelector(".add-buddies__skip");
+      const errorEl = root.querySelector(".add-buddies__error");
 
       function finish(result) {
         if (settled) return;
@@ -208,9 +219,9 @@
       // Tab walks the grid rather than the page behind it. NOT sendBtn: it
       // starts disabled, and a disabled button cannot take focus, so focus
       // would have stayed on whatever opened the modal.
-      root.querySelector(".onboarding-buddies").focus();
+      root.querySelector(".add-buddies").focus();
     });
   }
 
-  window.OnboardingBuddiesModal = { open };
+  window.AddBuddiesModal = { open };
 })();

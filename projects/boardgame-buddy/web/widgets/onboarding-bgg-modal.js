@@ -26,7 +26,7 @@
 // same import, same readout (.claude/rules/ui-object-design.md §2).
 //
 // Why a modal and not a router view: same reasoning as the sibling
-// widgets/onboarding-buddies-modal.js — this is step 3 of 3 in a sequence that
+// widgets/add-buddies-modal.js — this is step 3 of 3 in a sequence that
 // begins in a modal, it has no URL worth deep-linking, and a real view would
 // need a back-stack entry that means nothing once setup is done. It borrows
 // the .polaroid-popup__* chrome so the three steps read as one flow.

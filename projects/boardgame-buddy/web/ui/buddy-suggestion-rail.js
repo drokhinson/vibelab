@@ -9,7 +9,7 @@
 //     Played-with lists, fed by GET /buddies/suggested (rail, Add button)
 //   • the onboarding "Add buddies" step, as a wrapping grid of tiles the user
 //     ticks before sending one batch of requests
-//     (widgets/onboarding-buddies-modal.js, fed by
+//     (widgets/add-buddies-modal.js, fed by
 //      GET /buddies/suggested/onboarding)
 //
 // Per .claude/rules/ui-object-design.md §2 the surface-specific bits — which

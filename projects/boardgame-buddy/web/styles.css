@@ -3109,7 +3109,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    (cream in BOTH themes), where that red drops to 3.68:1; deepening it toward
    the paper's own ink brings it to 5.84 dark / 7.91 light, and keeps it a token
    expression rather than a second literal red. Same mix as the sibling step's
-   .onboarding-buddies__error. */
+   .add-buddies__error. */
 .onboarding-bgg .bgg-log__sublist-error {
   color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
 }
@@ -9417,33 +9417,37 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
 
-/* ── Onboarding step two: "Add buddies" ──────────────────────────────────────
-   Sibling of .avatar-cust and .onboarding-bgg — same polaroid card, same
-   trimmed padding, same inner scroll — because the three are consecutive
-   screens of one flow and any difference between their chrome reads as a jump.
-   Wider than the customizer: this one holds a three-column grid, not a single
-   carousel. */
-.onboarding-buddies {
+/* ── "Add buddies" ───────────────────────────────────────────────────────────
+   Two callers: first-run setup's step two, and the Buddies screen's Add button
+   (widgets/add-buddies-modal.js). On the onboarding path it is a sibling of
+   .avatar-cust and .onboarding-bgg — same polaroid card, same trimmed padding —
+   because those three are consecutive screens of one flow and any difference
+   between their chrome reads as a jump. Wider than the customizer: this one
+   holds a three-column grid, not a single carousel.
+
+   The card is deliberately PAPER in both themes and must NOT be added to the
+   chrome re-point list near the top of this file: the measured ratios in
+   .buddy-tile--select's own comment are taken against paper. */
+.add-buddies {
   width: min(420px, 92vw);
-  /* Let the close button overhang the corner without a scrollbar; the
-     vertical scroll lives on __body, exactly as .avatar-cust does. */
+  /* Let the close button overhang the corner; __body owns the layout below. */
   overflow: visible;
   padding: 0;
 }
-.onboarding-buddies:focus { outline: none; }   /* programmatic focus only */
-.onboarding-buddies__body {
+.add-buddies:focus { outline: none; }   /* programmatic focus only */
+.add-buddies__body {
   padding: 18px 14px 16px;
   max-height: calc(100vh - 36px);
   max-height: calc(var(--bgb-vv-h, 100dvh) - 36px);
   overflow-y: auto;
   overflow-x: hidden;
 }
-.onboarding-buddies .polaroid-popup__title { margin-bottom: 4px; }
-.onboarding-buddies .polaroid-popup__body { margin-bottom: 12px; }
+.add-buddies .polaroid-popup__title { margin-bottom: 4px; }
+.add-buddies .polaroid-popup__body { margin-bottom: 12px; }
 
 /* auto-fit rather than a fixed column count: the same rule gives three columns
    on a phone and four on the 420px cap, with no breakpoint. */
-.onboarding-buddies__grid {
+.add-buddies__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 8px;
@@ -9451,7 +9455,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding: 2px;
 }
 
-.onboarding-buddies__error {
+.add-buddies__error {
   margin-top: 12px;
   font-size: 12px;
   font-weight: 600;
@@ -9467,18 +9471,18 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* The step's two commit buttons get the 52px commit-button target
    (.claude/rules/mobile-web.md §5) and share the row evenly — Skip is a real
    destination here, not a corner escape, so it is not shrunk to a link. */
-.onboarding-buddies__actions {
+.add-buddies__actions {
   margin-top: 14px;
   gap: 10px;
 }
-.onboarding-buddies__actions .btn {
+.add-buddies__actions .btn {
   flex: 1 1 0;
   min-height: 52px;
   height: auto;
 }
 
 /* ── Onboarding step three: "Link BoardGameGeek" ─────────────────────────────
-   Third sibling of .avatar-cust / .onboarding-buddies — same polaroid card,
+   Third sibling of .avatar-cust / .add-buddies — same polaroid card,
    same trimmed padding, same inner scroll, because the three are consecutive
    screens of one flow and any difference between their chrome reads as a jump.
    Shares the 420px cap with the buddies grid: the import log's game-name
@@ -9538,7 +9542,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* Both commit buttons get the 52px target (.claude/rules/mobile-web.md §5) and
    share the row evenly — Skip is a real destination here, not a corner escape.
-   Matches .onboarding-buddies__actions exactly; the two steps are one flow. */
+   Matches .add-buddies__actions exactly; the two steps are one flow. */
 .onboarding-bgg__actions {
   gap: 10px;
 }

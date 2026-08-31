@@ -429,7 +429,7 @@
   // finished profile, because a discovery step is not worth blocking a
   // completed signup on.
   async function promptAddBuddies() {
-    if (!window.OnboardingBuddiesModal) return;
+    if (!window.AddBuddiesModal) return;
     let suggestions = [];
     try {
       const res = await window.Buddy.onboardingSuggestions(12);
@@ -444,7 +444,7 @@
 
     let result;
     try {
-      result = await window.OnboardingBuddiesModal.open({ suggestions });
+      result = await window.AddBuddiesModal.open({ suggestions });
     } catch (e) {
       console.warn("Add-buddies step failed:", e);
       return;

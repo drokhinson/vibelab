@@ -582,7 +582,7 @@ projects/boardgame-buddy/web/
 │   │     is. It survives as that page's BGG-import escape hatch.
 
 │   ├── join-panel.js
-│   ├── onboarding-buddies-modal.js  → first-run step 2: pick buddies, one batched send
+│   ├── add-buddies-modal.js  → first-run step 2: pick buddies, one batched send
 │   ├── onboarding-bgg-modal.js      → first-run step 3: link BGG, then watch the import
 │   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
 │
