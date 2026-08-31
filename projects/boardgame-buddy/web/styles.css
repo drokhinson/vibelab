@@ -3751,23 +3751,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 @media (prefers-reduced-motion: reduce) {
   .shelf-more__spinner { animation-duration: 2400ms; }
 }
-.search-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
-.search-hit {
-  position: relative;
-  display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.55rem;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.6rem;
-  cursor: pointer;
-}
-.search-hit:hover { border-color: var(--accent); }
-.search-hit img { width: 44px; height: 44px; object-fit: cover; border-radius: 0.35rem; }
-.search-hit__placeholder { width: 44px; height: 44px; border-radius: 0.35rem; display: grid; place-items: center; background: oklch(var(--b3)); }
-.search-hit__body { flex: 1; min-width: 0; }
-.search-hit__name { font-weight: 600; font-size: 0.92rem; line-height: 1.2; }
-.search-hit__meta { font-size: 0.76rem; opacity: 0.6; margin-top: 0.1rem; }
-
 /* ── Unified status tag (every game tile) ─────────────────────────────────── */
 .status-tag {
   display: inline-flex; align-items: center; gap: 0.25rem;
@@ -9073,7 +9056,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    espresso in dark.
 
    The rules below exist because these components default to the DaisyUI base
-   palette (.input, .search-hit, .collection-tile, .filter-chip …), which is the
+   palette (.input, .collection-tile, .filter-chip …), which is the
    app ground rather than a card surface. Each re-points at the --sheet-* card
    tokens so it reads as a card on whichever ground it lands on. Everything
    stays valid in both themes because every rule reads a token, not a literal.
@@ -9178,23 +9161,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .bgb-spoke-screen .buddies-row__when { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
 .bgb-spoke-screen .buddies-section { border-top-color: var(--sheet-line); }
 .bgb-spoke-screen .buddies-section h3 { color: var(--accent-ink); }
-
-/* Profile-search suggestion rows under the buddies-view search bar —
-   .search-hit defaults to DaisyUI's dark base tones, which render as
-   black boxes on cream. Match the warm-wash polaroid look used by
-   .buddies-row so the suggestions stay legible. */
-.bgb-spoke-screen .search-hit {
-  background: var(--sheet-card);
-  color: var(--polaroid-ink, #1D1812);
-  border: 1px solid var(--sheet-line);
-}
-.bgb-spoke-screen .search-hit:hover { border-color: var(--accent); }
-.bgb-spoke-screen .search-hit__placeholder {
-  background: var(--polaroid-line, #DAC9A4);
-  color: var(--polaroid-ink, #1D1812);
-}
-.bgb-spoke-screen .search-hit__name { color: var(--polaroid-ink, #1D1812); }
-.bgb-spoke-screen .search-hit__meta { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
 
 /* Search-bar + filter-toggle controls — DaisyUI's `.input.input-bordered`
    defaults to dark theme tones, which renders as a black box on cream.

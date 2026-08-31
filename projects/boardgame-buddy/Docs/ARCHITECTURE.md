@@ -215,15 +215,15 @@ Existing canonical overrides to copy — grep the class name rather than trustin
 | Surface | Pattern |
 |---|---|
 | `<input class="input input-bordered">` | `.bgb-spoke-screen .input` — scoped override |
-| `.search-hit` (profile-search suggestion rows in Buddies) | `.bgb-spoke-screen .search-hit` — scoped override |
+| `.buddies-row` (the Buddies / Sent / Incoming rows) | `.bgb-spoke-screen .buddies-row` — scoped override |
 | `.game-finder-dropdown` (Log play → pick game) | own class family, polaroid tokens by default |
 | `.buddies-link-results` (Buddies → Link ghost) | own class family, polaroid tokens by default |
 | `.bgb-sheet__*` (every bottom sheet) | own class family, plus the sheet's class named in the re-point list |
 | `.scoring-*` (the round grid) | **the cleanest example of the rule below.** Renders on paper (the play-detail popup) *and* chrome, so it is defined once in surface tokens in its own family and travels to both. It used to carry two byte-identical per-view override blocks; both were deleted, not edited |
 
-If a component is **only ever used on one surface** (like `.search-hit` today), the scoped override pattern is fine. If a component is shared across surfaces (like `.game-finder-*`), define it in surface tokens directly in its own class family so it travels.
+If a component is **only ever used on one surface** (like `.buddies-row` today), the scoped override pattern is fine. If a component is shared across surfaces (like `.game-finder-*`), define it in surface tokens directly in its own class family so it travels.
 
-*(`.cascade-buddy-dropdown` used to be listed here. It was deleted when the Gather player picker became a sheet — see §4.4.)*
+*(`.cascade-buddy-dropdown` used to be listed here. It was deleted when the Gather player picker became a sheet — see §4.4. `.search-hit` was listed here too, as the one-surface example, until the Buddies screen's profile-search bar became the Add button and the family went with it.)*
 
 ### 4.2b Contrast
 
@@ -582,7 +582,8 @@ projects/boardgame-buddy/web/
 │   │     is. It survives as that page's BGG-import escape hatch.
 
 │   ├── join-panel.js
-│   ├── add-buddies-modal.js  → first-run step 2: pick buddies, one batched send
+│   ├── add-buddies-modal.js  → first-run step 2 AND the Buddies screen's Add button:
+│   │     search or pick, one batched send
 │   ├── onboarding-bgg-modal.js      → first-run step 3: link BGG, then watch the import
 │   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
 │

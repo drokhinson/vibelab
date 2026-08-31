@@ -227,7 +227,7 @@ Components are global functions / classes attached to `window`. There is no modu
 | Scoring grid | `.scoring-table`, `.scoring-table-wrap`, `.scoring-cell`, `.scoring-cell--read`, `.scoring-total-row`, `.scoring-total-cell--winner`, `.scoring-head` | Inside scoring section | `--font-score` (JetBrains Mono) for all numbers | None |
 | Profiles | `.profile-hub*`, `.profile-id*`, `.profile-collection-grid`, `.profile-collection__*`, `.profile-stats`, `.profile-stat-card*`, `.profile-empty`, `.profile-loading`, `.profile-panel__*` | `styles.css:3179–3500+` | `--font-display` for names + stats | None |
 | Spoke / sub-pages | `.spoke-head*`, `.spoke-toggle*` | Inside collection / wishlist / plays | `--font-display` for title | None |
-| Buddies | `.buddies-row`, `.buddies-row__avatar`, `.buddies-row__avatar--ghost`, `.buddy-tile`, `.buddy-tile__avatar`, `.search-hit` | Inside buddies section | `--font-sans` | None |
+| Buddies | `.buddies-row`, `.buddies-row__avatar`, `.buddies-row__avatar--ghost`, `.buddy-tile`, `.buddy-tile__avatar`, `.buddies-add*` | Inside buddies section | `--font-sans` | None |
 | Animations | `.animate-fadeUp` | `styles.css:88` | n/a | `.animate-fade` (without `Up`) does NOT exist — earlier audit notes that mentioned it as dead were incorrect; there is no class to delete |
 | Admin (used) | `.admin-reports__*` | Inside admin block | `--font-sans` | None |
 | Admin (DEAD) | `.admin-tool*` family | DELETED | n/a | Removed in cleanup. |
@@ -425,6 +425,30 @@ To reproduce or extend: re-run those greps after any refactor and update the cou
 ---
 
 ## Cleanup log
+
+### Pass 4 (Add-buddies consolidation) — 2026-08-31
+
+The Buddies screen's profile-search bar was replaced by an Add button opening
+the shared Add-buddies card, so the row shape the search hits used went cold.
+
+**JS removed:** `_searchInput`, the `_q` / `_search` fields, and the
+`<ul class="search-list">` block in `views/buddies-view.js`. `_personFor` lost
+its `this._search` branch. `_relationAction` keeps its remaining caller
+(`_renderAccountRow`) and gains an indirect one — the card's `relationFor`.
+
+**CSS removed:** the whole `.search-list` / `.search-hit*` family (7 rules) and
+its `.bgb-spoke-screen .search-hit*` override block (5 rules + comment). The
+`.search-hit` mention in the spoke-screen block's own header comment went too.
+
+**Renamed, not deleted:** `.buddies-search*` → `.buddies-add*` — the surface it
+was named for no longer exists. Same for `widgets/onboarding-buddies-modal.js`
+→ `add-buddies-modal.js` and `.onboarding-buddies*` → `.add-buddies*`, which now
+has two callers.
+
+**Docs updated:** `ARCHITECTURE.md` cited `.search-hit` twice as the canonical
+"only ever used on one surface, so a scoped override is fine" example;
+`.buddies-row` took over, and the deletion is noted where
+`.cascade-buddy-dropdown`'s already was.
 
 ### Pass 1 (initial audit) — 2026-05-23
 Inventory only; no code changes.
