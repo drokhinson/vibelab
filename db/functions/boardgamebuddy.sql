@@ -632,10 +632,11 @@
 --   Called by:  shared-backend/routes/boardgame_buddy/achievement_routes.py
 --               (GET /achievements, POST /achievements/installed)
 --   Purpose:    Everything on the Achievements spoke (/profile/achievements) in
---               one call. Computes all nine metrics behind the fifteen badges
---               (plays logged, wins, biggest table, buddies, guide chapters,
---               chapters of yours another player kept, plays you wrote notes
---               on, whether BGG is linked, whether the PWA is installed),
+--               one call. Computes all ten metrics behind the sixteen badges
+--               (plays logged, wins, biggest table, two-player-only games
+--               played, buddies, guide chapters, chapters of yours another
+--               player kept, plays you wrote notes on, whether BGG is linked,
+--               whether the PWA is installed),
 --               inserts a boardgamebuddy_user_achievements row for anything
 --               newly earned, then joins the catalog to those rows and returns
 --               name / tagline / requirement / icon / threshold / progress /
@@ -648,3 +649,6 @@
 --               the "logged it OR appeared on it" visibility rule shared with
 --               bgb_play_stats (045) and bgb_user_stats_detail (058); wins are
 --               necessarily narrower, since a win needs a player row.
+--               two_player_games is the one metric that reaches the games
+--               table — 020 denormalized name and thumbnail onto plays, never
+--               the player counts.

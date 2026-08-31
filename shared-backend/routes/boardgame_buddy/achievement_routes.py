@@ -1,4 +1,4 @@
-"""Achievements — the Profile hub's fifteen-badge spoke.
+"""Achievements — the Profile hub's sixteen-badge spoke.
 
 Self-only, for the same reason the Stats detail endpoint is: the spoke hangs
 off the Profile hub, which is the viewer's own screen, and "you have not linked

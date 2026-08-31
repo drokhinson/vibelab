@@ -6,7 +6,7 @@
 // progress against every badge. Nothing here fetches per tile.
 //
 // The screen is a trophy shelf: a summary strip, then one card per group with
-// a 3-up grid of medallions. A locked badge is shown, not hidden — the whole
+// a 4-up grid of medallions. A locked badge is shown, not hidden — the whole
 // point of an achievement list is knowing what is still out there — so it
 // keeps its art (dimmed and desaturated by CSS, never by a second "locked"
 // sprite) and prints what it wants from you.

@@ -1,0 +1,34 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Duelist badge — Buddy over a two-player board with a pawn dug in on either side">
+  <title>Duelist badge — Buddy over a two-player board with a pawn dug in on either side</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold. -->
+  <defs>
+    <linearGradient id="duelist-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="duelist-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="duelist-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#duelist-disc)"/>
+  <g clip-path="url(#duelist-clip)">
+    <g transform="translate(36.00 9.60) scale(0.44)">
+    <path d="M84 152 L52 140" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><path d="M116 152 L148 140" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><circle cx="100" cy="148" r="14" fill="url(#duelist-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#duelist-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#duelist-gold)"/>
+    <path d="M70 66 Q80 60 90 64" stroke="#1A0F0B" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="M110 64 Q120 60 130 66" stroke="#1A0F0B" stroke-width="3.4" fill="none" stroke-linecap="round"/><circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M84 106 Q100 113 116 106" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g><rect x="40" y="96" width="80" height="32" rx="6" fill="#8A5A32"/><rect x="45" y="100" width="70" height="24" rx="4" fill="#F3E6CE"/><path d="M80 100 V124" stroke="#1A0F0B" stroke-width="2" opacity="0.5" stroke-dasharray="3 3"/><g transform="translate(62 120) scale(1.0)" fill="#F8F2E5" opacity="1.0"><circle cx="0" cy="-11" r="4"/><path d="M-6 0 L-6 -6 Q-6 -9 -2 -8 L2 -8 Q6 -9 6 -6 L6 0 Z"/></g><g transform="translate(98 120) scale(1.0)" fill="#C8553D" opacity="1.0"><circle cx="0" cy="-11" r="4"/><path d="M-6 0 L-6 -6 Q-6 -9 -2 -8 L2 -8 Q6 -9 6 -6 L6 0 Z"/></g><path d="M28 39 Q29.1 42.9 33 44 Q29.1 45.1 28 49 Q26.9 45.1 23 44 Q26.9 42.9 28 39 Z" fill="#F0C662" opacity="0.9"/><path d="M132 39 Q133.1 42.9 137 44 Q133.1 45.1 132 49 Q130.9 45.1 127 44 Q130.9 42.9 132 39 Z" fill="#F0C662" opacity="0.9"/>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#E0A94A" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#E0A94A" stroke-width="1.4" opacity="0.34"/>
+</svg>

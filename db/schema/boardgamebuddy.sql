@@ -363,7 +363,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chapter_reports (
 ALTER TABLE public.boardgamebuddy_chapter_reports ENABLE ROW LEVEL SECURITY;
 
 -- Achievement catalog (migration 061). Three objects: the four section
--- headings, the fifteen badges, and one row per badge a user has earned.
+-- headings, the sixteen badges, and one row per badge a user has earned.
 -- The catalog is DATA, not a Python dict, so retuning a tier or rewording a
 -- badge is an UPDATE rather than a deploy. `metric` names a key of the JSONB
 -- blob bgb_sync_achievements computes; `icon` is a sprite slug resolving to
@@ -383,9 +383,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_achievements (
   tagline       TEXT NOT NULL,
   requirement   TEXT NOT NULL,
   metric        TEXT NOT NULL CHECK (metric IN (
-                  'plays_logged', 'wins', 'biggest_table', 'buddies',
-                  'guide_chapters', 'chapters_borrowed', 'plays_with_notes',
-                  'bgg_linked', 'app_installed')),
+                  'plays_logged', 'wins', 'biggest_table', 'two_player_games',
+                  'buddies', 'guide_chapters', 'chapters_borrowed',
+                  'plays_with_notes', 'bgg_linked', 'app_installed')),
   threshold     INT  NOT NULL CHECK (threshold > 0),
   icon          TEXT NOT NULL,
   display_order INT  NOT NULL

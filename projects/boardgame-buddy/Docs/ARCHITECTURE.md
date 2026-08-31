@@ -33,7 +33,7 @@ Each object has a JS file in `web/domain/` that wraps its API surface, normalize
 | **Collection** | `domain/collection.js` | Per-user `(game, status)` mapping — owned / wishlist / played-not-owned. Drives the status badges everywhere a Game appears. |
 | **Profile** | `domain/profile.js` | Public projection of a User: stats, recent plays, owned games, favourite game. |
 | **Feed** | `domain/feed.js` | Composite chronological stream of plays + algorithmic rails (hot games, suggested buddies). Lives in its own object because the response is heterogeneous. |
-| **Achievement** | `domain/achievements.js` | A badge in the fifteen-item catalog, resolved against the viewer's own progress. The *catalog* lives in the database (`boardgamebuddy_achievements`), not in this file — retuning a tier is an UPDATE, not a deploy. What the module owns beyond the fetch is the half the server cannot know: which badges this **device** has already shown the user, which is what drives the "New" ribbons. |
+| **Achievement** | `domain/achievements.js` | A badge in the sixteen-item catalog, resolved against the viewer's own progress. The *catalog* lives in the database (`boardgamebuddy_achievements`), not in this file — retuning a tier is an UPDATE, not a deploy. What the module owns beyond the fetch is the half the server cannot know: which badges this **device** has already shown the user, which is what drives the "New" ribbons. |
 
 The `domain/store.js` file is the cross-cutting state container. Views call `window.store.subscribe(key, fn)` to listen for changes and `window.store.set(key, value)` to publish. The `user`, `feed`, and `myCollectionMap` keys are the high-traffic ones; everything else is view-local.
 
@@ -380,7 +380,7 @@ Bottom-nav "Profile"
 └────────┬────────┘
          │
          ├── Your stats  → stats     (podium + per-game breakdown)
-         ├── See all → achievements  (fifteen badges, four groups)
+         ├── See all → achievements  (sixteen badges, four groups)
          ├── See all → collection
          ├── See all → wishlist
          ├── See all → plays

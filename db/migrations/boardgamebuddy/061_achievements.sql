@@ -1,6 +1,6 @@
 -- 061_achievements.sql — the Achievements spoke.
 --
--- Fifteen badges hanging off the Profile hub, in four groups: time at the
+-- Sixteen badges hanging off the Profile hub, in four groups: time at the
 -- table, victories, the reference guide, and the setup work that makes the app
 -- yours. Everything is DERIVED from data the app already writes — plays,
 -- winners, buddy edges, guide chapters, the BGG link — with exactly one
@@ -70,9 +70,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_achievements (
   -- What you actually have to do, in plain language. Shown on locked badges.
   requirement   TEXT NOT NULL,
   metric        TEXT NOT NULL CHECK (metric IN (
-                  'plays_logged', 'wins', 'biggest_table', 'buddies',
-                  'guide_chapters', 'chapters_borrowed', 'plays_with_notes',
-                  'bgg_linked', 'app_installed')),
+                  'plays_logged', 'wins', 'biggest_table', 'two_player_games',
+                  'buddies', 'guide_chapters', 'chapters_borrowed',
+                  'plays_with_notes', 'bgg_linked', 'app_installed')),
   threshold     INT  NOT NULL CHECK (threshold > 0),
   -- Sprite slug → web/assets/sprites/achievements/bgb-ach-<icon>.svg
   icon          TEXT NOT NULL,
@@ -119,46 +119,49 @@ VALUES
   ('plays_300',         'table',     'Table Titan',
    'Three hundred plays deep, and still dealing.',
    'Log 300 plays',                                  'plays_logged',     300, 'table-titan',       30),
+  ('duelist',           'table',     'Duelist',
+   'Two chairs, one board, nowhere to hide.',
+   'Play a game built for two players only',         'two_player_games',   1, 'duelist',           40),
   ('full_table',        'table',     'Full Table',
    'Everyone came. Someone had to fetch a chair.',
-   'Log a play with 5 or more players',              'biggest_table',      5, 'full-table',        40),
+   'Log a play with 5 or more players',              'biggest_table',      5, 'full-table',        50),
 
   ('wins_10',           'victories', 'Crowned',
    'Ten wins says it was not luck.',
-   'Win 10 plays',                                   'wins',              10, 'crowned',           50),
-  ('wins_100',          'victories', 'Hundred Crowns',
-   'A century of last laughs.',
-   'Win 100 plays',                                  'wins',             100, 'hundred-crowns',    60),
+   'Win 10 plays',                                   'wins',              10, 'crowned',           60),
+  ('wins_100',          'victories', 'King of the Hill',
+   'A hundred wins, and the high ground.',
+   'Win 100 plays',                                  'wins',             100, 'king-of-the-hill',  70),
   ('wins_300',          'victories', 'Dynasty',
    'Three hundred wins. The table calls it a reign.',
-   'Win 300 plays',                                  'wins',             300, 'dynasty',           70),
+   'Win 300 plays',                                  'wins',             300, 'dynasty',           80),
 
   ('chapters_1',        'guide',     'First Page',
    'Your reference guide has a first chapter.',
-   'Add 1 chapter to your reference guide',          'guide_chapters',     1, 'first-page',        80),
+   'Add 1 chapter to your reference guide',          'guide_chapters',     1, 'first-page',        90),
   ('chapters_10',       'guide',     'Rules Lawyer',
    'Ten chapters. Nobody bluffs past you now.',
-   'Add 10 chapters to your reference guide',        'guide_chapters',    10, 'rules-lawyer',      90),
+   'Add 10 chapters to your reference guide',        'guide_chapters',    10, 'rules-lawyer',     100),
   ('chapters_50',       'guide',     'Loremaster',
    'Fifty chapters — a shelf of your own making.',
-   'Add 50 chapters to your reference guide',        'guide_chapters',    50, 'loremaster',       100),
+   'Add 50 chapters to your reference guide',        'guide_chapters',    50, 'loremaster',       110),
   ('chapter_borrowed',  'guide',     'Cited Source',
    'Someone else keeps a chapter you wrote.',
    'Have a chapter you wrote added to another player''s guide',
-                                                     'chapters_borrowed',  1, 'cited-source',     110),
+                                                     'chapters_borrowed',  1, 'cited-source',     120),
 
   ('buddy_1',           'setup',     'Buddy System',
    'Games are better with someone across the table.',
-   'Add your first buddy',                           'buddies',            1, 'buddy-system',     120),
+   'Add your first buddy',                           'buddies',            1, 'buddy-system',     130),
   ('play_notes_1',      'setup',     'Table Chronicler',
    'The score fades. The story does not.',
-   'Add a description to a game you logged',         'plays_with_notes',   1, 'table-chronicler', 130),
+   'Add a description to a game you logged',         'plays_with_notes',   1, 'table-chronicler', 140),
   ('bgg_linked',        'setup',     'Geek Certified',
    'Your shelf, straight from BoardGameGeek.',
-   'Link your BoardGameGeek account',                'bgg_linked',         1, 'geek-certified',   140),
+   'Link your BoardGameGeek account',                'bgg_linked',         1, 'geek-certified',   150),
   ('app_installed',     'setup',     'Pocket Buddy',
    'Buddy lives on your home screen now.',
-   'Install the web app on your phone',              'app_installed',      1, 'pocket-buddy',     150)
+   'Install the web app on your phone',              'app_installed',      1, 'pocket-buddy',     160)
 ON CONFLICT (id) DO UPDATE
   SET group_id      = EXCLUDED.group_id,
       name          = EXCLUDED.name,
@@ -198,11 +201,11 @@ DECLARE
 BEGIN
   -- ── 1. Every metric, in one pass ──────────────────────────────────────────
   WITH my_plays AS (
-    SELECT p.id
+    SELECT p.id, p.game_id
     FROM public.boardgamebuddy_plays p
     WHERE p.user_id = uid
     UNION
-    SELECT p.id
+    SELECT p.id, p.game_id
     FROM public.boardgamebuddy_plays p
     JOIN public.boardgamebuddy_play_players pp ON pp.play_id = p.id
     WHERE pp.player_user_id = uid
@@ -226,6 +229,20 @@ BEGIN
       WHERE pp.is_winner
     ),
     'biggest_table', COALESCE((SELECT MAX(players) FROM table_sizes), 0),
+    -- Duelist: a game the BOX is built for two, not an evening that happened
+    -- to seat two. `max_players = 2` is the test — a game that can never
+    -- seat a third — which keeps 1-2 player games (Patchwork, Watergate) in:
+    -- they are duels the moment a second person sits down, and excluding them
+    -- on min_players would be a stricter reading than anyone means by "a
+    -- two-player game". This is the one metric that has to reach the games
+    -- table: migration 020 denormalized name and thumbnail onto plays, never
+    -- the player counts.
+    'two_player_games', (
+      SELECT COUNT(DISTINCT mp.game_id)
+      FROM my_plays mp
+      JOIN public.boardgamebuddy_games g ON g.id = mp.game_id
+      WHERE g.max_players = 2
+    ),
     'buddies', (
       SELECT COUNT(*)
       FROM public.boardgamebuddy_buddy_edges e

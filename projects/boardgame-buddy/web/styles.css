@@ -10629,6 +10629,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   line-height: 1.4;
   color: var(--polaroid-muted, #8B7E68);
 }
+/* Four columns, not three. The groups hold 5 / 3 / 4 / 4 badges, so 4-up
+   leaves exactly one orphan tile on the whole screen where 3-up left three;
+   the medallion still reads at the ~75px this gives it on a 390px phone.
+   Narrow phones drop to 3 — see the media query at the end of this block. */
 .ach-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -10694,7 +10698,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-weight: 700;
   line-height: 1.15;
   color: var(--polaroid-ink, #1D1812);
-  /* Two lines' worth, always. "Hundred Crowns" wraps and "Crowned" does not,
+  /* Two lines' worth, always. "King of the Hill" wraps and "Crowned" does not,
      and without a floor the date and the progress bar beside them sit at two
      different heights across one row. */
   min-height: 2.3em;
