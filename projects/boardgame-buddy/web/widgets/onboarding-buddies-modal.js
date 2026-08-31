@@ -1,15 +1,16 @@
 // widgets/onboarding-buddies-modal.js — the onboarding "Add buddies" step.
 //
-// Second and last screen of first-time setup: the user has just saved a
-// display name and a badge in PolaroidPopup.avatarCustomizer, and this offers
-// a grid of people they may know. Tiles multi-select; one button sends every
-// tick as a single batch (POST /buddies/requests/bulk), the other skips.
+// Third and last screen of first-time setup: the user has saved a display name
+// and a badge in PolaroidPopup.avatarCustomizer and been offered a
+// BoardGameGeek link (widgets/onboarding-bgg-modal.js), and this offers a grid
+// of people they may know. Tiles multi-select; one button sends every tick as
+// a single batch (POST /buddies/requests/bulk), the other skips.
 //
-// Why a modal and not a router view: this is step 2 of 2 in a sequence that
+// Why a modal and not a router view: this is step 3 of 3 in a sequence that
 // begins in a modal, it has no URL worth deep-linking, and a real view would
 // need a back-stack entry that means nothing once setup is done. It borrows
-// the .polaroid-popup__* chrome so the two steps read as one flow — the same
-// thing widgets/… does for the avatar customizer's card.
+// the .polaroid-popup__* chrome so the three steps read as one flow — the same
+// thing widgets/onboarding-bgg-modal.js does.
 //
 // The tiles are NOT bespoke markup: they are the canonical buddy-suggestion
 // tile in its "select" mode (ui/buddy-suggestion-rail.js), which is what the
@@ -27,7 +28,14 @@
     if (_closeTimer) { clearTimeout(_closeTimer); _closeTimer = null; }
     const stale = document.getElementById(BACKDROP_ID);
     if (stale) stale.remove();
-    document.body.style.overflow = "";
+    // First-run runs three of these polaroid cards back to back, and a
+    // teardown fires 200ms after its own card resolved — by which time the
+    // NEXT card may already have locked the scroll. Only the last overlay out
+    // restores it, or the closing card silently unlocks the page behind the
+    // one that replaced it.
+    if (!document.querySelector(".polaroid-popup__backdrop")) {
+      document.body.style.overflow = "";
+    }
   }
 
   /**

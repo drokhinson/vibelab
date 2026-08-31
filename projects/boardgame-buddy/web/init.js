@@ -369,14 +369,33 @@
         title: "Couldn't save your profile",
         body: (e && e.message) ? String(e.message) : "Please try again from Settings.",
       });
-      // Setup didn't complete, so don't move them on to step two — the whole
-      // modal returns on the next load (needs_setup is still true).
+      // Setup didn't complete, so don't move them on to the later steps — the
+      // whole modal returns on the next load (needs_setup is still true).
       return;
     }
+    await promptLinkBgg();
     await promptAddBuddies();
   }
 
-  // Step two of first-time setup: offer a few people to add, multi-select,
+  // Step two of first-time setup: offer to link BoardGameGeek and, if they do,
+  // watch the import land. Runs before Add buddies deliberately — a shelf full
+  // of the user's own games is what makes the buddy suggestions (and the feed
+  // behind this whole sequence) worth looking at.
+  //
+  // Best-effort in exactly the same way as step three: the modal never
+  // rejects, an absent widget is a no-op, and every exit leaves the user on
+  // their feed with a finished profile. Skipping costs nothing — the same
+  // link lives in Settings → Connections.
+  async function promptLinkBgg() {
+    if (!window.OnboardingBggModal) return;
+    try {
+      await window.OnboardingBggModal.open();
+    } catch (e) {
+      console.warn("Link-BoardGameGeek step failed:", e);
+    }
+  }
+
+  // Step three of first-time setup: offer a few people to add, multi-select,
   // one batch of requests or skip. Runs only on this path — an established
   // account meets the same suggestions as the Feed and Buddies rails.
   //

@@ -19,7 +19,11 @@
   //
   // 15s is well past a healthy p99 (including a cold Railway dyno) and well
   // short of "forever". Uploads get their own budget — a play photo over
-  // cellular legitimately takes longer than any JSON call ever should.
+  // cellular legitimately takes longer than any JSON call ever should, and so
+  // does the odd endpoint that does third-party work inside the handler
+  // (POST /bgg/sync walks a whole BoardGameGeek collection before it answers).
+  // Those pass an explicit `timeoutMs`; they still get a deadline, just one
+  // sized to the work rather than to a JSON round trip.
   const REQUEST_TIMEOUT_MS = 15000;
   const UPLOAD_TIMEOUT_MS = 60000;
 
@@ -157,7 +161,7 @@
     }
 
     async _request(method, path, opts = {}) {
-      const { body, query, headers, raw, signal, _retried, _stalled } = opts;
+      const { body, query, headers, raw, signal, timeoutMs, _retried, _stalled } = opts;
       const url = new URL(this.base + this.prefix + path);
       if (query) {
         for (const [k, v] of Object.entries(query)) {
@@ -178,7 +182,9 @@
 
       let res, release;
       try {
-        [res, release] = await this._send(url.toString(), init, REQUEST_TIMEOUT_MS, signal);
+        [res, release] = await this._send(
+          url.toString(), init, timeoutMs || REQUEST_TIMEOUT_MS, signal,
+        );
       } catch (e) {
         // A stalled socket does not heal itself — the same request on a new
         // connection is what recovers, which is exactly what the user was
@@ -231,10 +237,11 @@
       }
     }
 
-    // `opts` carries per-call extras — today just `{ signal }`, used by the
-    // game picker to drop a search the next keystroke has superseded.
+    // `opts` carries per-call extras: `{ signal }`, used by the game picker to
+    // drop a search the next keystroke has superseded, and `{ timeoutMs }` for
+    // the handful of endpoints whose honest budget is not a JSON round trip.
     get(path, query, opts)   { return this._request("GET",    path, { ...(opts || {}), query }); }
-    post(path, body)         { return this._request("POST",   path, { body }); }
+    post(path, body, opts)   { return this._request("POST",   path, { ...(opts || {}), body }); }
     put(path, body)          { return this._request("PUT",    path, { body }); }
     patch(path, body)        { return this._request("PATCH",  path, { body }); }
     del(path)                { return this._request("DELETE", path); }

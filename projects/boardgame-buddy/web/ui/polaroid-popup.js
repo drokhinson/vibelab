@@ -476,13 +476,16 @@
         nameError: null,
       };
 
+      // .polaroid-field* is the shared look for a labelled field on a polaroid
+      // card (also the first-run BGG step); .avatar-cust__name* stays as this
+      // card's layout offset and as the JS hooks below.
       const nameFieldHtml = includeNameField ? `
-          <div class="avatar-cust__name">
-            <label class="avatar-cust__name-label" for="avatar-cust-name">Display name</label>
-            <input id="avatar-cust-name" type="text" class="input input-bordered input-sm avatar-cust__name-input"
+          <div class="polaroid-field avatar-cust__name">
+            <label class="polaroid-field__label" for="avatar-cust-name">Display name</label>
+            <input id="avatar-cust-name" type="text" class="input input-bordered input-sm polaroid-field__input avatar-cust__name-input"
                    value="${escapeAttr(state.displayName)}" maxlength="40" autocomplete="off"
                    placeholder="Your name" />
-            <div class="avatar-cust__name-error text-error text-xs" hidden></div>
+            <div class="polaroid-field__error avatar-cust__name-error text-error text-xs" hidden></div>
           </div>
         ` : "";
 
