@@ -84,8 +84,19 @@
       this._moreError = null;  // batch failure — blocks the sentinel until retried
       this._statusMap = {};
       this._mapPending = true; // don't guess "not on your shelf" before the map lands
-      /** @type {Set<string>} Game ids with a collection write in flight. */
-      this._pending = new Set();
+      /** @type {Map<string, any>} id → game, so _syncRows doesn't rebuild it. */
+      this._gameById = new Map();
+      // The write queue. A tap NEVER waits on the network: it paints, records
+      // what the user asked for, and lets _drain reconcile that against what
+      // the server has confirmed. See _toggle.
+      /** @type {Map<string, ("owned"|"wishlist"|null)>} id → state last asked for. */
+      this._want = new Map();
+      /** @type {Map<string, ("owned"|"wishlist"|"played"|null)>} id → last state the server confirmed. */
+      this._confirmed = new Map();
+      /** @type {Set<string>} Game ids whose _drain loop is running. */
+      this._writing = new Set();
+      if (this._syncFrame != null) cancelAnimationFrame(this._syncFrame);
+      this._syncFrame = null;
       // Monotonic: a page resolving after a newer search must not write back.
       this._loadSeq = 0;
       clearTimeout(this._searchTimer);
@@ -127,7 +138,7 @@
         if (!m) return;
         this._statusMap = m;
         this._mapPending = false;
-        this._syncRows();
+        this._scheduleSync();
       });
       this.listenDom("status-changed", (e) => {
         const { gameId, status } = (e && e.detail) || {};
@@ -139,7 +150,7 @@
         else next[gameId] = status;
         this._statusMap = next;
         this._mapPending = false;
-        this._syncRows();
+        this._scheduleSync();
       });
 
       // Independent of the catalog: the rows paint without it (with their
@@ -149,14 +160,14 @@
           if (!this._mounted || !m) return;
           this._statusMap = m;
           this._mapPending = false;
-          this._syncRows();
+          this._scheduleSync();
         })
         .catch(() => {
           // Degrade to "+" rather than leaving every row's button hidden for
           // the rest of the session — same call the status tag makes.
           if (!this._mounted) return;
           this._mapPending = false;
-          this._syncRows();
+          this._scheduleSync();
         });
 
       await this._load({ reset: true });
@@ -174,6 +185,8 @@
       this._infinite.observe(null);
       clearTimeout(this._searchTimer);
       this._searchTimer = null;
+      if (this._syncFrame != null) cancelAnimationFrame(this._syncFrame);
+      this._syncFrame = null;
     }
 
     /** Paint the buttons from whatever the device already knows, in frame one. */
@@ -223,7 +236,7 @@
     async _load({ reset = false } = {}) {
       const seq = ++this._loadSeq;
       if (reset) {
-        this._games = [];
+        this._setGames([]);
         this._total = 0;
         this._page = 0;
         this._loadedOnce = false;
@@ -235,7 +248,7 @@
       try {
         const data = await this._fetchPage(1);
         if (seq !== this._loadSeq) return;
-        this._games = (data && data.games) || [];
+        this._setGames((data && data.games) || []);
         this._total = (data && data.total) || 0;
         this._page = 1;
         this._loadedOnce = true;
@@ -268,7 +281,7 @@
         const data = await this._fetchPage(next);
         if (seq !== this._loadSeq) return;
         const games = (data && data.games) || [];
-        this._games = this._games.concat(games);
+        this._setGames(this._games.concat(games));
         this._total = (data && data.total) || this._total;
         this._page = next;
         // A page that comes back empty while the reported total says there is
@@ -291,6 +304,16 @@
       this._loadMore();
     }
 
+    /**
+     * The list and its id index move together. _syncRows runs on every status
+     * change and would otherwise rebuild that index each time, over a list the
+     * scroll sentinel keeps growing.
+     */
+    _setGames(games) {
+      this._games = games;
+      this._gameById = new Map(games.map((g) => [g.id, g]));
+    }
+
     /** Compare against what is actually drawable, not the reported total alone. */
     _hasMore() {
       return this._loadedOnce && this._games.length > 0 && this._games.length < this._total;
@@ -300,8 +323,17 @@
 
     /**
      * The whole point of the screen: one tap adds the game to the active
-     * shelf, one more takes it off again. Optimistic — the button flips in the
-     * tap's own frame and rolls back if the write fails.
+     * shelf, one more takes it off again.
+     *
+     * The tap does not touch the network. It repaints the button from what the
+     * user just asked for and records that intent; _drain is what talks to the
+     * server, on its own schedule. That split is the difference between a
+     * screen you can run your thumb down and one that goes grey under you: the
+     * previous version held the row in an `aria-busy` state — dimmed and
+     * `pointer-events: none` — for the whole round trip, so every tap was
+     * followed by a few hundred milliseconds of a button that looked broken
+     * and ignored the correction tap, on a screen whose entire job is a long
+     * run of taps.
      *
      * A game already on the OTHER shelf moves rather than duplicating:
      * POST /collection upserts on (user, game), so wishlist → owned is the
@@ -309,31 +341,71 @@
      *
      * @param {string} gameId
      */
-    async _toggle(gameId) {
-      if (!gameId || this._pending.has(gameId)) return;
-      const target = this._shelf;
+    _toggle(gameId) {
+      if (!gameId) return;
       const prev = this._statusMap[gameId] || null;
-      const removing = prev === target;
+      const next = prev === this._shelf ? null : this._shelf;
 
-      this._pending.add(gameId);
+      // The rollback target is the last state the SERVER agreed to, captured
+      // before the first unconfirmed write — not `prev`, which on a second tap
+      // is already something only this device believes.
+      if (!this._confirmed.has(gameId)) this._confirmed.set(gameId, prev);
+      this._want.set(gameId, next);
       // Patches the shared map and announces it, which lands back here through
-      // the status-changed listener and repaints the row.
-      window.Collection.applyLocalStatus(gameId, removing ? null : target);
-      this._syncRows();
+      // the status-changed listener and repaints the row this frame.
+      window.Collection.applyLocalStatus(gameId, next);
+      this._drain(gameId);
+    }
+
+    /**
+     * Reconcile one game's server state with what the user asked for, one
+     * write at a time, until the two agree.
+     *
+     * Serialized per game because /collection keys on (user, game): two writes
+     * for the same row in flight at once can land in either order, and the
+     * loser decides what the row ends up as. Coalescing falls out of the same
+     * loop — taps that net back to where the server already is send nothing at
+     * all, so running down the list adding and un-adding a game costs one
+     * request, not one per tap.
+     *
+     * @param {string} gameId
+     */
+    async _drain(gameId) {
+      if (this._writing.has(gameId)) return;
+      // Captured rather than read through `this`: a remount swaps all three
+      // out from under a loop that is mid-await, and this one should then
+      // finish against the queue it started on and leave the new one alone.
+      const want = this._want;
+      const confirmed = this._confirmed;
+      const writing = this._writing;
+
+      writing.add(gameId);
       try {
-        if (removing) await window.Collection.removeByGame(gameId);
-        else await window.Collection.add(gameId, target);
-      } catch (e) {
-        window.Collection.applyLocalStatus(gameId, prev);
-        const noun = shelfOf(target).noun;
-        window.PolaroidPopup.alert({
-          title: removing ? "Couldn't remove that" : "Couldn't add that",
-          body: (e && e.message)
-            || `The game didn't reach your ${noun} — check your connection and try again.`,
-        });
+        while (want.has(gameId)) {
+          const target = want.get(gameId);
+          // Already what the server has — the taps cancelled out.
+          if (confirmed.get(gameId) === target) { want.delete(gameId); continue; }
+          try {
+            if (target == null) await window.Collection.removeByGame(gameId);
+            else await window.Collection.add(gameId, target);
+            confirmed.set(gameId, target);
+            // Anything else in the slot arrived while this was in the air and
+            // is the next iteration's job.
+            if (want.get(gameId) === target) want.delete(gameId);
+          } catch (e) {
+            want.delete(gameId);
+            const back = confirmed.has(gameId) ? confirmed.get(gameId) : null;
+            window.Collection.applyLocalStatus(gameId, back);
+            window.PolaroidPopup.alert({
+              title: target == null ? "Couldn't remove that" : "Couldn't add that",
+              body: (e && e.message)
+                || `The game didn't reach your ${shelfOf(this._shelf).noun} — check your connection and try again.`,
+            });
+            break;
+          }
+        }
       } finally {
-        this._pending.delete(gameId);
-        this._syncRows();
+        writing.delete(gameId);
       }
     }
 
@@ -494,7 +566,6 @@
       const s = shelfOf(this._shelf);
       const status = this._statusMap[id] || null;
       const on = status === this._shelf;
-      const busy = this._pending.has(id);
       const name = game.name || "this game";
 
       // Only worth saying when it differs from what the button reports: on the
@@ -512,7 +583,6 @@
         <button type="button"
                 class="catalog-row__action ${on ? "is-on" : ""}"
                 data-catalog-add="${escapeAttr(id)}"
-                ${busy ? 'aria-busy="true"' : ""}
                 aria-pressed="${on}"
                 title="${escapeAttr(label)}" aria-label="${escapeAttr(label)}">
           <i data-icon="${on ? "check" : "plus"}" class="w-4 h-4"></i>
@@ -527,17 +597,30 @@
      */
     _rowState(gameId) {
       if (this._mapPending) return "pending-map";
-      return [
-        this._shelf,
-        this._statusMap[gameId] || "",
-        this._pending.has(gameId) ? "busy" : "",
-      ].join("|");
+      return `${this._shelf}|${this._statusMap[gameId] || ""}`;
+    }
+
+    /**
+     * Coalesce a repaint into the next frame.
+     *
+     * One tap announces itself twice — applyLocalStatus writes the store slot
+     * AND dispatches `status-changed`, and both land here — and a slow link
+     * can settle a handful of rows at once. rAF collapses that into a single
+     * pass, and it still runs before the browser paints, so the button the
+     * user just pressed flips in the tap's own frame.
+     */
+    _scheduleSync() {
+      if (this._syncFrame != null) return;
+      this._syncFrame = requestAnimationFrame(() => {
+        this._syncFrame = null;
+        if (this._mounted) this._syncRows();
+      });
     }
 
     /** Repaint only the row slots whose state actually changed. */
     _syncRows() {
       const hosts = this.container.querySelectorAll("[data-catalog-slot]");
-      const byId = new Map(this._games.map((g) => [g.id, g]));
+      const byId = this._gameById;
       for (const host of hosts) {
         const id = host.getAttribute("data-catalog-slot");
         const next = this._rowState(id);
