@@ -189,6 +189,45 @@
     window.router.go("auth");
   }
 
+  // How long first-run setup waits for an add-by-QR flow to finish.
+  //
+  // Same posture as BOOT_WATCHDOG_MS above — fall forward rather than sit. The
+  // QR flow can fail to START (a throw inside buddies-view's mount, a
+  // load-order regression on BuddyQrSheet) and it can fail to END: router.go()
+  // toggles `.hidden` on [data-view] containers and does NOT close a
+  // body-level overlay, so tapping the bottom nav mid-scan orphans the sheet
+  // over the Feed and its onClose never fires. Without an absolute deadline any
+  // of those strands first-run setup for the whole launch. 45s is long enough
+  // for a real scan — open the camera, aim, redeem, read the result — and short
+  // enough that a stranded gate heals inside one session.
+  const QR_HOLD_MS = 45000;
+
+  // First-run setup yields to an add-by-QR arrival, because that exchange is
+  // happening live between two people standing together and must not be
+  // interrupted by a modal. The hold is STATE, not an event: on the optimistic
+  // boot path routeAfterBoot() runs before handleProfileOutcome arrives (it is
+  // behind a /bootstrap round trip), so a user who taps Done in four seconds
+  // would fire an event into a document with no listener yet and lose setup for
+  // the whole launch. A flag interrogated at call time cannot lose that race.
+  let _qrHold = false;
+  let _qrHoldTimer = null;
+  let _pendingFirstRun = null;
+
+  // Idempotent: safe from the sheet's onClose, the deadline, or both.
+  function releaseQrHold() {
+    if (!_qrHold) return;
+    _qrHold = false;
+    if (_qrHoldTimer) { clearTimeout(_qrHoldTimer); _qrHoldTimer = null; }
+    const run = _pendingFirstRun;
+    _pendingFirstRun = null;
+    // Let the sheet's close animation finish before the modal lands on top of
+    // it — the .is-closing node lingers for CLOSE_MS (ui/bottom-sheet.js).
+    if (run) setTimeout(run, 250);
+  }
+  // Named global rather than a CustomEvent: this is a point-to-point handoff
+  // between two known parties, not a broadcast, and it stays greppable.
+  window.bgbQrFlowEnded = releaseQrHold;
+
   // Boot navigation happens exactly once per signed-in session. Supabase fires
   // onAuthStateChange more than once at boot (INITIAL_SESSION, then often
   // TOKEN_REFRESHED) and each invocation is an un-serialized async function, so
@@ -271,7 +310,11 @@
     // Dismissing without saving leaves the flag set so the modal returns on
     // next load.
     if (me && me.needs_setup) {
-      maybePromptFirstTimeSetup(me);
+      // Park it if a QR arrival owns the screen; releaseQrHold() runs it when
+      // the sheet closes (or when the deadline gives up on it).
+      const run = () => maybePromptFirstTimeSetup(me);
+      if (_qrHold) _pendingFirstRun = run;
+      else run();
     }
   }
 
@@ -614,6 +657,9 @@
       if (m) qrMatch = { name: "buddies", params: { qr: decodeURIComponent(m[1]) } };
     } catch (_) {}
     if (qrMatch) {
+      // Hold first-run setup until the QR flow finishes — see QR_HOLD_MS.
+      _qrHold = true;
+      _qrHoldTimer = setTimeout(releaseQrHold, QR_HOLD_MS);
       // Replace the /b/<token> entry now, before anything else can push on top
       // of it. Left in place it stays behind the Buddies entry, where Back
       // lands on a path matchPath() deliberately doesn't know (dead button)

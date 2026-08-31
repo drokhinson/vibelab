@@ -777,6 +777,11 @@
         ...(opts || {}),
         returnFocus: btn || null,
         onAdded: () => this._afterQrAdd(),
+        // Tell the first-run gate the QR exchange is over, so a brand-new
+        // account gets its profile modal now rather than stacked over the
+        // sheet. Unconditional rather than only on the deep-link path: it
+        // no-ops when no hold is active, and one code path beats two.
+        onClose: () => { if (window.bgbQrFlowEnded) window.bgbQrFlowEnded(); },
       });
     }
 

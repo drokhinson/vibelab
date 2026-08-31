@@ -158,11 +158,23 @@
     }
   }
 
+  // Set by a surface whose promise must not be lost if something else dismisses
+  // the singleton out from under it. Every popup here shares one BACKDROP_ID,
+  // and alert()/confirm() both dismiss() first — so an unrelated alert fired
+  // while the avatar customizer is open removes its node, and without this its
+  // promise would never settle. That is a permanent hang for the caller, and
+  // first-run setup now parks a continuation behind exactly that promise
+  // (see the QR gate in init.js).
+  let _orphanHook = null;
+
   function dismiss() {
     const existing = document.getElementById(BACKDROP_ID);
     if (existing && existing.parentNode) {
       existing.parentNode.removeChild(existing);
     }
+    const hook = _orphanHook;
+    _orphanHook = null;
+    if (hook) { try { hook(); } catch (e) { console.warn("popup orphan hook:", e); } }
   }
 
   /** Is one of this module's cards on screen right now? Every entry point here
@@ -680,13 +692,24 @@
             }
             payload.displayName = trimmed;
           }
-          dismiss();
-          resolve(payload);
+          settle(payload);
         } else {
-          dismiss();
-          resolve(null);
+          settle(null);
         }
       }
+
+      // One exit for every path — the buttons, the X, the backdrop, and a
+      // dismiss() fired by some other popup. Idempotent, so the orphan hook
+      // racing a real click cannot resolve twice.
+      let settled = false;
+      function settle(value) {
+        if (settled) return;
+        settled = true;
+        _orphanHook = null;
+        dismiss();
+        resolve(value);
+      }
+      _orphanHook = () => settle(null);
 
       root.addEventListener("click", (ev) => {
         if (ev.target === root) finish(false);

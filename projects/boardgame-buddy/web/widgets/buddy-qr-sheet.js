@@ -35,6 +35,9 @@
    *   Present → opens on Scan and redeems it immediately, no camera.
    * @property {Element|null} [returnFocus]
    * @property {(edge: any) => void} [onAdded]  Fires once per successful add.
+   * @property {() => void} [onClose]  Fires when the sheet is dismissed, by any
+   *   route — Done, the backdrop, Escape. Used by the first-run gate in
+   *   init.js to know the QR exchange is over and setup may proceed.
    */
 
   class BuddyQrSheet {
@@ -90,7 +93,11 @@
         onClose: () => {
           window.BuddyQrScan.leave();
           this._clearRemint();
+          // Read the caller's hook off `o`, not `this._opts` — _reset() below
+          // clears _opts, and this has to survive it.
+          const after = o.onClose;
           this._reset();
+          if (after) { try { after(); } catch (e) { console.warn("QR sheet onClose:", e); } }
         },
       });
     }
