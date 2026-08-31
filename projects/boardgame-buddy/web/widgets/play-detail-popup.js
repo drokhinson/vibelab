@@ -223,6 +223,18 @@
       && players.some((pl) => Array.isArray(pl[k]) && pl[k].length > 1);
   }
 
+  // Inline handler that routes a scoreboard row to that player's profile
+  // (own → profile-self, anyone else → profile-other), dismissing the popup
+  // first so the destination isn't left behind a backdrop. Returns "" for
+  // free-text / ghost players — they have no account and no profile page.
+  function playerNav(pl, me) {
+    if (!pl || !pl.user_id) return "";
+    const route = (me && me.id === pl.user_id)
+      ? `window.router.go('profile-self')`
+      : `window.router.go('profile-other',{userId:'${escapeAttr(pl.user_id)}'})`;
+    return `event.stopPropagation();window.PlayDetailPopup.dismiss();${route}`;
+  }
+
   // ── View mode ─────────────────────────────────────────────────────────────
   function renderView(p) {
     // Players sorted by score descending so the scoreboard reads top-down
@@ -281,9 +293,19 @@
           </h3>
           ${ranked.length === 0
             ? `<div class="text-sm opacity-60">No players recorded.</div>`
-            : `<ul class="play-detail__players">
-                ${ranked.map((pl) => `
-                  <li class="play-detail__player ${pl.is_winner ? "is-winner" : ""}">
+            : `<ul class="play-detail__players${ranked.some((pl) => pl.user_id) ? " has-links" : ""}">
+                ${ranked.map((pl) => {
+                  // Registered players' rows open their profile; the popup
+                  // dismisses first so the destination view isn't buried
+                  // under a backdrop. Ghost players have no profile to open,
+                  // so their row stays inert (and un-styled as a link).
+                  const nav = playerNav(pl, me);
+                  return `
+                  <li class="play-detail__player ${pl.is_winner ? "is-winner" : ""}${nav ? " is-link" : ""}"
+                      ${nav ? `role="button" tabindex="0"
+                      aria-label="Open ${escapeAttr(pl.name)}'s profile"
+                      onclick="${nav}"
+                      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}"` : ""}>
                     <span class="play-detail__player-name">
                       ${window.BgbBadge ? window.BgbBadge.render({
                         avatar: pl.avatar || null,
@@ -297,8 +319,9 @@
                       ${pl.is_winner ? `<i data-icon="crown" class="w-3.5 h-3.5 play-detail__player-crown"></i>` : ""}
                     </span>
                     <span class="play-detail__player-score">${pl.score != null ? pl.score : ""}</span>
+                    ${nav ? `<i data-icon="chevron-right" class="w-3.5 h-3.5 play-detail__player-go"></i>` : ""}
                   </li>
-                `).join("")}
+                `;}).join("")}
               </ul>`}
         </section>
 

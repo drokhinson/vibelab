@@ -2,7 +2,8 @@
 //
 // Two-faced flip card styled like an instant photo: cream surface, soft drop
 // shadow, photo at the top in its natural aspect ratio.
-//   Front  → photo, then a two-row caption:
+//   Front  → maximize button (top-right, over the photo) into the in-place
+//            play-detail popup, the photo, then a two-row caption:
 //              title row — game name + an explicit open button
 //              meta row  — winner on the left, collection-status pill on the
 //                          right, above a hairline
@@ -10,10 +11,10 @@
 //            rides along as a small bottom-right badge at its natural aspect;
 //            with no snapshot the box art IS the photo, height-capped.
 //   Back   → game title + duration, ranked scoreboard with the winner row
-//            tinted, optional notes, maximize button (top-right) into the
-//            in-place play-detail popup, and a "Tap to flip back" footer.
+//            tinted, optional notes, the same maximize button (top-right),
+//            and a "Tap to flip back" footer.
 //
-// Clicking the game-name text, the open button, the status pill, or the
+// Clicking the game-name text, the open button, the status pill, or either
 // maximize button acts on its own (data-no-flip). Clicking anywhere else on
 // the card — the photo and the box-art badge included — flips it. State lives
 // in a module-level Map keyed by play_id so flipping re-renders only the
@@ -115,6 +116,10 @@
     const me = window.store && window.store.get && window.store.get("user");
     const gameName = escapeHtml(g.name || "Unknown game");
     const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${escapeAttr(jsStr(g.name || ""))}'})`;
+    // Same expand affordance the back face carries, mirrored onto the front
+    // so the play details are one tap away instead of flip-then-tap. The
+    // popup fetches the full play itself, so the front needs no hydration.
+    const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
 
     // Caption "winner" block. Three modes:
     //   - cooperative + any winners → "We beat the game" (brass win style)
@@ -170,6 +175,12 @@
     // re-measure to decide whether it fit; it has its own row now, so the
     // layout is static and the title simply ellipsises.
     return `
+      <button class="play-card__maximize play-card__maximize--front" type="button" data-no-flip
+              aria-label="Open play details"
+              title="Open play details"
+              onclick="${detailNav}">
+        <i data-icon="maximize-2" class="w-3.5 h-3.5"></i>
+      </button>
       ${photoHtml}
       <div class="play-card__caption">
         <div class="play-card__title-row">

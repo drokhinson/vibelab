@@ -457,9 +457,12 @@
 
     _renderHead() {
       const other = this._isOther();
+      // router.up(), not go(): the header arrow is hierarchical ("back to the
+      // profile this spoke hangs off"), and go() would push a second copy of
+      // that profile onto history — see domain/view.js#up.
       const backJs = other
-        ? `window.router.go('profile-other',{userId:'${escapeAttr(this._targetUserId)}'})`
-        : "window.router.go('profile-self')";
+        ? `window.router.up('profile-other',{userId:'${escapeAttr(this._targetUserId)}'})`
+        : "window.router.up('profile-self')";
       const p = this._targetProfile;
       let titleHtml;
       if (other && p && p.display_name) {

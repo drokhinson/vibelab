@@ -202,7 +202,7 @@
       const total = this.ctl.total[MODE];
       return `
         <header class="spoke-head">
-          <button class="spoke-head__back" onclick="window.router.go('profile-self')" aria-label="Back to profile">
+          <button class="spoke-head__back" onclick="window.router.up('profile-self')" aria-label="Back to profile">
             <i data-icon="arrow-left" class="w-4 h-4"></i>
           </button>
           <h2 class="spoke-head__title font-display">Wishlist</h2>

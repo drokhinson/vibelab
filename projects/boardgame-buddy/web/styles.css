@@ -2702,8 +2702,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .play-card__back-error { color: var(--polaroid-accent); }
 
-/* Maximize button — top-right of the back face. Lives on the back so the
-   front stays clean; tap opens the in-place play-detail popup (data-no-flip). */
+/* Maximize button — top-right of either face; tap opens the in-place
+   play-detail popup (data-no-flip, so it never flips the card). On the back
+   it sits on paper; on the front it floats over the photo, where a paper
+   plate keeps the glyph legible against whatever the snapshot happens to be
+   (see .play-card__maximize--front below). */
 .play-card__maximize {
   position: absolute;
   top: 10px;
@@ -2731,6 +2734,27 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card__maximize:hover {
   opacity: 1;
   background: rgba(0,0,0,0.08);
+}
+/* Touch has no hover, and this is a touch-first surface — without a press
+   state the tap reads as not having registered. */
+.play-card__maximize:active { transform: scale(0.92); }
+/* Front face: the button lands on the photo, so it can't borrow the paper
+   ground the back-face version sits on. Give it its own translucent plate
+   instead of tinting the photo through it — the same trick the box-art
+   badge's bottom scrim uses — so the glyph reads on a bright sky and on a
+   dark table alike, in either theme. */
+.play-card__maximize--front {
+  background: var(--photo-plate, rgba(255,255,255,0.86));
+  border-color: rgba(0,0,0,0.10);
+  color: var(--on-photo, #2A2118);
+  opacity: 0.92;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.play-card__maximize--front:hover {
+  opacity: 1;
+  background: var(--photo-plate, rgba(255,255,255,0.86));
 }
 
 /* ── Play sessions (same-day, same-buddy-set plays) ───────────────────────
@@ -3486,6 +3510,26 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    polaroid popup variants (the parent name already gets re-tinted). */
 .play-detail__player-crown { color: inherit; flex: none; }
 .play-detail__player-score { font-family: var(--font-display); font-weight: 700; }
+/* A row for a registered player opens that player's profile; the chevron is
+   the affordance. Ghost (free-text) players have no profile, so their row
+   gets neither the chevron nor the pointer — but in a table that mixes the
+   two, the name takes the slack and the ghost rows reserve the chevron's
+   width, so every score stays in one column instead of one row's number
+   hanging out past the rest. An all-ghost table has no links and so needs
+   neither, which is what .has-links gates. */
+.play-detail__player.is-link { cursor: pointer; }
+.play-detail__players.has-links .play-detail__player { gap: 0.5rem; }
+.play-detail__players.has-links .play-detail__player-name { flex: 1 1 auto; }
+.play-detail__players.has-links .play-detail__player:not(.is-link)::after {
+  content: "";
+  flex: none;
+  width: 0.875rem;   /* matches the chevron's w-3.5 */
+}
+.play-detail__player.is-link:hover,
+.play-detail__player.is-link:focus-visible { border-color: var(--accent); }
+.play-detail__player-go { flex: none; opacity: 0.45; }
+.play-detail__player.is-link:hover .play-detail__player-go { opacity: 0.8; }
+.play-detail__player.is-link:active { transform: scale(0.99); filter: brightness(0.97); }
 
 .play-detail__expansions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
 .play-detail__expansions li {
@@ -8163,6 +8207,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .play-detail-popup__card .play-detail__player.is-winner .play-detail__player-name,
 .play-detail-popup__card .play-detail__player.is-winner .play-detail__player-score {
   color: #C9922A;
+}
+/* --accent is the app's own hue, which reads as a foreign ink on the cream
+   card — the popup's rows take the polaroid accent on hover instead. */
+.play-detail-popup__card .play-detail__player.is-link:hover,
+.play-detail-popup__card .play-detail__player.is-link:focus-visible {
+  border-color: var(--polaroid-accent);
 }
 .play-detail-popup__card .play-detail__game-when,
 .play-detail-popup__card .play-detail__edit-photo-pick-hint {

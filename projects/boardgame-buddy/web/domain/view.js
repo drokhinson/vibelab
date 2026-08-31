@@ -318,6 +318,38 @@
       return this.go(fallback, {}, { skipPush: true });
     }
 
+    // Hierarchical "up" for spoke screens whose header carries a parent
+    // affordance ("Back to profile") rather than a plain back arrow. The
+    // parent is a fixed destination, but reaching it with go() pushes a
+    // SECOND copy of it onto history, and the device back button then walks
+    // straight back into the spoke: buddies → their profile → their
+    // collection → up → profile → back → collection → back → profile → …
+    // an endless two-screen loop with buddies stranded underneath.
+    //
+    // So: when the parent is exactly where a browser-back would land, take
+    // it — the spoke's history entry is consumed instead of duplicated, and
+    // whatever sat under it (buddies) becomes reachable again. When it isn't
+    // the parent (deep link straight into the spoke, or a cross-link from
+    // somewhere else), swap the current entry for the parent so the spoke
+    // still doesn't linger in history behind it.
+    //
+    // Match on the built URL, not just the route name, so a spoke for one
+    // user doesn't "go up" into a different user's profile.
+    async up(name, params) {
+      const target = this.pathFor(name, params || {});
+      const top = this._stack[this._stack.length - 1];
+      if (top && top.name === name && target && this.pathFor(top.name, top.params) === target) {
+        try {
+          history.back();
+          return;
+        } catch (_) { /* fall through to the replace path */ }
+      }
+      if (target) {
+        try { history.replaceState({ name, params: params || {} }, "", target); } catch (_) {}
+      }
+      return this.go(name, params || {}, { skipPush: true });
+    }
+
     // Non-destructive peek at where `back()` would land. Used by views that
     // want to label a back affordance with the destination name. Returns
     // the fallback when the stack is empty.
