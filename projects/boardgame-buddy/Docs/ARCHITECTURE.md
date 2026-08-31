@@ -292,6 +292,49 @@ control. It reads `--polaroid-*`, so it follows whichever surface it lands on �
 except on the parchment scroll, which is a paper island (§4.2b) and scopes the
 button to the parchment's own ink.
 
+### 4.3b The BGG import log, and the polaroid field
+
+Two more extractions of the same shape, both landed when the first-run
+"Link BoardGameGeek" step (`widgets/onboarding-bgg-modal.js`) became the second
+place in the app that needed something Settings already had. Instance #2 is the moment
+(`.claude/rules/ui-object-design.md` §4), not instance #4.
+
+**`ui/bgg-import-log.js` (`window.renderBggImportLog`)** is the live readout of a
+BGG import — five steps from "asking BoardGameGeek" through the streaming list of
+game titles the worker is fetching to the final totals. It is a **pure function of
+two payloads**: the `POST /bgg/sync` summary (what landed immediately, how much
+was queued) and the latest `GET /bgg/sync/status` (how far the worker has drained
+that queue). No fetching, no timers, no DOM — the caller owns the poll and
+re-renders the host on each tick. It was `SettingsView._renderBggProgress`; both
+surfaces now render the same function, differing only in a layout class
+(`bgg-log--card` supplies the Settings card's gutters).
+
+Two behaviours came out with it, onto `domain/bgg.js`, because they are the same
+question asked twice rather than shared markup:
+
+- `Bgg.importDrained(status)` — the single definition of "the queue is empty".
+  It reads the **session** counters, never the lifetime `pending_count`, so a row
+  left behind by an earlier failed sync cannot pin a poll open forever.
+- `Bgg.invalidateImportedData()` — the single post-sync cache drop (the
+  collection status map and the feed).
+
+`Bgg.sync()` also carries its own deadline. `POST /bgg/sync` walks an entire BGG
+collection and play history *inside the handler* before it answers, so the API
+client's 15s default aborted mid-size accounts routinely — and the abort was a
+lie, because the handler finishes the sync and queues the background worker
+whether or not anyone is still listening. `api.post` grew a `timeoutMs` opt for
+it (120s), and both surfaces report a tripped deadline as *the import is still
+running*, never as a failure.
+
+**`.polaroid-field*`** is the CSS half of the same story: a labelled text field on
+a polaroid card, shared by the avatar customizer's display-name input and the BGG
+step's credentials. Callers keep their own layout class and their own JS hook
+class; the shared family owns the look. It reads `--polaroid-*` because the card
+is **paper** (§4.2a) — light in both themes, which is also why its white fill is a
+deliberate literal. Extracting it fixed a tap target on the way: DaisyUI's
+`input-sm` is a 32px control, under the 44px floor, so the family releases the
+fixed height and sizes against a `min-height`.
+
 ### 4.4 Chrome, layering and mobile
 
 The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§ App chrome & layering) and `.claude/rules/mobile-web.md`. The parts specific to this app:
@@ -516,6 +559,7 @@ projects/boardgame-buddy/web/
 │   ├── oauth-buttons.js     → oauthButtons
 │   ├── bottom-sheet.js      → BgbBottomSheet — the shell every sheet shares (§4.3)
 │   ├── search-field.js      → BgbSearchField — the × every search box clears with
+│   ├── bgg-import-log.js    → renderBggImportLog — the BGG import readout (§4.3b)
 │   ├── icons.js             → BgbIcons — the vendored Phosphor set + render pass
 │   ├── viewport-lock.js     → publishes the visible viewport as CSS properties
 │   ├── zoom-lock.js         → holds the page at 1x on iOS Safari
@@ -536,6 +580,8 @@ projects/boardgame-buddy/web/
 │   │     is. It survives as that page's BGG-import escape hatch.
 
 │   ├── join-panel.js
+│   ├── onboarding-buddies-modal.js  → first-run step 2: pick buddies, one batched send
+│   ├── onboarding-bgg-modal.js      → first-run step 3: link BGG, then watch the import
 │   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
 │
 ├── views/                  ← One file per screen / route

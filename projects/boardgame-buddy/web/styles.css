@@ -3078,6 +3078,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .bgg-log__sublist-pending { list-style: none; margin-left: -1.1rem; opacity: 0.65; }
 .bgg-log__sublist-error   { color: oklch(var(--er, 0.66 0.22 25)); }
+/* Settings renders the log inside the Connections card, which supplies its own
+   gutters — so the log drops its default top margin and takes the card's.
+   Was an inline style before the log became a shared component. */
+.bgg-log--card { margin: 0 0.9rem 0.9rem; }
 .bgg-log__footer {
   margin-top: 0.55rem;
   font-size: 0.78rem;
@@ -3086,15 +3090,29 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   text-align: center;
 }
 
-/* Cream-screen variants — Settings sits on the polaroid sheet, so we
-   re-color the glyph and the muted-state body against the cream palette
-   instead of the dark-theme oklch tokens. */
-.bgb-spoke-screen .bgg-log { color: var(--polaroid-ink, #1D1812); }
-.bgb-spoke-screen .bgg-log__icon { color: var(--accent-ink); }
-.bgb-spoke-screen .bgg-log__icon--idle { background: var(--polaroid-line, #DAC9A4); }
-.bgb-spoke-screen .bgg-log__step--idle .bgg-log__body { color: var(--polaroid-muted, #8B7E68); }
-.bgb-spoke-screen .bgg-log__sublist { color: var(--polaroid-muted, #8B7E68); }
-.bgb-spoke-screen .bgg-log__footer { color: var(--polaroid-muted, #8B7E68); }
+/* Light-surface variants. The log's base rules paint from the GROUND tokens
+   (oklch(var(--bc))), which invert on a light card — so every surface that is
+   light in both themes re-points them at the paper column
+   (.claude/rules/theming.md §6). Two such surfaces today: Settings' spoke
+   screen, and the first-run "Link BoardGameGeek" polaroid card, which is a
+   body-level overlay and so escapes the spoke screen's own re-point (§8).
+   Add the next light surface that hosts an import log here by name. */
+:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log { color: var(--polaroid-ink, #1D1812); }
+:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__icon { color: var(--accent-ink); }
+:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__icon--idle { background: var(--polaroid-line, #DAC9A4); }
+:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__step--idle .bgg-log__body { color: var(--polaroid-muted, #8B7E68); }
+:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__sublist { color: var(--polaroid-muted, #8B7E68); }
+:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__footer { color: var(--polaroid-muted, #8B7E68); }
+/* The errored-name tail is the one line above that is NOT the same problem on
+   both surfaces. Settings' spoke screen is chrome — dark in dark — so it keeps
+   the base red, which is tuned for a dark ground. The onboarding card is paper
+   (cream in BOTH themes), where that red drops to 3.68:1; deepening it toward
+   the paper's own ink brings it to 5.84 dark / 7.91 light, and keeps it a token
+   expression rather than a second literal red. Same mix as the sibling step's
+   .onboarding-buddies__error. */
+.onboarding-bgg .bgg-log__sublist-error {
+  color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
+}
 .profile-panel { display: flex; flex-direction: column; gap: 0.55rem; }
 .profile-panel__controls {
   display: flex; align-items: center; gap: 0.4rem;
@@ -9379,10 +9397,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
 
 /* ── Onboarding step two: "Add buddies" ──────────────────────────────────────
-   Sibling of .avatar-cust — same polaroid card, same trimmed padding, same
-   inner scroll — because the two are consecutive screens of one flow and any
-   difference between their chrome reads as a jump. Wider than the customizer:
-   this one holds a three-column grid, not a single carousel. */
+   Sibling of .avatar-cust and .onboarding-bgg — same polaroid card, same
+   trimmed padding, same inner scroll — because the three are consecutive
+   screens of one flow and any difference between their chrome reads as a jump.
+   Wider than the customizer: this one holds a three-column grid, not a single
+   carousel. */
 .onboarding-buddies {
   width: min(420px, 92vw);
   /* Let the close button overhang the corner without a scrollbar; the
@@ -9437,14 +9456,110 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   height: auto;
 }
 
-.avatar-cust__name {
+/* ── Onboarding step three: "Link BoardGameGeek" ─────────────────────────────
+   Third sibling of .avatar-cust / .onboarding-buddies — same polaroid card,
+   same trimmed padding, same inner scroll, because the three are consecutive
+   screens of one flow and any difference between their chrome reads as a jump.
+   Shares the 420px cap with the buddies grid: the import log's game-name
+   sublist wants the same width the tiles do. */
+.onboarding-bgg {
+  width: min(420px, 92vw);
+  /* Let the close button overhang the corner without a scrollbar; the
+     vertical scroll lives on __body, exactly as its two siblings do. */
+  overflow: visible;
+  padding: 0;
+}
+.onboarding-bgg:focus { outline: none; }   /* programmatic focus only */
+.onboarding-bgg__body {
+  padding: 18px 14px 16px;
+  max-height: calc(100vh - 36px);
+  max-height: calc(var(--bgb-vv-h, 100dvh) - 36px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.onboarding-bgg .polaroid-popup__title { margin-bottom: 4px; }
+.onboarding-bgg .polaroid-popup__body { margin-bottom: 12px; }
+
+/* BGG's own lockup: a fixed-colour navy/orange mark we neither recolour nor
+   filter (.claude/rules/assets.md). It needs no plate here — the polaroid card
+   is paper, so it is light in both themes, which is the ground the mark was
+   drawn for. */
+.onboarding-bgg__mark {
+  display: block;
+  width: 132px;
+  height: auto;
+  margin: 0 auto 12px;
+}
+
+.onboarding-bgg__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.onboarding-bgg__error {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  /* Same deepened rust as the sibling step's error: --rust straight is 3.9:1
+     on the dark theme's paper, under the 4.5:1 that 12px body text needs. */
+  color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
+  text-align: left;
+}
+
+.onboarding-bgg__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--polaroid-muted);
+  text-align: left;
+}
+
+/* Both commit buttons get the 52px target (.claude/rules/mobile-web.md §5) and
+   share the row evenly — Skip is a real destination here, not a corner escape.
+   Matches .onboarding-buddies__actions exactly; the two steps are one flow. */
+.onboarding-bgg__actions {
+  gap: 10px;
+}
+.onboarding-bgg__actions .btn {
+  flex: 1 1 0;
+  min-height: 52px;
+  height: auto;
+}
+
+/* The log is the shared ui/bgg-import-log.js readout; the card owns only where
+   it sits. Left-aligned against the card's centred title, because it is a list
+   of statements to read down, not a caption. */
+.onboarding-bgg__log { text-align: left; }
+/* The footer stacks a note over the action row; the gap is the parent's so the
+   action row itself carries no vertical margin of its own (the form above
+   spaces its children the same way). */
+.onboarding-bgg__foot {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── A labelled text field on a polaroid card ────────────────────────────────
+   One family for every input that lands on .polaroid-popup__card: the avatar
+   customizer's display name and the first-run BGG step's credentials. The
+   second one is what made this shared rather than copied
+   (.claude/rules/ui-object-design.md §4 — extract at instance #2).
+
+   The surface is PAPER — light in both themes — so the ink reads --polaroid-*
+   and the white fill is a literal on purpose: a field sunk into photo paper is
+   white in any light (.claude/rules/theming.md §6).
+
+   Callers keep their own layout class alongside (.avatar-cust__name), and
+   their own JS hook class on the input; nothing positional lives here. */
+.polaroid-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 10px 0 4px;
   text-align: left;
 }
-.avatar-cust__name-label {
+.polaroid-field__label {
   font-family: var(--font-sans);
   font-weight: 700;
   font-size: 11px;
@@ -9452,8 +9567,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-transform: uppercase;
   color: var(--polaroid-muted);
 }
-.avatar-cust__name-input {
+.polaroid-field__input {
   width: 100%;
+  /* Explicit rather than inherited from Tailwind's preflight: the padding and
+     the border have to land inside the min-height below, not outside it
+     (.claude/rules/mobile-web.md §6). */
+  box-sizing: border-box;
   background: #fff;
   border: 1px solid rgba(42, 32, 20, 0.18);
   color: var(--polaroid-ink);
@@ -9462,14 +9581,23 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-weight: 600;
   padding: 9px 12px;
   border-radius: 10px;
+  /* DaisyUI's .input-sm is a 32px control, which is under the 44px floor
+     (.claude/rules/mobile-web.md §5) and clips the padding above. Release the
+     fixed height and let the padding size the field against the floor. */
+  height: auto;
+  min-height: 44px;
 }
-.avatar-cust__name-input:focus {
+.polaroid-field__input:focus {
   outline: none;
   border-color: var(--accent, #C9922A);
   box-shadow: 0 0 0 2px rgba(201, 146, 42, 0.25);
 }
-.avatar-cust__name-error {
+.polaroid-field__error {
   margin: 0;
+}
+
+.avatar-cust__name {
+  margin: 10px 0 4px;
 }
 
 .avatar-cust__carousel {
@@ -10354,7 +10482,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .scroll-panel__search,
 .import-exp-search__input,
 .cascade-exp-filter__input,
-.avatar-cust__name-input {
+/* Every labelled field on a polaroid card — the avatar customizer's display
+   name and the first-run BGG credentials — in one selector. */
+.polaroid-field__input {
   font-size: 16px;
 }
 
