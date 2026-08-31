@@ -7881,9 +7881,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--on-accent);
 }
 .catalog-row__action.is-on:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-/* A write in flight: the button holds the state it optimistically painted and
-   stops inviting a second tap it would have to queue behind the first. */
-.catalog-row__action[aria-busy="true"] { opacity: 0.55; pointer-events: none; }
+/* No in-flight state. The button used to dim to 0.55 and go pointer-events:none
+   for the whole round trip, which on the one screen built for a long run of taps
+   meant every tap was followed by a few hundred milliseconds of a control that
+   looked broken and ignored the correction tap. The write is queued and
+   coalesced instead (views/add-games-view.js, _drain), so the button always
+   shows what the user last asked for and is always ready for the next tap. */
 
 .catalog-error {
   display: flex;
