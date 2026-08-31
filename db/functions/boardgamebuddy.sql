@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 062 (bgb_sync_achievements — the Achievements spoke's
---               whole payload in one call, unlock rows included)
+-- Last updated: migration 063 (bgb_onboarding_buddy_suggestions — suggestions
+--               for an account that has no signals to rank on yet)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -128,6 +128,27 @@
 --               list agree. Powers the Feed's "Buddies you may know" rail and
 --               the same rail on the Buddies screen, which reads it through
 --               GET /buddies/suggested rather than pulling a feed page.
+
+-- bgb_onboarding_buddy_suggestions(uid UUID, lim INT DEFAULT 12,
+--                                  active_window_days INT DEFAULT 90)
+--   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT, source TEXT)
+--   Defined in: db/migrations/boardgamebuddy/063_onboarding_buddy_suggestions.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
+--               (GET /buddies/suggested/onboarding, lim 12)
+--   Purpose:    The onboarding "Add buddies" step's candidate list. Same
+--               earned-signal candidates as bgb_suggested_buddies (returned
+--               first, source='graph'), then a community fallback ranked by
+--               plays logged in the last `active_window_days`
+--               (source='active') — because the one user who is guaranteed to
+--               get NOTHING out of bgb_suggested_buddies is the brand-new
+--               account this screen exists for. Additionally excludes
+--               profiles still carrying needs_setup, which have neither a
+--               real display name nor a chosen badge yet. `source` travels to
+--               the client because an 'active' candidate has both counts at
+--               zero, which the tile would otherwise mislabel "Mutual buddy".
+--               Shared plays are counted exactly as bgb_suggested_buddies
+--               counts them, so the two suggestion surfaces can never disagree
+--               about who the viewer has already played with.
 
 -- bgb_distinct_mechanics()
 --   → TABLE (mechanic TEXT)
@@ -526,7 +547,7 @@
 --   → JSONB { "accounts": [BuddyEdgeResponse…], "ghosts": [GhostPlayer…],
 --             "recent": [PlayedWithUser…] }
 --   Defined in: db/migrations/boardgamebuddy/047_play_partners_rpc.sql
---   Last updated in: db/migrations/boardgamebuddy/060_play_partners_pending_request_id.sql
+--   Last updated in: db/migrations/boardgamebuddy/061_play_partners_pending_request_id.sql
 --               (`recent` rows gained pending_request_id — the pending edge's
 --                own id, so the Buddies screen's played-with row can cancel an
 --                outgoing request or accept an incoming one without a second

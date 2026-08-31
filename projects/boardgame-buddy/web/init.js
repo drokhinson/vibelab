@@ -369,6 +369,56 @@
         title: "Couldn't save your profile",
         body: (e && e.message) ? String(e.message) : "Please try again from Settings.",
       });
+      // Setup didn't complete, so don't move them on to step two — the whole
+      // modal returns on the next load (needs_setup is still true).
+      return;
+    }
+    await promptAddBuddies();
+  }
+
+  // Step two of first-time setup: offer a few people to add, multi-select,
+  // one batch of requests or skip. Runs only on this path — an established
+  // account meets the same suggestions as the Feed and Buddies rails.
+  //
+  // Deliberately best-effort. Every failure mode here (no candidates, a dead
+  // network, a rejected batch) ends with the user on their feed with a
+  // finished profile, because a discovery step is not worth blocking a
+  // completed signup on.
+  async function promptAddBuddies() {
+    if (!window.OnboardingBuddiesModal) return;
+    let suggestions = [];
+    try {
+      const res = await window.Buddy.onboardingSuggestions(12);
+      suggestions = (res && res.suggestions) || [];
+    } catch (e) {
+      console.warn("Buddy suggestions unavailable; skipping the step:", e);
+      return;
+    }
+    // An "Add buddies" screen with nobody on it is worse than no screen: it
+    // reads as a broken feature on the user's first minute in the app.
+    if (suggestions.length === 0) return;
+
+    let result;
+    try {
+      result = await window.OnboardingBuddiesModal.open({ suggestions });
+    } catch (e) {
+      console.warn("Add-buddies step failed:", e);
+      return;
+    }
+    if (!result || result.action !== "sent") return;
+
+    // Partial failures are benign and self-evident — the ones that landed show
+    // as pending on the Buddies screen and the rest simply don't. A batch
+    // where NOTHING landed is not self-evident, though: the user ticked
+    // several people, watched the screen close, and got nothing. Say so.
+    if (result.sent.length === 0 && result.failed.length > 0) {
+      const first = result.failed[0];
+      window.PolaroidPopup.alert({
+        title: "Couldn't send those requests",
+        body: first && first.detail
+          ? `${first.detail}. You can add buddies any time from the Buddies screen.`
+          : "You can add buddies any time from the Buddies screen.",
+      });
     }
   }
 

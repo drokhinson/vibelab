@@ -13,6 +13,7 @@ from pydantic import (
 
 from .constants import (
     BggAuthState,
+    BuddySuggestionSource,
     CollectionStatus,
     FeedCardKind,
     PlayMode,
@@ -636,6 +637,41 @@ class BuddyRequestCreate(BaseModel):
     target_user_id: str
 
 
+class BulkBuddyRequestCreate(BaseModel):
+    """A batch of buddy requests, sent from one multi-select.
+
+    The onboarding "Add buddies" step lets the user tick several suggestions
+    and send them in one go. Firing N parallel POSTs from the client instead
+    would mean N auth round trips and a partially-applied batch the UI has no
+    way to describe."""
+
+    target_user_ids: list[str] = Field(..., min_length=1, max_length=50)
+
+
+class BulkBuddyRequestFailure(BaseModel):
+    """One target that could not be requested, and why."""
+
+    user_id: str
+    detail: str
+
+
+class BulkBuddyRequestResponse(BaseModel):
+    """Per-target outcome of a bulk send.
+
+    A batch is never all-or-nothing: one stale suggestion (the target deleted
+    their account, or sent the viewer a request while the screen was open)
+    must not sink the other nine. Every target is attempted; `sent` counts the
+    edges that now exist, `failed` explains the rest."""
+
+    sent: list[str] = []
+    failed: list[BulkBuddyRequestFailure] = []
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def sent_count(self) -> int:
+        return len(self.sent)
+
+
 # ── Add a buddy by QR code ────────────────────────────────────────────────────
 
 class BuddyQrTokenResponse(BaseModel):
@@ -963,6 +999,12 @@ class FeedSuggestedBuddy(BaseModel):
     # it has. play_count is what ranks the rail — see migration 057.
     mutual_count: int
     play_count: int = 0
+    # Which tier the candidate came from (migration 063). Only the onboarding
+    # endpoint sets it — the Feed rail and GET /buddies/suggested return
+    # earned-signal candidates exclusively, so their counts already say why a
+    # suggestion is there. None means "derive the reason from the counts",
+    # which is what every pre-060 caller of the shared tile does.
+    source: Optional[BuddySuggestionSource] = None
 
 
 class FeedSuggestedBuddiesCard(BaseModel):

@@ -15,6 +15,8 @@ from ..models import (
     BuddyEdgeResponse,
     BuddyRequestResponse,
     BuddyRequestsResponse,
+    BulkBuddyRequestFailure,
+    BulkBuddyRequestResponse,
 )
 from ._helpers import canonical_edge_pair, edge_response, fetch_profiles_by_ids
 
@@ -122,6 +124,37 @@ def send_request(sb, viewer_id: str, target_user_id: str) -> BuddyRequestRespons
     edge = inserted.data[0]
     profiles = fetch_profiles_by_ids(sb, [target_user_id])
     return _request_response(edge, viewer_id, profiles)
+
+
+def send_requests_bulk(
+    sb, viewer_id: str, target_user_ids: list[str]
+) -> BulkBuddyRequestResponse:
+    """Send requests to several users at once, reporting per-target outcomes.
+
+    Each target goes through send_request, so every rule that applies to a
+    single request applies here — self-request rejection, the auto-accept when
+    the target already requested the viewer, and the idempotent no-op when the
+    viewer already requested them. A target that raises is recorded in
+    `failed` and the batch continues: the onboarding step sends whatever the
+    user ticked, and one suggestion going stale between paint and tap must not
+    cost them the other nine.
+
+    Duplicates within one payload collapse — send_request is idempotent, but
+    de-duplicating first keeps `sent` an honest count of distinct people."""
+    result = BulkBuddyRequestResponse()
+    seen: set[str] = set()
+    for target_id in target_user_ids:
+        if target_id in seen:
+            continue
+        seen.add(target_id)
+        try:
+            send_request(sb, viewer_id, target_id)
+            result.sent.append(target_id)
+        except HTTPException as e:
+            result.failed.append(
+                BulkBuddyRequestFailure(user_id=target_id, detail=str(e.detail))
+            )
+    return result
 
 
 def _accept_edge(sb, edge: dict[str, Any], viewer_id: str) -> BuddyRequestResponse:
