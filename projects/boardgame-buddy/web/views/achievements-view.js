@@ -283,7 +283,7 @@
         // screen, where it would just restate the picture.
         : `<div class="ach-detail__status">
              <i data-icon="key-round" class="w-4 h-4"></i>
-             <span class="sr-only">Locked. To earn: </span>
+             <span class="bgb-vis-hidden">Locked. To earn: </span>
              ${escapeHtml(a.requirement)}
            </div>`;
       // No bar once it is earned: the status pill above already says so, and

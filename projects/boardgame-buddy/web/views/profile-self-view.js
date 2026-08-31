@@ -255,7 +255,7 @@
             <h3 class="preview-card__title font-display">Achievements</h3>
             <span class="preview-card__sub">${a.earned_count} of ${a.total}</span>
             <button class="preview-card__seeall" onclick="window.router.go('achievements')">
-              See all${unseen ? `<span class="preview-card__seeall-dot" aria-hidden="true"></span><span class="sr-only">, ${unseen} new</span>` : ""}
+              See all${unseen ? `<span class="preview-card__seeall-dot" aria-hidden="true"></span><span class="bgb-vis-hidden">, ${unseen} new</span>` : ""}
               <i data-icon="chevron-right" class="w-3 h-3"></i>
             </button>
           </header>

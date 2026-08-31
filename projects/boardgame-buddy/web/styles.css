@@ -4472,7 +4472,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   pointer-events: none;
 }
 
-/* Visually hidden, still focusable and still labelled by the button below. */
+/* Text (or a control) that only assistive tech reads.
+   `.buddy-qr-sheet__file` is a visually hidden but still FOCUSABLE file input,
+   labelled by the button below it; `.bgb-vis-hidden` is the general form, used
+   on the Achievements screen to name a state the picture carries visually.
+
+   Project-owned rather than Tailwind's `.sr-only` on purpose: in local dev the
+   Tailwind CDN's JIT scans the DOM at load, so a class that only ever appears
+   inside a string a view renders later is never generated — and the "hidden"
+   text prints on screen. The deploy build scans every .html and .js file in the
+   project and would have generated it, so leaning on Tailwind here would have
+   been a dev-only ghost that looked correct in the deployed artifact. */
+.bgb-vis-hidden,
 .buddy-qr-sheet__file {
   position: absolute;
   width: 1px; height: 1px;
