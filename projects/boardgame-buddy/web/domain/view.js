@@ -252,6 +252,25 @@
         el.classList.toggle("hidden", el.dataset.view !== name);
       });
 
+      // A new screen starts at the top of itself. Views are shown and hidden by
+      // toggling .hidden on siblings of one scrolling document, so the scroll
+      // offset is a property of the PAGE, not of the view — walk from a
+      // scrolled Profile hub into Buddies and the browser has no reason to move
+      // it, so Buddies opens halfway down. Nothing reset it before this.
+      //
+      // Here, beside the visibility flip and before any await, so it lands in
+      // the tap's own frame (.claude/rules/web-frontend.md, "Navigation feels
+      // instantaneous") rather than after the destination's data arrives.
+      //
+      // Forward navigations only. A popstate is the user returning to a screen
+      // they had already scrolled, and yanking that to the top would be its own
+      // bug; restoring the offset properly needs a per-entry record this router
+      // does not keep, so back is left exactly as it was.
+      if (prev !== next && !fromPopstate) {
+        try { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); }
+        catch (_) { window.scrollTo(0, 0); }   // older Safari rejects the options form
+      }
+
       const authed = !!window.store.get("user");
       document.querySelectorAll("[data-auth-only]").forEach((el) => {
         el.classList.toggle("hidden", !authed);

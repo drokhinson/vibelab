@@ -153,6 +153,14 @@
         onAdded: (edge) => {
           if (this._opts.onAdded) this._opts.onAdded(edge);
         },
+        // The scan half resolves a code to a person and offers to open them.
+        // Closing is the sheet's own lifecycle, so it happens here rather than
+        // in the half that owns the camera — and it happens BEFORE the route,
+        // so the sheet is not left over a screen it was never opened from.
+        onGoToProfile: (userId) => {
+          this._sheet.close();
+          window.router.go("profile-other", { userId: userId });
+        },
       };
     }
 

@@ -4710,6 +4710,44 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--on-accent);
 }
 .buddy-qr-sheet__action--go:hover { background: var(--accent-hover); }
+.buddy-qr-sheet__action[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* ── The scan-result choice ───────────────────────────────────────────────────
+   A resolved code shows the person and asks. Two buttons side by side rather
+   than stacked, because they are alternatives of equal standing — Go to profile
+   is not a lesser Buddy up, it is the other thing you might have scanned for. */
+.buddy-qr-sheet__handle {
+  margin: -4px 0 0;
+  font-size: 0.8rem;
+  color: var(--polaroid-muted);
+}
+.buddy-qr-sheet__line {
+  margin: 0;
+  max-width: 32ch;
+  font-size: 0.82rem;
+  color: var(--polaroid-muted);
+}
+/* An add that failed reports under the face it was about, so the card keeps its
+   shape and the person stays on screen. --rust deepened toward the surface ink
+   for the same reason the Add-buddies error is: straight --rust is under 4.5:1
+   on this ground at 13px. */
+.buddy-qr-sheet__line--error {
+  color: color-mix(in srgb, var(--rust) 76%, var(--polaroid-ink));
+  font-weight: 600;
+}
+.buddy-qr-sheet__choice {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 300px;
+}
+/* Beats .buddy-qr-sheet__action's own max-width (0,1,0) at 0,2,0 — inside the
+   pair each button takes half the row, not 260px of it. */
+.buddy-qr-sheet__choice .buddy-qr-sheet__action {
+  flex: 1 1 0;
+  max-width: none;
+  min-width: 0;
+}
 
 /* ── Player picker sheet ──────────────────────────────────────────────────
    "Who's playing?" on the Gather screen. Multi-select: rows are checkboxes,
@@ -8931,10 +8969,21 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    admin-key block is now the card's only child, so it has to pay for its own
    top edge. */
 .set-card__acct-edit-form:first-child { padding-top: 0.9rem; }
+/* Edit and the QR square, as one group on the trailing edge of the account
+   card. Both are actions on your own identity — how you look, and how someone
+   finds you — so they share a treatment and sit together rather than the QR
+   arriving as an ornament beside a button. */
+.set-card__acct-actions { display: flex; align-items: stretch; gap: 0.35rem; flex: none; }
+/* Square, and the 44px floor rather than the label button's padded height:
+   there is no text to set the width (.claude/rules/mobile-web.md §5). */
+.set-card__qr-btn { width: 44px; min-height: 44px; padding: 0; gap: 0; }
+
 .set-card__avatar-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  justify-content: center;
+  min-height: 44px;
   padding: 0.5rem 0.7rem;
   border-radius: 0.65rem;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);

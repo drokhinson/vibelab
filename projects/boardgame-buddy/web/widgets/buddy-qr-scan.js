@@ -19,6 +19,9 @@
    * @property {() => boolean} isActive        False once the user has switched
    *   tab or closed the sheet — every await checks this before painting.
    * @property {(edge: any) => void} onAdded
+   * @property {(userId: string) => void} onGoToProfile  Close the sheet and
+   *   route to that person. The scan half never touches the sheet's lifecycle
+   *   itself, so leaving is the sheet's call to make.
    */
 
   /**
@@ -38,18 +41,26 @@
 
   /**
    * @param {any} err
+   * @param {"read"|"add"} [phase]  Which half failed. The token is verified
+   *   twice now — once to show who the code belongs to, once to act on it — and
+   *   the same status means different things either side of the user's tap.
    * @returns {string}
    */
-  function errorCopy(err) {
+  function errorCopy(err, phase) {
+    const adding = phase !== "read";
     if (err && (err.offline || err.status === 0)) {
       return "You're offline — reconnect and scan again.";
     }
     switch (err && err.status) {
       // 410 is the expired-or-forged branch, and it is genuinely common: a new
       // user who followed the QR with their phone camera can easily spend
-      // longer than the token's life signing in before they land here.
+      // longer than the token's life signing in before they land here. It is
+      // now also reachable AFTER the code resolved — the token can die while
+      // the user is deciding — which is a different sentence.
       case 410:
-        return "That code has expired. Ask them to show it again.";
+        return adding
+          ? "That code expired while you were deciding. Ask them to show it again."
+          : "That code has expired. Ask them to show it again.";
       case 400:
         return "That's your own code.";
       case 403:
@@ -57,7 +68,7 @@
       case 404:
         return "That account no longer exists.";
       default:
-        return "Couldn't add them just now.";
+        return adding ? "Couldn't add them just now." : "Couldn't read that code just now.";
     }
   }
 
@@ -98,16 +109,21 @@
       /** @type {ScanCtx|null} */ this._ctx = null;
       /** @type {any} */ this._state = null;   // {kind, message}
       /** @type {any} */ this._result = null;  // {edge, created}
+      // The resolved code, held between the scan and the user's decision. The
+      // token rides along because "Buddy up" redeems the SAME one — re-reading
+      // it from the camera would mean scanning twice.
+      /** @type {any} */ this._peek = null;    // {token, person}
     }
 
-    /** True when there is a message or result the first Escape should clear. */
+    /** True when there is something on screen the first Escape should clear. */
     get hasMessage() {
-      return !!(this._state || this._result);
+      return !!(this._state || this._result || this._peek);
     }
 
     clearMessage() {
       this._state = null;
       this._result = null;
+      this._peek = null;
     }
 
     /**
@@ -148,6 +164,8 @@
         if (this._ctx) this._renderScanner();
         return true;
       }
+      if (kind === "buddy-up") { this._buddyUp(); return true; }
+      if (kind === "go-profile") { this._goToProfile(); return true; }
       if (kind === "start-camera") {
         // Must go through _renderScanner, not _startCamera: the gesture panel
         // replaced the <video> with its own markup, so starting the camera
@@ -220,7 +238,7 @@
         return;
       }
       window.BgbQrCamera.stop();
-      this._redeem(token);
+      this._resolve(token);
     }
 
     /**
@@ -266,24 +284,63 @@
         this._render();
         return;
       }
-      this._redeem(token);
+      this._resolve(token);
     }
 
-    // ── redeem ───────────────────────────────────────────────────────────────
+    // ── resolve, then act ────────────────────────────────────────────────────
 
     /**
+     * Turn a scanned token into a person, and stop there.
+     *
+     * This used to be _redeem(): resolving a code WAS the add, so both accounts
+     * became buddies before the scanner had seen a name. A camera pointed at a
+     * code is a clear enough intent to treat as consent, which is what made
+     * that safe — but it is not clear enough to treat as a DECISION, because
+     * scanning is also how you find out what a code is. So the token now
+     * resolves to a name and the user picks what to do with it.
+     *
      * @param {string} token
      * @returns {Promise<void>}
      */
-    async _redeem(token) {
+    async _resolve(token) {
       const seq = ++this._seq;
-      this._state = { kind: "pending", message: "Adding…" };
+      this._state = { kind: "pending", message: "Reading that code…" };
       this._result = null;
+      this._peek = null;
       this._render();
       try {
-        const res = await window.Buddy.addByQr(token);
+        const person = await window.Buddy.peekQr(token);
         if (seq !== this._seq || !this._ctx || !this._ctx.isActive()) return;
         this._state = null;
+        this._peek = { token: token, person: person };
+        this._render();
+      } catch (err) {
+        if (seq !== this._seq || !this._ctx || !this._ctx.isActive()) return;
+        this._peek = null;
+        this._state = { kind: "error", message: errorCopy(err, "read") };
+        this._render();
+      }
+    }
+
+    /**
+     * Redeem the token the user just looked at. Unchanged from what a scan used
+     * to do on its own — one call, both accounts buddies, no pending request.
+     * @returns {Promise<void>}
+     */
+    async _buddyUp() {
+      const peek = this._peek;
+      // aria-disabled rather than the disabled attribute keeps the button
+      // focusable mid-write (a disabled button drops a keyboard user onto
+      // <body>), so the re-entrancy guard has to live here.
+      if (!peek || (this._state && this._state.kind === "pending")) return;
+      const seq = ++this._seq;
+      this._state = { kind: "pending", message: "Adding…" };
+      this._render();
+      try {
+        const res = await window.Buddy.addByQr(peek.token);
+        if (seq !== this._seq || !this._ctx || !this._ctx.isActive()) return;
+        this._state = null;
+        this._peek = null;
         this._result = res;
         // The play-partners bundle carries buddy membership, so a stale copy
         // would serve the Gather picker a roster without the new buddy in it.
@@ -292,16 +349,80 @@
         this._ctx.onAdded(res.edge);
       } catch (err) {
         if (seq !== this._seq || !this._ctx || !this._ctx.isActive()) return;
-        this._result = null;
-        this._state = { kind: "error", message: errorCopy(err) };
+        // Keep the choice card up rather than dropping back to the camera: the
+        // person is still on screen, and an expired token is one "Scan again"
+        // away without losing who they were.
+        this._state = { kind: "error", message: errorCopy(err, "add") };
         this._render();
       }
     }
 
+    /** Leave for their profile. The sheet owns closing itself. */
+    _goToProfile() {
+      const peek = this._peek;
+      if (!peek || !this._ctx) return;
+      this._ctx.onGoToProfile(peek.person.user_id);
+    }
+
     // ── render ───────────────────────────────────────────────────────────────
+
+    // What the viewer already is to this person, and therefore whether "Buddy
+    // up" has anything left to do. Every branch still SHOWS them — a scan that
+    // resolved to a real account and then said nothing would read as a failure.
+    _relationCopy(relation) {
+      switch (relation) {
+        case "buddies":
+          return { line: "You're already buddies — nothing to add.", cta: "Already buddies", can: false };
+        case "outgoing":
+          // The scan would promote it, but the button has to say what it does.
+          return { line: "You've already asked. Adding here accepts it for both of you.", cta: "Buddy up", can: true };
+        case "incoming":
+          return { line: "They asked to be buddies. Adding here accepts it.", cta: "Accept", can: true };
+        case "blocked":
+          return { line: "You can't add this person.", cta: "Buddy up", can: false };
+        default:
+          return { line: "Nothing has been sent yet.", cta: "Buddy up", can: true };
+      }
+    }
 
     _render() {
       if (!this._ctx) return;
+
+      // The choice card. A pending message rides ALONGSIDE it rather than
+      // replacing it — "Adding…" and a failed add both belong under the face
+      // they are about, and dropping back to a bare camera would lose who the
+      // user had just resolved.
+      if (this._peek) {
+        const p = this._peek.person;
+        const rel = this._relationCopy(p.relation);
+        const msg = this._state || {};
+        const busy = msg.kind === "pending";
+        this._ctx.paint(`
+          <div class="buddy-qr-sheet__result">
+            ${window.BgbBadge.render({
+              avatar: p.avatar,
+              displayName: p.display_name,
+              size: "md",
+            })}
+            <p class="buddy-qr-sheet__name">${escapeHtml(p.display_name)}</p>
+            ${p.username
+              ? `<p class="buddy-qr-sheet__handle">@${escapeHtml(p.username)}</p>`
+              : ""}
+            <p class="buddy-qr-sheet__line${msg.kind === "error" ? " buddy-qr-sheet__line--error" : ""}">
+              ${escapeHtml(msg.kind === "error" ? msg.message : rel.line)}
+            </p>
+            <div class="buddy-qr-sheet__choice">
+              ${btn("Go to profile", 'data-qr-action="go-profile"')}
+              ${rel.can
+                ? btn(busy ? "Adding…" : rel.cta,
+                      busy ? 'data-qr-action="buddy-up" aria-disabled="true"' : 'data-qr-action="buddy-up"',
+                      true)
+                : btn(rel.cta, 'disabled', true)}
+            </div>
+            ${btn("Scan a different code", 'data-qr-action="rescan"')}
+          </div>`);
+        return;
+      }
 
       if (this._result) {
         const edge = this._result.edge;
