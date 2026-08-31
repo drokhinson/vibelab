@@ -165,6 +165,14 @@
     }
   }
 
+  /** Is one of this module's cards on screen right now? Every entry point here
+   *  calls dismiss() first, so the module is a singleton — which is exactly why
+   *  a caller that wants to show something *after* the current card (the
+   *  achievement queue in ui/achievement-popup.js) has to be able to ask. */
+  function isOpen() {
+    return !!document.getElementById(BACKDROP_ID);
+  }
+
   /**
    * The X in the card's corner — the wrap-up card's primary exit now that
    * the bottom button is "Another round?". It takes the same feed redirect
@@ -280,6 +288,76 @@
         ${actions}
       </div>
     `;
+  }
+
+  /**
+   * "Achievement unlocked" polaroid — the badge's medallion as the photo, its
+   * name and flavour line as the caption, and one CTA that jumps straight to
+   * the Achievements spoke.
+   *
+   * A sibling of show() rather than a variant of it: it shares this module's
+   * chrome (backdrop, card, headline, corner X) and its singleton lifecycle,
+   * but none of show()'s play-shaped state — no winner, no save, no retry.
+   * Queueing and "wait until nothing else is on screen" belong to the caller
+   * (ui/achievement-popup.js), because this function, like every other entry
+   * point here, dismisses whatever card is currently up.
+   *
+   * @param {Object} opts
+   * @param {string} opts.name         badge name, the polaroid's title
+   * @param {string} opts.description  its flavour line, under the name
+   * @param {string} opts.spriteUrl    the medallion, used as the photo
+   * @param {number=} opts.index       1-based position when several unlocked
+   * @param {number=} opts.total       how many unlocked in this batch
+   * @param {() => void=} opts.onView  the "See my achievements" CTA
+   * @param {() => void=} opts.onDismiss  X or backdrop tap
+   */
+  function achievement(opts) {
+    dismiss(); // singleton — never stack two
+    const root = document.createElement("div");
+    root.id = BACKDROP_ID;
+    root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--with-headline";
+
+    const counter = (opts.total || 1) > 1
+      ? `<div class="polaroid-popup__count">${opts.index} of ${opts.total}</div>`
+      : "";
+
+    root.innerHTML = `
+      <div class="polaroid-popup__headline">Achievement unlocked!</div>
+      <div class="polaroid-popup__card polaroid-popup__card--achievement"
+           role="dialog" aria-modal="true"
+           aria-label="${escapeAttr(`Achievement unlocked: ${opts.name}`)}">
+        <button class="polaroid-popup__close" aria-label="Close">
+          <i data-icon="x" class="w-4 h-4"></i>
+        </button>
+        <img class="polaroid-popup__photo polaroid-popup__photo--badge"
+             src="${escapeAttr(opts.spriteUrl)}" alt="" width="160" height="160" />
+        <div class="polaroid-popup__title">${escapeHtml(opts.name)}</div>
+        <p class="polaroid-popup__caption">${escapeHtml(opts.description || "")}</p>
+        ${counter}
+        <div class="polaroid-popup__actions">
+          <button class="polaroid-popup__view btn btn-primary btn-sm">
+            <i data-icon="trophy" class="w-3.5 h-3.5"></i>
+            <span>See my achievements</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const close = () => {
+      dismiss();
+      if (typeof opts.onDismiss === "function") opts.onDismiss();
+    };
+    root.addEventListener("click", (ev) => {
+      const t = /** @type {any} */ (ev.target);
+      if (t === root) { close(); return; }
+      if (t.closest(".polaroid-popup__close")) { close(); return; }
+      if (t.closest(".polaroid-popup__view")) {
+        dismiss();
+        if (typeof opts.onView === "function") opts.onView();
+      }
+    });
+    document.body.appendChild(root);
+    window.BgbIcons.render(root);
   }
 
   /**
@@ -629,5 +707,7 @@
       : (String(name || "?").trim().slice(0, 2).toUpperCase() || "?");
   }
 
-  window.PolaroidPopup = { show, update, dismiss, confirm, alert, avatarCustomizer };
+  window.PolaroidPopup = {
+    show, update, dismiss, isOpen, achievement, confirm, alert, avatarCustomizer,
+  };
 })();

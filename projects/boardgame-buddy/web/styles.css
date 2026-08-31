@@ -10823,6 +10823,59 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    affordance, so this only gives it a little air under the badge. */
 .ach-detail + .bgb-sheet__cancel { margin: 0.9rem 0.2rem 0.2rem; }
 
+/* ── "Achievement unlocked!" polaroid ─────────────────────────────────────────
+   ui/polaroid-popup.js#achievement, queued by ui/achievement-popup.js. Rides
+   the wrap-up card's own chrome — backdrop, card, headline, corner X — so an
+   unlock reads as the same object the app already puts in front of you when
+   something is worth marking. Only the photo treatment and the caption below
+   it are this card's own.
+
+   The card stays on the paper aliases (cream in both themes) like every other
+   polaroid: it is a photograph, per .claude/rules/theming.md §6. That is also
+   what makes the medallion work here — a dark coin needs a light mount. */
+.polaroid-popup__card--achievement { padding-bottom: 18px; }
+
+/* `contain`, not the wrap-up photo's `cover`: a medallion is a round mark on a
+   transparent ground, and cropping it to a square would clip the rim. The plate
+   behind it is the print the coin is mounted on. */
+.polaroid-popup__photo--badge {
+  object-fit: contain;
+  padding: 10px;
+  background: radial-gradient(circle at 50% 42%,
+              color-mix(in srgb, var(--polaroid-accent) 16%, transparent),
+              transparent 68%),
+              var(--polaroid-bg-soft, #F2E7D2);
+}
+.polaroid-popup__caption {
+  margin: 0 0 2px;
+  font-family: var(--font-polaroid);
+  font-style: italic;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: var(--polaroid-muted);
+}
+.polaroid-popup__count {
+  margin-top: 8px;
+  font-family: var(--font-score);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--polaroid-muted);
+  font-variant-numeric: tabular-nums;
+}
+.polaroid-popup__card--achievement .polaroid-popup__actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+/* 52px: this is the card's one commit button (.claude/rules/mobile-web.md §5). */
+.polaroid-popup__card--achievement .polaroid-popup__view {
+  min-height: 52px;
+  border-radius: 999px;
+  padding-inline: 1.1rem;
+  gap: 0.4rem;
+}
+
 /* ── Hub preview card ─────────────────────────────────────────────────────── */
 /* Four badges at a glance: the most recently unlocked first, then whatever is
    closest to landing — so the card is never four grey discs on a new account. */

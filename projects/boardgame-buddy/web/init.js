@@ -456,6 +456,7 @@
     // device has shown, whether the install was reported) are keyed by user
     // but live outside bgbCache, so they need their own line — otherwise the
     // next account on this phone inherits them.
+    if (window.BgbAchievementPopup) window.BgbAchievementPopup.reset();
     if (window.Achievements) window.Achievements.forget();
     if (window.bgbCache) window.bgbCache.unbindUser();
     window.store.reset();
@@ -591,6 +592,10 @@
     // gating (phone viewport, signed in, not already installed, settle delay)
     // and no-ops on browsers that never report the app as installable.
     if (window.BgbInstallPrompt) window.BgbInstallPrompt.init();
+
+    // Listen for badges unlocking mid-session. The queue itself waits for a
+    // clear screen before showing anything, so this is safe to arm at boot.
+    if (window.BgbAchievementPopup) window.BgbAchievementPopup.init();
 
     // Pocket Buddy. An installed PWA is indistinguishable from a browser tab
     // to the backend, so the app has to say so itself — from a cold start in

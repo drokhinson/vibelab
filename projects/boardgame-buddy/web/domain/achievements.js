@@ -10,6 +10,16 @@
 // badge was unlocked; it cannot know whether this person has laid eyes on it.
 // That belongs to the device, so the seen set lives in localStorage keyed by
 // user, exactly like the install prompt's dismissal.
+//
+// TWO device-side sets, and they answer different questions. Do not merge them:
+//   • `known`  — which badges this DEVICE has ever observed as earned. Advanced
+//     by every payload the app sees. A badge that is earned but not known is
+//     one that landed just now, which is what fires the unlock polaroid.
+//   • `seen`   — which badges the user has actually LOOKED at, written only
+//     once the Achievements spoke has painted them. Drives the "New" ribbons
+//     and the hub's dot.
+// A user who earns a badge and never opens the spoke has it in `known` (the
+// popup showed it) but not in `seen` (the ribbon is still waiting).
 
 // @ts-check
 
@@ -22,7 +32,20 @@
   const STALE_TTL_MS = 60 * 60 * 1000;
 
   const SEEN_KEY_PREFIX = "bgb.achievements.seen.";
+  const KNOWN_KEY_PREFIX = "bgb.achievements.known.";
   const INSTALL_KEY_PREFIX = "bgb.achievements.installed.";
+
+  // A play save invalidates through two paths at once (the play's own deps and
+  // the buddy roster), so the check has to coalesce or it fires twice. The
+  // delay also lets a burst of writes — a BGG sync, a finalize that touches
+  // plays, players and expansions — settle into one request.
+  const CHECK_DEBOUNCE_MS = 1500;
+
+  // Fired on `window` with { detail: { unlocked: Achievement[] } } whenever a
+  // payload reveals badges this device had not observed as earned. A DOM event
+  // rather than a direct call into the UI: the domain layer should not know
+  // that a polaroid exists, and it makes the behaviour testable by listening.
+  const UNLOCK_EVENT = "bgb:achievements-unlocked";
 
   /**
    * @typedef {Object} Achievement
@@ -58,6 +81,47 @@
 
   // Guards reportInstalled() against overlapping calls — see there.
   let _installInFlight = false;
+  let _checkTimer = null;
+
+  /** Earned ids this device has already observed. */
+  function _known(uid) {
+    const raw = _safe(() => localStorage.getItem(KNOWN_KEY_PREFIX + uid), null);
+    const parsed = raw ? _safe(() => JSON.parse(raw), null) : null;
+    return Array.isArray(parsed) ? parsed : null;   // null = never observed
+  }
+
+  /**
+   * Fold a freshly-fetched payload into the `known` set and announce whatever
+   * it revealed. Every path that fetches goes through here, so the baseline
+   * advances no matter which screen did the fetching.
+   *
+   * The FIRST observation on a device records silently and announces nothing:
+   * a returning user signing in on a new phone has earned badges already, and
+   * they did not earn them just now. That is the whole reason `known` is
+   * stored separately from `seen` — `seen` is empty for anyone who has never
+   * opened the spoke, so diffing against it would fire the popup for every
+   * badge they already hold.
+   *
+   * @param {AchievementsPayload|null} payload
+   * @returns {any[]} the newly-earned achievements, oldest-first by catalog order
+   */
+  function _observe(payload) {
+    const uid = _uid();
+    if (!uid || !payload || !Array.isArray(payload.achievements)) return [];
+    const earned = payload.achievements.filter((a) => a.earned);
+    const earnedIds = earned.map((a) => a.id);
+    const before = _known(uid);
+    _safe(() => localStorage.setItem(KNOWN_KEY_PREFIX + uid, JSON.stringify(earnedIds)));
+    if (before === null) return [];
+    const had = new Set(before);
+    const fresh = earned.filter((a) => !had.has(a.id));
+    if (fresh.length) {
+      _safe(() => window.dispatchEvent(new CustomEvent(UNLOCK_EVENT, {
+        detail: { unlocked: fresh },
+      })));
+    }
+    return fresh;
+  }
 
   function _uid() {
     const me = window.store && window.store.get("user");
@@ -77,9 +141,35 @@
       return window.bgbCache.swr(
         NS,
         uid,
-        () => window.api.get("/achievements"),
+        // _observe hangs off the FETCHER, not off the returned value: swr()
+        // serves a cached payload without calling this at all, and re-observing
+        // a copy the device has already folded in would announce nothing while
+        // costing a localStorage round trip on every read.
+        () => window.api.get("/achievements").then((payload) => {
+          _observe(payload);
+          return payload;
+        }),
         { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS },
       );
+    },
+
+    /**
+     * Ask the server whether anything just unlocked, and announce it if so.
+     *
+     * Scheduled by invalidate(), i.e. by the writes that can actually move a
+     * badge, rather than polled. Debounced and inherently single-flight (the
+     * work is one `all({force:true})`, and bgbCache.swr collapses concurrent
+     * fetches for the same key). Failures are swallowed: a badge is not worth
+     * an error toast, and the next screen that reads the payload finds it.
+     */
+    scheduleUnlockCheck() {
+      if (!_uid()) return;
+      clearTimeout(_checkTimer);
+      _checkTimer = setTimeout(() => {
+        _checkTimer = null;
+        if (!_uid()) return;
+        this.all({ force: true }).catch(() => {});
+      }, CHECK_DEBOUNCE_MS);
     },
 
     /** Synchronous stale-tolerant read, or null. Lets the hub card and the
@@ -92,13 +182,18 @@
       return window.bgbCache.peek(NS, uid);
     },
 
-    /** Drop the cached payload. Called from every write that can move a badge
-     *  — logging a play, accepting a buddy, keeping a chapter, linking BGG. */
+    /** Drop the cached payload AND go look for what the write just unlocked.
+     *  Called from every write that can move a badge — logging a play,
+     *  accepting a buddy, keeping a chapter, linking BGG. Dropping alone would
+     *  mean a badge earned mid-session stayed invisible until the user next
+     *  wandered onto the Profile hub, which is exactly the moment the celebration
+     *  is worth nothing. */
     invalidate() {
       const uid = _uid();
       if (!window.bgbCache) return;
       if (uid == null) window.bgbCache.clear(NS);
       else window.bgbCache.delete(NS, uid);
+      this.scheduleUnlockCheck();
     },
 
     /**
@@ -126,9 +221,12 @@
         // rather than leaving a stale copy that still shows Pocket Buddy
         // locked.
         if (payload) {
+          // Seeded straight into the cache, so it never passes through all()'s
+          // fetcher — observe it here or Pocket Buddy unlocks in silence.
           window.bgbCache.setWithTtls(NS, uid, payload, {
             freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS,
           });
+          _observe(payload);
         }
       } catch (_) { /* try again next launch */
       } finally { _installInFlight = false; }
@@ -174,6 +272,7 @@
       const uid = userId || _uid();
       if (!uid) return;
       _safe(() => localStorage.removeItem(SEEN_KEY_PREFIX + uid));
+      _safe(() => localStorage.removeItem(KNOWN_KEY_PREFIX + uid));
       _safe(() => localStorage.removeItem(INSTALL_KEY_PREFIX + uid));
     },
 
@@ -186,6 +285,9 @@
     spriteUrl(icon) {
       return `assets/sprites/achievements/bgb-ach-${icon}.svg`;
     },
+
+    /** The event ui/achievement-popup.js listens on. */
+    UNLOCK_EVENT,
   };
 
   window.Achievements = Achievements;
