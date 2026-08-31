@@ -15,6 +15,7 @@
   window.logPlayView     = new window.LogPlayView();
   window.playFlowView    = new window.PlayFlowView();
   window.gameExplorerView = new window.GameExplorerView();
+  window.addGamesView = new window.AddGamesView();
   window.gameDetailView  = new window.GameDetailView();
   window.referenceGuideAddView = new window.ReferenceGuideAddView();
   window.profileSelfView = new window.ProfileSelfView();
@@ -39,6 +40,7 @@
   window.router.register("log-play",      window.logPlayView);
   window.router.register("play-flow",     window.playFlowView);
   window.router.register("game-explorer", window.gameExplorerView);
+  window.router.register("add-games",     window.addGamesView);
   window.router.register("game-detail",   window.gameDetailView);
   window.router.register("reference-guide-add", window.referenceGuideAddView);
   window.router.register("profile-self",  window.profileSelfView);

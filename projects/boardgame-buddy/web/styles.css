@@ -7285,6 +7285,127 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .game-polaroid.game-polaroid--row:hover { transform: none; box-shadow: none; }
 
+/* ── Add Games: the catalog scroll ────────────────────────────────────────
+   views/add-games-view.js — the whole BgB library as one list, one tap per
+   row to shelve a game. It sits on .bgb-spoke-screen, so the chrome re-point
+   at the top of this file has already pointed --polaroid-* at the app tokens
+   and the .game-polaroid--row inside each row follows the screen it is on.
+   Nothing here paints a literal: the screen is dark in dark and light in
+   light, and the action button is the only accent on it. */
+.catalog-lede {
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+
+/* The escape hatch above the list: BGG import, for a game the catalog below
+   cannot contain by definition. Deliberately quieter than a .btn-primary —
+   it is the exception, and the list is the answer. */
+.catalog-import {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 44px;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.75rem;
+  background: none;
+  color: var(--accent-ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.catalog-import:hover { background: var(--accent-quiet); border-color: var(--accent); }
+.catalog-import:active { transform: translateY(1px); }
+.catalog-import:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.catalog-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* 56px, not 44: list rows sit flush against each other, so a slightly-off
+   thumb lands on the neighbour (.claude/rules/mobile-web.md §5). */
+.catalog-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 56px;
+  padding: 0.3rem 0.35rem;
+  border-radius: 0.6rem;
+  border-bottom: 1px solid oklch(var(--bc) / 0.07);
+}
+.catalog-row:last-child { border-bottom: none; }
+/* Touch has no hover, so the row needs a press state or the tap reads as
+   ignored. The tile inside is the navigating target; this is its feedback. */
+.catalog-row:active { background: oklch(var(--bc) / 0.05); }
+
+/* The viewer-dependent half of the row, repainted on its own so a status
+   change never swaps the artwork out and back. */
+.catalog-row__slot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* "Wishlist" / "Played" — why this row is not a plain "+". */
+.catalog-row__note {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: oklch(var(--bc) / 0.55);
+  background: oklch(var(--b3));
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+}
+
+/* The whole screen, in one control. Outline = not on this shelf, filled =
+   on it and one more tap takes it off. */
+.catalog-row__action {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid oklch(var(--bc) / 0.16);
+  border-radius: 0.6rem;
+  background: none;
+  color: var(--accent-ink);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.catalog-row__action:hover { background: var(--accent-quiet); border-color: var(--accent); }
+.catalog-row__action:active { transform: translateY(1px); }
+.catalog-row__action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.catalog-row__action.is-on {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
+}
+.catalog-row__action.is-on:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+/* A write in flight: the button holds the state it optimistically painted and
+   stops inviting a second tap it would have to queue behind the first. */
+.catalog-row__action[aria-busy="true"] { opacity: 0.55; pointer-events: none; }
+
+.catalog-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
 /* ── Expanded play-detail popup ──────────────────────────────────────────
    In-place modal opened from the polaroid play-card's maximize button.
    Holds the full play record + edit form so the user doesn't have to

@@ -75,6 +75,19 @@ class CollectionSort(StrEnum):
     ADDED_AT = "added_at"
 
 
+class CatalogSort(StrEnum):
+    """Row order for GET /games.
+
+    NEWEST is the historical default and stays the default: the Game Explorer
+    and every other paginated catalog caller was built against created_at DESC.
+    ALPHABETICAL is what a browse-the-whole-library screen wants — the Add
+    Games page scrolls the entire catalog, where import order is noise.
+    """
+
+    NEWEST = "newest"
+    ALPHABETICAL = "alphabetical"
+
+
 class BggAuthState(StrEnum):
     """Surfaced on /bgg/sync/status so the FE knows which card to render."""
 

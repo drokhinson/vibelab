@@ -277,36 +277,17 @@
 
     // ── Writes ──────────────────────────────────────────────────────────────
 
-    /**
-     * Patch the cached map so any reader (play cards, recent-plays thumbs,
-     * anything pulling `window.store.get('myCollectionMap')` synchronously)
-     * sees the new state, then announce it. `null` flags "no relationship" —
-     * listeners delete their local entry so the tile flips back to "+".
-     * Called BEFORE the network write so the pill moves in the same frame as
-     * the tap, and again with the old value if that write fails.
-     */
-    _applyLocal(gameId, status) {
-      const cur = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
-      const next = { ...cur };
-      if (status == null) delete next[gameId];
-      else next[gameId] = status;
-      window.store.set("myCollectionMap", next);
-      document.dispatchEvent(new CustomEvent("status-changed", {
-        detail: { gameId, status: status == null ? null : status },
-      }));
-    }
-
     async _choose(status) {
       const gameId = this._gameId;
       const prev = this._currentStatus;
       this.close();
       if (!gameId || (status !== "owned" && status !== "wishlist")) return;
       if (status === prev) return;                 // re-picking the current row is a no-op
-      this._applyLocal(gameId, status);
+      window.Collection.applyLocalStatus(gameId, status);
       try {
         await window.Collection.add(gameId, status);
       } catch (e) {
-        this._applyLocal(gameId, prev);
+        window.Collection.applyLocalStatus(gameId, prev);
         window.PolaroidPopup.alert({
           title: "Couldn't save that",
           body: (e && e.message) || `${LABEL[status]} didn't stick — check your connection and try again.`,
@@ -319,11 +300,11 @@
       const prev = this._currentStatus;
       this.close();
       if (!gameId) return;
-      this._applyLocal(gameId, null);
+      window.Collection.applyLocalStatus(gameId, null);
       try {
         await window.Collection.removeByGame(gameId);
       } catch (e) {
-        this._applyLocal(gameId, prev);
+        window.Collection.applyLocalStatus(gameId, prev);
         window.PolaroidPopup.alert({
           title: "Couldn't remove that",
           body: (e && e.message) || "The game is still in your collection — check your connection and try again.",

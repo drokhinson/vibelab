@@ -21,7 +21,7 @@ from .bgg_client import (
     normalize_image_url,
     parse_bgg_xml,
 )
-from .constants import EXPANSION_COLOR_PALETTE, PlayMode, derive_play_mode
+from .constants import EXPANSION_COLOR_PALETTE, CatalogSort, PlayMode, derive_play_mode
 from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
 from .models import GameDetail, GameListResponse, GameSummary, RefreshImagesResponse, RulebookUrlUpdate
 from .services import game_service
@@ -175,6 +175,14 @@ async def list_games(
             "response contract is unchanged for anyone who doesn't opt out."
         ),
     ),
+    sort: CatalogSort = Query(
+        CatalogSort.NEWEST,
+        description=(
+            "Row order. `newest` (default) is created_at DESC — what the Game "
+            "Explorer and every historical caller expects. `alphabetical` "
+            "orders by name, for screens that browse the whole catalog."
+        ),
+    ),
     bgg_ids: Optional[str] = Query(
         None,
         description=(
@@ -261,12 +269,17 @@ async def list_games(
     # across paginated calls.
     if players is not None and prioritize_exact_players:
         query = query.order("max_players", desc=False)
-    # `id` is the tiebreaker, and it is load-bearing rather than cosmetic:
-    # created_at is nullable (001_baseline.sql:60) and bulk BGG imports insert
-    # inside one transaction, where now() is the TRANSACTION timestamp — so
-    # ties are normal, and without a deterministic second key paginated calls
-    # could repeat or skip games between pages.
-    query = query.order("created_at", desc=True).order("id", desc=True)
+    # `id` is the tiebreaker on both axes, and it is load-bearing rather than
+    # cosmetic: created_at is nullable (001_baseline.sql:60) and bulk BGG
+    # imports insert inside one transaction, where now() is the TRANSACTION
+    # timestamp — so ties are normal there; two printings of the same game
+    # share a name, so they are normal on the alphabetical axis too. Without a
+    # deterministic second key paginated calls could repeat or skip games
+    # between pages.
+    if sort == CatalogSort.ALPHABETICAL:
+        query = query.order("name", desc=False).order("id", desc=True)
+    else:
+        query = query.order("created_at", desc=True).order("id", desc=True)
     query = query.range(offset, offset + per_page - 1)
     result = await asyncio.to_thread(query.execute)
 

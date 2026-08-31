@@ -1,8 +1,8 @@
 // views/wishlist-view.js — Full wishlist spoke.
 //
 // Mirrors collection-view but pins status='wishlist' and drops the toggle.
-// "+ Add" button in the header opens the AddGameModal for searching the
-// BgB library or importing from BGG.
+// "+ Add" button in the header opens the Add Games page
+// (views/add-games-view.js) — the whole BgB catalog as one scroll.
 //
 // Data lives in ShelfController (domain/shelf-controller.js) — the same
 // fetch-once-and-window-locally model collection-view uses, right down to the
@@ -216,11 +216,9 @@
       `;
     }
 
+    /** The catalog scroll — see CollectionView._openAddGame. */
     _openAddGame() {
-      window.AddGameModal.open({
-        status: "wishlist",
-        onAdded: () => { this.ctl.load(MODE, { force: true }); },
-      });
+      window.router.go("add-games", { status: "wishlist" });
     }
 
     _renderControls() {

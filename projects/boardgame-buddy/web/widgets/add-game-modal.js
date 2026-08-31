@@ -1,7 +1,14 @@
-// widgets/add-game-modal.js — Modal for adding a game to Collection or
-// Wishlist from the spoke header. Hosts a GameFinder; picking a game calls
+// widgets/add-game-modal.js — Search-and-import modal for adding a game to
+// Collection or Wishlist. Hosts a GameFinder; picking a game calls
 // Collection.add(game.id, status) and dispatches `status-changed` so any
 // live grids re-render their pills.
+//
+// It is no longer the primary add affordance: the spokes' "+ Add" opens the
+// Add Games page (views/add-games-view.js), which scrolls the whole BgB
+// catalog with a one-tap add/remove per row. This modal survives as that
+// page's escape hatch for the one thing a catalog scroll cannot do — reach a
+// game BgB has not imported yet — so it opens titled for BoardGameGeek and
+// leads with the finder's BGG search.
 //
 // Reuses the polaroid-popup backdrop + card chrome for visual consistency
 // (per .claude/rules/ui-object-design.md §3c) but owns its own
@@ -16,6 +23,7 @@
    * @typedef {Object} AddGameModalOpts
    * @property {"owned"|"wishlist"} status
    * @property {string} [title]
+   * @property {string} [hint] Overrides the line above the finder.
    * @property {(game: any, status: string) => void} [onAdded]
    */
 
@@ -44,7 +52,7 @@
         </button>
         <div class="polaroid-popup__title">${escapeHtml(title)}</div>
         <p class="polaroid-popup__body add-game-modal__hint">
-          Search your BoardgameBuddy library, or import from BoardGameGeek.
+          ${escapeHtml(opts.hint || "Search your BoardgameBuddy library, or import from BoardGameGeek.")}
         </p>
         <div class="add-game-modal__body" data-finder-mount></div>
         <div class="add-game-modal__note" hidden></div>
@@ -81,12 +89,9 @@
           return { refuse: true, reason: "Couldn't add — try again." };
         }
         // Patch the cached myCollectionMap so other surfaces see the new
-        // pill immediately (mirrors ui/status-tag.js _choose).
-        const cur = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
-        window.store.set("myCollectionMap", { ...cur, [game.id]: opts.status });
-        document.dispatchEvent(new CustomEvent("status-changed", {
-          detail: { gameId: game.id, status: opts.status },
-        }));
+        // pill immediately. Shared with the status sheet and the Add Games
+        // page — see Collection.applyLocalStatus.
+        window.Collection.applyLocalStatus(game.id, opts.status);
         if (typeof opts.onAdded === "function") {
           try { opts.onAdded(game, opts.status); } catch (_) {}
         }

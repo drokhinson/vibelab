@@ -50,7 +50,7 @@ Today the codebase honours this rule for two of the four object families and bre
 | --- | --- | --- | --- |
 | **Play** | `renderPlayCard` | `ui/play-card.js` | ✅ Single source of truth on 3 surfaces (feed single, feed strip, game-detail recent). The chronological plays view (`.plays-list__row`) is the outlier — flagged in audit §5b. |
 | **User** | `BgbBadge.render` | `ui/user-badge.js` | ✅ Single source of truth on 30+ call sites. As of the 2026-05-23 cleanup the global header also routes through it; no other code path exists. |
-| **Game** | `renderGamePolaroid` (partial) | `ui/game-card.js` | ⚠️ Six bespoke tiles (`.collection-tile`, `.hot-game-tile`, `.preview-card__cover`, `.game-detail__polaroid`, `.plays-list__thumb`, `.game-polaroid`) still exist. `renderGamePolaroid` now serves three surfaces through its `variant` opt — `polaroid` (Gather grid, explorer), `rail` (feed rails) and `row` (the Collection spoke's Expansions tree). The tree went through the canonical component rather than becoming a seventh bespoke tile; `showStatus` and `interactive` opts exist for it (every tree row is owned, and a `role="button"` tile can't nest inside the group's disclosure button). |
+| **Game** | `renderGamePolaroid` (partial) | `ui/game-card.js` | ⚠️ Six bespoke tiles (`.collection-tile`, `.hot-game-tile`, `.preview-card__cover`, `.game-detail__polaroid`, `.plays-list__thumb`, `.game-polaroid`) still exist. `renderGamePolaroid` now serves three surfaces through its `variant` opt — `polaroid` (Gather grid, explorer), `rail` (feed rails) and `row` (the Collection spoke's Expansions tree, and the Add Games catalog scroll). The tree went through the canonical component rather than becoming a seventh bespoke tile; `showStatus` and `interactive` opts exist for it (every tree row is owned, and a `role="button"` tile can't nest inside the group's disclosure button). Add Games reused that same row shape — tile plus a sibling quick action, `showStatus: false` because the row's own button already reports the state — so a whole new screen landed with no new Game tile. |
 | **Buddy** | _(no canonical row)_ | n/a | ⚠️ Buddy rows are rendered via `BgbBadge.render` for the avatar but the surrounding row markup is duplicated in `views/buddies-view.js`, `views/feed-view.js` (suggestions), and the profile preview. Less severe than Game because the avatar — the visual identity — is shared. |
 | **Chapter** | (none yet) | `widgets/reference-guide-scroll.js` renders chapters into the parchment scroll | Chapters are not surfaced outside the scroll, so the rule does not need to be enforced. If a future change shows a single chapter in a tooltip / preview, that would be the moment to extract a `renderChapter` function. |
 | **Session** | `widgets/round-score-grid.js` + `widgets/game-info-bar.js`, plus the cascading `play-flow-view` screens | The scoring grid is shared between host (live edit) and joiner (read-only mirror); the Play step's game-info strip is shared by the same pair. | ✅ Single source for both the scoring view and the Play header. The Gather/Settle screens are unique to the host. |
@@ -327,6 +327,12 @@ Most navigation between screens is **drill-into-an-object**. The graph below sho
 collection /     plays      session-viewer (joiner)
 wishlist                    play-flow (host) ◀───────── Bottom-nav "Play"
 (spokes from profile-self)
+  │
+  │ "+ Add"
+  ↓
+add-games  ── the whole catalog as one scroll; one tap per row shelves a game.
+              Both spokes land here, and its own toggle says which shelf the
+              tap fills, so it is one screen rather than two near-copies.
 
 
 Bottom-nav "Profile"
@@ -346,7 +352,7 @@ Bottom-nav "Profile"
 
 The two key observations:
 
-1. **`game-detail`, `profile-self/other`, and `play-flow` are the "destination" screens.** Everything else either lists them or details them.
+1. **`game-detail`, `profile-self/other`, and `play-flow` are the "destination" screens.** Everything else either lists them or details them. `add-games` is the one screen that deliberately isn't a drill-in: it is a *catalog*, and its rows mutate the viewer's relationship to a Game rather than navigating to one — though the tile inside each row still drills into `game-detail`, because deciding whether you want a game is what the game page is for.
 2. **The chronological `feed` is the main loop.** A user opens the app, sees recent plays from their buddies (Play objects), maybe taps a player avatar (→ User), maybe taps a game name (→ Game), maybe maximizes a play card (→ Play detail). All four flows are object-drilling.
 
 ### 5.4 The Play cascade
@@ -405,6 +411,8 @@ If two surfaces let the user open the same destination, they should use the same
 
 > Today's state: maximize button on the play card vs full-row tap on `.plays-list__row` (same destination, different affordance). See UI_AUDIT.md §5b.
 
+> The corollary for *mutations*: there are two ways to shelve a game and they are deliberately different tasks, not two affordances for one. The **status sheet** behind a tile's corner chip is "where does this one game sit?" — a radio group over owned / wishlist / remove, reachable from any tile anywhere. The **Add Games** row button is "fill my shelf" — one tap, one shelf, stated by the page's own toggle, repeated down a list. Add Games therefore turns the tile's corner chip off (`showStatus: false`): two controls on one 44px row, one of them opening a sheet that says what the other already shows, is the version of this that would violate the rule.
+
 ### Rule 3 — Destructive actions are confirmed through `PolaroidPopup.confirm`
 
 Per `.claude/rules/web-frontend.md`, all destructive actions go through the project's single confirm modal. No view rolls its own confirm dialog. This applies to: delete a play, remove a buddy, abandon a session, abandon a Gather draft, clear a collection, delete an account.
@@ -417,7 +425,7 @@ Per `.claude/rules/web-frontend.md`, all destructive actions go through the proj
 
 ```
 projects/boardgame-buddy/web/
-├── index.html              ← single-page shell: header + bottom nav + 18 view containers
+├── index.html              ← single-page shell: header + bottom nav + 19 view containers
 ├── init.js                 ← view construction, router registration, Supabase boot
 ├── helpers.js              ← jsStr, buddyLoader, formatDate, toast
 ├── config.js               ← API base URL
@@ -458,11 +466,15 @@ projects/boardgame-buddy/web/
 │   ├── player-reorder.js            → drag-to-reorder the Gather roster
 │   ├── game-picker-sheet.js, game-search-sheet.js, player-picker-sheet.js  ← sheets (§4.3)
 │   ├── add-game-modal.js, import-expansions-modal.js, outbox-modal.js      ← modals
+│   │     add-game-modal is no longer the way in to a shelf — views/add-games-view.js
+│   │     is. It survives as that page's BGG-import escape hatch.
+
 │   ├── join-panel.js
 │   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
 │
 ├── views/                  ← One file per screen / route
 │   ├── feed-view.js, log-play-view.js, play-flow-view.js, stats-view.js, …
+│   ├── add-games-view.js   → the catalog scroll behind both spokes' "+ Add"
 │
 └── assets/                 ← Brand, illustrations, credits (per .claude/rules/assets.md)
 ```
