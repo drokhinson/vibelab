@@ -2,9 +2,11 @@
 -- BoardgameBuddy — current schema snapshot
 -- Last updated: migration 046 (session write RPCs; drops the redundant
 --               (code, phase) index), plus the two catalog-browse indexes from
---               051 and 060, folded in below. Migrations 047-059 are NOT yet
---               reflected here — read them directly until someone catches this
---               snapshot up.
+--               051 and 060 and the achievement objects from 062 (the catalog,
+--               its groups, the per-user unlock rows and
+--               profiles.app_installed_at), folded in below. Migrations
+--               047-059 are NOT yet reflected here — read them directly until
+--               someone catches this snapshot up.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: the legacy boardgamebuddy_buddies table is now strictly for free-text
@@ -87,6 +89,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- pending-import rows whose created_at >= this value to report
   -- session-scoped progress (Imported X of Y). Added in migration 027.
   bgg_last_sync_started_at TIMESTAMPTZ,
+  -- First time this account was seen running as an installed PWA (migration
+  -- 062). The one achievement fact nothing in the database could derive; set
+  -- by POST /achievements/installed and read only by bgb_sync_achievements.
+  app_installed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_profiles ENABLE ROW LEVEL SECURITY;
@@ -356,6 +362,47 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chapter_reports (
 );
 ALTER TABLE public.boardgamebuddy_chapter_reports ENABLE ROW LEVEL SECURITY;
 
+-- Achievement catalog (migration 062). Three objects: the four section
+-- headings, the sixteen badges, and one row per badge a user has earned.
+-- The catalog is DATA, not a Python dict, so retuning a tier or rewording a
+-- badge is an UPDATE rather than a deploy. `metric` names a key of the JSONB
+-- blob bgb_sync_achievements computes; `icon` is a sprite slug resolving to
+-- web/assets/sprites/achievements/bgb-ach-<icon>.svg.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_achievement_groups (
+  id            TEXT PRIMARY KEY,
+  label         TEXT NOT NULL,
+  blurb         TEXT NOT NULL,
+  display_order INT  NOT NULL
+);
+ALTER TABLE public.boardgamebuddy_achievement_groups ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_achievements (
+  id            TEXT PRIMARY KEY,
+  group_id      TEXT NOT NULL REFERENCES public.boardgamebuddy_achievement_groups(id),
+  name          TEXT NOT NULL,
+  tagline       TEXT NOT NULL,
+  requirement   TEXT NOT NULL,
+  metric        TEXT NOT NULL CHECK (metric IN (
+                  'plays_logged', 'wins', 'biggest_table', 'two_player_games',
+                  'buddies', 'guide_chapters', 'chapters_borrowed',
+                  'plays_with_notes', 'bgg_linked', 'app_installed')),
+  threshold     INT  NOT NULL CHECK (threshold > 0),
+  icon          TEXT NOT NULL,
+  display_order INT  NOT NULL
+);
+ALTER TABLE public.boardgamebuddy_achievements ENABLE ROW LEVEL SECURITY;
+
+-- Written once, when a badge is first earned. Exists ONLY to pin the unlock
+-- date — and to make the badge permanent: deleting a play afterwards does not
+-- take back the evening it belonged to.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_achievements (
+  user_id        UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  achievement_id TEXT NOT NULL REFERENCES public.boardgamebuddy_achievements(id) ON DELETE CASCADE,
+  unlocked_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, achievement_id)
+);
+ALTER TABLE public.boardgamebuddy_user_achievements ENABLE ROW LEVEL SECURITY;
+
 -- Indexes
 CREATE UNIQUE INDEX IF NOT EXISTS bgb_profiles_username_uk ON public.boardgamebuddy_profiles(username);
 -- Composite indexes (migration 019) — supersede the single-column variants.
@@ -382,6 +429,9 @@ CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_chapter
   ON public.boardgamebuddy_user_chapters(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_chapter_reports_status
   ON public.boardgamebuddy_chapter_reports(status, created_at);
+-- Achievements (migration 062): the catalog is always read in screen order.
+CREATE INDEX IF NOT EXISTS idx_bgb_achievements_order
+  ON public.boardgamebuddy_achievements (display_order);
 -- Expansions (folded into 001_baseline): fast lookup of a base game's expansions by bgg_id.
 CREATE INDEX IF NOT EXISTS idx_bgb_games_base_bgg
   ON public.boardgamebuddy_games(base_game_bgg_id)

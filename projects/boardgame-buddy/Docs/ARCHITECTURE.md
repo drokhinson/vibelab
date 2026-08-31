@@ -33,6 +33,7 @@ Each object has a JS file in `web/domain/` that wraps its API surface, normalize
 | **Collection** | `domain/collection.js` | Per-user `(game, status)` mapping — owned / wishlist / played-not-owned. Drives the status badges everywhere a Game appears. |
 | **Profile** | `domain/profile.js` | Public projection of a User: stats, recent plays, owned games, favourite game. |
 | **Feed** | `domain/feed.js` | Composite chronological stream of plays + algorithmic rails (hot games, suggested buddies). Lives in its own object because the response is heterogeneous. |
+| **Achievement** | `domain/achievements.js` | A badge in the sixteen-item catalog, resolved against the viewer's own progress. The *catalog* lives in the database (`boardgamebuddy_achievements`), not in this file — retuning a tier is an UPDATE, not a deploy. What the module owns beyond the fetch is the half the server cannot know: which badges this **device** has already shown the user, which is what drives the "New" ribbons. |
 
 The `domain/store.js` file is the cross-cutting state container. Views call `window.store.subscribe(key, fn)` to listen for changes and `window.store.set(key, value)` to publish. The `user`, `feed`, and `myCollectionMap` keys are the high-traffic ones; everything else is view-local.
 
@@ -379,6 +380,7 @@ Bottom-nav "Profile"
 └────────┬────────┘
          │
          ├── Your stats  → stats     (podium + per-game breakdown)
+         ├── See all → achievements  (sixteen badges, four groups)
          ├── See all → collection
          ├── See all → wishlist
          ├── See all → plays
@@ -473,7 +475,7 @@ projects/boardgame-buddy/web/
 │   ├── view.js             ← Base View class + Router
 │   ├── theme.js            ← light/dark controller (see §4.2a)
 │   ├── net.js, cache.js, outbox.js, bootstrap.js          ← Offline + caching
-│   ├── game.js, play.js, buddy.js, user.js, collection.js, profile.js, stats.js, …
+│   ├── game.js, play.js, buddy.js, user.js, collection.js, profile.js, stats.js, achievements.js, …
 │   ├── shelf-controller.js, shelf-filter.js               ← Client-side shelf paging
 │   └── play-session.js, session-phase.js, live-scores.js, score-write-queue.js  ← Session state
 │
@@ -513,7 +515,8 @@ projects/boardgame-buddy/web/
 │   ├── feed-view.js, log-play-view.js, play-flow-view.js, stats-view.js, …
 │   ├── add-games-view.js   → the catalog scroll behind both spokes' "+ Add"
 │
-└── assets/                 ← Brand, illustrations, credits (per .claude/rules/assets.md)
+└── assets/                 ← Brand, illustrations, credits, sprites (per .claude/rules/assets.md)
+    └── sprites/achievements/  ← bgb-ach-<slug>.svg — one medallion per badge
 ```
 
 `Docs/` next to this file holds the audit (`UI_AUDIT.md`), the standalone screen mocks (`mocks/`) and release notes.

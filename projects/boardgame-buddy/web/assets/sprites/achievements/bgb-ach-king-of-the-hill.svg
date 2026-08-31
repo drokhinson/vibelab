@@ -1,0 +1,34 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="King of the Hill badge — Buddy crowned on the summit, arms raised">
+  <title>King of the Hill badge — Buddy crowned on the summit, arms raised</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold. -->
+  <defs>
+    <linearGradient id="king-of-the-hill-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="king-of-the-hill-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="king-of-the-hill-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#king-of-the-hill-disc)"/>
+  <g clip-path="url(#king-of-the-hill-clip)">
+    <path d="M-10 160 L46 96 L102 160 Z" fill="#5C4A34"/><path d="M62 160 L118 92 L174 160 Z" fill="#4A3B29"/><path d="M14 160 L80 88 L146 160 Z" fill="#8A5A32"/><path d="M80 88 L62 108 L80 118 L98 108 Z" fill="#C9A97A" opacity="0.8"/><g transform="translate(38.00 27.80) scale(0.42)">
+    <path d="M84 148 L40 98" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><path d="M116 148 L160 98" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><circle cx="100" cy="148" r="14" fill="url(#king-of-the-hill-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#king-of-the-hill-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#king-of-the-hill-gold)"/>
+    <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M78 100 Q100 124 122 100" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g><g transform="translate(66 22)"><path d="M0 17.4 L0 3.1 L7.0 9.0 L14.0 0 L21.0 9.0 L28.0 3.1 L28.0 17.4 Z" fill="url(#king-of-the-hill-gold)"/><rect x="0" y="17.4" width="28.0" height="3.9" rx="1.7" fill="url(#king-of-the-hill-gold)"/></g><path d="M26 42 Q27.3 46.7 32 48 Q27.3 49.3 26 54 Q24.7 49.3 20 48 Q24.7 46.7 26 42 Z" fill="#F0C662" opacity="0.9"/><path d="M134 42 Q135.3 46.7 140 48 Q135.3 49.3 134 54 Q132.7 49.3 128 48 Q132.7 46.7 134 42 Z" fill="#F0C662" opacity="0.9"/>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#BFB4A4" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#BFB4A4" stroke-width="1.4" opacity="0.34"/>
+</svg>

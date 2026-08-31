@@ -1,8 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 060 (bgb_play_partners — `recent` rows now carry
---               pending_request_id so a played-with row can cancel/accept
---               in place)
+-- Last updated: migration 062 (bgb_sync_achievements — the Achievements spoke's
+--               whole payload in one call, unlock rows included)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -626,3 +625,30 @@
 --               rule shared with bgb_play_stats (039/045).
 --   NOTE:       GET /collection is deliberately unchanged — the native app
 --               consumes its row shape (app/src/store/AppContext.js:262).
+
+-- bgb_sync_achievements(uid UUID)
+--   → JSONB { total, earned_count, metrics, groups[], achievements[] }
+--   Defined in: db/migrations/boardgamebuddy/062_achievements.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/achievement_routes.py
+--               (GET /achievements, POST /achievements/installed)
+--   Purpose:    Everything on the Achievements spoke (/profile/achievements) in
+--               one call. Computes all ten metrics behind the sixteen badges
+--               (plays logged, wins, biggest table, two-player-only games
+--               played, buddies, guide chapters, chapters of yours another
+--               player kept, plays you wrote notes on, whether BGG is linked,
+--               whether the PWA is installed),
+--               inserts a boardgamebuddy_user_achievements row for anything
+--               newly earned, then joins the catalog to those rows and returns
+--               name / tagline / requirement / icon / threshold / progress /
+--               earned / unlocked_at per badge.
+--   NOTE:       VOLATILE — it writes the unlock rows. Deliberately one function
+--               rather than a read plus a write: every caller wants both, and
+--               the metrics pass is the expensive half. `earned` is read off
+--               the unlock row rather than the live metric, which is what makes
+--               a badge permanent once a play behind it is deleted. Plays use
+--               the "logged it OR appeared on it" visibility rule shared with
+--               bgb_play_stats (045) and bgb_user_stats_detail (058); wins are
+--               necessarily narrower, since a win needs a player row.
+--               two_player_games is the one metric that reaches the games
+--               table — 020 denormalized name and thumbnail onto plays, never
+--               the player counts.

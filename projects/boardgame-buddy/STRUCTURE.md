@@ -83,6 +83,7 @@ Linked to Supabase Auth `auth.users`.
 | avatar_url | TEXT | nullable |
 | is_admin | BOOLEAN | default false; granted via `POST /profile/become-admin` with the shared admin key |
 | bgg_username | TEXT | nullable; linked BoardGameGeek username (folded into 001_baseline). Unique when non-null. |
+| app_installed_at | TIMESTAMPTZ | nullable; first time this account was seen running as an installed PWA (migration 062). The one achievement fact nothing in the database could derive — set by `POST /achievements/installed`, read only by `bgb_sync_achievements`. |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_collections
@@ -249,6 +250,43 @@ Presence row: this chapter is in the user's guide for that game.
 | created_at | TIMESTAMPTZ | when the user added the chapter |
 | UNIQUE(user_id, chapter_id) | | one row per user-chapter pair |
 
+### boardgamebuddy_achievement_groups (lookup)
+The four section headings on the Achievements spoke. Seeded by migration 062.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | TEXT PK | `table` / `victories` / `guide` / `setup` |
+| label | TEXT | e.g. "At the table" |
+| blurb | TEXT | one line under the heading |
+| display_order | INT | screen order |
+
+### boardgamebuddy_achievements (lookup)
+The badge catalog — sixteen rows, seeded by migration 062. Kept as **data, not a
+Python dict**, per `.claude/rules/database-supabase.md`: retuning a tier or
+rewording a badge is an UPDATE, not a deploy.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | TEXT PK | `plays_10`, `wins_100`, `chapter_borrowed`, … |
+| group_id | TEXT FK | → achievement_groups |
+| name | TEXT | "Table Regular", "Dynasty", "Cited Source" |
+| tagline | TEXT | one line of flavour, shown under the name |
+| requirement | TEXT | what you have to do, in plain language; shown on locked badges |
+| metric | TEXT | which computed metric drives it — CHECKed against the ten `bgb_sync_achievements` computes, so a badge can't name a metric nothing calculates |
+| threshold | INT | the bar the metric has to clear |
+| icon | TEXT | **sprite slug**, never an emoji → `web/assets/sprites/achievements/bgb-ach-<icon>.svg` |
+| display_order | INT | screen order |
+
+### boardgamebuddy_user_achievements
+One row per badge a user has earned, written the first time they clear the bar.
+Exists only to pin the unlock date — and to make the badge **permanent**: earned
+is read off this row, not off the live metric, so deleting a play afterwards
+does not take back the evening it belonged to.
+| Column | Type | Notes |
+|--------|------|-------|
+| user_id | UUID FK | → profiles |
+| achievement_id | TEXT FK | → achievements |
+| unlocked_at | TIMESTAMPTZ | when the badge was first earned |
+| PRIMARY KEY (user_id, achievement_id) | | |
+
 ### boardgamebuddy_chapter_reports
 User-submitted moderation reports against a chapter. Admins resolve
 (`status='resolved'`) or delete the chapter outright (cascade removes
@@ -354,6 +392,8 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/users/me/stats` — Strava-style aggregate stats for the current user
 - `GET /api/v1/boardgame_buddy/users/{user_id}/stats` — same shape for any user (profiles are public)
 - `GET /api/v1/boardgame_buddy/users/me/stats/detail` — everything the Stats spoke draws, in one call (podium, per-game win/score breakdown, nemesis, 26-week play rhythm, unplayed shelf, table size, taste, comebacks, co-op record, personal bests). Backed by `bgb_user_stats_detail`. Self-only, unlike the two above. The `shelf` block is `{owned, played, unplayed, marked, games[], games_truncated}`: `played` counts a logged play OR a `played_before_at` mark, and `games` is every owned base game with no logged plays (capped at 300) — the list the shelf sheet renders and toggles. It ships inside this payload rather than through a second endpoint so the sheet's rows and the count on the card that opens it cannot drift apart, and so the sheet needs no fetch to open.
+- `GET /api/v1/boardgame_buddy/achievements` — the whole Achievements spoke in one call: the catalog and its four groups joined to the caller's progress (`{total, earned_count, metrics, groups[], achievements[]}`). Backed by `bgb_sync_achievements`, which also **writes** — it stamps the unlock row for anything newly earned before returning. One function rather than a read plus a write because every caller wants both and the metrics pass is the expensive half. Self-only, like `/users/me/stats/detail`.
+- `POST /api/v1/boardgame_buddy/achievements/installed` — record that the caller is running the installed web app, and return the refreshed payload. The one achievement fact nothing in the database could derive: an installed PWA is indistinguishable from a browser tab server-side, so the web app reports it itself on a cold start in standalone display-mode (and on the `appinstalled` event). Idempotent — `profiles.app_installed_at` is written only while still NULL, so relaunching keeps the original date.
 - `GET /api/v1/boardgame_buddy/users/{user_id}/profile` — public profile + buddy-relation flags
 - `GET /api/v1/boardgame_buddy/search?q=&include_bgg=false` — unified game search (collection → DB; BGG only when `include_bgg=true`). Expansions are excluded from every source unless `include_expansions=true` — they aren't pickable as a session's main game and are added through the base game's expansion section instead.
 - `POST /api/v1/boardgame_buddy/sessions` — open a short-code play session (body `{game_id?}`). Closes any prior open session for the same host first.
@@ -406,12 +446,13 @@ Path-based routing via the History API (`projects/boardgame-buddy/web/domain/vie
 | `/games/add` | `add-games` | — | `status` (`owned` \| `wishlist`, default `owned`) | Add Games: the whole BgB catalog alphabetically as one scrolling list, one tap per row to add to (or remove from) the active shelf. Reached from the "+ Add" on the Collection and Wishlist spokes; the in-page toggle switches shelf and `replaceUrl`s so a refresh keeps it. Listed above `/games` in the route table — the two patterns cannot collide, but specific before general is the table's rule. |
 | `/game/:gameId` | `game-detail` | `gameId` | `gameName` | Game hero, status toggle, reference scroll, recent plays. |
 | `/game/:gameId/chapters` | `reference-guide-add` | `gameId` | `gameName`, `expansionIds`, `mode` (`"edit"` for prefill), `chapterId` | Three-mode chapter editor (browse / create / edit). When opened with `mode=edit`, the scroll widget stashes the chapter on the view singleton (`_prefillChapter`) so the deep-link parent never re-fetches it. |
-| `/profile` | `profile-self` | — | — | Own profile: account card, a tappable **Your stats** block (plays / wins / top game) routing to `/profile/stats`, then Collection / Wishlist / Recent plays / Buddies preview cards. Bottom-nav Profile tab. |
+| `/profile` | `profile-self` | — | — | Own profile: account card, a tappable **Your stats** block (plays / wins / top game) routing to `/profile/stats`, then Achievements / Collection / Wishlist / Recent plays / Buddies preview cards. The Achievements card is the one that is not part of `/profile/bundle` — it paints from its own cached payload and refreshes in the background, so first paint still costs exactly one call. Bottom-nav Profile tab. |
 | `/profile/collection` | `collection` | — | `userId` (when viewing another user — though `/u/:userId` is preferred for that) | Collection grid. |
 | `/profile/wishlist` | `wishlist` | — | `userId` | Wishlist grid. |
 | `/profile/plays` | `plays` | — | `userId` | Plays log. |
 | `/profile/buddies` | `buddies` | — | `qr` (a token, only from a `/b/<token>` link) | Accepted buddies + pending requests + search. Buddies and Played-with are paged 6 per page, with the "Buddies you may know" rail between them. A QR button beside the search field opens `widgets/buddy-qr-sheet.js` — My code / Scan. |
 | `/profile/stats` | `stats` | — | — | Stats spoke: gold/silver/bronze podium of the most-played games, career strip, a per-game picker showing win/play ratio and the average winning score, then nemesis, play rhythm, shelf of shame, table size, taste, comebacks, co-op record and personal bests. One call. |
+| `/profile/achievements` | `achievements` | — | — | Achievements spoke: a progress ring over sixteen medallion badges in four groups (At the table / Victories / The reference guide / Making it yours). Each group is a single horizontally-scrolling rail ordered **done → in progress → not started**, with the catalog's own order kept inside each bucket so a tier ladder never reads out of sequence. Locked badges keep their art, desaturated, and print what they still want from you; tapping any badge opens its detail sheet, which stays grey while the badge is unearned. One call. |
 | `/u/:userId` | `profile-other` | `userId` | — | Public profile for another account. Distinct from `/profile/*` so userId can't collide with a subpage name. |
 | `/settings` | `settings` | — | — | Account / theme (Light-Dark-Auto) / logout. Opened from the header gear on any screen, so it **closes** back to wherever it came from rather than routing to the hub. |
 | `/admin` | `admin` | — | — | Chapter-reports moderation. Only reachable when `is_admin=true`. |
@@ -470,6 +511,7 @@ Bottom nav has three tabs: **Feed**, **Log**, **Profile**.
    - **What offline can't do.** Joining (the lobby is server-side — the Join half disables itself and says so), live scores, photos (the blob is never persisted, so a queued play can't carry one), signing in, and BGG search/import. Picking a game is limited to what's already cached — `PlayCreate.game_id` is required and the catalog can't be searched, so the picker filters `game.recent` plus every warmed `game.bundle` (i.e. the user's whole owned collection) and says as much in its empty state. The reference guide still works: `Chapter.cachedMyChapters` reads through the stale window when offline rather than returning nothing.
    - **Cold start.** `web/sw.js` precaches the app shell so BgB opens from a home-screen icon with no signal at all; without it the feature would only work for people who left the tab open. See Active Development Notes.
 4. **Game Search** (search pill on Feed/Profile): single ranked list — collection hits first, then DB matches. A "Search BoardGameGeek for more" button appends BGG hits on demand. **Expansions never appear here** — base games only, on every source. They live in the base game's Expansions section instead.
+4b. **Profile → Achievements** (`/profile/achievements`): sixteen medallion badges of the BoardgameBuddy character, grouped into At the table (10 / 100 / 300 plays logged, a two-player-only game, and a five-player table), Victories (10 / 100 / 300 wins), The reference guide (1 / 10 / 50 chapters kept, plus a chapter of yours that someone else keeps) and Making it yours (first buddy, notes on a logged play, the BGG link, the app installed to a home screen). Every badge but one is derived from data the app already writes; the install is reported by the web app itself, because an installed PWA is indistinguishable from a browser tab server-side. Earned badges are **permanent** — the unlock row is what `earned` reads, so deleting a play later does not take the badge back. Each group is one horizontally-scrolling rail, ordered done → in progress → not started. Locked badges keep their art (desaturated) and print what they still want; tapping any badge opens its detail sheet, which shows the same grey medallion plus the badge's flavour line and what it takes to earn it.
 5. **Game Detail** (tap any game card): box art hero, status toggle (none → owned → wishlist → none), Log a Play button, BGG + Rulebook links, Expansions section, a rolled-up parchment **Reference Guide scroll** (tap either roll to open/close), and recent plays. The scroll is per-user per-game and starts empty; tap **Add a chapter** at the bottom to either Create a new one or Browse the community pool.
 
 **Add games** (the `+ Add` on the Collection and Wishlist spokes, `/games/add`): the whole BgB catalog as one alphabetical scroll, 30 rows a batch behind the shared scroll sentinel. The back row, an **"Add to:"** label with the Collection / Wishlist pills, and the search box are all pinned to the top of the screen — the label is the screen's whole explanation, and the shelf the pills select is what every row's + writes to, so neither may scroll away from a list this long. Each row is a game tile that opens the game page, with a quick action beside it: **+** puts the game on the active shelf, **✓** means it is already there and takes it off. A game sitting on the *other* shelf (or one you've only played) says so in a chip, and the same tap moves it — `POST /collection` upserts on (user, game), so wishlist → owned is one tap, not a remove and an add. The Collection ↔ Wishlist toggle at the top retargets every button without a single request. A search box narrows the catalog server-side; below it, **Import from BoardGameGeek** opens the old `AddGameModal` for the one case a catalog scroll can't cover — a game BgB has never imported.

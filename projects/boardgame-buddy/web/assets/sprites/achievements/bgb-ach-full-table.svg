@@ -1,0 +1,34 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Full Table badge — Buddy with four more players around the board">
+  <title>Full Table badge — Buddy with four more players around the board</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold. -->
+  <defs>
+    <linearGradient id="full-table-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="full-table-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="full-table-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#full-table-disc)"/>
+  <g clip-path="url(#full-table-clip)">
+    <circle cx="80" cy="86" r="50" fill="none" stroke="#8A5A32" stroke-width="3" opacity="0.7"/><g transform="translate(30 92) scale(0.92)" fill="#F8F2E5" opacity="1.0"><circle cx="0" cy="-11" r="4"/><path d="M-6 0 L-6 -6 Q-6 -9 -2 -8 L2 -8 Q6 -9 6 -6 L6 0 Z"/></g><g transform="translate(46 58) scale(0.92)" fill="#F8F2E5" opacity="1.0"><circle cx="0" cy="-11" r="4"/><path d="M-6 0 L-6 -6 Q-6 -9 -2 -8 L2 -8 Q6 -9 6 -6 L6 0 Z"/></g><g transform="translate(114 58) scale(0.92)" fill="#F8F2E5" opacity="1.0"><circle cx="0" cy="-11" r="4"/><path d="M-6 0 L-6 -6 Q-6 -9 -2 -8 L2 -8 Q6 -9 6 -6 L6 0 Z"/></g><g transform="translate(130 92) scale(0.92)" fill="#F8F2E5" opacity="1.0"><circle cx="0" cy="-11" r="4"/><path d="M-6 0 L-6 -6 Q-6 -9 -2 -8 L2 -8 Q6 -9 6 -6 L6 0 Z"/></g><g transform="translate(34.00 41.40) scale(0.46)">
+    <circle cx="100" cy="148" r="14" fill="url(#full-table-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#full-table-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#full-table-gold)"/>
+    <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M78 100 Q100 124 122 100" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#E0A94A" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#E0A94A" stroke-width="1.4" opacity="0.34"/>
+</svg>

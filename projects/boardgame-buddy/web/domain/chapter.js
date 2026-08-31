@@ -71,6 +71,9 @@
     // open refetches rather than serving the pre-mutation list.
     invalidateChaptersCache() {
       if (window.bgbCache) window.bgbCache.clear(CHAPTERS_NS);
+      // Three tiers of "chapters in your guide" hang off this count, so every
+      // chapter mutation is an achievement mutation too.
+      if (window.Achievements && window.Achievements.invalidate) window.Achievements.invalidate();
     },
     pool(gameId, { q, chapterType, expansionIds } = {}) {
       const query = {};

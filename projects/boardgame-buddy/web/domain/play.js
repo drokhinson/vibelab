@@ -145,6 +145,9 @@
   function _invalidatePlayDeps() {
     if (window.Profile && window.Profile.invalidate) window.Profile.invalidate();
     if (window.Game && window.Game.invalidateBundle) window.Game.invalidateBundle();
+    // Four badges move on a play: plays logged, wins, the biggest table you
+    // have sat at, and whether you wrote the night down.
+    if (window.Achievements && window.Achievements.invalidate) window.Achievements.invalidate();
     // Stats live in their own cache namespace now — clear so the next
     // Profile mount re-pulls accurate plays/wins counts.
     if (window.Stats && window.Stats.invalidate) window.Stats.invalidate();
