@@ -2975,23 +2975,66 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   position: relative;
   flex: 1 1 auto;
   width: 100%;
-  /* The grid row is the tap target and clears the 44px floor on its own
-     (56px avatar + two text lines), but state it so a copy of this rule can't
-     quietly shrink under it. */
-  min-height: 44px;
+  /* A FIXED height, not a floor. The grid this lands in is sized as a whole
+     number of rows (see .add-buddies__grid), which is only a height you can
+     compute if every row is the same one — otherwise a two-line display name
+     makes its row taller than its neighbours and "three rows tall" stops
+     being true. Comfortably over the 44px tap-target floor either way
+     (.claude/rules/mobile-web.md §5). */
+  height: var(--buddy-tile-h, 116px);
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   font: inherit;
   cursor: pointer;
   transition: border-color 120ms var(--ease), background 120ms var(--ease),
               transform 90ms var(--ease);
 }
+/* Two lines, then ellipsis — the height above is only fixed if the name can't
+   grow past what it budgets for. */
+.buddy-tile--select .buddy-tile__name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.buddy-tile--select .buddy-tile__reason {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Touch has no hover, so the press state is the primary affordance
    (.claude/rules/mobile-web.md §5). */
 .buddy-tile--select:active { transform: scale(0.97); }
 @media (hover: hover) {
-  .buddy-tile--select:hover { border-color: var(--polaroid-accent); }
+  .buddy-tile--select:not([disabled]):hover { border-color: var(--polaroid-accent); }
+}
+/* Someone the viewer already shares an edge with. Rendered and labelled rather
+   than hidden: a search that silently drops the person you looked up reads as
+   broken, and the backend would reject the tick anyway. The press affordance
+   goes with it — nothing happens, so nothing should move.
+   [disabled] is 0,2,0, so it beats the :active rule above without doubling.
+
+   Recessed by its SURFACE, never by opacity. A blanket `opacity: 0.55` here
+   took the reason line — which on this tile is the entire message, and is
+   11.5px text — from 4.5:1 down to 2.2:1 dark / 2.1:1 light. The one element
+   that must stay readable was the one being faded. So the ground steps back
+   instead, the avatar carries the "inert" reading, and the label steps UP to
+   full ink: >14:1 in both themes, and the only thing on the tile at full
+   strength, which is right when it is the only thing left to say. */
+.buddy-tile--select[disabled] {
+  cursor: default;
+  background: var(--polaroid-bg-soft);
+  border-color: var(--polaroid-line);
+}
+.buddy-tile--select[disabled]:active { transform: none; }
+.buddy-tile--select[disabled] .buddy-tile__avatar-wrap { opacity: 0.5; }
+.buddy-tile--select[disabled] .buddy-tile__name { color: var(--polaroid-muted); }
+.buddy-tile--select[disabled] .buddy-tile__reason {
+  color: var(--polaroid-ink);
+  font-weight: 600;
 }
 .buddy-tile--select:focus-visible {
   outline: 2px solid var(--polaroid-accent);
@@ -3109,7 +3152,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    (cream in BOTH themes), where that red drops to 3.68:1; deepening it toward
    the paper's own ink brings it to 5.84 dark / 7.91 light, and keeps it a token
    expression rather than a second literal red. Same mix as the sibling step's
-   .onboarding-buddies__error. */
+   .add-buddies__error. */
 .onboarding-bgg .bgg-log__sublist-error {
   color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
 }
@@ -3726,23 +3769,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 @media (prefers-reduced-motion: reduce) {
   .shelf-more__spinner { animation-duration: 2400ms; }
 }
-.search-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
-.search-hit {
-  position: relative;
-  display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.55rem;
-  background: oklch(var(--b2));
-  border: 1px solid oklch(var(--b3));
-  border-radius: 0.6rem;
-  cursor: pointer;
-}
-.search-hit:hover { border-color: var(--accent); }
-.search-hit img { width: 44px; height: 44px; object-fit: cover; border-radius: 0.35rem; }
-.search-hit__placeholder { width: 44px; height: 44px; border-radius: 0.35rem; display: grid; place-items: center; background: oklch(var(--b3)); }
-.search-hit__body { flex: 1; min-width: 0; }
-.search-hit__name { font-weight: 600; font-size: 0.92rem; line-height: 1.2; }
-.search-hit__meta { font-size: 0.76rem; opacity: 0.6; margin-top: 0.1rem; }
-
 /* ── Unified status tag (every game tile) ─────────────────────────────────── */
 .status-tag {
   display: inline-flex; align-items: center; gap: 0.25rem;
@@ -5073,16 +5099,37 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* ── Buddies view ─────────────────────────────────────────────────────────── */
-.buddies-search { padding: 0.5rem 0; }
-/* Search field and the QR button share one row: both are ways of adding the
-   same thing, so separating them would read as two unrelated affordances. */
-/* The field itself is a .search-field, which already carries
-   `flex: 1 1 auto; min-width: 0` — so the row supplies only the gap.
-   `stretch`, not `center`: it makes the button take the field's height
-   whatever that is, so the pair reads as one control instead of the button
+.buddies-add { padding: 0.5rem 0; }
+/* The Add button and the QR button share one row: both are ways of adding the
+   same thing, so separating them would read as two unrelated affordances.
+   `stretch`, not `center`: it makes the QR square take the Add button's height
+   whatever that is, so the pair reads as one control instead of the square
    floating at its own size beside it. */
-.buddies-search__row { display: flex; align-items: stretch; gap: 0.5rem; }
-.buddies-search__qr {
+.buddies-add__row { display: flex; align-items: stretch; gap: 0.5rem; }
+/* Add takes the growth the profile-search field it replaced used to carry.
+   Drawn from the SAME three tokens as the QR square rather than reaching for a
+   DaisyUI .btn-primary, because of the row comment above: a solid accent pill
+   beside a hand-drawn outline square is two affordances, not one control
+   (.claude/rules/ui-object-design.md §3b). */
+.buddies-add__btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex; align-items: center; justify-content: center; gap: 0.45rem;
+  box-sizing: border-box;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-1);
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.buddies-add__btn:active { background: var(--bg-2); }
+.buddies-add__btn:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.buddies-add__qr {
   flex: none;
   display: flex; align-items: center; justify-content: center;
   box-sizing: border-box;
@@ -5097,13 +5144,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.buddies-search__qr:active { background: var(--bg-2); }
-.buddies-search__qr:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.buddies-add__qr:active { background: var(--bg-2); }
+.buddies-add__qr:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 .buddies-section { padding: 0.75rem 0; border-top: 1px solid oklch(var(--b3)); }
-/* Drop the divider that would otherwise sit immediately below the search
-   bar — the user explicitly wanted the search area free of horizontal
-   lines. Subsequent sections still divide cleanly from each other. */
-.buddies-search + .buddies-section { border-top: none; padding-top: 0.25rem; }
+/* Drop the divider that would otherwise sit immediately below the add row —
+   that band is deliberately free of horizontal lines. Subsequent sections
+   still divide cleanly from each other. */
+.buddies-add + .buddies-section { border-top: none; padding-top: 0.25rem; }
 .buddies-section h3 { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
 .buddies-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .buddies-row {
@@ -9027,7 +9074,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    espresso in dark.
 
    The rules below exist because these components default to the DaisyUI base
-   palette (.input, .search-hit, .collection-tile, .filter-chip …), which is the
+   palette (.input, .collection-tile, .filter-chip …), which is the
    app ground rather than a card surface. Each re-points at the --sheet-* card
    tokens so it reads as a card on whichever ground it lands on. Everything
    stays valid in both themes because every rule reads a token, not a literal.
@@ -9132,23 +9179,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .bgb-spoke-screen .buddies-row__when { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
 .bgb-spoke-screen .buddies-section { border-top-color: var(--sheet-line); }
 .bgb-spoke-screen .buddies-section h3 { color: var(--accent-ink); }
-
-/* Profile-search suggestion rows under the buddies-view search bar —
-   .search-hit defaults to DaisyUI's dark base tones, which render as
-   black boxes on cream. Match the warm-wash polaroid look used by
-   .buddies-row so the suggestions stay legible. */
-.bgb-spoke-screen .search-hit {
-  background: var(--sheet-card);
-  color: var(--polaroid-ink, #1D1812);
-  border: 1px solid var(--sheet-line);
-}
-.bgb-spoke-screen .search-hit:hover { border-color: var(--accent); }
-.bgb-spoke-screen .search-hit__placeholder {
-  background: var(--polaroid-line, #DAC9A4);
-  color: var(--polaroid-ink, #1D1812);
-}
-.bgb-spoke-screen .search-hit__name { color: var(--polaroid-ink, #1D1812); }
-.bgb-spoke-screen .search-hit__meta { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
 
 /* Search-bar + filter-toggle controls — DaisyUI's `.input.input-bordered`
    defaults to dark theme tones, which renders as a black box on cream.
@@ -9417,41 +9447,119 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
 
-/* ── Onboarding step two: "Add buddies" ──────────────────────────────────────
-   Sibling of .avatar-cust and .onboarding-bgg — same polaroid card, same
-   trimmed padding, same inner scroll — because the three are consecutive
-   screens of one flow and any difference between their chrome reads as a jump.
-   Wider than the customizer: this one holds a three-column grid, not a single
-   carousel. */
-.onboarding-buddies {
+/* ── "Add buddies" ───────────────────────────────────────────────────────────
+   Two callers: first-run setup's step two, and the Buddies screen's Add button
+   (widgets/add-buddies-modal.js). On the onboarding path it is a sibling of
+   .avatar-cust and .onboarding-bgg — same polaroid card, same trimmed padding —
+   because those three are consecutive screens of one flow and any difference
+   between their chrome reads as a jump. Wider than the customizer: this one
+   holds a three-column grid, not a single carousel.
+
+   The card is deliberately PAPER in both themes and must NOT be added to the
+   chrome re-point list near the top of this file: the measured ratios in
+   .buddy-tile--select's own comment are taken against paper. */
+.add-buddies {
   width: min(420px, 92vw);
-  /* Let the close button overhang the corner without a scrollbar; the
-     vertical scroll lives on __body, exactly as .avatar-cust does. */
+  /* Let the close button overhang the corner; __body owns the layout below. */
   overflow: visible;
   padding: 0;
 }
-.onboarding-buddies:focus { outline: none; }   /* programmatic focus only */
-.onboarding-buddies__body {
+.add-buddies:focus { outline: none; }   /* programmatic focus only */
+
+/* The card is a flex column and the GRID is its only shrinkable child — the
+   bottom-sheet anatomy of .claude/rules/overlays.md §3, applied to a centred
+   modal. That is what pins the search field and the Send row: they are
+   `flex: none`, so the card's height does not move as results come and go.
+   Before this, __body was the scroller and every query resized the whole card.
+
+   No `position: sticky` for the footer: sticky inside a scroller needs the
+   scroller to be the thing that scrolls, and then the search field scrolls
+   away with the tiles. This way each part is exactly where it should be. */
+.add-buddies__body {
+  /* Tall enough for the two-line name the clamp below allows: 58px avatar +
+     2 x 16.32px name + 12px reason + 9.6px padding, measured. At 116px (a
+     one-line tile) the second line overlapped the reason line — the grid
+     stretches every row to the tallest in it, so one long name in a row of
+     three is enough to do it. */
+  --buddy-tile-h: 132px;
+  --add-buddies-gap: 8px;
+  --add-buddies-grid-h: calc(3 * var(--buddy-tile-h) + 2 * var(--add-buddies-gap));
+  /* Explicit, not inherited from Tailwind's preflight: the max-height below
+     caps the CONTENT box, so under content-box the 34px of padding lands
+     OUTSIDE the cap and the pinned Send row is pushed off the bottom of a
+     short screen — measured at 375x500, 34px over. This is the exact case
+     .claude/rules/mobile-web.md §6 exists for, and the cap is load-bearing
+     here in a way it was not when this was a plain scroller. */
+  box-sizing: border-box;
   padding: 18px 14px 16px;
   max-height: calc(100vh - 36px);
   max-height: calc(var(--bgb-vv-h, 100dvh) - 36px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;                     /* the grid scrolls, not this */
 }
-.onboarding-buddies .polaroid-popup__title { margin-bottom: 4px; }
-.onboarding-buddies .polaroid-popup__body { margin-bottom: 12px; }
+.add-buddies .polaroid-popup__title { flex: none; margin-bottom: 4px; }
+.add-buddies .polaroid-popup__body { flex: none; margin-bottom: 12px; }
+
+/* Doubled up on .search-field, which is later in this file and sets
+   `flex: 1 1 auto` for the rows where a field shares space with a button. Here
+   it is a full-width band that must not grow. */
+.search-field.add-buddies__search { flex: none; display: flex; margin-bottom: 10px; }
+/* .polaroid-field__input declares the `padding` SHORTHAND and sits later in
+   this file than .search-field__input's `padding-right: 40px`, at the same
+   0,1,0 — so it wins on source order and the × lands on top of the caret.
+   0,2,0 here so the clearance cannot be tied away again. */
+.add-buddies__search .search-field__input { padding-right: 40px; }
+/* .search-field__icon reads --ink-muted, a GROUND token: on this cream card in
+   the dark theme that is near-white on cream. --polaroid-muted is the paper
+   equivalent, and is what .field-clear-btn beside it already uses. Scoped
+   rather than changed at source — the field's other call sites sit on
+   .bgb-spoke-screen, where --ink-muted is correct. */
+.add-buddies__search .search-field__icon { color: var(--polaroid-muted); }
 
 /* auto-fit rather than a fixed column count: the same rule gives three columns
-   on a phone and four on the 420px cap, with no breakpoint. */
-.onboarding-buddies__grid {
+   on a phone and four on the 420px cap, with no breakpoint.
+
+   `flex: 0 1 <three rows>` is a definite basis the grid may SHRINK from — a
+   short screen, a software keyboard — but never grow past. That is statically
+   what overlays.md §4's measured anti-jump pin does in JS, and better: the
+   height is authored rather than sampled at open time, so it can never be a
+   floor the shrunken card is unable to honour. */
+.add-buddies__grid {
+  flex: 0 1 var(--add-buddies-grid-h);
+  min-height: 0;                        /* or flex refuses to shrink it */
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 8px;
+  align-content: start;
+  gap: var(--add-buddies-gap);
   /* 2px so a focus ring on an edge tile isn't clipped by the scroll box. */
   padding: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Bottom fade, only while there is more below. A cue that costs no layout, so
+   it cannot reintroduce the resizing the fixed height exists to remove. */
+.add-buddies__grid.is-scrollable {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+/* Searching, nothing suggested, no matches: all three centre in the same box
+   rather than clinging to the top of an otherwise empty three rows. */
+.add-buddies__grid.is-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.add-buddies__empty {
+  margin: 0 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--polaroid-muted);
+  text-align: center;
 }
 
-.onboarding-buddies__error {
+.add-buddies__error {
+  flex: none;
   margin-top: 12px;
   font-size: 12px;
   font-weight: 600;
@@ -9467,18 +9575,23 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* The step's two commit buttons get the 52px commit-button target
    (.claude/rules/mobile-web.md §5) and share the row evenly — Skip is a real
    destination here, not a corner escape, so it is not shrunk to a link. */
-.onboarding-buddies__actions {
-  margin-top: 14px;
+.add-buddies__actions {
+  flex: none;
+  /* The row is pinned now, so it needs to read as chrome over a scrolling list
+     rather than floating on the same plane as the last row of tiles. */
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--polaroid-line);
   gap: 10px;
 }
-.onboarding-buddies__actions .btn {
+.add-buddies__actions .btn {
   flex: 1 1 0;
   min-height: 52px;
   height: auto;
 }
 
 /* ── Onboarding step three: "Link BoardGameGeek" ─────────────────────────────
-   Third sibling of .avatar-cust / .onboarding-buddies — same polaroid card,
+   Third sibling of .avatar-cust / .add-buddies — same polaroid card,
    same trimmed padding, same inner scroll, because the three are consecutive
    screens of one flow and any difference between their chrome reads as a jump.
    Shares the 420px cap with the buddies grid: the import log's game-name
@@ -9538,7 +9651,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* Both commit buttons get the 52px target (.claude/rules/mobile-web.md §5) and
    share the row evenly — Skip is a real destination here, not a corner escape.
-   Matches .onboarding-buddies__actions exactly; the two steps are one flow. */
+   Same button sizing as .add-buddies__actions; the two steps are one flow. It
+   does NOT take that row's divider, because this card scrolls as one block and
+   its buttons sit at the end of the content rather than pinned above it. */
 .onboarding-bgg__actions {
   gap: 10px;
 }

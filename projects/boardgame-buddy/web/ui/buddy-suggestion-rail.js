@@ -7,10 +7,11 @@
 //     the page (rail, Add button)
 //   • the Buddies screen, as a standalone section between the Buddies and
 //     Played-with lists, fed by GET /buddies/suggested (rail, Add button)
-//   • the onboarding "Add buddies" step, as a wrapping grid of tiles the user
-//     ticks before sending one batch of requests
-//     (widgets/onboarding-buddies-modal.js, fed by
-//      GET /buddies/suggested/onboarding)
+//   • the "Add buddies" card — first-run setup's step two and the Buddies
+//     screen's Add button — as a wrapping grid of tiles the user ticks before
+//     sending one batch of requests (widgets/add-buddies-modal.js, fed by
+//     GET /buddies/suggested/onboarding and, once the user searches,
+//     GET /profiles/search)
 //
 // Per .claude/rules/ui-object-design.md §2 the surface-specific bits — which
 // view owns the Add button, and whether a tile commits on tap or toggles a
@@ -30,8 +31,12 @@
   // false, so the backend sends the tier and it wins when present.
   function suggestionReason(s) {
     // A tile being re-rendered in place carries its already-computed line, so
-    // the reason survives a patch that has no backend row behind it.
-    if (s.reason) return s.reason;
+    // the reason survives a patch that has no backend row behind it. It is
+    // also how a person with no ranking signal at all names themselves — a
+    // /profiles/search hit reads "@username", which "Mutual buddy" would be a
+    // flat lie about. Escaped here and NOT below, because this is the one
+    // branch whose value can come from a caller rather than from this file.
+    if (s.reason) return escapeHtml(s.reason);
     if (s.source === "active") return "Active recently";
     return (s.play_count || 0) > 0 ? "Played with" : "Mutual buddy";
   }
@@ -44,6 +49,8 @@
    * @property {number} [mutual_count]
    * @property {number} [play_count]
    * @property {"graph"|"active"|null} [source]
+   * @property {string|null} [username]  present on a /profiles/search hit
+   * @property {string} [reason]         overrides the derived reason line
    */
 
   /**
@@ -61,6 +68,13 @@
    * @param {string} [opts.addHandler]  mode "add": global expression called as
    *   `(userId, buttonEl)`, e.g. "window.feedView._addBuddy".
    * @param {boolean} [opts.selected]   mode "select": current tick state.
+   * @param {boolean} [opts.disabled]   mode "select": this person cannot be
+   *   ticked — the viewer already shares an edge with them, and `s.reason`
+   *   says which. A real `disabled` attribute rather than aria-disabled, so no
+   *   click can reach the host's delegated toggle at all. The cost is that the
+   *   tile leaves the tab order; accepted here because the label IS the whole
+   *   message and a screen reader's virtual cursor still reaches it, whereas a
+   *   focusable-but-inert tile makes every host guard the toggle by hand.
    * @param {"none"|"sending"|"sent"|"buddies"} [opts.state="none"]
    *   mode "add": what the action button shows. The tile does NOT leave its
    *   list when a request is sent — it flips here instead. Removing it would
@@ -93,7 +107,7 @@
         <button type="button"
                 class="buddy-tile buddy-tile--select${o.selected ? " is-selected" : ""}"
                 data-user-id="${escapeAttr(s.user_id)}"
-                aria-pressed="${o.selected ? "true" : "false"}">
+                aria-pressed="${o.selected ? "true" : "false"}"${o.disabled ? " disabled" : ""}>
           <span class="buddy-tile__check" aria-hidden="true">
             <i data-icon="check" class="w-3 h-3"></i>
           </span>

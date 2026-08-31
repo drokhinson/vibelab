@@ -12,8 +12,6 @@
       super("buddies");
       this._buddies = [];
       this._requests = { incoming: [], outgoing: [] };
-      this._search = [];
-      this._q = "";
       this._loading = false;
       this._suggested = [];   // SuggestedBuddy[] — the "may know" rail
 
@@ -142,8 +140,8 @@
 
     render() {
       // Capture focus + caret so a re-render mid-typing doesn't yank the
-      // user out of an input (the live profile-search and ghost-link
-      // pickers both keystroke-refresh).
+      // user out of an input. One field on this screen keystroke-refreshes:
+      // the ghost-link picker.
       const active = document.activeElement;
       const activeId = active && active.id;
       const caret = active && active.selectionStart;
@@ -155,8 +153,7 @@
           && this._requests.incoming.length === 0
           && this._requests.outgoing.length === 0
           && (this._playedWith || []).length === 0
-          && (this._ghosts || []).length === 0
-          && !this._q) {
+          && (this._ghosts || []).length === 0) {
         this.container.innerHTML = `
           ${this._renderTopbar()}
           <div class="profile-loading">
@@ -183,37 +180,19 @@
       this.container.innerHTML = `
         ${this._renderTopbar()}
 
-        <section class="buddies-search">
-          <div class="buddies-search__row">
-            ${window.BgbSearchField.render({
-              id: "buddies-search-input",
-              value: this._q,
-              placeholder: "Search for buddies",
-              // This field searches on blur / Enter, not per keystroke, so the ×
-              // has to commit the empty query itself — hence the oninput, which
-              // is also the event BgbSearchField dispatches when it clears.
-              oninput: "if(!this.value)window.buddiesView._searchInput('');",
-              onblur: "window.buddiesView._searchInput(this.value)",
-              onkeydown: "if(event.key==='Enter'){event.preventDefault();window.buddiesView._searchInput(this.value);}",
-            })}
-            <button type="button" class="buddies-search__qr"
+        <section class="buddies-add">
+          <div class="buddies-add__row">
+            <button type="button" id="buddies-add-btn" class="buddies-add__btn"
+                    onclick="window.buddiesView._openAdd()">
+              <i data-icon="user-plus" class="w-5 h-5"></i>
+              <span>Add buddies</span>
+            </button>
+            <button type="button" class="buddies-add__qr"
                     aria-label="Add a buddy by QR code"
                     onclick="window.buddiesView._openQr(this)">
               <i data-icon="qr-code" class="w-5 h-5"></i>
             </button>
           </div>
-          ${this._q
-            ? `<ul class="search-list">${this._search.map((u) => `
-                <li class="search-hit" onclick="window.router.go('profile-other',{userId:'${u.id}'})">
-                  <div class="search-hit__placeholder"><i data-icon="user"></i></div>
-                  <div class="search-hit__body">
-                    <div class="search-hit__name">${escapeHtml(u.display_name)}</div>
-                    ${u.username ? `<div class="search-hit__meta">@${escapeHtml(u.username)}</div>` : ""}
-                  </div>
-                  ${this._relationAction(u.id)}
-                </li>
-              `).join("")}</ul>`
-            : ""}
         </section>
 
         ${this._requests.incoming.length > 0 ? `
@@ -255,7 +234,7 @@
         <section class="buddies-section">
           <h3>Buddies (${this._buddies.length})</h3>
           ${this._buddies.length === 0
-            ? `<p class="text-sm opacity-60 p-3">No buddies yet — search above to add some.</p>`
+            ? `<p class="text-sm opacity-60 p-3">No buddies yet — tap Add buddies to find some.</p>`
             : `<ul class="buddies-list">${buddiesSlice.map((b) => {
                 const plays = playCountByUser[b.other_user_id] || 0;
                 const sub = [
@@ -488,29 +467,73 @@
       `;
     }
 
-    // ── Profile search (header) ─────────────────────────────────────────────
-    async _searchInput(q) {
-      this._q = q;
-      if (!q) {
-        this._search = [];
-        this.render();
+    // ── Adding (header) ─────────────────────────────────────────────────────
+    //
+    // This screen used to lead with its own profile-search bar, whose hits were
+    // a third row shape carrying a third copy of the relation affordance. The
+    // Add-buddies card does the same job better — it ranks people the viewer
+    // may know, multi-selects, and sends one batch — so the bar became the
+    // button that opens it, and the card grew the search the bar had.
+    async _openAdd() {
+      const result = await window.AddBuddiesModal.open({
+        suggestions: this._suggested,
+        // The card labels an already-connected search hit rather than letting
+        // the batch reject it. This view is the one place that knows all four
+        // relation sources, so it answers the question rather than handing the
+        // card a snapshot that could not see _playedWith's server flags.
+        relationFor: (userId) => this._relationFor(userId).kind,
+        // No next step to skip TO from here — the button is just backing out.
+        dismissLabel: "Cancel",
+        dismissAriaLabel: "Close",
+      });
+      if (!result || result.action !== "sent") return;
+
+      if (result.sent.length === 0 && result.failed.length > 0) {
+        // Every already-connected target was untickable, so a batch where
+        // nothing landed is a real failure — a race, or a block — and not
+        // self-evident from a screen that would otherwise look unchanged.
+        if (typeof showToast === "function") {
+          showToast((result.failed[0] && result.failed[0].detail)
+            || "Couldn't send those requests", "error");
+        }
         return;
       }
-      try {
-        this._search = await window.Buddy.searchProfiles(q);
-      } catch (_) {
-        this._search = [];
+
+      // A full reload rather than the optimistic patching every other mutation
+      // here does, and it follows the same rule rather than excepting it: the
+      // restructure is allowed because continuity is ALREADY broken — a modal
+      // opened, covered the screen and closed again. Nothing is under anyone's
+      // finger. And what comes back is a batch that may have auto-accepted some
+      // targets into Buddies, left others in Sent and failed a third set, which
+      // is three lists changing membership at once; patching it would be _load
+      // written twice. The card already invalidated the bundle, so this is a
+      // real refetch.
+      //
+      // Bumped BEFORE the reload, not after: _load() captures _mutationSeq at
+      // its top and drops its own results if it moved, so bumping first is what
+      // makes an older in-flight _load stand down instead of landing on ours.
+      this._mutationSeq++;
+      await this._load();
+
+      // The reload replaced container.innerHTML, so the button that opened the
+      // card is detached and focus fell through to <body>. Recover it from
+      // there — but only from there, never stealing it from wherever the user
+      // has since moved (.claude/rules/overlays.md §5).
+      if (document.activeElement === document.body) {
+        const btn = document.getElementById("buddies-add-btn");
+        if (btn) btn.focus();
       }
-      this.render();
     }
 
     // ── Relation affordance ─────────────────────────────────────────────────
     //
     // One renderer for the four states a person can be in relative to the
-    // viewer, shared by the profile-search hits and the played-with rows.
-    // They used to carry their own copies of the same switch, and only one of
-    // them ever grew a Cancel — per .claude/rules/ui-object-design.md §2 the
-    // surface difference is a parameter, not a second implementation.
+    // viewer. The played-with rows draw it directly; the Add-buddies card
+    // consumes _relationFor through the relationFor callback _openAdd hands it,
+    // so a person who is already a buddy reads the same on both surfaces. They
+    // used to carry their own copies of the same switch, and only one of them
+    // ever grew a Cancel — per .claude/rules/ui-object-design.md §2 the surface
+    // difference is a parameter, not a second implementation.
 
     /**
      * @typedef {Object} BuddyRelation
@@ -654,7 +677,7 @@
     // person (_syncRelationControls) and leaves the lists alone; the lists
     // re-form on the next _load(), which is a continuity break by definition.
     // The four existing breaks are onMount->_load(), _goBuddiesPage,
-    // _goPlayedWithPage and _searchInput. _unfriend restructures immediately
+    // _goPlayedWithPage and _openAdd. _unfriend restructures immediately
     // and that follows from the rule rather than excepting it — see its note.
     //
     // Because the row does not move, its control must not claim it has. That is
@@ -664,8 +687,6 @@
 
     // The display fields for a user, from whichever list the tap came off.
     _personFor(userId) {
-      const hit = (this._search || []).find((u) => u.id === userId);
-      if (hit) return { display_name: hit.display_name, avatar: hit.avatar || null };
       const sug = (this._suggested || []).find((x) => x.user_id === userId);
       if (sug) return { display_name: sug.display_name, avatar: sug.avatar || null };
       const played = (this._playedWith || []).find((x) => x.user_id === userId);
