@@ -241,7 +241,7 @@
         <div class="preview-card__badges">
           ${picks.map((b) => `
             <span class="preview-card__badge ${b.earned ? "is-earned" : "is-locked"}"
-                  title="${escapeAttr(b.earned ? b.name : `${b.name} — ${b.requirement}`)}">
+                  title="${escapeAttr(`${b.name} — ${b.earned ? b.tagline : b.requirement}`)}">
               <img src="${escapeAttr(window.Achievements.spriteUrl(b.icon))}" alt=""
                    width="160" height="160" loading="lazy" decoding="async" />
             </span>

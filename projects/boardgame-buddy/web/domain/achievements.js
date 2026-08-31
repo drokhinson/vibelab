@@ -52,8 +52,8 @@
    * @property {string} id
    * @property {string} group_id
    * @property {string} name
-   * @property {string} tagline
-   * @property {string} requirement
+   * @property {string} tagline     plain, past tense — shown once earned
+   * @property {string} requirement the same fact in the imperative — shown while locked
    * @property {string} icon         sprite slug — see spriteUrl()
    * @property {string} metric
    * @property {number} threshold
