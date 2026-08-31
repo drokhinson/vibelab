@@ -333,6 +333,9 @@
       // focusable mid-write (a disabled button drops a keyboard user onto
       // <body>), so the re-entrancy guard has to live here.
       if (!peek || (this._state && this._state.kind === "pending")) return;
+      // The button stays enabled so it can absorb a tap (see _render), so the
+      // "there is nothing to add" case is refused here rather than by the DOM.
+      if (!this._relationCopy(peek.person.relation).can) return;
       const seq = ++this._seq;
       this._state = { kind: "pending", message: "Adding…" };
       this._render();
@@ -413,11 +416,23 @@
             </p>
             <div class="buddy-qr-sheet__choice">
               ${btn("Go to profile", 'data-qr-action="go-profile"')}
-              ${rel.can
-                ? btn(busy ? "Adding…" : rel.cta,
-                      busy ? 'data-qr-action="buddy-up" aria-disabled="true"' : 'data-qr-action="buddy-up"',
-                      true)
-                : btn(rel.cta, 'disabled', true)}
+              ${btn(busy ? "Adding…" : rel.cta,
+                    // aria-disabled, never the disabled attribute. Two reasons,
+                    // and the second one is a phone bug rather than a nicety:
+                    //   * a disabled button cannot hold focus, so it drops a
+                    //     keyboard user onto <body> the moment it paints;
+                    //   * Chrome's touch adjustment snaps a tap that lands on a
+                    //     non-interactive control to the nearest interactive
+                    //     one — so tapping a truly-disabled "Already buddies"
+                    //     fired "Scan a different code" below it and threw away
+                    //     the person who had just been scanned. Measured with a
+                    //     real touch tap; a mouse click does not do this, which
+                    //     is exactly how it would have shipped.
+                    // Staying enabled means this button absorbs its own taps.
+                    (busy || !rel.can)
+                      ? 'data-qr-action="buddy-up" aria-disabled="true"'
+                      : 'data-qr-action="buddy-up"',
+                    true)}
             </div>
             ${btn("Scan a different code", 'data-qr-action="rescan"')}
           </div>`);

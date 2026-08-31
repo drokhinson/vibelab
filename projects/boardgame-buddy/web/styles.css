@@ -4692,6 +4692,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* The body is a centring flex column, so without this these size to their
+     own content and every `width: 100%` inside them resolves against that
+     rather than against the panel — which is what made the two-button choice
+     row 195px wide and wrapped "Go to profile" onto two lines. */
+  width: 100%;
   gap: 10px;
   padding: 28px 18px;
   text-align: center;
@@ -4710,7 +4715,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--on-accent);
 }
 .buddy-qr-sheet__action--go:hover { background: var(--accent-hover); }
-.buddy-qr-sheet__action[disabled] { opacity: 0.5; cursor: not-allowed; }
+/* aria-disabled, not [disabled] — see the note in buddy-qr-scan.js's _render.
+   The button stays interactive on purpose, so it swallows the tap that Chrome's
+   touch adjustment would otherwise hand to the control below it. */
+.buddy-qr-sheet__action[aria-disabled="true"] { opacity: 0.5; cursor: default; }
 
 /* ── The scan-result choice ───────────────────────────────────────────────────
    A resolved code shows the person and asks. Two buttons side by side rather
@@ -4739,7 +4747,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: flex;
   gap: 8px;
   width: 100%;
-  max-width: 300px;
+  /* Wider than the single-action 260px cap: two labels side by side, and at
+     300px "Go to profile" wrapped to two lines against a one-line neighbour. */
+  max-width: 360px;
 }
 /* Beats .buddy-qr-sheet__action's own max-width (0,1,0) at 0,2,0 — inside the
    pair each button takes half the row, not 260px of it. */
@@ -8973,7 +8983,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    card. Both are actions on your own identity — how you look, and how someone
    finds you — so they share a treatment and sit together rather than the QR
    arriving as an ornament beside a button. */
-.set-card__acct-actions { display: flex; align-items: stretch; gap: 0.35rem; flex: none; }
+/* 0.5rem, not less: these are two adjacent tap targets and
+   .claude/rules/mobile-web.md §5 wants >= 8px of clear space between hit zones.
+   0.35rem measured 6px. */
+.set-card__acct-actions { display: flex; align-items: stretch; gap: 0.5rem; flex: none; }
 /* Square, and the 44px floor rather than the label button's padded height:
    there is no text to set the width (.claude/rules/mobile-web.md §5). */
 .set-card__qr-btn { width: 44px; min-height: 44px; padding: 0; gap: 0; }
