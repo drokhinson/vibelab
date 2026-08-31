@@ -33,6 +33,16 @@
     // Profile search — returns ProfileSearchResult[]
     static searchProfiles(q) { return window.api.get("/profiles/search", { q }); }
 
+    // Add by QR. The token is short-lived and stateless (see the backend's
+    // buddy_qr_service) — never cache it and never persist it, because a
+    // stored copy outlives the consent it stands for.
+    static qrToken() { return window.api.post("/buddies/qr-token", {}); }
+
+    // Redeem a scanned token: both users become buddies immediately, no
+    // pending request. 410 = expired or forged, 400 = your own code,
+    // 403 = blocked, 404 = the account is gone.
+    static addByQr(token) { return window.api.post("/buddies/qr-add", { token }); }
+
     // "Buddies you may know" — the same ranked candidates the Feed rail
     // renders, as a standalone call so the Buddies screen doesn't have to
     // pull a feed page for them. Uncached: the RPC already excludes anyone

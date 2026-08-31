@@ -346,6 +346,7 @@
      .player-picker-sheet,
      .game-search-sheet,
      .shelf-sheet,
+     .buddy-qr-sheet,
      .exp-picker,
      .import-exp-modal,
      .cascade-player--drag-clone,
@@ -382,6 +383,7 @@
      .player-picker-sheet,
      .game-search-sheet,
      .shelf-sheet,
+     .buddy-qr-sheet,
      .exp-picker,
      .import-exp-modal,
      .cascade-player--drag-clone,
@@ -4228,10 +4230,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    there is no footer commit, just Cancel. Panel chrome is the shared
    .bgb-sheet__* family; only these rows and the tab strip are ours. */
 
-/* Unplayed / Marked played. A two-option segmented control, not a sheet of its
-   own: it switches which slice of one in-memory array the list renders, and
-   burying that behind a second overlay would be absurd. Its own host element
-   so a toggle can repaint the counts without touching the search field. */
+/* A two-option segmented control inside a sheet panel — the shelf sheet's
+   Unplayed / Marked played, and the buddy QR sheet's My code / Scan. Promoted
+   out of .shelf-sheet__* into the shared .bgb-sheet__* family at the second
+   consumer, per ui-object-design.md §4; the .shelf-sheet__* selectors stay as
+   aliases so that widget's markup did not have to change.
+   Its own host element so a toggle can repaint without touching the panel. */
+.bgb-sheet__tabs,
 .shelf-sheet__tabs {
   flex: none;
   display: flex;
@@ -4244,6 +4249,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      context, as .game-finder__input and .import-exp-modal do. */
   background: var(--well, var(--polaroid-bg-soft));
 }
+.bgb-sheet__tab,
 .shelf-sheet__tab {
   flex: 1 1 0;
   min-width: 0;
@@ -4263,11 +4269,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    1.10:1 against the --well strip behind it in BOTH themes, so the selected
    tab read as unselected at a glance even though its label was legible. The
    accent tint is the same signal .shelf-sheet__row uses for a ticked row. */
+.bgb-sheet__tab[aria-selected="true"],
 .shelf-sheet__tab[aria-selected="true"] {
   background: color-mix(in srgb, var(--accent) 22%, var(--polaroid-bg));
   color: var(--accent-ink);
   box-shadow: var(--sh-1);
 }
+.bgb-sheet__tab:focus-visible,
 .shelf-sheet__tab:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -3px; }
 
 .shelf-sheet__row {
@@ -4351,6 +4359,165 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   line-height: 1.4;
   color: var(--polaroid-muted);
 }
+
+/* ── Add-a-buddy QR sheet ─────────────────────────────────────────────────
+   Two tabs on one panel: show your own code, or scan someone else's. Panel,
+   grip, title, tab strip and Done button all come from .bgb-sheet__*; only the
+   plate, the camera viewport and the result card are this sheet's own.
+
+   .buddy-qr-sheet is named in BOTH re-point lists at the top of this file (the
+   theme-agnostic block and the dark delta) — it is chrome opened from a
+   --bg-1 spoke screen. It is deliberately NOT in the play-cascade --bg-2 list;
+   that would render the sheet a step brighter than the screen behind it. */
+
+/* One growable child, so the tab strip and Done stay put while this scrolls. */
+.buddy-qr-sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 2px 0;
+}
+
+/* The tabs carry a glyph beside the label, which the shelf sheet's do not —
+   its text-only tabs rely on block-level ellipsis that flex would break. */
+.buddy-qr-sheet .bgb-sheet__tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* The one surface in the app that does not move with the theme. A QR is a
+   machine-readable mark, not chrome: rendered light-on-espresso it is out of
+   spec and unreliable on any scanner that does not try both polarities. So it
+   gets the plate it was drawn for, in both themes — the same reasoning
+   assets.md applies to a fixed third-party brand lockup. The literals live
+   here, scoped and commented, rather than inline in the widget (theming.md
+   §10), and the encoder is passed the same two values explicitly. */
+.buddy-qr-sheet__plate {
+  --qr-plate: #FFFFFF;
+  /* Explicit, not inherited from preflight: the quiet-zone padding and the
+     hairline would otherwise land OUTSIDE the width cap, and the plate came
+     out 310px against a 280px intent (mobile-web.md §6). */
+  box-sizing: border-box;
+  background: var(--qr-plate);
+  border: 1px solid var(--polaroid-line);
+  border-radius: 16px;
+  padding: 14px;
+  width: min(280px, 72vw);
+  aspect-ratio: 1;
+  margin: 8px auto 10px;
+  box-shadow: var(--sh-2);
+}
+.buddy-qr-sheet__img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* createDataURL emits one pixel per module; keep the upscale crisp rather
+     than letting the browser smooth the modules into each other. */
+  image-rendering: pixelated;
+}
+
+.buddy-qr-sheet__name {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  color: var(--polaroid-ink);
+  text-align: center;
+}
+.buddy-qr-sheet__hint {
+  margin: 4px 12px 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--polaroid-muted);
+  text-align: center;
+}
+
+/* ── Scan tab ─────────────────────────────────────────────────────────────── */
+.buddy-qr-sheet__scan {
+  position: relative;
+  box-sizing: border-box;
+  width: min(280px, 72vw);
+  aspect-ratio: 1;
+  margin: 8px auto 0;
+  border-radius: 16px;
+  overflow: hidden;
+  /* Dark in both themes on purpose: this is a camera viewport, and the frame
+     that lands in it is whatever the room looks like. */
+  background: #14100E;
+}
+.buddy-qr-sheet__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Aiming guide. Pure decoration — the decoder reads the whole frame, not just
+   what is inside this box. */
+.buddy-qr-sheet__reticle {
+  position: absolute;
+  inset: 16%;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+/* Visually hidden, still focusable and still labelled by the button below. */
+.buddy-qr-sheet__file {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0;
+}
+.buddy-qr-sheet__filebtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: 10px 0 2px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--accent-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.buddy-qr-sheet__filebtn:active { background: var(--polaroid-bg-soft); }
+.buddy-qr-sheet__file:focus-visible + .buddy-qr-sheet__filebtn {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+}
+
+/* ── Pending / error / result ─────────────────────────────────────────────── */
+.buddy-qr-sheet__state,
+.buddy-qr-sheet__result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 18px;
+  text-align: center;
+  color: var(--polaroid-ink);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.buddy-qr-sheet__state p { margin: 0; max-width: 30ch; }
+
+/* 52px commit height comes from .bgb-sheet__cancel; this just constrains the
+   width so a single action doesn't stretch the full panel. */
+.buddy-qr-sheet__action { width: 100%; max-width: 260px; margin-top: 0; }
+.buddy-qr-sheet__action--go {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
+}
+.buddy-qr-sheet__action--go:hover { background: var(--accent-hover); }
 
 /* ── Player picker sheet ──────────────────────────────────────────────────
    "Who's playing?" on the Gather screen. Multi-select: rows are checkboxes,
@@ -4741,6 +4908,29 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* ── Buddies view ─────────────────────────────────────────────────────────── */
 .buddies-search { padding: 0.5rem 0; }
+/* Search field and the QR button share one row: both are ways of adding the
+   same thing, so separating them would read as two unrelated affordances. */
+/* The field itself is a .search-field, which already carries
+   `flex: 1 1 auto; min-width: 0` — so the row needs nothing but the gap. */
+.buddies-search__row { display: flex; align-items: center; gap: 0.5rem; }
+.buddies-search__qr {
+  flex: none;
+  display: flex; align-items: center; justify-content: center;
+  box-sizing: border-box;
+  width: 44px;
+  /* Match the field's height so the pair reads as one control, but never drop
+     below the 44px tap-target floor if the field is ever shorter. */
+  align-self: stretch;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-1);
+  color: var(--accent-ink);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.buddies-search__qr:active { background: var(--bg-2); }
+.buddies-search__qr:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 .buddies-section { padding: 0.75rem 0; border-top: 1px solid oklch(var(--b3)); }
 /* Drop the divider that would otherwise sit immediately below the search
    bar — the user explicitly wanted the search area free of horizontal

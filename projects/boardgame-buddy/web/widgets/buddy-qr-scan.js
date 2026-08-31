@@ -308,10 +308,9 @@
               size: "md",
             })}
             <p class="buddy-qr-sheet__name">${escapeHtml(line)}</p>
-            <div class="buddy-qr-sheet__actions">
-              ${btn("Scan another", 'data-qr-action="rescan"')}
-              ${btn("Done", 'data-action="close"', true)}
-            </div>
+            <!-- No "Done" here: the panel's own Done is directly below, and
+                 two identically-labelled buttons stacked is worse than one. -->
+            ${btn("Scan another", 'data-qr-action="rescan"', true)}
           </div>`);
         return;
       }

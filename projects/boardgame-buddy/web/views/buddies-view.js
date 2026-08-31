@@ -53,6 +53,19 @@
       // state on every mount of a reused view").
       this._buddiesPage = 1;
       this._playedWithPage = 1;
+
+      // Arrived via a /b/<token> QR link, which init.js rewrites to this view
+      // with the token as a param. Scrub it from the address bar first and
+      // synchronously, so a refresh — or a back navigation weeks later — can't
+      // replay a code the user has long since moved past, even if the redeem
+      // itself fails. The sheet opens after first paint so it doesn't land
+      // over a loading screen.
+      const qr = this.params && this.params.qr;
+      if (qr) {
+        window.router.replaceUrl("buddies", {});
+        setTimeout(() => this._openQr(null, { tab: "scan", token: qr }), 0);
+      }
+
       await this._load();
     }
 
@@ -151,17 +164,24 @@
         ${this._renderTopbar()}
 
         <section class="buddies-search">
-          ${window.BgbSearchField.render({
-            id: "buddies-search-input",
-            value: this._q,
-            placeholder: "Search for buddies",
-            // This field searches on blur / Enter, not per keystroke, so the ×
-            // has to commit the empty query itself — hence the oninput, which
-            // is also the event BgbSearchField dispatches when it clears.
-            oninput: "if(!this.value)window.buddiesView._searchInput('');",
-            onblur: "window.buddiesView._searchInput(this.value)",
-            onkeydown: "if(event.key==='Enter'){event.preventDefault();window.buddiesView._searchInput(this.value);}",
-          })}
+          <div class="buddies-search__row">
+            ${window.BgbSearchField.render({
+              id: "buddies-search-input",
+              value: this._q,
+              placeholder: "Search for buddies",
+              // This field searches on blur / Enter, not per keystroke, so the ×
+              // has to commit the empty query itself — hence the oninput, which
+              // is also the event BgbSearchField dispatches when it clears.
+              oninput: "if(!this.value)window.buddiesView._searchInput('');",
+              onblur: "window.buddiesView._searchInput(this.value)",
+              onkeydown: "if(event.key==='Enter'){event.preventDefault();window.buddiesView._searchInput(this.value);}",
+            })}
+            <button type="button" class="buddies-search__qr"
+                    aria-label="Add a buddy by QR code"
+                    onclick="window.buddiesView._openQr(this)">
+              <i data-icon="qr-code" class="w-5 h-5"></i>
+            </button>
+          </div>
           ${this._q
             ? `<ul class="search-list">${this._search.map((u) => `
                 <li class="search-hit" onclick="window.router.go('profile-other',{userId:'${u.id}'})">
@@ -745,6 +765,25 @@
         );
         this.render();
       }
+    }
+
+    /**
+     * @param {Element|null} btn  Focus returns here on close; null on the
+     *   deep-link path, where nothing was tapped to get here.
+     * @param {object} [opts]     Passed through to the sheet (tab, token).
+     */
+    _openQr(btn, opts) {
+      window.BuddyQrSheet.open({
+        ...(opts || {}),
+        returnFocus: btn || null,
+        onAdded: () => this._afterQrAdd(),
+      });
+    }
+
+    /** Repaint the lists behind the sheet so the new buddy is already there. */
+    async _afterQrAdd() {
+      window.Buddy.invalidate();
+      await this._load();
     }
 
     async _reject(requestId) {

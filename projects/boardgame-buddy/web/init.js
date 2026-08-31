@@ -516,7 +516,18 @@
     // /play/{code}, /game/{id}, /profile/collection, etc. resumes there
     // after auth. Querystring values are merged onto params by the route
     // table; we also pull anything not consumed by the path template here.
-    const initialMatch = window.router.matchPath(window.location.pathname);
+    //
+    // /b/<token> — the add-a-buddy QR link — is handled here rather than in the
+    // router's path table on purpose. It is inbound-only: nothing in the app
+    // ever navigates TO it, and pathFor() resolves by name with .find(), so a
+    // second entry named "buddies" would silently make every future
+    // router.go("buddies") build the wrong URL. Rewriting it to the Buddies
+    // screen with the token as a param gets the pendingRoute stash below, and
+    // therefore the bounce through /auth, for free.
+    const qrMatch = window.location.pathname.match(/^\/b\/([^/]+)\/?$/);
+    const initialMatch = qrMatch
+      ? { name: "buddies", params: { qr: decodeURIComponent(qrMatch[1]) } }
+      : window.router.matchPath(window.location.pathname);
     if (initialMatch) {
       try {
         const qs = new URLSearchParams(window.location.search);
