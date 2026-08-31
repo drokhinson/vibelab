@@ -1,4 +1,4 @@
-<title>Feed Card Sizes</title>
+<title>BoardgameBuddy Feed Cards</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=JetBrains+Mono:wght@500;700&display=swap" />
@@ -53,15 +53,33 @@ h1 {
 .board-head p { color: var(--board-dim); font-size: 0.98rem; line-height: 1.62; margin: 0.85rem 0 0; max-width: 68ch; }
 .board-head p b { color: var(--board-ink); font-weight: 600; }
 
-.controls { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-end; }
-.controls__label { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--board-faint); }
+.controlbar {
+  position: sticky; top: 0; z-index: 20;
+  /* Bleed through the wrap's gutters so the bar reads as chrome, then restate
+     the gutter as its own padding so the controls stay on the page's column. */
+  margin: 0 -1.5rem 0.5rem;
+  padding: 0.85rem 1.5rem;
+  background: rgba(20, 15, 12, 0.93);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--board-line);
+}
+.controlbar__inner { display: flex; gap: 1.6rem; flex-wrap: wrap; align-items: center; }
+.control { display: flex; align-items: center; gap: 0.6rem; }
+.control__label {
+  font-size: 0.64rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--board-faint); white-space: nowrap;
+}
 .toggle { display: flex; gap: 0.3rem; background: var(--board-panel); border: 1px solid var(--board-line); border-radius: 999px; padding: 0.3rem; }
 .toggle button {
   font-family: var(--sans); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
   border: none; background: transparent; color: var(--board-dim); cursor: pointer;
-  padding: 0.5rem 1rem; border-radius: 999px; min-height: 40px; transition: background .16s, color .16s;
+  padding: 0.5rem 0.95rem; border-radius: 999px; min-height: 40px;
+  transition: background .16s, color .16s;
 }
+.toggle button:hover { color: var(--board-ink); }
+.toggle button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .toggle button[aria-pressed="true"] { background: var(--gold); color: #2B1E06; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 /* ── Sections ─────────────────────────────────────────────────────────── */
 .wrap > section { margin-top: 4rem; }
@@ -336,16 +354,38 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
         comes from whatever aspect the decoded image happens to have — so every session is a
         different shape. Below: what's on screen now, then three ways to collapse it.
         <b>The collection-status pill is gone from all three options.</b>
+        The controls stress the frames — <b>Extreme</b> swaps in a 9:16 phone shot and a 21:9
+        panorama, <b>Long</b> swaps in the kind of subtitled game name that used to fight the
+        pill for room in the meta row.
       </p>
     </div>
-    <div class="controls">
-      <span class="controls__label">Theme</span>
-      <div class="toggle" role="group" aria-label="Theme">
-        <button type="button" data-theme="dark" aria-pressed="true">Dark</button>
-        <button type="button" data-theme="light" aria-pressed="false">Light</button>
+  </header>
+
+  <div class="controlbar">
+    <div class="controlbar__inner">
+      <div class="control">
+        <span class="control__label">Theme</span>
+        <div class="toggle" role="group" aria-label="Theme">
+          <button type="button" data-set="theme" data-val="dark" aria-pressed="true">Dark</button>
+          <button type="button" data-set="theme" data-val="light" aria-pressed="false">Light</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control__label">Photos</span>
+        <div class="toggle" role="group" aria-label="Photo aspect ratios">
+          <button type="button" data-set="aspects" data-val="typical" aria-pressed="true">Typical</button>
+          <button type="button" data-set="aspects" data-val="extreme" aria-pressed="false">Extreme</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control__label">Game names</span>
+        <div class="toggle" role="group" aria-label="Game name length">
+          <button type="button" data-set="names" data-val="short" aria-pressed="true">Short</button>
+          <button type="button" data-set="names" data-val="long" aria-pressed="false">Long</button>
+        </div>
       </div>
     </div>
-  </header>
+  </div>
 
   <!-- ── 0 · TODAY ──────────────────────────────────────────────────────── -->
   <section>
@@ -527,14 +567,16 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
   justify-content: space-between;
   margin-top: 1.6rem;
   overflow-x: auto;
+  /* NOT left to compute: beside a scrollable overflow-x, `visible` computes to
+     `auto`, which would make this grid a vertical scrollport sitting over most
+     of the page. Same trap as .play-session__scroll in the app's stylesheet. */
+  overflow-y: hidden;
   padding-bottom: 0.8rem;
 }
 .study__h {
-  position: sticky; top: 0;
   font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--board-faint); padding: 0.5rem 0; text-align: center;
   border-bottom: 1px solid var(--board-line);
-  background: var(--board-bg);
 }
 .study__h.is-rec { color: var(--gold); border-bottom-color: rgba(224,169,74,0.5); }
 /* Row label spans the full width so each content case reads as a band rather
@@ -679,16 +721,102 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
     <rect x='32' y='170' width='58' height='4' rx='2' fill='#B08A6A'/>
     <rect x='5' y='5' width='190' height='190' rx='4' fill='none' stroke='#1C0B05' stroke-width='2'/>`);
 
+  // 21:9 panorama — the whole table, end to end. The aspect a phone shoots
+  // when it is turned sideways and backed off.
+  const ART_ULTRAWIDE = svg(336, 144, `
+    <defs>${woodDefs("C", "#7E5A3A", "#2E1B0B")}</defs>
+    <rect width='336' height='144' fill='url(#wC)'/>
+    <rect width='336' height='144' fill='url(#lC)'/>
+    <g transform='rotate(-2 168 76)'>
+      <rect x='96' y='28' width='144' height='92' rx='7' fill='#1E3B36'/>
+      <rect x='104' y='36' width='128' height='76' rx='4' fill='#2E5A50'/>
+      <g stroke='#44796B' stroke-width='2' opacity='.9'>
+        <path d='M104 61h128M104 87h128M147 36v76M190 36v76'/>
+      </g>
+      <circle cx='125' cy='48' r='7' fill='#E0A94A'/>
+      <circle cx='168' cy='74' r='7' fill='#C8553D'/>
+      <circle cx='211' cy='100' r='7' fill='#EFE5D2'/>
+    </g>
+    <g transform='rotate(-11 44 106)'>
+      <rect x='16' y='78' width='34' height='48' rx='4' fill='#EADFC6'/>
+      <rect x='28' y='82' width='34' height='48' rx='4' fill='#F7F0E1'/>
+    </g>
+    <g transform='rotate(9 288 100)'>
+      <rect x='268' y='76' width='34' height='48' rx='4' fill='#EADFC6'/>
+      <rect x='280' y='80' width='34' height='48' rx='4' fill='#F7F0E1'/>
+    </g>
+    <circle cx='52' cy='34' r='13' fill='#31241A'/>
+    <circle cx='52' cy='34' r='9.5' fill='#6B4A2F'/>
+    <circle cx='296' cy='38' r='22' fill='#E0A94A' opacity='.16'/>
+    <circle cx='296' cy='38' r='12' fill='#E9BC6B'/>
+    <rect width='336' height='144' fill='url(#vC)'/>`);
+
+  // 9:16 — a phone held upright, which is how most session photos are taken.
+  const ART_ULTRATALL = svg(180, 320, `
+    <defs>${woodDefs("D", "#5A3D26", "#1F1207")}</defs>
+    <rect width='180' height='320' fill='url(#wD)'/>
+    <path d='M90 0v52' stroke='#180F07' stroke-width='4'/>
+    <path d='M64 52h52l18 28H46z' fill='#E0A94A'/>
+    <ellipse cx='90' cy='80' rx='45' ry='8' fill='#FFE3AE'/>
+    <ellipse cx='90' cy='190' rx='118' ry='112' fill='#FFDCA0' opacity='.22'/>
+    <rect width='180' height='320' fill='url(#lD)' opacity='.45'/>
+    <g transform='rotate(2 90 232)'>
+      <rect x='14' y='168' width='152' height='136' rx='8' fill='#1E3B36'/>
+      <rect x='23' y='177' width='134' height='118' rx='4' fill='#2E5A50'/>
+      <g stroke='#44796B' stroke-width='2' opacity='.9'>
+        <path d='M23 216h134M23 256h134M68 177v118M112 177v118'/>
+      </g>
+      <circle cx='45' cy='197' r='8' fill='#C8553D'/>
+      <circle cx='90' cy='236' r='8' fill='#E0A94A'/>
+      <circle cx='134' cy='275' r='8' fill='#EFE5D2'/>
+    </g>
+    <g transform='rotate(-8 40 130)'>
+      <rect x='16' y='108' width='36' height='50' rx='4' fill='#F2E8D3'/>
+      <rect x='27' y='113' width='36' height='50' rx='4' fill='#FAF3E3'/>
+    </g>
+    <circle cx='146' cy='128' r='14' fill='#31241A'/>
+    <circle cx='146' cy='128' r='10' fill='#6B4A2F'/>
+    <rect width='180' height='320' fill='url(#vD)'/>`);
+
   const ARROW = "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M7 17 17 7M7 7h10v10'/></svg>";
 
   // ── Content cases ────────────────────────────────────────────────────────
   // `photo` null → the play has no snapshot, so the box art IS the picture.
-  const CASES = {
-    wide: { name: "Brass: Birmingham", winner: "Sam", score: 142, photo: ART_WIDE, ar: 1.5,   box: ART_BOX_TALL, pill: "owned" },
-    tall: { name: "Wingspan",          winner: "You", score: 87,  photo: ART_TALL, ar: 0.667, box: ART_BOX_SQ,   pill: "played" },
-    boxT: { name: "Ark Nova",          winner: "Maya", score: 118, photo: null,    ar: 0.78,  box: ART_BOX_TALL, pill: "wishlist" },
-    boxS: { name: "The Crew",          team: "won",                 photo: null,    ar: 1.0,   box: ART_BOX_SQ,   pill: "owned" },
+  // Photo art and game names are swapped by the control bar, so every option
+  // can be stressed with the aspect ratios and title lengths that break cards.
+  const PHOTOS = {
+    typical: {
+      wide: { src: ART_WIDE,      ar: 1.5,    label: "3:2 · 300×200" },
+      tall: { src: ART_TALL,      ar: 0.667,  label: "2:3 · 200×300" },
+    },
+    extreme: {
+      wide: { src: ART_ULTRAWIDE, ar: 2.333,  label: "21:9 · 336×144" },
+      tall: { src: ART_ULTRATALL, ar: 0.5625, label: "9:16 · 180×320" },
+    },
   };
+  const NAMES = {
+    short: { wide: "Brass: Birmingham", tall: "Wingspan", boxT: "Ark Nova", boxS: "The Crew" },
+    long: {
+      wide: "Brass: Birmingham — Deluxe Edition",
+      tall: "Wingspan: Oceania Expansion",
+      boxT: "Ark Nova: Marine Worlds",
+      boxS: "The Crew: Mission Deep Sea",
+    },
+  };
+
+  const state = { theme: "dark", aspects: "typical", names: "short" };
+  let CASES = {};
+
+  function buildCases() {
+    const ph = PHOTOS[state.aspects];
+    const nm = NAMES[state.names];
+    CASES = {
+      wide: { name: nm.wide, winner: "Sam",  score: 142, photo: ph.wide.src, ar: ph.wide.ar, label: ph.wide.label, box: ART_BOX_TALL, pill: "owned" },
+      tall: { name: nm.tall, winner: "You",  score: 87,  photo: ph.tall.src, ar: ph.tall.ar, label: ph.tall.label, box: ART_BOX_SQ,   pill: "played" },
+      boxT: { name: nm.boxT, winner: "Maya", score: 118, photo: null, ar: 0.78, label: "0.78 · 156×200", box: ART_BOX_TALL, pill: "wishlist" },
+      boxS: { name: nm.boxS, team: "won",                photo: null, ar: 1.0,  label: "1.00 · 200×200", box: ART_BOX_SQ,   pill: "owned" },
+    };
+  }
 
   const PILL_LABEL = { owned: "Owned", played: "Played", wishlist: "Wishlist" };
 
@@ -810,27 +938,29 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
     },
   };
 
-  document.querySelectorAll("[data-panel]").forEach((host) => {
-    const opt = host.getAttribute("data-panel");
-    const p = PANELS[opt];
-    const facts = p.facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
-    host.innerHTML = `
-      <div class="stage__item">
-        <div class="stage__cap"><span class="dot"></span>${p.cap}</div>
-        <div class="phone tokens" data-bgb="dark">${phoneHtml(opt)}</div>
-      </div>
-      <div class="stage__info">
-        <p class="stage__note">${p.note}</p>
-        <dl class="facts">${facts}</dl>
-      </div>`;
-  });
+  function renderPanels() {
+    document.querySelectorAll("[data-panel]").forEach((host) => {
+      const opt = host.getAttribute("data-panel");
+      const p = PANELS[opt];
+      const facts = p.facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+      host.innerHTML = `
+        <div class="stage__item">
+          <div class="stage__cap"><span class="dot"></span>${p.cap}</div>
+          <div class="phone tokens" data-bgb="${state.theme}">${phoneHtml(opt)}</div>
+        </div>
+        <div class="stage__info">
+          <p class="stage__note">${p.note}</p>
+          <dl class="facts">${facts}</dl>
+        </div>`;
+    });
+  }
 
   // ── Frame study: four content cases × four options ───────────────────────
   const STUDY_ROWS = [
-    ["wide", "Horizontal snapshot", "3:2 · 300×200"],
-    ["tall", "Vertical snapshot",   "2:3 · 200×300"],
-    ["boxT", "No photo · portrait cover", "0.78 · 156×200"],
-    ["boxS", "No photo · square cover",   "1.00 · 200×200"],
+    ["wide", "Horizontal snapshot"],
+    ["tall", "Vertical snapshot"],
+    ["boxT", "No photo · portrait cover"],
+    ["boxS", "No photo · square cover"],
   ];
   const STUDY_COLS = [
     ["now", "Today", false],
@@ -838,14 +968,16 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
     ["b",   "B · one, fill", false],
     ["c",   "C · one, fit", true],
   ];
-  const study = document.querySelector("[data-study]");
-  if (study) {
+  function renderStudy() {
+    const study = document.querySelector("[data-study]");
+    if (!study) return;
+    study.setAttribute("data-bgb", state.theme);
     let html = "";
     STUDY_COLS.forEach(([, label, rec]) => {
       html += `<div class="study__h${rec ? " is-rec" : ""}">${label}</div>`;
     });
-    STUDY_ROWS.forEach(([key, label, meta]) => {
-      html += `<div class="study__lab">${label}<span>${meta}</span><span class="rule"></span></div>`;
+    STUDY_ROWS.forEach(([key, label]) => {
+      html += `<div class="study__lab">${label}<span>${CASES[key].label}</span><span class="rule"></span></div>`;
       STUDY_COLS.forEach(([opt]) => {
         html += `<div class="study__cell opt-${opt}">${cardHtml(opt, key)}</div>`;
       });
@@ -853,14 +985,28 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
     study.innerHTML = html;
   }
 
-  // ── Theme toggle ─────────────────────────────────────────────────────────
-  const buttons = document.querySelectorAll(".toggle button");
-  buttons.forEach((btn) => {
+  function renderAll() {
+    buildCases();
+    renderPanels();
+    renderStudy();
+  }
+
+  // ── Controls ─────────────────────────────────────────────────────────────
+  // One handler for all three groups: each button names the state key it sets
+  // and the value it sets it to, so adding a fourth control is one more
+  // .control block in the markup and nothing here.
+  document.querySelectorAll(".toggle button[data-set]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const theme = btn.dataset.theme;
-      buttons.forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
-      document.querySelectorAll("[data-bgb]").forEach((host) => host.setAttribute("data-bgb", theme));
+      const { set, val } = btn.dataset;
+      if (state[set] === val) return;
+      state[set] = val;
+      btn.parentElement.querySelectorAll("button").forEach((b) => {
+        b.setAttribute("aria-pressed", String(b === btn));
+      });
+      renderAll();
     });
   });
+
+  renderAll();
 })();
 </script>
