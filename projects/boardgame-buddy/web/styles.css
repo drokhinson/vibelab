@@ -3015,9 +3015,27 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    than hidden: a search that silently drops the person you looked up reads as
    broken, and the backend would reject the tick anyway. The press affordance
    goes with it — nothing happens, so nothing should move.
-   [disabled] is 0,2,0, so it beats the :active rule above without doubling. */
-.buddy-tile--select[disabled] { opacity: 0.55; cursor: default; }
+   [disabled] is 0,2,0, so it beats the :active rule above without doubling.
+
+   Recessed by its SURFACE, never by opacity. A blanket `opacity: 0.55` here
+   took the reason line — which on this tile is the entire message, and is
+   11.5px text — from 4.5:1 down to 2.2:1 dark / 2.1:1 light. The one element
+   that must stay readable was the one being faded. So the ground steps back
+   instead, the avatar carries the "inert" reading, and the label steps UP to
+   full ink: >14:1 in both themes, and the only thing on the tile at full
+   strength, which is right when it is the only thing left to say. */
+.buddy-tile--select[disabled] {
+  cursor: default;
+  background: var(--polaroid-bg-soft);
+  border-color: var(--polaroid-line);
+}
 .buddy-tile--select[disabled]:active { transform: none; }
+.buddy-tile--select[disabled] .buddy-tile__avatar-wrap { opacity: 0.5; }
+.buddy-tile--select[disabled] .buddy-tile__name { color: var(--polaroid-muted); }
+.buddy-tile--select[disabled] .buddy-tile__reason {
+  color: var(--polaroid-ink);
+  font-weight: 600;
+}
 .buddy-tile--select:focus-visible {
   outline: 2px solid var(--polaroid-accent);
   outline-offset: 2px;
@@ -9458,9 +9476,21 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    scroller to be the thing that scrolls, and then the search field scrolls
    away with the tiles. This way each part is exactly where it should be. */
 .add-buddies__body {
-  --buddy-tile-h: 116px;
+  /* Tall enough for the two-line name the clamp below allows: 58px avatar +
+     2 x 16.32px name + 12px reason + 9.6px padding, measured. At 116px (a
+     one-line tile) the second line overlapped the reason line — the grid
+     stretches every row to the tallest in it, so one long name in a row of
+     three is enough to do it. */
+  --buddy-tile-h: 132px;
   --add-buddies-gap: 8px;
   --add-buddies-grid-h: calc(3 * var(--buddy-tile-h) + 2 * var(--add-buddies-gap));
+  /* Explicit, not inherited from Tailwind's preflight: the max-height below
+     caps the CONTENT box, so under content-box the 34px of padding lands
+     OUTSIDE the cap and the pinned Send row is pushed off the bottom of a
+     short screen — measured at 375x500, 34px over. This is the exact case
+     .claude/rules/mobile-web.md §6 exists for, and the cap is load-bearing
+     here in a way it was not when this was a plain scroller. */
+  box-sizing: border-box;
   padding: 18px 14px 16px;
   max-height: calc(100vh - 36px);
   max-height: calc(var(--bgb-vv-h, 100dvh) - 36px);
