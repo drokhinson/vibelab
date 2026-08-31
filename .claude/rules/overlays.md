@@ -11,8 +11,9 @@ dropdown hung off an input.
 
 The canonical implementation is `projects/boardgame-buddy/web/ui/bottom-sheet.js`
 (the shell) plus the `.bgb-sheet__*` family in that project's `styles.css` (the
-chrome), with four consumers: `ui/status-tag.js`, `widgets/game-picker-sheet.js`,
-`widgets/player-picker-sheet.js`, `widgets/game-search-sheet.js`.
+chrome), with five consumers: `ui/status-tag.js`, `widgets/game-picker-sheet.js`,
+`widgets/player-picker-sheet.js`, `widgets/game-search-sheet.js`,
+`widgets/country-picker-sheet.js`.
 
 ---
 

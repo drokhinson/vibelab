@@ -1,9 +1,10 @@
 """Pydantic models for BoardgameBuddy."""
 
 from datetime import date, datetime
-from typing import Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 from pydantic import (
     UUID4,
+    AfterValidator,
     BaseModel,
     Field,
     SecretStr,
@@ -31,6 +32,29 @@ class HealthResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+def _normalize_country(value: str) -> str:
+    """Upper-case an ISO 3166-1 alpha-2 code, or reject it.
+
+    The DB CHECK (migration 065) is `^[A-Z]{2}$`, so a lowercase "de" from a
+    client that read `navigator.language` verbatim would be a 500 at insert
+    time rather than a 422. Normalizing here means the API's contract is
+    case-insensitive while the column stays one canonical case — which is what
+    lets a future `GROUP BY country_code` be a single bucket per country.
+
+    Membership in the real ISO list is deliberately NOT checked: that list
+    changes, it would need vendoring into the backend to enforce, and the
+    clients pick from a fixed table anyway. Shape is what protects the column.
+    """
+    code = value.strip().upper()
+    if len(code) != 2 or not code.isascii() or not code.isalpha():
+        raise ValueError("country_code must be an ISO 3166-1 alpha-2 code")
+    return code
+
+
+# Two ASCII letters, stored upper-case. Used by every play write path.
+CountryCode = Annotated[str, AfterValidator(_normalize_country)]
 
 
 class RefreshImagesResponse(BaseModel):
@@ -370,6 +394,13 @@ class PlayCreate(BaseModel):
     # instead of writing a duplicate. Omitted by live writes, where two
     # identical POSTs legitimately mean two plays.
     client_key: Optional[UUID4] = None
+    # Where the play happened, ISO 3166-1 alpha-2 (migration 065). Country
+    # granularity is the whole design: it answers "what gets played in
+    # Germany" without a location permission and without being able to say
+    # where anybody lives. The client resolves it from the device timezone and
+    # the host can correct it in Settle Up; None whenever it can't be resolved,
+    # which is a legitimate row and never an error.
+    country_code: Optional[CountryCode] = None
 
 
 class PlayUpdate(BaseModel):
@@ -381,6 +412,10 @@ class PlayUpdate(BaseModel):
     photo_url: Optional[str] = None
     expansion_ids: list[str] = []
     play_mode: Optional[PlayMode] = None
+    # Migration 060. Like play_mode, only written when the request carries one:
+    # an edit form that doesn't offer the field must not silently wipe the
+    # country the play was logged with.
+    country_code: Optional[CountryCode] = None
 
 
 class PlayPhotoResponse(BaseModel):
@@ -427,6 +462,10 @@ class PlayResponse(BaseModel):
     # Resolved scoring style for this play. Set from PlayCreate.play_mode if
     # provided, else inherited from the game at insert time. Always populated.
     play_mode: PlayMode = PlayMode.COMPETITIVE
+    # ISO 3166-1 alpha-2 where the play happened (migration 065). None for
+    # every play logged before 060 and for any client that couldn't resolve
+    # one, so every reader has to handle its absence.
+    country_code: Optional[str] = None
     # Logger metadata — lets the FE distinguish own logs from shared plays
     # (where the current user appears via a linked buddy).
     logged_by_id: str

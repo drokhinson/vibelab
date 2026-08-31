@@ -487,6 +487,29 @@
     `;
   }
 
+  /**
+   * The date line under the game name, plus where it was played when the play
+   * carries a country (migration 065).
+   *
+   * The only surface that shows the country back to the user. It reads as one
+   * more fact about the play — "31 Aug 2026 · Germany" — rather than as its
+   * own labelled row, because that is the weight it has: a field the app
+   * filled in for a count nobody is looking at yet. Every play logged before
+   * 060, and every one whose device couldn't resolve a country, simply shows
+   * the date it always did.
+   *
+   * Not editable here. The country is set where it is captured — the Where
+   * card on Settle Up — and this popup's edit mode is a full replacement of
+   * the play (PUT /plays/{id}) that deliberately omits the field, which the
+   * backend reads as "leave it alone".
+   */
+  function playWhenLine(p) {
+    const date = formatDate(p.played_at);
+    const code = p && p.country_code;
+    const where = code && window.Geo ? window.Geo.countryName(code) : "";
+    return where ? `${escapeHtml(date)} · ${escapeHtml(where)}` : escapeHtml(date);
+  }
+
   // Shared game bubble for view + edit mode. The title reads "A game of
   // <name>" with the game name in the polaroid accent (same orange the
   // feed uses for winners), and the right side hosts a Go-to-game-detail
@@ -499,7 +522,7 @@
       ? `<input id="play-popup-date" type="date" class="input input-bordered input-sm"
                 value="${escapeAttr(state.draft.played_at)}"
                 onchange="window.PlayDetailPopup._setDraft('played_at', this.value)" />`
-      : `<div class="play-detail__game-when">${formatDate(p.played_at)}</div>`;
+      : `<div class="play-detail__game-when">${playWhenLine(p)}</div>`;
     return `
       <div class="play-detail__meta">
         <div class="play-detail__game-row">

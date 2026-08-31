@@ -1750,6 +1750,8 @@
                  onchange="window.playFlowView._setDate(this.value)" />
         </section>
 
+        ${this._renderCountryCard()}
+
         ${this._renderPhotoCard(url)}
 
         <section class="cascade-card">
@@ -1758,6 +1760,40 @@
                     rows="4"
                     placeholder="A clutch play, a surprise comeback, anything worth remembering."
                     onchange="window.playFlowView._setNotes(this.value)">${escapeHtml(this._ps.notes || "")}</textarea>
+        </section>
+      `;
+    }
+
+    /**
+     * The Settle Up "where" slot (migration 065).
+     *
+     * The value is already filled in — domain/geo.js resolved it from the
+     * device's timezone when the draft was born — so this is a row to glance
+     * at, not a field to complete. It is shown rather than recorded silently
+     * because a value the app writes to a play and never admits to is not a
+     * thing this app should have; showing it also makes it correctable, which
+     * is the only way the eventual by-country numbers are worth reading.
+     *
+     * Country only, and the hint says so: nobody should have to open the sheet
+     * to find out how precise "where" is.
+     */
+    _renderCountryCard() {
+      const code = this._ps.countryCode;
+      const name = code && window.Geo ? window.Geo.countryName(code) : "";
+      return `
+        <section class="cascade-card">
+          <label class="cascade-card__label">Where</label>
+          <button type="button" class="cascade-where"
+                  aria-label="Where you played — ${name ? escapeAttr(name) : "not recorded"}"
+                  onclick="window.playFlowView._openCountryPicker(event)">
+            <span class="cascade-where__body">
+              <span class="cascade-where__value${name ? "" : " cascade-where__value--empty"}">${
+                name ? escapeHtml(name) : "Not recorded"
+              }</span>
+              <span class="cascade-where__hint">Country only, so plays can be counted by region</span>
+            </span>
+            <i data-icon="chevron-down" class="w-4 h-4 cascade-where__caret"></i>
+          </button>
         </section>
       `;
     }
@@ -2057,6 +2093,32 @@
     _setNotes(value) {
       this._ps.notes = value;
       this._ps.persist();
+    }
+
+    /** Open the country sheet from the Where card. */
+    _openCountryPicker(ev) {
+      if (!window.CountryPickerSheet) return;
+      window.CountryPickerSheet.open({
+        selectedCode: this._ps.countryCode,
+        returnFocus: (ev && ev.currentTarget) || null,
+        onPick: (code) => this._setCountry(code),
+      });
+    }
+
+    /**
+     * @param {string|null} code  null when the host chose not to record one.
+     *
+     * A hand-picked country is remembered against the timezone it was picked
+     * in (domain/geo.js), so the correction sticks for the next play at home
+     * without following the host abroad. Clearing the field is deliberately
+     * NOT remembered: "not this time" is a per-play answer, and persisting it
+     * would silently switch the feature off for good from one tap.
+     */
+    _setCountry(code) {
+      this._ps.countryCode = code || null;
+      this._ps.persist();
+      if (code && window.Geo) window.Geo.remember(code);
+      this.render();
     }
 
     _resolvePlayMode() {

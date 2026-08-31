@@ -8,6 +8,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { countryForPlay } from './geo';
+
 const KEY = 'bgb.activeSession';
 
 export const PHASES = ['gather', 'play', 'settle'];
@@ -74,5 +76,12 @@ export function toPlayPayload(draft, { scoresByUser } = {}) {
     photo_url: draft.photoUrl || null,
     expansion_ids: draft.expansionIds || [],
     play_mode: draft.playMode || null,
+    // Where this was played, ISO 3166-1 alpha-2 (migration 065). Resolved at
+    // payload time rather than when the draft was created: this app has no UI
+    // showing or correcting the value, so there is nothing for an earlier read
+    // to keep stable, and reading it here means a draft resumed after a flight
+    // records where the game was actually played. null when the device can't
+    // say — the backend takes an absent country as unknown.
+    country_code: countryForPlay(),
   };
 }
