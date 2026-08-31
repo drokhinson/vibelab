@@ -221,8 +221,11 @@
     _tile(a) {
       const isNew = this._fresh.includes(a.id);
       const src = window.Achievements.spriteUrl(a.icon);
+      // Sighted users get the badge name and can tap through for the rest; a
+      // screen reader gets the plain description here so the rail is legible
+      // without opening sixteen sheets.
       const label = a.earned
-        ? `${a.name} — unlocked ${formatDate(a.unlocked_at)}`
+        ? `${a.name} — unlocked ${formatDate(a.unlocked_at)}. ${a.tagline}`
         : `${a.name} — locked. ${a.requirement}`;
       return `
         <button class="ach-tile ${a.earned ? "is-earned" : "is-locked"}" type="button"
@@ -275,6 +278,11 @@
              <i data-icon="check" class="w-4 h-4"></i>
              Unlocked ${escapeHtml(formatDate(a.unlocked_at) || "")}
            </div>`
+        // The tagline says what the badge is FOR in the past tense ("you've
+        // played a game made for two"), so it only belongs on an earned badge;
+        // while locked, the same fact is the requirement below, in the
+        // imperative. Printing both would say it twice.
+        //
         // The key glyph and the desaturated art carry "locked" visually, and
         // the requirement reads as a to-do rather than as something achieved
         // — but none of that reaches a screen reader, which would otherwise
@@ -303,7 +311,7 @@
             <div class="ach-detail ${a.earned ? "is-earned" : "is-locked"}">
               <img class="ach-detail__art" src="${escapeAttr(src)}" alt="" width="160" height="160" />
               <h3 class="ach-detail__name font-display">${escapeHtml(a.name)}</h3>
-              <p class="ach-detail__tagline">${escapeHtml(a.tagline)}</p>
+              ${a.earned ? `<p class="ach-detail__tagline">${escapeHtml(a.tagline)}</p>` : ""}
               ${status}
               ${bar}
             </div>

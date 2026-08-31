@@ -1108,8 +1108,11 @@ class AchievementItem(BaseModel):
     id: str
     group_id: str
     name: str
+    # What the badge is for, in plain language and past tense ("You've played
+    # a game made specifically for 2 players."). Printed on earned badges and
+    # in the unlock popup — see migration 067.
     tagline: str
-    # What you have to do, in plain language. Printed on locked badges.
+    # The same fact in the imperative. Printed on locked badges.
     requirement: str
     # Sprite slug, never an emoji (.claude/rules/assets.md). The web app
     # resolves it to assets/sprites/achievements/bgb-ach-<icon>.svg.
