@@ -2401,14 +2401,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* ── Caption ──────────────────────────────────────────────────────────────
    Two stacked rows. The title row carries the game name and an explicit open
-   button; the meta row carries the winner and the collection-status pill,
-   separated by a hairline.
+   button; the meta row carries the winner, separated by a hairline.
 
    This replaced a single row that put the name and the winner on the same
    line, which needed a post-paint re-measure (.has-long-meta) to decide
-   whether they fit. In the meta row the pill never shrinks and the WINNER
-   takes the ellipsis — the reverse of the old rule — so a 220px strip card
-   still reads its status. */
+   whether they fit. The collection-status pill used to share the meta row and
+   won every width fight in it; with it gone the winner has the row to itself
+   and only ellipsises against the card edge. Owned / played / wishlist still
+   live on the collection grid, wishlist, game detail and the hot-games rail —
+   the feed card is the one surface that dropped them. */
 .play-card__caption {
   width: 100%;
   padding: 12px 4px 2px;
@@ -2513,31 +2514,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 600;
   font-size: 12px;
   font-style: italic;
-}
-.play-card__status-slot { flex: 0 0 auto; margin-left: auto; }
-
-/* Owned / wishlist / played take the app-wide .status-tag--* fills here, same
-   as on every other surface. This slot used to restate them as tinted
-   outlines drawn from unrelated tokens (--ok, --accent-ink, --polaroid-muted)
-   so they'd sit lighter on cream paper; the cost was that the one status pill
-   people look at most was the one that didn't match the rest of the app —
-   played lost its violet identity to plain grey entirely.
-   --add keeps its override below: it is the neutral "+" affordance, not a
-   status, and the canonical fill is built from dark-theme tokens that read
-   wrong on the polaroid ground. */
-.play-card__status-slot .status-tag--add {
-  color: var(--polaroid-ink-soft);
-  background: transparent;
-  border-color: var(--polaroid-line);
-}
-.play-card__status-slot .status-tag--add:hover {
-  background: transparent;
-  color: var(--polaroid-ink);
-  border-color: var(--polaroid-muted);
-}
-.play-card__status-slot .status-tag:focus-visible {
-  outline: 2px solid var(--accent-ink);
-  outline-offset: 1px;
 }
 
 /* ── Size variants ─────────────────────────────────────────────────────── */
@@ -3849,19 +3825,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   white-space: nowrap;
 }
-/* The labelled pill in a play card's meta row. Sized for a 44px hit box via
-   the ::before below rather than 44px of visible chrome, which would tower
-   over an 11px winner line. Colours are the shared .status-tag--* fills
-   below — the same ones every other surface uses. */
-.status-tag--sm-row {
-  min-height: 28px;
-  padding: 4px 10px;
-  font-size: 0.72rem;
-  gap: 0.3rem;
-  position: relative;
-}
-.status-tag--sm-row::before { content: ""; position: absolute; inset: -8px; }
-.status-tag--sm-row i { width: 0.82rem; height: 0.82rem; }
 .status-tag--lg {
   min-height: 2.5rem;
   padding: 0.4rem 0.9rem;

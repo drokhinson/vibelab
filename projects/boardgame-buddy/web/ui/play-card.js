@@ -5,8 +5,7 @@
 //   Front  → maximize button (top-right, over the photo) into the in-place
 //            play-detail popup, the photo, then a two-row caption:
 //              title row — game name + an explicit open button
-//              meta row  — winner on the left, collection-status pill on the
-//                          right, above a hairline
+//              meta row  — the winner, on its own above a hairline
 //            When the user uploaded their own snapshot the game's box art
 //            rides along as a small bottom-right badge at its natural aspect;
 //            with no snapshot the box art IS the photo, height-capped.
@@ -15,12 +14,12 @@
 //            optional notes, the same maximize button (top-right), and a
 //            "Tap to flip back" footer.
 //
-// Clicking the game-name text, the open button, the status pill, either
-// maximize button, or a scoreboard row for a registered player acts on its
-// own (data-no-flip). Clicking anywhere else on the card — the photo and the
-// box-art badge included — flips it. State lives in a module-level Map keyed
-// by play_id so flipping re-renders only the affected <article> via outerHTML
-// replacement — the feed scroll position is preserved.
+// Clicking the game-name text, the open button, either maximize button, or a
+// scoreboard row for a registered player acts on its own (data-no-flip).
+// Clicking anywhere else on the card — the photo and the box-art badge
+// included — flips it. State lives in a module-level Map keyed by play_id so
+// flipping re-renders only the affected <article> via outerHTML replacement —
+// the feed scroll position is preserved.
 
 (function () {
   // Per-play state lives outside the render so re-renders are cheap and
@@ -134,12 +133,6 @@
     // uploaded their own photo — otherwise the game art *is* the hero.
     const hasUserPhoto = !!card.photo_url;
     const gameThumb = g.thumbnail_url || g.image_url || "";
-    // null/undefined = the viewer's collection hasn't loaded yet; `{}` means
-    // loaded and they own nothing. Only the latter earns a "+" — see
-    // domain/collection.js and the `pending` branch in ui/status-tag.js.
-    const statusMap = (window.store && window.store.get && window.store.get("myCollectionMap")) || null;
-    const statusPending = !statusMap;
-    const gameStatus = (g.id && statusMap && statusMap[g.id]) || null;
 
     // Box-art badge: only when the user uploaded their own session photo
     // (otherwise the box art IS the photo slot). Fixed height, auto width, so
@@ -194,15 +187,6 @@
         </div>
         <div class="play-card__meta-row">
           <div class="play-card__caption-meta">${winnerBlock}</div>
-          ${g.id
-            ? `<span class="play-card__status-slot" data-no-flip
-                     data-game-id="${escapeAttr(g.id)}"
-                     data-game-name="${escapeAttr(g.name || "")}">
-                 ${window.renderStatusTag(g.id, gameStatus, {
-                     size: "sm-row", addLabel: "Add", pending: statusPending, gameName: g.name,
-                   })}
-               </span>`
-            : ""}
         </div>
       </div>
     `;
@@ -456,7 +440,7 @@
       const t = event.target;
       if (!t) return;
       // Anything in a no-flip subtree handles its own navigation (game-name
-      // link, game-thumbnail badge, maximize button, status pill).
+      // link, maximize button, back-side player badges).
       if (t.closest && t.closest("[data-no-flip]")) return;
       // Buttons / form controls / links never flip the card.
       if (t.closest && t.closest("input, textarea, button, label, select")) return;
