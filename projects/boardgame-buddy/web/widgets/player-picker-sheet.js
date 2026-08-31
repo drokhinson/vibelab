@@ -205,17 +205,14 @@
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
           <h3 class="bgb-sheet__title">Add players</h3>
           ${seated ? `<p class="bgb-sheet__sub">${seated} already at the table</p>` : ""}
-          <div class="game-finder bgb-sheet__search">
+          <div class="game-finder bgb-sheet__search" data-search-host>
             <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
             <input type="text" id="${INPUT_ID}"
                    class="input input-bordered game-finder__input"
                    placeholder="Search buddies, or type a name…"
                    aria-label="Search buddies, or type a name"
                    autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" />
-            <button type="button" class="field-clear-btn" data-picker-action="clear"
-                    aria-label="Clear search" hidden>
-              <i data-icon="x" class="w-4 h-4"></i>
-            </button>
+            ${window.BgbSearchField.clearButton()}
           </div>
           <div class="bgb-sheet__list" role="group" aria-label="Players to add"
                data-picker-list>${this._renderList()}</div>
@@ -240,7 +237,6 @@
         html: this._renderPanel(),
         returnFocus: opts.returnFocus || null,
         onClick: (e) => {
-          if (e.target.closest('[data-picker-action="clear"]')) { this._clear(); return; }
           if (e.target.closest('[data-picker-action="guest"]')) { this._pickGuest(); return; }
           if (e.target.closest('[data-picker-action="confirm"]')) { this._confirm(); return; }
           const row = e.target.closest("[data-picker-name]");
@@ -315,11 +311,6 @@
     _setQuery(value) {
       this._query = value || "";
       this._repaintList();
-      const root = this._sheet.el;
-      const clear = root
-        ? /** @type {HTMLElement|null} */ (root.querySelector('[data-picker-action="clear"]'))
-        : null;
-      if (clear) clear.hidden = !this._query;
     }
 
     /**
@@ -341,13 +332,14 @@
       if (foot) foot.innerHTML = this._renderConfirm();
     }
 
+    /**
+     * Escape's first press backs out of the search. The × does the same thing
+     * through the shared field's own click path — both land back in _setQuery
+     * via the `input` event BgbSearchField dispatches, so "empty the box and
+     * repaint the list" is written once, in ui/search-field.js.
+     */
     _clear() {
-      const root = this._sheet.el;
-      const input = root
-        ? /** @type {HTMLInputElement|null} */ (root.querySelector(`#${INPUT_ID}`))
-        : null;
-      if (input) { input.value = ""; input.focus(); }
-      this._setQuery("");
+      window.BgbSearchField.clear(this._sheet.el);
     }
 
     // ── Selection ───────────────────────────────────────────────────────────

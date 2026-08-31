@@ -222,12 +222,13 @@
     _renderSearch() {
       return `
         <div class="profile-panel__controls">
-          <input id="plays-search-input"
-                 class="input input-bordered input-sm flex-1 min-w-0"
-                 placeholder="Search by game or player name"
-                 autocomplete="off"
-                 value="${escapeAttr(this._query)}"
-                 oninput="window.playsView._onSearchInput(this.value)" />
+          ${window.BgbSearchField.render({
+            id: "plays-search-input",
+            value: this._query,
+            placeholder: "Search by game or player name",
+            inputCls: "input-sm",
+            oninput: "window.playsView._onSearchInput(this.value)",
+          })}
           <button class="btn btn-ghost btn-sm" title="Refresh"
                   ${this._loading ? "disabled" : ""}
                   onclick="window.playsView._load({reset:true})">

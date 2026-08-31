@@ -1,8 +1,8 @@
 // views/wishlist-view.js — Full wishlist spoke.
 //
 // Mirrors collection-view but pins status='wishlist' and drops the toggle.
-// "+ Add" button in the header opens the AddGameModal for searching the
-// BgB library or importing from BGG.
+// "+ Add" button in the header opens the Add Games page
+// (views/add-games-view.js) — the whole BgB catalog as one scroll.
 //
 // Data lives in ShelfController (domain/shelf-controller.js) — the same
 // fetch-once-and-window-locally model collection-view uses, right down to the
@@ -216,23 +216,21 @@
       `;
     }
 
+    /** The catalog scroll — see CollectionView._openAddGame. */
     _openAddGame() {
-      window.AddGameModal.open({
-        status: "wishlist",
-        onAdded: () => { this.ctl.load(MODE, { force: true }); },
-      });
+      window.router.go("add-games", { status: "wishlist" });
     }
 
     _renderControls() {
       const activeFilters = this.ctl.activeFilterCount();
       return `
         <div class="profile-panel__controls">
-          <input id="wishlist-search-input"
-                 class="input input-bordered flex-1 min-w-0"
-                 placeholder="Search your wishlist by name"
-                 autocomplete="off"
-                 value="${escapeAttr(this.ctl.query)}"
-                 oninput="window.wishlistView._onSearchInput(this.value)" />
+          ${window.BgbSearchField.render({
+            id: "wishlist-search-input",
+            value: this.ctl.query,
+            placeholder: "Search your wishlist by name",
+            oninput: "window.wishlistView._onSearchInput(this.value)",
+          })}
           <button id="wishlist-filter-btn" class="btn btn-ghost relative" title="Filters"
                   onclick="window.wishlistView._toggleFilters()">
             <i data-icon="sliders-horizontal" class="w-4 h-4"></i>

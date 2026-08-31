@@ -3,8 +3,8 @@
 // Toggle between "Owned", "Expansions" and "Played" + shared
 // search/filters (Owned and Played only — see below).
 // Wishlist lives at its own /wishlist route. The "+ Add" button in the
-// header opens the AddGameModal (widgets/add-game-modal.js) for searching
-// the BgB library or importing from BGG.
+// header opens the Add Games page (views/add-games-view.js) — the whole BgB
+// catalog as one scroll, one tap per row.
 //
 // Data lives in ShelfController (domain/shelf-controller.js): a whole shelf is
 // fetched once and cached, and the visible window, filter and search are all
@@ -486,23 +486,26 @@
       `;
     }
 
+    /**
+     * The catalog scroll (views/add-games-view.js), not a search modal: the
+     * whole BgB library with one tap per row to shelve a game. Coming back
+     * remounts this view, and every collection write has already dropped the
+     * cached shelves, so the grid re-reads on its own — nothing to force here.
+     */
     _openAddGame() {
-      window.AddGameModal.open({
-        status: "owned",
-        onAdded: () => { this.ctl.load(this._mode, { force: true }); },
-      });
+      window.router.go("add-games", { status: "owned" });
     }
 
     _renderControls() {
       const activeFilters = this.ctl.activeFilterCount();
       return `
         <div class="profile-panel__controls">
-          <input id="collection-search-input"
-                 class="input input-bordered flex-1 min-w-0"
-                 placeholder="Search your collection by name"
-                 autocomplete="off"
-                 value="${escapeAttr(this.ctl.query)}"
-                 oninput="window.collectionView._onSearchInput(this.value)" />
+          ${window.BgbSearchField.render({
+            id: "collection-search-input",
+            value: this.ctl.query,
+            placeholder: "Search your collection by name",
+            oninput: "window.collectionView._onSearchInput(this.value)",
+          })}
           <button id="collection-filter-btn" class="btn btn-ghost relative" title="Filters"
                   onclick="window.collectionView._toggleFilters()">
             <i data-icon="sliders-horizontal" class="w-4 h-4"></i>

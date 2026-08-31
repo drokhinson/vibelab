@@ -110,16 +110,13 @@
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
           <h3 class="bgb-sheet__title">${escapeHtml(title)}</h3>
           <p class="bgb-sheet__sub">${n} game${n === 1 ? "" : "s"} with logged plays</p>
-          <div class="game-finder bgb-sheet__search">
+          <div class="game-finder bgb-sheet__search" data-search-host>
             <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
             <input type="text" id="game-picker-search"
                    class="input input-bordered game-finder__input"
                    placeholder="Search your games…" aria-label="Search your games"
                    autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
-            <button type="button" class="field-clear-btn" data-picker-action="clear"
-                    aria-label="Clear search" hidden>
-              <i data-icon="x" class="w-4 h-4"></i>
-            </button>
+            ${window.BgbSearchField.clearButton()}
           </div>
           <div class="bgb-sheet__list" role="listbox" aria-label="${escapeAttr(title)}"
                data-picker-list>${this._renderList()}</div>
@@ -144,7 +141,6 @@
         label: title,
         returnFocus: opts.returnFocus || null,
         onClick: (e) => {
-          if (e.target.closest('[data-picker-action="clear"]')) { this._clear(); return; }
           const row = e.target.closest("[data-picker-game-id]");
           if (row) this._pick(row.dataset.pickerGameId);
         },
@@ -201,17 +197,16 @@
         host.scrollTop = 0;
         window.BgbIcons.render(/** @type {HTMLElement} */ (host));
       }
-      const clear = /** @type {HTMLElement|null} */ (root.querySelector('[data-picker-action="clear"]'));
-      if (clear) clear.hidden = !this._query;
     }
 
+    /**
+     * Escape's first press backs out of the search. The × does the same thing
+     * through the shared field's own click path — both land back in _setQuery
+     * via the `input` event BgbSearchField dispatches, so "empty the box and
+     * repaint the list" is written once, in ui/search-field.js.
+     */
     _clear() {
-      const root = this._sheet.el;
-      const input = root
-        ? /** @type {HTMLInputElement|null} */ (root.querySelector(".game-finder__input"))
-        : null;
-      if (input) { input.value = ""; input.focus(); }
-      this._setQuery("");
+      window.BgbSearchField.clear(this._sheet.el);
     }
 
     // ── Pick ────────────────────────────────────────────────────────────────

@@ -115,6 +115,35 @@
     }
 
     /**
+     * Optimistic status write, local half: patch the cached status map and
+     * announce the change so every mounted surface repaints in the tap's own
+     * frame. `null` means "no relationship" — listeners delete their entry and
+     * the tile flips back to "+".
+     *
+     * Callers run this BEFORE the network write and again with the previous
+     * value if that write fails. It is deliberately state-only: the error
+     * surface belongs to the screen the user is looking at, not here.
+     *
+     * Three call sites had spelled this out by hand — the status sheet, the
+     * add-game modal and the Add Games page — which is exactly the drift
+     * .claude/rules/ui-object-design.md §4 says to extract at instance #2.
+     *
+     * @param {string} gameId
+     * @param {("owned"|"wishlist"|"played"|null)} status
+     */
+    static applyLocalStatus(gameId, status) {
+      if (!gameId) return;
+      const cur = (window.store && window.store.get && window.store.get("myCollectionMap")) || {};
+      const next = { ...cur };
+      if (status == null) delete next[gameId];
+      else next[gameId] = status;
+      window.store.set("myCollectionMap", next);
+      document.dispatchEvent(new CustomEvent("status-changed", {
+        detail: { gameId, status: status == null ? null : status },
+      }));
+    }
+
+    /**
      * Mark (or unmark) an owned game as played before the user joined, so a
      * pre-account favourite can leave the Shelf of Shame without a fabricated
      * play. Migration 059; opened from the Stats spoke's shelf sheet.

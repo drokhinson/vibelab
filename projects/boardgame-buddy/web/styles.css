@@ -741,9 +741,18 @@ body {
   background: rgba(255, 250, 235, 0.75);
   border: 1px solid rgba(139, 111, 60, 0.35);
   color: #2B1D0A;
-  padding: 0 14px 0 32px;
+  /* 38px right, for the shared × — see the scoped colour below. */
+  padding: 0 38px 0 32px;
   font-size: 0.88rem;
 }
+/* The parchment is a genuine paper island — light in both themes, painted
+   from literals rather than the alias families (.claude/rules/theming.md
+   §7). The shared × reads --polaroid-*, which the screen around this scroll
+   re-points to the app ground, so on a dark spoke it would arrive as pale ink
+   on cream paper. Give it the parchment's own ink. It stays 44px tall over a
+   38px field: the overhang is the tap target, not the visible control. */
+.scroll-panel__search-row .field-clear-btn { color: rgba(43, 29, 10, 0.5); right: 2px; }
+.scroll-panel__search-row .field-clear-btn:hover { color: #2B1D0A; }
 .scroll-panel__search::placeholder { color: rgba(43, 29, 10, 0.45); }
 .scroll-panel__search:focus {
   outline: 2px solid var(--accent);
@@ -6447,6 +6456,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .game-finder__input {
   width: 100%;
   padding-left: 36px;
+  /* Room for the .field-clear-btn every finder now carries (ui/search-field.js).
+     Without it a long query slides under the ×. */
+  padding-right: 40px;
   background: var(--polaroid-bg);
   color: var(--polaroid-ink);
   border: 1px solid var(--polaroid-line);
@@ -6711,8 +6723,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding-right: 44px;
   font-size: 13px;
 }
-/* Shared clear (×) affordance for any .game-finder-chrome field that can hold
-   a query — the import popup's filter and the Gather picker's filter. */
+/* ── Search fields: the shared × ──────────────────────────────────────────
+   ui/search-field.js owns the behaviour; this owns the look. One button class
+   for every search box in the app, inside whichever chrome the host draws —
+   .search-field below, .game-finder above, the parchment scroll's search row.
+   The host is what positions it, so the host must be `position: relative` and
+   must carry `data-search-host`. */
 .field-clear-btn {
   position: absolute;
   right: 0;
@@ -6729,6 +6745,34 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .field-clear-btn[hidden] { display: none; }
 .field-clear-btn:hover { color: var(--polaroid-ink); }
+.field-clear-btn:active { transform: translateY(-50%) scale(0.9); }
+.field-clear-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 0.5rem; }
+
+/* The wrapper BgbSearchField.render() emits, for the boxes that had no chrome
+   of their own — the Collection / Wishlist / Plays / Buddies / Add Games
+   searches. `flex: 1 1 auto` + `min-width: 0` because most of them sit in a
+   row beside a filter button and used to carry those utilities themselves. */
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.search-field__input {
+  width: 100%;
+  /* Clears the 44px button; the extra 4px keeps the caret off its edge. */
+  padding-right: 40px;
+}
+.search-field--icon .search-field__input { padding-left: 36px; }
+.search-field__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-muted);
+  pointer-events: none;
+}
 .import-exp-modal__body {
   max-height: min(52vh, 380px);
   overflow-y: auto;
@@ -7284,6 +7328,172 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-size: 0.85rem;
 }
 .game-polaroid.game-polaroid--row:hover { transform: none; box-shadow: none; }
+
+/* ── Add Games: the catalog scroll ────────────────────────────────────────
+   views/add-games-view.js — the whole BgB library as one list, one tap per
+   row to shelve a game. It sits on .bgb-spoke-screen, so the chrome re-point
+   at the top of this file has already pointed --polaroid-* at the app tokens
+   and the .game-polaroid--row inside each row follows the screen it is on.
+   Nothing here paints a literal: the screen is dark in dark and light in
+   light, and the action button is the only accent on it. */
+/* The band under the back row: "Add to:" + the two shelf pills, then the
+   search. Everything you steer this screen with, pinned — on a list that
+   unrolls the whole catalog, the shelf a row's + will fill is the one thing
+   you must never have to scroll back up to check.
+
+   Same bleed-and-blur treatment as .spoke-head above it so the two read as one
+   stack of chrome, and one step down the z ladder (15) so it slides UNDER the
+   back row rather than over it — the same pairing the Collection spoke's
+   Expansions control band uses. The negative inline margin plus matching
+   padding is what makes the band reach the column edges; without it rows slide
+   past the pinned band through the gutters. */
+#add-games-pinned {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + var(--bgb-spoke-head-height));
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-inline: -1rem;
+  padding: 0.45rem 1rem 0.55rem;
+  background: oklch(var(--b1) / 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid oklch(var(--b3));
+}
+
+/* "Add to:" and the pills are one row: the label is what the pills mean, so
+   it reads as a sentence rather than as a heading over a control. */
+.catalog-target {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.catalog-target__label {
+  flex: none;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+/* The shared toggle carries block margins for its usual home mid-screen; in a
+   pinned band the band's own padding is the spacing. */
+.catalog-target .spoke-toggle {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* A touch tighter than the spokes' full-width version, because the label is
+   sharing the row and the band should stay short. */
+.catalog-target .spoke-toggle__pill { padding: 0.4rem 0.6rem; }
+
+.catalog-search .search-field__input { height: 40px; min-height: 40px; }
+
+/* The escape hatch above the list: BGG import, for a game the catalog below
+   cannot contain by definition. Deliberately quieter than a .btn-primary —
+   it is the exception, and the list is the answer. */
+.catalog-import {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 44px;
+  margin: 0.6rem 0 0.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.75rem;
+  background: none;
+  color: var(--accent-ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.catalog-import:hover { background: var(--accent-quiet); border-color: var(--accent); }
+.catalog-import:active { transform: translateY(1px); }
+.catalog-import:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.catalog-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* 56px, not 44: list rows sit flush against each other, so a slightly-off
+   thumb lands on the neighbour (.claude/rules/mobile-web.md §5). */
+.catalog-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 56px;
+  padding: 0.3rem 0.35rem;
+  border-radius: 0.6rem;
+  border-bottom: 1px solid oklch(var(--bc) / 0.07);
+}
+.catalog-row:last-child { border-bottom: none; }
+/* Touch has no hover, so the row needs a press state or the tap reads as
+   ignored. The tile inside is the navigating target; this is its feedback. */
+.catalog-row:active { background: oklch(var(--bc) / 0.05); }
+
+/* The viewer-dependent half of the row, repainted on its own so a status
+   change never swaps the artwork out and back. */
+.catalog-row__slot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* "Wishlist" / "Played" — why this row is not a plain "+". */
+.catalog-row__note {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: oklch(var(--bc) / 0.55);
+  background: oklch(var(--b3));
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+}
+
+/* The whole screen, in one control. Outline = not on this shelf, filled =
+   on it and one more tap takes it off. */
+.catalog-row__action {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid oklch(var(--bc) / 0.16);
+  border-radius: 0.6rem;
+  background: none;
+  color: var(--accent-ink);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.catalog-row__action:hover { background: var(--accent-quiet); border-color: var(--accent); }
+.catalog-row__action:active { transform: translateY(1px); }
+.catalog-row__action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.catalog-row__action.is-on {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
+}
+.catalog-row__action.is-on:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+/* A write in flight: the button holds the state it optimistically painted and
+   stops inviting a second tap it would have to queue behind the first. */
+.catalog-row__action[aria-busy="true"] { opacity: 0.55; pointer-events: none; }
+
+.catalog-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
 
 /* ── Expanded play-detail popup ──────────────────────────────────────────
    In-place modal opened from the polaroid play-card's maximize button.

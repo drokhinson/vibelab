@@ -127,6 +127,7 @@
         // active-session list are the bottom half of the Play tab now. Kept as
         // an alias so shared links and bookmarks still land somewhere sane.
         { name: "log-play",            pattern: /^\/(play|join)\/?$/,             build: () => "/play" },
+        { name: "add-games",           pattern: /^\/games\/add\/?$/,              build: () => "/games/add" },
         { name: "game-explorer",       pattern: /^\/games\/?$/,                   build: () => "/games" },
         { name: "game-detail",         pattern: /^\/game\/([^/]+)\/?$/,
           consume: ["gameId"],

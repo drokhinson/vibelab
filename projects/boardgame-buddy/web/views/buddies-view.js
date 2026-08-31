@@ -151,12 +151,17 @@
         ${this._renderTopbar()}
 
         <section class="buddies-search">
-          <input id="buddies-search-input" class="input input-bordered w-full"
-                 placeholder="Search for buddies"
-                 autocomplete="off"
-                 onblur="window.buddiesView._searchInput(this.value)"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();window.buddiesView._searchInput(this.value);}"
-                 value="${escapeAttr(this._q)}" />
+          ${window.BgbSearchField.render({
+            id: "buddies-search-input",
+            value: this._q,
+            placeholder: "Search for buddies",
+            // This field searches on blur / Enter, not per keystroke, so the ×
+            // has to commit the empty query itself — hence the oninput, which
+            // is also the event BgbSearchField dispatches when it clears.
+            oninput: "if(!this.value)window.buddiesView._searchInput('');",
+            onblur: "window.buddiesView._searchInput(this.value)",
+            onkeydown: "if(event.key==='Enter'){event.preventDefault();window.buddiesView._searchInput(this.value);}",
+          })}
           ${this._q
             ? `<ul class="search-list">${this._search.map((u) => `
                 <li class="search-hit" onclick="window.router.go('profile-other',{userId:'${u.id}'})">
@@ -413,12 +418,13 @@
       const hasGhosts = ghostMatches.length > 0;
       return `
         <div class="buddies-link-panel" onclick="event.stopPropagation()">
-          <input id="ghost-link-input"
-                 class="input input-bordered input-sm w-full"
-                 placeholder="Search buddies or ghosts to link “${escapeHtml(displayName)}”"
-                 autocomplete="off"
-                 oninput="window.buddiesView._linkSearchInput(this.value)"
-                 value="${escapeAttr(this._linkQuery)}" />
+          ${window.BgbSearchField.render({
+            id: "ghost-link-input",
+            value: this._linkQuery,
+            placeholder: `Search buddies or ghosts to link “${displayName}”`,
+            inputCls: "input-sm",
+            oninput: "window.buddiesView._linkSearchInput(this.value)",
+          })}
           ${this._linkQuery && (hasAccounts || hasGhosts) ? `
             <ul class="buddies-link-results">
               ${this._linkResults.map((u) => `

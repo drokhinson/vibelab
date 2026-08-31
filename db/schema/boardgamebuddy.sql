@@ -1,7 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
 -- Last updated: migration 046 (session write RPCs; drops the redundant
---               (code, phase) index).
+--               (code, phase) index), plus the two catalog-browse indexes from
+--               051 and 060, folded in below. Migrations 047-059 are NOT yet
+--               reflected here — read them directly until someone catches this
+--               snapshot up.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: the legacy boardgamebuddy_buddies table is now strictly for free-text
@@ -457,6 +460,22 @@ CREATE INDEX IF NOT EXISTS idx_bgb_play_players_display_name_trgm
 -- Sync-status session roll-up predicate (migration 039).
 CREATE INDEX IF NOT EXISTS idx_bgb_pending_imports_user_created
   ON public.boardgamebuddy_bgg_pending_imports (user_id, created_at);
+
+-- Catalog browse, one ordered index per sort axis GET /games offers. Both
+-- carry the `is_expansion = false` predicate the browse callers always send,
+-- and both end in `id DESC` because neither leading column is unique —
+-- created_at is nullable and bulk imports share a transaction timestamp; two
+-- printings of one game share a name.
+--   created_at DESC (migration 051) — `sort=newest`, the default: the Game
+--     Explorer's "All BgB Games" grid.
+--   name ASC (migration 060) — `sort=alphabetical`: the Add Games catalog
+--     scroll, which pages the whole catalog end to end.
+CREATE INDEX IF NOT EXISTS idx_bgb_games_browse
+  ON public.boardgamebuddy_games (created_at DESC, id DESC)
+  WHERE is_expansion = false;
+CREATE INDEX IF NOT EXISTS idx_bgb_games_browse_alpha
+  ON public.boardgamebuddy_games (name ASC, id DESC)
+  WHERE is_expansion = false;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Objects the migrations create that this snapshot used to omit

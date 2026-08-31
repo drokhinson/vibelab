@@ -165,14 +165,19 @@
       </p>`;
   }
 
-  /** Show/hide the filter field and keep its clear button in sync. */
+  /**
+   * Show or hide the filter field itself — there is nothing to filter until
+   * the candidates land. Its × keeps itself in sync (ui/search-field.js).
+   */
   function _syncSearchChrome() {
     const root = _root();
     if (!root) return;
     const host = root.querySelector(".import-exp-search");
     if (host) host.hidden = _candidates.length === 0;
-    const clear = root.querySelector(".import-exp-search .field-clear-btn");
-    if (clear) clear.hidden = !_query;
+    // _load() empties the field directly rather than through a keystroke, so
+    // the × has to be re-derived here — nothing dispatched an `input` event
+    // for the shared listener to act on.
+    window.BgbSearchField.sync(host || root);
   }
 
   /**
@@ -304,15 +309,13 @@
             ? `Expansions BoardGameGeek lists for <strong>${escapeHtml(opts.gameName)}</strong>.`
             : "Expansions BoardGameGeek lists for this game."}
         </p>
-        <div class="game-finder import-exp-search" hidden>
+        <div class="game-finder import-exp-search" data-search-host hidden>
           <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
-          <input type="text" class="input input-bordered game-finder__input import-exp-search__input"
+          <input type="text" id="import-exp-filter-input"
+                 class="input input-bordered game-finder__input import-exp-search__input"
                  placeholder="Filter expansions…" aria-label="Filter expansions by name"
                  autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
-          <button type="button" class="field-clear-btn"
-                  data-exp-action="clear-filter" aria-label="Clear filter" hidden>
-            <i data-icon="x" class="w-4 h-4"></i>
-          </button>
+          ${window.BgbSearchField.clearButton({ label: "Clear filter" })}
         </div>
         <div class="import-exp-modal__body"></div>
       </div>
@@ -340,10 +343,6 @@
           _load();
         } else if (action === "import") {
           _import(Number(hit.getAttribute("data-exp-bgg-id")), hit);
-        } else if (action === "clear-filter") {
-          const input = _searchInput();
-          if (input) { input.value = ""; input.focus(); }
-          _setQuery("");
         }
       });
     }
@@ -365,8 +364,9 @@
       if (el && el.value) {
         e.preventDefault();
         e.stopPropagation();
-        el.value = "";
-        _setQuery("");
+        // Same path the × takes — BgbSearchField empties the box and
+        // dispatches the `input` event _setQuery already listens for.
+        window.BgbSearchField.clearInput(el);
         return;
       }
       dismiss();
