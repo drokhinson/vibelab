@@ -1,4 +1,4 @@
--- 061_achievements.sql — the Achievements spoke.
+-- 062_achievements.sql — the Achievements spoke.
 --
 -- Sixteen badges hanging off the Profile hub, in four groups: time at the
 -- table, victories, the reference guide, and the setup work that makes the app
@@ -44,7 +44,7 @@ ALTER TABLE public.boardgamebuddy_profiles
   ADD COLUMN IF NOT EXISTS app_installed_at TIMESTAMPTZ;
 
 COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS
-  'First time this account was seen running as an installed PWA (migration 061). Drives the "Pocket Buddy" achievement; nothing else reads it.';
+  'First time this account was seen running as an installed PWA (migration 062). Drives the "Pocket Buddy" achievement; nothing else reads it.';
 
 -- ── Groups ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_achievement_groups (

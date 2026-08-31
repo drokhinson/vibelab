@@ -2,7 +2,7 @@
 //
 // Reached from the Profile hub's Achievements card. Everything on this screen
 // comes from ONE call, GET /achievements, backed by the bgb_sync_achievements
-// RPC (migration 061) — the catalog, the four group headings, and the viewer's
+// RPC (migration 062) — the catalog, the four group headings, and the viewer's
 // progress against every badge. Nothing here fetches per tile.
 //
 // The screen is a trophy shelf: a summary strip, then one card per group,

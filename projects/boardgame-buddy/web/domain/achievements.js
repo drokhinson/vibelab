@@ -2,7 +2,7 @@
 //
 // ONE endpoint backs the whole feature: GET /achievements returns the catalog
 // joined to the viewer's own progress (see bgb_sync_achievements, migration
-// 061). That call also WRITES — it stamps the unlock date for anything newly
+// 062). That call also WRITES — it stamps the unlock date for anything newly
 // earned — which is why it is not treated as a cheap re-read: the fresh window
 // is generous and the writes that move a badge are what invalidate it.
 //

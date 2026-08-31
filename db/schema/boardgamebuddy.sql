@@ -2,7 +2,7 @@
 -- BoardgameBuddy — current schema snapshot
 -- Last updated: migration 046 (session write RPCs; drops the redundant
 --               (code, phase) index), plus the two catalog-browse indexes from
---               051 and 060 and the achievement objects from 061 (the catalog,
+--               051 and 060 and the achievement objects from 062 (the catalog,
 --               its groups, the per-user unlock rows and
 --               profiles.app_installed_at), folded in below. Migrations
 --               047-059 are NOT yet reflected here — read them directly until
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- session-scoped progress (Imported X of Y). Added in migration 027.
   bgg_last_sync_started_at TIMESTAMPTZ,
   -- First time this account was seen running as an installed PWA (migration
-  -- 061). The one achievement fact nothing in the database could derive; set
+  -- 062). The one achievement fact nothing in the database could derive; set
   -- by POST /achievements/installed and read only by bgb_sync_achievements.
   app_installed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
@@ -362,7 +362,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chapter_reports (
 );
 ALTER TABLE public.boardgamebuddy_chapter_reports ENABLE ROW LEVEL SECURITY;
 
--- Achievement catalog (migration 061). Three objects: the four section
+-- Achievement catalog (migration 062). Three objects: the four section
 -- headings, the sixteen badges, and one row per badge a user has earned.
 -- The catalog is DATA, not a Python dict, so retuning a tier or rewording a
 -- badge is an UPDATE rather than a deploy. `metric` names a key of the JSONB
@@ -429,7 +429,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_chapter
   ON public.boardgamebuddy_user_chapters(chapter_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_chapter_reports_status
   ON public.boardgamebuddy_chapter_reports(status, created_at);
--- Achievements (migration 061): the catalog is always read in screen order.
+-- Achievements (migration 062): the catalog is always read in screen order.
 CREATE INDEX IF NOT EXISTS idx_bgb_achievements_order
   ON public.boardgamebuddy_achievements (display_order);
 -- Expansions (folded into 001_baseline): fast lookup of a base game's expansions by bgg_id.

@@ -83,7 +83,7 @@ Linked to Supabase Auth `auth.users`.
 | avatar_url | TEXT | nullable |
 | is_admin | BOOLEAN | default false; granted via `POST /profile/become-admin` with the shared admin key |
 | bgg_username | TEXT | nullable; linked BoardGameGeek username (folded into 001_baseline). Unique when non-null. |
-| app_installed_at | TIMESTAMPTZ | nullable; first time this account was seen running as an installed PWA (migration 061). The one achievement fact nothing in the database could derive — set by `POST /achievements/installed`, read only by `bgb_sync_achievements`. |
+| app_installed_at | TIMESTAMPTZ | nullable; first time this account was seen running as an installed PWA (migration 062). The one achievement fact nothing in the database could derive — set by `POST /achievements/installed`, read only by `bgb_sync_achievements`. |
 | created_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_collections
@@ -251,7 +251,7 @@ Presence row: this chapter is in the user's guide for that game.
 | UNIQUE(user_id, chapter_id) | | one row per user-chapter pair |
 
 ### boardgamebuddy_achievement_groups (lookup)
-The four section headings on the Achievements spoke. Seeded by migration 061.
+The four section headings on the Achievements spoke. Seeded by migration 062.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | TEXT PK | `table` / `victories` / `guide` / `setup` |
@@ -260,7 +260,7 @@ The four section headings on the Achievements spoke. Seeded by migration 061.
 | display_order | INT | screen order |
 
 ### boardgamebuddy_achievements (lookup)
-The badge catalog — sixteen rows, seeded by migration 061. Kept as **data, not a
+The badge catalog — sixteen rows, seeded by migration 062. Kept as **data, not a
 Python dict**, per `.claude/rules/database-supabase.md`: retuning a tier or
 rewording a badge is an UPDATE, not a deploy.
 | Column | Type | Notes |

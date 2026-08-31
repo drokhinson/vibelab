@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 061 (bgb_sync_achievements — the Achievements spoke's
+-- Last updated: migration 062 (bgb_sync_achievements — the Achievements spoke's
 --               whole payload in one call, unlock rows included)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -628,7 +628,7 @@
 
 -- bgb_sync_achievements(uid UUID)
 --   → JSONB { total, earned_count, metrics, groups[], achievements[] }
---   Defined in: db/migrations/boardgamebuddy/061_achievements.sql
+--   Defined in: db/migrations/boardgamebuddy/062_achievements.sql
 --   Called by:  shared-backend/routes/boardgame_buddy/achievement_routes.py
 --               (GET /achievements, POST /achievements/installed)
 --   Purpose:    Everything on the Achievements spoke (/profile/achievements) in

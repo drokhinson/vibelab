@@ -1011,7 +1011,7 @@ class GameBundlesResponse(BaseModel):
     truncated: bool = False
 
 
-# ── Achievements (migration 061) ──────────────────────────────────────────────
+# ── Achievements (migration 062) ──────────────────────────────────────────────
 
 class AchievementGroup(BaseModel):
     """One section heading on the Achievements spoke."""
