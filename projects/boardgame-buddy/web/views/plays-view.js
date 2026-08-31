@@ -22,7 +22,11 @@
       this._error = null;
       this._query = "";
       this._searchTimer = null;
+      // The VIEWER's own game -> status map. Every row's status tag reads it,
+      // on this user's plays and on anyone else's — the tag is your
+      // relationship to the game, never the log's owner's.
       this._statusMap = {};
+      this._statusMapReady = false;
       this._targetUserId = null;
       this._targetProfile = null;
     }
@@ -34,6 +38,14 @@
 
     async onMount() {
       this.listen("user", () => this.render());
+      this.listen("myCollectionMap", () => this._refreshStatusMap());
+      this.listenDom("status-changed", (e) => {
+        const { gameId, status } = e.detail || {};
+        if (!gameId) return;
+        if (status == null) delete this._statusMap[gameId];
+        else this._statusMap[gameId] = status;
+        this.render();
+      });
       await this._initFromParams();
     }
 
@@ -47,6 +59,7 @@
       this._resetState();
       this._targetUserId = (this.params && this.params.userId) || null;
       if (this._isOther()) {
+        this._hydrateStatusMap();
         this._hydrateFromCache();
         // A _load always follows, so mark the fetch in flight before the
         // first paint — otherwise an empty hydrate paints the empty state.
@@ -55,14 +68,45 @@
         window.User.fetch(this._targetUserId)
           .then((p) => { this._targetProfile = p; this.render(); })
           .catch(() => {});
-        await this._load({ reset: true });
+        // Their plays and your collection, in parallel: the rows come from
+        // them, the status tags on those rows come from you.
+        await Promise.all([this._load({ reset: true }), this._refreshStatusMap()]);
         return;
       }
+      this._hydrateStatusMap();
       this._hydrateFromCache();
       this._loading = true;
       this.render();
       // Inside the cache's fresh window this resolves with no network call.
-      await this._load({ reset: true });
+      await Promise.all([this._load({ reset: true }), this._refreshStatusMap()]);
+    }
+
+    /**
+     * Paint the viewer's own map before awaiting anything, so an owned game's
+     * thumb doesn't flash the "+" for a frame. Stale-tolerant on purpose —
+     * _refreshStatusMap is what corrects it.
+     */
+    _hydrateStatusMap() {
+      const map = (window.store && window.store.get("myCollectionMap"))
+        || (window.Collection && window.Collection.cachedStatusMap
+            ? window.Collection.cachedStatusMap() : null);
+      if (!map) return false;
+      // Copied, not aliased: status-changed mutates this object in place and
+      // the store's copy is shared with every other reader.
+      this._statusMap = { ...map };
+      this._statusMapReady = true;
+      return true;
+    }
+
+    async _refreshStatusMap() {
+      try {
+        this._statusMap = { ...((await window.Collection.myStatusMap()) || {}) };
+      } catch (_) {}
+      // Set even on failure, so a map that will never arrive stops the tags
+      // waiting on it — same contract as domain/collection.js's catch.
+      this._statusMapReady = true;
+      if (!this._mounted) return;
+      this.render();
     }
 
     /**
@@ -88,7 +132,11 @@
       if (!seed) return false;
       this._plays = seed.recent_plays || [];
       this._total = seed.recent_plays_total || 0;
-      this._statusMap = seed.status_map || {};
+      if (seed.status_map) {
+        // The bundle's status_map is the VIEWER's, whoever the bundle was for.
+        this._statusMap = { ...seed.status_map };
+        this._statusMapReady = true;
+      }
       this._loaded = true;
       return true;
     }
@@ -99,6 +147,7 @@
       // _targetUserId still holds the PREVIOUS mount's target.
       this._resetState();
       this._targetUserId = (this.params && this.params.userId) || null;
+      this._hydrateStatusMap();
       this._hydrateFromCache();
       this._loading = true;
       this.render();
@@ -223,8 +272,15 @@
       if (winnerLabel) subParts.push(`<span class="plays-list__winner"><i data-icon="trophy" class="w-3 h-3"></i> ${winnerLabel}</span>`);
       if (playerCount > 0) subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
       const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
+      // Always the viewer's own relationship to the game, even on someone
+      // else's log — that is what the tag's sheet reads and writes. Hidden
+      // rather than guessed while the map is still in flight.
       const statusOverlay = p.game_id
-        ? `<span class="plays-list__status">${window.renderStatusTag(p.game_id, (this._statusMap || {})[p.game_id] || null, { corner: true, gameName: p.game_name })}</span>`
+        ? `<span class="plays-list__status">${window.renderStatusTag(
+             p.game_id,
+             (this._statusMap || {})[p.game_id] || null,
+             { corner: true, pending: !this._statusMapReady, gameName: p.game_name },
+           )}</span>`
         : "";
       return `
         <li class="plays-list__row" data-play-id="${p.id}"

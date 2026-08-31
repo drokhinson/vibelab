@@ -23,6 +23,13 @@
 // /collection/shelf endpoint with expansions included and grouped by
 // domain/expansion-tree.js.
 //
+// The same view serves ?userId=<someone-else>, reached from their profile. It
+// then holds TWO people's data at once: the rows are theirs, the status tags
+// are yours. You cannot edit another user's collection, so on that path the
+// tags read only the viewer's own map (never the row's `status`), a pick
+// writes to the viewer's shelf, and nothing a pick does may add or remove a
+// tile from the target's grid.
+//
 // Repaints are surgical: render() rebuilds the shell only when something
 // structural changes, and revealing a batch rewrites just the grid and
 // sentinel hosts. A full container.innerHTML per batch is itself the "laggy"
@@ -84,7 +91,11 @@
     _resetState() {
       this._mode = MODE_OWNED;
       this._filtersOpen = false;
+      // The VIEWER's own game -> status map, on every mount — including one
+      // showing someone else's shelf, where it is the only source a tile's
+      // status tag may read (see _renderTile).
       this._statusMap = {};
+      this._statusMapReady = false;
       this._targetUserId = null;
       this._targetProfile = null;
       this._lastSig = null;
@@ -164,9 +175,15 @@
         if (!gameId) return;
         if (status == null) delete this._statusMap[gameId];
         else this._statusMap[gameId] = status;
-        this.ctl.spliceGame(gameId, status);
-        this.ctl.deriveAll();
-        this._spliceTree(gameId, status);
+        // The shelf on screen belongs to the target, the status that just
+        // changed belongs to the VIEWER. Splicing here would drop a game off
+        // someone else's collection because you wishlisted it — the one thing
+        // this screen must never do. Repaint the tags and leave their rows be.
+        if (!this._isOther()) {
+          this.ctl.spliceGame(gameId, status);
+          this.ctl.deriveAll();
+          this._spliceTree(gameId, status);
+        }
         this.render();
       });
       await this._initFromParams();
@@ -194,7 +211,11 @@
       if (this._isOther()) return false;
       const seed = window.store.get("profileBundle");
       if (!seed) return false;
-      this._statusMap = seed.status_map || this._statusMap;
+      // The bundle's status_map is the VIEWER's, whoever the bundle was for.
+      if (seed.status_map) {
+        this._statusMap = { ...seed.status_map };
+        this._statusMapReady = true;
+      }
       return this.ctl.seedPartial(MODE_OWNED, seed.owned_page, seed.owned_total);
     }
 
@@ -206,6 +227,7 @@
       this._targetUserId = (this.params && this.params.userId) || null;
 
       if (this._isOther()) {
+        this._hydrateStatusMap();
         this._hydrateFromCache();
         this.render();
         window.User.fetch(this._targetUserId)
@@ -219,6 +241,7 @@
       }
 
       // Self path — paint from cache, then let SWR decide whether to refresh.
+      this._hydrateStatusMap();
       this._hydrateFromCache();
       // The Played tab is lazy (see _setMode): nothing on first paint needs its
       // contents, and the bundle already carries its count for the toggle pill.
@@ -240,14 +263,36 @@
       // holds the PREVIOUS mount's target until _initFromParams runs.
       this._resetState();
       this._targetUserId = (this.params && this.params.userId) || null;
+      this._hydrateStatusMap();
       this._hydrateFromCache();
       this.render();
     }
 
+    /**
+     * Paint the viewer's own map before awaiting anything — on another user's
+     * shelf it is the ONLY thing a tag can read, so without this every tile
+     * flashes "+" for a frame, including games the viewer owns.
+     */
+    _hydrateStatusMap() {
+      const map = (window.store && window.store.get("myCollectionMap"))
+        || (window.Collection && window.Collection.cachedStatusMap
+            ? window.Collection.cachedStatusMap() : null);
+      if (!map) return false;
+      // Copied, not aliased: the status-changed handler mutates this object
+      // in place, and the store's copy is shared with every other reader.
+      this._statusMap = { ...map };
+      this._statusMapReady = true;
+      return true;
+    }
+
     async _refreshMaps() {
       try {
-        this._statusMap = (await window.Collection.myStatusMap()) || {};
+        this._statusMap = { ...((await window.Collection.myStatusMap()) || {}) };
       } catch (_) {}
+      // Set even on failure: a map that will never arrive has to stop the
+      // tags waiting on it, or an owned game reads as no state at all for the
+      // rest of the session. Same contract as domain/collection.js's catch.
+      this._statusMapReady = true;
       if (!this._mounted) return;
       this.render();
     }
@@ -563,14 +608,27 @@
 
     _renderTile(item) {
       const g = item.game || {};
-      const status = this._statusMap[g.id] || item.status || null;
+      // On someone else's shelf `item.status` is THEIR relationship to the
+      // game, and the tag is always the viewer's — tapping it writes to the
+      // viewer's collection, so it has to read from it too. Falling back to
+      // the row would label a game you've never touched "Owned" and offer to
+      // remove a collection row you don't have. The viewer's map is the only
+      // source there; on your own shelf the row IS your map, so it still
+      // serves the first paint before the map lands.
+      const other = this._isOther();
+      const status = other
+        ? (this._statusMap[g.id] || null)
+        : (this._statusMap[g.id] || item.status || null);
+      // Nothing to fall back on while the viewer's map is in flight, so hide
+      // the tag rather than claim "not in your collection" on their shelf.
+      const pending = other && !this._statusMapReady;
       // Catalog-wide count, straight off the shelf row — the same number the
       // game page's "Expansions (N)" heading shows. bgb_collection_shelf
       // computes it in SQL, so the badge is right on the first cached paint.
       const expCount = g.expansion_count || 0;
       return `
         <div class="collection-tile" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})">
-          ${window.renderStatusTag(g.id, status, { corner: true, gameName: g.name })}
+          ${window.renderStatusTag(g.id, status, { corner: true, pending, gameName: g.name })}
           <div class="collection-tile__art">
             ${gameArtImg(g, "card")
               || `<div class="collection-tile__placeholder"><i data-icon="dice-6"></i></div>`}

@@ -23,6 +23,14 @@
 // `status-changed` CustomEvent fires on `document` BEFORE the network call, so
 // every surface rendering the tag repaints in the same frame. A failed write
 // rolls the map back and surfaces the error through PolaroidPopup.alert.
+//
+// EVERY read and write here is about the VIEWER's collection, on every screen —
+// another user's shelf included. You cannot edit someone else's collection, so
+// a tag sitting on their tile still reads your relationship to that game and a
+// pick still moves your shelf, not theirs. The sheet re-resolves its checked
+// row from the viewer's own map (see viewerStatus) rather than trusting the
+// status the call site passed, so a screen holding someone else's rows cannot
+// mislabel it.
 
 (function () {
   const ICON = {
@@ -40,6 +48,29 @@
     owned: "On your shelf",
     wishlist: "Games you want",
   };
+
+  /**
+   * The status the SHEET and the PILL must both show: the VIEWER's own
+   * relationship to this game, never anybody else's.
+   *
+   * A tile can sit on someone else's shelf — Profile Other → Collection — and
+   * the row backing it carries THAT user's status. A call site there could
+   * hand us "owned" for a game the viewer has never touched, which would open
+   * the sheet with Owned checked and offer "Remove from collection" for a row
+   * that doesn't exist. So the viewer's own map wins whenever it has loaded;
+   * `fallback` covers only the frame before it lands (null map = not loaded,
+   * `{}` = loaded and the viewer owns nothing).
+   *
+   * The map is authoritative for all three states — bgb_collection_status_map
+   * unions the collection rows with a derived `played` for every game the
+   * viewer has a play on — so an absent entry means "no relationship", not
+   * "unknown".
+   */
+  function viewerStatus(gameId, fallback) {
+    const map = window.store && window.store.get && window.store.get("myCollectionMap");
+    if (!map) return fallback || null;
+    return map[gameId] || null;
+  }
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
@@ -241,6 +272,7 @@
      * @param {Event} event      The originating tap (focus returns here on close).
      * @param {string} gameId
      * @param {string} currentStatus  "" when the viewer has no relationship.
+     *   Only a fallback — the viewer's own map wins, see viewerStatus().
      * @param {string} [gameName]     Titles the sheet.
      */
     openFor(event, gameId, currentStatus, gameName) {
@@ -248,7 +280,10 @@
 
       this._gameId = gameId;
       this._gameName = gameName || "";
-      this._currentStatus = currentStatus || null;
+      // Re-resolved rather than trusted: this sheet both reads and writes the
+      // VIEWER's collection, on every screen, including one showing another
+      // user's shelf. What it checks has to match what a pick would change.
+      this._currentStatus = viewerStatus(gameId, currentStatus);
 
       this._sheet.open({
         html: this._renderPanel(),
