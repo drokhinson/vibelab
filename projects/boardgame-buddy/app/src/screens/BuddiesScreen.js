@@ -3,14 +3,15 @@
 // through the shared ConfirmModal.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Users } from 'lucide-react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../theme';
+import { Users } from 'lucide-react-native';
+import { COLORS, FONTS, SPACING } from '../theme';
 import AppHeader from '../components/AppHeader';
 import BuddyRow from '../components/BuddyRow';
 import LoadingState from '../components/LoadingState';
 import EmptyState from '../components/EmptyState';
+import SearchField from '../components/SearchField';
 import { confirm } from '../components/ConfirmModal';
 import api from '../api/client';
 
@@ -125,10 +126,12 @@ export default function BuddiesScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader title="Buddies" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <View style={styles.searchRow}>
-          <Search size={18} color={COLORS.textMuted} />
-          <TextInput style={styles.input} placeholder="Find people by name…" placeholderTextColor={COLORS.textMuted} value={q} onChangeText={setQ} autoCorrect={false} />
-        </View>
+        <SearchField
+          value={q}
+          onChangeText={setQ}
+          placeholder="Find people by name…"
+          clearLabel="Clear buddy search"
+        />
 
         {searchResults.length > 0 ? (
           <Section title="Search results">
@@ -187,8 +190,6 @@ function Section({ title, children }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   body: { padding: SPACING.lg },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: COLORS.card, borderRadius: RADII.md, paddingHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.border },
-  input: { flex: 1, color: COLORS.text, fontFamily: FONTS.sans, fontSize: 15, paddingVertical: 11 },
   section: { marginTop: SPACING.xl },
   sectionTitle: { fontFamily: FONTS.display, color: COLORS.text, fontSize: 18, marginBottom: SPACING.xs },
 });

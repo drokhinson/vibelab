@@ -4,12 +4,13 @@
 // Props: onPick(game, { source }), includeRecentlyPlayed, placeholder.
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Search, Plus, Download } from 'lucide-react-native';
 import { COLORS, FONTS, RADII, SPACING } from '../theme';
 import { useAppState } from '../store/AppContext';
 import api from '../api/client';
 import GameTile from '../components/GameTile';
+import SearchField from '../components/SearchField';
 
 export default function GameFinder({ onPick, includeRecentlyPlayed = false, placeholder = 'Search games…', autoFocus }) {
   const state = useAppState();
@@ -68,19 +69,13 @@ export default function GameFinder({ onPick, includeRecentlyPlayed = false, plac
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.inputRow}>
-        <Search size={18} color={COLORS.textMuted} />
-        <TextInput
-          style={styles.input}
-          placeholder={placeholder}
-          placeholderTextColor={COLORS.textMuted}
-          value={q}
-          onChangeText={setQ}
-          autoFocus={autoFocus}
-          autoCorrect={false}
-        />
-        {loading ? <ActivityIndicator color={COLORS.accent} /> : null}
-      </View>
+      <SearchField
+        value={q}
+        onChangeText={setQ}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        trailing={loading ? <ActivityIndicator color={COLORS.accent} /> : null}
+      />
 
       {showRecent ? (
         <>
@@ -129,8 +124,6 @@ function ResultRow({ game, onPress }) {
 
 const styles = StyleSheet.create({
   wrap: { gap: SPACING.sm },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, backgroundColor: COLORS.card, borderRadius: RADII.md, paddingHorizontal: SPACING.md, borderWidth: 1, borderColor: COLORS.border },
-  input: { flex: 1, color: COLORS.text, fontFamily: FONTS.sans, fontSize: 15, paddingVertical: 11 },
   sectionLabel: { fontFamily: FONTS.sansSemibold, color: COLORS.textMuted, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: SPACING.sm },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.md, paddingVertical: SPACING.sm },
   bggSection: { marginTop: SPACING.sm },
