@@ -39,6 +39,23 @@ class BuddyEdgeStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class BuddySuggestionSource(StrEnum):
+    """Why a buddy suggestion is in the list (migration 063).
+
+    The onboarding "Add buddies" step ranks two tiers of candidate, and the
+    tile's reason line can't be derived from the counts alone: an ACTIVE
+    candidate carries mutual_count = 0 and play_count = 0, which the shared
+    rail would otherwise label "Mutual buddy". The tier is the label."""
+
+    # An earned signal — a shared play or a shared accepted buddy. The same
+    # candidates bgb_suggested_buddies returns for the Feed rail.
+    GRAPH = "graph"
+    # Community fallback: people logging plays lately. Only the onboarding
+    # step uses this tier, because a brand-new account has no earned signal
+    # to rank on and an empty discovery screen is the failure case there.
+    ACTIVE = "active"
+
+
 class PlaySessionStatus(StrEnum):
     """Lifecycle of a short-code play-logging session."""
 

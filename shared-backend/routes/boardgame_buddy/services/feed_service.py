@@ -18,7 +18,7 @@ from ..models import (
     HotGamesResponse,
     SuggestedBuddiesResponse,
 )
-from ..constants import PlayMode
+from ..constants import BuddySuggestionSource, PlayMode
 from ._helpers import fetch_games_by_ids, fetch_profiles_by_ids
 
 
@@ -139,6 +139,40 @@ def fetch_suggested_buddies(sb, viewer_id: str, *, limit: int = 5) -> SuggestedB
             avatar=p.get("avatar"),
             mutual_count=int(r.get("mutual_count") or 0),
             play_count=int(r.get("play_count") or 0),
+        ))
+    return SuggestedBuddiesResponse(suggestions=suggestions)
+
+
+def fetch_onboarding_buddy_suggestions(
+    sb, viewer_id: str, *, limit: int = 12
+) -> SuggestedBuddiesResponse:
+    """Candidates for the onboarding "Add buddies" step.
+
+    Deliberately NOT fetch_suggested_buddies with a bigger limit. That one
+    floors on an earned signal — a shared play or a shared buddy — which is
+    right for the Feed rail and empty for exactly the user this screen exists
+    for. bgb_onboarding_buddy_suggestions returns the same earned-signal
+    candidates first and then falls back to people who have logged plays
+    recently, tagging each row with the tier it came from so the tile can say
+    which it is."""
+    rows = sb.rpc(
+        "bgb_onboarding_buddy_suggestions",
+        {"uid": viewer_id, "lim": limit},
+    ).execute().data or []
+    user_ids = [r["user_id"] for r in rows]
+    profiles = fetch_profiles_by_ids(sb, user_ids)
+    suggestions: list[FeedSuggestedBuddy] = []
+    for r in rows:
+        p = profiles.get(r["user_id"])
+        if not p:
+            continue
+        suggestions.append(FeedSuggestedBuddy(
+            user_id=r["user_id"],
+            display_name=p["display_name"],
+            avatar=p.get("avatar"),
+            mutual_count=int(r.get("mutual_count") or 0),
+            play_count=int(r.get("play_count") or 0),
+            source=BuddySuggestionSource(r.get("source") or BuddySuggestionSource.GRAPH),
         ))
     return SuggestedBuddiesResponse(suggestions=suggestions)
 

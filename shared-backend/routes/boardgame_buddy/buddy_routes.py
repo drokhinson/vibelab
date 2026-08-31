@@ -20,6 +20,8 @@ from .models import (
     BuddyRequestCreate,
     BuddyRequestResponse,
     BuddyRequestsResponse,
+    BulkBuddyRequestCreate,
+    BulkBuddyRequestResponse,
     GhostLinkRequest,
     GhostLinkResponse,
     GhostMergeRequest,
@@ -78,6 +80,29 @@ async def list_suggested_buddies(
     )
 
 
+@router.get(
+    "/buddies/suggested/onboarding",
+    response_model=SuggestedBuddiesResponse,
+    status_code=200,
+    summary="Suggest buddies for a brand-new account",
+)
+async def list_onboarding_buddy_suggestions(
+    limit: int = Query(12, ge=1, le=50, description="Maximum suggestions to return"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SuggestedBuddiesResponse:
+    """Candidates for the onboarding "Add buddies" step, shown once the
+    first-time profile modal is saved.
+
+    Not the same list as /buddies/suggested: that one only returns people the
+    viewer shares a play or a buddy with, which is the empty set for the
+    account that has just been created. This falls back to recently active
+    users once those run out, and tags each candidate with which tier it came
+    from so the client can label it honestly."""
+    return feed_service.fetch_onboarding_buddy_suggestions(
+        get_supabase(), user.user_id, limit=limit
+    )
+
+
 @router.post(
     "/buddies/request",
     response_model=BuddyRequestResponse,
@@ -90,6 +115,27 @@ async def send_buddy_request(
 ) -> BuddyRequestResponse:
     """Send a request to another user. Auto-accepts if a reverse request exists."""
     return buddy_service.send_request(get_supabase(), user.user_id, body.target_user_id)
+
+
+@router.post(
+    "/buddies/requests/bulk",
+    response_model=BulkBuddyRequestResponse,
+    status_code=200,
+    summary="Send buddy requests to several users at once",
+)
+async def send_buddy_requests_bulk(
+    body: BulkBuddyRequestCreate,
+    user: CurrentUser = Depends(get_current_user),
+) -> BulkBuddyRequestResponse:
+    """Send one request per target, reporting each outcome separately.
+
+    Backs the onboarding step's multi-select. Partial success is the expected
+    shape, not an error: targets that fail (already buddies, blocked, account
+    gone) come back in `failed` while the rest are sent, so 200 is correct
+    even when some did not land."""
+    return buddy_service.send_requests_bulk(
+        get_supabase(), user.user_id, body.target_user_ids
+    )
 
 
 @router.post(

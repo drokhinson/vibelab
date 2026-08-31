@@ -2954,6 +2954,67 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .user-badge.buddy-tile__avatar .user-badge__initials { font-size: 20px; }
 .buddy-tile__name { font-size: 0.85rem; font-weight: 600; line-height: 1.2; color: var(--polaroid-ink); }
 .buddy-tile__reason { font-size: 0.72rem; color: var(--polaroid-muted); margin-top: 0.15rem; }
+
+/* Selectable variant — the onboarding "Add buddies" step's grid. The tile IS
+   the control there (a real <button aria-pressed>), so it drops the rail's
+   fixed 130px basis and grows to fill the grid's column instead.
+
+   Every colour is a --polaroid-* token, because this variant is only ever
+   rendered inside the polaroid card, which is PAPER in both themes
+   (.claude/rules/theming.md §6). --polaroid-accent is the same terracotta the
+   card's own primary button fills with, so the selected tile and the Send
+   button read as one accent. Ratios, dark / light theme:
+     white on the terracotta check   4.35 / 5.90   (graphic, needs 3:1)
+     terracotta border on paper      3.90 / 5.90   (graphic, needs 3:1)
+     --polaroid-ink name on the wash  >14 / >14 */
+.buddy-tile--select {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  /* The grid row is the tap target and clears the 44px floor on its own
+     (56px avatar + two text lines), but state it so a copy of this rule can't
+     quietly shrink under it. */
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease),
+              transform 90ms var(--ease);
+}
+/* Touch has no hover, so the press state is the primary affordance
+   (.claude/rules/mobile-web.md §5). */
+.buddy-tile--select:active { transform: scale(0.97); }
+@media (hover: hover) {
+  .buddy-tile--select:hover { border-color: var(--polaroid-accent); }
+}
+.buddy-tile--select:focus-visible {
+  outline: 2px solid var(--polaroid-accent);
+  outline-offset: 2px;
+}
+.buddy-tile--select.is-selected {
+  border-color: var(--polaroid-accent);
+  background: color-mix(in srgb, var(--polaroid-accent) 12%, var(--polaroid-bg));
+}
+/* The tick. Present but transparent when unselected, so selecting a tile
+   doesn't reflow the grid — only the check's own opacity changes. */
+.buddy-tile__check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--polaroid-accent);
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 120ms var(--ease), transform 120ms var(--ease);
+}
+.buddy-tile--select.is-selected .buddy-tile__check { opacity: 1; transform: scale(1); }
 .bgg-link-form { display: flex; flex-direction: column; gap: 0.4rem; }
 
 /* BGG sync log. Sits inside .bgg-card as the live readout while the
@@ -9109,6 +9170,65 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   overflow-x: hidden;
 }
 .avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
+
+/* ── Onboarding step two: "Add buddies" ──────────────────────────────────────
+   Sibling of .avatar-cust — same polaroid card, same trimmed padding, same
+   inner scroll — because the two are consecutive screens of one flow and any
+   difference between their chrome reads as a jump. Wider than the customizer:
+   this one holds a three-column grid, not a single carousel. */
+.onboarding-buddies {
+  width: min(420px, 92vw);
+  /* Let the close button overhang the corner without a scrollbar; the
+     vertical scroll lives on __body, exactly as .avatar-cust does. */
+  overflow: visible;
+  padding: 0;
+}
+.onboarding-buddies:focus { outline: none; }   /* programmatic focus only */
+.onboarding-buddies__body {
+  padding: 18px 14px 16px;
+  max-height: calc(100vh - 36px);
+  max-height: calc(var(--bgb-vv-h, 100dvh) - 36px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.onboarding-buddies .polaroid-popup__title { margin-bottom: 4px; }
+.onboarding-buddies .polaroid-popup__body { margin-bottom: 12px; }
+
+/* auto-fit rather than a fixed column count: the same rule gives three columns
+   on a phone and four on the 420px cap, with no breakpoint. */
+.onboarding-buddies__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  /* 2px so a focus ring on an edge tile isn't clipped by the scroll box. */
+  padding: 2px;
+}
+
+.onboarding-buddies__error {
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  /* --rust straight is 3.9:1 on the dark theme's paper — under the 4.5:1 that
+     12px body text needs. Deepening it toward the paper's own ink keeps it
+     unmistakably red at 5.84:1 dark / 7.91:1 light, and stays a token
+     expression rather than a second literal red. */
+  color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
+  text-align: left;
+}
+
+/* The step's two commit buttons get the 52px commit-button target
+   (.claude/rules/mobile-web.md §5) and share the row evenly — Skip is a real
+   destination here, not a corner escape, so it is not shrunk to a link. */
+.onboarding-buddies__actions {
+  margin-top: 14px;
+  gap: 10px;
+}
+.onboarding-buddies__actions .btn {
+  flex: 1 1 0;
+  min-height: 52px;
+  height: auto;
+}
 
 .avatar-cust__name {
   display: flex;

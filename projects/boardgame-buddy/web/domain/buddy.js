@@ -50,6 +50,22 @@
     // button for a request that's already sent.
     static suggested() { return window.api.get("/buddies/suggested"); }
 
+    // The onboarding "Add buddies" step's list. A separate endpoint, not
+    // suggested() with a bigger limit: that one only returns people the
+    // viewer already shares a play or a buddy with, which is empty for the
+    // account that was created ninety seconds ago — see migration 063. Each
+    // candidate carries a `source` saying which tier it came from.
+    static onboardingSuggestions(limit) {
+      return window.api.get("/buddies/suggested/onboarding", limit ? { limit } : {});
+    }
+
+    // Multi-select send. Resolves { sent: string[], sent_count, failed:
+    // [{user_id, detail}] } — a partial batch is the expected shape, not an
+    // error, so callers report counts rather than branching on a throw.
+    static sendRequests(targetUserIds) {
+      return window.api.post("/buddies/requests/bulk", { target_user_ids: targetUserIds });
+    }
+
     // Played-with discovery + ghost-player linking.
     static playedWith()   { return window.api.get("/played-with"); }
     static ghostPlayers() { return window.api.get("/ghost-players"); }
