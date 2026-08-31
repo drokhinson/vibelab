@@ -5,11 +5,13 @@
 // RPC (migration 061) — the catalog, the four group headings, and the viewer's
 // progress against every badge. Nothing here fetches per tile.
 //
-// The screen is a trophy shelf: a summary strip, then one card per group with
-// a 4-up grid of medallions. A locked badge is shown, not hidden — the whole
-// point of an achievement list is knowing what is still out there — so it
-// keeps its art (dimmed and desaturated by CSS, never by a second "locked"
-// sprite) and prints what it wants from you.
+// The screen is a trophy shelf: a summary strip, then one card per group,
+// each holding a single horizontally-scrolling rail of medallions ordered
+// done → in progress → not started. A locked badge is shown, not hidden — the
+// whole point of an achievement list is knowing what is still out there — so
+// it keeps its art (dimmed and desaturated by CSS, never by a second "locked"
+// sprite) and prints what it wants from you. Tapping any badge opens its
+// detail sheet, which keeps the same grey art while it is unearned.
 //
 // "New" ribbons come from the device, not the server: see domain/
 // achievements.js. They are cleared by markSeen() only after this screen has
@@ -177,8 +179,30 @@
       `;
     }
 
+    /**
+     * Done → in progress → not started, with the catalog's own order kept
+     * inside each bucket so a tier ladder never reads out of sequence: at
+     * 47 plays, Century Club (47/100) still comes before Table Titan
+     * (47/300) rather than being reshuffled by percentage.
+     *
+     * The index tiebreak makes the sort explicitly stable rather than leaning
+     * on the engine's, and `items` arrives in display_order from the RPC.
+     *
+     * @param {any[]} items
+     * @returns {any[]} a new array — never sorts the payload in place, which
+     *   is the cached object every other reader shares.
+     */
+    _byCompletion(items) {
+      const rank = (a) => (a.earned ? 0 : (a.progress > 0 ? 1 : 2));
+      return items
+        .map((a, i) => ({ a, i }))
+        .sort((x, y) => rank(x.a) - rank(y.a) || x.i - y.i)
+        .map((x) => x.a);
+    }
+
     _renderGroup(group, items) {
       const earned = items.filter((a) => a.earned).length;
+      const ordered = this._byCompletion(items);
       return `
         <section class="preview-card ach-group">
           <header class="preview-card__head">
@@ -187,7 +211,9 @@
             <span class="preview-card__sub">${earned}/${items.length}</span>
           </header>
           <p class="ach-group__blurb">${escapeHtml(group.blurb)}</p>
-          <div class="ach-grid">${items.map((a) => this._tile(a)).join("")}</div>
+          <div class="ach-rail" role="list" aria-label="${escapeAttr(group.label)} achievements">
+            ${ordered.map((a) => this._tile(a)).join("")}
+          </div>
         </section>
       `;
     }
@@ -200,7 +226,7 @@
         : `${a.name} — locked. ${a.requirement}`;
       return `
         <button class="ach-tile ${a.earned ? "is-earned" : "is-locked"}" type="button"
-                aria-label="${escapeAttr(label)}"
+                role="listitem" aria-label="${escapeAttr(label)}"
                 onclick="window.achievementsView._open('${jsStr(a.id)}')">
           <span class="ach-tile__art">
             <img src="${escapeAttr(src)}" alt="" width="160" height="160" loading="lazy" decoding="async" />
@@ -249,8 +275,15 @@
              <i data-icon="check" class="w-4 h-4"></i>
              Unlocked ${escapeHtml(formatDate(a.unlocked_at) || "")}
            </div>`
+        // The key glyph and the desaturated art carry "locked" visually, and
+        // the requirement reads as a to-do rather than as something achieved
+        // — but none of that reaches a screen reader, which would otherwise
+        // hear only the instruction while the earned variant says "Unlocked"
+        // outright. The word goes in visually-hidden text rather than on
+        // screen, where it would just restate the picture.
         : `<div class="ach-detail__status">
              <i data-icon="key-round" class="w-4 h-4"></i>
+             <span class="sr-only">Locked. To earn: </span>
              ${escapeHtml(a.requirement)}
            </div>`;
       // No bar once it is earned: the status pill above already says so, and
@@ -263,7 +296,7 @@
         : "";
 
       this._sheet.open({
-        label: a.name,
+        label: a.earned ? `${a.name} — unlocked` : `${a.name} — locked`,
         html: `
           <div class="ach-sheet__panel bgb-sheet__panel">
             <div class="bgb-sheet__grip" aria-hidden="true"></div>

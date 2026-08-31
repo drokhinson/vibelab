@@ -10629,19 +10629,46 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   line-height: 1.4;
   color: var(--polaroid-muted, #8B7E68);
 }
-/* Four columns, not three. The groups hold 5 / 3 / 4 / 4 badges, so 4-up
-   leaves exactly one orphan tile on the whole screen where 3-up left three;
-   the medallion still reads at the ~75px this gives it on a 390px phone.
-   Narrow phones drop to 3 — see the media query at the end of this block. */
-.ach-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.4rem;
+/* One horizontally-scrolling rail per group, not a wrapping grid.
+
+   A grid has to pick a column count that suits every group at once, and the
+   groups are 5 / 3 / 4 / 4 — so whatever it picks, some group orphans a tile
+   on a row of its own. A rail has no rows to orphan, gives each medallion more
+   room than 4-up did (92px against ~75px), and keeps every group exactly one
+   band tall however many badges it grows to.
+
+   `overflow-y: hidden` is NOT redundant: an absent overflow-y computes to
+   `auto` beside a scrollable overflow-x (CSS Overflow 3 §3), which would make
+   each rail a vertical scroll container too — the same gesture trap called out
+   on .feed-rail__scroll.
+
+   The rail bleeds to the card's edges (negative inline margin plus matching
+   padding, the .spoke-head idiom) so a half-visible tile at the right edge
+   reads as "there is more" rather than as a clipped layout. The 2px of block
+   padding is there so a focused tile's outline is not clipped by the
+   scrollport. */
+.ach-rail {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  min-width: 0;
+  margin-inline: -0.95rem;
+  padding: 2px 0.95rem 6px;
 }
+.ach-rail::-webkit-scrollbar { display: none; }
 
 /* ── One badge ────────────────────────────────────────────────────────────── */
 .ach-tile {
   position: relative;
+  /* Fixed basis, and no shrink: in a flex scroller the default `flex-shrink: 1`
+     would squeeze every tile to fit instead of letting the rail scroll. */
+  flex: 0 0 92px;
+  scroll-snap-align: start;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -10656,7 +10683,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-align: center;
   transition: transform 0.15s var(--ease), background 0.15s;
 }
-.ach-tile:hover { background: var(--polaroid-bg-soft); transform: translateY(-2px); }
+/* No hover lift here, unlike the grid this replaced: the rail is a scrollport,
+   so a tile that translates up is clipped at its top edge instead of rising. */
+.ach-tile:hover { background: var(--polaroid-bg-soft); }
 .ach-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ach-tile__art { position: relative; display: block; width: 100%; }
 .ach-tile__art img {
@@ -10806,6 +10835,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* Narrow phones: three medallions plus their captions get tight under ~340px. */
 @media (max-width: 350px) {
-  .ach-grid { grid-template-columns: repeat(3, 1fr); }
+  .ach-tile { flex-basis: 84px; }
   .ach-summary { gap: 0.7rem; }
 }
