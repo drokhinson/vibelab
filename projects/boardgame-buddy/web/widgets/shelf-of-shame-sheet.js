@@ -187,16 +187,13 @@
           <p class="bgb-sheet__sub">
             ${n} owned ${n === 1 ? "game has" : "games have"} never hit the table
           </p>
-          <div class="game-finder bgb-sheet__search">
+          <div class="game-finder bgb-sheet__search" data-search-host>
             <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
             <input type="text" id="shelf-sheet-search"
                    class="input input-bordered game-finder__input"
                    placeholder="Search the shelf…" aria-label="Search the shelf"
                    autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
-            <button type="button" class="field-clear-btn" data-shelf-action="clear"
-                    aria-label="Clear search" hidden>
-              <i data-icon="x" class="w-4 h-4"></i>
-            </button>
+            ${window.BgbSearchField.clearButton()}
           </div>
           <div data-shelf-tabs>${this._renderTabs()}</div>
           <div class="bgb-sheet__list" role="listbox" aria-multiselectable="true"
@@ -229,7 +226,6 @@
         label: "Games you've never played",
         returnFocus: opts.returnFocus || null,
         onClick: (e) => {
-          if (e.target.closest('[data-shelf-action="clear"]')) { this._clear(); return; }
           const tab = e.target.closest("[data-shelf-tab]");
           if (tab) { this._setTab(tab.dataset.shelfTab); return; }
           const row = e.target.closest("[data-shelf-game-id]");
@@ -282,17 +278,16 @@
       // The list alone — re-rendering the panel would blow away the input the
       // user is typing into, along with its focus and caret.
       this._patchList(root, { keepScroll: false });
-      const clear = /** @type {HTMLElement|null} */ (root.querySelector('[data-shelf-action="clear"]'));
-      if (clear) clear.hidden = !this._query;
     }
 
+    /**
+     * Escape's first press backs out of the search. The × does the same thing
+     * through the shared field's own click path — both land back in
+     * _setQuery via the `input` event BgbSearchField dispatches, so there is
+     * no second copy of "empty the box and repaint the list" here.
+     */
     _clear() {
-      const root = this._sheet.el;
-      const input = root
-        ? /** @type {HTMLInputElement|null} */ (root.querySelector(".game-finder__input"))
-        : null;
-      if (input) { input.value = ""; input.focus(); }
-      this._setQuery("");
+      window.BgbSearchField.clear(this._sheet.el);
     }
 
     /** @param {string} tab */

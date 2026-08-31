@@ -225,12 +225,12 @@
       const activeFilters = this.ctl.activeFilterCount();
       return `
         <div class="profile-panel__controls">
-          <input id="wishlist-search-input"
-                 class="input input-bordered flex-1 min-w-0"
-                 placeholder="Search your wishlist by name"
-                 autocomplete="off"
-                 value="${escapeAttr(this.ctl.query)}"
-                 oninput="window.wishlistView._onSearchInput(this.value)" />
+          ${window.BgbSearchField.render({
+            id: "wishlist-search-input",
+            value: this.ctl.query,
+            placeholder: "Search your wishlist by name",
+            oninput: "window.wishlistView._onSearchInput(this.value)",
+          })}
           <button id="wishlist-filter-btn" class="btn btn-ghost relative" title="Filters"
                   onclick="window.wishlistView._toggleFilters()">
             <i data-icon="sliders-horizontal" class="w-4 h-4"></i>

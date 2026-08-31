@@ -455,12 +455,12 @@
       const activeFilters = this.ctl.activeFilterCount();
       return `
         <div class="profile-panel__controls">
-          <input id="collection-search-input"
-                 class="input input-bordered flex-1 min-w-0"
-                 placeholder="Search your collection by name"
-                 autocomplete="off"
-                 value="${escapeAttr(this.ctl.query)}"
-                 oninput="window.collectionView._onSearchInput(this.value)" />
+          ${window.BgbSearchField.render({
+            id: "collection-search-input",
+            value: this.ctl.query,
+            placeholder: "Search your collection by name",
+            oninput: "window.collectionView._onSearchInput(this.value)",
+          })}
           <button id="collection-filter-btn" class="btn btn-ghost relative" title="Filters"
                   onclick="window.collectionView._toggleFilters()">
             <i data-icon="sliders-horizontal" class="w-4 h-4"></i>

@@ -8,9 +8,15 @@
 // browsed: every base game, alphabetical, revealed a batch at a time by the
 // same scroll sentinel the two spokes use (ui/infinite-scroll.js).
 //
-// The modal survives as this page's escape hatch, opened from the one control
+// The modal survives as this page's escape hatch, opened from the control just
 // above the list, because the one thing a catalog scroll cannot do is reach a
 // game BoardGameGeek has and BgB has not imported yet.
+//
+// Everything you steer the screen with is pinned: the back row, "Add to:" with
+// its two pills, and the search box. On a list this long the shelf the + fills
+// is the one thing you must not have to scroll back up to check — and the two
+// bands read as one stack of chrome because the lower one takes the upper
+// one's bleed-and-blur treatment (styles.css, #add-games-pinned).
 //
 // One page serves both shelves. `status` picks which on entry (the spoke you
 // came from) and the toggle switches it without refetching anything — the
@@ -363,17 +369,16 @@
           <span class="spoke-head__count" id="add-games-count">${escapeHtml(this._countLabel())}</span>
         </header>
 
-        <p class="catalog-lede">Every game in BoardgameBuddy. Tap to put one on your shelf — tap again to take it off.</p>
-
-        ${this._renderToggle()}
-
-        <div class="profile-panel__controls">
-          <input id="add-games-search-input"
-                 class="input input-bordered flex-1 min-w-0"
-                 placeholder="Search the game library"
-                 autocomplete="off" autocapitalize="off" autocorrect="off"
-                 value="${escapeAttr(this._query)}"
-                 oninput="window.addGamesView._onSearchInput(this.value)" />
+        <div id="add-games-pinned">
+          ${this._renderToggle()}
+          ${window.BgbSearchField.render({
+            id: "add-games-search-input",
+            value: this._query,
+            placeholder: "Search the game library",
+            icon: true,
+            cls: "catalog-search",
+            oninput: "window.addGamesView._onSearchInput(this.value)",
+          })}
         </div>
 
         <button type="button" class="catalog-import" onclick="window.addGamesView._openBggImport()">
@@ -388,27 +393,46 @@
       this._armInfinite();
     }
 
+    /**
+     * "Add to:" + the two pills, as one row.
+     *
+     * The label is the whole explanation of this screen — it replaced a
+     * sentence of prose above the toggle that described the catalog rather
+     * than the control under it. "Add to: [Collection] [Wishlist]" says what
+     * the pills do and what a row's + will do, in two words, and it is also
+     * the toggle's accessible name (`aria-labelledby`) rather than a
+     * duplicate `aria-label` that would have to be kept in step with it.
+     */
     _renderToggle() {
       return `
-        <div class="spoke-toggle spoke-toggle--${SHELVES.length}" role="tablist"
-             aria-label="Where added games go">
-          ${SHELVES.map((s) => `
-            <button class="spoke-toggle__pill ${this._shelf === s.id ? "is-active" : ""}"
-                    role="tab" aria-selected="${this._shelf === s.id}"
-                    data-shelf-pill="${s.id}"
-                    onclick="window.addGamesView._setShelf('${s.id}')">
-              <span class="spoke-toggle__label">${escapeHtml(s.label)}</span>
-            </button>
-          `).join("")}
+        <div class="catalog-target">
+          <span class="catalog-target__label" id="add-games-target-label">Add to:</span>
+          <div class="spoke-toggle spoke-toggle--${SHELVES.length}" role="tablist"
+               aria-labelledby="add-games-target-label">
+            ${SHELVES.map((s) => `
+              <button class="spoke-toggle__pill ${this._shelf === s.id ? "is-active" : ""}"
+                      role="tab" aria-selected="${this._shelf === s.id}"
+                      data-shelf-pill="${s.id}"
+                      onclick="window.addGamesView._setShelf('${s.id}')">
+                <span class="spoke-toggle__label">${escapeHtml(s.label)}</span>
+              </button>
+            `).join("")}
+          </div>
         </div>
       `;
     }
 
+    /**
+     * The header count, and the tail of the end-of-list label. "N matches"
+     * rather than "N games match" while searching — the header slot is what
+     * is left of the row after the back button and the title, and the longer
+     * phrasing ran off the edge of a 390px screen.
+     */
     _countLabel() {
       if (!this._loadedOnce) return "";
       const n = this._total;
-      const noun = `game${n === 1 ? "" : "s"}`;
-      return this._query ? `${n} ${noun} match` : `${n} ${noun}`;
+      if (this._query) return `${n} match${n === 1 ? "" : "es"}`;
+      return `${n} game${n === 1 ? "" : "s"}`;
     }
 
     _renderBody() {

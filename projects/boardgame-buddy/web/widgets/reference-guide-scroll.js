@@ -194,13 +194,17 @@
                   aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
                   onclick="window.referenceGuideScroll._toggleScroll()"></button>
           <div class="scroll-panel__peek">
-            <div class="scroll-panel__search-row">
+            <div class="scroll-panel__search-row" data-search-host>
               <i data-icon="search" class="w-4 h-4 scroll-panel__search-icon"></i>
               <input class="scroll-panel__search"
-                     type="search"
+                     id="guide-scroll-search"
+                     type="text"
                      placeholder="Search chapters…"
+                     aria-label="Search chapters"
+                     autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
                      value="${escapeAttr(this._search)}"
                      oninput="window.referenceGuideScroll._onSearch(this.value)" />
+              ${window.BgbSearchField.clearButton({ value: this._search })}
             </div>
             ${!open ? `
               <button class="scroll-panel__hint" type="button"

@@ -2609,7 +2609,7 @@
     _renderExpansionFilter() {
       const q = this._expansionQuery || "";
       return `
-        <div class="game-finder cascade-exp-filter">
+        <div class="game-finder cascade-exp-filter" data-search-host>
           <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
           <input type="text" id="cascade-exp-filter-input"
                  class="input input-bordered game-finder__input cascade-exp-filter__input"
@@ -2617,10 +2617,7 @@
                  value="${escapeAttr(q)}"
                  autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
                  oninput="window.playFlowView._onExpansionFilterInput(this.value)" />
-          <button type="button" class="field-clear-btn" aria-label="Clear filter" ${q ? "" : "hidden"}
-                  onclick="window.playFlowView._clearExpansionFilter()">
-            <i data-icon="x" class="w-4 h-4"></i>
-          </button>
+          ${window.BgbSearchField.clearButton({ label: "Clear filter", value: q })}
         </div>
       `;
     }
@@ -2675,14 +2672,6 @@
       }
       const clear = document.querySelector(".cascade-exp-filter .field-clear-btn");
       if (clear) clear.hidden = !this._expansionQuery;
-    }
-
-    _clearExpansionFilter() {
-      const input = /** @type {HTMLInputElement|null} */ (
-        document.getElementById("cascade-exp-filter-input")
-      );
-      if (input) { input.value = ""; input.focus(); }
-      this._onExpansionFilterInput("");
     }
 
     _openImportExpansions() {

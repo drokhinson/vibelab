@@ -647,13 +647,17 @@ components above.
         </div>
         <div class="scroll-panel chapter-add__pool-scroll">
           <div class="scroll-panel__peek">
-            <div class="scroll-panel__search-row">
+            <div class="scroll-panel__search-row" data-search-host>
               <i data-icon="search" class="w-4 h-4 scroll-panel__search-icon"></i>
               <input class="scroll-panel__search"
-                     type="search"
+                     id="chapter-pool-search"
+                     type="text"
                      placeholder="Search chapters…"
+                     aria-label="Search chapters"
+                     autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
                      value="${escapeAttr(this._search)}"
                      oninput="window.referenceGuideAddView._onSearchInput(this.value)" />
+              ${window.BgbSearchField.clearButton({ value: this._search })}
             </div>
           </div>
           <div class="scroll-panel__body">

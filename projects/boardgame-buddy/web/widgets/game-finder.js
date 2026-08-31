@@ -107,12 +107,13 @@
       this._container = containerEl;
       const placeholder = escapeAttr(this._opts.placeholder || "Search for a game…");
       containerEl.innerHTML = `
-        <div class="game-finder${this._opts.inlineDropdown ? " game-finder--inline" : ""}">
+        <div class="game-finder${this._opts.inlineDropdown ? " game-finder--inline" : ""}" data-search-host>
           <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
           <input id="${this.inputId}"
                  class="input input-bordered game-finder__input"
                  placeholder="${placeholder}"
                  autocomplete="off" autocapitalize="off" autocorrect="off" />
+          ${window.BgbSearchField.clearButton()}
           <ul id="${this.dropdownId}" class="game-finder-dropdown hidden"
               onmousedown="event.preventDefault()"></ul>
         </div>
@@ -183,7 +184,14 @@
       this._bggMode = false;
       this._supersede();
       const input = /** @type {HTMLInputElement|null} */ (document.getElementById(this.inputId));
-      if (input) input.value = "";
+      if (input) {
+        input.value = "";
+        // Emptying the box by hand leaves the shared × up, since nothing
+        // dispatched an `input` event. Re-derive it rather than dispatching
+        // one — a synthetic keystroke here would re-open the dropdown that
+        // _close() is about to shut.
+        window.BgbSearchField.sync(input.closest("[data-search-host]") || undefined);
+      }
       this._close();
     }
 

@@ -247,6 +247,42 @@ They replaced dropdowns because the dropdown geometry was unwinnable: `ui/dropdo
 
 The repo-wide statement is `.claude/rules/overlays.md`.
 
+### 4.3a The search field's ×
+
+`ui/search-field.js` is the sheet shell's smaller sibling, and it exists for the
+same reason: **one lifecycle, many looks.** Fourteen search boxes across the app
+— five of which had each grown their own clear button, with three different
+`data-*-action` spellings — now share two delegated `document` listeners:
+
+- `input` inside a `[data-search-host]` shows or hides that host's ×.
+- a click on the × empties the input, hides itself, **dispatches a real
+  bubbling `input` event**, and re-resolves the field by id to restore focus.
+
+That dispatch is the whole design. Every call site already had an input handler
+— an inline `oninput`, an `addEventListener`, a debounced search — so a
+synthetic event runs it unchanged and *no screen needs a clear path of its own*.
+Escape handlers that used to duplicate the clear call `BgbSearchField.clear(root)`
+and land in the same place.
+
+Delegation on `document`, rather than binding per field, is not a shortcut:
+nearly every host here repaints by replacing `innerHTML`, so a bound listener
+would need re-attaching after each paint, and the one call site that forgot
+would have a dead ×.
+
+Two entry points, split the way §4 splits everything else — the shell owns the
+behaviour, the caller owns the markup:
+
+| | For |
+|---|---|
+| `render(opts)` | a plain box with no chrome of its own (the Collection / Wishlist / Plays / Buddies / Add Games searches). Emits `.search-field`. |
+| `clearButton(opts)` | a host that already draws its own field — `.game-finder`, the parchment scroll's search row. Those add `data-search-host` to the wrapper they have. |
+
+The × itself is one class, `.field-clear-btn`, 44×44 whatever the field's own
+height, so the hit area is the tap target and the glyph inside it is the
+control. It reads `--polaroid-*`, so it follows whichever surface it lands on —
+except on the parchment scroll, which is a paper island (§4.2b) and scopes the
+button to the parchment's own ink.
+
 ### 4.4 Chrome, layering and mobile
 
 The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§ App chrome & layering) and `.claude/rules/mobile-web.md`. The parts specific to this app:
@@ -451,6 +487,7 @@ projects/boardgame-buddy/web/
 │   ├── markdown.js          → renderMarkdown
 │   ├── oauth-buttons.js     → oauthButtons
 │   ├── bottom-sheet.js      → BgbBottomSheet — the shell every sheet shares (§4.3)
+│   ├── search-field.js      → BgbSearchField — the × every search box clears with
 │   ├── icons.js             → BgbIcons — the vendored Phosphor set + render pass
 │   ├── viewport-lock.js     → publishes the visible viewport as CSS properties
 │   ├── zoom-lock.js         → holds the page at 1x on iOS Safari
