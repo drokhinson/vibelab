@@ -26,7 +26,7 @@ from .models import (
     PlayUpdate,
 )
 from .dependencies import CurrentUser, get_current_user
-from .services import played_with_service
+from .services import buddy_service, played_with_service
 from .services._helpers import raise_for_rpc_error
 
 logger = logging.getLogger(__name__)
@@ -247,13 +247,23 @@ async def list_plays(
     ),
     user_id: Optional[str] = Query(
         None,
-        description="Target user (profiles are public); defaults to the viewer",
+        description="Target user (buddies only); defaults to the viewer",
     ),
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayListResponse:
     """List plays the target user logged + participated in (paginated, latest first)."""
     sb = get_supabase()
     target_user_id = user_id or user.user_id
+    # Someone else's play log is buddies-only, matching what /profile/bundle
+    # will hand back for the same pair. Profiles stay public — a stranger still
+    # gets the collection and the four headline stats — but the log of who
+    # played what, with whom, and when is not part of that.
+    if target_user_id != user.user_id and not buddy_service.relation_to(
+        sb, user.user_id, target_user_id
+    )["is_buddy"]:
+        raise HTTPException(
+            status_code=403, detail="Only buddies can see this user's plays"
+        )
 
     # Single RPC (migration 039). The old path fetched EVERY visible play
     # tuple, merged/sorted/paginated in Python, then hydrated players and

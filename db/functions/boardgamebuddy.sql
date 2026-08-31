@@ -197,14 +197,26 @@
 --                  of NULL, via a LEFT JOIN to boardgamebuddy_games — 020
 --                  denormalized name/thumbnail onto collection rows but not
 --                  the full-size art)
+--               db/migrations/boardgamebuddy/064_profile_bundle_buddy_blocks.sql
+--                 (Profile Other became buddy-aware: new `is_buddy` flag,
+--                  new buddy-only `together` + `top_games` blocks, and
+--                  `recent_plays` is NULL — not [] — for a viewer who is
+--                  neither the target nor an accepted buddy. The COUNT
+--                  `recent_plays_total` stays visible to everyone; it is one
+--                  of the four headline stats a public profile shows.)
 
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)
 --   Purpose:    Single round-trip Profile Self / Profile Other payload.
 --               Stats + owned/wishlist/played first pages + recent plays +
 --               viewer's status_map + expansion_counts. Buddies + pending
---               requests are included only when viewer = target. Reuses
---               bgb_user_stats for the stats block.
+--               requests are included only when viewer = target; the plays
+--               log, `together` and `top_games` only when viewer = target or
+--               the two are accepted buddies. Reuses bgb_user_stats for the
+--               stats block.
+--               `together` mirrors bgb_user_stats_detail's `nemesis` rules —
+--               competitive plays only, both people actual participants —
+--               but with no 3-play floor, since the pair is already chosen.
 
 -- bgb_bootstrap(viewer UUID, owned_plays_limit INT DEFAULT 5,
 --               max_game_bundles INT DEFAULT 250)
