@@ -526,7 +526,7 @@
 --   → JSONB { "accounts": [BuddyEdgeResponse…], "ghosts": [GhostPlayer…],
 --             "recent": [PlayedWithUser…] }
 --   Defined in: db/migrations/boardgamebuddy/047_play_partners_rpc.sql
---   Last updated in: db/migrations/boardgamebuddy/060_play_partners_pending_request_id.sql
+--   Last updated in: db/migrations/boardgamebuddy/061_play_partners_pending_request_id.sql
 --               (`recent` rows gained pending_request_id — the pending edge's
 --                own id, so the Buddies screen's played-with row can cancel an
 --                outgoing request or accept an incoming one without a second

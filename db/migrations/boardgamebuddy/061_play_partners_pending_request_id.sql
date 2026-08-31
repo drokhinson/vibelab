@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 060_play_partners_pending_request_id.sql — carry the pending edge id on
+-- 061_play_partners_pending_request_id.sql — carry the pending edge id on
 -- bgb_play_partners' `recent` rows.
 --
 -- The Buddies screen's "Played with" list already knows a row has a pending
