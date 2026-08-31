@@ -29,6 +29,15 @@
       // False until the viewer's collection map is known either way — see
       // onMount. Gates the status corner on every game tile in the feed.
       this._statusReady = false;
+      // Suggestion-tile action state, keyed by user id: {state, requestId}.
+      // Survives the feed's own repaints (a new page appended, an upload
+      // landing) so a tile that says "Cancel" keeps saying it — the rail's
+      // markup is rebuilt from the backend cards, which know nothing about
+      // what this session has sent.
+      this._buddyState = new Map();
+      // User ids with a send/cancel in flight. A second tap on the same tile
+      // is dropped rather than opening a second edge.
+      this._busy = new Set();
     }
 
     async onMount() {
@@ -511,18 +520,52 @@
     _renderSuggestedBuddiesCard(card) {
       return window.renderSuggestedBuddiesRail(card.suggestions, {
         addHandler: "window.feedView._addBuddy",
+        cancelHandler: "window.feedView._cancelBuddy",
+        stateFor: (userId) => (this._buddyState.get(userId) || {}),
       });
     }
 
-    // The rail is a stateless strip of markup interleaved into the feed page,
-    // so the button element IS the state here — there's no card field to patch
-    // and re-render from. It flips in the same frame as the tap and reconciles
-    // on the echo, which is the same contract as the Buddies screen's
-    // optimistic handlers, expressed against the DOM node.
-    async _addBuddy(userId, btnEl) {
-      const wasLabel = btnEl.textContent;
-      btnEl.disabled = true;
-      btnEl.textContent = "Sent";
+    // The rail is markup interleaved into the feed page, so there is no card
+    // field to patch and re-render from — this Map is the tile's state, keyed
+    // by user id. The tile itself renders every one of those states
+    // (ui/buddy-suggestion-rail.js), so the Feed, the Buddies screen and the
+    // onboarding grid cannot drift on what a Sent tile looks like.
+    //
+    // The person deliberately does NOT leave the rail on a send. Removing a
+    // tile mid-tap slides every tile to its right into a new slot, and the
+    // next tap lands on whoever moved under the finger.
+    _patchTile(userId, patch) {
+      const prev = this._buddyState.get(userId) || {};
+      const next = { ...prev, ...patch };
+      this._buddyState.set(userId, next);
+      const host = this.container || document;
+      const esc = (window.CSS && CSS.escape) ? CSS.escape(userId) : userId;
+      const tile = host.querySelector(`.buddy-tile[data-user-id="${esc}"]`);
+      if (!tile) return;
+      // Re-render the tile from what it is already showing plus the new action
+      // state; the backend row it came from is not kept on this view.
+      const nameEl = tile.querySelector(".buddy-tile__name");
+      const reasonEl = tile.querySelector(".buddy-tile__reason");
+      window.patchBuddySuggestionTile(host, {
+        user_id: userId,
+        display_name: nameEl ? nameEl.textContent.trim() : "",
+        avatar: next.avatar || null,
+        mutual_count: 0,
+        play_count: 0,
+        reason: reasonEl ? reasonEl.textContent.trim() : null,
+      }, {
+        mode: "add",
+        addHandler: "window.feedView._addBuddy",
+        cancelHandler: "window.feedView._cancelBuddy",
+        state: next.state,
+        requestId: next.requestId,
+      });
+    }
+
+    async _addBuddy(userId) {
+      if (this._busy.has(userId)) return;
+      this._busy.add(userId);
+      this._patchTile(userId, { state: "sending" });
       try {
         const res = await window.Buddy.sendRequest(userId);
         // The buddy bundle's played-with rows carry this relation — drop it so
@@ -530,53 +573,35 @@
         window.Buddy.invalidate();
         if (res && res.direction === "incoming") {
           // Auto-accepted — they had already asked us.
-          btnEl.textContent = "Buddies";
-          return;
+          this._patchTile(userId, { state: "buddies", requestId: null });
+        } else {
+          this._patchTile(userId, { state: "sent", requestId: (res && res.id) || null });
         }
-        this._armCancel(btnEl, res && res.id, userId);
       } catch (e) {
-        btnEl.disabled = false;
-        btnEl.textContent = wasLabel || "Add";
+        this._patchTile(userId, { state: "none", requestId: null });
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't send that request", "error");
         }
+      } finally {
+        this._busy.delete(userId);
       }
     }
 
-    // Turn the tile's Add button into the undo for the request it just sent.
-    // Without an edge id there's nothing to address, so it stays a dead "Sent".
-    _armCancel(btnEl, requestId, userId) {
-      if (!requestId) { btnEl.textContent = "Sent"; return; }
-      btnEl.disabled = false;
-      btnEl.textContent = "Cancel";
-      btnEl.title = "Withdraw your buddy request";
-      btnEl.classList.remove("btn-primary");
-      btnEl.classList.add("btn-ghost");
-      btnEl.onclick = (ev) => {
-        ev.stopPropagation();
-        this._cancelBuddy(requestId, userId, btnEl);
-      };
-    }
-
-    async _cancelBuddy(requestId, userId, btnEl) {
-      btnEl.disabled = true;
-      btnEl.textContent = "Add";
+    async _cancelBuddy(requestId, userId) {
+      if (this._busy.has(userId)) return;
+      this._busy.add(userId);
+      this._patchTile(userId, { state: "sending" });
       try {
         await window.Buddy.cancel(requestId);
         window.Buddy.invalidate();
-        btnEl.disabled = false;
-        btnEl.title = "";
-        btnEl.classList.remove("btn-ghost");
-        btnEl.classList.add("btn-primary");
-        btnEl.onclick = (ev) => {
-          ev.stopPropagation();
-          this._addBuddy(userId, btnEl);
-        };
+        this._patchTile(userId, { state: "none", requestId: null });
       } catch (e) {
-        this._armCancel(btnEl, requestId, userId);
+        this._patchTile(userId, { state: "sent", requestId });
         if (typeof showToast === "function") {
           showToast(e.message || "Couldn't cancel that request", "error");
         }
+      } finally {
+        this._busy.delete(userId);
       }
     }
   }

@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 065 (plays.country_code — bgb_log_play writes it,
---               bgb_plays_page returns it)
+-- Last updated: migration 066 (bgb_suggested_buddies — the Feed/Buddies rails
+--               now skip half-set-up profiles, matching 063's onboarding list)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -116,6 +116,13 @@
 --                  on ANY existing edge with the viewer — pending and blocked
 --                  included, not just accepted — and candidates with no
 --                  profile row; lim now defaults to 5)
+--               db/migrations/boardgamebuddy/066_suggested_buddies_skip_unset_profiles.sql
+--                 (CREATE OR REPLACE — body only, so the GRANT survives. Adds
+--                  `pr.needs_setup IS NOT TRUE` to the profile join, so a
+--                  profile that has never been through the setup modal — email
+--                  local-part as its display name, default badge — is no longer
+--                  suggestable here either. 063 had the filter and this did
+--                  not, which was an oversight rather than a decision.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --               (embedded Feed rail, lim 5)
 --               shared-backend/routes/boardgame_buddy/buddy_routes.py

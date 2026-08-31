@@ -5117,6 +5117,24 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .buddies-row__name { font-weight: 600; }
 .buddies-row__when { font-size: 0.74rem; opacity: 0.6; }
 
+/* A row this session has already acted on. It deliberately stays where it is
+   until the lists next re-form (see the continuity-break rule in
+   views/buddies-view.js), so it has to read as settled rather than as something
+   still awaiting a tap — otherwise the user taps the same row again.
+
+   Only the row's chrome is muted; the name keeps full contrast, because the row
+   is still a link to that person's profile and its whole surface is tappable.
+   The Buddies screen is a spoke screen, so --polaroid-* here resolves to the
+   app's chrome tokens, not the paper family (.claude/rules/theming.md §6). */
+.buddies-row--resolved {
+  border-style: dashed;
+  border-color: var(--polaroid-line);
+  background: transparent;
+}
+.buddies-row--resolved .buddies-row__when { opacity: 0.45; }
+/* No press lift: nothing here is waiting on another tap. */
+.buddies-row--resolved:active { transform: none; }
+
 /* Destructive icon button — tints the glyph and outlines on hover so the X
    reads as a destructive action even before the confirm. The icon inherits it
    through currentColor; the `i` selector covers the frame before

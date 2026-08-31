@@ -32,7 +32,9 @@
     // teardown fires 200ms after its own card resolved — by which time the
     // NEXT card may already have locked the scroll. Only the last overlay out
     // restores it, or the closing card silently unlocks the page behind the
-    // one that replaced it.
+    // one that replaced it. The same guard covers the QR sheet, which carries
+    // .polaroid-popup__backdrop too, and covers teardown()'s other caller —
+    // the top of open(), which would otherwise unlock on the way IN.
     if (!document.querySelector(".polaroid-popup__backdrop")) {
       document.body.style.overflow = "";
     }
@@ -97,7 +99,8 @@
       `;
       document.body.appendChild(root);
       // The grid can outrun the viewport; stop the page behind it scrolling
-      // with it. Restored by teardown() on every exit path.
+      // with it. teardown() releases it, but only once no other polaroid
+      // backdrop is left — see the note there.
       document.body.style.overflow = "hidden";
       window.BgbIcons.render(root);
 
