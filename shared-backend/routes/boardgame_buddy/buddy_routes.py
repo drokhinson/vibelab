@@ -10,9 +10,13 @@ from fastapi import Depends, Path, Query
 from db import get_supabase
 
 from . import router
+from .constants import QR_TOKEN_TTL_SECONDS
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     BuddyEdgeResponse,
+    BuddyQrAddRequest,
+    BuddyQrAddResponse,
+    BuddyQrTokenResponse,
     BuddyRequestCreate,
     BuddyRequestResponse,
     BuddyRequestsResponse,
@@ -26,7 +30,7 @@ from .models import (
     PlayPartnersResponse,
     SuggestedBuddiesResponse,
 )
-from .services import buddy_service, feed_service, played_with_service
+from .services import buddy_qr_service, buddy_service, feed_service, played_with_service
 
 
 @router.get(
@@ -86,6 +90,42 @@ async def send_buddy_request(
 ) -> BuddyRequestResponse:
     """Send a request to another user. Auto-accepts if a reverse request exists."""
     return buddy_service.send_request(get_supabase(), user.user_id, body.target_user_id)
+
+
+@router.post(
+    "/buddies/qr-token",
+    response_model=BuddyQrTokenResponse,
+    status_code=200,
+    summary="Mint a short-lived add-me QR token",
+)
+async def mint_buddy_qr_token(
+    user: CurrentUser = Depends(get_current_user),
+) -> BuddyQrTokenResponse:
+    """Sign a token the caller's QR code encodes. Stateless; expires in ~3 minutes."""
+    token, expires_at = buddy_qr_service.mint_qr_token(user.user_id)
+    return BuddyQrTokenResponse(
+        token=token,
+        expires_at=expires_at,
+        ttl_seconds=QR_TOKEN_TTL_SECONDS,
+    )
+
+
+@router.post(
+    "/buddies/qr-add",
+    response_model=BuddyQrAddResponse,
+    status_code=200,
+    summary="Become buddies by scanning someone's QR code",
+)
+async def add_buddy_by_qr(
+    body: BuddyQrAddRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> BuddyQrAddResponse:
+    """Redeem a scanned QR token — both users become buddies immediately."""
+    issuer_id = buddy_qr_service.issuer_from_qr_token(body.token)
+    edge, created = buddy_qr_service.add_buddy_mutually(
+        get_supabase(), user.user_id, issuer_id
+    )
+    return BuddyQrAddResponse(edge=edge, created=created)
 
 
 @router.post(
