@@ -233,7 +233,8 @@ Every colour change states its ratio, in both themes, in the commit that makes i
 
 Every choice list in the app is a **bottom sheet**, not a `position: absolute` dropdown. The shell is `ui/bottom-sheet.js` (`window.BgbBottomSheet`) — 165 lines that own the lifecycle only: body-level creation so the sheet survives a view's `innerHTML` swap, scroll lock, delegated clicks, capture-phase Escape with an `onEscape` first-refusal hook, guarded focus return, the close animation, orphan teardown. **Nothing about how a sheet looks lives there.** Each sheet writes its own markup, on the shared `.bgb-sheet__*` panel chrome plus its own row family.
 
-Five consumers today:
+Eight consumers today (this table had drifted at four — grep `BgbBottomSheet`
+rather than trusting a count):
 
 | Sheet | File | Shape |
 |---|---|---|
@@ -242,6 +243,12 @@ Five consumers today:
 | Gather players | `widgets/player-picker-sheet.js` | **multi-select**, footer confirm, tick order preserved |
 | Gather game | `widgets/game-search-sheet.js` | hosts `widgets/game-finder.js` with `inlineDropdown` |
 | Settle Up country | `widgets/country-picker-sheet.js` | single-select over 247 rows, filter matches name **and** code, plus a pinned opt-out row |
+| Collection expansions | `widgets/expansion-picker-sheet.js` | single-select over one base game's catalog expansions (`.exp-picker`) |
+| Shelf of shame | `widgets/shelf-of-shame-sheet.js` | the unplayed-games list behind the Stats card, with a played-before toggle per row (`.shelf-sheet`) |
+| Add a buddy by QR | `widgets/buddy-qr-sheet.js` | two tabs on one sheet — show my code, or scan theirs (`.buddy-qr-sheet`) |
+
+`views/achievements-view.js` also opens one directly (`.ach-sheet`) rather than
+through a widget module.
 
 They replaced dropdowns because the dropdown geometry was unwinnable: `ui/dropdown-fit.js` existed only to measure a dropdown against the visible viewport and shrink or flip it, `.cascade-buddy-dropdown` carried an explicit z-index to paint over the docked Continue CTA, and its max-height had already been raised once. Measured: a four-player roster clamped the buddy list to 168px — one and a half rows of seven — sitting on the Continue button and running off the bottom edge, before the keyboard was even up. A sheet is `position: fixed` at z-index 100, sized off `--bgb-vv-h`, so none of that is expressible.
 

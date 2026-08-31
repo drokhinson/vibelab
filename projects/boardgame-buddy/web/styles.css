@@ -297,7 +297,7 @@
    has to leave the alias families the way --accent-on-paper and
    --ghost-ink-paper did.
 
-   The five picker sheets are in the list even though they are not screens.
+   The picker sheets are in the list even though they are not screens.
    ui/bottom-sheet.js appends a sheet to <body>, so it lands OUTSIDE the screen
    that opened it and kept the root paper aliases — which in dark meant tapping
    "Showing <game>" on an espresso screen threw up a cream sheet. Listing them
