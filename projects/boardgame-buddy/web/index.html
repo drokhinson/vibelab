@@ -247,6 +247,12 @@
   <script src="ui/install-prompt.js"></script>
   <script src="ui/dropdown-fit.js"></script>
   <script src="ui/infinite-scroll.js"></script>
+  <!-- Vendored QR codecs — see each file's header for provenance. Same-origin
+       on purpose: sw.js derives its precache list from the src= attributes in
+       this file, so a CDN copy would be the one thing missing offline. -->
+  <script src="ui/qr-encode.js"></script>
+  <script src="ui/qr-decode.js"></script>
+  <script src="ui/qr-camera.js"></script>
 
   <!-- Widgets -->
   <script src="widgets/reference-guide-scroll.js"></script>
@@ -265,6 +271,8 @@
   <script src="widgets/import-expansions-modal.js"></script>
   <script src="widgets/expansion-tree.js"></script>
   <script src="widgets/expansion-picker-sheet.js"></script>
+  <script src="widgets/buddy-qr-scan.js"></script>
+  <script src="widgets/buddy-qr-sheet.js"></script>
 
   <!-- Views -->
   <script src="views/splash-view.js"></script>
