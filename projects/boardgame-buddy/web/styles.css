@@ -2975,24 +2975,49 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   position: relative;
   flex: 1 1 auto;
   width: 100%;
-  /* The grid row is the tap target and clears the 44px floor on its own
-     (56px avatar + two text lines), but state it so a copy of this rule can't
-     quietly shrink under it. */
-  min-height: 44px;
+  /* A FIXED height, not a floor. The grid this lands in is sized as a whole
+     number of rows (see .add-buddies__grid), which is only a height you can
+     compute if every row is the same one — otherwise a two-line display name
+     makes its row taller than its neighbours and "three rows tall" stops
+     being true. Comfortably over the 44px tap-target floor either way
+     (.claude/rules/mobile-web.md §5). */
+  height: var(--buddy-tile-h, 116px);
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   font: inherit;
   cursor: pointer;
   transition: border-color 120ms var(--ease), background 120ms var(--ease),
               transform 90ms var(--ease);
 }
+/* Two lines, then ellipsis — the height above is only fixed if the name can't
+   grow past what it budgets for. */
+.buddy-tile--select .buddy-tile__name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.buddy-tile--select .buddy-tile__reason {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Touch has no hover, so the press state is the primary affordance
    (.claude/rules/mobile-web.md §5). */
 .buddy-tile--select:active { transform: scale(0.97); }
 @media (hover: hover) {
-  .buddy-tile--select:hover { border-color: var(--polaroid-accent); }
+  .buddy-tile--select:not([disabled]):hover { border-color: var(--polaroid-accent); }
 }
+/* Someone the viewer already shares an edge with. Rendered and labelled rather
+   than hidden: a search that silently drops the person you looked up reads as
+   broken, and the backend would reject the tick anyway. The press affordance
+   goes with it — nothing happens, so nothing should move.
+   [disabled] is 0,2,0, so it beats the :active rule above without doubling. */
+.buddy-tile--select[disabled] { opacity: 0.55; cursor: default; }
+.buddy-tile--select[disabled]:active { transform: none; }
 .buddy-tile--select:focus-visible {
   outline: 2px solid var(--polaroid-accent);
   outline-offset: 2px;
