@@ -5098,16 +5098,37 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* ── Buddies view ─────────────────────────────────────────────────────────── */
-.buddies-search { padding: 0.5rem 0; }
-/* Search field and the QR button share one row: both are ways of adding the
-   same thing, so separating them would read as two unrelated affordances. */
-/* The field itself is a .search-field, which already carries
-   `flex: 1 1 auto; min-width: 0` — so the row supplies only the gap.
-   `stretch`, not `center`: it makes the button take the field's height
-   whatever that is, so the pair reads as one control instead of the button
+.buddies-add { padding: 0.5rem 0; }
+/* The Add button and the QR button share one row: both are ways of adding the
+   same thing, so separating them would read as two unrelated affordances.
+   `stretch`, not `center`: it makes the QR square take the Add button's height
+   whatever that is, so the pair reads as one control instead of the square
    floating at its own size beside it. */
-.buddies-search__row { display: flex; align-items: stretch; gap: 0.5rem; }
-.buddies-search__qr {
+.buddies-add__row { display: flex; align-items: stretch; gap: 0.5rem; }
+/* Add takes the growth the profile-search field it replaced used to carry.
+   Drawn from the SAME three tokens as the QR square rather than reaching for a
+   DaisyUI .btn-primary, because of the row comment above: a solid accent pill
+   beside a hand-drawn outline square is two affordances, not one control
+   (.claude/rules/ui-object-design.md §3b). */
+.buddies-add__btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex; align-items: center; justify-content: center; gap: 0.45rem;
+  box-sizing: border-box;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-1);
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.buddies-add__btn:active { background: var(--bg-2); }
+.buddies-add__btn:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.buddies-add__qr {
   flex: none;
   display: flex; align-items: center; justify-content: center;
   box-sizing: border-box;
@@ -5122,13 +5143,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.buddies-search__qr:active { background: var(--bg-2); }
-.buddies-search__qr:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.buddies-add__qr:active { background: var(--bg-2); }
+.buddies-add__qr:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 .buddies-section { padding: 0.75rem 0; border-top: 1px solid oklch(var(--b3)); }
-/* Drop the divider that would otherwise sit immediately below the search
-   bar — the user explicitly wanted the search area free of horizontal
-   lines. Subsequent sections still divide cleanly from each other. */
-.buddies-search + .buddies-section { border-top: none; padding-top: 0.25rem; }
+/* Drop the divider that would otherwise sit immediately below the add row —
+   that band is deliberately free of horizontal lines. Subsequent sections
+   still divide cleanly from each other. */
+.buddies-add + .buddies-section { border-top: none; padding-top: 0.25rem; }
 .buddies-section h3 { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
 .buddies-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .buddies-row {
