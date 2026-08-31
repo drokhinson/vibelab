@@ -9460,27 +9460,89 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding: 0;
 }
 .add-buddies:focus { outline: none; }   /* programmatic focus only */
+
+/* The card is a flex column and the GRID is its only shrinkable child — the
+   bottom-sheet anatomy of .claude/rules/overlays.md §3, applied to a centred
+   modal. That is what pins the search field and the Send row: they are
+   `flex: none`, so the card's height does not move as results come and go.
+   Before this, __body was the scroller and every query resized the whole card.
+
+   No `position: sticky` for the footer: sticky inside a scroller needs the
+   scroller to be the thing that scrolls, and then the search field scrolls
+   away with the tiles. This way each part is exactly where it should be. */
 .add-buddies__body {
+  --buddy-tile-h: 116px;
+  --add-buddies-gap: 8px;
+  --add-buddies-grid-h: calc(3 * var(--buddy-tile-h) + 2 * var(--add-buddies-gap));
   padding: 18px 14px 16px;
   max-height: calc(100vh - 36px);
   max-height: calc(var(--bgb-vv-h, 100dvh) - 36px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;                     /* the grid scrolls, not this */
 }
-.add-buddies .polaroid-popup__title { margin-bottom: 4px; }
-.add-buddies .polaroid-popup__body { margin-bottom: 12px; }
+.add-buddies .polaroid-popup__title { flex: none; margin-bottom: 4px; }
+.add-buddies .polaroid-popup__body { flex: none; margin-bottom: 12px; }
+
+/* Doubled up on .search-field, which is later in this file and sets
+   `flex: 1 1 auto` for the rows where a field shares space with a button. Here
+   it is a full-width band that must not grow. */
+.search-field.add-buddies__search { flex: none; display: flex; margin-bottom: 10px; }
+/* .polaroid-field__input declares the `padding` SHORTHAND and sits later in
+   this file than .search-field__input's `padding-right: 40px`, at the same
+   0,1,0 — so it wins on source order and the × lands on top of the caret.
+   0,2,0 here so the clearance cannot be tied away again. */
+.add-buddies__search .search-field__input { padding-right: 40px; }
+/* .search-field__icon reads --ink-muted, a GROUND token: on this cream card in
+   the dark theme that is near-white on cream. --polaroid-muted is the paper
+   equivalent, and is what .field-clear-btn beside it already uses. Scoped
+   rather than changed at source — the field's other call sites sit on
+   .bgb-spoke-screen, where --ink-muted is correct. */
+.add-buddies__search .search-field__icon { color: var(--polaroid-muted); }
 
 /* auto-fit rather than a fixed column count: the same rule gives three columns
-   on a phone and four on the 420px cap, with no breakpoint. */
+   on a phone and four on the 420px cap, with no breakpoint.
+
+   `flex: 0 1 <three rows>` is a definite basis the grid may SHRINK from — a
+   short screen, a software keyboard — but never grow past. That is statically
+   what overlays.md §4's measured anti-jump pin does in JS, and better: the
+   height is authored rather than sampled at open time, so it can never be a
+   floor the shrunken card is unable to honour. */
 .add-buddies__grid {
+  flex: 0 1 var(--add-buddies-grid-h);
+  min-height: 0;                        /* or flex refuses to shrink it */
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 8px;
+  align-content: start;
+  gap: var(--add-buddies-gap);
   /* 2px so a focus ring on an edge tile isn't clipped by the scroll box. */
   padding: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Bottom fade, only while there is more below. A cue that costs no layout, so
+   it cannot reintroduce the resizing the fixed height exists to remove. */
+.add-buddies__grid.is-scrollable {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+/* Searching, nothing suggested, no matches: all three centre in the same box
+   rather than clinging to the top of an otherwise empty three rows. */
+.add-buddies__grid.is-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.add-buddies__empty {
+  margin: 0 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--polaroid-muted);
+  text-align: center;
 }
 
 .add-buddies__error {
+  flex: none;
   margin-top: 12px;
   font-size: 12px;
   font-weight: 600;
@@ -9497,7 +9559,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    (.claude/rules/mobile-web.md §5) and share the row evenly — Skip is a real
    destination here, not a corner escape, so it is not shrunk to a link. */
 .add-buddies__actions {
-  margin-top: 14px;
+  flex: none;
+  /* The row is pinned now, so it needs to read as chrome over a scrolling list
+     rather than floating on the same plane as the last row of tiles. */
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--polaroid-line);
   gap: 10px;
 }
 .add-buddies__actions .btn {
@@ -9567,7 +9634,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* Both commit buttons get the 52px target (.claude/rules/mobile-web.md §5) and
    share the row evenly — Skip is a real destination here, not a corner escape.
-   Matches .add-buddies__actions exactly; the two steps are one flow. */
+   Same button sizing as .add-buddies__actions; the two steps are one flow. It
+   does NOT take that row's divider, because this card scrolls as one block and
+   its buttons sit at the end of the content rather than pinned above it. */
 .onboarding-bgg__actions {
   gap: 10px;
 }

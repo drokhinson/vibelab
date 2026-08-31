@@ -438,8 +438,12 @@
       console.warn("Buddy suggestions unavailable; skipping the step:", e);
       return;
     }
-    // An "Add buddies" screen with nobody on it is worse than no screen: it
-    // reads as a broken feature on the user's first minute in the app.
+    // The card itself tolerates an empty list — it has a search field, so
+    // there is always something to do on it. This guard survives for a
+    // different reason, particular to first-run: an account ninety seconds old
+    // has nobody to search FOR. Interrupting someone's first minute with an
+    // empty grid and a box they cannot fill reads as a broken feature; from
+    // the Buddies screen, where the user asked for this card, it does not.
     if (suggestions.length === 0) return;
 
     let result;
