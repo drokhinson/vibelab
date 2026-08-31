@@ -120,16 +120,15 @@
                 </div>` : ""}
             </div>
             <div class="set-card__acct-actions">
-              <button class="set-card__avatar-btn" type="button"
-                      title="Edit your profile" aria-label="Edit your profile"
-                      onclick="window.profileSelfView._openEditProfile()">
-                <i data-icon="palette" class="w-4 h-4"></i>
-                Edit
-              </button>
-              <button class="set-card__avatar-btn set-card__qr-btn" type="button"
+              <button class="set-card__acct-btn" type="button"
                       title="Add a buddy by QR code" aria-label="Add a buddy by QR code"
                       onclick="window.profileSelfView._openQr(this)">
-                <i data-icon="qr-code" class="w-4 h-4"></i>
+                <i data-icon="qr-code" class="w-5 h-5"></i>
+              </button>
+              <button class="set-card__acct-btn" type="button"
+                      title="Edit your profile" aria-label="Edit your profile"
+                      onclick="window.profileSelfView._openEditProfile()">
+                <i data-icon="pencil" class="w-5 h-5"></i>
               </button>
             </div>
           </div>

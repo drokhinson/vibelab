@@ -8979,41 +8979,43 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    admin-key block is now the card's only child, so it has to pay for its own
    top edge. */
 .set-card__acct-edit-form:first-child { padding-top: 0.9rem; }
-/* Edit and the QR square, as one group on the trailing edge of the account
-   card. Both are actions on your own identity — how you look, and how someone
-   finds you — so they share a treatment and sit together rather than the QR
-   arriving as an ornament beside a button. */
-/* 0.5rem, not less: these are two adjacent tap targets and
-   .claude/rules/mobile-web.md §5 wants >= 8px of clear space between hit zones.
-   0.35rem measured 6px. */
-.set-card__acct-actions { display: flex; align-items: stretch; gap: 0.5rem; flex: none; }
-/* Square, and the 44px floor rather than the label button's padded height:
-   there is no text to set the width (.claude/rules/mobile-web.md §5). */
-.set-card__qr-btn { width: 44px; min-height: 44px; padding: 0; gap: 0; }
+/* The two actions on your own identity — how someone finds you, and how you
+   look — as one group on the trailing edge of the account card. QR leads:
+   it is the one that involves another person, and the one worth reaching for
+   at a table.
 
-.set-card__avatar-btn {
+   Both are icon squares. The class was .set-card__avatar-btn while it was a
+   labelled "Edit profile" beside an avatar; it is neither now, so it carries
+   the name of what it is (.claude/rules/ui-object-design.md §5 — a class named
+   for a surface that no longer exists is the same debt as a dead component). */
+/* 0.5rem, not less: two adjacent tap targets, and .claude/rules/mobile-web.md
+   §5 wants >= 8px of clear space between hit zones. 0.35rem measured 6px. */
+.set-card__acct-actions { display: flex; align-items: stretch; gap: 0.5rem; flex: none; }
+
+.set-card__acct-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
   justify-content: center;
+  /* Square on the 44px floor. With no label there is nothing else to set the
+     width, so it is stated rather than derived from padding. */
+  box-sizing: border-box;
+  width: 44px;
   min-height: 44px;
-  padding: 0.5rem 0.7rem;
+  padding: 0;
   border-radius: 0.65rem;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent-ink);
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.78rem;
   cursor: pointer;
   flex: none;
   transition: background 0.15s, border-color 0.15s;
 }
-.set-card__avatar-btn:hover {
+.set-card__acct-btn:hover {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
-.set-card__avatar-btn:focus-visible {
+.set-card__acct-btn:active { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.set-card__acct-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
