@@ -340,6 +340,8 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/buddies/requests` — pending requests in both directions: `{incoming[], outgoing[]}`
 - `GET /api/v1/boardgame_buddy/buddies/suggested?limit=` — "Buddies you may know" candidates (`bgb_suggested_buddies`); the same rail the Feed embeds, as a standalone call for the Buddies screen
 - `POST /api/v1/boardgame_buddy/buddies/request` — body `{target_user_id}`; auto-accepts if a reverse request exists
+- `POST /api/v1/boardgame_buddy/buddies/qr-token` — mint the short-lived signed token the caller's add-me QR encodes. Returns `{token, expires_at, ttl_seconds}`; stateless (no table, nothing persisted), HS256 over `BGB_QR_SECRET`, ~3 min TTL, and the sheet re-mints at 150s. The frontend composes the scannable payload as `{origin}/b/{token}` — the backend can't know the client's origin
+- `POST /api/v1/boardgame_buddy/buddies/qr-add` — body `{token}`; redeem a scanned code. **Both users become buddies immediately** — an accepted edge, no pending request, no confirmation. That is only safe because the QR carries this token rather than a user id: ids are public (every `/u/{userId}` URL has one), so an id proves nothing, whereas a token exists only because its owner had the sheet open seconds ago. Idempotent on a re-scan (`created:false`) and promotes an existing pending edge in either direction. 400 self-scan · 403 blocked · 404 issuer gone · **410 expired or forged** — never 401, because `domain/api.js` treats any 401 as a stale Supabase session and burns a refresh + retry before surfacing an error the user can't act on
 - `POST /api/v1/boardgame_buddy/buddies/{request_id}/accept` — accept incoming request
 - `POST /api/v1/boardgame_buddy/buddies/{request_id}/reject` — recipient declines a pending request
 - `POST /api/v1/boardgame_buddy/buddies/{request_id}/cancel` — sender withdraws their own pending request (403 for anyone else)
@@ -408,11 +410,15 @@ Path-based routing via the History API (`projects/boardgame-buddy/web/domain/vie
 | `/profile/collection` | `collection` | — | `userId` (when viewing another user — though `/u/:userId` is preferred for that) | Collection grid. |
 | `/profile/wishlist` | `wishlist` | — | `userId` | Wishlist grid. |
 | `/profile/plays` | `plays` | — | `userId` | Plays log. |
-| `/profile/buddies` | `buddies` | — | — | Accepted buddies + pending requests + search. Buddies and Played-with are paged 6 per page, with the "Buddies you may know" rail between them. |
+| `/profile/buddies` | `buddies` | — | `qr` (a token, only from a `/b/<token>` link) | Accepted buddies + pending requests + search. Buddies and Played-with are paged 6 per page, with the "Buddies you may know" rail between them. A QR button beside the search field opens `widgets/buddy-qr-sheet.js` — My code / Scan. |
 | `/profile/stats` | `stats` | — | — | Stats spoke: gold/silver/bronze podium of the most-played games, career strip, a per-game picker showing win/play ratio and the average winning score, then nemesis, play rhythm, shelf of shame, table size, taste, comebacks, co-op record and personal bests. One call. |
 | `/u/:userId` | `profile-other` | `userId` | — | Public profile for another account. Distinct from `/profile/*` so userId can't collide with a subpage name. |
 | `/settings` | `settings` | — | — | Account / theme (Light-Dark-Auto) / logout. Opened from the header gear on any screen, so it **closes** back to wherever it came from rather than routing to the hub. |
 | `/admin` | `admin` | — | — | Chapter-reports moderation. Only reachable when `is_admin=true`. |
+
+**Inbound-only, and deliberately NOT in the router's path table:**
+
+- `/b/<token>` — the add-a-buddy QR link. `init.js` matches it before `matchPath()` and rewrites it to `{name: "buddies", params: {qr: token}}`, which inherits the `pendingRoute` stash and therefore the bounce through `/auth` for a signed-out scanner. It stays out of `_routes` because nothing in the app ever navigates *to* it, and `pathFor()` resolves by name with `.find()` — a second entry named `buddies` would silently make every future `router.go("buddies")` build the wrong URL. `buddies-view` consumes the param and `replaceUrl`s the token straight back out of the address bar, so a refresh or a much later back navigation can't replay a spent code.
 
 **Routes intentionally not in the URL:**
 
