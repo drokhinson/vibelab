@@ -4911,16 +4911,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* Search field and the QR button share one row: both are ways of adding the
    same thing, so separating them would read as two unrelated affordances. */
 /* The field itself is a .search-field, which already carries
-   `flex: 1 1 auto; min-width: 0` — so the row needs nothing but the gap. */
-.buddies-search__row { display: flex; align-items: center; gap: 0.5rem; }
+   `flex: 1 1 auto; min-width: 0` — so the row supplies only the gap.
+   `stretch`, not `center`: it makes the button take the field's height
+   whatever that is, so the pair reads as one control instead of the button
+   floating at its own size beside it. */
+.buddies-search__row { display: flex; align-items: stretch; gap: 0.5rem; }
 .buddies-search__qr {
   flex: none;
   display: flex; align-items: center; justify-content: center;
   box-sizing: border-box;
   width: 44px;
-  /* Match the field's height so the pair reads as one control, but never drop
-     below the 44px tap-target floor if the field is ever shorter. */
-  align-self: stretch;
+  /* Height comes from the row's stretch; this is the floor for the case where
+     the field is ever shorter than a tap target. */
   min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 12px;
