@@ -11,15 +11,16 @@
 //            rides along as a small bottom-right badge at its natural aspect;
 //            with no snapshot the box art IS the photo, height-capped.
 //   Back   → game title + duration, ranked scoreboard with the winner row
-//            tinted, optional notes, the same maximize button (top-right),
-//            and a "Tap to flip back" footer.
+//            tinted — a registered player's row opens their profile —
+//            optional notes, the same maximize button (top-right), and a
+//            "Tap to flip back" footer.
 //
-// Clicking the game-name text, the open button, the status pill, or either
-// maximize button acts on its own (data-no-flip). Clicking anywhere else on
-// the card — the photo and the box-art badge included — flips it. State lives
-// in a module-level Map keyed by play_id so flipping re-renders only the
-// affected <article> via outerHTML replacement — the feed scroll position is
-// preserved.
+// Clicking the game-name text, the open button, the status pill, either
+// maximize button, or a scoreboard row for a registered player acts on its
+// own (data-no-flip). Clicking anywhere else on the card — the photo and the
+// box-art badge included — flips it. State lives in a module-level Map keyed
+// by play_id so flipping re-renders only the affected <article> via outerHTML
+// replacement — the feed scroll position is preserved.
 
 (function () {
   // Per-play state lives outside the render so re-renders are cheap and
@@ -316,14 +317,26 @@
         ${durationMeta ? `<span class="play-card__back-meta">${escapeHtml(durationMeta)}</span>` : ""}
       </header>
 
-      <ul class="play-card__back-players">
+      <ul class="play-card__back-players${ranked.some((pl) => pl.user_id) ? " has-links" : ""}">
         ${ranked.length === 0
           ? `<li class="play-card__back-empty">No players recorded.</li>`
-          : ranked.map((pl) => `
-              <li class="play-card__back-player ${pl.is_winner ? "is-winner" : ""}">
+          : ranked.map((pl) => {
+              // A registered player's whole row opens their profile; the
+              // chevron is the affordance. Ghost players have no account and
+              // so no profile, leaving their row inert (and un-styled as a
+              // link) — see playerNav.
+              const nav = playerNav(pl, me);
+              return `
+              <li class="play-card__back-player ${pl.is_winner ? "is-winner" : ""}${nav ? " is-link" : ""}"
+                  ${nav ? `role="button" tabindex="0" data-no-flip
+                  aria-label="Open ${escapeAttr(pl.name)}'s profile"
+                  onclick="${nav}"
+                  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}"` : ""}>
                 ${renderPlayerRow(pl, me)}
                 <span class="play-card__back-player-score">${pl.score != null ? escapeHtml(String(pl.score)) : ""}</span>
-              </li>`).join("")}
+                ${nav ? `<i data-icon="chevron-right" class="play-card__back-player-go"></i>` : ""}
+              </li>`;
+            }).join("")}
       </ul>
 
       ${notesBlock}
@@ -332,46 +345,37 @@
     `;
   }
 
-  // Render a single back-side player row: badge on the left, name beside
-  // it. Registered players get a clickable customized badge that routes
-  // to their profile (own → profile-self, others → profile-other); the
-  // badge is the only navigable surface so tapping the name is inert.
-  // Ghost players get a non-clickable baseline badge with their initials.
-  function renderPlayerRow(pl, me) {
-    const nameHtml = `<span class="play-card__back-player-name">${escapeHtml(pl.name)}</span>`;
-    if (!pl.user_id) {
-      const ghostBadge = window.BgbBadge.render({
-        avatar: null,
-        displayName: pl.name,
-        size: "sm",
-        isGhost: true,
-        extraClass: "play-card__back-player-avatar",
-      });
-      return `${ghostBadge}${nameHtml}`;
-    }
+  // Inline handler that routes a scoreboard row to that player's profile
+  // (own → profile-self, anyone else → profile-other). Returns "" for
+  // free-text / ghost players — they have no account and no profile page.
+  //
+  // stopPropagation keeps the click off the article, which would otherwise
+  // flip the card out from under the navigation; the row also carries
+  // data-no-flip so the flip controller skips it even if a future change
+  // lets the event through.
+  function playerNav(pl, me) {
+    if (!pl || !pl.user_id) return "";
     const route = (me && me.id === pl.user_id)
       ? `window.router.go('profile-self')`
       : `window.router.go('profile-other',{userId:'${escapeAttr(pl.user_id)}'})`;
+    return `event.stopPropagation();${route}`;
+  }
+
+  // Render the leading half of a back-side player row: badge, then name.
+  // Both are purely visual — the navigation lives on the <li> so the whole
+  // row is one target (the 24px badge alone was a hard tap on a touch-first
+  // surface) and keyboard / aria flow stays on a single element.
+  function renderPlayerRow(pl, me) {
+    const nameHtml = `<span class="play-card__back-player-name">${escapeHtml(pl.name)}</span>`;
     const badge = window.BgbBadge.render({
-      avatar: pl.avatar || null,
+      avatar: pl.user_id ? (pl.avatar || null) : null,
       displayName: pl.name,
       size: "sm",
-      isMe: !!(me && me.id === pl.user_id),
-      extraClass: "play-card__back-player-avatar is-link",
+      isMe: !!(me && pl.user_id && me.id === pl.user_id),
+      isGhost: !pl.user_id,
+      extraClass: "play-card__back-player-avatar",
     });
-    // Wrap the badge in a clickable shell so it routes to the player's
-    // profile. The badge is purely visual; navigation lives on the wrapper
-    // so keyboard / aria flow stays on one element.
-    return `
-      <span class="play-card__back-player-avatar-wrap"
-            role="button" tabindex="0" data-no-flip
-            aria-label="Open ${escapeAttr(pl.name)}'s profile"
-            onclick="event.stopPropagation(); ${route}"
-            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();${route};}">
-        ${badge}
-      </span>
-      ${nameHtml}
-    `;
+    return `${badge}${nameHtml}`;
   }
 
   // ── Aspect ratio detection ──────────────────────────────────────────────────
