@@ -205,6 +205,33 @@ def reject_request(sb, viewer_id: str, request_id: str) -> None:
     sb.table("boardgamebuddy_buddy_edges").delete().eq("id", request_id).execute()
 
 
+def cancel_request(sb, viewer_id: str, request_id: str) -> None:
+    """Withdraw a pending request the viewer sent.
+
+    The mirror of reject_request: same edge, opposite party. Only the sender
+    can cancel — the recipient's way out is Decline, which is a different
+    signal to the sender and shouldn't be reachable through this route.
+    """
+    rows = (
+        sb.table("boardgamebuddy_buddy_edges")
+        .select("id, user_a, user_b, status, requested_by")
+        .eq("id", request_id)
+        .execute()
+    )
+    if not rows.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+    edge = rows.data[0]
+    if viewer_id not in (edge["user_a"], edge["user_b"]):
+        raise HTTPException(status_code=404, detail="Request not found")
+    if edge["status"] != BuddyEdgeStatus.PENDING.value:
+        raise HTTPException(status_code=409, detail="Request is not pending")
+    if edge["requested_by"] != viewer_id:
+        raise HTTPException(
+            status_code=403, detail="Only the sender can cancel a request"
+        )
+    sb.table("boardgamebuddy_buddy_edges").delete().eq("id", request_id).execute()
+
+
 def unfriend(sb, viewer_id: str, edge_id: str) -> None:
     """Delete an accepted edge. Either party can do this."""
     rows = (
@@ -223,28 +250,44 @@ def unfriend(sb, viewer_id: str, edge_id: str) -> None:
 
 
 
-def relation_to(sb, viewer_id: str, other_id: str) -> dict[str, Optional[str]]:
+def relation_to(sb, viewer_id: str, other_id: str) -> dict[str, Any]:
     """Return relationship metadata for a public profile view.
 
     Output keys: is_buddy (bool), has_pending_request (bool),
-    pending_request_direction ('incoming' | 'outgoing' | None).
+    pending_request_direction ('incoming' | 'outgoing' | None),
+    pending_request_id (edge UUID | None).
+
+    pending_request_id is what lets the profile's relation button cancel an
+    outgoing request (or accept an incoming one) in place — without it the FE
+    has to pull the whole /buddies/requests list just to find the edge id.
     """
+    none_rel = {
+        "is_buddy": False,
+        "has_pending_request": False,
+        "pending_request_direction": None,
+        "pending_request_id": None,
+    }
     if viewer_id == other_id:
-        return {"is_buddy": False, "has_pending_request": False, "pending_request_direction": None}
+        return dict(none_rel)
     user_a, user_b = canonical_edge_pair(viewer_id, other_id)
     rows = (
         sb.table("boardgamebuddy_buddy_edges")
-        .select("status, requested_by")
+        .select("id, status, requested_by")
         .eq("user_a", user_a)
         .eq("user_b", user_b)
         .execute()
     )
     if not rows.data:
-        return {"is_buddy": False, "has_pending_request": False, "pending_request_direction": None}
+        return dict(none_rel)
     edge = rows.data[0]
     if edge["status"] == BuddyEdgeStatus.ACCEPTED.value:
-        return {"is_buddy": True, "has_pending_request": False, "pending_request_direction": None}
+        return {**none_rel, "is_buddy": True}
     if edge["status"] == BuddyEdgeStatus.PENDING.value:
         direction = "outgoing" if edge["requested_by"] == viewer_id else "incoming"
-        return {"is_buddy": False, "has_pending_request": True, "pending_request_direction": direction}
-    return {"is_buddy": False, "has_pending_request": False, "pending_request_direction": None}
+        return {
+            "is_buddy": False,
+            "has_pending_request": True,
+            "pending_request_direction": direction,
+            "pending_request_id": edge["id"],
+        }
+    return dict(none_rel)

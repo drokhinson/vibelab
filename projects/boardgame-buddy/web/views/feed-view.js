@@ -514,14 +514,69 @@
       });
     }
 
+    // The rail is a stateless strip of markup interleaved into the feed page,
+    // so the button element IS the state here — there's no card field to patch
+    // and re-render from. It flips in the same frame as the tap and reconciles
+    // on the echo, which is the same contract as the Buddies screen's
+    // optimistic handlers, expressed against the DOM node.
     async _addBuddy(userId, btnEl) {
+      const wasLabel = btnEl.textContent;
+      btnEl.disabled = true;
+      btnEl.textContent = "Sent";
       try {
-        btnEl.disabled = true;
-        await window.Buddy.sendRequest(userId);
-        btnEl.textContent = "Sent";
+        const res = await window.Buddy.sendRequest(userId);
+        // The buddy bundle's played-with rows carry this relation — drop it so
+        // the Buddies screen doesn't paint a stale "Buddy up" for this person.
+        window.Buddy.invalidate();
+        if (res && res.direction === "incoming") {
+          // Auto-accepted — they had already asked us.
+          btnEl.textContent = "Buddies";
+          return;
+        }
+        this._armCancel(btnEl, res && res.id, userId);
       } catch (e) {
         btnEl.disabled = false;
-        btnEl.textContent = "Try again";
+        btnEl.textContent = wasLabel || "Add";
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't send that request", "error");
+        }
+      }
+    }
+
+    // Turn the tile's Add button into the undo for the request it just sent.
+    // Without an edge id there's nothing to address, so it stays a dead "Sent".
+    _armCancel(btnEl, requestId, userId) {
+      if (!requestId) { btnEl.textContent = "Sent"; return; }
+      btnEl.disabled = false;
+      btnEl.textContent = "Cancel";
+      btnEl.title = "Withdraw your buddy request";
+      btnEl.classList.remove("btn-primary");
+      btnEl.classList.add("btn-ghost");
+      btnEl.onclick = (ev) => {
+        ev.stopPropagation();
+        this._cancelBuddy(requestId, userId, btnEl);
+      };
+    }
+
+    async _cancelBuddy(requestId, userId, btnEl) {
+      btnEl.disabled = true;
+      btnEl.textContent = "Add";
+      try {
+        await window.Buddy.cancel(requestId);
+        window.Buddy.invalidate();
+        btnEl.disabled = false;
+        btnEl.title = "";
+        btnEl.classList.remove("btn-ghost");
+        btnEl.classList.add("btn-primary");
+        btnEl.onclick = (ev) => {
+          ev.stopPropagation();
+          this._addBuddy(userId, btnEl);
+        };
+      } catch (e) {
+        this._armCancel(btnEl, requestId, userId);
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't cancel that request", "error");
+        }
       }
     }
   }

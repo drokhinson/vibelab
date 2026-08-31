@@ -341,7 +341,8 @@ each missing game from the BGG XML API.
 - `GET /api/v1/boardgame_buddy/buddies/suggested?limit=` — "Buddies you may know" candidates (`bgb_suggested_buddies`); the same rail the Feed embeds, as a standalone call for the Buddies screen
 - `POST /api/v1/boardgame_buddy/buddies/request` — body `{target_user_id}`; auto-accepts if a reverse request exists
 - `POST /api/v1/boardgame_buddy/buddies/{request_id}/accept` — accept incoming request
-- `POST /api/v1/boardgame_buddy/buddies/{request_id}/reject` — delete a pending request
+- `POST /api/v1/boardgame_buddy/buddies/{request_id}/reject` — recipient declines a pending request
+- `POST /api/v1/boardgame_buddy/buddies/{request_id}/cancel` — sender withdraws their own pending request (403 for anyone else)
 - `DELETE /api/v1/boardgame_buddy/buddies/{edge_id}` — unfriend (either party can call)
 - `GET /api/v1/boardgame_buddy/played-with` — real-account players the viewer has shared a play with (carries buddy-relation flags so the FE can show a quick-add affordance for non-buddies)
 - `GET /api/v1/boardgame_buddy/ghost-players` — free-text nicknames the viewer recorded in plays without an account, grouped with play counts + last-played date

@@ -31,4 +31,5 @@ def fetch_public_profile(sb, viewer_id: str, target_id: str) -> PublicProfileRes
         is_buddy=bool(rel["is_buddy"]),
         has_pending_request=bool(rel["has_pending_request"]),
         pending_request_direction=rel["pending_request_direction"],
+        pending_request_id=rel["pending_request_id"],
     )

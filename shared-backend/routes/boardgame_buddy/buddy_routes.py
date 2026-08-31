@@ -117,6 +117,22 @@ async def reject_buddy_request(
     return MessageResponse(message="Request rejected")
 
 
+@router.post(
+    "/buddies/{request_id}/cancel",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Cancel an outgoing buddy request",
+)
+async def cancel_buddy_request(
+    request_id: str = Path(..., description="Edge UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Withdraw a pending request the current user sent. Sender only —
+    the recipient declines instead."""
+    buddy_service.cancel_request(get_supabase(), user.user_id, request_id)
+    return MessageResponse(message="Request cancelled")
+
+
 @router.delete(
     "/buddies/{edge_id}",
     response_model=MessageResponse,
