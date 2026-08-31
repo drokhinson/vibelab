@@ -132,25 +132,127 @@
       }
       if (p.has_pending_request) {
         if (p.pending_request_direction === "incoming") {
-          return `<button class="btn btn-sm btn-primary" onclick="window.profileOtherView._accept('${p.id}')"><i data-icon="user-check" class="w-4 h-4"></i> Accept request</button>`;
+          return `<button class="btn btn-sm btn-primary" onclick="window.profileOtherView._accept('${p.pending_request_id || ""}')"><i data-icon="user-check" class="w-4 h-4"></i> Accept request</button>`;
         }
-        return `<button class="btn btn-sm btn-ghost" disabled><i data-icon="clock" class="w-4 h-4"></i> Request sent</button>`;
+        // While the send is still in the air we have no edge id to cancel, so
+        // the button states the fact and waits; the echo arms it a beat later.
+        return p.pending_request_id
+          ? `<button class="btn btn-sm btn-ghost" title="Withdraw your buddy request" onclick="window.profileOtherView._cancel('${p.pending_request_id}')"><i data-icon="x" class="w-4 h-4"></i> Cancel request</button>`
+          : `<button class="btn btn-sm btn-ghost" disabled><i data-icon="clock" class="w-4 h-4"></i> Request sent</button>`;
       }
       return `<button class="btn btn-sm btn-primary" onclick="window.profileOtherView._addBuddy('${p.id}')"><i data-icon="user-plus" class="w-4 h-4"></i> Buddy up</button>`;
     }
 
-    async _addBuddy(userId) {
-      try { await window.Buddy.sendRequest(userId); } catch (_) {}
-      await this._load();
+    // ── Relation mutations ────────────────────────────────────────────────────
+    //
+    // All three paint first and reconcile behind (.claude/rules/web-frontend.md,
+    // "Mutations feel instantaneous"). They used to await the write and then
+    // re-run _load(), which drops the profile AND the bundle back to null — so
+    // tapping "Buddy up" threw the whole screen back to its loader for a round
+    // trip. The button is the only thing that changes, so only it needs to.
+
+    // Snapshot just the four relation fields, so a background bundle refresh
+    // landing mid-write can't be erased by a whole-object rollback.
+    _relationSnapshot() {
+      const p = this._profile || {};
+      return {
+        is_buddy: p.is_buddy,
+        has_pending_request: p.has_pending_request,
+        pending_request_direction: p.pending_request_direction,
+        pending_request_id: p.pending_request_id,
+      };
     }
 
-    async _accept(otherUserId) {
+    async _addBuddy(userId) {
+      const p = this._profile;
+      if (!p) return;
+      const before = this._relationSnapshot();
+      Object.assign(p, {
+        has_pending_request: true,
+        pending_request_direction: "outgoing",
+        pending_request_id: null,
+      });
+      this.render();
       try {
-        const requests = await window.Buddy.requests();
-        const inc = (requests.incoming || []).find((r) => r.other_user_id === otherUserId);
-        if (inc) await window.Buddy.accept(inc.id);
-      } catch (_) {}
-      await this._load();
+        const res = await window.Buddy.sendRequest(userId);
+        // The played-with rows cached in the buddy bundle carry this relation
+        // — drop it so the Buddies screen doesn't serve the pre-request copy.
+        if (window.Buddy.invalidate) window.Buddy.invalidate();
+        if (res && res.direction === "incoming") {
+          // Auto-accepted: they had already requested us, so this made us
+          // buddies rather than leaving a request pending.
+          Object.assign(p, {
+            is_buddy: true,
+            has_pending_request: false,
+            pending_request_direction: null,
+            pending_request_id: null,
+          });
+        } else {
+          p.pending_request_id = (res && res.id) || null;
+        }
+      } catch (e) {
+        Object.assign(p, before);
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't send that request", "error");
+        }
+      }
+      this.render();
+    }
+
+    async _accept(requestId) {
+      const p = this._profile;
+      if (!p) return;
+      const before = this._relationSnapshot();
+      Object.assign(p, {
+        is_buddy: true,
+        has_pending_request: false,
+        pending_request_direction: null,
+        pending_request_id: null,
+      });
+      this.render();
+      try {
+        // A profile fetched before the API carried pending_request_id still
+        // needs the list lookup to find the edge.
+        let id = requestId;
+        if (!id) {
+          const requests = await window.Buddy.requests();
+          const inc = (requests.incoming || []).find((r) => r.other_user_id === p.id);
+          id = inc && inc.id;
+        }
+        if (!id) throw new Error("That request is no longer pending");
+        await window.Buddy.accept(id);
+        if (window.Buddy.invalidate) window.Buddy.invalidate();
+      } catch (e) {
+        Object.assign(p, before);
+        this.render();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't accept that request", "error");
+        }
+      }
+    }
+
+    // Withdraw a request we sent. One tap re-sends it, so no confirm gate —
+    // those are reserved for the destructive actions (unfriend).
+    async _cancel(requestId) {
+      const p = this._profile;
+      if (!p || !requestId) return;
+      const before = this._relationSnapshot();
+      Object.assign(p, {
+        has_pending_request: false,
+        pending_request_direction: null,
+        pending_request_id: null,
+      });
+      this.render();
+      try {
+        await window.Buddy.cancel(requestId);
+        if (window.Buddy.invalidate) window.Buddy.invalidate();
+      } catch (e) {
+        Object.assign(p, before);
+        this.render();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't cancel that request", "error");
+        }
+      }
     }
 
     // ── Four stat tiles ───────────────────────────────────────────────────────

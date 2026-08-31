@@ -1,7 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 058 (bgb_user_stats_detail — the Stats spoke's whole
---               payload in one call)
+-- Last updated: migration 060 (bgb_play_partners — `recent` rows now carry
+--               pending_request_id so a played-with row can cancel/accept
+--               in place)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -526,6 +527,11 @@
 --   → JSONB { "accounts": [BuddyEdgeResponse…], "ghosts": [GhostPlayer…],
 --             "recent": [PlayedWithUser…] }
 --   Defined in: db/migrations/boardgamebuddy/047_play_partners_rpc.sql
+--   Last updated in: db/migrations/boardgamebuddy/060_play_partners_pending_request_id.sql
+--               (`recent` rows gained pending_request_id — the pending edge's
+--                own id, so the Buddies screen's played-with row can cancel an
+--                outgoing request or accept an incoming one without a second
+--                /buddies/requests round trip to look the id up by user)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/played_with_service.py
 --               (fetch_play_partners — GET /play-partners; fetch_played_with
 --                and fetch_ghost_players slice their list off the same call),

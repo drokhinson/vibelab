@@ -205,6 +205,9 @@ export const api = {
   sendBuddyRequest: (targetUserId) => post('/buddies/request', { target_user_id: targetUserId }),
   acceptBuddy: (requestId) => post(`/buddies/${requestId}/accept`, {}),
   rejectBuddy: (requestId) => post(`/buddies/${requestId}/reject`, {}),
+  // Withdraw a request WE sent — the mirror of rejectBuddy, which is the
+  // recipient's decline. Same edge, opposite party.
+  cancelBuddyRequest: (requestId) => post(`/buddies/${requestId}/cancel`, {}),
   unfriend: (edgeId) => del(`/buddies/${edgeId}`),
   playedWith: () => get('/played-with'),
   ghostPlayers: () => get('/ghost-players'),

@@ -36,6 +36,15 @@
       // — see _linkSearchInput.
       this._linkSearchTimer = null;
       this._linkSearchSeq = 0;
+
+      // Bumped by every optimistic friend-graph edit. _load() captures it
+      // before its awaits and drops its own results if it changed meanwhile,
+      // so a slow first fetch can't resurrect a request the user just sent or
+      // cancelled (.claude/rules/web-frontend.md, "Async state & race
+      // conditions").
+      this._mutationSeq = 0;
+      // user_ids with an in-flight send, so a double-tap can't open two edges.
+      this._sending = new Set();
     }
 
     async onMount() {
@@ -61,6 +70,7 @@
 
     async _load() {
       this._loading = true;
+      const seq = this._mutationSeq;
       this.render();
       // Requests aren't part of the cached bundle — always fetch fresh, in
       // parallel with the bundle, and fold in below without blocking the
@@ -79,14 +89,19 @@
         // view paints immediately instead of firing three uncached calls.
         const combined = await window.Buddy.allBuddies()
           .catch(() => ({ accounts: [], ghosts: [], recent: [] }));
-        this._buddies = combined.accounts || [];
-        this._ghosts = combined.ghosts || [];
-        this._playedWith = combined.recent || [];
+        if (seq === this._mutationSeq) {
+          this._buddies = combined.accounts || [];
+          this._ghosts = combined.ghosts || [];
+          this._playedWith = combined.recent || [];
+        }
       } finally {
         this._loading = false;
         this.render();
       }
       const [requests, suggested] = await Promise.all([requestsPromise, suggestedPromise]);
+      // A friend-graph edit landed while these were in flight — local state is
+      // newer than the server copy we're holding, so let it stand.
+      if (seq !== this._mutationSeq) return;
       this._requests = requests || { incoming: [], outgoing: [] };
       this._suggested = suggested || [];
       this.render();
@@ -150,7 +165,7 @@
                     <div class="search-hit__name">${escapeHtml(u.display_name)}</div>
                     ${u.username ? `<div class="search-hit__meta">@${escapeHtml(u.username)}</div>` : ""}
                   </div>
-                  <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();window.buddiesView._request('${u.id}', this)">Add</button>
+                  ${this._relationAction(u.id)}
                 </li>
               `).join("")}</ul>`
             : ""}
@@ -180,12 +195,16 @@
             <h3>Sent</h3>
             <ul class="buddies-list">
               ${this._requests.outgoing.map((r) => `
-                <li class="buddies-row">
+                <li class="buddies-row" onclick="window.router.go('profile-other',{userId:'${r.other_user_id}'})">
                   ${window.BgbBadge.render({ avatar: r.other_avatar, displayName: r.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
                     <div class="buddies-row__name">${escapeHtml(r.other_display_name)}</div>
                     <div class="buddies-row__when">Awaiting reply</div>
                   </div>
+                  <button class="btn btn-ghost btn-xs" ${r._inFlight ? "disabled" : ""}
+                          aria-label="Cancel request"
+                          title="Cancel your request"
+                          onclick="event.stopPropagation();window.buddiesView._cancel('${r.id}')">Cancel</button>
                 </li>
               `).join("")}
             </ul>
@@ -342,14 +361,7 @@
     }
 
     _renderAccountRow(p) {
-      let action;
-      if (p.has_pending_request) {
-        action = p.pending_request_direction === "incoming"
-          ? `<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();window.buddiesView._acceptIncoming('${p.user_id}', this)">Accept</button>`
-          : `<button class="btn btn-ghost btn-xs" disabled>Sent</button>`;
-      } else {
-        action = `<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();window.buddiesView._request('${p.user_id}', this)">Buddy up</button>`;
-      }
+      const action = this._relationAction(p.user_id);
       return `
         <li class="buddies-row" onclick="window.router.go('profile-other',{userId:'${p.user_id}'})">
           ${window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm", extraClass: "buddies-row__avatar" })}
@@ -448,41 +460,334 @@
       this.render();
     }
 
-    async _request(userId, btn) {
-      btn.disabled = true;
-      btn.textContent = "…";
+    // ── Relation affordance ─────────────────────────────────────────────────
+    //
+    // One renderer for the four states a person can be in relative to the
+    // viewer, shared by the profile-search hits and the played-with rows.
+    // They used to carry their own copies of the same switch, and only one of
+    // them ever grew a Cancel — per .claude/rules/ui-object-design.md §2 the
+    // surface difference is a parameter, not a second implementation.
+
+    /**
+     * @typedef {Object} BuddyRelation
+     * @property {"none"|"outgoing"|"incoming"|"buddies"} kind
+     * @property {string|null} [id]       pending edge id, when one is known
+     * @property {boolean} [inFlight]     the send hasn't been echoed yet
+     */
+
+    /** @returns {BuddyRelation} */
+    _relationFor(userId) {
+      if ((this._buddies || []).some((b) => b.other_user_id === userId)) {
+        return { kind: "buddies" };
+      }
+      // The request lists lead: they're what the optimistic handlers below
+      // patch, so they hold the newest truth. The played-with row's own server
+      // flags are the fallback for the window before /buddies/requests lands
+      // (or when that call failed and left the lists empty).
+      const out = (this._requests.outgoing || []).find((r) => r.other_user_id === userId);
+      if (out) return { kind: "outgoing", id: out.id, inFlight: !!out._inFlight };
+      const inc = (this._requests.incoming || []).find((r) => r.other_user_id === userId);
+      if (inc) return { kind: "incoming", id: inc.id };
+      const played = (this._playedWith || []).find((p) => p.user_id === userId);
+      if (played) {
+        if (played.is_buddy) return { kind: "buddies" };
+        if (played.has_pending_request) {
+          return {
+            kind: played.pending_request_direction === "incoming" ? "incoming" : "outgoing",
+            id: played.pending_request_id || null,
+          };
+        }
+      }
+      return { kind: "none" };
+    }
+
+    _relationAction(userId) {
+      const rel = this._relationFor(userId);
+      if (rel.kind === "buddies") {
+        return `<button class="btn btn-ghost btn-xs" disabled>Buddies</button>`;
+      }
+      if (rel.kind === "incoming") {
+        // No edge id (a bundle cached before the RPC started carrying one) —
+        // say what's true rather than offering a button that can't fire.
+        return rel.id
+          ? `<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();window.buddiesView._accept('${rel.id}','${userId}')">Accept</button>`
+          : `<button class="btn btn-ghost btn-xs" disabled>Wants to buddy up</button>`;
+      }
+      if (rel.kind === "outgoing") {
+        return rel.id && !rel.inFlight
+          ? `<button class="btn btn-ghost btn-xs" aria-label="Cancel request" title="Cancel your request" onclick="event.stopPropagation();window.buddiesView._cancel('${rel.id}')">Cancel</button>`
+          : `<button class="btn btn-ghost btn-xs" disabled>Sent</button>`;
+      }
+      return `<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();window.buddiesView._request('${userId}')">Buddy up</button>`;
+    }
+
+    // ── Friend-graph mutations ──────────────────────────────────────────────
+    //
+    // Every one of these used to await the write, drop the SWR bundle, then
+    // re-run _load() — three endpoints and a repaint through the loading
+    // branch. Tapping Add meant watching the button sit on "…" for a round
+    // trip before anything moved.
+    //
+    // Per .claude/rules/web-frontend.md ("Mutations feel instantaneous") local
+    // state moves first and the write flows through behind it. Each handler
+    // takes a field-level snapshot of exactly what it touches, paints, and
+    // either reconciles against the echo or restores the snapshot. The bundle
+    // cache is invalidated rather than re-fetched, so the next cold mount is
+    // honest without this one flickering.
+    //
+    // These all change list MEMBERSHIP (a person moves between Sent, Buddies,
+    // Played-with and the suggestion rail), which is the structural case the
+    // surgical-repaint rule exempts — hence a full render() rather than a
+    // per-row patch.
+
+    // The display fields for a user, from whichever list the tap came off.
+    _personFor(userId) {
+      const hit = (this._search || []).find((u) => u.id === userId);
+      if (hit) return { display_name: hit.display_name, avatar: hit.avatar || null };
+      const sug = (this._suggested || []).find((x) => x.user_id === userId);
+      if (sug) return { display_name: sug.display_name, avatar: sug.avatar || null };
+      const played = (this._playedWith || []).find((x) => x.user_id === userId);
+      if (played) return { display_name: played.display_name, avatar: played.avatar || null };
+      const req = [...(this._requests.incoming || []), ...(this._requests.outgoing || [])]
+        .find((r) => r.other_user_id === userId);
+      if (req) return { display_name: req.other_display_name, avatar: req.other_avatar || null };
+      return { display_name: "Buddy", avatar: null };
+    }
+
+    // Patch the relation fields on this person's played-with row, if they have
+    // one. Field-level snapshot in, undo closure out — a whole-list snapshot
+    // would erase a concurrent edit to a different row.
+    _patchPlayedWith(userId, patch) {
+      const row = (this._playedWith || []).find((p) => p.user_id === userId);
+      if (!row) return () => {};
+      const before = {
+        is_buddy: row.is_buddy,
+        has_pending_request: row.has_pending_request,
+        pending_request_direction: row.pending_request_direction,
+        pending_request_id: row.pending_request_id,
+      };
+      Object.assign(row, patch);
+      return () => Object.assign(row, before);
+    }
+
+    _sortBuddies(list) {
+      return list.slice().sort((a, b) =>
+        (a.other_display_name || "").toLowerCase()
+          .localeCompare((b.other_display_name || "").toLowerCase()));
+    }
+
+    async _request(userId) {
+      if (this._sending.has(userId)) return;
+      this._sending.add(userId);
+      this._mutationSeq++;
+
+      // A placeholder id until the echo brings the real edge id — Cancel stays
+      // disabled on the row for that window, since it has nothing to address.
+      const tempId = `tmp:${userId}`;
+      const person = this._personFor(userId);
+      const row = {
+        id: tempId,
+        direction: "outgoing",
+        other_user_id: userId,
+        other_display_name: person.display_name,
+        other_avatar: person.avatar,
+        created_at: new Date().toISOString(),
+        _inFlight: true,
+      };
+      this._requests.outgoing = [...(this._requests.outgoing || []), row];
+      const undoPlayed = this._patchPlayedWith(userId, {
+        has_pending_request: true,
+        pending_request_direction: "outgoing",
+        pending_request_id: tempId,
+      });
+      // The suggestion RPC excludes anyone the viewer shares an edge with, so
+      // a refetch would drop this tile anyway — drop it now and let the Sent
+      // row be where they show up.
+      const sugIdx = (this._suggested || []).findIndex((x) => x.user_id === userId);
+      const sug = sugIdx >= 0 ? this._suggested[sugIdx] : null;
+      if (sug) this._suggested.splice(sugIdx, 1);
+      this.render();
+
+      const undo = () => {
+        this._requests.outgoing = (this._requests.outgoing || []).filter((r) => r.id !== tempId);
+        undoPlayed();
+        if (sug) this._suggested.splice(sugIdx, 0, sug);
+      };
+
+      let res;
       try {
-        await window.Buddy.sendRequest(userId);
-        btn.textContent = "Sent";
-        // The pending-request flag lives on the cached played-with rows —
-        // drop the bundle so _load refetches instead of serving stale chips.
-        window.Buddy.invalidate();
-        await this._load();
+        res = await window.Buddy.sendRequest(userId);
       } catch (e) {
-        btn.disabled = false;
-        btn.textContent = "Try again";
+        undo();
+        this.render();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't send that request", "error");
+        }
+        return;
+      } finally {
+        this._sending.delete(userId);
+      }
+
+      // The relation flags ride on the cached played-with bundle — drop it so
+      // the next cold mount doesn't serve the pre-request copy.
+      window.Buddy.invalidate();
+
+      // send_request auto-accepts when the other person had already asked us:
+      // the echo comes back pointing INCOMING, meaning we're buddies now, not
+      // waiting. Two lists change shape — reload rather than guess.
+      if (res && res.direction === "incoming") {
+        undo();
+        await this._load();
+        if (typeof showToast === "function") showToast("You're buddies now", "success");
+        return;
+      }
+
+      // Swap the placeholder for the real edge id so Cancel can address it.
+      const realId = res && res.id;
+      if (realId) {
+        const live = (this._requests.outgoing || []).find((r) => r.id === tempId);
+        if (live) { live.id = realId; live._inFlight = false; }
+        this._patchPlayedWith(userId, { pending_request_id: realId });
+      }
+      this.render();
+    }
+
+    // Withdraw a request we sent. Reversible in one tap from the same row, so
+    // it takes no confirm — the project's confirm surface is reserved for the
+    // destructive gates (unfriend), per .claude/rules/ui-object-design.md §3c.
+    async _cancel(requestId) {
+      if (!requestId || requestId.startsWith("tmp:")) return;
+      this._mutationSeq++;
+
+      const outgoing = this._requests.outgoing || [];
+      const idx = outgoing.findIndex((r) => r.id === requestId);
+      const removed = idx >= 0 ? outgoing[idx] : null;
+      if (idx >= 0) outgoing.splice(idx, 1);
+
+      // Reached from a played-with row too, where the request may never have
+      // made it into the outgoing list (a failed /buddies/requests fetch).
+      const played = (this._playedWith || []).find((p) => p.pending_request_id === requestId);
+      const undoPlayed = played
+        ? this._patchPlayedWith(played.user_id, {
+            has_pending_request: false,
+            pending_request_direction: null,
+            pending_request_id: null,
+          })
+        : () => {};
+      this.render();
+
+      try {
+        await window.Buddy.cancel(requestId);
+      } catch (e) {
+        if (removed) outgoing.splice(idx, 0, removed);
+        undoPlayed();
+        this.render();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't cancel that request", "error");
+        }
+        return;
+      }
+      window.Buddy.invalidate();
+    }
+
+    async _accept(requestId, userId) {
+      this._mutationSeq++;
+      const incoming = this._requests.incoming || [];
+      const idx = incoming.findIndex((r) => r.id === requestId);
+      const req = idx >= 0 ? incoming[idx] : null;
+      if (req) incoming.splice(idx, 1);
+
+      const otherId = (req && req.other_user_id) || userId;
+      const person = this._personFor(otherId);
+      // Paint them into Buddies from what the row already carries; the echo
+      // brings the authoritative edge (accepted_at above all).
+      const optimistic = {
+        id: requestId,
+        other_user_id: otherId,
+        other_display_name: (req && req.other_display_name) || person.display_name,
+        other_avatar: (req && req.other_avatar) || person.avatar,
+        accepted_at: new Date().toISOString(),
+        created_at: (req && req.created_at) || new Date().toISOString(),
+      };
+      const buddiesBefore = this._buddies;
+      this._buddies = this._sortBuddies([...this._buddies, optimistic]);
+      const undoPlayed = this._patchPlayedWith(otherId, {
+        is_buddy: true,
+        has_pending_request: false,
+        pending_request_direction: null,
+        pending_request_id: null,
+      });
+      this.render();
+
+      let edge;
+      try {
+        edge = await window.Buddy.accept(requestId);
+      } catch (e) {
+        if (req) incoming.splice(idx, 0, req);
+        this._buddies = buddiesBefore;
+        undoPlayed();
+        this.render();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't accept that request", "error");
+        }
+        return;
+      }
+      window.Buddy.invalidate();
+      if (edge && edge.id) {
+        this._buddies = this._sortBuddies(
+          this._buddies.map((b) => (b.id === requestId ? edge : b))
+        );
+        this.render();
       }
     }
 
-    async _acceptIncoming(userId, btn) {
-      btn.disabled = true;
+    async _reject(requestId) {
+      this._mutationSeq++;
+      const incoming = this._requests.incoming || [];
+      const idx = incoming.findIndex((r) => r.id === requestId);
+      if (idx < 0) return;
+      const [req] = incoming.splice(idx, 1);
+      const undoPlayed = this._patchPlayedWith(req.other_user_id, {
+        has_pending_request: false,
+        pending_request_direction: null,
+        pending_request_id: null,
+      });
+      this.render();
       try {
-        const inc = (this._requests.incoming || []).find((r) => r.other_user_id === userId);
-        if (inc) await window.Buddy.accept(inc.id);
-      } catch (_) {}
+        await window.Buddy.reject(requestId);
+      } catch (e) {
+        incoming.splice(idx, 0, req);
+        undoPlayed();
+        this.render();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't decline that request", "error");
+        }
+        return;
+      }
       window.Buddy.invalidate();
-      await this._load();
     }
 
-    async _accept(id)  {
-      try { await window.Buddy.accept(id); }
-      finally { window.Buddy.invalidate(); await this._load(); }
-    }
-    async _reject(id)  { try { await window.Buddy.reject(id); } finally { await this._load(); } }
-    async _unfriend(id) {
+    async _unfriend(edgeId) {
       if (!confirm("Remove this buddy?")) return;
-      try { await window.Buddy.unfriend(id); }
-      finally { window.Buddy.invalidate(); await this._load(); }
+      this._mutationSeq++;
+      const idx = this._buddies.findIndex((b) => b.id === edgeId);
+      if (idx < 0) return;
+      const [removed] = this._buddies.splice(idx, 1);
+      // They drop back into Played with, if they're on that list at all.
+      const undoPlayed = this._patchPlayedWith(removed.other_user_id, { is_buddy: false });
+      this.render();
+      try {
+        await window.Buddy.unfriend(edgeId);
+      } catch (e) {
+        this._buddies.splice(idx, 0, removed);
+        undoPlayed();
+        this.render();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't remove that buddy", "error");
+        }
+        return;
+      }
+      window.Buddy.invalidate();
     }
 
     // ── Ghost → account linking ─────────────────────────────────────────────

@@ -648,6 +648,9 @@ class PlayedWithUser(BaseModel):
     is_buddy: bool = False
     has_pending_request: bool = False
     pending_request_direction: Optional[Literal["incoming", "outgoing"]] = None
+    # Edge id of the pending request, so the row can offer Cancel (outgoing) or
+    # Accept (incoming) without a second /buddies/requests round trip.
+    pending_request_id: Optional[str] = None
 
 
 class GhostPlayer(BaseModel):
@@ -721,6 +724,9 @@ class PublicProfileResponse(BaseModel):
     # "Request sent" / "Accept request" instead of "Add buddy".
     has_pending_request: bool = False
     pending_request_direction: Optional[Literal["incoming", "outgoing"]] = None
+    # Edge id of that pending request. The relation button needs it to cancel
+    # an outgoing request (or accept an incoming one) in place.
+    pending_request_id: Optional[str] = None
 
 
 class FavoriteGame(BaseModel):

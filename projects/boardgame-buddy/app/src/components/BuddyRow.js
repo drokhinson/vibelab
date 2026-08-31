@@ -14,7 +14,7 @@ import UserBadge from './UserBadge';
  * @param {'none'|'add'|'incoming'|'outgoing'|'buddies'} [props.relation]
  * @param {() => void} [props.onPress] open the user's profile
  * @param {() => void} [props.onPrimary] add / accept
- * @param {() => void} [props.onSecondary] reject / unfriend
+ * @param {() => void} [props.onSecondary] reject / cancel-request / unfriend
  * @param {boolean} [props.busy]
  * @param {string} [props.subtitle]
  */
@@ -63,11 +63,28 @@ function Affordance({ relation, onPrimary, onSecondary }) {
     );
   }
   if (relation === 'outgoing') {
+    // Tapping the pill withdraws the request. Surfaces that can't cancel (a
+    // search hit whose edge id we don't hold) pass no onSecondary and get the
+    // same pill as a plain status chip.
+    if (!onSecondary) {
+      return (
+        <View style={styles.pillMuted}>
+          <Clock size={14} color={COLORS.textMuted} />
+          <Text style={styles.pillMutedLabel}>Requested</Text>
+        </View>
+      );
+    }
     return (
-      <View style={styles.pillMuted}>
-        <Clock size={14} color={COLORS.textMuted} />
-        <Text style={styles.pillMutedLabel}>Requested</Text>
-      </View>
+      <Pressable
+        style={styles.pillMuted}
+        onPress={onSecondary}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel buddy request"
+      >
+        <X size={14} color={COLORS.textMuted} />
+        <Text style={styles.pillMutedLabel}>Cancel</Text>
+      </Pressable>
     );
   }
   if (relation === 'buddies') {

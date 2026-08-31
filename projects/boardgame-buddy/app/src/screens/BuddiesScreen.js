@@ -38,20 +38,63 @@ export default function BuddiesScreen({ navigation }) {
     return () => clearTimeout(t);
   }, [q]);
 
-  async function sendRequest(userId) {
-    setBusyId(userId);
-    try { await api.sendBuddyRequest(userId); await reload(); } catch {}
-    setBusyId(null);
+  // Sending and cancelling paint first and reconcile behind — mirrors the
+  // optimistic handlers in web/views/buddies-view.js. Awaiting the write and
+  // then reloading both lists meant the row sat under a spinner for a full
+  // round trip before anything moved.
+  async function sendRequest(userId, person) {
+    // A placeholder id until the echo brings the real edge id; the row's
+    // Cancel stays inert for that window (see the `_pending` guard below).
+    const temp = {
+      id: `tmp:${userId}`,
+      direction: 'outgoing',
+      other_user_id: userId,
+      other_display_name: (person && (person.display_name || person.other_display_name)) || 'Player',
+      other_avatar: (person && (person.avatar || person.other_avatar)) || null,
+      created_at: new Date().toISOString(),
+      _pending: true,
+    };
+    setRequests((r) => ({ ...r, outgoing: [...r.outgoing, temp] }));
+    try {
+      const res = await api.sendBuddyRequest(userId);
+      if (res && res.direction === 'incoming') {
+        // Auto-accepted — they had already asked us, so we're buddies now.
+        setRequests((r) => ({ ...r, outgoing: r.outgoing.filter((x) => x.id !== temp.id) }));
+        await reload();
+        return;
+      }
+      setRequests((r) => ({
+        ...r,
+        outgoing: r.outgoing.map((x) =>
+          x.id === temp.id && res && res.id ? { ...x, id: res.id, _pending: false } : x),
+      }));
+    } catch {
+      setRequests((r) => ({ ...r, outgoing: r.outgoing.filter((x) => x.id !== temp.id) }));
+    }
+  }
+  // Withdraw a request we sent. One tap re-sends it, so it takes no confirm —
+  // ConfirmModal is for the destructive gates (unfriend).
+  async function cancelRequest(req) {
+    if (req._pending) return;
+    setRequests((r) => ({ ...r, outgoing: r.outgoing.filter((x) => x.id !== req.id) }));
+    try {
+      await api.cancelBuddyRequest(req.id);
+    } catch {
+      setRequests((r) => ({ ...r, outgoing: [...r.outgoing, req] }));
+    }
   }
   async function accept(id) {
     setBusyId(id);
     try { await api.acceptBuddy(id); await reload(); } catch {}
     setBusyId(null);
   }
-  async function reject(id) {
-    setBusyId(id);
-    try { await api.rejectBuddy(id); await reload(); } catch {}
-    setBusyId(null);
+  async function reject(req) {
+    setRequests((r) => ({ ...r, incoming: r.incoming.filter((x) => x.id !== req.id) }));
+    try {
+      await api.rejectBuddy(req.id);
+    } catch {
+      setRequests((r) => ({ ...r, incoming: [...r.incoming, req] }));
+    }
   }
   async function unfriend(buddy) {
     const ok = await confirm({
@@ -96,7 +139,7 @@ export default function BuddiesScreen({ navigation }) {
                 relation={buddyIds.has(p.id) ? 'buddies' : pendingIds.has(p.id) ? 'outgoing' : 'add'}
                 busy={busyId === p.id}
                 onPress={() => navigation.navigate('ProfileOther', { userId: p.id })}
-                onPrimary={() => sendRequest(p.id)}
+                onPrimary={() => sendRequest(p.id, p)}
               />
             ))}
           </Section>
@@ -105,7 +148,7 @@ export default function BuddiesScreen({ navigation }) {
         {requests.incoming.length > 0 ? (
           <Section title={`Requests (${requests.incoming.length})`}>
             {requests.incoming.map((r) => (
-              <BuddyRow key={r.id} buddy={r} relation="incoming" busy={busyId === r.id} onPress={() => navigation.navigate('ProfileOther', { userId: r.other_user_id })} onPrimary={() => accept(r.id)} onSecondary={() => reject(r.id)} />
+              <BuddyRow key={r.id} buddy={r} relation="incoming" busy={busyId === r.id} onPress={() => navigation.navigate('ProfileOther', { userId: r.other_user_id })} onPrimary={() => accept(r.id)} onSecondary={() => reject(r)} />
             ))}
           </Section>
         ) : null}
@@ -113,7 +156,7 @@ export default function BuddiesScreen({ navigation }) {
         {requests.outgoing.length > 0 ? (
           <Section title="Sent">
             {requests.outgoing.map((r) => (
-              <BuddyRow key={r.id} buddy={r} relation="outgoing" onPress={() => navigation.navigate('ProfileOther', { userId: r.other_user_id })} />
+              <BuddyRow key={r.id} buddy={r} relation="outgoing" onPress={() => navigation.navigate('ProfileOther', { userId: r.other_user_id })} onSecondary={r._pending ? undefined : () => cancelRequest(r)} />
             ))}
           </Section>
         ) : null}

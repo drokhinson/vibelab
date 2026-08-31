@@ -24,6 +24,10 @@
 
     static accept(requestId)  { return window.api.post(`/buddies/${requestId}/accept`, {}); }
     static reject(requestId)  { return window.api.post(`/buddies/${requestId}/reject`, {}); }
+    // Withdraw a request WE sent. Distinct from reject(), which is the
+    // recipient's decline — same edge, opposite party, different meaning to
+    // whoever is on the other end.
+    static cancel(requestId)  { return window.api.post(`/buddies/${requestId}/cancel`, {}); }
     static unfriend(edgeId)   { return window.api.del(`/buddies/${edgeId}`); }
 
     // Profile search — returns ProfileSearchResult[]

@@ -18,7 +18,6 @@ export default function ProfileOtherScreen({ navigation, route }) {
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState(null);
   const [preview, setPreview] = useState([]);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [p, s, grid] = await Promise.all([
@@ -33,10 +32,114 @@ export default function ProfileOtherScreen({ navigation, route }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Paint first, reconcile behind — the relation pill is the only thing that
+  // changes, so reloading the whole profile (which drops it back to null and
+  // re-shows the loader) for a round trip was the wrong shape.
+  function patchRelation(patch) {
+    setProfile((p) => (p ? { ...p, ...patch } : p));
+  }
+
   async function addBuddy() {
-    setBusy(true);
-    try { await api.sendBuddyRequest(userId); await load(); } catch {}
-    setBusy(false);
+    if (!profile) return;
+    const before = {
+      is_buddy: profile.is_buddy,
+      has_pending_request: profile.has_pending_request,
+      pending_request_direction: profile.pending_request_direction,
+      pending_request_id: profile.pending_request_id,
+    };
+    patchRelation({
+      has_pending_request: true,
+      pending_request_direction: 'outgoing',
+      pending_request_id: null,
+    });
+    try {
+      const res = await api.sendBuddyRequest(userId);
+      if (res && res.direction === 'incoming') {
+        // Auto-accepted — they had already requested us.
+        patchRelation({
+          is_buddy: true,
+          has_pending_request: false,
+          pending_request_direction: null,
+          pending_request_id: null,
+        });
+      } else {
+        patchRelation({ pending_request_id: (res && res.id) || null });
+      }
+    } catch {
+      patchRelation(before);
+    }
+  }
+
+  async function acceptRequest() {
+    if (!profile) return;
+    const before = {
+      is_buddy: profile.is_buddy,
+      has_pending_request: profile.has_pending_request,
+      pending_request_direction: profile.pending_request_direction,
+      pending_request_id: profile.pending_request_id,
+    };
+    patchRelation({
+      is_buddy: true,
+      has_pending_request: false,
+      pending_request_direction: null,
+      pending_request_id: null,
+    });
+    try {
+      // A profile fetched before the API carried pending_request_id still
+      // needs the list lookup to find the edge.
+      let id = profile.pending_request_id;
+      if (!id) {
+        const reqs = await api.buddyRequests();
+        const inc = (reqs.incoming || []).find((r) => r.other_user_id === userId);
+        id = inc && inc.id;
+      }
+      if (!id) throw new Error('no pending request');
+      await api.acceptBuddy(id);
+    } catch {
+      patchRelation(before);
+    }
+  }
+
+  async function declineRequest() {
+    if (!profile || !profile.pending_request_id) return;
+    const requestId = profile.pending_request_id;
+    const before = {
+      has_pending_request: profile.has_pending_request,
+      pending_request_direction: profile.pending_request_direction,
+      pending_request_id: requestId,
+    };
+    patchRelation({
+      has_pending_request: false,
+      pending_request_direction: null,
+      pending_request_id: null,
+    });
+    try {
+      await api.rejectBuddy(requestId);
+    } catch {
+      patchRelation(before);
+    }
+  }
+
+  // Withdraw a request we sent. Reversible with the next tap, so no confirm —
+  // ConfirmModal is reserved for the destructive gates.
+  async function cancelRequest() {
+    if (!profile || !profile.pending_request_id) return;
+    const requestId = profile.pending_request_id;
+    const before = {
+      has_pending_request: profile.has_pending_request,
+      pending_request_direction: profile.pending_request_direction,
+      pending_request_id: requestId,
+    };
+    patchRelation({
+      has_pending_request: false,
+      pending_request_direction: null,
+      pending_request_id: null,
+    });
+    try {
+      await api.cancelBuddyRequest(requestId);
+    } catch {
+      patchRelation(before);
+    }
   }
 
   if (!profile) {
@@ -67,9 +170,15 @@ export default function ProfileOtherScreen({ navigation, route }) {
         <View style={styles.relationCard}>
           <BuddyRow
             buddy={{ display_name: profile.display_name, username: profile.username, avatar: profile.avatar }}
-            relation={relation === 'incoming' ? 'add' : relation}
-            busy={busy}
-            onPrimary={addBuddy}
+            relation={relation}
+            onPrimary={relation === 'incoming' ? acceptRequest : addBuddy}
+            onSecondary={
+              relation === 'incoming'
+                ? declineRequest
+                : relation === 'outgoing' && profile.pending_request_id
+                ? cancelRequest
+                : undefined
+            }
           />
         </View>
 
