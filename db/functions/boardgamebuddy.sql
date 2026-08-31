@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 063 (bgb_onboarding_buddy_suggestions — suggestions
---               for an account that has no signals to rank on yet)
+-- Last updated: migration 065 (plays.country_code — bgb_log_play writes it,
+--               bgb_plays_page returns it)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -341,7 +341,8 @@
 -- bgb_log_play(p_user UUID, p_payload JSONB)
 --   → JSONB shaped like models.PlayResponse { id, game_id, game_name,
 --     game_thumbnail, played_at, notes, players[], photo_url, expansions[],
---     created_at, play_mode, logged_by_id, logged_by_name, is_own }
+--     created_at, play_mode, country_code, logged_by_id, logged_by_name,
+--     is_own }
 --     or {"error": "game_not_found"}
 --     or {"duplicate": true, "id": <uuid>} when p_payload.client_key is one
 --     this user already has a play for (048) — the caller re-reads that row.
@@ -356,6 +357,11 @@
 --                 (honours p_payload.client_key: pre-checks for a stored key,
 --                  writes the column, and catches unique_violation for the
 --                  concurrent case — both return the duplicate envelope)
+--               db/migrations/boardgamebuddy/065_play_country.sql
+--                 (reads p_payload.country_code, upper-cases it, drops
+--                  anything that isn't ^[A-Z]{2}$ to NULL rather than failing
+--                  the save, writes plays.country_code and echoes the
+--                  NORMALIZED value back)
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
 --               bgb_finalize_session
@@ -402,6 +408,9 @@
 --                p_search TEXT DEFAULT NULL, p_own_only BOOLEAN DEFAULT false)
 --   → JSONB { plays: [models.PlayResponse-shaped...], total }
 --   Defined in: db/migrations/boardgamebuddy/039_perf_rpcs_and_indexes.sql
+--               (body replaced by 065_play_country.sql, which adds the
+--                country_code key so a play keeps its country past the
+--                response to its own POST)
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
 --               (list_plays — GET /plays). The second caller, GET
 --               /games/{id}/plays, was removed as uncalled; that data now

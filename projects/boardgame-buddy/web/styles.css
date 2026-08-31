@@ -297,7 +297,7 @@
    has to leave the alias families the way --accent-on-paper and
    --ghost-ink-paper did.
 
-   The four picker sheets are in the list even though they are not screens.
+   The picker sheets are in the list even though they are not screens.
    ui/bottom-sheet.js appends a sheet to <body>, so it lands OUTSIDE the screen
    that opened it and kept the root paper aliases — which in dark meant tapping
    "Showing <game>" on an espresso screen threw up a cream sheet. Listing them
@@ -349,6 +349,7 @@
      .game-picker-sheet,
      .player-picker-sheet,
      .game-search-sheet,
+     .country-picker-sheet,
      .shelf-sheet,
      .buddy-qr-sheet,
      .ach-sheet,
@@ -387,6 +388,7 @@
      .game-picker-sheet,
      .player-picker-sheet,
      .game-search-sheet,
+     .country-picker-sheet,
      .shelf-sheet,
      .buddy-qr-sheet,
      .ach-sheet,
@@ -411,14 +413,15 @@
    same surface. Everything else about them comes from the shared block above;
    this only moves the card and the well it sits over one step each.
 
-   The two sheets are here because they are the two you can open FROM Gather:
-   widgets/player-picker-sheet.js and widgets/game-search-sheet.js have no
-   other call site. Leaving them at --bg-1 would mean tapping "Add player" on a
-   raised card threw up a sheet a step below it — a milder version of the
-   mismatch 4b2a044 fixed. .game-picker-sheet and .exp-picker are NOT here:
-   they belong to Stats and Collection respectively, which are --bg-1 screens.
-   If a sheet ever gains a second call site across that line, it stops being
-   able to sit in either list and needs its tone from the screen that opened it.
+   The three sheets are here because they are the three you can open from the
+   cascade: widgets/player-picker-sheet.js and widgets/game-search-sheet.js
+   (Gather) and widgets/country-picker-sheet.js (Settle Up) have no other call
+   site. Leaving them at --bg-1 would mean tapping "Add player" on a raised
+   card threw up a sheet a step below it — a milder version of the mismatch
+   4b2a044 fixed. .game-picker-sheet and .exp-picker are NOT here: they belong
+   to Stats and Collection respectively, which are --bg-1 screens. If a sheet
+   ever gains a second call site across that line, it stops being able to sit
+   in either list and needs its tone from the screen that opened it.
 
    (0,2,0) via the :root prefix, so it beats the (0,1,0) shared block outright
    rather than on source order — same reason the island below is doubled up.
@@ -428,7 +431,8 @@
           [data-view="session-viewer"],
           .cascade-player--drag-clone,
           .player-picker-sheet,
-          .game-search-sheet) {
+          .game-search-sheet,
+          .country-picker-sheet) {
   --polaroid-bg:       var(--bg-2);
   --sheet-card:        var(--bg-2);
   /* A well is still one step below whatever it is cut into. */
@@ -4204,6 +4208,72 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: grid; place-items: center;
   color: var(--accent-ink);
 }
+/* ── Country picker sheet (widgets/country-picker-sheet.js) ─────────────────
+   The Where card on Settle Up. Rows are name + code, no art: a country has no
+   thumbnail, and a flag would be an emoji or 247 sprites (.claude/rules/
+   assets.md). The code column earns its place — it is the value that actually
+   gets stored, and it is what a user who knows "DE" is scanning for. */
+.country-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  /* 56px, as every other row in a sheet — flush rows make a slightly-off
+     thumb land on the neighbour. */
+  min-height: 56px;
+  padding: 6px 10px;
+  flex: none;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  text-align: left;
+  color: var(--polaroid-ink);
+  cursor: pointer;
+}
+.country-picker__row:hover { background: var(--polaroid-bg-soft); }
+.country-picker__row:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: -3px;
+}
+.country-picker__row[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.country-picker__row[aria-selected="true"] .country-picker__name { color: var(--accent-ink); }
+.country-picker__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.97rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.country-picker__code {
+  flex: none;
+  font-family: var(--font-score);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--polaroid-muted);
+}
+.country-picker__check {
+  flex: none;
+  width: 20px;
+  display: grid; place-items: center;
+  color: var(--accent-ink);
+}
+/* The opt-out row sits above the countries and stays put while the list
+   filters, so it reads as a different kind of answer rather than as the
+   first result. */
+.country-picker__row--none {
+  border-bottom: 1px solid var(--polaroid-line);
+  border-radius: 10px 10px 0 0;
+  margin-bottom: 2px;
+}
+.country-picker__row--none .country-picker__name {
+  font-weight: 500;
+  color: var(--polaroid-muted);
+}
+
 .bgb-sheet__empty {
   margin: 0;
   padding: 28px 10px;
@@ -6268,6 +6338,45 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--polaroid-ink);
   border-color: var(--polaroid-line);
 }
+
+/* Settle Up: the Where row. A well cut into the card, like the notes field and
+   the empty photo dropzone beside it — it opens a sheet rather than taking
+   typing, but it is the same kind of thing: a value on the play the host can
+   change. 56px so it clears the tap-target floor with the caret inside it. */
+.cascade-where {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 10px;
+  background: var(--well, var(--polaroid-bg-soft));
+  color: var(--polaroid-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.cascade-where:hover { background: var(--polaroid-bg-soft); }
+.cascade-where:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: -3px;
+}
+.cascade-where__body { flex: 1 1 auto; min-width: 0; }
+.cascade-where__value,
+.cascade-where__hint {
+  display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cascade-where__value { font-size: 0.97rem; font-weight: 600; line-height: 1.2; }
+/* Nothing recorded is a state, not an error — muted, not rust. */
+.cascade-where__value--empty { font-weight: 500; color: var(--polaroid-muted); }
+.cascade-where__hint {
+  margin-top: 3px;
+  font-size: 0.74rem;
+  color: var(--polaroid-muted);
+}
+.cascade-where__caret { flex: none; color: var(--polaroid-muted); }
 
 /* ── Play tab, Host half — heading + the option-card list ───────────────── */
 .cascade-chooser__header { padding: 12px 4px 18px; text-align: center; }

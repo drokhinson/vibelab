@@ -37,6 +37,22 @@
       this.notes        = initial.notes || "";
       this.expansionIds = initial.expansionIds || [];
       this.playMode     = initial.playMode || null;
+      // Where this is being played, ISO 3166-1 alpha-2 (migration 065). Seeded
+      // from the device the moment the draft is born rather than read at Save:
+      // Settle Up shows it and the host can correct it, so it has to be a real
+      // field of the draft, and a resumed draft must not silently re-detect
+      // over a correction the host already made. `null` is a legitimate value
+      // — see domain/geo.js — and travels all the way to a NULL column.
+      //
+      // Detection is keyed on the field being ABSENT, not falsy. A host who
+      // opened the picker and chose "don't record a country" persists a draft
+      // whose countryCode is null; a `||` here would re-detect on the next
+      // load and quietly put the country back, which is the one outcome that
+      // choice has to be safe from. Only a snapshot predating this field, or a
+      // genuinely new draft, has no key at all.
+      this.countryCode  = Object.prototype.hasOwnProperty.call(initial, "countryCode")
+        ? (initial.countryCode || null)
+        : (window.Geo ? window.Geo.countryForPlay() : null);
       this.code         = initial.code || null;
       this.sessionId    = initial.sessionId || null;
       this.hostUserId   = initial.hostUserId || null;
@@ -78,6 +94,7 @@
         notes: this.notes,
         expansionIds: this.expansionIds,
         playMode: this.playMode,
+        countryCode: this.countryCode,
         code: this.code,
         sessionId: this.sessionId,
         hostUserId: this.hostUserId,
@@ -109,6 +126,7 @@
       this.notes = "";
       this.expansionIds = [];
       this.playMode = null;
+      this.countryCode = null;
       this.code = null;
       this.sessionId = null;
       this.hostUserId = null;
@@ -317,6 +335,10 @@
         photo_url: this.photoUrl || null,
         expansion_ids: this.expansionIds,
         play_mode: this.playMode || null,
+        // Absent (not "") when unknown: the backend reads a missing country as
+        // "we don't know", and an empty string as a malformed code — a 422 on
+        // the Save the host just tapped.
+        country_code: this.countryCode || null,
       };
     }
   }

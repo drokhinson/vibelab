@@ -9,6 +9,7 @@ import { X, Star } from 'lucide-react-native';
 import { COLORS, FONTS, RADII, SPACING, SHADOWS } from '../theme';
 import api from '../api/client';
 import UserBadge from '../components/UserBadge';
+import { countryName } from '../models/geo';
 
 let _show = null;
 
@@ -67,7 +68,14 @@ export function PlayDetailHost() {
               {photo ? <Image source={{ uri: photo }} style={styles.photo} resizeMode="cover" /> : null}
               <Text style={styles.title}>{play.game_name || (play.game && play.game.name) || 'Play'}</Text>
               <Text style={styles.meta}>
-                {[play.played_at, play.duration_minutes ? `${play.duration_minutes} min` : null].filter(Boolean).join('  ·  ')}
+                {[
+                  play.played_at,
+                  play.duration_minutes ? `${play.duration_minutes} min` : null,
+                  // Where it was played (migration 065). Absent on every play
+                  // logged before the column existed, and on any whose device
+                  // couldn't resolve one — the line just reads as it always did.
+                  play.country_code ? countryName(play.country_code) : null,
+                ].filter(Boolean).join('  ·  ')}
               </Text>
               <View style={styles.scoreboard}>
                 {players.length === 0 ? (

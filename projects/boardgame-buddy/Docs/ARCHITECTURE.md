@@ -25,7 +25,7 @@ Each object has a JS file in `web/domain/` that wraps its API surface, normalize
 | Object | File | Role in the experience |
 | --- | --- | --- |
 | **Game** | `domain/game.js` | The thing being played. Owns metadata (name, year, players, playtime, BGG link, image). Also owns the relationship to Chapters (rules excerpts) and Expansions. |
-| **Play** | `domain/play.js` | A single recorded session of a Game by one or more Users (and possibly ghost players). Owns players, scores, winner, notes, photo, duration. |
+| **Play** | `domain/play.js` | A single recorded session of a Game by one or more Users (and possibly ghost players). Owns players, scores, winner, notes, photo, duration, and the country it was played in (migration 065, resolved by `domain/geo.js`). |
 | **Buddy** | `domain/buddy.js` | A directed friendship between two Users. Carries request state (pending in/out, accepted) and recent-play history together. Ghost buddies are placeholders for non-account players. |
 | **User** | `domain/user.js` | A profile (display name, avatar customization, BGG link). The viewer is the implicit `User.current()`. |
 | **Session** | `domain/play-session.js` + `domain/session-phase.js` + `domain/live-scores.js` | The live state of a game-in-progress. Phases (`gather` → `play` → `settle`) drive the cascading host UX; Realtime keeps joiners in sync. When the host saves, the Session finalizes into a Play and is discarded. |
@@ -233,7 +233,8 @@ Every colour change states its ratio, in both themes, in the commit that makes i
 
 Every choice list in the app is a **bottom sheet**, not a `position: absolute` dropdown. The shell is `ui/bottom-sheet.js` (`window.BgbBottomSheet`) — 165 lines that own the lifecycle only: body-level creation so the sheet survives a view's `innerHTML` swap, scroll lock, delegated clicks, capture-phase Escape with an `onEscape` first-refusal hook, guarded focus return, the close animation, orphan teardown. **Nothing about how a sheet looks lives there.** Each sheet writes its own markup, on the shared `.bgb-sheet__*` panel chrome plus its own row family.
 
-Four consumers today:
+Eight consumers today (this table had drifted at four — grep `BgbBottomSheet`
+rather than trusting a count):
 
 | Sheet | File | Shape |
 |---|---|---|
@@ -241,6 +242,13 @@ Four consumers today:
 | Stats by-game picker | `widgets/game-picker-sheet.js` | single-select, client-side filter |
 | Gather players | `widgets/player-picker-sheet.js` | **multi-select**, footer confirm, tick order preserved |
 | Gather game | `widgets/game-search-sheet.js` | hosts `widgets/game-finder.js` with `inlineDropdown` |
+| Settle Up country | `widgets/country-picker-sheet.js` | single-select over 247 rows, filter matches name **and** code, plus a pinned opt-out row |
+| Collection expansions | `widgets/expansion-picker-sheet.js` | single-select over one base game's catalog expansions (`.exp-picker`) |
+| Shelf of shame | `widgets/shelf-of-shame-sheet.js` | the unplayed-games list behind the Stats card, with a played-before toggle per row (`.shelf-sheet`) |
+| Add a buddy by QR | `widgets/buddy-qr-sheet.js` | two tabs on one sheet — show my code, or scan theirs (`.buddy-qr-sheet`) |
+
+`views/achievements-view.js` also opens one directly (`.ach-sheet`) rather than
+through a widget module.
 
 They replaced dropdowns because the dropdown geometry was unwinnable: `ui/dropdown-fit.js` existed only to measure a dropdown against the visible viewport and shrink or flip it, `.cascade-buddy-dropdown` carried an explicit z-index to paint over the docked Continue CTA, and its max-height had already been raised once. Measured: a four-player roster clamped the buddy list to 168px — one and a half rows of seven — sitting on the Continue button and running off the bottom edge, before the keyboard was even up. A sheet is `position: fixed` at z-index 100, sized off `--bgb-vv-h`, so none of that is expressible.
 
@@ -416,6 +424,24 @@ log-play (Host or Join?)
 ```
 
 The cascading three screens use snap-scroll so the host can swipe back to revisit a previous phase. The joiner's `session-viewer` mirrors the host's phase via polling + Realtime.
+
+**Where the play happened** (migration 065). The draft is born carrying an ISO
+3166-1 alpha-2 country, resolved by `domain/geo.js` from the device's IANA
+timezone — no location permission, no network, no third-party service, and a
+granularity that cannot say where anybody lives. Settle Up shows it on a Where
+card and the host can change it through `widgets/country-picker-sheet.js`; a
+hand-pick is remembered against the timezone it was made in, so a correction
+sticks at home without following the host to a convention abroad. The value
+rides `PlaySession.toPlayCreate()`, which means it reaches the column the same
+way through all four write paths — solo log, hosted finalize, offline outbox
+flush, and the native app (`app/src/models/geo.js`, detection only for now).
+
+Nothing reads it yet. It exists so that "what gets played in Germany" is
+answerable later, and that answer can only be built from data collected
+forwards: a play logged with no country can never be given one. `null` is a
+first-class value throughout — an unresolvable device, a host who opted out,
+and every play predating the column all land there, and any future aggregate
+filters them out and reports its own coverage.
 
 ---
 

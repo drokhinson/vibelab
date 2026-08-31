@@ -195,6 +195,14 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   -- response returns the original play instead of writing a duplicate. NULL
   -- for every live write — two identical online POSTs really are two plays.
   client_key UUID,
+  -- ISO 3166-1 alpha-2 country where the play happened (migration 065), upper
+  -- case, NULL when unknown and on every row logged before 060. Resolved by
+  -- the client from the device's IANA timezone (web/domain/geo.js) or picked
+  -- by the host in Settle Up — country granularity only, so it needs no
+  -- location permission and cannot say where anyone lives. Exists to feed a
+  -- future popularity-by-country/region view; nothing reads it today.
+  country_code TEXT
+    CHECK (country_code IS NULL OR country_code ~ '^[A-Z]{2}$'),
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
@@ -452,6 +460,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bgg_play
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_client_key
   ON public.boardgamebuddy_plays (user_id, client_key)
   WHERE client_key IS NOT NULL;
+-- Popularity by country (migration 065). (country_code, game_id) is the shape
+-- of every question the column exists for — "top games in X", "which countries
+-- play Y". Partial because most rows will be NULL for a long while and a NULL
+-- is never an answer.
+CREATE INDEX IF NOT EXISTS idx_bgb_plays_country_game
+  ON public.boardgamebuddy_plays (country_code, game_id)
+  WHERE country_code IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_bgb_bgg_pending_user_status
   ON public.boardgamebuddy_bgg_pending_imports (user_id, status)
   WHERE status = 'pending';
