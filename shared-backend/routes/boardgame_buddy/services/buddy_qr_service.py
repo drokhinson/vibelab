@@ -16,6 +16,7 @@ seconds ago is exactly the signal a raw id cannot provide, and it is what makes
 """
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -100,20 +101,7 @@ def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResp
         .execute()
     )
     if existing.data:
-        edge = existing.data[0]
-        if edge["status"] == BuddyEdgeStatus.BLOCKED.value:
-            raise HTTPException(status_code=403, detail="Blocked")
-        if edge["status"] == BuddyEdgeStatus.ACCEPTED.value:
-            return edge_response(edge, viewer_id, profiles), False
-        # Pending, either direction — the scan is the acceptance. This is what
-        # makes "add instantly" work even when one side already sent a request.
-        updated = (
-            sb.table("boardgamebuddy_buddy_edges")
-            .update({"status": BuddyEdgeStatus.ACCEPTED.value, "accepted_at": now})
-            .eq("id", edge["id"])
-            .execute()
-        )
-        return edge_response((updated.data or [edge])[0], viewer_id, profiles), True
+        return _resolve_existing(sb, existing.data[0], viewer_id, profiles, now)
 
     try:
         inserted = (
@@ -128,9 +116,13 @@ def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResp
             .execute()
         )
     except Exception:
-        # idx_bgb_buddy_edges_pair is UNIQUE on (user_a, user_b), so two people
-        # scanning each other's codes at the same moment race here. Whoever
-        # loses re-reads the row the winner wrote — the outcome is identical.
+        # idx_bgb_buddy_edges_pair is UNIQUE on (user_a, user_b), so anything
+        # that wrote this pair between the SELECT above and this INSERT lands
+        # here. Usually that is the other person scanning simultaneously — but
+        # it can equally be an ordinary buddy request or a block, so the raced
+        # row goes through the SAME status handling as a pre-existing one.
+        # Reporting it as "already buddies" would tell a blocked user they were
+        # added, and would leave a pending edge unpromoted.
         raced = (
             sb.table("boardgamebuddy_buddy_edges")
             .select("id, user_a, user_b, status, requested_by, created_at, accepted_at")
@@ -139,7 +131,31 @@ def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResp
             .execute()
         )
         if not raced.data:
+            # The insert failed for some other reason entirely — surface it.
             raise
-        return edge_response(raced.data[0], viewer_id, profiles), False
+        return _resolve_existing(sb, raced.data[0], viewer_id, profiles, now)
 
     return edge_response(inserted.data[0], viewer_id, profiles), True
+
+
+def _resolve_existing(
+    sb,
+    edge: dict[str, Any],
+    viewer_id: str,
+    profiles: dict[str, dict],
+    now: str,
+) -> tuple[BuddyEdgeResponse, bool]:
+    """Apply the scan to an edge that already exists. Returns (edge, created)."""
+    if edge["status"] == BuddyEdgeStatus.BLOCKED.value:
+        raise HTTPException(status_code=403, detail="Blocked")
+    if edge["status"] == BuddyEdgeStatus.ACCEPTED.value:
+        return edge_response(edge, viewer_id, profiles), False
+    # Pending, either direction — the scan is the acceptance. This is what makes
+    # "add instantly" work even when one side had already sent a request.
+    updated = (
+        sb.table("boardgamebuddy_buddy_edges")
+        .update({"status": BuddyEdgeStatus.ACCEPTED.value, "accepted_at": now})
+        .eq("id", edge["id"])
+        .execute()
+    )
+    return edge_response((updated.data or [edge])[0], viewer_id, profiles), True

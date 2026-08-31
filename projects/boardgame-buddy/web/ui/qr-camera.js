@@ -133,6 +133,13 @@
         // awaited. iOS normally still allows it for a muted playsinline
         // MediaStream; when it does not, the caller renders a tap-to-start
         // affordance rather than a frozen black rectangle.
+        //
+        // Release the track before handing back. Nothing is scanning it, the
+        // caller is about to repaint the <video> out of the DOM, and a lit
+        // camera indicator over a panel that is not looking at anything is the
+        // exact failure this module exists to prevent. The caller restarts
+        // from scratch inside a real gesture.
+        this.stop();
         opts.onError("needs_gesture", err);
         return;
       }
@@ -193,7 +200,12 @@
       const w = Math.max(1, Math.round(bitmap.width * scale));
       const h = Math.max(1, Math.round(bitmap.height * scale));
       const ctx = this._ctx(w, h);
-      if (!ctx) return null;
+      // Release the bitmap on the failure path too — an ImageBitmap holds
+      // decoded pixels until it is closed or collected.
+      if (!ctx) {
+        if (typeof bitmap.close === "function") bitmap.close();
+        return null;
+      }
       ctx.drawImage(bitmap, 0, 0, w, h);
       if (typeof bitmap.close === "function") bitmap.close();
       // A saved screenshot may be a dark-mode render, so try both polarities.

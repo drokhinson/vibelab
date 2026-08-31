@@ -524,10 +524,25 @@
     // router.go("buddies") build the wrong URL. Rewriting it to the Buddies
     // screen with the token as a param gets the pendingRoute stash below, and
     // therefore the bounce through /auth, for free.
-    const qrMatch = window.location.pathname.match(/^\/b\/([^/]+)\/?$/);
-    const initialMatch = qrMatch
-      ? { name: "buddies", params: { qr: decodeURIComponent(qrMatch[1]) } }
-      : window.router.matchPath(window.location.pathname);
+    let qrMatch = null;
+    try {
+      const m = window.location.pathname.match(/^\/b\/([^/]+)\/?$/);
+      // decodeURIComponent throws URIError on a malformed escape (/b/abc%).
+      // Unguarded that would take down boot itself — and this is an inbound
+      // public URL that strangers paste, so it has to survive being mangled.
+      if (m) qrMatch = { name: "buddies", params: { qr: decodeURIComponent(m[1]) } };
+    } catch (_) {}
+    if (qrMatch) {
+      // Replace the /b/<token> entry now, before anything else can push on top
+      // of it. Left in place it stays behind the Buddies entry, where Back
+      // lands on a path matchPath() deliberately doesn't know (dead button)
+      // and a refresh replays the code. This is what actually makes the token
+      // unreplayable; buddies-view then strips the ?qr= off its own entry.
+      try {
+        history.replaceState(null, "", window.router.pathFor("buddies", {}) || "/profile/buddies");
+      } catch (_) {}
+    }
+    const initialMatch = qrMatch || window.router.matchPath(window.location.pathname);
     if (initialMatch) {
       try {
         const qs = new URLSearchParams(window.location.search);

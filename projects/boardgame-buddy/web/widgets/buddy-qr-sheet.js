@@ -44,6 +44,12 @@
         className: "buddy-qr-sheet",
         label: "Add a buddy",
       });
+      // Captured before every await that ends in a paint, so a tab switch or a
+      // close mid-request cannot repaint over whatever the user moved to.
+      // Deliberately NOT reset in _reset(): it has to outlive the state it
+      // guards, or a mint still in flight from a previous open would match the
+      // next open's token — and the timer it then arms would be unclearable.
+      this._seq = 0;
       this._reset();
     }
 
@@ -52,9 +58,6 @@
       /** @type {string|null} */ this._token = null;
       /** @type {any} */ this._remintTimer = null;
       /** @type {BuddyQrOpenOpts} */ this._opts = {};
-      // Captured before every await that ends in a paint, so a tab switch or a
-      // close mid-request cannot repaint over whatever the user moved to.
-      this._seq = 0;
     }
 
     get isOpen() {

@@ -64,7 +64,8 @@
   /**
    * The panel's one button shape. `--go` is the filled variant.
    * @param {string} label
-   * @param {string} attrs
+   * @param {string} attrs  Interpolated RAW into the markup — every call site
+   *   must pass a string literal. Never route user or server data through it.
    * @param {boolean} [go]
    * @returns {string}
    */
@@ -84,6 +85,12 @@
 
   class BuddyQrScan {
     constructor() {
+      // Deliberately NOT reset in _reset(): this counter is what lets a
+      // response that arrives after a tab switch be dropped, so it has to
+      // outlive the state it guards. Zeroing it on every leave() would let an
+      // in-flight request from a previous visit match the new visit's token
+      // and paint over it.
+      this._seq = 0;
       this._reset();
     }
 
@@ -91,7 +98,6 @@
       /** @type {ScanCtx|null} */ this._ctx = null;
       /** @type {any} */ this._state = null;   // {kind, message}
       /** @type {any} */ this._result = null;  // {edge, created}
-      this._seq = 0;
     }
 
     /** True when there is a message or result the first Escape should clear. */
@@ -112,11 +118,9 @@
      * @returns {void}
      */
     enter(ctx, token) {
+      // No "restore the previous message" branch: the sheet always calls
+      // leave() immediately before enter(), so state is null by construction.
       this._ctx = ctx;
-      if (this._state || this._result) {
-        this._render();
-        return;
-      }
       if (token) {
         this._redeem(token);
         return;
@@ -145,7 +149,11 @@
         return true;
       }
       if (kind === "start-camera") {
-        this._startCamera();
+        // Must go through _renderScanner, not _startCamera: the gesture panel
+        // replaced the <video> with its own markup, so starting the camera
+        // against a host that no longer has one would silently do nothing.
+        this.clearMessage();
+        this._renderScanner();
         return true;
       }
       return false;
