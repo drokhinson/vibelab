@@ -223,7 +223,7 @@
       const src = window.Achievements.spriteUrl(a.icon);
       // Sighted users get the badge name and can tap through for the rest; a
       // screen reader gets the plain description here so the rail is legible
-      // without opening sixteen sheets.
+      // without opening nineteen sheets.
       const label = a.earned
         ? `${a.name} — unlocked ${formatDate(a.unlocked_at)}. ${a.tagline}`
         : `${a.name} — locked. ${a.requirement}`;

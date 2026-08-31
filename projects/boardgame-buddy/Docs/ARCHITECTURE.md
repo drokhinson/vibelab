@@ -33,7 +33,7 @@ Each object has a JS file in `web/domain/` that wraps its API surface, normalize
 | **Collection** | `domain/collection.js` | Per-user `(game, status)` mapping — owned / wishlist / played-not-owned. Drives the status badges everywhere a Game appears. |
 | **Profile** | `domain/profile.js` | Public projection of a User: stats, recent plays, owned games, favourite game. |
 | **Feed** | `domain/feed.js` | Composite chronological stream of plays + algorithmic rails (hot games, suggested buddies). Lives in its own object because the response is heterogeneous. |
-| **Achievement** | `domain/achievements.js` | A badge in the sixteen-item catalog, resolved against the viewer's own progress. The *catalog* lives in the database (`boardgamebuddy_achievements`), not in this file — retuning a tier is an UPDATE, not a deploy. What the module owns beyond the fetch is the half the server cannot know, in two separate device-side sets: `known` (which badges this device has ever observed as earned — a badge earned but not known is one that landed just now, which announces the unlock polaroid) and `seen` (which the user has actually looked at on the shelf, which drives the "New" ribbons). Unlocks are announced on a window event, not by calling into the UI, so the domain layer does not need to know a polaroid exists. |
+| **Achievement** | `domain/achievements.js` | A badge in the nineteen-item catalog, resolved against the viewer's own progress. The *catalog* lives in the database (`boardgamebuddy_achievements`), not in this file — retuning a tier is an UPDATE, not a deploy. What the module owns beyond the fetch is the half the server cannot know, in two separate device-side sets: `known` (which badges this device has ever observed as earned — a badge earned but not known is one that landed just now, which announces the unlock polaroid) and `seen` (which the user has actually looked at on the shelf, which drives the "New" ribbons). Unlocks are announced on a window event, not by calling into the UI, so the domain layer does not need to know a polaroid exists. |
 
 The `domain/store.js` file is the cross-cutting state container. Views call `window.store.subscribe(key, fn)` to listen for changes and `window.store.set(key, value)` to publish. The `user`, `feed`, and `myCollectionMap` keys are the high-traffic ones; everything else is view-local.
 
@@ -431,7 +431,7 @@ Bottom-nav "Profile"
 └────────┬────────┘
          │
          ├── Your stats  → stats     (podium + per-game breakdown)
-         ├── See all → achievements  (sixteen badges, four groups)
+         ├── See all → achievements  (nineteen badges, five groups)
          ├── See all → collection
          ├── See all → wishlist
          ├── See all → plays

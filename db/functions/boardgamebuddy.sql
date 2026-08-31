@@ -678,14 +678,18 @@
 -- bgb_sync_achievements(uid UUID)
 --   → JSONB { total, earned_count, metrics, groups[], achievements[] }
 --   Defined in: db/migrations/boardgamebuddy/062_achievements.sql
+--               (body replaced by 068_location_achievements.sql, which carries
+--                plays.country_code through the my_plays CTE and adds the
+--                countries / continents metrics)
 --   Called by:  shared-backend/routes/boardgame_buddy/achievement_routes.py
 --               (GET /achievements, POST /achievements/installed)
 --   Purpose:    Everything on the Achievements spoke (/profile/achievements) in
---               one call. Computes all ten metrics behind the sixteen badges
---               (plays logged, wins, biggest table, two-player-only games
---               played, buddies, guide chapters, chapters of yours another
---               player kept, plays you wrote notes on, whether BGG is linked,
---               whether the PWA is installed),
+--               one call. Computes all twelve metrics behind the nineteen
+--               badges (plays logged, wins, biggest table, two-player-only
+--               games played, buddies, guide chapters, chapters of yours
+--               another player kept, plays you wrote notes on, whether BGG is
+--               linked, whether the PWA is installed, distinct countries and
+--               distinct continents played in),
 --               inserts a boardgamebuddy_user_achievements row for anything
 --               newly earned, then joins the catalog to those rows and returns
 --               name / tagline / requirement / icon / threshold / progress /
@@ -700,4 +704,8 @@
 --               necessarily narrower, since a win needs a player row.
 --               two_player_games is the one metric that reaches the games
 --               table — 020 denormalized name and thumbnail onto plays, never
---               the player counts.
+--               the player counts. `continents` joins
+--               boardgamebuddy_countries (068) with an INNER join on purpose:
+--               bgb_log_play accepts any well-formed ^[A-Z]{2}$, so an
+--               unmapped code counts toward `countries` and contributes no
+--               continent rather than failing the whole screen.

@@ -2,9 +2,10 @@
 -- BoardgameBuddy — current schema snapshot
 -- Last updated: migration 046 (session write RPCs; drops the redundant
 --               (code, phase) index), plus the two catalog-browse indexes from
---               051 and 060 and the achievement objects from 062 (the catalog,
+--               051 and 060, the achievement objects from 062 (the catalog,
 --               its groups, the per-user unlock rows and
---               profiles.app_installed_at), folded in below. Migrations
+--               profiles.app_installed_at), plays.country_code from 065 and the
+--               country→continent lookup from 068, folded in below. Migrations
 --               047-059 are NOT yet reflected here — read them directly until
 --               someone catches this snapshot up.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
@@ -370,8 +371,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chapter_reports (
 );
 ALTER TABLE public.boardgamebuddy_chapter_reports ENABLE ROW LEVEL SECURITY;
 
--- Achievement catalog (migration 062). Three objects: the four section
--- headings, the sixteen badges, and one row per badge a user has earned.
+-- Achievement catalog (migration 062, extended by 068). Three objects: the five
+-- section headings, the nineteen badges, and one row per badge a user has
+-- earned.
 -- The catalog is DATA, not a Python dict, so retuning a tier or rewording a
 -- badge is an UPDATE rather than a deploy. `metric` names a key of the JSONB
 -- blob bgb_sync_achievements computes; `icon` is a sprite slug resolving to
@@ -390,10 +392,13 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_achievements (
   name          TEXT NOT NULL,
   tagline       TEXT NOT NULL,
   requirement   TEXT NOT NULL,
-  metric        TEXT NOT NULL CHECK (metric IN (
+  -- Migration 068 dropped 062's inline (server-named) constraint and re-added
+  -- it under a name of our own, with 'countries' and 'continents' appended.
+  metric        TEXT NOT NULL CONSTRAINT bgb_achievements_metric_chk CHECK (metric IN (
                   'plays_logged', 'wins', 'biggest_table', 'two_player_games',
                   'buddies', 'guide_chapters', 'chapters_borrowed',
-                  'plays_with_notes', 'bgg_linked', 'app_installed')),
+                  'plays_with_notes', 'bgg_linked', 'app_installed',
+                  'countries', 'continents')),
   threshold     INT  NOT NULL CHECK (threshold > 0),
   icon          TEXT NOT NULL,
   display_order INT  NOT NULL
@@ -410,6 +415,17 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_achievements (
   PRIMARY KEY (user_id, achievement_id)
 );
 ALTER TABLE public.boardgamebuddy_user_achievements ENABLE ROW LEVEL SECURITY;
+
+-- Country → continent (migration 068), the lookup behind the Globe Trotter
+-- badge. Seeded with all 247 codes web/domain/geo-data.js can produce, so no
+-- country the app can detect or offer is missing a continent. Transcontinental
+-- countries get one continent each (RU→EU, TR/CY/AM/AZ/GE/KZ→AS, EG→AF) —
+-- see the migration for why. No continent NAME column: nothing prints one yet.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_countries (
+  code      TEXT PRIMARY KEY CHECK (code ~ '^[A-Z]{2}$'),
+  continent TEXT NOT NULL CHECK (continent IN ('AF','AN','AS','EU','NA','OC','SA'))
+);
+ALTER TABLE public.boardgamebuddy_countries ENABLE ROW LEVEL SECURITY;
 
 -- Indexes
 CREATE UNIQUE INDEX IF NOT EXISTS bgb_profiles_username_uk ON public.boardgamebuddy_profiles(username);

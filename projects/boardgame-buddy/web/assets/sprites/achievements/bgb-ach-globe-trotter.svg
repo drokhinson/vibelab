@@ -1,0 +1,52 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Globe Trotter badge — Buddy behind a globe, a dashed route drawn between two continents">
+  <title>Globe Trotter badge — Buddy behind a globe, a dashed route drawn between two continents</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold. -->
+  <defs>
+    <linearGradient id="globe-trotter-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="globe-trotter-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="globe-trotter-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+    <clipPath id="globe-trotter-globe">
+      <circle cx="80" cy="112" r="38"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#globe-trotter-disc)"/>
+  <g clip-path="url(#globe-trotter-clip)">
+    <g transform="translate(40.00 -0.80) scale(0.40)">
+      <circle cx="100" cy="148" r="14" fill="url(#globe-trotter-gold)"/>
+      <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#globe-trotter-gold)"/>
+      <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#globe-trotter-gold)"/>
+      <path d="M70 66 Q80 60 90 64" stroke="#1A0F0B" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+      <path d="M110 64 Q120 60 130 66" stroke="#1A0F0B" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+      <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+      <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+      <path d="M80 102 Q100 118 120 102" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+    </g>
+    <circle cx="80" cy="112" r="38" fill="#F3E6CE"/>
+    <g clip-path="url(#globe-trotter-globe)">
+      <path d="M50 98 C58 86 76 86 84 98 C92 110 82 124 68 126 C54 128 42 112 50 98 Z" fill="#7C8F5A"/>
+      <path d="M100 88 C112 88 118 100 112 112 C106 124 110 138 98 141 C88 143 86 130 90 118 C94 106 92 90 100 88 Z" fill="#7C8F5A"/>
+      <path d="M50 136 C58 130 72 134 70 141 C68 148 54 147 50 142 Z" fill="#7C8F5A"/>
+      <ellipse cx="80" cy="112" rx="12.6" ry="38" fill="none" stroke="#8A5A32" stroke-width="1.6" opacity="0.5"/><ellipse cx="80" cy="112" rx="25.2" ry="38" fill="none" stroke="#8A5A32" stroke-width="1.6" opacity="0.5"/><path d="M47.7 92 H112.3" stroke="#8A5A32" stroke-width="1.6" opacity="0.5"/><path d="M42.0 112 H118.0" stroke="#8A5A32" stroke-width="1.6" opacity="0.5"/><path d="M47.7 132 H112.3" stroke="#8A5A32" stroke-width="1.6" opacity="0.5"/>
+      <path d="M66 106 Q86 88 104 118" stroke="#C8553D" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-dasharray="5 5"/>
+      <circle cx="66" cy="106" r="3.4" fill="#C8553D"/>
+      <circle cx="104" cy="118" r="3.4" fill="#C8553D"/>
+    </g>
+    <circle cx="80" cy="112" r="38" fill="none" stroke="#C9922A" stroke-width="3"/>
+    <path d="M26 57 Q27.3 60.9 31 62 Q27.3 63.1 26 67 Q24.7 63.1 21 62 Q24.7 60.9 26 57 Z" fill="#F0C662" opacity="0.9"/>
+    <path d="M134 57 Q135.3 60.9 139 62 Q135.3 63.1 134 67 Q132.7 63.1 129 62 Q132.7 60.9 134 57 Z" fill="#F0C662" opacity="0.9"/>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#E0A94A" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#E0A94A" stroke-width="1.4" opacity="0.34"/>
+</svg>
