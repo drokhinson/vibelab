@@ -16,6 +16,24 @@
       return u;
     }
 
+    /**
+     * Permanently delete the signed-in account.
+     *
+     * DELETE /profile removes the profile row; the schema cascades it to
+     * collections, plays, buddy edges and chapters, and leaves community
+     * chapters authored by this account with created_by NULL. There is no
+     * soft-delete and no undo — the caller MUST confirm first
+     * (.claude/rules/web-frontend.md), and must sign out afterwards, because
+     * the token in hand still looks valid to the client while pointing at a
+     * row that is gone.
+     *
+     * Same endpoint the native app calls (app/src/api/client.js#deleteAccount),
+     * so the two platforms delete exactly the same way.
+     */
+    static deleteAccount() {
+      return window.api.del("/profile");
+    }
+
     static async fetch(userId) {
       const raw = await window.api.get(`/users/${userId}/profile`);
       return new User(raw);

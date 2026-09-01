@@ -375,10 +375,27 @@
   /**
    * Render a small confirm dialog with two buttons. Resolves true when the
    * user picks the destructive action, false on cancel / backdrop click.
-   * @param {{title:string, body?:string, confirmLabel?:string, cancelLabel?:string}} opts
+   *
+   * This is the project's ONE confirm surface (.claude/rules/web-frontend.md,
+   * ui-object-design.md §3c), so a variant is an opt rather than a second
+   * dialog: `destructive` paints the confirm button as the thing it does.
+   * Most callers here are "discard a draft" — recoverable in the sense that
+   * nothing existed yet — and read fine in the accent. Reserve `destructive`
+   * for an action that removes something the user already has, where the rule
+   * is explicit that the button must look dangerous at a glance in both
+   * themes.
+   *
+   * @param {{title:string, body?:string, confirmLabel?:string,
+   *          cancelLabel?:string, destructive?:boolean}} opts
    * @returns {Promise<boolean>}
    */
-  function confirm({ title, body, confirmLabel = "Discard", cancelLabel = "Keep playing" }) {
+  function confirm({
+    title,
+    body,
+    confirmLabel = "Discard",
+    cancelLabel = "Keep playing",
+    destructive = false,
+  }) {
     return new Promise((resolve) => {
       dismiss();
       const root = document.createElement("div");
@@ -391,7 +408,7 @@
           ${body ? `<p class="polaroid-popup__body">${escapeHtml(body)}</p>` : ""}
           <div class="polaroid-popup__actions">
             <button class="btn btn-ghost btn-sm polaroid-popup__cancel">${escapeHtml(cancelLabel)}</button>
-            <button class="btn btn-primary btn-sm polaroid-popup__confirm">${escapeHtml(confirmLabel)}</button>
+            <button class="btn btn-sm polaroid-popup__confirm${destructive ? " polaroid-popup__confirm--danger" : " btn-primary"}">${escapeHtml(confirmLabel)}</button>
           </div>
         </div>
       `;
