@@ -56,6 +56,25 @@ class BuddyEdgeStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class GhostClaimStatus(StrEnum):
+    """Lifecycle of a ghost account claim (boardgamebuddy_ghost_claims, 069).
+
+    Unlike BuddyEdgeStatus this never deletes: the (owner, ghost_name_key,
+    claimant) triple is unique, so status mutates in place and reject_count
+    survives a re-ask. That is what makes the two-strike rule stick.
+    """
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    # The claimant's "Not me" — suppresses the suggestion without telling the
+    # owner anything. Reversible: a later claim flips the same row to pending.
+    DISMISSED = "dismissed"
+    # Another claimant's accept took the ghost. The rows this claim points at
+    # no longer exist, so it can never succeed.
+    SUPERSEDED = "superseded"
+
+
 class BuddySuggestionSource(StrEnum):
     """Why a buddy suggestion is in the list (migration 063).
 

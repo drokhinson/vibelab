@@ -834,6 +834,98 @@ class GhostMergeResponse(BaseModel):
     rows_updated: int
 
 
+# ── Ghost account claims (migration 069) ─────────────────────────────────────
+#
+# The mirror image of GhostLinkRequest above. That one is the ghost's OWNER
+# saying "this nickname is Julia"; these are the claimant saying "that ghost is
+# me" and the owner approving. A ghost has no id, so every one of these is
+# keyed by (owner, display name).
+
+class GhostClaimSuggestion(BaseModel):
+    """A buddy's ghost whose name looks like the viewer's — "is this you?"."""
+
+    owner_user_id: str
+    owner_display_name: str
+    owner_username: Optional[str] = None
+    owner_avatar: Optional[Avatar] = None
+    ghost_display_name: str
+    # lower(btrim(display_name)) — the claim key. The FE addresses rows by it,
+    # so two spellings of one ghost stay one row under the finger.
+    ghost_name_key: str
+    play_count: int
+    last_played_at: Optional[date] = None
+    last_game_name: Optional[str] = None
+    match_score: Optional[float] = None
+    # Set only when the viewer already has a claim on this ghost. A pending one
+    # keeps the row visible with a disabled "Requested" chip rather than
+    # vanishing; every other status filters the row out server-side.
+    claim_status: Optional[str] = None
+    claim_id: Optional[str] = None
+
+
+class GhostClaimSuggestionsResponse(BaseModel):
+    """An object rather than a bare list, matching SuggestedBuddiesResponse, so
+    a count or a "why nothing" reason can be added without a breaking change."""
+
+    suggestions: list[GhostClaimSuggestion] = []
+
+
+class GhostClaimDetail(GhostClaimSuggestion):
+    """One ghost on one play, for the claim sheet.
+
+    can_claim / blocked_reason exist so the sheet paints a truthful disabled
+    state instead of offering a button that 409s.
+    """
+
+    can_claim: bool = False
+    blocked_reason: Optional[str] = None
+
+
+class GhostClaimResponse(BaseModel):
+    """One claim, from whichever side is looking at it."""
+
+    id: str
+    direction: Literal["incoming", "outgoing"]
+    # The OTHER party: the claimant on an incoming claim, the owner on an
+    # outgoing one. Mirrors BuddyRequestResponse.
+    other_user_id: str
+    other_display_name: str
+    other_username: Optional[str] = None
+    other_avatar: Optional[Avatar] = None
+    ghost_display_name: str
+    play_count: int = 0
+    last_played_at: Optional[date] = None
+    created_at: datetime
+
+
+class GhostClaimsResponse(BaseModel):
+    incoming: list[GhostClaimResponse] = []
+    outgoing: list[GhostClaimResponse] = []
+
+
+class GhostClaimCreate(BaseModel):
+    """Ask the ghost's owner to link it to your account."""
+
+    owner_user_id: str
+    display_name: str = Field(..., min_length=1)
+
+
+class GhostClaimDismiss(BaseModel):
+    """"Not me" — stop suggesting this ghost to the viewer."""
+
+    owner_user_id: str
+    display_name: str = Field(..., min_length=1)
+
+
+class GhostClaimAcceptResponse(BaseModel):
+    """rows_merged is how many plays actually moved, which is what the owner's
+    toast says. It can differ from the play_count shown at request time if the
+    owner logged more plays with that nickname in between."""
+
+    claim: GhostClaimResponse
+    rows_merged: int
+
+
 class PlayLeaveResponse(BaseModel):
     """Result of a player self-removing from a play (turning their row into a
     ghost). rows_updated is 1 on success, 0 if the caller wasn't a player."""
