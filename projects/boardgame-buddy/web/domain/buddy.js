@@ -118,7 +118,8 @@
     }
 
     // ── Pending incoming requests ───────────────────────────────────────────
-    // One number, two surfaces: a bare dot on the Profile nav tab and a red
+    // Two surfaces read this: the Profile nav tab's dot (shared with unseen
+    // achievements — see domain/achievements.js#publishUnseen) and the red
     // count in the corner of the hub's Buddies card. It lives in the store
     // (slot `buddyRequestCount`) because neither surface is mounted when the
     // other needs it — the nav bar outlives every view, and the hub is not on

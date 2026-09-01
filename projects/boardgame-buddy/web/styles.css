@@ -2013,10 +2013,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-nav__ico { display: inline-flex; align-items: center; justify-content: center; position: relative; }
 .bgb-nav__label { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
 
-/* Buddy requests waiting — a bare dot pinned to the Profile glyph. No count:
-   the number lives on the Buddies card one tap away, where there is room to
-   say what it counts. The ring is the bar's own ground, so the dot reads as
-   sitting on top of the icon rather than merging with it. */
+/* Something waiting behind the Profile tab — a buddy request, an unseen
+   badge — as one bare dot pinned to the glyph. No count: the numbers live on
+   the hub cards one tap away, where there is room to say what they count. The
+   ring is the bar's own ground, so the dot reads as sitting on top of the icon
+   rather than merging with it. */
 .bgb-nav__dot {
   position: absolute;
   top: -1px;
@@ -8497,9 +8498,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   /* Anchors .preview-card__count in the corner. */
   position: relative;
 }
-/* Pending buddy requests, sitting on the Buddies card's top-right corner —
-   the one number on the hub that is a thing to DO rather than a thing to look
-   at, which is why it gets a badge and every other figure gets a sub-head.
+/* The hub's "something is waiting here" badge, on the top-right corner of the
+   card that owns it — pending buddy requests on Buddies, unseen badges on
+   Achievements. Those are the figures that are a thing to DO; every other
+   number on the hub is a thing to look at, and gets a sub-head instead.
    Deliberately outside the card's own padding: a badge tucked inside the
    corner radius reads as content, one straddling the edge reads as a count.
    The hub's container has 1rem of gutter, so the overhang never clips. */
@@ -11659,13 +11661,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .preview-card__badge img { width: 100%; height: auto; display: block; aspect-ratio: 1 / 1; }
 .preview-card__badge.is-locked img { filter: grayscale(0.85) brightness(0.62); opacity: 0.7; }
-.preview-card__seeall-dot {
-  display: inline-block;
-  width: 6px; height: 6px;
-  border-radius: 999px;
-  background: var(--accent-fill);
-  margin-left: 0.15rem;
-}
 
 /* Narrow phones: three medallions plus their captions get tight under ~340px. */
 @media (max-width: 350px) {

@@ -504,30 +504,38 @@
     });
   }
 
-  // Pending buddy requests → a dot on the Profile tab. It sits at this level
-  // for the same reason the offline banner does: the nav bar is app chrome, it
-  // outlives every view, and a request that lands while the user is on the
-  // Feed has to be announced by something that is already on screen.
+  // Everything waiting behind the Profile tab → one dot on it. It sits at this
+  // level for the same reason the offline banner does: the nav bar is app
+  // chrome, it outlives every view, and something that lands while the user is
+  // on the Feed has to be announced by a surface already on screen.
   //
-  // The dot carries no number — three tabs of chrome is the wrong place to
-  // read a figure. The count itself is one tap away, in the corner of the
-  // hub's Buddies card (profile-self-view.js#_renderBuddiesPreview).
-  function syncNavRequestDot(count) {
+  // Two sources today — pending buddy requests and unseen achievements — and
+  // deliberately ONE dot for both. Three tabs of chrome is the wrong place to
+  // read a figure or to distinguish two kinds of news; the dot says "there is
+  // something here", and the hub's cards, one tap away, each carry their own
+  // count in the corner (profile-self-view.js#_countBadge).
+  //
+  // Reads the store rather than the subscriber's argument, because it fires
+  // for either slot and needs both — and because store.reset() calls
+  // subscribers with null after zeroing the data.
+  function syncNavProfileDot() {
     const tab = document.querySelector('.bgb-nav__tab[data-nav="profile-self"]');
     const dot = tab && tab.querySelector(".bgb-nav__dot");
     if (!dot) return;
-    const n = Math.max(0, Number(count) || 0);
-    dot.hidden = n === 0;
+    const requests = Math.max(0, Number(window.store.get("buddyRequestCount")) || 0);
+    const badges = Math.max(0, Number(window.store.get("achievementUnseenCount")) || 0);
+    dot.hidden = requests + badges === 0;
     // The dot is aria-hidden, so the tab's own name is what has to change —
     // otherwise the one control that knows something is waiting announces
     // itself identically either way.
-    if (n) {
-      tab.setAttribute("aria-label", `Profile — ${n} buddy request${n === 1 ? "" : "s"} waiting`);
-    } else {
-      tab.removeAttribute("aria-label");
-    }
+    const parts = [];
+    if (requests) parts.push(`${requests} buddy request${requests === 1 ? "" : "s"} waiting`);
+    if (badges) parts.push(`${badges} new achievement${badges === 1 ? "" : "s"}`);
+    if (parts.length) tab.setAttribute("aria-label", `Profile — ${parts.join(", ")}`);
+    else tab.removeAttribute("aria-label");
   }
-  window.store.subscribe("buddyRequestCount", syncNavRequestDot);
+  window.store.subscribe("buddyRequestCount", syncNavProfileDot);
+  window.store.subscribe("achievementUnseenCount", syncNavProfileDot);
 
   // Pending uploads live in the header. Two keys drive it: the count itself,
   // and connectivity (which changes what the dialog offers).
@@ -771,6 +779,20 @@
       window.store.subscribe("user", reportInstall);
     }
     window.addEventListener("appinstalled", reportInstall);
+
+    // Unseen badges → the Profile tab's dot, from this device's own receipts.
+    // Same timing argument as reportInstall above: auth resolves after boot,
+    // so this runs on the sign-in that lands the session. Reading the cache
+    // rather than fetching keeps boot at zero extra calls — /achievements is a
+    // write as well as a read (it stamps unlock dates), so it is not something
+    // to fire just to light a dot. The first screen that does read it
+    // republishes.
+    const publishUnseenBadges = () => {
+      if (!window.Achievements || !window.store.get("user")) return;
+      window.Achievements.publishUnseenFromCache();
+    };
+    publishUnseenBadges();
+    window.store.subscribe("user", publishUnseenBadges);
 
     if (window.api) window.api.trackEvent("page_view");
   });

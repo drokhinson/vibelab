@@ -138,19 +138,26 @@
       const uid = _uid();
       if (!uid) return null;
       if (force) window.bgbCache.delete(NS, uid);
-      return window.bgbCache.swr(
+      const payload = await window.bgbCache.swr(
         NS,
         uid,
         // _observe hangs off the FETCHER, not off the returned value: swr()
         // serves a cached payload without calling this at all, and re-observing
         // a copy the device has already folded in would announce nothing while
         // costing a localStorage round trip on every read.
-        () => window.api.get("/achievements").then((payload) => {
-          _observe(payload);
-          return payload;
+        () => window.api.get("/achievements").then((p) => {
+          _observe(p);
+          // The nav dot has to move on a background refresh too, and a
+          // background refresh never reaches the await below — the caller
+          // already has the cached copy by then.
+          Achievements.publishUnseen(p);
+          return p;
         }),
         { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS },
       );
+      // …and on the cache-served path, where the fetcher above never ran.
+      Achievements.publishUnseen(payload);
+      return payload;
     },
 
     /**
@@ -227,6 +234,7 @@
             freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS,
           });
           _observe(payload);
+          Achievements.publishUnseen(payload);
         }
       } catch (_) { /* try again next launch */
       } finally { _installInFlight = false; }
@@ -264,6 +272,36 @@
       if (!uid || !payload || !Array.isArray(payload.achievements)) return;
       const ids = payload.achievements.filter((a) => a.earned).map((a) => a.id);
       _safe(() => localStorage.setItem(SEEN_KEY_PREFIX + uid, JSON.stringify(ids)));
+      // The ribbons are spent, so the dot goes with them — from here rather
+      // than from the spoke, because this write is what made it untrue.
+      Achievements.publishUnseen(payload);
+    },
+
+    // ── The Profile tab's dot ────────────────────────────────────────────────
+    // Unseen badges are the second half of the app's one notification signal
+    // (the first is pending buddy requests — see domain/buddy.js). The count
+    // goes into the store because the nav bar outlives every view and has no
+    // payload of its own to count, while the Achievements card on the hub
+    // still counts its own copy: the card knows exactly what it painted.
+    //
+    // Every path that can move the number publishes: a fetch, a cache-served
+    // read, the install echo, and markSeen(). The seen set lives in
+    // localStorage, so `unseen` can change with no payload changing at all.
+
+    /** @returns {number} */
+    unseenCount() { return window.store.get("achievementUnseenCount") || 0; },
+
+    /** @param {AchievementsPayload|null} payload */
+    publishUnseen(payload) {
+      if (!payload || !Array.isArray(payload.achievements)) return;
+      window.store.set("achievementUnseenCount", Achievements.unseen(payload).length);
+    },
+
+    /** Publish from whatever this device already has on disk. Called on the
+     *  sign-in that lands a session, so the dot is right on the Feed at boot
+     *  rather than waiting for the first screen that reads /achievements. */
+    publishUnseenFromCache() {
+      Achievements.publishUnseen(Achievements.cached());
     },
 
     /** Wipe this account's local receipts. Called on sign-out so the next
