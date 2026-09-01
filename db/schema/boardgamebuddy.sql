@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   needs_setup BOOLEAN DEFAULT true NOT NULL,
   app_installed_at TIMESTAMPTZ,
   bgg_last_push_started_at TIMESTAMPTZ,
+  bgg_last_check_started_at TIMESTAMPTZ,
   CONSTRAINT boardgamebuddy_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,
   CONSTRAINT bgb_profiles_username_format CHECK ((username ~ '^[a-z0-9_]{3,30}$'::text))

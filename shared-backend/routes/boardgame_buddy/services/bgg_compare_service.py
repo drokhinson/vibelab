@@ -34,7 +34,8 @@ from ..bgg_collection_read import (
     _parse_collection_items,
 )
 from ..bgg_client import fetch_bgg_as_user
-from ..constants import BggPullChange, BggPushChange
+from ..constants import BggCheckPhase, BggPullChange, BggPushChange
+from .bgg_progress import BggCheckProgress, NullProgress
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,7 @@ def _load_local_collection(sb: Client, user_id: str) -> list[dict]:
 
 async def _resolve_collids(
     user_id: str, username: str, bgg_ids: list[int],
+    *, progress: Optional[BggCheckProgress] = None,
 ) -> dict[int, BggCollectionItem]:
     """Look up BGG collection rows for games the status sweep could not see.
 
@@ -128,17 +130,21 @@ async def _resolve_collids(
     Best-effort: any failure returns what was resolved so far. An unresolved id
     just means the push treats it as a create, which is the status quo.
     """
+    prog = progress or NullProgress()
     found: dict[int, BggCollectionItem] = {}
     if not bgg_ids:
+        prog.skip(BggCheckPhase.COLLIDS, detail="Nothing new to add to BoardGameGeek")
         return found
     chunks = [
         bgg_ids[i:i + _COLLID_CHUNK]
         for i in range(0, len(bgg_ids), _COLLID_CHUNK)
     ][:_COLLID_MAX_CHUNKS]
+    prog.begin(BggCheckPhase.COLLIDS, total=len(chunks))
 
     for i, chunk in enumerate(chunks):
         if i:
             await asyncio.sleep(BGG_THROTTLE_SECONDS)
+        prog.tick(BggCheckPhase.COLLIDS, i)
         try:
             body = await fetch_bgg_as_user(
                 user_id, "/collection",
@@ -149,13 +155,20 @@ async def _resolve_collids(
                     "showprivate": 1,
                 },
                 timeout=20.0,
+                on_warm_up=lambda attempt, of, wait: prog.retry(
+                    BggCheckPhase.COLLIDS,
+                    attempt=attempt, of=of, wait_seconds=wait,
+                ),
             )
         except Exception as exc:  # noqa: BLE001 — incl. BggWarmUpError
             logger.warning("BGG collid resolve failed for %d ids: %s", len(chunk), exc)
+            # Best-effort by contract: an unresolved id just becomes a create.
+            prog.tick(BggCheckPhase.COLLIDS, len(chunks), detail="Partly matched")
             return found
         for item in _parse_collection_items(body, username=username):
             if item.collid is not None:
                 found[item.bgg_id] = item
+    prog.tick(BggCheckPhase.COLLIDS, len(chunks))
     return found
 
 
@@ -171,17 +184,34 @@ def _classify_pull(local_status: str, remote_status: str) -> BggPullChange:
     return BggPullChange.UPDATE
 
 
-async def build_plan(sb: Client, user_id: str, username: str) -> ComparePlan:
-    """Sweep BGG, read the shelf, and classify every game in both directions."""
-    remote_items, warm_up_failed = await _fetch_collection_items(user_id, username)
+async def build_plan(
+    sb: Client, user_id: str, username: str,
+    *, progress: Optional[BggCheckProgress] = None,
+) -> ComparePlan:
+    """Sweep BGG, read the shelf, and classify every game in both directions.
+
+    `progress` is optional because this runs unwatched from POST /bgg/push as
+    well as under the comparison checklist.
+    """
+    prog = progress or NullProgress()
+    remote_items, warm_up_failed = await _fetch_collection_items(
+        user_id, username, progress=prog,
+    )
     remote = {it.bgg_id: it for it in remote_items}
 
+    prog.begin(BggCheckPhase.SHELF)
     local_rows = await asyncio.to_thread(_load_local_collection, sb, user_id)
+    prog.tick(
+        BggCheckPhase.SHELF, 0,
+        detail=f"{len(local_rows)} {'game' if len(local_rows) == 1 else 'games'} on your shelf",
+    )
     plan = ComparePlan(
         local_total=len(local_rows),
         remote_total=sum(1 for it in remote_items if it.status is not None),
         warm_up_failed=warm_up_failed,
     )
+
+    prog.begin(BggCheckPhase.COMPARE)
 
     # Rows BgB has that BoardGameGeek has no concept of.
     pushable: dict[int, dict] = {}
@@ -253,6 +283,7 @@ async def build_plan(sb: Client, user_id: str, username: str) -> ComparePlan:
     # Games on the BGG shelf that BgB's catalog has never heard of. Queued for
     # a catalog-only import so the comparison can name them; the caller does
     # the queueing, since that is a write.
+    prog.begin(BggCheckPhase.CATALOG)
     known = await asyncio.to_thread(_known_catalog_ids, sb, sorted(remote.keys()))
     plan.catalog_missing = sorted(
         bgg_id for bgg_id, item in remote.items()
@@ -261,8 +292,18 @@ async def build_plan(sb: Client, user_id: str, username: str) -> ComparePlan:
     for entry in plan.push:
         if entry.bgg_id in plan.catalog_missing:
             entry.newly_catalogued = True
+    n_missing = len(plan.catalog_missing)
+    prog.tick(
+        BggCheckPhase.CATALOG, 0,
+        detail=(
+            f"{n_missing} {'game' if n_missing == 1 else 'games'} BgB has never seen"
+            if n_missing else "Every game was already in the catalog"
+        ),
+    )
 
-    resolved = await _resolve_collids(user_id, username, sorted(add_candidates))
+    resolved = await _resolve_collids(
+        user_id, username, sorted(add_candidates), progress=prog,
+    )
     for entry in plan.push:
         if entry.collid is None and entry.bgg_id in resolved:
             hit = resolved[entry.bgg_id]

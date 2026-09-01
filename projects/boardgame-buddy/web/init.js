@@ -28,6 +28,7 @@
   window.achievementsView = new window.AchievementsView();
   window.settingsView    = new window.SettingsView();
   window.importPlaysView = new window.ImportPlaysView();
+  window.bggSyncView    = new window.BggSyncView();
   window.adminView       = new window.AdminView();
 
   // Widget singleton — the Play tab's Join half. Hoisted here (rather than
@@ -54,6 +55,7 @@
   window.router.register("achievements",  window.achievementsView);
   window.router.register("settings",      window.settingsView);
   window.router.register("import-plays",  window.importPlaysView);
+  window.router.register("bgg-sync",      window.bggSyncView);
   window.router.register("admin",         window.adminView);
 
   // Supabase boot. We model this as a global helper (used by views directly)
@@ -568,6 +570,9 @@
     // Same reasoning, other signal: the next account's near-matches are not
     // this one's, and the key set behind the count outlives store.reset().
     if (window.GhostClaim) window.GhostClaim.forgetSuggestions();
+    // Same again: the saved comparison is this account's shelf against this
+    // account's BGG handle, and it lives in localStorage outside bgbCache.
+    if (window.BggSyncFlow) window.BggSyncFlow.reset();
     if (window.bgbCache) window.bgbCache.unbindUser();
     window.store.reset();
     window.router.go("auth");
