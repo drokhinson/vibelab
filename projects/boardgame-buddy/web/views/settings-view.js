@@ -752,6 +752,11 @@
         ? `<span class="bgb-mark bgb-mark--bgg"><img src="assets/credits/bgg-mark.svg" alt="" /></span>`
         : `<span class="bgb-mark bgb-mark--bgb"><img src="assets/brand/bgb-logo.svg" alt="" /></span>`;
       const arrow = `<i data-icon="chevron-right" class="w-4 h-4 bgb-mark__arrow"></i>`;
+      // The marks carry the direction; the caption carries the verb. Two
+      // unlabelled logo pairs left the user having to infer which one moved
+      // data which way — the same ambiguity the comparison table above fixes.
+      const face = (marks, cap) =>
+        `<span class="bgb-mark__row">${marks}</span><span class="bgb-mark__cap">${cap}</span>`;
       return `<div class="set-card__bgg-sync">
         <button class="btn btn-ghost btn-sm" ${busy}
                 title="Import from BoardGameGeek"
@@ -759,7 +764,7 @@
                 onclick="window.settingsView._pullBgg()">
           ${this._bggSyncing
             ? `<i data-icon="loader-2" class="w-4 h-4 animate-spin"></i><span class="bgb-mark__word">Importing…</span>`
-            : mark("bgg") + arrow + mark("bgb")}
+            : face(mark("bgg") + arrow + mark("bgb"), "Import to BgB")}
         </button>
         <button class="btn btn-primary btn-sm" ${busy}
                 title="Push to BoardGameGeek"
@@ -767,7 +772,7 @@
                 onclick="window.settingsView._pushBgg()">
           ${this._bggPushing
             ? `<i data-icon="loader-2" class="w-4 h-4 animate-spin"></i><span class="bgb-mark__word">Pushing…</span>`
-            : mark("bgb") + arrow + mark("bgg")}
+            : face(mark("bgb") + arrow + mark("bgg"), "Push to BGG")}
         </button>
       </div>`;
     }
