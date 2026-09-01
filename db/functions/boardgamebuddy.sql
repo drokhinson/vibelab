@@ -1,8 +1,9 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 069 (ghost account claims — the merge extracted as
---               bgb_link_ghost_rows, plus the suggestion / detail / list /
---               create / accept / reject / dismiss RPCs behind them)
+-- Last updated: migration 070 (bgb_profile_bundle publishes the incoming
+--               ghost-claim count) and 069 (ghost account claims — the merge
+--               extracted as bgb_link_ghost_rows, plus the suggestion /
+--               detail / list / create / accept / reject / dismiss RPCs)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -221,6 +222,12 @@
 --                  neither the target nor an accepted buddy. The COUNT
 --                  `recent_plays_total` stays visible to everyone; it is one
 --                  of the four headline stats a public profile shows.)
+--               db/migrations/boardgamebuddy/070_profile_bundle_ghost_claims.sql
+--                 (new self-only `ghost_claims_incoming` block beside
+--                  `buddy_requests_incoming`, so the Profile tab's dot and the
+--                  Buddies card's count are right on first paint. Additive and
+--                  self-null, so bootstrap_version is deliberately NOT bumped —
+--                  064's argument, verbatim.)
 
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)

@@ -159,6 +159,11 @@
       if (window.Buddy && window.Buddy.publishPendingFromBundle) {
         window.Buddy.publishPendingFromBundle(payload.profile_bundle);
       }
+      // Same seed, same dot: incoming ghost claims (migration 070's
+      // ghost_claims_incoming block).
+      if (window.GhostClaim && window.GhostClaim.publishPendingFromBundle) {
+        window.GhostClaim.publishPendingFromBundle(payload.profile_bundle);
+      }
 
       // Identity seed. This is the one entry init.js reads synchronously right
       // after bindUser(), before any await — it's what lets the next boot paint

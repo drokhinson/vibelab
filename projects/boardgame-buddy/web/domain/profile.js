@@ -42,6 +42,10 @@
     if (target === viewerId && window.Buddy && window.Buddy.publishPendingFromBundle) {
       window.Buddy.publishPendingFromBundle(payload);
     }
+    if (target === viewerId && window.GhostClaim
+        && window.GhostClaim.publishPendingFromBundle) {
+      window.GhostClaim.publishPendingFromBundle(payload);
+    }
     return payload;
   }
 

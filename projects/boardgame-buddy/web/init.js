@@ -507,11 +507,11 @@
   // chrome, it outlives every view, and something that lands while the user is
   // on the Feed has to be announced by a surface already on screen.
   //
-  // Two sources today — pending buddy requests and unseen achievements — and
-  // deliberately ONE dot for both. Three tabs of chrome is the wrong place to
-  // read a figure or to distinguish two kinds of news; the dot says "there is
-  // something here", and the hub's cards, one tap away, each carry their own
-  // count in the corner (profile-self-view.js#_countBadge).
+  // Three sources today — pending buddy requests, unseen achievements, and
+  // incoming ghost account claims — and deliberately ONE dot for all of them.
+  // Three tabs of chrome is the wrong place to read a figure or to distinguish
+  // kinds of news; the dot says "there is something here", and the hub's
+  // cards, one tap away, carry the counts (profile-self-view.js#_countBadge).
   //
   // Reads the store rather than the subscriber's argument, because it fires
   // for either slot and needs both — and because store.reset() calls
@@ -522,18 +522,21 @@
     if (!dot) return;
     const requests = Math.max(0, Number(window.store.get("buddyRequestCount")) || 0);
     const badges = Math.max(0, Number(window.store.get("achievementUnseenCount")) || 0);
-    dot.hidden = requests + badges === 0;
+    const claims = Math.max(0, Number(window.store.get("ghostClaimRequestCount")) || 0);
+    dot.hidden = requests + badges + claims === 0;
     // The dot is aria-hidden, so the tab's own name is what has to change —
     // otherwise the one control that knows something is waiting announces
     // itself identically either way.
     const parts = [];
     if (requests) parts.push(`${requests} buddy request${requests === 1 ? "" : "s"} waiting`);
     if (badges) parts.push(`${badges} new achievement${badges === 1 ? "" : "s"}`);
+    if (claims) parts.push(`${claims} link request${claims === 1 ? "" : "s"} waiting`);
     if (parts.length) tab.setAttribute("aria-label", `Profile — ${parts.join(", ")}`);
     else tab.removeAttribute("aria-label");
   }
   window.store.subscribe("buddyRequestCount", syncNavProfileDot);
   window.store.subscribe("achievementUnseenCount", syncNavProfileDot);
+  window.store.subscribe("ghostClaimRequestCount", syncNavProfileDot);
 
   // Pending uploads live in the header. Two keys drive it: the count itself,
   // and connectivity (which changes what the dialog offers).
