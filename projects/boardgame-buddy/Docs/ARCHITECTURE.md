@@ -335,6 +335,54 @@ deliberate literal. Extracting it fixed a tap target on the way: DaisyUI's
 `input-sm` is a 32px control, under the 44px floor, so the family releases the
 fixed height and sizes against a `min-height`.
 
+It has since acquired one caller that is *not* on paper — the first-run deck
+(§4.3c) — and that is exactly the trap §4.2a describes: on a chrome surface
+`--polaroid-ink` resolves to `--ink`, which is cream text on the family's white
+literal. The deck scopes its own fields to the ground's `--well` rather than
+changing the shared rule, which still has three callers that are genuinely on
+paper.
+
+### 4.3c The first-run deck, and the badge picker
+
+First-run setup used to be three modals opened back to back, each awaiting its
+own write before the next appeared. It is now **one mounted deck** —
+`widgets/onboarding-deck.js` (the shell, the queue and the ledger) plus
+`widgets/onboarding-deck-slides.js` (the four panels) — and the split between
+those two files is the same lifecycle-vs-appearance seam the bottom-sheet shell
+uses: the shell owns the track, the counter and the write queue and knows
+nothing about what a slide contains; a slide says `deck.next()` and stops
+caring.
+
+Three properties are load-bearing, and each is a rule this codebase already had:
+
+- **No handler awaits.** Continue and Skip queue a write through `deck.queue()`
+  and move the track in the same frame. An `await` in a button handler here is
+  the bug; the ledger on the finale is where an outcome belongs.
+- **A promotion appends.** Ticking a suggestion inserts the people they know
+  below the grid rather than re-rendering it, so the tile under the thumb
+  survives (`.claude/rules/overlays.md` §6). Untick takes nothing back for the
+  same reason.
+- **The deck is chrome, the picker is paper.** `.ob-deck` joins the re-point
+  lists in `styles.css`, so its tiles and fields follow the ground in both
+  themes; `.ob-paper` restores the alias family for the badge carousel at
+  (0,4,0), for the reason §4.2b spells out.
+
+**`ui/avatar-picker.js` (`BgbAvatarPicker.mount`)** is the third extraction of
+the shape described above: the icon carousel, the Icon/Background target toggle
+and the swatch grid, lifted out of `PolaroidPopup.avatarCustomizer` the moment
+the deck's first slide became its second caller. The customizer keeps its
+polaroid chrome and its Cancel/Save; the deck keeps its slide and its Continue;
+neither owns the carousel any more. It kept the `.avatar-cust__*` class family
+deliberately — the CSS was already right, and renaming it would have been a
+sweep with no reader. `refresh()` exists because a picker mounted off-screen
+measures its reel as zero.
+
+**`domain/buddy-network.js` (`BuddyNetwork`)** is the same kind of extraction
+applied to a *decision* rather than a component: which people a tick has earned,
+deduped across seeds, in rank order. The deck and the Buddies-screen card share
+it, so "who does ticking Priya introduce" cannot answer differently on the two
+surfaces that ask.
+
 ### 4.4 Chrome, layering and mobile
 
 The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§ App chrome & layering) and `.claude/rules/mobile-web.md`. The parts specific to this app:
@@ -559,6 +607,8 @@ projects/boardgame-buddy/web/
 │   ├── game-card.js         → renderGamePolaroid     (Game — Gather grid only)
 │   ├── status-tag.js        → renderStatusTag, renderExpansionBadge, the status sheet
 │   ├── buddy-suggestion-rail.js → the rail shared by Feed and Buddies
+│   ├── avatar-picker.js     → BgbAvatarPicker.mount — the badge carousel, shared by
+│   │     the avatar customizer and the first-run deck's slide 1 (§4.3c)
 │   ├── polaroid-popup.js    → show/dismiss/isOpen/achievement/confirm/alert/avatarCustomizer
 │   ├── markdown.js          → renderMarkdown
 │   ├── oauth-buttons.js     → oauthButtons
@@ -585,9 +635,13 @@ projects/boardgame-buddy/web/
 │   │     is. It survives as that page's BGG-import escape hatch.
 
 │   ├── join-panel.js
-│   ├── add-buddies-modal.js  → first-run step 2 AND the Buddies screen's Add button:
-│   │     search or pick, one batched send
-│   ├── onboarding-bgg-modal.js      → first-run step 3: link BGG, then watch the import
+│   ├── onboarding-deck.js    → first-run setup: the shell, the write queue, the ledger
+│   ├── onboarding-deck-slides.js    → its four panels (§4.3c)
+│   ├── add-buddies-modal.js  → the Buddies screen's Add button: search or pick, one
+│   │     batched send. Was also first-run step 2 until the deck replaced it, and
+│   │     still shares the deck's promote logic (domain/buddy-network.js)
+│   │     (widgets/onboarding-bgg-modal.js was deleted here — the deck's slide 3
+│   │      replaced its only caller, and Settings could already link and sync)
 │   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
 │
 ├── views/                  ← One file per screen / route

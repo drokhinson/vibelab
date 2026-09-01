@@ -5,8 +5,9 @@ A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code a
 > **Status:** Original audit produced 2026-05-23. Four passes have been applied
 > since; read the **Cleanup log** at the bottom, newest first:
 > Pass 1 + 2 (dead code) 2026-05-23, Pass 2 2026-08-20 (§9),
-> Pass 3 (feed-card rework) 2026-08-29, **Pass 4 (theme system + sheet system)
-> 2026-08-30**.
+> Pass 3 (feed-card rework) 2026-08-29, Pass 4 (theme system + sheet system)
+> 2026-08-30, Pass 5 (Wishlist → a shelf) 2026-09-01, **Pass 6 (first-run deck)
+> 2026-09-01**.
 >
 > ⚠️ Every `file:line` citation in §§2-8 dates from 2026-05-23 and has drifted.
 > Treat the *claims* as current only where a later pass confirms them; re-grep
@@ -425,6 +426,36 @@ To reproduce or extend: re-run those greps after any refactor and update the cou
 ---
 
 ## Cleanup log
+
+### Pass 6 (first-run deck) — 2026-09-01
+
+First-run setup became one deck (`widgets/onboarding-deck.js` +
+`onboarding-deck-slides.js`), which took the last caller away from one widget
+and gave a second one a shared component instead of a private copy.
+
+**Deleted:** `widgets/onboarding-bgg-modal.js` (≈470 lines) whole, its
+`<script>` tag, and its `.onboarding-bgg*` CSS family (≈85 lines). It had
+exactly one caller — `init.js`'s first-run sequence — and the deck's slide 3
+replaced it. Nothing was lost with it: Settings already renders a BGG link form
+and a sync, which is what the deck's copy points at, and the import readout was
+never this widget's own (`ui/bgg-import-log.js`, §4.3b of ARCHITECTURE.md, is
+shared with Settings and stays). Two `:is(.bgb-spoke-screen, .onboarding-bgg)`
+overrides narrowed to the spoke alone.
+
+**Extracted rather than copied:** `ui/avatar-picker.js` — the icon carousel,
+the colour-target toggle and the swatch grid, lifted out of
+`PolaroidPopup.avatarCustomizer` when the deck's slide 1 became its second
+caller. Instance #2 is the moment (`.claude/rules/ui-object-design.md` §4). The
+customizer keeps its polaroid chrome and mounts the picker; the `.avatar-cust__*`
+class family was deliberately NOT renamed, since the CSS was already correct and
+a rename would have been a sweep with no reader.
+
+**Stale comments corrected, not left to rot:** the `.add-buddies` CSS block
+still claimed two callers and named `.onboarding-bgg` as a sibling; the
+`.buddy-tile--select` block still said the variant "is only ever rendered
+inside the polaroid card", which the deck's chrome grid made false. Both now
+say what is true, and the second says why reading the alias rather than
+`--paper*` is what let the tile gain a second surface without a rule changing.
 
 ### Pass 5 (Wishlist → a shelf of Collection) — 2026-09-01
 

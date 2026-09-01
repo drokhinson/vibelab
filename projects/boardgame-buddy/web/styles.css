@@ -369,6 +369,7 @@
      .exp-picker,
      .import-exp-modal,
      .cascade-player--drag-clone,
+     .ob-deck,
      [data-view="log-play"],
      [data-view="play-flow"],
      [data-view="session-viewer"]) {
@@ -410,6 +411,7 @@
      .exp-picker,
      .import-exp-modal,
      .cascade-player--drag-clone,
+     .ob-deck,
      [data-view="log-play"],
      [data-view="play-flow"],
      [data-view="session-viewer"]) {
@@ -3045,9 +3047,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    the control there (a real <button aria-pressed>), so it drops the rail's
    fixed 130px basis and grows to fill the grid's column instead.
 
-   Every colour is a --polaroid-* token, because this variant is only ever
-   rendered inside the polaroid card, which is PAPER in both themes
-   (.claude/rules/theming.md §6). --polaroid-accent is the same terracotta the
+   Every colour is a --polaroid-* token. That was written when this variant had
+   one surface — the polaroid card, which is PAPER in both themes — and it is
+   what lets it now have two: the first-run deck (.ob-deck) is a screen rather
+   than a photograph, so it joins the chrome re-point list at the top of this
+   file and the same tokens resolve to the ground family there. Reading the
+   alias rather than --paper* directly is the whole reason that worked without
+   touching a rule below (.claude/rules/theming.md §6-7).
+   --polaroid-accent is the same terracotta the
    card's own primary button fills with, so the selected tile and the Send
    button read as one accent. Ratios, dark / light theme:
      white on the terracotta check   4.35 / 5.90   (graphic, needs 3:1)
@@ -3222,12 +3229,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    screen, and the first-run "Link BoardGameGeek" polaroid card, which is a
    body-level overlay and so escapes the spoke screen's own re-point (§8).
    Add the next light surface that hosts an import log here by name. */
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log { color: var(--polaroid-ink, #1D1812); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__icon { color: var(--accent-ink); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__icon--idle { background: var(--polaroid-line, #DAC9A4); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__step--idle .bgg-log__body { color: var(--polaroid-muted, #8B7E68); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__sublist { color: var(--polaroid-muted, #8B7E68); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__footer { color: var(--polaroid-muted, #8B7E68); }
+.bgb-spoke-screen .bgg-log { color: var(--polaroid-ink, #1D1812); }
+.bgb-spoke-screen .bgg-log__icon { color: var(--accent-ink); }
+.bgb-spoke-screen .bgg-log__icon--idle { background: var(--polaroid-line, #DAC9A4); }
+.bgb-spoke-screen .bgg-log__step--idle .bgg-log__body { color: var(--polaroid-muted, #8B7E68); }
+.bgb-spoke-screen .bgg-log__sublist { color: var(--polaroid-muted, #8B7E68); }
+.bgb-spoke-screen .bgg-log__footer { color: var(--polaroid-muted, #8B7E68); }
 /* The errored-name tail is the one line above that is NOT the same problem on
    both surfaces. Settings' spoke screen is chrome — dark in dark — so it keeps
    the base red, which is tuned for a dark ground. The onboarding card is paper
@@ -3235,7 +3242,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    the paper's own ink brings it to 5.84 dark / 7.91 light, and keeps it a token
    expression rather than a second literal red. Same mix as the sibling step's
    .add-buddies__error. */
-.onboarding-bgg .bgg-log__sublist-error {
+.bgb-spoke-screen .bgg-log__sublist-error {
   color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
 }
 .profile-panel { display: flex; flex-direction: column; gap: 0.55rem; }
@@ -9897,12 +9904,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
 
 /* ── "Add buddies" ───────────────────────────────────────────────────────────
-   Two callers: first-run setup's step two, and the Buddies screen's Add button
-   (widgets/add-buddies-modal.js). On the onboarding path it is a sibling of
-   .avatar-cust and .onboarding-bgg — same polaroid card, same trimmed padding —
-   because those three are consecutive screens of one flow and any difference
-   between their chrome reads as a jump. Wider than the customizer: this one
-   holds a three-column grid, not a single carousel.
+   One caller now: the Buddies screen's Add button
+   (widgets/add-buddies-modal.js). It was also first-run setup's step two, as a
+   sibling of .avatar-cust and the since-deleted .onboarding-bgg, until the
+   first-run deck (.ob-deck) took that path over — which is why the card is
+   still sized for a grid rather than a carousel, and why its select-mode tile
+   is shared rather than owned. Wider than the customizer: this one holds a
+   three-column grid.
 
    The card is deliberately PAPER in both themes and must NOT be added to the
    chrome re-point list near the top of this file: the measured ratios in
@@ -10037,93 +10045,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   flex: 1 1 0;
   min-height: 52px;
   height: auto;
-}
-
-/* ── Onboarding step three: "Link BoardGameGeek" ─────────────────────────────
-   Third sibling of .avatar-cust / .add-buddies — same polaroid card,
-   same trimmed padding, same inner scroll, because the three are consecutive
-   screens of one flow and any difference between their chrome reads as a jump.
-   Shares the 420px cap with the buddies grid: the import log's game-name
-   sublist wants the same width the tiles do. */
-.onboarding-bgg {
-  width: min(420px, 92vw);
-  /* Let the close button overhang the corner without a scrollbar; the
-     vertical scroll lives on __body, exactly as its two siblings do. */
-  overflow: visible;
-  padding: 0;
-}
-.onboarding-bgg:focus { outline: none; }   /* programmatic focus only */
-.onboarding-bgg__body {
-  padding: 18px 14px 16px;
-  max-height: calc(100vh - 36px);
-  max-height: calc(var(--bgb-vv-h, 100dvh) - 36px);
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-.onboarding-bgg .polaroid-popup__title { margin-bottom: 4px; }
-.onboarding-bgg .polaroid-popup__body { margin-bottom: 12px; }
-
-/* BGG's own lockup: a fixed-colour navy/orange mark we neither recolour nor
-   filter (.claude/rules/assets.md). It needs no plate here — the polaroid card
-   is paper, so it is light in both themes, which is the ground the mark was
-   drawn for. */
-.onboarding-bgg__mark {
-  display: block;
-  width: 132px;
-  height: auto;
-  margin: 0 auto 12px;
-}
-
-.onboarding-bgg__form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.onboarding-bgg__error {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.35;
-  /* Same deepened rust as the sibling step's error: --rust straight is 3.9:1
-     on the dark theme's paper, under the 4.5:1 that 12px body text needs. */
-  color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
-  text-align: left;
-}
-
-.onboarding-bgg__note {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--polaroid-muted);
-  text-align: left;
-}
-
-/* Both commit buttons get the 52px target (.claude/rules/mobile-web.md §5) and
-   share the row evenly — Skip is a real destination here, not a corner escape.
-   Same button sizing as .add-buddies__actions; the two steps are one flow. It
-   does NOT take that row's divider, because this card scrolls as one block and
-   its buttons sit at the end of the content rather than pinned above it. */
-.onboarding-bgg__actions {
-  gap: 10px;
-}
-.onboarding-bgg__actions .btn {
-  flex: 1 1 0;
-  min-height: 52px;
-  height: auto;
-}
-
-/* The log is the shared ui/bgg-import-log.js readout; the card owns only where
-   it sits. Left-aligned against the card's centred title, because it is a list
-   of statements to read down, not a caption. */
-.onboarding-bgg__log { text-align: left; }
-/* The footer stacks a note over the action row; the gap is the parent's so the
-   action row itself carries no vertical margin of its own (the form above
-   spaces its children the same way). */
-.onboarding-bgg__foot {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 /* ── A labelled text field on a polaroid card ────────────────────────────────
@@ -11936,4 +11857,292 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 @media (max-width: 350px) {
   .ach-tile { flex-basis: 84px; }
   .ach-summary { gap: 0.7rem; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   First-run deck — widgets/onboarding-deck.js + onboarding-deck-slides.js
+   ══════════════════════════════════════════════════════════════════════════
+   The three modals first-run used to open in sequence are one full-screen
+   deck now, so this family is a SCREEN rather than a card: it owns the whole
+   viewport, it has no backdrop to dim (there is nothing behind it worth
+   showing), and it sits at 100 with the modal band — nothing in the app may
+   paint over it while it is up, and by construction nothing tries: the QR
+   sheet, its only competitor for a new account's first seconds, holds the
+   deck back rather than racing it (init.js#_qrHold).
+
+   Chrome, not paper: the deck follows the ground in both themes
+   (.claude/rules/theming.md §6). The one paper island is the badge picker,
+   which is the same cream carousel the avatar customizer puts on a polaroid —
+   .ob-paper restores the alias family for it. */
+.ob-deck {
+  position: fixed;
+  top: var(--bgb-vv-top, 0px);
+  left: 0;
+  right: 0;
+  /* The visible-viewport ladder (.claude/rules/mobile-web.md §1): the actions
+     row must stay above the software keyboard on the two slides with fields.
+     Clamped exactly as .chapter-edit-locked is — a stale-LARGE --bgb-vv-h
+     would size the deck past the bottom of the screen and take the Continue
+     button, its last flex:none child, with it. */
+  height: 100vh;
+  height: 100dvh;
+  height: min(var(--bgb-vv-h, 100dvh), calc(100dvh - var(--bgb-vv-top, 0px)));
+  box-sizing: border-box;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0);
+  background-image: var(--glow);
+  color: var(--ink);
+  animation: fadeIn 200ms ease-out both;
+}
+.ob-deck.is-closing { animation: fadeOut 200ms ease-in both; }
+
+/* ── Head: back · counter · segment bar ───────────────────────────────────── */
+.ob-deck__head {
+  flex: none;
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+  row-gap: 10px;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+}
+.ob-deck__back {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-muted);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+/* 44px hit area without inflating the control (.claude/rules/mobile-web.md §5). */
+.ob-deck__back { position: relative; }
+.ob-deck__back::before { content: ""; position: absolute; inset: -4px; }
+.ob-deck__back:active { background: var(--accent-quiet); color: var(--ink); }
+/* Kept in the grid when hidden, or the counter jumps left on slide 1. */
+.ob-deck__back[hidden] { display: grid; visibility: hidden; }
+.ob-deck__count {
+  grid-column: 2;
+  text-align: center;
+  font-family: var(--font-score);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.ob-deck__count b { color: var(--accent); font-weight: 700; }
+.ob-deck__bar { grid-column: 1 / -1; display: flex; gap: 5px; }
+.ob-deck__seg {
+  flex: 1;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  overflow: hidden;
+  position: relative;
+}
+.ob-deck__seg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 260ms var(--ease);
+}
+.ob-deck__seg.is-done::after { transform: scaleX(1); }
+
+/* ── Track ────────────────────────────────────────────────────────────────── */
+.ob-deck__clip { flex: 1 1 auto; overflow: hidden; }
+.ob-deck__track {
+  display: flex;
+  height: 100%;
+  /* Width is set in JS from the slide count; the transform is the whole
+     transition — 240ms of travel, never a wait on a request. */
+  transition: transform 240ms var(--ease);
+}
+.ob-slide {
+  width: 25%;
+  flex: 0 0 25%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 16px 0;
+  /* The app's content column, not the viewport, on a tablet or desktop. */
+  max-width: 480px;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+.ob-slide__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 8px;
+}
+.ob-slide__eyebrow {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  margin-bottom: 6px;
+}
+:root[data-bgb="dark"] .ob-slide__eyebrow { color: var(--accent); }
+.ob-slide__title {
+  font-family: var(--font-polaroid);
+  font-weight: 600;
+  font-size: 25px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.ob-slide__body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  margin: 0 0 14px;
+}
+.ob-slide__title--center, .ob-slide__body--center { text-align: center; }
+.ob-slide__note { font-size: 11.5px; line-height: 1.45; color: var(--ink-faint); margin: 10px 0 0; }
+.ob-field { margin-bottom: 12px; }
+.ob-field__label { color: var(--ink-faint); }
+/* A labelled field on the deck sits on CHROME, not paper. The shared
+   .polaroid-field__input hardcodes a white background and takes its ink from
+   --polaroid-ink — correct on the polaroid card it was written for, and cream
+   text on white here, where the re-point above points that alias at --ink.
+   So the deck's fields take the ground's own well instead. Scoped to .ob-deck
+   (0,2,0) rather than changing the shared rule, which has three other callers
+   that ARE on paper. */
+.ob-deck .polaroid-field__input {
+  background: var(--well, var(--bg-2));
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.ob-deck .polaroid-field__input::placeholder { color: var(--ink-faint); }
+
+/* Actions: pinned to the bottom of the slide, never scrolled away. */
+.ob-slide__actions {
+  flex: none;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0 max(16px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+}
+/* 52px: these are the deck's commit buttons (.claude/rules/mobile-web.md §5). */
+.ob-btn { min-height: 52px; border-radius: var(--r-lg); }
+.ob-btn--go { flex: 1; }
+
+/* The badge picker's paper island.
+   ──────────────────────────────────────────────────────────────────────────
+   .ob-deck joins the chrome re-point lists above, which is right for the deck
+   as a whole — it is a screen, not a photograph. The picker inside it is the
+   exception: it is the same cream carousel the avatar customizer renders on a
+   polaroid, so it points the alias family back at --paper* (theming.md §7).
+
+   SPECIFICITY IS LOAD-BEARING, for the reason the scorepad island spells out
+   above: the dark branch of the re-point is (0,3,0), so a bare .ob-paper would
+   lose --accent-ink to it and put espresso-tuned gold on cream. `:root .ob-deck`
+   plus the doubled class is (0,4,0) and wins outright rather than on source
+   order. Do not "simplify" it back. */
+:root .ob-deck .ob-paper.ob-paper {
+  background: var(--paper);
+  color: var(--paper-ink);
+  --polaroid-bg: var(--paper);
+  --polaroid-bg-soft: color-mix(in srgb, var(--paper) 92%, var(--paper-line));
+  --polaroid-ink: var(--paper-ink);
+  --polaroid-ink-soft: color-mix(in srgb, var(--paper-ink) 78%, var(--paper));
+  --polaroid-muted: var(--paper-muted);
+  --polaroid-line: var(--paper-line);
+  --accent-ink: var(--accent-on-paper);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-3);
+  padding: 14px 12px 12px;
+  margin-bottom: 12px;
+}
+
+/* ── Slide 2: the suggestion grid ─────────────────────────────────────────── */
+.ob-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ob-tiles__msg {
+  grid-column: 1 / -1;
+  padding: 24px 8px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  margin: 0;
+}
+
+/* ── Slide 3: the BGG lockup ──────────────────────────────────────────────── */
+/* A fixed third-party mark keeps the light plate it was drawn for — never
+   recoloured, never brightness-filtered (.claude/rules/assets.md). */
+.ob-plate {
+  background: #fff;
+  border-radius: var(--r-md);
+  padding: 9px 14px;
+  margin: 0 auto 12px;
+  width: max-content;
+  box-shadow: var(--sh-3);
+}
+.ob-plate__mark { display: block; height: 26px; width: auto; }
+
+/* ── Finale: the background-write ledger ──────────────────────────────────── */
+.ob-done__mark { display: grid; place-items: center; margin: 6px 0 12px; }
+.ob-done__ring {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-quiet);
+  color: var(--accent-ink);
+  animation: obPop 420ms var(--ease) both;
+}
+:root[data-bgb="dark"] .ob-done__ring { color: var(--accent); }
+@keyframes obPop {
+  from { transform: scale(0.72); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.ob-ledger { display: flex; flex-direction: column; }
+.ob-ledger__msg {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  text-align: center;
+  margin: 0;
+}
+.ob-job {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: start;
+  gap: 9px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+.ob-job:first-child { border-top: 0; }
+.ob-job__mark { margin-top: 1px; color: var(--ink-faint); }
+.ob-job--done .ob-job__mark { color: var(--ok); }
+.ob-job--failed .ob-job__mark { color: var(--rust); }
+.ob-job--running .ob-job__mark { color: var(--accent); animation: obSpin 1.1s linear infinite; }
+@keyframes obSpin { to { transform: rotate(360deg); } }
+.ob-job__label { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.25; }
+.ob-job__meta { font-size: 11px; color: var(--ink-faint); margin-top: 2px; line-height: 1.35; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-deck__track, .ob-deck__seg::after { transition: none; }
+  .ob-job--running .ob-job__mark, .ob-done__ring { animation: none; }
 }

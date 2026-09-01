@@ -1161,10 +1161,21 @@ class FeedSuggestedBuddy(BaseModel):
     display_name: str
     avatar: Optional[Avatar] = None
     # Accepted buddies shared with the viewer, and plays shared with them.
-    # A suggestion has at least one of the two; the rail labels whichever
-    # it has. play_count is what ranks the rail — see migration 057.
+    # A suggestion has at least one of the three counts; the rail labels
+    # whichever it has. play_count is what ranks the rail — see migration 057.
     mutual_count: int
     play_count: int = 0
+    # People the viewer has SENT a request to who are buddies with this
+    # candidate (migration 072). Deliberately not folded into mutual_count:
+    # someone who has not accepted yet is not a mutual buddy, and the tile
+    # says exactly that sentence off that number.
+    pending_mutual_count: int = 0
+    # Which first-hop person explains this candidate, and their name so the
+    # tile can say "Buddy of Priya" without a second lookup. An accepted link
+    # is preferred over a pending one. Null for a candidate that is only here
+    # on a shared play, and for the whole 'active' tier.
+    via_user_id: Optional[str] = None
+    via_display_name: Optional[str] = None
     # Which tier the candidate came from (migration 063). Only the onboarding
     # endpoint sets it — the Feed rail and GET /buddies/suggested return
     # earned-signal candidates exclusively, so their counts already say why a
@@ -1200,6 +1211,28 @@ class HotGamesResponse(BaseModel):
 
 class SuggestedBuddiesResponse(BaseModel):
     suggestions: list[FeedSuggestedBuddy] = []
+
+
+class SuggestionNetworkGroup(BaseModel):
+    """Who one suggestion knows — the second hop, shipped up front.
+
+    `via_user_id` is a user_id from the `suggestions` list beside it. The
+    onboarding deck holds these until the user ticks that person, then
+    promotes `buddies` into the grid in the same frame (migration 072). One
+    candidate can appear under several groups; the client keeps the first."""
+
+    via_user_id: str
+    buddies: list[FeedSuggestedBuddy] = []
+
+
+class OnboardingSuggestionsResponse(SuggestedBuddiesResponse):
+    """GET /buddies/suggested/onboarding only.
+
+    A subclass rather than two new fields on the shared response, because
+    /buddies/suggested has no use for a preloaded second hop and should not
+    carry an always-empty list to say so."""
+
+    network: list[SuggestionNetworkGroup] = []
 
 
 class GameBundlesResponse(BaseModel):

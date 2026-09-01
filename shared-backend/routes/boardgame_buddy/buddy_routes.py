@@ -30,6 +30,7 @@ from .models import (
     GhostMergeResponse,
     GhostPlayer,
     MessageResponse,
+    OnboardingSuggestionsResponse,
     PlayedWithUser,
     PlayPartnersResponse,
     SuggestedBuddiesResponse,
@@ -84,14 +85,14 @@ async def list_suggested_buddies(
 
 @router.get(
     "/buddies/suggested/onboarding",
-    response_model=SuggestedBuddiesResponse,
+    response_model=OnboardingSuggestionsResponse,
     status_code=200,
     summary="Suggest buddies for a brand-new account",
 )
 async def list_onboarding_buddy_suggestions(
     limit: int = Query(12, ge=1, le=50, description="Maximum suggestions to return"),
     user: CurrentUser = Depends(get_current_user),
-) -> SuggestedBuddiesResponse:
+) -> OnboardingSuggestionsResponse:
     """Candidates for the onboarding "Add buddies" step, shown once the
     first-time profile modal is saved.
 
@@ -99,7 +100,11 @@ async def list_onboarding_buddy_suggestions(
     viewer shares a play or a buddy with, which is the empty set for the
     account that has just been created. This falls back to recently active
     users once those run out, and tags each candidate with which tier it came
-    from so the client can label it honestly."""
+    from so the client can label it honestly.
+
+    Carries `network` as well: the buddies of each candidate it returns, so
+    the onboarding deck can promote them into the grid the moment the user
+    ticks that candidate, without a round trip (migration 072)."""
     return feed_service.fetch_onboarding_buddy_suggestions(
         get_supabase(), user.user_id, limit=limit
     )

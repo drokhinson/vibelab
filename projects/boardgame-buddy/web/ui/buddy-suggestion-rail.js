@@ -29,16 +29,32 @@
   // are neither: people who are simply active in the app, with both counts at
   // zero. Reading the counts alone would label them "Mutual buddy", which is
   // false, so the backend sends the tier and it wins when present.
+  //
+  // Migration 072 adds a third kind: someone reached through a request the
+  // viewer SENT and nobody has answered. "Mutual buddy" would be false about
+  // them too — the link is one-sided until it is accepted — so they name the
+  // person they came through instead. That name is another user's display
+  // name, so it is escaped here; it is the only branch below that touches
+  // user-supplied text.
   function suggestionReason(s) {
     // A tile being re-rendered in place carries its already-computed line, so
     // the reason survives a patch that has no backend row behind it. It is
     // also how a person with no ranking signal at all names themselves — a
     // /profiles/search hit reads "@username", which "Mutual buddy" would be a
-    // flat lie about. Escaped here and NOT below, because this is the one
-    // branch whose value can come from a caller rather than from this file.
+    // flat lie about. Escaped here, because this is the one branch whose
+    // value can come from a caller rather than from this file.
     if (s.reason) return escapeHtml(s.reason);
+    // Counts first: a real shared play or a real accepted mutual outranks a
+    // request nobody has answered, exactly as the RPC's ORDER BY does.
+    if ((s.play_count || 0) > 0) return "Played with";
+    if ((s.mutual_count || 0) > 0) return "Mutual buddy";
+    if (s.source === "network" || (s.pending_mutual_count || 0) > 0) {
+      return s.via_display_name
+        ? `Buddy of ${escapeHtml(s.via_display_name)}`
+        : "Buddy of someone you added";
+    }
     if (s.source === "active") return "Active recently";
-    return (s.play_count || 0) > 0 ? "Played with" : "Mutual buddy";
+    return "Mutual buddy";
   }
 
   /**
@@ -48,7 +64,10 @@
    * @property {Object|null} [avatar]
    * @property {number} [mutual_count]
    * @property {number} [play_count]
-   * @property {"graph"|"active"|null} [source]
+   * @property {number} [pending_mutual_count]  via a request the viewer sent
+   * @property {string|null} [via_user_id]      who explains this suggestion
+   * @property {string|null} [via_display_name] their name, for the reason line
+   * @property {"graph"|"active"|"network"|null} [source]
    * @property {string|null} [username]  present on a /profiles/search hit
    * @property {string} [reason]         overrides the derived reason line
    */

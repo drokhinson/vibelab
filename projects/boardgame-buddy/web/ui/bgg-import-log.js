@@ -5,7 +5,7 @@
 // log, shared by every surface that can start one:
 //
 //   • views/settings-view.js        — the Connections card's Sync button
-//   • widgets/onboarding-bgg-modal.js — first-run "Link BoardGameGeek" step
+//   • widgets/onboarding-deck-slides.js — the first-run deck's BGG slide
 //
 // It reads a sync's two payloads and nothing else: the POST /bgg/sync summary
 // (what landed immediately, how much was queued) and the GET /bgg/sync/status
