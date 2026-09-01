@@ -152,6 +152,14 @@
         );
       }
 
+      // Pending buddy requests → the Profile tab's dot. Seeded here rather
+      // than left to Profile._fetch(): the bundle above arrives inside
+      // /bootstrap, so the first call that would have published it is one the
+      // cache write we just made will legitimately skip.
+      if (window.Buddy && window.Buddy.publishPendingFromBundle) {
+        window.Buddy.publishPendingFromBundle(payload.profile_bundle);
+      }
+
       // Identity seed. This is the one entry init.js reads synchronously right
       // after bindUser(), before any await — it's what lets the next boot paint
       // the user's screen without waiting on the network.

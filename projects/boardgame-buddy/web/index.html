@@ -170,6 +170,12 @@
             data-nav-views="profile-self,collection,wishlist,plays,buddies,stats,achievements,settings">
       <span class="bgb-nav__ico">
         <i data-icon="user" class="w-5 h-5"></i>
+        <!-- Buddy requests waiting. A bare dot, no number: the count belongs
+             on the Buddies card this tab leads to, where there is room to say
+             what it counts. init.js#syncNavRequestDot drives it from the
+             store's `buddyRequestCount` slot and swaps the tab's accessible
+             name, so the dot itself is decoration. -->
+        <span class="bgb-nav__dot" aria-hidden="true" hidden></span>
       </span>
       <span class="bgb-nav__label">Profile</span>
     </button>

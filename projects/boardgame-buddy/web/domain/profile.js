@@ -35,6 +35,13 @@
         && window.Play && window.Play.rememberLastPlay) {
       window.Play.rememberLastPlay(payload.recent_plays[0] || null);
     }
+    // Same choke-point reasoning for the buddy-request badge: every refresh of
+    // the self bundle passes through here — the hub's mount, the tab-focus
+    // warmRefresh, and SWR's background revalidation — so publishing the count
+    // once here keeps the nav dot honest without any screen having to ask.
+    if (target === viewerId && window.Buddy && window.Buddy.publishPendingFromBundle) {
+      window.Buddy.publishPendingFromBundle(payload);
+    }
     return payload;
   }
 

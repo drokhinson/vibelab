@@ -22,6 +22,12 @@
         offline: false,       // BgbNet.isOffline() — see domain/net.js
         outboxCount: 0,       // plays queued for upload — see domain/outbox.js
         theme: "dark",        // "light" | "dark" — see domain/theme.js
+        // Pending INCOMING buddy requests. The app's one notification signal:
+        // the Profile nav tab paints a dot from it, the hub's Buddies card
+        // paints the number. Lives here rather than on either surface because
+        // neither is mounted when the other needs the figure — see
+        // domain/buddy.js#setPendingCount for who writes it.
+        buddyRequestCount: 0,
       };
       this._subs = new Map(); // key → Set<fn>
     }
@@ -80,6 +86,10 @@
         // Same reasoning again: the painted theme isn't a session value, and
         // logout must not leave the key undefined for subscribers.
         theme: window.BgbTheme ? window.BgbTheme.current() : "dark",
+        // Zeroed on purpose, unlike the two above: whoever signs in next has
+        // their own graph, and a leftover dot would announce someone else's
+        // requests on the new account's Profile tab.
+        buddyRequestCount: 0,
       };
       for (const subs of this._subs.values()) {
         for (const fn of subs) {

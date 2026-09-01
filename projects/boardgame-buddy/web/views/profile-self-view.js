@@ -37,6 +37,10 @@
 
     async onMount() {
       this.listen("user", () => this.render());
+      // The Buddies card's request badge reads the store slot, not the bundle
+      // it was painted from — so accepting from the Buddies spoke and coming
+      // back finds the corner already clear.
+      this.listen("buddyRequestCount", () => this.render());
       this._loading = true;
       this._ach = window.Achievements.cached();
       this.render();
@@ -378,12 +382,21 @@
         sub: `${count} ${count === 1 ? "player" : "players"}`,
         route: "buddies",
         body,
+        // Incoming friend requests, not buddies — the one number on this hub
+        // that is a thing to do rather than a thing to look at, which is why
+        // it gets the corner badge and everything else gets a sub-head.
+        badge: window.Buddy.pendingCount(),
       });
     }
 
-    _previewCard({ icon, title, sub, route, body, modifier = "" }) {
+    _previewCard({ icon, title, sub, route, body, modifier = "", badge = 0 }) {
       return `
         <section class="preview-card ${modifier}">
+          ${badge > 0 ? `
+            <span class="preview-card__count">
+              <span aria-hidden="true">${badge > 99 ? "99+" : badge}</span>
+              <span class="bgb-vis-hidden">${badge} buddy request${badge === 1 ? "" : "s"} waiting</span>
+            </span>` : ""}
           <header class="preview-card__head">
             <span class="preview-card__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
             <h3 class="preview-card__title font-display">${escapeHtml(title)}</h3>

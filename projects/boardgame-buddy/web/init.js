@@ -504,6 +504,31 @@
     });
   }
 
+  // Pending buddy requests → a dot on the Profile tab. It sits at this level
+  // for the same reason the offline banner does: the nav bar is app chrome, it
+  // outlives every view, and a request that lands while the user is on the
+  // Feed has to be announced by something that is already on screen.
+  //
+  // The dot carries no number — three tabs of chrome is the wrong place to
+  // read a figure. The count itself is one tap away, in the corner of the
+  // hub's Buddies card (profile-self-view.js#_renderBuddiesPreview).
+  function syncNavRequestDot(count) {
+    const tab = document.querySelector('.bgb-nav__tab[data-nav="profile-self"]');
+    const dot = tab && tab.querySelector(".bgb-nav__dot");
+    if (!dot) return;
+    const n = Math.max(0, Number(count) || 0);
+    dot.hidden = n === 0;
+    // The dot is aria-hidden, so the tab's own name is what has to change —
+    // otherwise the one control that knows something is waiting announces
+    // itself identically either way.
+    if (n) {
+      tab.setAttribute("aria-label", `Profile — ${n} buddy request${n === 1 ? "" : "s"} waiting`);
+    } else {
+      tab.removeAttribute("aria-label");
+    }
+  }
+  window.store.subscribe("buddyRequestCount", syncNavRequestDot);
+
   // Pending uploads live in the header. Two keys drive it: the count itself,
   // and connectivity (which changes what the dialog offers).
   function syncOutboxIndicator() {

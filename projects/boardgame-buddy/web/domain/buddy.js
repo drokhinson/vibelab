@@ -117,6 +117,33 @@
       );
     }
 
+    // ── Pending incoming requests ───────────────────────────────────────────
+    // One number, two surfaces: a bare dot on the Profile nav tab and a red
+    // count in the corner of the hub's Buddies card. It lives in the store
+    // (slot `buddyRequestCount`) because neither surface is mounted when the
+    // other needs it — the nav bar outlives every view, and the hub is not on
+    // screen when a request lands while the user is on the Feed.
+    //
+    // Two writers, in order of freshness: the profile bundle (which carries
+    // buddy_requests_incoming, and is refreshed by /bootstrap, the hub, and
+    // every tab-focus warmRefresh), and the Buddies screen, whose accept /
+    // decline handlers know the new count a round trip before the server does.
+    static pendingCount() { return window.store.get("buddyRequestCount") || 0; }
+
+    static setPendingCount(n) {
+      window.store.set("buddyRequestCount", Math.max(0, Math.floor(Number(n) || 0)));
+    }
+
+    /**
+     * Publish the count off a bgb_profile_bundle payload. No-ops when the
+     * block is absent — the RPC omits requests entirely on someone else's
+     * profile, and an absent list is "not my business", not "zero waiting".
+     */
+    static publishPendingFromBundle(bundle) {
+      if (!bundle || !Array.isArray(bundle.buddy_requests_incoming)) return;
+      Buddy.setPendingCount(bundle.buddy_requests_incoming.length);
+    }
+
     // Drop the combined cache so the next allBuddies() refetches. Call after
     // mutations that would change the roster: accept/unfriend, save a play
     // (which may add new ghost names or bump play counts).
