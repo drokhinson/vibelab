@@ -245,17 +245,21 @@ dl.facts dd .flag-bad  { color: #E9917C; font-weight: 700; }
 .pc__open svg { width: 14px; height: 14px; }
 .pc__meta-row {
   display: flex; align-items: center; gap: 6px; min-width: 0;
+  line-height: 16px;
   padding-top: 6px; border-top: 1px solid var(--polaroid-line);
 }
 .win {
   display: inline-flex; align-items: center; gap: 4px; min-width: 0;
   font-size: 11px; font-weight: 700; color: var(--win);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Pinned: --font-score is taller than --font-sans, so a winner line with a
+     score measured 1px more than a coop "We won!" without one. */
+  line-height: 16px;
 }
 .win em { font-style: normal; font-weight: 600; color: var(--polaroid-muted); letter-spacing: 0.02em; }
 .win .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--polaroid-line); flex: 0 0 auto; }
 .win .score { font-family: var(--font-score); font-weight: 700; color: var(--polaroid-ink-soft); }
-.win--loss { color: var(--polaroid-muted); font-style: italic; font-weight: 600; }
+.win--loss { color: var(--polaroid-muted); font-style: italic; font-weight: 600; line-height: 16px; }
 
 /* The status pill — rendered ONLY in the "today" panel, struck through. */
 .pill {
@@ -281,24 +285,27 @@ dl.facts dd .flag-bad  { color: #E9917C; font-weight: 700; }
 .opt-now .pc--boxart.pc--wide .pc__photo img.fg,
 .opt-now .pc--boxart.pc--tall .pc__photo img.fg { max-height: 150px; }
 
-/* A · TWO FOOTPRINTS — wide 280 / tall 208, each with a locked frame. */
+/* A · SHIPPED — two widths, ONE height. The photo frame is 230px tall in both
+   variants, so with one caption spec every card resolves to the same total
+   height; orientation picks only the width. The image is contained and never
+   cropped, and the leftover space is filled by a blurred copy of itself. */
 .opt-a .pc { width: 280px; }
 .opt-a .pc--tall, .opt-a .pc--boxart { width: 208px; }
-.opt-a .pc__photo { aspect-ratio: 3 / 2; }
-.opt-a .pc--tall .pc__photo, .opt-a .pc--boxart .pc__photo { aspect-ratio: 4 / 5; }
-.opt-a .pc__photo img.fg { object-fit: cover; }
-/* Box art is artwork, not a snapshot: it is never sliced, it letterboxes on
-   the soft paper ground inside the same locked 4:5 tile. */
-.opt-a .pc--boxart .pc__photo { background: var(--polaroid-bg-soft); }
-.opt-a .pc--boxart .pc__photo img.fg { object-fit: contain; }
+.opt-a .pc__photo { height: 230px; aspect-ratio: auto; }
+.opt-a .pc__photo img.fg { object-fit: contain; }
+.opt-a .pc__photo img.bg {
+  display: block; position: absolute; inset: -12%; z-index: 0;
+  width: 124%; height: 124%; object-fit: cover;
+  filter: blur(16px) saturate(1.35) brightness(0.66);
+}
 
-/* B · ONE FOOTPRINT, FILL — 264 wide, 4:3 frame, centre-crop everything. */
+/* B · ALSO CONSIDERED — one footprint, 4:3 frame, centre-crop everything. */
 .opt-b .pc { width: 264px; }
 .opt-b .pc__photo { aspect-ratio: 4 / 3; }
 .opt-b .pc__photo img.fg { object-fit: cover; }
 
-/* C · ONE FOOTPRINT, FIT — 264 wide, 4:3 frame, the image sits whole on a
-   blurred, dimmed copy of itself. Nothing is ever cropped. */
+/* C · ALSO CONSIDERED — one footprint, 4:3 frame, image whole on its own
+   blur. Contributed the blur-fill mechanic that A now uses. */
 .opt-c .pc { width: 264px; }
 .opt-c .pc__photo { aspect-ratio: 4 / 3; background: #1b1512; }
 .opt-c .pc__photo img.fg { object-fit: contain; }
@@ -347,12 +354,13 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
   <header class="board-head">
     <div class="board-head__text">
       <div class="eyebrow">BoardgameBuddy · Feed</div>
-      <h1>One card, two sizes — or one?</h1>
+      <h1>Two widths, one height</h1>
       <p>
         The feed card has <b>no fixed size at all</b> today. Width comes from one of three
         variants (full-width solo, 260px landscape strip, 220px portrait strip) and height
         comes from whatever aspect the decoded image happens to have — so every session is a
-        different shape. Below: what's on screen now, then three ways to collapse it.
+        different shape. Below: what's on screen now, then what shipped — and the two
+        one-size options it was weighed against.
         <b>The collection-status pill is gone from all three options.</b>
         The controls stress the frames — <b>Extreme</b> swaps in a 9:16 phone shot and a 21:9
         panorama, <b>Long</b> swaps in the kind of subtitled game name that used to fight the
@@ -413,21 +421,24 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
   <section>
     <div class="sec-head">
       <span class="sec-num">A</span>
-      <h2>Two footprints — wide and tall</h2>
-      <span class="verdict verdict--ok">what you asked for</span>
+      <h2>Two widths, one height</h2>
+      <span class="verdict verdict--rec">shipped</span>
     </div>
     <p class="sec-lede">
-      The full-width solo variant retires: <b>every card is a tile</b>, and a solo play is just
-      one tile centred in the column. A tile is either <b>280 × 261</b> with a locked 3:2 frame,
-      or <b>208 × 320</b> with a locked 4:5 frame. Orientation is picked once from the decoded
-      image and never changes after. Box art takes the tall tile and letterboxes rather than crops — and since BGG
-      covers sit at roughly 0.75–0.80 against a 0.80 frame, the bars are hairlines.
+      The combination that beats all three of the others. Keep two footprints, so a landscape
+      photo gets horizontal room and a portrait photo gets vertical room — but give both cards
+      the <b>same 230px photo-frame height</b>, and fill whatever the image doesn't cover with a
+      blurred, dimmed copy of itself. A tile is <b>280 × 321</b> or <b>208 × 321</b>:
+      <b>one height across the whole feed, two widths, and nothing ever cropped.</b> A landscape
+      shot blurs above and below, a portrait shot blurs down each side, and box art at ~0.78
+      against the tall tile's 0.80 frame gets hairlines. The full-width solo variant retires —
+      a solo play is one tile, centred.
     </p>
     <div class="tally">
       <span class="chip">widths <b>2</b></span>
-      <span class="chip">heights <b>2</b></span>
-      <span class="chip">cropping <b>centre-crop</b></span>
-      <span class="chip">rail alignment <b>still needs centring</b></span>
+      <span class="chip">heights <b>1</b></span>
+      <span class="chip">cropping <b>none</b></span>
+      <span class="chip">rail <b>one baseline</b></span>
     </div>
     <div class="stage" style="margin-top:1.5rem" data-panel="a"></div>
   </section>
@@ -437,7 +448,7 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
     <div class="sec-head">
       <span class="sec-num">B</span>
       <h2>One footprint — fill the frame</h2>
-      <span class="verdict verdict--ok">your option, the blunt version</span>
+      <span class="verdict verdict--bad">also considered</span>
     </div>
     <p class="sec-lede">
       One tile: <b>264 × 270</b>, a 4:3 frame, every image centre-cropped to fill it. Perfectly
@@ -459,15 +470,18 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
     <div class="sec-head">
       <span class="sec-num">C</span>
       <h2>One footprint — fit on its own blur</h2>
-      <span class="verdict verdict--rec">recommended</span>
+      <span class="verdict verdict--ok">also considered</span>
     </div>
     <p class="sec-lede">
-      Same single <b>264 × 270</b> tile and same 4:3 frame as B — but the image sits <i>whole</i>
+      Contributed the blur-fill mechanic that A ships. Same single <b>264 × 270</b> tile and
+      same 4:3 frame as B — but the image sits <i>whole</i>
       inside it, over a blurred, dimmed, scaled-up copy of itself. This is the answer to
       "I'm not sure how to best fit that": the frame is uniform, and <b>nothing is ever cropped</b>
       — a wide photo, a tall photo and a portrait box cover all land in the same box with their
       full composition intact, each carrying its own colour into the letterbox so the card still
-      reads as a photograph rather than as art on a grey plate.
+      reads as a photograph rather than as art on a grey plate. Its one weakness is what sent us
+      to A: with a single frame a 9:16 shot shrinks to a narrow sliver, where a tall tile gives
+      it the full height.
     </p>
     <div class="tally">
       <span class="chip">widths <b>1</b></span>
@@ -487,7 +501,8 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
     <p class="sec-lede">
       Rows are the content cases you named — a horizontal snapshot, a vertical snapshot, and two
       plays with no photo at all where the box art <i>is</i> the picture. Columns are the options.
-      This is where the crop damage in B and the shape sprawl in Today are easiest to see.
+      Read the <b>A</b> column down: four different images, four different shapes, one card
+      height. Then read <b>Today</b> down for what it replaces.
     </p>
     <!-- data-bgb sits on the host, not on .study itself: the token blocks are
          descendant selectors, so an element cannot theme itself. -->
@@ -512,39 +527,45 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
           <td class="no">no crop, any height</td><td class="no">letterboxed, 2 caps</td><td class="no">no</td>
           <td>Nothing is predictable; the solo card dwarfs everything.</td>
         </tr>
-        <tr>
-          <td>A · two</td><td>280×261 / 208×320</td>
-          <td class="yes">4:5, ~17% cropped</td><td class="yes">whole, hairline bars</td><td class="no">no — two heights</td>
-          <td>Honest to the source images, but the rail still mixes heights.</td>
+        <tr data-rec>
+          <td>A · shipped</td><td>280×321 / 208×321 — <b>one height</b></td>
+          <td class="yes">whole, side blur</td><td class="yes">whole, hairline bars</td><td class="yes">yes</td>
+          <td>Two widths so each orientation gets room, one height so the rail lines up, and no crop anywhere.</td>
         </tr>
         <tr>
           <td>B · one, fill</td><td>264×270</td>
           <td class="no">half cropped</td><td class="no">title/publisher lost</td><td class="yes">yes</td>
           <td>Maximum order, real content loss.</td>
         </tr>
-        <tr data-rec>
+        <tr>
           <td>C · one, fit</td><td>264×270</td>
           <td class="yes">whole, letterboxed</td><td class="yes">whole, letterboxed</td><td class="yes">yes</td>
-          <td>One size and no crop; a tall image is smaller on screen than in A.</td>
+          <td>One size and no crop, but a 9:16 shot becomes a sliver — A gives it a whole tile.</td>
         </tr>
       </tbody>
     </table>
 
-    <pre class="code"><i>/* C · the entire CSS delta in web/styles.css */</i>
-.play-card--single, .play-card--strip.is-portrait,
-.play-card--strip.is-landscape   <i>→ collapse to one</i>  <b>.play-card { width: 264px }</b>
+    <pre class="code"><i>/* SHIPPED · the CSS delta in web/styles.css */</i>
+<s>.play-card--single</s> <s>.play-card--strip.is-portrait</s>
+<s>.play-card--strip.is-landscape</s>   <i>three sizes → two widths</i>
+<b>.play-card       { --pc-photo-h: 230px; box-sizing: border-box }</b>
+<b>.play-card--wide { width: 280px }   .play-card--tall { width: 208px }</b>
 
 .play-card__photo {
-  <s>aspect-ratio: var(--photo-aspect, 1);</s>   <b>aspect-ratio: 4 / 3;</b>
+  <s>aspect-ratio: var(--photo-aspect, 1);</s>   <b>height: var(--pc-photo-h);</b>
 }
 .play-card__photo-img { <s>object-fit: cover;</s> <b>object-fit: contain;</b> }
 <b>.play-card__photo-bg</b> { position:absolute; inset:-12%; width:124%; height:124%;
-                        object-fit:cover; filter:blur(16px) saturate(1.35) brightness(.66) }
+                       object-fit:cover; filter:blur(16px) saturate(1.35) brightness(.66) }
+<i>/* the back's scoreboard now scrolls — a fixed card height can no longer
+   grow to fit an 8-player table */</i>
+.play-card__back-players { <b>flex:1 1 auto; min-height:0; overflow-y:auto</b> }
 
 <i>/* and in ui/play-card.js */</i>
-<s>orientFor() / aspectCache / onPhotoLoad</s>  <i>— all three die with the free-running frame</i>
-<s>play-card__status-slot + renderStatusTag(...)</s>  <i>— pill removed from the card</i>
-<i>/* views/feed-view.js: _syncStatusPills keeps its hot-games branch, drops the play-card one */</i></pre>
+<s>--photo-aspect</s> <i>— the frame's height is fixed, so the inline ratio is gone</i>
+<s>__sessionPlayCount</s> <i>— it only ever picked strip vs single (feed-view + game-detail too)</i>
+<s>play-card__photo--cover</s> <i>— box art is no longer a special layout</i>
+onPhotoLoad <i>still classifies orientation, but now swaps only the WIDTH</i></pre>
 
     <p class="sec-lede" style="margin-top:1.4rem">
       <b>On the pill.</b> Removing it takes the meta row down to one thing — the winner — so it
@@ -904,14 +925,14 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
       ],
     },
     a: {
-      cap: "A · two footprints",
-      note: "The full-width solo variant is gone: a solo play is <b>one tile, centred</b>. Orientation is read once from the image and picks one of two locked frames. Box art always takes the tall tile and letterboxes rather than crops, because a sliced cover is a cover you stop recognising.",
+      cap: "A · two widths, one height",
+      note: "Both tiles carry the <b>same 230px photo frame height</b>, so with one caption spec every card in the app is the same height and the rail sits on a single baseline. Orientation picks the width only. The image is contained, never cropped; the leftover space is its own blur.",
       facts: [
-        ["Footprints", "<b>2</b> — 280 × 261 wide, 208 × 320 tall"],
-        ["Frame", "<code>3 / 2</code> or <code>4 / 5</code>, locked"],
-        ["Photos", "centre-cropped to the nearer frame — ~17% off a 2:3 shot"],
-        ["Box art", "<span class='flag-good'>whole</span> — 4:5 is 0.80, a BGG cover is ~0.78"],
-        ["Rail", "<span class='flag-bad'>still ragged</span> — two heights sit side by side"],
+        ["Footprints", "<b>2 widths, <span class='flag-good'>1 height</span></b> — 280 × 321, 208 × 321"],
+        ["Frame", "<code>height: 230px</code> in both — the whole mechanism"],
+        ["Photos", "<span class='flag-good'>never cropped</span> — landscape blurs top + bottom, portrait blurs the sides"],
+        ["Box art", "<span class='flag-good'>whole</span> — 0.78 in a 0.80 frame is a hairline"],
+        ["Rail", "<span class='flag-good'>one baseline</span>"],
       ],
     },
     b: {
@@ -964,9 +985,9 @@ pre.code s { color: #E9917C; text-decoration-color: rgba(233,145,124,0.5); }
   ];
   const STUDY_COLS = [
     ["now", "Today", false],
-    ["a",   "A · two", false],
+    ["a",   "A · shipped", true],
     ["b",   "B · one, fill", false],
-    ["c",   "C · one, fit", true],
+    ["c",   "C · one, fit", false],
   ];
   function renderStudy() {
     const study = document.querySelector("[data-study]");
