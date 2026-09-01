@@ -340,7 +340,10 @@
         icon: "star",
         title: "Wishlist",
         sub: `${count} game${count === 1 ? "" : "s"}`,
-        route: "wishlist",
+        // Same spoke as the card above it, on its wishlist shelf — the two used
+        // to be separate screens.
+        route: "collection",
+        params: { shelf: "wishlist" },
         body: items.length
           ? `<div class="preview-card__covers">${items.slice(0, PREVIEW_COVERS).map((it) => this._cover(it)).join("")}</div>`
           : `<div class="preview-card__empty">Nothing on your wishlist yet.</div>`,
@@ -414,7 +417,16 @@
         </span>`;
     }
 
-    _previewCard({ icon, title, sub, route, body, modifier = "", badge = 0, badgeLabel = "" }) {
+    /**
+     * @param {Object} opts
+     * @param {Object} [opts.params] Route params for "See all". The Collection
+     *   spoke takes ?shelf=, so two cards on this hub point at the same route.
+     */
+    _previewCard({ icon, title, sub, route, params, body, modifier = "", badge = 0, badgeLabel = "" }) {
+      // escapeAttr, not raw: the onclick is a double-quoted attribute and
+      // JSON.stringify emits double quotes, which would close it. The parser
+      // decodes &quot; back to " before the JS ever runs.
+      const args = params ? `,${escapeAttr(JSON.stringify(params))}` : "";
       return `
         <section class="preview-card ${modifier}">
           ${this._countBadge(badge, badgeLabel)}
@@ -422,7 +434,7 @@
             <span class="preview-card__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
             <h3 class="preview-card__title font-display">${escapeHtml(title)}</h3>
             <span class="preview-card__sub">${escapeHtml(sub)}</span>
-            <button class="preview-card__seeall" onclick="window.router.go('${route}')">
+            <button class="preview-card__seeall" onclick="window.router.go('${route}'${args})">
               See all <i data-icon="chevron-right" class="w-3 h-3"></i>
             </button>
           </header>

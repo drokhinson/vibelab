@@ -134,7 +134,13 @@
           extract: (m) => ({ gameId: decodeURIComponent(m[1]) }),
           build: (p) => `/game/${encodeURIComponent(p.gameId || "")}` },
         { name: "collection",          pattern: /^\/profile\/collection\/?$/,     build: () => "/profile/collection" },
-        { name: "wishlist",            pattern: /^\/profile\/wishlist\/?$/,       build: () => "/profile/wishlist" },
+        // Match-only alias. The wishlist is a shelf of the collection spoke now
+        // (?shelf=wishlist), but the standalone path was bookmarkable for long
+        // enough that dropping it would strand real links and home-screen
+        // shortcuts. No `build`: nothing navigates TO this name any more, and
+        // pathFor("collection", {shelf}) is what writes the canonical URL.
+        { name: "wishlist",            pattern: /^\/profile\/wishlist\/?$/,
+          alias: "collection",         aliasParams: { shelf: "wishlist" } },
         { name: "plays",               pattern: /^\/profile\/plays\/?$/,          build: () => "/profile/plays" },
         { name: "buddies",             pattern: /^\/profile\/buddies\/?$/,        build: () => "/profile/buddies" },
         { name: "stats",               pattern: /^\/profile\/stats\/?$/,          build: () => "/profile/stats" },
@@ -154,17 +160,33 @@
       this._views.set(name, view);
     }
 
-    // Resolve a URL pathname to {name, params} or null. Querystring values
-    // are merged into params so /game/x?gameName=Catan hydrates both.
-    matchPath(pathname) {
+    // Resolve a URL pathname to {name, params} or null. Querystring values are
+    // merged into params so /game/x?gameName=Catan hydrates both.
+    //
+    // The merge lives here rather than at the call site because there are three
+    // call sites and only one of them used to do it: the boot path in init.js
+    // did, so a cold deep link worked, but the popstate fallback below (browser
+    // -supplied entries, which carry no state object) did not — walking back to
+    // /profile/collection?shelf=wishlist landed on the default shelf.
+    //
+    // A route may also declare `alias` + `aliasParams`, which resolve it to a
+    // DIFFERENT view: that is how a retired path stays live without a second
+    // view registered under its name. Extracted and querystring params win over
+    // aliasParams, so an explicit ?shelf= in the URL is still honoured.
+    matchPath(pathname, search) {
       const path = (pathname || "/").split("?")[0];
+      const qs = search === undefined ? window.location.search : search;
       for (const r of this._routes) {
         if (!r.pattern) continue;
         const m = path.match(r.pattern);
-        if (m) {
-          const params = r.extract ? r.extract(m) : {};
-          return { name: r.name, params };
-        }
+        if (!m) continue;
+        const params = { ...(r.aliasParams || {}), ...(r.extract ? r.extract(m) : {}) };
+        try {
+          for (const [k, v] of new URLSearchParams(qs).entries()) {
+            if (params[k] == null) params[k] = v;
+          }
+        } catch (_) {}
+        return { name: r.alias || r.name, params };
       }
       return null;
     }
@@ -300,7 +322,7 @@
       if (window.api) window.api.trackEvent("view:" + name);
     }
 
-    async back(fallback = "feed") {
+    async back(fallback = "feed", fallbackParams = {}) {
       // Prefer the browser history's back so the URL and our _stack stay in
       // sync — popstate (below) will pop _stack and call go(). When _stack
       // is empty we have nowhere to go back to, so fall through to the
@@ -311,11 +333,11 @@
           return;
         } catch (_) { /* fall through */ }
       }
-      const url = this.pathFor(fallback, {});
+      const url = this.pathFor(fallback, fallbackParams);
       if (url) {
-        try { history.replaceState({ name: fallback, params: {} }, "", url); } catch (_) {}
+        try { history.replaceState({ name: fallback, params: fallbackParams }, "", url); } catch (_) {}
       }
-      return this.go(fallback, {}, { skipPush: true });
+      return this.go(fallback, fallbackParams, { skipPush: true });
     }
 
     // Hierarchical "up" for spoke screens whose header carries a parent

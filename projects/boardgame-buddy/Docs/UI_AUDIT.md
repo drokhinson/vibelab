@@ -277,7 +277,7 @@ Six paired surfaces compared.
 
 **Profile-self vs Profile-other** — `views/profile-self-view.js` (277 lines) and `views/profile-other-view.js` (279 lines). Both render a `.profile-hub` header, a `.profile-stat-card` strip, and a body of preview cards. Profile-other's stats grid uses `.profile-stat-card--static` (no clickable tiles), profile-self's are clickable. Otherwise the visual structure is consistent. Both views use `BgbBadge.render` for the header avatar (`profile-self-view.js:73`, `profile-other-view.js:106`). **Verdict: consistent.**
 
-**Collection vs Wishlist** — Both use `.profile-collection-grid` and `.collection-tile`, with `collection-view.js:299` and `wishlist-view.js:186` identical except for status filter. Both call `renderStatusTag` and `renderExpansionBadge` with identical `{ size: "xs" }` options. **Verdict: consistent.**
+**Collection vs Wishlist** — ~~Both use `.profile-collection-grid` and `.collection-tile`, with `collection-view.js:299` and `wishlist-view.js:186` identical except for status filter.~~ **Resolved:** the two screens were merged. Wishlist is a shelf of the collection spoke (`?shelf=wishlist`), so there is one `_renderTile` rather than two identical ones, and `views/wishlist-view.js` is gone. See the Cleanup log.
 
 **Game detail vs game polaroid (Gather screen)** — Same game, two different presentations:
 - Game detail (`views/game-detail-view.js:120–158`): hero polaroid with title in Crimson display, meta pills (players, time, expansion flag, coop flag), action row.
@@ -426,6 +426,52 @@ To reproduce or extend: re-run those greps after any refactor and update the cou
 
 ## Cleanup log
 
+### Pass 5 (Wishlist → a shelf of Collection) — 2026-09-01
+
+The finding this document raised three times (§6 "Collection vs Wishlist",
+§8's tile inventory, and the "Still open" note under it) is resolved, and not
+by extracting the component those notes proposed. `views/wishlist-view.js` was
+`collection-view.js` with the toggle removed and the status pinned — a
+byte-identical `_renderFilters()`, a byte-identical `_renderTile()`, a
+byte-identical scroll strip. Extracting a shared tile would have deduplicated
+the markup while leaving two screens, two routes and two singletons in place.
+Merging them removes all of it: Collection now holds **Owned / Wishlist /
+Played / Expansions**, and the shelf is a route param.
+
+**JS removed:** `views/wishlist-view.js` (371 lines) whole, its `<script>` tag,
+its `<main data-view="wishlist">` container, its `data-nav-views` entry, and
+its two lines in `init.js`. `_renderToggle` in `collection-view.js` went with
+the pill row.
+
+**CSS removed:** `.spoke-toggle--3` (3 rules, width metrics tuned for a pill
+row that no longer exists) and `.spoke-toggle__count` (2 rules — Add Games,
+the one remaining consumer of that family, has no counts on its pills).
+
+**Promoted, not copied:** `.status-sheet__opt`, `__opt-label`, `__opt-sub`,
+`__radio` and `__opt--danger` → `.bgb-sheet__opt*`. The new shelf picker made
+the radio row a second consumer, which is the moment
+`.claude/rules/ui-object-design.md` §4 names for extraction. The shared
+`.bgb-sheet__*` family already held every other part of a sheet; the row was
+the gap. It reads the same `--polaroid-*` aliases either way, so it stays paper
+inside `.status-sheet` and becomes chrome inside a re-pointed sheet with no
+rule restated. `.bgb-sheet__opt-count` is the one genuinely new member.
+
+**Added:** `widgets/shelf-picker-sheet.js` and the `.shelf-picker` trigger
+family. A dropdown, not a pill row, because four labels do not fit a 390px
+row — and a *sheet* rather than an absolute list, per
+`.claude/rules/overlays.md`. `.shelf-picker-sheet` is named in both theme
+re-point selector lists (`.claude/rules/theming.md` §8); note it is **not**
+`.shelf-sheet`, which belongs to `widgets/shelf-of-shame-sheet.js`.
+
+**Kept:** the Profile hub's Wishlist preview card and its
+`.preview-card--wishlist` modifier — the hub still has two cards, they just
+route to the same spoke with different `?shelf=`. `/profile/wishlist` survives
+as a match-only alias in the router's path table so existing bookmarks land.
+
+**Docs updated:** `STRUCTURE.md` (routes table, screen flow, the Collection dev
+note), `ARCHITECTURE.md` (route diagram, hub links, the `BgbSearchField`
+consumer list), and the three findings above, struck through in place.
+
 ### Pass 4 (Add-buddies consolidation) — 2026-08-31
 
 The Buddies screen's profile-search bar was replaced by an Add button opening
@@ -544,9 +590,10 @@ visual-regression risk across many screens and deserves its own change:
   live in this pass): `.collection-tile`, `.hot-game-tile`, `.preview-card__cover`,
   `.game-detail__polaroid`, `.plays-list__thumb`, `.game-polaroid`.
   `renderGamePolaroid` (`ui/game-card.js`) is used exactly once, by the Gather
-  grid. Two of the six are outright copy-paste: `.collection-tile` is duplicated
-  between `views/collection-view.js` and `views/wishlist-view.js`, and
-  `.hot-game-tile` is duplicated *within* `views/feed-view.js` at two call sites.
+  grid. One of the six is outright copy-paste: `.hot-game-tile` is duplicated
+  *within* `views/feed-view.js` at two call sites. (`.collection-tile` was the
+  other, duplicated between the collection and wishlist views — resolved by
+  merging those two screens; see the Cleanup log.)
   The native tier is the healthier model — `components/GameTile.js` is one
   component used everywhere. Fold the web side onto a single
   `renderGameTile(game, { variant })`.
@@ -817,8 +864,8 @@ geometrically unavailable there. That one chip is scoped to a measured 28×28 �
 better than the 21px it had — and the exception is commented at the rule.
 
 **Known cost, accepted deliberately:** a tile no longer distinguishes owned
-from wishlisted from played anywhere in the app. On the Owned tab and the
-Wishlist spoke that is the point. On the feed's "Hot this week" rail and the
+from wishlisted from played anywhere in the app. On the Owned and Wishlist
+shelves that is the point. On the feed's "Hot this week" rail and the
 explorer grid it is a real loss — "do I already own this?" was the useful
 signal there, and what survives is one bit (`+` = no relationship, `⋯` = some
 relationship). If the signal is wanted back, the cheap carrier is a
@@ -826,7 +873,10 @@ status-tinted rule under `.game-polaroid__caption`, driven by the `data-status`
 attribute the polaroid already sets — off the artwork, so it needs no opaque
 plate. Not done here.
 
-**Still open:** `_renderTile` remains byte-identical in `views/collection-view.js`
+~~**Still open:** `_renderTile` remains byte-identical in `views/collection-view.js`
 and `views/wishlist-view.js` — this pass applied the same one-line edit to both
-copies, which is the empirical case for extracting `ui/collection-tile.js`.
-Deliberately left out to keep this diff to the visual change.
+copies, which is the empirical case for extracting `ui/collection-tile.js`.~~
+**Resolved** by merging the two spokes rather than by extracting a component:
+there is now one `_renderTile`, in `views/collection-view.js`. A shared
+`ui/collection-tile.js` is still the right answer for the *other* four tile
+implementations listed above.

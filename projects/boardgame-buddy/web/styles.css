@@ -362,6 +362,7 @@
      .game-search-sheet,
      .country-picker-sheet,
      .shelf-sheet,
+     .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ach-sheet,
      .exp-picker,
@@ -401,6 +402,7 @@
      .game-search-sheet,
      .country-picker-sheet,
      .shelf-sheet,
+     .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ach-sheet,
      .exp-picker,
@@ -2437,7 +2439,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    whether they fit. The collection-status pill used to share the meta row and
    won every width fight in it; with it gone the winner has the row to itself
    and only ellipsises against the card edge. Owned / played / wishlist still
-   live on the collection grid, wishlist, game detail and the hot-games rail —
+   live on the collection grids, game detail and the hot-games rail —
    the feed card is the one surface that dropped them. */
 .play-card__caption {
   width: 100%;
@@ -3814,7 +3816,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 600;
 }
 
-/* Scroll strip under the Collection / Wishlist grids (ui/infinite-scroll.js).
+/* Scroll strip under the collection grids (ui/infinite-scroll.js).
    This is where the docked prev/next pager used to be. It sits in normal
    flow rather than fixed to the nav on purpose: it belongs to the end of the
    list, it is what the IntersectionObserver watches, and a docked copy of it
@@ -3890,8 +3892,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .status-tag--lg i { width: 1rem; height: 1rem; }
 /* ── The corner chip — one mark for every state, on every tile ──────────────
-   Every corner-of-artwork slot renders THIS: the collection and wishlist
-   grids, the feed rail and explorer polaroids, the plays-list thumbs. No
+   Every corner-of-artwork slot renders THIS: the collection grids, the feed
+   rail and explorer polaroids, the plays-list thumbs. No
    label, no per-status colour. A tile's corner restates what the screen
    around it already said — twelve "Owned" pills on the Owned tab — so here it
    is a control rather than a readout, and the state lives in the button's
@@ -4094,41 +4096,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0 0 8px; padding: 0 10px;
   font-size: 0.78rem; color: var(--polaroid-muted);
 }
-.status-sheet__opt {
-  display: flex; align-items: center; gap: 12px;
-  width: 100%; min-height: 56px; padding: 0 10px;
-  background: transparent; border: none; border-radius: 12px;
-  font-size: 0.97rem; font-weight: 500; line-height: 1.2;
-  color: var(--polaroid-ink);
-  cursor: pointer; text-align: left;
-}
-.status-sheet__opt:hover { background: var(--polaroid-bg-soft); }
-.status-sheet__opt:focus-visible {
-  outline: 2px solid var(--accent-ink);
-  outline-offset: -3px;
-}
-.status-sheet__opt > i,
-.status-sheet__opt > svg { color: var(--polaroid-muted); flex: 0 0 auto; }
-.status-sheet__opt-label { flex: 1 1 auto; min-width: 0; }
-.status-sheet__opt-sub {
-  display: block; margin-top: 3px;
-  font-size: 0.74rem; font-weight: 400; color: var(--polaroid-muted);
-}
-.status-sheet__radio {
-  flex: 0 0 auto; width: 21px; height: 21px; border-radius: 50%;
-  border: 2px solid var(--polaroid-line);
-  display: grid; place-items: center;
-}
-.status-sheet__opt[aria-checked="true"] {
-  background: var(--polaroid-bg-soft);
-  font-weight: 600;
-}
-.status-sheet__opt[aria-checked="true"] > i,
-.status-sheet__opt[aria-checked="true"] > svg { color: var(--ok); }
-.status-sheet__opt[aria-checked="true"] .status-sheet__radio { border-color: var(--ok); }
-.status-sheet__opt[aria-checked="true"] .status-sheet__radio::after {
-  content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--ok);
-}
+/* The radio row this sheet used to own lives in the shared sheet chrome now —
+   see .bgb-sheet__opt below. It reads the same --polaroid-* aliases, so it
+   still renders as paper here and as chrome inside a re-pointed sheet. */
 /* Played is derived from logged plays — no row to set, so it reads as a
    statement rather than an option. */
 .status-sheet__note {
@@ -4137,9 +4107,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 0.82rem; color: var(--polaroid-muted);
 }
 .status-sheet__rule { height: 1px; background: var(--polaroid-line); margin: 6px 10px; }
-.status-sheet__opt--danger { color: var(--rust); }
-.status-sheet__opt--danger > i,
-.status-sheet__opt--danger > svg { color: var(--rust); }
 .status-sheet__cancel {
   min-height: 52px; margin-top: 4px;
   border: 1px solid var(--polaroid-line); border-radius: 12px;
@@ -4227,6 +4194,74 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0 0 8px; padding: 0 10px; flex: none;
   font-size: 0.78rem; color: var(--polaroid-muted);
 }
+
+/* ── Radio / option row ───────────────────────────────────────────────────
+   A row that states a choice and shows whether it is the one in force: icon,
+   label with an optional sub-line, and a tick circle on the trailing edge.
+   Written for the status sheet, promoted here when the shelf picker made it
+   the second user — the row is the same object on both, and the alias tokens
+   make it paper inside .status-sheet and chrome inside a re-pointed sheet
+   without either one restating a rule.
+
+   Works under role="radio" (aria-checked) and role="option" (aria-selected);
+   the selectors below take either, so a listbox and a radiogroup can share it.
+   56px, not 44: rows sit flush, so a slightly-off thumb lands on the
+   neighbour (.claude/rules/mobile-web.md §5). */
+.bgb-sheet__opt {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; min-height: 56px; padding: 0 10px;
+  background: transparent; border: none; border-radius: 12px;
+  font-size: 0.97rem; font-weight: 500; line-height: 1.2;
+  color: var(--polaroid-ink);
+  cursor: pointer; text-align: left;
+}
+.bgb-sheet__opt:hover { background: var(--polaroid-bg-soft); }
+/* Inset: the list is a scroller and would clip an outset ring. */
+.bgb-sheet__opt:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: -3px;
+}
+.bgb-sheet__opt:active { background: var(--polaroid-line); }
+.bgb-sheet__opt > i,
+.bgb-sheet__opt > svg { color: var(--polaroid-muted); flex: 0 0 auto; }
+.bgb-sheet__opt-label { flex: 1 1 auto; min-width: 0; }
+.bgb-sheet__opt-sub {
+  display: block; margin-top: 3px;
+  font-size: 0.74rem; font-weight: 400; color: var(--polaroid-muted);
+}
+/* Reserved whether or not the row is the checked one, so picking can't reflow
+   the label beside it. */
+.bgb-sheet__radio {
+  flex: 0 0 auto; width: 21px; height: 21px; border-radius: 50%;
+  border: 2px solid var(--polaroid-line);
+  display: grid; place-items: center;
+}
+.bgb-sheet__opt[aria-checked="true"],
+.bgb-sheet__opt[aria-selected="true"] {
+  background: var(--polaroid-bg-soft);
+  font-weight: 600;
+}
+.bgb-sheet__opt[aria-checked="true"] > i,
+.bgb-sheet__opt[aria-checked="true"] > svg,
+.bgb-sheet__opt[aria-selected="true"] > i,
+.bgb-sheet__opt[aria-selected="true"] > svg { color: var(--ok); }
+.bgb-sheet__opt[aria-checked="true"] .bgb-sheet__radio,
+.bgb-sheet__opt[aria-selected="true"] .bgb-sheet__radio { border-color: var(--ok); }
+.bgb-sheet__opt[aria-checked="true"] .bgb-sheet__radio::after,
+.bgb-sheet__opt[aria-selected="true"] .bgb-sheet__radio::after {
+  content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--ok);
+}
+.bgb-sheet__opt--danger { color: var(--rust); }
+.bgb-sheet__opt--danger > i,
+.bgb-sheet__opt--danger > svg { color: var(--rust); }
+/* A count sitting between the label and the tick — how many rows the shelf
+   this option names holds. Tabular so the column doesn't jitter. */
+.bgb-sheet__opt-count {
+  flex: 0 0 auto;
+  font-size: 0.8rem; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--polaroid-muted);
+}
 /* Rides the .game-finder chrome (icon + input + clear button) the same way
    the import-expansions filter does — a bare shell, not a GameFinder: there
    is nothing to search for over the network here. */
@@ -4273,7 +4308,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   align-items: center;
   gap: 12px;
   width: 100%;
-  /* 56px, as .status-sheet__opt and .game-finder-dropdown-item — see the
+  /* 56px, as .bgb-sheet__opt and .game-finder-dropdown-item — see the
      comment on the latter about mis-taps landing on the neighbouring row. */
   min-height: 56px;
   padding: 6px 10px;
@@ -4560,7 +4595,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   gap: 12px;
   width: 100%;
   /* 56px, as every other sheet row in the app — .game-picker__row,
-     .player-picker__row, .status-sheet__opt. */
+     .player-picker__row, .bgb-sheet__opt. */
   min-height: 56px;
   padding: 6px 10px;
   flex: none;
@@ -4863,7 +4898,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   align-items: center;
   gap: 12px;
   width: 100%;
-  /* 56px, as every other sheet row in the app — .status-sheet__opt,
+  /* 56px, as every other sheet row in the app — .bgb-sheet__opt,
      .game-picker__row, .game-finder-dropdown-item. */
   min-height: 56px;
   padding: 6px 10px;
@@ -5413,8 +5448,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-muted, #8B7E68);
   border: 1px dashed color-mix(in srgb, var(--polaroid-ink) 25%, transparent);
 }
-/* Inline prev / next strip under each paginated buddies list. The Collection
-   and Wishlist grids scroll instead (.shelf-more); this screen stays paged
+/* Inline prev / next strip under each paginated buddies list. The collection
+   grids scroll instead (.shelf-more); this screen stays paged
    because it stacks two lists plus a rail, so each pager has to sit with the
    list it drives rather than one sentinel serving all three. */
 .buddies-pager {
@@ -7396,7 +7431,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .field-clear-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 0.5rem; }
 
 /* The wrapper BgbSearchField.render() emits, for the boxes that had no chrome
-   of their own — the Collection / Wishlist / Plays / Buddies / Add Games
+   of their own — the Collection / Plays / Buddies / Add Games
    searches. `flex: 1 1 auto` + `min-width: 0` because most of them sit in a
    row beside a filter button and used to carry those utilities themselves. */
 .search-field {
@@ -8435,8 +8470,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    Identity row + preview cards on the hub (the stat tiles it used to carry are
    now .statsblock, at the end of this file — .profile-stat-card below stays
    because profile-other-view still renders another person's numbers with it),
-   with shared chrome (.spoke-head, .spoke-toggle) for the Collection /
-   Wishlist / Plays / Buddies spokes. Settings reuses the same card system.
+   with shared chrome (.spoke-head, .shelf-picker) for the Collection /
+   Plays / Buddies spokes. Settings reuses the same card system.
    Reuses --polaroid-* tokens so the whole surface matches the parchment /
    polaroid cards already in the app.
    ────────────────────────────────────────────────────────────────────────── */
@@ -8942,7 +8977,52 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .spoke-head__add svg { width: 14px; height: 14px; }
 
-/* ── Collection: owned ↔ played-not-owned toggle ────────────────────────── */
+/* ── Collection: the shelf dropdown ──────────────────────────────────────
+   The trigger for widgets/shelf-picker-sheet.js — a full-width control that
+   states the shelf on screen and opens the list of the others. It replaced the
+   .spoke-toggle pill row below, which was already at its width limit with
+   three shelves (see the --3 metrics) and had no room for a fourth.
+
+   Same shape as .stats-picker, which is the app's other "tap to change what
+   this screen is about" control: 56px, accent-tinted, display face on the
+   value, chevron in --accent-ink. Deliberately not a shared class — the two
+   differ in their innards (art thumbnail vs icon) and share only a look, which
+   is what the token set is for. */
+.shelf-picker {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 0.85rem;
+  padding: 0.5rem 0.85rem;
+  min-height: 56px;
+  margin: 0.5rem 0 0.5rem;
+  font-family: var(--font-sans);
+  color: var(--polaroid-ink);
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+@media (hover: hover) {
+  .shelf-picker:hover { border-color: var(--accent); }
+}
+.shelf-picker:active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.shelf-picker:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shelf-picker__icon { color: var(--accent-ink); flex: none; }
+.shelf-picker__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shelf-picker__chev { color: var(--accent-ink); flex: none; display: grid; place-items: center; }
+
+/* ── Add Games: collection ↔ wishlist target toggle ─────────────────────── */
 .spoke-toggle {
   display: flex;
   gap: 0.4rem;
@@ -8977,27 +9057,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   box-shadow: var(--accent-fill-sh);
   font-weight: 800;
 }
-.spoke-toggle__count {
-  font-size: 0.72rem;
-  opacity: 0.7;
-  font-weight: 800;
-}
-.spoke-toggle__pill.is-active .spoke-toggle__count { opacity: 0.95; }
-
-/* Three pills in the 480px column need tighter metrics than two — at the
-   two-pill padding "Expansions" alone eats half the row. The label
-   wraps to two lines rather than truncating, and min-height stays 44px, so
-   the padding shrinks but the tap target never does. */
-.spoke-toggle--3 .spoke-toggle__pill {
-  padding: 0.4rem 0.4rem;
-  font-size: 0.72rem;
-  gap: 0.3rem;
-}
-.spoke-toggle--3 .spoke-toggle__label {
-  line-height: 1.15;
-  text-align: center;
-}
-.spoke-toggle--3 .spoke-toggle__count { font-size: 0.66rem; }
+/* Add Games is the only consumer left, and its two pills carry no count and
+   need no width variant. The --3 metrics and .spoke-toggle__count went with
+   the Collection pill row they were tuned for; if a third target ever appears
+   here, size it then rather than restoring a rule nothing reads. */
 
 /* ── Day-bucket divider ──────────────────────────────────────────────────
    Shared by the Plays list (This week / Last week / Earlier) and the Feed
@@ -9313,7 +9376,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* ────────────────────────────────────────────────────────────────────────────
    Spoke screen — secondary views (Settings + spokes)
-   Every spoke the hub routes into (Collection / Wishlist / Plays / Buddies /
+   Every spoke the hub routes into (Collection / Plays / Buddies /
    Settings). Neither theme paints a sheet: the page ground shows through and
    the cards carry the separation — white on cream in light, --chrome on
    espresso in dark.

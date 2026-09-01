@@ -49,11 +49,14 @@
   /** @typedef {"owned"|"wishlist"} Shelf */
 
   // One table drives the toggle pills, the header verb, the aria-labels and
-  // the spoke each shelf goes back to, so a third shelf can't leave one of
-  // them wired to nothing.
+  // where each shelf goes back to, so a third shelf can't leave one of them
+  // wired to nothing. Both shelves land on the same spoke now, told apart by
+  // ?shelf= — `routeParams` is what keeps the back arrow returning to the one
+  // the user was adding to rather than dumping them on Owned.
   const SHELVES = [
     { id: "owned",    label: "Collection", noun: "collection", route: "collection", icon: "library-big" },
-    { id: "wishlist", label: "Wishlist",   noun: "wishlist",   route: "wishlist",   icon: "star" },
+    { id: "wishlist", label: "Wishlist",   noun: "wishlist",   route: "collection", icon: "star",
+      routeParams: { shelf: "wishlist" } },
   ];
 
   /** @param {string} id @returns {typeof SHELVES[number]} */
@@ -709,9 +712,11 @@
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     _back() {
-      // Reachable only from the two spokes, so back names a destination; the
-      // fallback covers a cold deep link straight to /games/add.
-      window.router.back(shelfOf(this._shelf).route);
+      // Reachable only from the Collection spoke, so back names a destination;
+      // the fallback covers a cold deep link straight to /games/add, and its
+      // params are what put the user back on the shelf they were adding to.
+      const s = shelfOf(this._shelf);
+      window.router.back(s.route, s.routeParams || {});
     }
 
     /**

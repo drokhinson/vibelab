@@ -16,11 +16,12 @@
 //   3. `playing_time || 0` means a game with no playtime recorded PASSES a
 //      playtime_max filter but FAILS a playtime_min one.
 //
-// Both collection-view and wishlist-view call this (through ShelfController),
-// so the two spokes cannot drift apart the way their duplicated
-// PLAYTIME_BUCKETS arrays did. Those two scroll rather than page and slice the
-// window themselves; `pageOf` below is left for the Game Explorer, which is
-// still paged.
+// The Collection spoke calls this through ShelfController for each of its flat
+// shelves (owned, wishlist, played). Its Expansions tree is not a shelf and has
+// no ShelfFilter pass, but its search still goes through `matchesName` below so
+// the two never disagree about what "Cafe" matches. The spoke scrolls rather
+// than pages and slices the window itself; `pageOf` below is left for the Game
+// Explorer, which is still paged.
 
 (function () {
   /**
@@ -47,6 +48,21 @@
   }
 
   /**
+   * The one name test the search box means, wherever it is typed. Substring,
+   * not prefix, and NOT trimmed — this mirrors the server's
+   * `search.lower() not in name` exactly, and the truncated-shelf path sends
+   * the same query on to that endpoint, so trimming here would make the local
+   * and server halves of one search disagree. An empty query matches
+   * everything, so a cleared box filters nothing.
+   * @param {any} name @param {any} query @returns {boolean}
+   */
+  function matchesName(name, query) {
+    const q = String(query == null ? "" : query).toLowerCase();
+    if (!q) return true;
+    return String(name == null ? "" : name).toLowerCase().includes(q);
+  }
+
+  /**
    * Does one game row survive the active filters?
    * @param {any} game  A CollectionItem.game payload.
    * @param {ShelfFilters} f
@@ -57,10 +73,7 @@
     const excludeExpansions = f.excludeExpansions !== false;
     if (excludeExpansions && game.is_expansion) return false;
 
-    const name = (game.name || "").toLowerCase();
-    // Substring, not prefix — mirrors `search.lower() not in name`. An empty
-    // string is falsy on both sides, so a cleared search box filters nothing.
-    if (f.search && !name.includes(String(f.search).toLowerCase())) return false;
+    if (f.search && !matchesName(game.name, f.search)) return false;
 
     if (f.players != null) {
       const mn = game.min_players;
@@ -153,6 +166,7 @@
   window.ShelfFilter = {
     PLAYTIME_BUCKETS,
     isActiveBucket,
+    matchesName,
     passesShelfFilters,
     filterShelf,
     compareGameNames,

@@ -1,10 +1,21 @@
 // views/collection-view.js — Full collection spoke.
 //
-// Toggle between "Owned", "Expansions" and "Played" + shared
-// search/filters (Owned and Played only — see below).
-// Wishlist lives at its own /wishlist route. The "+ Add" button in the
-// header opens the Add Games page (views/add-games-view.js) — the whole BgB
-// catalog as one scroll, one tap per row.
+// One screen, four shelves — Owned, Wishlist, Played and Expansions — chosen
+// from a dropdown (widgets/shelf-picker-sheet.js) with the shared search and
+// filter bar underneath it. The active shelf rides the URL as ?shelf=<id>, so
+// every shelf is a real bookmarkable place and the Profile hub's Wishlist card
+// deep-links straight into one.
+//
+// Wishlist used to be its own spoke at /wishlist, a copy of this file with the
+// toggle removed and status pinned — right down to a byte-identical
+// _renderFilters(). That path survives as a match-only alias in the router's
+// table (domain/view.js) and nothing else is left of it. The native app had
+// already collapsed the two into one screen with a status param
+// (app/src/screens/CollectionScreen.js); this is the web catching up.
+//
+// The "+ Add" button in the header opens the Add Games page
+// (views/add-games-view.js) — the whole BgB catalog as one scroll, one tap per
+// row — targeting whichever shelf is on screen.
 //
 // Data lives in ShelfController (domain/shelf-controller.js): a whole shelf is
 // fetched once and cached, and the visible window, filter and search are all
@@ -13,22 +24,25 @@
 // reveals the next batch, which on the local path costs no I/O at all. This
 // file owns markup and painting only.
 //
-// The Expansions tab is deliberately NOT a ShelfController mode. That class is
-// paging-and-filtering machinery over one flat, server-ordered list per
-// CollectionStatus: it passes the mode straight through as the `status` query
-// param (which "expansions" is not), and its filter spec hard-codes
-// excludeExpansions, which would strip every row the tree exists to show.
-// Bending it would mean four conditionals in a class Wishlist also uses. The
-// tree keeps its own small state here instead, fetched from the same
+// Owned, Wishlist and Played are ShelfController modes. Expansions deliberately
+// is NOT. That class is paging-and-filtering machinery over one flat,
+// server-ordered list per CollectionStatus: it passes the mode straight through
+// as the `status` query param (which "expansions" is not), and its filter spec
+// hard-codes excludeExpansions, which would strip every row the tree exists to
+// show. The tree keeps its own small state here instead, fetched from the same
 // /collection/shelf endpoint with expansions included and grouped by
-// domain/expansion-tree.js.
+// domain/expansion-tree.js. Its search is a name match over those groups
+// (_visibleTree) rather than a ShelfFilter pass, for the same reason: players,
+// playtime and play mode say nothing about an expansion, so that shelf shows
+// the search field and hides the filter button.
 //
 // The same view serves ?userId=<someone-else>, reached from their profile. It
 // then holds TWO people's data at once: the rows are theirs, the status tags
 // are yours. You cannot edit another user's collection, so on that path the
 // tags read only the viewer's own map (never the row's `status`), a pick
 // writes to the viewer's shelf, and nothing a pick does may add or remove a
-// tile from the target's grid.
+// tile from the target's grid. Their wishlist is not offered there at all —
+// see `selfOnly` on the MODES table below.
 //
 // Repaints are surgical: render() rebuilds the shell only when something
 // structural changes, and revealing a batch rewrites just the grid and
@@ -41,24 +55,31 @@
   // screens on a phone, so the sentinel is well below the fold when it arms.
   const BATCH_SIZE = 21;
   const MODE_OWNED = "owned";
+  const MODE_WISHLIST = "wishlist";
   const MODE_PLAYED = "played";
   const MODE_EXPANSIONS = "expansions";
 
-  // One table drives the toggle pills, the header count and the count noun, so
-  // adding a fourth mode can't leave a pill wired to nothing. The previous
-  // hand-written pair indexed .spoke-toggle__count positionally and guarded on
-  // `pills.length === 2`, which silently stopped updating every count the
-  // moment a third pill appeared.
+  // One table drives the shelf picker, the header count and the count noun, so
+  // adding a shelf can't leave a row wired to nothing. An earlier hand-written
+  // pair indexed the counts positionally and guarded on `pills.length === 2`,
+  // which silently stopped updating every count the moment a third arrived.
+  //
+  // `selfOnly` is the wishlist's privacy rule, held in one place:
+  // bgb_collection_shelf returns an empty shelf to a non-owner by design
+  // (db/migrations/boardgamebuddy/055_hi_res_tile_art.sql), so offering the row
+  // on someone else's collection would only ever paint an empty grid. Read it
+  // through _availableModes(), never by hand.
   const MODES = [
-    { id: MODE_OWNED, label: "Owned", noun: "game" },
-    { id: MODE_EXPANSIONS, label: "Expansions", noun: "expansion" },
-    { id: MODE_PLAYED, label: "Played", noun: "game" },
+    { id: MODE_OWNED, label: "Owned", noun: "game", icon: "library-big" },
+    { id: MODE_WISHLIST, label: "Wishlist", noun: "game", icon: "star", selfOnly: true },
+    { id: MODE_PLAYED, label: "Played", noun: "game", icon: "dices" },
+    { id: MODE_EXPANSIONS, label: "Expansions", noun: "expansion", icon: "puzzle" },
   ];
 
   const PLAYTIME_BUCKETS = window.ShelfFilter.PLAYTIME_BUCKETS;
   const isActiveBucket = window.ShelfFilter.isActiveBucket;
 
-  // Per-device preference for the Expansions tab. localStorage rather than the
+  // Per-device preference for the Expansions shelf. localStorage rather than the
   // server: it is a view setting, worthless to another device, and reading it
   // must never be able to fail a render — hence the try/catch on both sides.
   const SHOW_ALL_KEY = "bgb.collection.expansionsShowAll";
@@ -75,7 +96,7 @@
     constructor() {
       super("collection");
       this.ctl = new window.ShelfController({
-        modes: [MODE_OWNED, MODE_PLAYED],
+        modes: [MODE_OWNED, MODE_WISHLIST, MODE_PLAYED],
         batchSize: BATCH_SIZE,
         target: () => this._shelfTarget(),
         otherUserId: () => (this._isOther() ? this._targetUserId : null),
@@ -103,7 +124,7 @@
       if (this.ctl) this.ctl.reset();
     }
 
-    /** Expansions-tab state. View-local — see the header on why not ShelfController. */
+    /** Expansions-shelf state. View-local — see the header on why not ShelfController. */
     _resetTreeState() {
       this._treeRows = null;
       this._tree = { groups: [], totalOwned: 0 };
@@ -115,8 +136,8 @@
       this._treeCatalog = null;
       this._treeCatalogLoading = false;
       this._treeCatalogSeq = 0;
-      // A view preference, not data — remembered so the tab doesn't snap back
-      // to owned-only on every navigation.
+      // A view preference, not data — remembered so the shelf doesn't snap
+      // back to owned-only on every navigation.
       this._treeShowAll = _readShowAll();
       // Monotonic guard: a slow load must not overwrite a newer one, and an
       // add's rollback must not fire after a later add superseded it.
@@ -126,6 +147,26 @@
     _isOther() {
       const me = window.store.get("user");
       return !!(this._targetUserId && me && this._targetUserId !== me.id);
+    }
+
+    /**
+     * The shelves this mount may show. One gate, three readers (the picker, the
+     * ?shelf= param and _setMode), so a private shelf can never be reached by
+     * one route while another hides it.
+     */
+    _availableModes() {
+      const other = this._isOther();
+      return MODES.filter((m) => !(m.selfOnly && other));
+    }
+
+    _modeDef(mode) {
+      return MODES.find((m) => m.id === mode) || MODES[0];
+    }
+
+    /** A ?shelf= value, validated against what this mount may show. */
+    _modeFromParams() {
+      const wanted = this.params && this.params.shelf;
+      return this._availableModes().some((m) => m.id === wanted) ? wanted : MODE_OWNED;
     }
 
     /** Cache/query target — the viewer's own id when no userId param is set. */
@@ -204,10 +245,18 @@
      * Paint before awaiting anything: a cached shelf renders its first batch
      * in this frame, and survives a hard reload because bgbCache writes
      * through to localStorage. Falls back to the profile bundle's first page
-     * (`owned_page` — the bundle's own field name), then to a spinner.
+     * (`owned_page` / `wishlist_page` — the bundle's own field names, and the
+     * only two shelves it carries rows for), then to a spinner.
      */
     _hydrateFromCache() {
-      if (this.ctl.hydrate(MODE_OWNED)) return true;
+      // The owned shelf is warmed whatever is on screen: the Expansions tree
+      // derives from it, so a cached copy is what lets that shelf paint in the
+      // frame it is picked in. Expansions itself is not a controller mode —
+      // hydrating it would write junk items/total keys under that name.
+      const mode = this._mode === MODE_EXPANSIONS ? MODE_OWNED : this._mode;
+      const ownedHit = this.ctl.hydrate(MODE_OWNED);
+      const hit = mode === MODE_OWNED ? ownedHit : this.ctl.hydrate(mode);
+      if (hit) return true;
       if (this._isOther()) return false;
       const seed = window.store.get("profileBundle");
       if (!seed) return false;
@@ -215,6 +264,12 @@
       if (seed.status_map) {
         this._statusMap = { ...seed.status_map };
         this._statusMapReady = true;
+      }
+      // The bundle carries a first page for the two shelves the hub previews.
+      // Only Owned has a prev_owned half — statusesFor() makes every other mode
+      // a single-status set — so the wishlist seed needs no `parted` figure.
+      if (mode === MODE_WISHLIST) {
+        return this.ctl.seedPartial(MODE_WISHLIST, seed.wishlist_page, seed.wishlist_total);
       }
       // owned_total is owned-ONLY (prev_owned is counted separately), while
       // owned_page carries both — so the seed's total has to be the sum, or
@@ -228,12 +283,38 @@
       );
     }
 
+    /**
+     * Counts for the shelves this mount has not loaded yet, so the picker shows
+     * real numbers before anything is fetched. The bundle knows all three; the
+     * shelves themselves stay lazy.
+     */
+    _seedShelfCounts() {
+      // The bundle is always the VIEWER's, so on someone else's shelf these
+      // numbers describe the wrong person. Their counts arrive with their data.
+      if (this._isOther()) return;
+      const seed = window.store.get("profileBundle");
+      if (!seed) return;
+      if (typeof seed.played_total === "number" && !this.ctl.shelf[MODE_PLAYED]) {
+        this.ctl.total[MODE_PLAYED] = seed.played_total;
+      }
+      if (typeof seed.wishlist_total === "number" && !this.ctl.shelf[MODE_WISHLIST]) {
+        this.ctl.total[MODE_WISHLIST] = seed.wishlist_total;
+      }
+      if (typeof seed.owned_total === "number" && !this.ctl.shelf[MODE_OWNED]) {
+        this.ctl.total[MODE_OWNED] = seed.owned_total;
+      }
+    }
+
     async _initFromParams() {
       // The view instance is a singleton across mounts (init.js wires it
       // once). Reset before reading params so user A's items don't linger
       // on screen while user B's fetch is in flight.
       this._resetState();
       this._targetUserId = (this.params && this.params.userId) || null;
+      // Before any hydrate: _hydrateFromCache and the first render both read
+      // _mode, so a deep link to ?shelf=wishlist has to have picked its shelf
+      // by now or the first frame paints Owned and then jumps.
+      this._mode = this._modeFromParams();
 
       if (this._isOther()) {
         this._hydrateStatusMap();
@@ -242,7 +323,7 @@
         window.User.fetch(this._targetUserId)
           .then((p) => { this._targetProfile = p; this.render(); })
           .catch(() => {});
-        await this.ctl.load(MODE_OWNED);
+        await this._loadActiveShelf();
         // Viewer maps still apply — overlay "you own this" pills on
         // the other user's tiles.
         await this._refreshMaps();
@@ -252,18 +333,29 @@
       // Self path — paint from cache, then let SWR decide whether to refresh.
       this._hydrateStatusMap();
       this._hydrateFromCache();
-      // The Played tab is lazy (see _setMode): nothing on first paint needs its
-      // contents, and the bundle already carries its count for the toggle pill.
-      const seed = window.store.get("profileBundle");
-      if (seed && typeof seed.played_total === "number") {
-        this.ctl.total[MODE_PLAYED] = seed.played_total;
-      }
+      // Every shelf but the one on screen is lazy (see _setMode): nothing on
+      // first paint needs their contents, and the bundle already carries their
+      // counts for the picker.
+      this._seedShelfCounts();
       this._seedTreeCount();
       this.render();
       await Promise.all([
-        this.ctl.load(MODE_OWNED),
+        this._loadActiveShelf(),
         this._refreshMaps(),
       ]);
+    }
+
+    /**
+     * Fetch whatever shelf the mount opened on. Expansions is not a controller
+     * mode and loads through its own path; the tree reads the owned shelf, so
+     * that is what a cold Expansions deep link has to pull.
+     */
+    async _loadActiveShelf() {
+      if (this._mode !== MODE_EXPANSIONS) return this.ctl.load(this._mode);
+      this._treeLoadedOnce = true;
+      const jobs = [this._loadTree()];
+      if (this._treeShowAll) jobs.push(this._loadCatalog());
+      await Promise.all(jobs);
     }
 
     renderLoading() {
@@ -272,8 +364,11 @@
       // holds the PREVIOUS mount's target until _initFromParams runs.
       this._resetState();
       this._targetUserId = (this.params && this.params.userId) || null;
+      this._mode = this._modeFromParams();
       this._hydrateStatusMap();
       this._hydrateFromCache();
+      this._seedShelfCounts();
+      this._seedTreeCount();
       this.render();
     }
 
@@ -339,6 +434,10 @@
       }
       this._paintCounts();
       this._paintFilters();
+      // The tree's pinned band lives outside the grid host, so _paintList never
+      // touches it — but a search can empty the tree, and "Expand all" has to
+      // go disabled with it.
+      if (this._mode === MODE_EXPANSIONS) this._paintTreeControls();
       this._paintList();
     }
 
@@ -347,9 +446,16 @@
       const activeId = active && active.id;
       const caret = active && active.selectionStart;
 
-      if (this._mode !== MODE_EXPANSIONS && this.ctl.isColdLoad(this._mode)) {
+      const tree = this._mode === MODE_EXPANSIONS;
+
+      if (!tree && this.ctl.isColdLoad(this._mode)) {
+        // The picker and the bar come up with the spinner rather than a frame
+        // after it. They are chrome, not content: emitting only the header here
+        // made both pop in once the first shelf landed, and moved the grid.
         this.container.innerHTML = `
           ${this._renderHead()}
+          ${this._renderShelfPicker()}
+          ${this._renderControls(tree)}
           <div class="profile-loading">
             ${window.buddyLoader({ size: 96, label: "Loading collection…" })}
           </div>
@@ -359,16 +465,15 @@
         return;
       }
 
-      const other = this._isOther();
-      // Search and the filter panel are ShelfFilter-derived over the flat
-      // shelf — players, playtime and play mode, none of which mean anything
-      // for an expansion — and the search box is bound to the controller's
-      // shared query. The tree tops out around 40 groups, so it earns neither.
-      const tree = this._mode === MODE_EXPANSIONS;
+      // The picker and the search bar are on every shelf and on every target,
+      // in that order — the control that says WHAT you are looking at, then the
+      // controls that narrow it. The filter PANEL is ShelfFilter-derived over a
+      // flat shelf (players, playtime, play mode), none of which mean anything
+      // for an expansion, so the tree gets the search field without it.
       this.container.innerHTML = `
         ${this._renderHead()}
-        ${other || tree ? "" : this._renderControls()}
-        ${other ? "" : this._renderToggle()}
+        ${this._renderShelfPicker()}
+        ${this._renderControls(tree)}
         <div id="collection-tree-controls-host">${tree ? this._renderTreeControls() : ""}</div>
         <div id="collection-filters-host">${!tree && this._filtersOpen ? this._renderFilters() : ""}</div>
         <div id="collection-grid-host">${this._renderBody()}</div>
@@ -426,13 +531,18 @@
     }
 
     /**
-     * The count for a mode's pill and header — what the user OWNS, which on
-     * the Owned shelf is fewer than the tiles on screen: a prev_owned game
-     * (sold, gifted, donated) is listed there but not counted there. The
+     * The count for a shelf's picker row and header — what the user OWNS,
+     * which on the Owned shelf is fewer than the tiles on screen: a prev_owned
+     * game (sold, gifted, donated) is listed there but not counted there. The
      * difference is named rather than hidden — see _countLabel.
      */
     _modeTotal(mode) {
-      if (mode === MODE_EXPANSIONS) return this._tree.totalOwned;
+      // The visible tree, so the header count follows a search the same way
+      // ctl.total does on the flat shelves (derive() reports the filtered
+      // length there). The picker reads this too, so its Expansions row and the
+      // header can't show two different numbers. The tree drops prev_owned rows
+      // upstream in _setTreeRows, so there is nothing to subtract here.
+      if (mode === MODE_EXPANSIONS) return this._visibleTree().totalOwned;
       return Math.max(0, (this.ctl.total[mode] || 0) - (this.ctl.parted[mode] || 0));
     }
 
@@ -455,22 +565,25 @@
       return !rows && parted > 0 ? `${label} · ${parted} prev. owned` : label;
     }
 
-    /** Header count + toggle pills — text only, so no teardown. */
+    /**
+     * The header count — text only, so no teardown. The picker's own counts are
+     * read fresh from _modeTotal every time the sheet opens, so there is
+     * nothing else on screen for this to keep in step.
+     */
     _paintCounts() {
       const head = this.container.querySelector(".spoke-head__count");
       if (head) head.textContent = this._countLabel(this._mode);
-      // Looked up by mode, not by position: the old positional version was
-      // guarded on exactly two pills and went silent when a third arrived.
-      this.container.querySelectorAll("[data-mode-count]").forEach((el) => {
-        el.textContent = String(this._modeTotal(el.getAttribute("data-mode-count")));
-      });
     }
 
     /** Filter panel + the badge on the filter button. */
     _paintFilters() {
+      // _filtersOpen survives a shelf switch, so without the tree check a panel
+      // left open on Owned would reappear on Expansions — where the button that
+      // closes it does not exist. Matches the guard in _renderShell.
+      const open = this._filtersOpen && this._mode !== MODE_EXPANSIONS;
       const host = this.container.querySelector("#collection-filters-host");
       if (host) {
-        host.innerHTML = this._filtersOpen ? this._renderFilters() : "";
+        host.innerHTML = open ? this._renderFilters() : "";
         this.refreshIcons(host);
       }
       const btn = this.container.querySelector("#collection-filter-btn");
@@ -508,7 +621,7 @@
           ${other ? "" : `
             <button class="spoke-head__add btn btn-primary btn-sm"
                     onclick="window.collectionView._openAddGame()"
-                    aria-label="Add a game to your collection">
+                    aria-label="Add a game to your ${this._mode === MODE_WISHLIST ? "wishlist" : "collection"}">
               <i data-icon="plus" class="w-4 h-4"></i><span>Add</span>
             </button>
           `}
@@ -523,41 +636,84 @@
      * cached shelves, so the grid re-reads on its own — nothing to force here.
      */
     _openAddGame() {
-      window.router.go("add-games", { status: "owned" });
+      // Add Games writes to a real shelf, and "expansions" and "played" are not
+      // ones you can put a game on by hand — both fall back to Owned.
+      const status = this._mode === MODE_WISHLIST ? MODE_WISHLIST : MODE_OWNED;
+      window.router.go("add-games", { status });
     }
 
-    _renderControls() {
+    /**
+     * Search field, plus the filter button on every shelf that has filters.
+     * @param {boolean} tree True on Expansions, where the button is dropped.
+     */
+    _renderControls(tree) {
       const activeFilters = this.ctl.activeFilterCount();
       return `
         <div class="profile-panel__controls">
           ${window.BgbSearchField.render({
             id: "collection-search-input",
             value: this.ctl.query,
-            placeholder: "Search your collection by name",
+            placeholder: this._searchPlaceholder(),
             oninput: "window.collectionView._onSearchInput(this.value)",
           })}
-          <button id="collection-filter-btn" class="btn btn-ghost relative" title="Filters"
-                  onclick="window.collectionView._toggleFilters()">
-            <i data-icon="sliders-horizontal" class="w-4 h-4"></i>
-            ${activeFilters > 0 ? `<span class="search-filter-badge">${activeFilters}</span>` : ""}
-          </button>
+          ${tree ? "" : `
+            <button id="collection-filter-btn" class="btn btn-ghost relative" title="Filters"
+                    onclick="window.collectionView._toggleFilters()">
+              <i data-icon="sliders-horizontal" class="w-4 h-4"></i>
+              ${activeFilters > 0 ? `<span class="search-filter-badge">${activeFilters}</span>` : ""}
+            </button>
+          `}
         </div>
       `;
     }
 
-    _renderToggle() {
+    /** Names the shelf being searched, so the field can't read as global. */
+    _searchPlaceholder() {
+      if (this._isOther()) {
+        const who = this._targetProfile && this._targetProfile.display_name;
+        // The name arrives on a later frame than the first paint, so the
+        // possessive has to have a form that reads without it.
+        return who ? `Search ${who}'s shelf by name` : "Search this shelf by name";
+      }
+      switch (this._mode) {
+        case MODE_WISHLIST:   return "Search your wishlist by name";
+        case MODE_PLAYED:     return "Search played games by name";
+        case MODE_EXPANSIONS: return "Search expansions by name";
+        default:              return "Search your collection by name";
+      }
+    }
+
+    /**
+     * The dropdown trigger — which shelf is on screen. No count on it: the
+     * spoke header already carries one ("42 games") a few pixels away, and the
+     * per-shelf numbers that are actually worth comparing are in the sheet,
+     * next to the shelves they belong to.
+     */
+    _renderShelfPicker() {
+      const def = this._modeDef(this._mode);
       return `
-        <div class="spoke-toggle spoke-toggle--${MODES.length}" role="tablist">
-          ${MODES.map((m) => `
-            <button class="spoke-toggle__pill ${this._mode === m.id ? "is-active" : ""}"
-                    role="tab" aria-selected="${this._mode === m.id}"
-                    onclick="window.collectionView._setMode('${m.id}')">
-              <span class="spoke-toggle__label">${escapeHtml(m.label)}</span>
-              <span class="spoke-toggle__count" data-mode-count="${m.id}">${this._modeTotal(m.id)}</span>
-            </button>
-          `).join("")}
-        </div>
+        <button type="button" class="shelf-picker" id="collection-shelf-picker"
+                aria-haspopup="dialog"
+                aria-label="Showing ${escapeAttr(def.label)} — choose a shelf"
+                onclick="window.collectionView._openShelfPicker(this)">
+          <i data-icon="${escapeAttr(def.icon)}" class="w-5 h-5 shelf-picker__icon"></i>
+          <span class="shelf-picker__label font-display">${escapeHtml(def.label)}</span>
+          <i data-icon="chevron-down" class="w-4 h-4 shelf-picker__chev"></i>
+        </button>
       `;
+    }
+
+    _openShelfPicker(anchor) {
+      const modes = this._availableModes();
+      const counts = {};
+      for (const m of modes) counts[m.id] = this._modeTotal(m.id);
+      window.ShelfPickerSheet.open({
+        options: modes,
+        selected: this._mode,
+        counts,
+        returnFocus: anchor || null,
+        onPick: (id) => this._setMode(id),
+      });
     }
 
     _renderFilters() {
@@ -623,9 +779,13 @@
         let empty;
         if (this._isOther()) {
           const who = (this._targetProfile && this._targetProfile.display_name) || "They";
-          empty = `${who} doesn't own any games yet.`;
+          if (isSearchingOrFiltering) empty = "No matches on this shelf.";
+          else if (mode === MODE_PLAYED) empty = `${who} has no played-but-uncollected games.`;
+          else empty = `${who} doesn't own any games yet.`;
         } else if (mode === MODE_OWNED) {
           empty = isSearchingOrFiltering ? "No matches in your collection." : "No owned games yet — tap the + to add one.";
+        } else if (mode === MODE_WISHLIST) {
+          empty = isSearchingOrFiltering ? "No wishlist matches." : "Nothing on your wishlist yet — tap the + to add one.";
         } else {
           empty = isSearchingOrFiltering ? "No played-not-owned matches." : "No played-but-uncollected games.";
         }
@@ -683,7 +843,51 @@
       `;
     }
 
-    // ── Expansions tab ────────────────────────────────────────────────────────
+    // ── Expansions shelf ──────────────────────────────────────────────────────
+
+    /**
+     * The tree as the search box leaves it. `this._tree` stays the unfiltered
+     * source of truth — everything that paints reads THIS instead, so the
+     * header count, the controls band and the body can never disagree about
+     * what is on screen.
+     *
+     * A group whose base game matches is kept whole: you searched for the game,
+     * so you want its expansions. Otherwise the group survives only for the
+     * kids that match, and is dropped when none do. Groups that matched purely
+     * through a kid come back open, or the one row you searched for would be
+     * hidden inside a collapsed group.
+     *
+     * Recomputed per paint rather than cached: it is a couple of dozen groups
+     * (the tree tops out around 40) and a cache here would be one more thing
+     * every mutation path had to remember to invalidate.
+     */
+    _visibleTree() {
+      const q = this.ctl.query;
+      const tree = this._tree || { groups: [], totalOwned: 0 };
+      if (!q) return tree;
+      const match = window.ShelfFilter.matchesName;
+      const groups = [];
+      for (const g of tree.groups || []) {
+        if (match(g.name, q)) {
+          groups.push(g);
+          continue;
+        }
+        const kids = (g.kids || []).filter((k) => match(k.game && k.game.name, q));
+        if (!kids.length) continue;
+        groups.push({ ...g, kids, ownedCount: kids.filter((k) => k.owned).length, _forceOpen: true });
+      }
+      let totalOwned = 0;
+      for (const g of groups) totalOwned += g.ownedCount;
+      return { groups, totalOwned };
+    }
+
+    /** _treeOpen, plus the groups a search matched only through a child. */
+    _treeOpenFor(tree) {
+      if (!(tree.groups || []).some((g) => g._forceOpen)) return this._treeOpen;
+      const open = { ...this._treeOpen };
+      for (const g of tree.groups) if (g._forceOpen) open[String(g.baseId)] = true;
+      return open;
+    }
 
     _renderTreeBody() {
       if (this._treeError) {
@@ -692,20 +896,29 @@
       if (this._treeLoading && !this._treeRows) {
         return `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Loading expansions…" })}</div>`;
       }
-      const groups = this._tree.groups || [];
+      const tree = this._visibleTree();
+      const groups = tree.groups || [];
       if (!groups.length && this._treeShowAll && this._treeCatalogLoading) {
         return `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Loading expansions…" })}</div>`;
+      }
+      if (!groups.length && this.ctl.query) {
+        return `<div class="profile-empty">No expansions match.</div>`;
       }
       if (!groups.length) {
         // Distinct from "you own no expansions": a shelf with no base game
         // that HAS any expansions in the catalog has nothing to nest under.
         return `<div class="profile-empty">Nothing to show yet — expansions appear here under the games you own.</div>`;
       }
-      const truncated = this._treeTruncated
+      // Only worth saying when the whole tree is on show — under a search the
+      // line would read as "these results are cut off", which is not what it
+      // means.
+      const truncated = this._treeTruncated && !this.ctl.query
         ? `<p class="exp-tree__truncated">Showing the first slice of a very large collection.</p>`
         : "";
-      return window.renderExpansionTree(this._tree, { open: this._treeOpen, showAll: this._treeShowAll })
-        + truncated;
+      return window.renderExpansionTree(tree, {
+        open: this._treeOpenFor(tree),
+        showAll: this._treeShowAll,
+      }) + truncated;
     }
 
     /**
@@ -720,7 +933,9 @@
     _renderTreeControls() {
       const on = this._treeShowAll;
       const busy = on && this._treeCatalogLoading && !this._treeCatalog;
-      const groups = (this._tree && this._tree.groups) || [];
+      // The visible tree, not the whole one: with a search narrowing the list to
+      // nothing, "Expand all" must not stay live over groups that aren't there.
+      const groups = this._visibleTree().groups || [];
       const anyOpen = this._anyGroupOpen();
       // One control, two directions: with anything open it closes everything,
       // otherwise it opens everything. Derived from _treeOpen on every paint
@@ -743,10 +958,16 @@
         </div>`;
     }
 
-    /** True when at least one group is currently disclosed. */
+    /**
+     * True when at least one group ON SCREEN is disclosed. Read off the visible
+     * tree so the control describes what the user can see: a search-matched
+     * group is force-opened by _treeOpenFor, and a collapsed group filtered out
+     * by that same search must not keep the label saying "Collapse all".
+     */
     _anyGroupOpen() {
-      const groups = (this._tree && this._tree.groups) || [];
-      return groups.some((g) => !!this._treeOpen[String(g.baseId)]);
+      const tree = this._visibleTree();
+      const open = this._treeOpenFor(tree);
+      return (tree.groups || []).some((g) => !!open[String(g.baseId)]);
     }
 
     /**
@@ -756,7 +977,9 @@
      */
     _toggleAllGroups() {
       const open = !this._anyGroupOpen();
-      const groups = (this._tree && this._tree.groups) || [];
+      // Only what is on screen: under a search this must not silently expand
+      // forty groups the user cannot see and would find open on clearing it.
+      const groups = this._visibleTree().groups || [];
       for (const g of groups) {
         const key = String(g.baseId);
         this._treeOpen[key] = open;
@@ -787,7 +1010,7 @@
 
     _setTreeRows(items, truncated) {
       // The owned shelf now carries prev_owned rows (migration 069), and this
-      // tab is specifically about the expansions you HAVE — its tally is the
+      // shelf is specifically about the expansions you HAVE — its tally is the
       // same number the status map's expansion_counts reports, which excludes
       // them. So they are dropped here rather than in expansion-tree.js, which
       // stays a pure reshape. A base game you sold falls out with them, and
@@ -799,8 +1022,8 @@
     }
 
     /**
-     * Paint from cache first so the tab has content in its first frame, same
-     * contract as ShelfController.hydrate for the other two tabs.
+     * Paint from cache first so the shelf has content in its first frame,
+     * same contract as ShelfController.hydrate for the other three.
      */
     _hydrateTree() {
       const cached = window.Collection.cachedShelf(this._shelfTarget(), MODE_OWNED, {
@@ -812,8 +1035,9 @@
     }
 
     /**
-     * Give the Expansions pill a number before the tab is ever opened —
-     * otherwise it reads "0" next to two populated pills and looks broken.
+     * Give the Expansions row a number before the shelf is ever opened —
+     * otherwise it reads "0" in the picker next to three populated shelves and
+     * looks broken.
      *
      * A cached expansions-shelf is exact. Failing that, the already-loaded
      * status map's per-base-game owned counts are close: they miss owned
@@ -821,7 +1045,11 @@
      * trailing group. Either way _loadTree corrects it.
      */
     _seedTreeCount() {
+      // _hydrateTree reads the TARGET's cached shelf, so it is safe either way.
       if (this._hydrateTree()) return;
+      // The expansion-count map is the viewer's own, and would put their number
+      // on someone else's shelf.
+      if (this._isOther()) return;
       const counts = window.Collection.cachedExpansionCounts
         ? window.Collection.cachedExpansionCounts()
         : null;
@@ -857,7 +1085,7 @@
      * build from, and the next load picks it up.
      *
      * prev_owned deliberately falls through to the removal path, matching
-     * _setTreeRows: marking an expansion sold takes it off this tab and out of
+     * _setTreeRows: marking an expansion sold takes it off this shelf and out of
      * its group's tally, the same way it leaves expansion_counts.
      */
     _spliceTree(gameId, status) {
@@ -904,7 +1132,7 @@
         this._treeCatalog = items || [];
       } catch (e) {
         if (seq !== this._treeCatalogSeq) return;
-        // Non-fatal: the tab still shows what you own. Turning the switch back
+        // Non-fatal: the shelf still shows what you own. Turning the switch back
         // off is the recovery, so it says so rather than blanking the tree.
         this._treeCatalog = [];
         this._treeError = null;
@@ -1077,17 +1305,21 @@
     // ── Handlers ──────────────────────────────────────────────────────────────
     _setMode(mode) {
       if (this._mode === mode) return;
+      // The picker only ever offers what _availableModes() allows, but this is
+      // also the landing point for a ?shelf= the user typed.
+      if (!this._availableModes().some((m) => m.id === mode)) return;
       this._mode = mode;
-      // Each tab keeps its own scroll window, so a tab arrived at from deep in
-      // another one must start at its head — otherwise the viewport lands on
-      // the new tab's sentinel and unrolls a list the user hasn't looked at.
+      this._syncShelfUrl();
+      // Each shelf keeps its own scroll window, so one arrived at from deep in
+      // another must start at its head — otherwise the viewport lands on the
+      // new shelf's sentinel and unrolls a list the user hasn't looked at.
       // Measured before the repaint on purpose: the grid host sits at the same
-      // document position in all three tabs, and this only ever scrolls UP.
+      // document position on every shelf, and this only ever scrolls UP.
       this._scrollToListTop();
       if (mode === MODE_EXPANSIONS) {
-        // Lazy, like the Played tab. Paint whatever is cached in the frame the
-        // pill was tapped in, then let SWR correct it — _loadTree still runs
-        // on a warm hydrate, or the tab would serve a cached shelf forever.
+        // Lazy, like Wishlist and Played. Paint whatever is cached in the frame
+        // the row was tapped in, then let SWR correct it — _loadTree still runs
+        // on a warm hydrate, or the shelf would serve a cached copy forever.
         if (!this._treeRows) this._hydrateTree();
         this.render();
         if (!this._treeLoadedOnce && !this._treeLoading) {
@@ -1095,15 +1327,28 @@
           this._loadTree();
         }
         // The switch is a remembered preference, so it can already be on the
-        // first time the tab is opened this session.
+        // first time the shelf is opened this session.
         if (this._treeShowAll && !this._treeCatalog && !this._treeCatalogLoading) {
           this._loadCatalog();
         }
         return;
       }
-      // Lazy first load for the Played tab.
+      // Lazy first load for Wishlist and Played.
       if (!this.ctl.shelf[mode] && !this.ctl.loading[mode]) this.ctl.load(mode);
       else this.render();
+    }
+
+    /**
+     * Put the active shelf in the address bar. replaceUrl rather than go():
+     * switching shelf is a lateral move inside one screen, so it should not
+     * stack a history entry per tap — Back from Expansions belongs to the
+     * Profile, not to Owned. It rewrites the entry and the store slot without
+     * re-mounting, so it cannot loop back through onParamsChange.
+     */
+    _syncShelfUrl() {
+      const params = { shelf: this._mode };
+      if (this._targetUserId) params.userId = this._targetUserId;
+      window.router.replaceUrl("collection", params);
     }
     _onSearchInput(value) { this.ctl.onSearchInput(value, this._mode); }
     _setFilter(key, value) { this.ctl.setFilter(key, value, this._mode); }
