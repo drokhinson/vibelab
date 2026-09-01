@@ -44,6 +44,14 @@ from .bgg_client import (
     parse_bgg_xml,
     store_user_credentials,
 )
+# The collection read layer lives in its own module now — the BgB->BGG
+# comparison needs the same sweep. See bgg_collection_read for why the
+# (bgg_id, status, private) contract this module keeps is an adapter over a
+# fuller one rather than a widened tuple.
+from .bgg_collection_read import (
+    BGG_THROTTLE_SECONDS as _WORKER_THROTTLE_SECONDS,
+    _fetch_collection_batched,
+)
 from .bgg_credentials import login_to_bgg
 from .constants import BggAuthState
 from .dependencies import CurrentUser, get_current_user
@@ -57,30 +65,9 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
-# BGG-collection statuses we import. Anything else (want, fortrade, preordered,
-# …) is ignored; users can curate those flags on BGG and they won't pollute the
-# BoardgameBuddy closet.
-#
-# ORDER IS LOAD-BEARING: _derive_collection_status walks this dict in insertion
-# order after checking `own`, so a game flagged both prevowned and wishlist
-# comes in as prev_owned. Each key is also its own (subtype, status) request in
-# the batch sweep below, so adding one costs two more BGG calls per sync.
-_BGG_STATUSES = {
-    "own": "owned",
-    "prevowned": "prev_owned",
-    "wishlist": "wishlist",
-    "wanttoplay": "wishlist",
-}
 
-# Subtypes we sweep when batching the /collection request. Each (subtype,
-# status) pair is its own xmlapi2 call so BGG can serve a smaller, more
-# cacheable subset — large combined requests are what trigger the warm-up
-# placeholder response that returns zero items.
-_COLLECTION_SUBTYPES: tuple[str, ...] = ("boardgame", "boardgameexpansion")
-
-# Throttle between BGG calls inside the worker. BGG's public limit is loose
-# (a few req/sec) but they 429 aggressively if you blast them.
-_WORKER_THROTTLE_SECONDS = 1.5
+# _WORKER_THROTTLE_SECONDS is imported from bgg_collection_read: the sweep and
+# this worker throttle for the same reason and must not drift apart.
 _WORKER_BATCH_SIZE = 50
 _WORKER_MAX_ATTEMPTS = 3
 
@@ -427,95 +414,6 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
 # ── BGG XML parsing ──────────────────────────────────────────────────────────
 
 
-def _derive_collection_status(item) -> Optional[str]:
-    """Map a BGG <item><status .../></item> to our collection status, or None."""
-    status_el = item.find("status")
-    if status_el is None:
-        return None
-    # Priority: own > prevowned > wishlist/wanttoplay (latter two collapse into
-    # 'wishlist'). `own` is checked out of band because it wins outright: BGG
-    # sets prevowned alongside own for a copy you replaced, and you do have it.
-    if status_el.get("own") == "1":
-        return "owned"
-    for flag, mapped in _BGG_STATUSES.items():
-        if flag == "own":
-            continue
-        if status_el.get(flag) == "1":
-            return mapped
-    return None
-
-
-def _parse_private_info(item) -> Optional[dict]:
-    """Extract <privateinfo .../> attributes (only present with showprivate=1).
-
-    Returns None when the element is absent — callers should treat that as
-    "no private fields to write" rather than nulling existing rows.
-    """
-    pi = item.find("privateinfo")
-    if pi is None:
-        return None
-
-    def _num(name: str) -> Optional[float]:
-        val = pi.get(name)
-        if val in (None, "", "0", "0.0", "0.00"):
-            return None
-        try:
-            return float(val)
-        except ValueError:
-            return None
-
-    def _int(name: str) -> Optional[int]:
-        val = pi.get(name)
-        if val in (None, "", "0"):
-            return None
-        try:
-            return int(val)
-        except ValueError:
-            return None
-
-    acq_date = pi.get("acquisitiondate") or None
-    if acq_date == "0000-00-00":
-        acq_date = None
-
-    private_comment_el = pi.find("privatecomment")
-    private_comment = (
-        private_comment_el.text.strip()
-        if private_comment_el is not None and private_comment_el.text
-        else None
-    )
-
-    return {
-        "private_comment": private_comment,
-        "acquired_from": (pi.get("acquiredfrom") or None) or None,
-        "acquisition_date": acq_date,
-        "purchase_price": _num("pricepaid"),
-        "purchase_currency": (pi.get("pricepaidcurrency") or None) or None,
-        "inventory_location": (pi.get("inventorylocation") or None) or None,
-        "quantity": _int("quantity"),
-    }
-
-
-def _parse_collection(body: str, *, username: str) -> list[tuple[int, str, Optional[dict]]]:
-    """Parse a BGG /collection?showprivate=1 response.
-
-    Returns a list of (bgg_id, status, private_fields_or_None). The third
-    element is None for items that don't carry a <privateinfo> block (the
-    response was unauthenticated or the user has no private data on them).
-    """
-    root = parse_bgg_xml(body, context=f"collection user={username!r}")
-    out: list[tuple[int, str, Optional[dict]]] = []
-    for item in root.findall("item"):
-        try:
-            bgg_id = int(item.get("objectid", "0"))
-        except (TypeError, ValueError):
-            continue
-        if not bgg_id:
-            continue
-        status = _derive_collection_status(item)
-        if status is None:
-            continue
-        out.append((bgg_id, status, _parse_private_info(item)))
-    return out
 
 
 def _parse_plays(body: str, *, username: str) -> tuple[list[dict], int]:
@@ -702,86 +600,6 @@ async def _process_pending_imports(user_id: str) -> None:
 # ── Sync core ────────────────────────────────────────────────────────────────
 
 
-def _status_priority(status: str) -> int:
-    """Higher means stronger — used to pick a winner when one game shows up
-    in multiple per-status batches (e.g. owned AND wishlisted).
-
-    prev_owned sits between the two: a game BGG reports as both prevowned and
-    wishlisted is one you had, sold, and want back — the shelf it belongs on is
-    the one that says you had it. Mirrors _derive_collection_status's ordering.
-    """
-    return {"owned": 3, "prev_owned": 2, "wishlist": 1}.get(status, 0)
-
-
-def _merge_collection_row(
-    existing: tuple[int, str, Optional[dict]],
-    incoming: tuple[int, str, Optional[dict]],
-) -> tuple[int, str, Optional[dict]]:
-    bgg_id, ex_status, ex_private = existing
-    _, in_status, in_private = incoming
-    if _status_priority(in_status) > _status_priority(ex_status):
-        ex_status = in_status
-    if in_private is not None:
-        if ex_private is None:
-            ex_private = in_private
-        else:
-            merged = dict(ex_private)
-            for key, value in in_private.items():
-                if value is not None:
-                    merged[key] = value
-            ex_private = merged
-    return (bgg_id, ex_status, ex_private)
-
-
-async def _fetch_collection_batched(
-    user_id: str, username: str,
-) -> tuple[list[tuple[int, str, Optional[dict]]], bool]:
-    """Pull the linked user's collection as N small (subtype, status) requests.
-
-    BGG's xmlapi2 has no page/limit pagination on /collection; the only way
-    to subdivide a huge collection so each request is small enough to be
-    served from cache (rather than triggering the warm-up placeholder) is to
-    filter by subtype and a single status flag at a time. We sweep the
-    matrix _COLLECTION_SUBTYPES × _BGG_STATUSES and dedupe the results.
-
-    Returns (rows, warm_up_failed). `warm_up_failed` is True iff at least one
-    batch exhausted its warm-up retries — _run_sync uses it together with the
-    final imported+pending counts to decide whether to surface a "try again"
-    flag to the FE.
-    """
-    merged: dict[int, tuple[int, str, Optional[dict]]] = {}
-    warm_up_failed = False
-    first = True
-    for subtype in _COLLECTION_SUBTYPES:
-        for status_flag in _BGG_STATUSES.keys():
-            if not first:
-                await asyncio.sleep(_WORKER_THROTTLE_SECONDS)
-            first = False
-            params = {
-                "username": username,
-                status_flag: 1,
-                "subtype": subtype,
-                "stats": 1,
-                "showprivate": 1,
-            }
-            try:
-                body = await fetch_bgg_as_user(
-                    user_id, "/collection", params, timeout=20.0,
-                )
-            except BggWarmUpError:
-                logger.warning(
-                    "BGG collection batch warm-up exhausted user=%s subtype=%s status=%s",
-                    user_id, subtype, status_flag,
-                )
-                warm_up_failed = True
-                continue
-            for row in _parse_collection(body, username=username):
-                bgg_id = row[0]
-                if bgg_id in merged:
-                    merged[bgg_id] = _merge_collection_row(merged[bgg_id], row)
-                else:
-                    merged[bgg_id] = row
-    return list(merged.values()), warm_up_failed
 
 
 async def _fetch_all_plays(user_id: str, username: str) -> list[dict]:
@@ -999,6 +817,16 @@ async def sync_bgg(
     """
     sb = get_supabase()
     username = _require_linked_username(sb, user.user_id)
+
+    # Both directions drive the same BGG session, and an import landing
+    # mid-push would overwrite shelf rows the queued plan was computed from.
+    # Enforced here, not only in the UI: two tabs, two devices.
+    push_state = sb.rpc("bgb_bgg_push_status", {"p_user": user.user_id}).execute().data or {}
+    if int(push_state.get("pending_count") or 0):
+        raise HTTPException(
+            status_code=409,
+            detail="A BoardGameGeek push is still running. Wait for it to finish, then try again.",
+        )
 
     summary = await _run_sync(user.user_id, username)
 

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="51" height="76" viewBox="0 0 51 76" role="img" aria-label="BoardGameGeek">
+  <title>BoardGameGeek</title>
+  <!-- BGG's own mark, cropped from the vendored powered-by lockup
+       (assets/credits/bgg-logo.svg) by viewBox: the two polygons at x 0-51.
+       Not a redraw. Per .claude/rules/assets.md a fixed third-party brand mark
+       is never recoloured and never brightness-filtered — where it would sit at
+       poor contrast (the amber primary button) it gets the light plate it was
+       drawn for instead. -->
+  <polygon fill="#FF5100" points="49.374 13.936 41.903 15.973 49.219 -4.8316906e-13 1.787 17.482 4.379 38.424 -3.37507799e-13 42.651 13.058 75.406 40.813 65.166 50.461 42.483 46.319 38.485"/>
+  <polygon fill="#FFFFFF" points="15.1196 63.3086 33.8576 44.0036 26.7606 33.4056 34.6816 16.0356 17.2286 34.1636 23.9436 44.2936"/>
+</svg>

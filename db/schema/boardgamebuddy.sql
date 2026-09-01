@@ -1,6 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: migration 046 (session write RPCs; drops the redundant
+-- Last updated: migration 073 (BgB->BGG push queue, profiles.bgg_last_push_
+--               started_at, pending_imports.kind gains 'catalog'), on top of
+--               migration 046 (session write RPCs; drops the redundant
 --               (code, phase) index), plus the two catalog-browse indexes from
 --               051 and 060, the achievement objects from 062 (the catalog,
 --               its groups, the per-user unlock rows and
@@ -91,6 +93,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- pending-import rows whose created_at >= this value to report
   -- session-scoped progress (Imported X of Y). Added in migration 027.
   bgg_last_sync_started_at TIMESTAMPTZ,
+  -- Same idea for the outbound direction (migration 073). GET
+  -- /bgg/push/status counts push-queue rows with created_at >= this to
+  -- report session-scoped progress.
+  bgg_last_push_started_at TIMESTAMPTZ,
   -- First time this account was seen running as an installed PWA (migration
   -- 062). The one achievement fact nothing in the database could derive; set
   -- by POST /achievements/installed and read only by bgb_sync_achievements.
@@ -327,7 +333,11 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_pending_imports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   bgg_id INTEGER NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('collection', 'play')),
+  -- 'catalog' (migration 073) materializes the GAME only and writes no
+  -- collection row: POST /bgg/check queues it so a game on the user's BGG
+  -- shelf that BgB has never seen can be listed by name in the comparison.
+  -- A shelf row here would silently reverse the mirror.
+  kind TEXT NOT NULL CHECK (kind IN ('collection', 'play', 'catalog')),
   payload JSONB NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'done', 'error')),
@@ -337,6 +347,48 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_pending_imports (
   completed_at TIMESTAMPTZ
 );
 ALTER TABLE public.boardgamebuddy_bgg_pending_imports ENABLE ROW LEVEL SECURITY;
+
+-- Outbound queue for BgB -> BGG (migration 073). One planned change per game
+-- per user, drained by a BackgroundTask at one BGG write per throttle tick.
+-- State lives here rather than in memory so a Railway restart mid-push resumes
+-- instead of replaying what already landed.
+--
+-- Deliberately NOT kind='push' on bgg_bgg_pending_imports: bgb_bgg_sync_status
+-- counts every row for the user with no kind filter, so a queued push would
+-- inflate the IMPORT poll's pending_count and pin that poll open forever.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_push_queue (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  bgg_id INTEGER NOT NULL,
+  -- Denormalized at plan time so the status RPC never joins games — and so a
+  -- 'clear' row, which by definition has no local game, still has a name.
+  game_name TEXT NOT NULL,
+  -- BGG's collection-row id. NULL is the ONLY case that creates a row on BGG
+  -- rather than editing one, and the payload branches on this rather than on
+  -- `change`: a game flagged only fortrade is invisible to the status sweep,
+  -- so an 'add' can still turn out to have an existing row. Sending no collid
+  -- for one of those would duplicate it and orphan the user's rating.
+  bgg_collid BIGINT,
+  change TEXT NOT NULL CHECK (change IN ('add', 'update', 'clear')),
+  target_status TEXT CHECK (target_status IN ('owned', 'wishlist', 'prev_owned')),
+  -- The complete form field set, frozen at plan time: the flags BgB owns at
+  -- their target values PLUS every other <status> attribute echoed back
+  -- verbatim. Frozen so the worker never re-reads BGG, and so a shelf edit
+  -- mid-push cannot produce a half-old, half-new write set.
+  payload JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'done', 'error')),
+  attempts INT NOT NULL DEFAULT 0,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  CONSTRAINT bgb_push_change_status CHECK (
+    (change IN ('add', 'update') AND target_status IS NOT NULL) OR
+    (change = 'clear' AND target_status IS NULL)
+  ),
+  UNIQUE (user_id, bgg_id)
+);
+ALTER TABLE public.boardgamebuddy_bgg_push_queue ENABLE ROW LEVEL SECURITY;
 
 -- Short-code play-session lobby (migration 011). Host creates a session with
 -- a code; other phones join, then the host finalizes into a single play.
@@ -538,6 +590,14 @@ CREATE INDEX IF NOT EXISTS idx_bgb_bgg_pending_user_status
   WHERE status = 'pending';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_bgg_pending_unique
   ON public.boardgamebuddy_bgg_pending_imports (user_id, bgg_id, kind);
+
+-- Push queue (migration 073): the worker's pending scan, and the status RPC's
+-- session window.
+CREATE INDEX IF NOT EXISTS idx_bgb_push_queue_user_pending
+  ON public.boardgamebuddy_bgg_push_queue (user_id, status)
+  WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_bgb_push_queue_user_created
+  ON public.boardgamebuddy_bgg_push_queue (user_id, created_at);
 -- Mutual buddy edges (migration 008).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_buddy_edges_pair
   ON public.boardgamebuddy_buddy_edges (user_a, user_b);

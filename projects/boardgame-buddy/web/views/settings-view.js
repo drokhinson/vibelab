@@ -34,6 +34,22 @@
       // must not be left unsure whether it happened.
       this._deleting = false;
 
+      // The comparison both sync buttons act on. Null means the sync band is
+      // not rendered at all: neither direction is offered until the user has
+      // seen what it would do, and a finished sync clears the comparison that
+      // authorised it so the buttons go away again.
+      this._bggDiff = null;
+      this._bggChecking = false;
+      this._bggCompareError = null;
+
+      this._bggPushing = false;
+      this._bggPushSummary = null;
+      this._bggPush = null;
+      this._bggPushError = null;
+      // Its own handle. Two queues, two exit conditions; each poll no-ops
+      // while the other is armed.
+      this._bggPushPollHandle = null;
+
       // True while a manual outbox flush is in flight — drives the Upload now
       // button's disabled/"Uploading…" state.
     }
@@ -54,7 +70,9 @@
       // while a poll is actually armed). Auto-removed on unmount via
       // listenDom.
       this.listenDom("visibilitychange", () => {
-        if (!document.hidden && this._bggPollHandle) this._pollBggStatus();
+        if (document.hidden) return;
+        if (this._bggPollHandle) this._pollBggStatus();
+        if (this._bggPushPollHandle) this._pollBggPushStatus();
       });
       this.render();
       await this._loadBggStatus();
@@ -64,16 +82,25 @@
         this._loadAdminReportsCount();
       }
       if (this._needsPoll()) this._startBggPoll();
+      else if (this._needsPushPoll()) this._startBggPushPoll();
     }
 
     async onUnmount() {
       this._stopBggPoll();
+      this._stopBggPushPoll();
     }
 
     async _loadBggStatus() {
       this._bggLoading = true;
       try {
-        this._bgg = await window.Bgg.status();
+        // Parallel, not serial: reopening Settings mid-push has to resume that
+        // readout, and two round trips before first paint is a visible stall.
+        const [sync, push] = await Promise.all([
+          window.Bgg.status(),
+          window.Bgg.pushStatus().catch(() => null),
+        ]);
+        this._bgg = sync;
+        if (push) this._bggPush = push;
       } catch (e) {
         this._bggError = e.message || "Failed to load BGG status";
       } finally {
@@ -245,13 +272,6 @@
       const errored = (this._bgg && this._bgg.errored_count) || 0;
       const lastDone = (this._bgg && this._bgg.last_completed_at) || null;
 
-      const syncBtn = (state === "linked" && username) ? `
-        <button class="btn btn-ghost btn-sm" title="Sync from BoardGameGeek"
-                ${this._bggSyncing ? "disabled" : ""}
-                onclick="window.settingsView._syncBgg()">
-          <i data-icon="refresh-cw" class="w-3.5 h-3.5 ${this._bggSyncing ? "animate-spin" : ""}"></i>
-          ${this._bggSyncing ? "Syncing…" : "Sync"}
-        </button>` : "";
 
       let body;
       if (this._bggLoading && !this._bgg) {
@@ -303,7 +323,20 @@
             </div>
             <button class="btn btn-ghost btn-xs" onclick="window.settingsView._unlinkBgg()">Unlink</button>
           </div>
+          <div class="set-card__bgg-actions">
+            <button class="btn btn-ghost btn-sm set-card__bgg-check"
+                    ${this._bggBusy() ? "disabled" : ""}
+                    onclick="window.settingsView._checkBggStatus()">
+              <i data-icon="${this._bggChecking ? "loader-2" : "shuffle"}"
+                 class="w-4 h-4 ${this._bggChecking ? "animate-spin" : ""}"></i>
+              ${this._bggChecking ? "Checking…" : "Check status"}
+            </button>
+          </div>
+          ${this._renderBggCompare()}
+          ${this._renderBggSyncActions()}
           ${this._renderBggProgress()}
+          ${this._renderBggPushProgress()}
+          ${this._renderBggRestale()}
         `;
       }
 
@@ -311,7 +344,6 @@
         <div class="set-card">
           <div class="set-card__bgg-top">
             <span class="set-card__bgg-mark">BoardGameGeek</span>
-            ${syncBtn}
           </div>
           ${body}
         </div>
@@ -613,6 +645,10 @@
       this._bggSyncing = true;
       this._bggSyncResult = null;
       this._bggSummary = null;
+      // The comparison authorised this run; once it starts it is spent. The
+      // sync band stays rendered while _bggSyncing so the log has a heading.
+      this._bggDiff = null;
+      this._bggCompareError = null;
       this._stopBggPoll();
       this.render();
       let summary;
@@ -654,7 +690,9 @@
     }
 
     _startBggPoll() {
-      if (this._bggPollHandle) return;
+      // One queue at a time: the two workers are mutually exclusive
+      // server-side, so two live polls would only fight over the same render.
+      if (this._bggPollHandle || this._bggPushPollHandle) return;
       this._bggPollHandle = setInterval(() => this._pollBggStatus(), 2000);
     }
 
@@ -681,6 +719,193 @@
         window.Bgg.invalidateImportedData();
       }
       this.render();
+    }
+
+    // ── The comparison, and the two syncs it gates ──────────────────────────
+    //
+    // Neither sync button is rendered until a comparison exists, so no sync can
+    // be started against a state the user has not seen — and a finished sync
+    // clears the comparison that authorised it, so they disappear again rather
+    // than sitting there one tap from a re-run against a stale plan.
+
+    _bggBusy() {
+      return this._bggChecking || this._bggSyncing || this._bggPushing
+        || !!this._bggPollHandle || !!this._bggPushPollHandle;
+    }
+
+    _renderBggCompare() {
+      if (this._bggCompareError) {
+        return `<div class="set-card__bgg-compare bgg-diff__error">${escapeHtml(this._bggCompareError)}</div>`;
+      }
+      if (!this._bggDiff) return "";
+      return `<div class="set-card__bgg-compare">
+        ${window.renderBggDiffList(this._bggDiff, { variant: "card" })}
+      </div>`;
+    }
+
+    _renderBggSyncActions() {
+      // The gate. Kept rendered while a sync runs so its progress log has a
+      // heading to sit under.
+      if (!this._bggDiff && !this._bggSyncing && !this._bggPushing) return "";
+      const busy = this._bggBusy() ? "disabled" : "";
+      const mark = (which) => which === "bgg"
+        ? `<span class="bgb-mark bgb-mark--bgg"><img src="assets/credits/bgg-mark.svg" alt="" /></span>`
+        : `<span class="bgb-mark bgb-mark--bgb"><img src="assets/brand/bgb-logo.svg" alt="" /></span>`;
+      const arrow = `<i data-icon="chevron-right" class="w-4 h-4 bgb-mark__arrow"></i>`;
+      return `<div class="set-card__bgg-sync">
+        <button class="btn btn-ghost btn-sm" ${busy}
+                title="Import from BoardGameGeek"
+                aria-label="Import from BoardGameGeek into BoardgameBuddy"
+                onclick="window.settingsView._pullBgg()">
+          ${this._bggSyncing
+            ? `<i data-icon="loader-2" class="w-4 h-4 animate-spin"></i><span class="bgb-mark__word">Importing…</span>`
+            : mark("bgg") + arrow + mark("bgb")}
+        </button>
+        <button class="btn btn-primary btn-sm" ${busy}
+                title="Push to BoardGameGeek"
+                aria-label="Push from BoardgameBuddy up to BoardGameGeek"
+                onclick="window.settingsView._pushBgg()">
+          ${this._bggPushing
+            ? `<i data-icon="loader-2" class="w-4 h-4 animate-spin"></i><span class="bgb-mark__word">Pushing…</span>`
+            : mark("bgb") + arrow + mark("bgg")}
+        </button>
+      </div>`;
+    }
+
+    _renderBggRestale() {
+      if (this._bggDiff || this._bggBusy()) return "";
+      if (!this._bggSummary && !this._bggPushSummary) return "";
+      return `<p class="set-card__bgg-restale">
+        <i data-icon="shuffle" class="w-4 h-4"></i>
+        That comparison is out of date now. Check status again to sync further.
+      </p>`;
+    }
+
+    async _checkBggStatus() {
+      this._bggChecking = true;
+      this._bggCompareError = null;
+      this._bggDiff = null;
+      this._bggSummary = null;
+      this._bggPushSummary = null;
+      this._bggSyncResult = null;
+      this._bggPushError = null;
+      this.render();
+      try {
+        this._bggDiff = await window.Bgg.check();
+      } catch (e) {
+        this._bggCompareError = (e && e.timeout)
+          ? "BoardGameGeek is taking a while. Try Check status again in a moment."
+          : (e && e.message) || "Couldn't compare with BoardGameGeek";
+      } finally {
+        this._bggChecking = false;
+        this.render();
+      }
+      // The catalog fill runs as a background import; its games only get names
+      // once it drains, so reuse the import poll and let the user re-check.
+      if (this._bggDiff && this._bggDiff.catalog_pending) {
+        await this._loadBggStatus();
+        if (this._needsPoll()) this._startBggPoll();
+      }
+    }
+
+    _pullBgg() {
+      window.BggSyncSheet.open({
+        diff: this._bggDiff,
+        direction: "pull",
+        onConfirm: () => this._syncBgg(),
+      });
+    }
+
+    _pushBgg() {
+      window.BggSyncSheet.open({
+        diff: this._bggDiff,
+        direction: "push",
+        onConfirm: () => this._commitPush(),
+      });
+    }
+
+    async _commitPush() {
+      this._bggPushing = true;
+      this._bggPushSummary = null;
+      this._bggPushError = null;
+      this._stopBggPushPoll();
+      this.render();
+      let summary;
+      try {
+        summary = await window.Bgg.push(this._bggDiff && this._bggDiff.checked_at);
+      } catch (e) {
+        this._bggPushing = false;
+        // A deadline is not a failure: the handler queues the worker whether or
+        // not we are still listening, same as _syncBgg.
+        this._bggPushError = (e && e.timeout)
+          ? "BoardGameGeek is taking a while. The push is still running in the background — check back in a few minutes."
+          : (e && e.message) || "Push failed";
+        this._bggDiff = null;
+        await this._loadBggStatus();
+        return;
+      }
+      this._bggPushSummary = summary;
+      // The comparison described the state before this push. It cannot describe
+      // the state after it, so it goes — and the buttons with it.
+      this._bggDiff = null;
+      await this._loadBggPushStatus();
+      if (summary && summary.queued > 0 && this._needsPushPoll()) {
+        this._startBggPushPoll();
+        return;
+      }
+      this._bggPushing = false;
+      this.render();
+    }
+
+    async _loadBggPushStatus() {
+      try {
+        this._bggPush = await window.Bgg.pushStatus();
+      } catch (_) {
+        // Non-fatal — the log renders from the summary until the next tick.
+      }
+    }
+
+    _needsPushPoll() {
+      return !window.Bgg.pushDrained(this._bggPush);
+    }
+
+    _startBggPushPoll() {
+      // One queue at a time: the two workers are mutually exclusive server-side.
+      if (this._bggPushPollHandle || this._bggPollHandle) return;
+      this._bggPushPollHandle = setInterval(() => this._pollBggPushStatus(), 2000);
+    }
+
+    _stopBggPushPoll() {
+      if (this._bggPushPollHandle) {
+        clearInterval(this._bggPushPollHandle);
+        this._bggPushPollHandle = null;
+      }
+    }
+
+    async _pollBggPushStatus() {
+      if (document.hidden) return;
+      try {
+        this._bggPush = await window.Bgg.pushStatus();
+      } catch (_) {
+        return;
+      }
+      if (!this._needsPushPoll()) {
+        this._stopBggPushPoll();
+        this._bggPushing = false;
+        // Deliberately NOT invalidateImportedData(): a push writes nothing
+        // locally, so dropping the status map and the feed would be churn.
+      }
+      this.render();
+    }
+
+    _renderBggPushProgress() {
+      return window.renderBggPushLog({
+        pushing: this._bggPushing,
+        summary: this._bggPushSummary,
+        status: this._bggPush,
+        error: this._bggPushError,
+        className: "bgg-log--card",
+      });
     }
 
     // The step log itself is ui/bgg-import-log.js — the same readout the

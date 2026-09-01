@@ -342,6 +342,16 @@ literal. The deck scopes its own fields to the ground's `--well` rather than
 changing the shared rule, which still has three callers that are genuinely on
 paper.
 
+### 4.3b-ii The comparison, the push log, and the sync sheet
+
+The BGG card grew a second direction, and with it three components. `ui/bgg-log-step.js` is the step row promoted out of the import log the moment a second log needed it (`.claude/rules/ui-object-design.md` §4, extract at instance #2) — both logs narrate different sequences but a step is a step.
+
+`ui/bgg-push-log.js` is deliberately **not** a variant of `renderBggImportLog`. That one walks five import-specific counters (`collection_imported`, `plays_pending`, `unique_games_to_import`) with no push analogue; parameterising it would be the options-matrix anti-pattern §2 warns about. Two components, one shared step primitive, one CSS family.
+
+`ui/bgg-diff-list.js` is the opposite call — one renderer with two variants, because there are two surfaces from day one: `card` is the summary under Check status, `sheet` is the grouped review list. It also takes a `direction`, since the push and pull sheets are the same comparison read opposite ways.
+
+Two details that are load-bearing rather than cosmetic. The pull sheet's `held` group — games kept at Prev. owned that `_hold_prev_owned` refuses to resurrect — is a *reassurance*, not a change: it is excluded from the count and the commit label, and wears a neutral stripe, because the destructive red would read as though the sheet were about to delete the thing it is promising to keep. And the sync buttons spell their direction with the two brand marks rather than acronyms, so each needs a real `aria-label`: two SVGs and an arrow tell a screen reader nothing.
+
 ### 4.3c The first-run deck, and the badge picker
 
 First-run setup used to be three modals opened back to back, each awaiting its
@@ -576,6 +586,8 @@ If two surfaces let the user open the same destination, they should use the same
 ### Rule 3 — Destructive actions are confirmed through `PolaroidPopup.confirm`
 
 Per `.claude/rules/web-frontend.md`, all destructive actions go through the project's single confirm modal. No view rolls its own confirm dialog. This applies to: delete a play, remove a buddy, abandon a session, abandon a Gather draft, clear a collection, delete an account.
+
+**One carve-out: a confirm whose subject is a LIST is a sheet.** Both BGG syncs are destructive — the push overwrites the user's BoardGameGeek collection, the import overwrites their BgB shelf — and the only honest confirmation names every row it will touch. `PolaroidPopup.confirm`'s `body` is a plain string that gets `escapeHtml`'d, so it cannot render a list at all, and a 500-row list in a centred card is the geometry `.claude/rules/overlays.md` §1 exists to prevent. So `widgets/bgg-sync-sheet.js` is a `BgbBottomSheet`, and **the sheet's commit button is the second tap** — one overlay for one decision, not a sheet with a confirm stacked on top of it. Any future confirm that needs to enumerate rather than assert belongs here too; anything that fits in a sentence does not.
 
 > Today's state: respected. See UI_AUDIT.md §3.8.
 

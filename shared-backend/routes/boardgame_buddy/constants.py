@@ -180,6 +180,37 @@ class BggAuthState(StrEnum):
     RELINK_REQUIRED = "relink_required"  # Username only (legacy public link)
 
 
+class BggPushChange(StrEnum):
+    """What one planned BgB -> BGG change does, as the user reads it.
+
+    Note the payload branches on whether a collid was resolved, NOT on this:
+    an ADD can still edit an existing BGG collection row (see
+    boardgamebuddy_bgg_push_queue.bgg_collid). This is the label, not the plan.
+    """
+
+    ADD = "add"        # In BgB; no flag BgB owns is set on BGG
+    UPDATE = "update"  # On both sides, statuses disagree
+    CLEAR = "clear"    # Flagged on BGG, absent from the BgB shelf
+
+
+class BggPullChange(StrEnum):
+    """The same comparison read the other way — what an import would do locally.
+
+    A pull is destructive too: it overwrites BgB shelf statuses from BGG. It
+    has no 'remove' member because the importer only ever upserts.
+    """
+
+    ADD = "add"        # On BGG, not on the BgB shelf -> a new collection row
+    UPDATE = "update"  # On both sides -> BgB's status is overwritten
+    HELD = "held"      # Would change, but _hold_prev_owned refuses to
+
+
+class BggUnpushableReason(StrEnum):
+    """Why a BgB collection row cannot be represented on BGG at all."""
+
+    NO_BGG_ID = "no_bgg_id"  # A game BgB has that BoardGameGeek does not
+
+
 class PlayMode(StrEnum):
     """Scoring style for a game / play. Persisted on boardgamebuddy_games.play_mode."""
 

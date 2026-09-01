@@ -12,6 +12,11 @@
   // socket can't hang the screen forever.
   const SYNC_TIMEOUT_MS = 120000;
 
+  // POST /bgg/check and POST /bgg/push both run the same eight-request sweep
+  // inside the handler before they can answer, for the same reason as above.
+  const CHECK_TIMEOUT_MS = 120000;
+  const PUSH_TIMEOUT_MS = 120000;
+
   // Linking or unlinking flips the Geek Certified badge, so both drop the
   // cached achievements payload. Chained on the promise rather than fired
   // beside the call: a failed link must not invalidate anything.
@@ -55,6 +60,52 @@
     static invalidateImportedData() {
       if (window.Collection) window.Collection.invalidateMyStatusMap();
       if (window.store) window.store.invalidate("feed");
+    }
+
+    // ── Comparison + push ───────────────────────────────────────────────────
+
+    /**
+     * Compare the BgB shelf against the live BGG collection, in both
+     * directions, and import any game BgB's catalog has never seen so the
+     * comparison can name it.
+     *
+     * A POST, not a GET: the catalog fill is a write. It writes to the GAME
+     * catalog only — never to a shelf row — so a game it imports still reads
+     * as "only on BGG" and the push still decides its fate.
+     */
+    static check() {
+      return window.api.post("/bgg/check", {}, { timeoutMs: CHECK_TIMEOUT_MS });
+    }
+
+    /**
+     * Push the shelf up to BoardGameGeek.
+     *
+     * NOT chained through _dropAchievements, and the caller must NOT call
+     * invalidateImportedData(): both exist because a sync changes local rows
+     * and flips the Geek Certified badge. A push writes nothing locally, so
+     * dropping the status map and the feed would be pure cache churn.
+     *
+     * @param {string|null} [checkedAt] the comparison the user reviewed, so the
+     *   server can say whether its own re-plan disagrees.
+     */
+    static push(checkedAt) {
+      return window.api.post("/bgg/push", { checked_at: checkedAt || null },
+                             { timeoutMs: PUSH_TIMEOUT_MS });
+    }
+
+    static pushStatus() { return window.api.get("/bgg/push/status"); }
+
+    /**
+     * True once every queued change has been sent or has failed — the exit
+     * condition for the push poll. Same session-counter argument as
+     * importDrained: a row left over from an abandoned run would otherwise
+     * keep the poll running forever.
+     *
+     * @param {{session_total?:number, session_done?:number, session_errored?:number}|null} status
+     */
+    static pushDrained(status) {
+      if (!status || !status.session_total) return true;
+      return ((status.session_done || 0) + (status.session_errored || 0)) >= status.session_total;
     }
   }
 

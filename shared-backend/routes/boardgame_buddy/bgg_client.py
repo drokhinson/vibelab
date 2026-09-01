@@ -425,6 +425,79 @@ async def _ensure_session(sb: Client, user_id: str, profile_row: dict) -> dict:
     }
 
 
+def _session_cookies(row: dict) -> dict[str, str]:
+    """The three cookies BGG evaluates a request as a logged-in user by."""
+    return {
+        "SessionID": row["bgg_session_id"],
+        "bggusername": row["bgg_session_user_cookie"] or row["bgg_username"],
+        "bggpassword": row["bgg_session_pass_cookie"] or "",
+    }
+
+
+async def _run_as_user(
+    user_id: str,
+    *,
+    attempt: Callable[[dict[str, str]], Awaitable[httpx.Response]],
+    context: str,
+) -> httpx.Response:
+    """Run `attempt` with the user's BGG cookies, refreshing the session as needed.
+
+    Owns IDENTITY only — loading the stored session, refreshing it before it
+    expires, and re-logging in once when BGG rejects it mid-flight. The caller
+    owns PROTOCOL: this never inspects the response beyond 401/403, so a GET
+    against xmlapi2 and a form POST against the web app can share it while each
+    keeps its own status mapping.
+
+    Only httpx.HTTPError is caught. BggWarmUpError is an HTTPException and must
+    keep escaping to _fetch_collection_batched, which handles it per batch.
+
+    `context` appears in the re-login log line only.
+    """
+    sb = get_supabase()
+    profile_row = _load_profile_session(sb, user_id)
+    profile_row = await _ensure_session(sb, user_id, profile_row)
+
+    try:
+        resp = await attempt(_session_cookies(profile_row))
+    except httpx.HTTPError as exc:
+        logger.warning("BGG network error on %s: %s", context, exc)
+        raise HTTPException(
+            status_code=503,
+            detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
+        )
+
+    if resp.status_code not in (401, 403):
+        return resp
+
+    # Server-side session was already invalidated. Force one fresh login and
+    # retry. If it 401s again, surface a re-link.
+    logger.info("BGG %s on %s for user=%s; re-logging in", resp.status_code, context, user_id)
+    password = decrypt_password(profile_row["bgg_password_enc"])
+    session = await login_to_bgg(profile_row["bgg_username"], password)
+    _persist_session(sb, user_id, session)
+    retry_row = {
+        **profile_row,
+        "bgg_session_id": session.session_id,
+        "bgg_session_user_cookie": session.user_cookie,
+        "bgg_session_pass_cookie": session.pass_cookie,
+    }
+
+    try:
+        resp = await attempt(_session_cookies(retry_row))
+    except httpx.HTTPError as exc:
+        logger.warning("BGG retry network error on %s: %s", context, exc)
+        raise HTTPException(
+            status_code=503,
+            detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
+        )
+    if resp.status_code in (401, 403):
+        raise HTTPException(
+            status_code=409,
+            detail="BGG re-link required: BoardGameGeek rejected the stored password.",
+        )
+    return resp
+
+
 async def fetch_bgg_as_user(
     user_id: str,
     path: str,
@@ -438,22 +511,13 @@ async def fetch_bgg_as_user(
     they're missing or near expiry. On a 401/403 from xmlapi2 (server-side
     session expiry that we didn't catch), re-logs in once and retries.
     """
-    sb = get_supabase()
-    profile_row = _load_profile_session(sb, user_id)
-    profile_row = await _ensure_session(sb, user_id, profile_row)
-
     full_url = f"{BGG_API_BASE}{path}"
 
-    def _make_do_get(row: dict) -> Callable[[], Awaitable[httpx.Response]]:
-        async def _do_get() -> httpx.Response:
-            cookies = {
-                "SessionID": row["bgg_session_id"],
-                "bggusername": row["bgg_session_user_cookie"] or row["bgg_username"],
-                "bggpassword": row["bgg_session_pass_cookie"] or "",
-            }
-            async with httpx.AsyncClient(
-                timeout=timeout, headers=_default_headers(), cookies=cookies,
-            ) as client:
+    async def _attempt(cookies: dict[str, str]) -> httpx.Response:
+        async with httpx.AsyncClient(
+            timeout=timeout, headers=_default_headers(), cookies=cookies,
+        ) as client:
+            async def _do_get() -> httpx.Response:
                 async with log_external_call(
                     app="boardgame-buddy", api_name="bgg",
                     method="GET", url=full_url, params=params,
@@ -461,50 +525,105 @@ async def fetch_bgg_as_user(
                     resp = await client.get(full_url, params=params)
                     record.attach_response(resp)
                     return resp
-        return _do_get
 
-    try:
-        resp = await _fetch_with_warmup_retry(
-            _make_do_get(profile_row), path=path, params=params,
-        )
-    except httpx.HTTPError as exc:
-        logger.warning("BGG network error on %s %s: %s", path, params, exc)
-        raise HTTPException(
-            status_code=503,
-            detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
-        )
+            # Warm-up retries sit INSIDE the auth retry, preserving the original
+            # nesting: a placeholder response is retried before we ever consider
+            # the session dead, and the post-re-login attempt gets the same
+            # treatment.
+            return await _fetch_with_warmup_retry(_do_get, path=path, params=params)
 
-    if resp.status_code in (401, 403):
-        # Server-side session was already invalidated. Force one fresh login
-        # and retry. If it 401s again, surface a re-link.
-        logger.info("BGG xmlapi2 %s for user=%s; re-logging in", resp.status_code, user_id)
-        password = decrypt_password(profile_row["bgg_password_enc"])
-        session = await login_to_bgg(profile_row["bgg_username"], password)
-        _persist_session(sb, user_id, session)
-        retry_row = {
-            **profile_row,
-            "bgg_session_id": session.session_id,
-            "bgg_session_user_cookie": session.user_cookie,
-            "bgg_session_pass_cookie": session.pass_cookie,
-        }
-        try:
-            resp = await _fetch_with_warmup_retry(
-                _make_do_get(retry_row), path=path, params=params,
-            )
-        except httpx.HTTPError as exc:
-            logger.warning("BGG retry network error on %s %s: %s", path, params, exc)
-            raise HTTPException(
-                status_code=503,
-                detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
-            )
-        if resp.status_code in (401, 403):
-            raise HTTPException(
-                status_code=409,
-                detail="BGG re-link required: BoardGameGeek rejected the stored password.",
-            )
-
+    resp = await _run_as_user(user_id, attempt=_attempt, context=f"GET {path}")
     _map_bgg_status(resp, path=path, params=params)
     return resp.text
+
+
+# ── Per-user writes (BGG's web app, not xmlapi2) ─────────────────────────────
+#
+# BGG has no write API. Collection edits go to the same form endpoint their own
+# site posts to, authenticated by the cookies above. Three things from the GET
+# path are deliberately NOT reused here:
+#
+#   * _fetch_with_warmup_retry — it re-runs the request up to 3 times and
+#     detects warm-up by parsing the body as XML. Around a write that is a
+#     triple-submit bug.
+#   * _map_bgg_status — its 401 branch tells the admin to set BGG_API_TOKEN, but
+#     a 401 on a cookie write means the session died; its 202 branch raises
+#     BggWarmUpError, which is meaningless for a form post.
+#   * _default_headers — it attaches BGG's app-registration bearer token, which
+#     has no business on the web form endpoint.
+
+
+def _web_headers(username: str) -> dict[str, str]:
+    """Headers BGG's ajax form handlers expect. No Authorization — cookies only."""
+    return {
+        "User-Agent": BGG_USER_AGENT,
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Referer": f"https://boardgamegeek.com/collection/user/{username}",
+    }
+
+
+def _map_bgg_write_status(resp: httpx.Response, *, url: str, form: dict) -> None:
+    """Translate a BGG form-POST status into HTTPException. 200 returns silently.
+
+    The write-side sibling of _map_bgg_status. 401/403 never reach here —
+    _run_as_user handles those. NOTE that a 200 is NOT proof the save landed:
+    BGG answers a dead session with 200 and an error body, so the caller still
+    has to read it (see bgg_write.interpret_save_response).
+    """
+    if resp.status_code == 200:
+        return
+    if resp.status_code == 429:
+        logger.warning("BGG 429 rate limit on write %s", url)
+        raise HTTPException(
+            status_code=429,
+            detail="BoardGameGeek rate-limited us. Wait a few seconds and try again.",
+        )
+    logger.warning(
+        "BGG write returned %s for %s objectid=%s: %s",
+        resp.status_code, url, form.get("objectid"), resp.text[:200],
+    )
+    raise HTTPException(
+        status_code=502,
+        detail=f"BoardGameGeek returned HTTP {resp.status_code} on a collection write.",
+    )
+
+
+async def post_bgg_form_as_user(
+    user_id: str,
+    username: str,
+    url: str,
+    form: dict[str, str],
+    *,
+    timeout: float,
+) -> httpx.Response:
+    """POST a form-encoded body to a BGG web endpoint AS the linked user.
+
+    Takes a FULL url, not a path — the write endpoint is not under
+    BGG_API_BASE. Returns the raw response rather than a parsed body, because
+    what counts as success is the caller's call.
+
+    Logged under api_name="bgg-write", distinct from "bgg" and "bgg-login", so
+    writes are isolable in api_logs. The form carries only ids and status
+    flags, so nothing needs redacting.
+    """
+
+    async def _attempt(cookies: dict[str, str]) -> httpx.Response:
+        async with httpx.AsyncClient(
+            timeout=timeout, headers=_web_headers(username), cookies=cookies,
+        ) as client:
+            async with log_external_call(
+                app="boardgame-buddy", api_name="bgg-write",
+                method="POST", url=url, params=form,
+            ) as record:
+                resp = await client.post(url, data=form)
+                record.attach_response(resp)
+                return resp
+
+    resp = await _run_as_user(user_id, attempt=_attempt, context=f"POST {url}")
+    _map_bgg_write_status(resp, url=url, form=form)
+    return resp
 
 
 def clear_user_session(sb: Client, user_id: str) -> None:
