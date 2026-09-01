@@ -5032,17 +5032,24 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    alphabetical place, so the tile itself has to carry the state — the corner
    chip cannot, by design: it is one neutral glyph whatever the status (see
    the .status-tag--corner block above). Two marks, because either alone is
-   ambiguous: greyed-out art on its own reads as a tile that hasn't loaded,
-   and a stamp on full-colour art gives a game you no longer have the same
-   visual weight as one you do.
+   ambiguous: faded art on its own reads as a tile that hasn't finished
+   loading, and a stamp on full-strength art gives a game you no longer have
+   the same visual weight as one you do.
 
    The dim goes on the ART, not the tile: dimming the whole tile would take
    the corner chip and the expansion badge with it, and both are still live
-   controls on a sold game. */
+   controls on a sold game.
+
+   The art keeps its HUE — a full grayscale(1) stripped the one cue that makes
+   a shelf scannable at 105px tiles, so a sold game stopped being recognisable
+   as itself rather than merely receding. Partial saturation plus a lighter
+   dim than the old 0.55 says "faded" while the cover is still the cover: the
+   tile reads as a memory of the game, not a broken thumbnail. The stamp does
+   the rest of the work of naming the state. */
 .collection-tile.is-prev-owned .collection-tile__art img,
 .collection-tile.is-prev-owned .collection-tile__placeholder {
-  filter: grayscale(1);
-  opacity: 0.55;
+  filter: saturate(0.45) contrast(0.92);
+  opacity: 0.7;
 }
 .collection-tile.is-prev-owned .collection-tile__name { color: var(--ink-muted); }
 
@@ -5062,14 +5069,28 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   transform: translate(-50%, -50%) rotate(-12deg);
   z-index: 3;
   pointer-events: none;
-  padding: 0.16rem 0.5rem;
+  /* A true ellipse — border-radius: 50% on BOTH axes, the way an ink stamp is
+     cut — rather than a stadium pill, which would read as one more UI chip on
+     a screen full of them. An ellipse eats its own corners, so the vertical
+     padding is the ROUNDNESS control, not decoration: a centred w×h label
+     fits only while (w/W)² + (h/H)² < 1, and trimming that padding collapses
+     the mark into a flat lens that reads as a band across the cover.
+
+     The type drops a notch in the same move to keep the whole mark inside the
+     art: at 90×32 the rotated bounding box is ~95px against the ~112px tile
+     the 3-up grid gives a 390px phone. The tile clips its overflow, so a
+     wider mark doesn't spill — its ends get sliced off and it stops reading
+     as an oval at all. Re-check that ~112px budget before changing the
+     wording, the type size or this padding. */
+  padding: 0.55rem 0.45rem;
   border: 2px solid oklch(0.96 0.006 85 / 0.85);
-  border-radius: var(--r-xs, 4px);
+  border-radius: 50%;
   background: oklch(0.21 0.014 55 / 0.88);
   color: oklch(0.96 0.006 85);
-  font-size: 0.62rem;
+  font-size: 0.54rem;
+  line-height: 1.2;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
@@ -8692,9 +8713,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .preview-card__cover img {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
-/* Prev. owned, same treatment as the Collection grid's tile art (see the
-   .collection-tile.is-prev-owned block) minus the stamp, which is unreadable
-   at a quarter-row cover. */
+/* Prev. owned. Deliberately NOT the Collection grid's treatment (see the
+   .collection-tile.is-prev-owned block): there the cover keeps its hue
+   because the stamp names the state and the grid is a shelf you scan by
+   cover. This strip has no room for a stamp — it is unreadable at a
+   quarter-row cover — so the desaturation is the only mark left, and it has
+   to go all the way to carry the meaning on its own. */
 .preview-card__cover.is-prev-owned img,
 .preview-card__cover.is-prev-owned .preview-card__cover-fallback {
   filter: grayscale(1);
