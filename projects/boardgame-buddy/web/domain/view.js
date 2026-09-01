@@ -150,6 +150,8 @@
           consume: ["userId"],
           extract: (m) => ({ userId: decodeURIComponent(m[1]) }),
           build: (p) => `/u/${encodeURIComponent(p.userId || "")}` },
+        { name: "import-plays",        pattern: /^\/settings\/import-plays\/?$/,
+          build: () => "/settings/import-plays" },
         { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
         { name: "admin",               pattern: /^\/admin\/?$/,                   build: () => "/admin" },
         { name: "feed",                pattern: /^\/(feed)?\/?$/,                 build: () => "/feed" },

@@ -1,12 +1,14 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: the 2026-09-01 migration collapse. All 48 functions now live
+-- Last updated: 005_play_import_groups.sql (bgb_feed_plays, bgb_plays_page and
+--               bgb_log_play grouped imported runs). The other 48
+--               functions come from the 2026-09-01 collapse and live
 --               in db/migrations/boardgamebuddy/003_rpcs.sql; each entry below
 --               also names the archived migration its surviving definition
 --               came from, since that file is where the reasoning is.
 --               Reconciled against a database built from the collapsed
---               migrations: the 48 documented here are exactly the 48 that
---               exist, with no stale or missing entries.
+--               migrations: the 48 documented there are exactly the 48 that
+--               existed at the collapse, with no stale or missing entries.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -73,11 +75,20 @@
 --            game_image_url TEXT, game_thumbnail_url TEXT, played_at DATE,
 --            created_at TIMESTAMPTZ, notes TEXT, photo_url TEXT,
 --            play_mode TEXT, winner_display_name TEXT,
---            participant_count INT, participants JSONB)
+--            participant_count INT, participants JSONB, group_count INT)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/014_feed_order_by_played_at.sql)
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/043_feed_perf_and_bootstrap_split.sql
+--   Last updated in: db/migrations/boardgamebuddy/005_play_import_groups.sql
+--               (one card per imported run: `page` keeps only the lowest-id row
+--               of each import_group_id and reports the run's size as
+--               group_count. The filter sits INSIDE `page`, before the LIMIT,
+--               so a page is 20 cards rather than 20 rows of which 19 are the
+--               same run — a 106-play import used to consume five pages of
+--               every follower's feed. DROP + CREATE rather than CREATE OR
+--               REPLACE: adding an OUT column is not a replace, and there is
+--               no MIN() for uuid, hence ORDER BY id LIMIT 1.)
+--   Perf shape from: db/migrations/boardgamebuddy/043_feed_perf_and_bootstrap_split.sql
 --               (perf only, no behavior change — verified identical rows and
 --               row order across 390 viewer x limit x cursor cases. A `page`
 --               CTE now applies the cursor and LIMIT first and a LATERAL
@@ -441,6 +452,10 @@
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/042_write_rpcs.sql)
+--   Last updated in: db/migrations/boardgamebuddy/005_play_import_groups.sql
+--               (persists p_payload.import_group_id, the tag the Settings
+--               importer puts on each run of identical plays, and echoes
+--               group_count: 1 — a freshly logged play stands for itself.)
 --               db/migrations/boardgamebuddy/044_cleanup.sql
 --                 (stops writing plays.game_image_url / game_play_mode, which
 --                  044 drops; stops writing the boardgamebuddy_buddies roster,
@@ -466,6 +481,23 @@
 --               rows it had just inserted. Idempotent when the payload
 --               carries a client_key, which is what makes the web app's
 --               offline outbox safe to retry after a lost response.
+
+-- bgb_import_plays(p_user UUID, p_payload JSONB)
+--   → JSONB { imported: INT, duplicate: INT, failed: INT,
+--             results: [ { index, id|null, duplicate, error|null } ] }
+--   p_payload is { "plays": [ <PlayCreate.model_dump(mode="json")>, ... ] } —
+--   the same per-play shape bgb_log_play takes, in an array.
+--   Defined in: db/migrations/boardgamebuddy/004_import_plays_rpc.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
+--               (import_plays — POST /plays/import, the Settings play importer)
+--   Purpose:    Writes one chunk of an import in a single call. Owns no insert
+--               logic: it loops the payload and calls bgb_log_play per element,
+--               so game resolution, the denormalized game columns, client_key
+--               idempotency and the player/expansion inserts have exactly one
+--               implementation. A game_not_found element reports in `results`
+--               and the rest of the chunk still lands — a batch that aborted
+--               wholesale would make a 300-play import unfinishable over one
+--               typo.
 
 -- bgb_finalize_session(p_host UUID, p_code TEXT, p_payload JSONB)
 --   → JSONB (PlayResponse, via bgb_log_play), {"duplicate": true, "id": UUID}
@@ -510,6 +542,11 @@
 --               (list_plays — GET /plays). The second caller, GET
 --               /games/{id}/plays, was removed as uncalled; that data now
 --               rides on /games/{id}/bundle.
+--   Last updated in: db/migrations/boardgamebuddy/005_play_import_groups.sql
+--               (same one-card-per-run rule as bgb_feed_plays, applied in
+--               `filtered` so `counted` totals CARDS — a pager reading 106
+--               over a six-row list would offer five empty pages. Each play
+--               object carries group_count.)
 --   Purpose:    One-call History page. Visibility = plays the target logged
 --               plus plays where they appear as a participant. Filters
 --               (game / buddy participant / free-text over game_name +

@@ -362,6 +362,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   game_thumbnail_url TEXT,
   client_key UUID,
   country_code TEXT,
+  import_group_id UUID,
   CONSTRAINT boardgamebuddy_plays_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_plays_game_id_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_plays_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -372,6 +373,7 @@ ALTER TABLE public.boardgamebuddy_plays ENABLE ROW LEVEL SECURITY;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_client_key ON public.boardgamebuddy_plays USING btree (user_id, client_key) WHERE (client_key IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_country_game ON public.boardgamebuddy_plays USING btree (country_code, game_id) WHERE (country_code IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_game_played ON public.boardgamebuddy_plays USING btree (game_id, played_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bgb_plays_import_group ON public.boardgamebuddy_plays USING btree (import_group_id, id) WHERE (import_group_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_played_at ON public.boardgamebuddy_plays USING btree (played_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bgg_play ON public.boardgamebuddy_plays USING btree (user_id, bgg_play_id) WHERE (bgg_play_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_user_played ON public.boardgamebuddy_plays USING btree (user_id, played_at DESC, created_at DESC);

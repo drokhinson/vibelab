@@ -143,6 +143,8 @@
         ${this._renderAppearanceCard()}
         <div class="set-card-label">Connections</div>
         ${this._renderBggCard()}
+        <div class="set-card-label">Import</div>
+        ${this._renderImportCard()}
         ${this._renderPendingUploadsSection()}
         <div class="set-card-label">Local cache</div>
         ${this._renderCacheCard()}
@@ -404,6 +406,32 @@
                 ${offline
                   ? "Saved on this device — they'll go up when you're back online."
                   : "Saved on this device until the server confirms them."}
+              </span>
+            </span>
+            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+          </button>
+        </div>
+      `;
+    }
+
+    /**
+     * The play importer's front door (views/import-plays-view.js).
+     *
+     * Its own section rather than a row under Connections: BGG sync links an
+     * account and keeps two libraries in step, and this reads a block of text
+     * once. Filing them together would suggest the importer needs an account
+     * somewhere, which is the whole point of it not doing.
+     */
+    _renderImportCard() {
+      return `
+        <div class="set-card">
+          <button class="set-card__row" onclick="window.router.go('import-plays')">
+            <span class="set-card__row-icon"><i data-icon="upload" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">Import plays from notes</span>
+              <span class="set-card__row-sub">
+                Paste a list or a page of tally marks — you review every play
+                before anything is saved.
               </span>
             </span>
             <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>

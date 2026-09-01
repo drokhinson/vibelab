@@ -371,6 +371,7 @@
      .import-exp-modal,
      .cascade-player--drag-clone,
      .ob-deck,
+     [data-view="import-plays"],
      [data-view="log-play"],
      [data-view="play-flow"],
      [data-view="session-viewer"]) {
@@ -414,6 +415,7 @@
      .import-exp-modal,
      .cascade-player--drag-clone,
      .ob-deck,
+     [data-view="import-plays"],
      [data-view="log-play"],
      [data-view="play-flow"],
      [data-view="session-viewer"]) {
@@ -11413,6 +11415,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .scoring-cell--read,
 .scroll-panel__search,
 .import-exp-search__input,
+/* The play importer's two text areas and its date fields. The paste box is
+   monospace so a tally block keeps the alignment it was written in; its own
+   rule sets only the family, so this floor is what sizes both. */
+.imp-textarea,
+.imp-date,
 .cascade-exp-filter__input,
 /* Every labelled field on a polaroid card — the avatar customizer's display
    name and the first-run BGG credentials — in one selector. */
@@ -12572,3 +12579,654 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .ob-deck__track, .ob-deck__seg::after { transition: none; }
   .ob-job--running .ob-job__mark, .ob-done__ring { animation: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Play importer — Settings → Import plays (views/import-plays-view.js)
+   ══════════════════════════════════════════════════════════════════════════
+   A .bgb-spoke-screen, and additionally named in the --polaroid-* re-point at
+   the top of this file: every surface here is a UI card, not a photograph, so
+   the ground tokens have to invert with the theme. Nothing below states a
+   colour — they all come through those aliases.
+
+   The step counter and segment bar are the onboarding deck's chrome
+   (.ob-deck__count / .ob-deck__seg) rebuilt under this family rather than
+   shared: the deck's live inside a body-level overlay that owns its own
+   layout, and the two would have had to grow a shared host to travel
+   together. What is shared is the shape, deliberately — a wizard should count
+   its steps the same way twice.
+   ────────────────────────────────────────────────────────────────────────── */
+.imp-chrome {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 1rem;
+}
+.imp-chrome__count {
+  text-align: center;
+  font-family: var(--font-score);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.imp-chrome__count b { color: var(--accent); font-weight: 700; }
+.imp-chrome__bar { display: flex; gap: 5px; }
+.imp-chrome__seg {
+  flex: 1;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  overflow: hidden;
+  position: relative;
+}
+.imp-chrome__seg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 260ms var(--ease);
+}
+.imp-chrome__seg.is-done::after { transform: scaleX(1); }
+
+/* Clears the docked nav bar below, which is fixed and so contributes no
+   height of its own: 52px button + 12px/28px padding + the app's own nav. */
+.imp-body { padding-bottom: calc(var(--bgb-nav-height) + 104px); }
+
+.imp-step { display: flex; flex-direction: column; gap: 0.85rem; }
+.imp-step--empty { align-items: center; text-align: center; padding-top: 2rem; }
+.imp-empty__art { width: 120px; height: 120px; opacity: 0.4; }
+.imp-step__title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.15;
+}
+.imp-step__lede {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  margin: 0;
+}
+.imp-step__lede--center { text-align: center; }
+.imp-note {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+  margin: 0;
+}
+.imp-warn {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--rust);
+  background: color-mix(in srgb, var(--rust) 10%, transparent);
+  border-radius: var(--r-md, 0.6rem);
+  padding: 0.6rem 0.7rem;
+  margin: 0;
+}
+.imp-warnings {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 0.6rem);
+  padding: 0.65rem 0.75rem;
+}
+.imp-warnings__label {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-ink);
+  margin-bottom: 0.3rem;
+}
+.imp-warnings ul { margin: 0; padding-left: 1.1rem; }
+.imp-warnings li {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  list-style: disc;
+}
+
+/* ── Step 1 & 2: the two text areas ───────────────────────────────────────── */
+.imp-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--well);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 0.6rem);
+  padding: 0.7rem 0.8rem;
+  line-height: 1.5;
+  resize: vertical;
+  /* Monospace so a pasted tally block keeps the alignment it was written in —
+     proportional digits turn "|||| ||||" into a ragged column. */
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.imp-textarea--short { font-family: var(--font-sans); }
+.imp-textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.imp-step__foot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.imp-filebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.imp-filebtn input { display: none; }
+.imp-filebtn:active { background: var(--accent-quiet); }
+.imp-count {
+  font-family: var(--font-score);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.imp-count.is-over { color: var(--rust); font-weight: 700; }
+
+.imp-examples { display: flex; flex-direction: column; gap: 0.35rem; }
+.imp-examples__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.imp-example {
+  text-align: left;
+  background: transparent;
+  min-height: 44px;
+  padding: 0.5rem 0.7rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md, 0.6rem);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+.imp-example:active { background: var(--accent-quiet); color: var(--ink); }
+
+/* ── Steps 3 & 4: the resolution rows ─────────────────────────────────────── */
+.imp-list {
+  border: 1px solid var(--card-border);
+  border-radius: 1.1rem;
+  background: var(--polaroid-bg);
+  overflow: hidden;
+}
+.imp-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  /* 56px, not 44: these rows sit flush, so a slightly-off thumb lands on the
+     neighbour (.claude/rules/mobile-web.md §5). */
+  min-height: 56px;
+  padding: 0.55rem 0.8rem;
+  text-align: left;
+  /* Both explicit rather than inherited from Tailwind's preflight — a bare
+     <button> otherwise falls back to the UA's grey plate and outset border,
+     which is a light box on a dark ground. Same reasoning as the box-sizing
+     note on the docked chrome above. */
+  background: transparent;
+  border: 0;
+  color: var(--polaroid-ink);
+}
+.imp-row + .imp-row { border-top: 1px solid var(--polaroid-line); }
+.imp-row:active { background: color-mix(in srgb, var(--polaroid-ink) 7%, transparent); }
+.imp-row__badge { flex: none; }
+.imp-row__art {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 0.4rem;
+  object-fit: cover;
+  background: var(--well);
+}
+.imp-row__art--blank {
+  display: grid;
+  place-items: center;
+  color: var(--polaroid-muted);
+}
+.imp-row__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.imp-row__name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imp-row__sub {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--polaroid-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imp-row__ok { color: var(--ok); flex: none; }
+.imp-row__chev { flex: none; color: var(--polaroid-muted); }
+.imp-row--unset .imp-row__sub { color: var(--accent-ink); font-weight: 600; }
+
+/* ── Step 5: the review list ──────────────────────────────────────────────── */
+.imp-bulkdate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--card-border);
+  border-radius: 1.1rem;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+}
+.imp-bulkdate__label { font-size: 0.8rem; font-weight: 600; }
+.imp-date {
+  background: var(--well);
+  color: var(--polaroid-ink);
+  border: 1px solid var(--polaroid-line);
+  border-radius: 0.45rem;
+  padding: 0.35rem 0.5rem;
+  min-height: 40px;
+}
+.imp-groups { display: flex; flex-direction: column; gap: 0.9rem; }
+.imp-group {
+  border: 1px solid var(--card-border);
+  border-radius: 1.1rem;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  overflow: hidden;
+}
+.imp-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--polaroid-line);
+}
+.imp-group__name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imp-group__count {
+  flex: none;
+  font-family: var(--font-score);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+.imp-play + .imp-play { border-top: 1px solid var(--polaroid-line); }
+.imp-play__head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 56px;
+  padding: 0.5rem 0.8rem;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: inherit;
+}
+.imp-play__head:active { background: color-mix(in srgb, var(--polaroid-ink) 7%, transparent); }
+.imp-play__chev { flex: none; color: var(--polaroid-muted); }
+.imp-play__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.imp-play__title { font-weight: 600; font-size: 0.88rem; line-height: 1.2; }
+.imp-play__sub {
+  font-size: 0.74rem;
+  color: var(--polaroid-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imp-play__drop {
+  flex: none;
+  background: transparent;
+  border: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  color: var(--polaroid-muted);
+  /* 44×44 hit area without inflating the glyph. */
+  position: relative;
+}
+.imp-play__drop::before { content: ""; position: absolute; inset: -8px; }
+.imp-play__drop:active { color: var(--rust); background: color-mix(in srgb, var(--rust) 14%, transparent); }
+.imp-play__detail {
+  padding: 0 0.8rem 0.7rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.imp-seats { display: flex; flex-direction: column; gap: 0.3rem; margin: 0; padding: 0; }
+.imp-seat {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  list-style: none;
+  font-size: 0.82rem;
+}
+.imp-seat__badge { flex: none; }
+.imp-seat__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-seat__score { font-family: var(--font-score); font-weight: 700; font-variant-numeric: tabular-nums; }
+.imp-seat__win { color: var(--accent-ink); display: inline-flex; }
+.imp-seat.is-winner .imp-seat__name { font-weight: 700; }
+.imp-play__notes { font-size: 0.76rem; color: var(--polaroid-muted); margin: 0; }
+.imp-play__fields { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.imp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 45%;
+  min-width: 0;
+}
+.imp-field__label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--polaroid-muted);
+}
+.imp-field--btn { text-align: left; background: transparent; border: 0; }
+.imp-field__value {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 0.45rem;
+  background: var(--well);
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.imp-field--btn:active .imp-field__value { border-color: var(--accent); }
+.imp-sentinel { height: 1px; }
+
+/* ── Step 6: summary, progress ────────────────────────────────────────────── */
+.imp-summary {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+}
+.imp-summary > div {
+  flex: 1;
+  border: 1px solid var(--card-border);
+  border-radius: 0.9rem;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  padding: 0.6rem;
+  text-align: center;
+  min-width: 0;
+}
+.imp-summary dt {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--polaroid-muted);
+}
+.imp-summary dd {
+  margin: 2px 0 0;
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.imp-summary__note {
+  margin-top: 2px;
+  font-size: 0.62rem;
+  line-height: 1.25;
+  color: var(--polaroid-muted);
+}
+.imp-bygame {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--card-border);
+  border-radius: 1.1rem;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  overflow: hidden;
+}
+.imp-bygame li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.85rem;
+}
+.imp-bygame li + li { border-top: 1px solid var(--polaroid-line); }
+.imp-bygame li span:last-child {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+}
+.imp-progress {
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  overflow: hidden;
+}
+.imp-progress__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 200ms var(--ease);
+}
+.imp-progress__label {
+  text-align: center;
+  font-family: var(--font-score);
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+.imp-cta {
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--rounded-btn, 0.6rem);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.imp-cta:disabled { opacity: 0.5; }
+.imp-cta:active:not(:disabled) { background: var(--accent-hover); }
+.imp-cta--ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+}
+
+/* ── The docked step nav ──────────────────────────────────────────────────── */
+/* Fixed, not sticky, and pinned to the content column — the same recipe as
+   .cascade-cta-wrap and .bgb-install, for the same reason: a sticky bar's
+   release point has to stay in sync with every other bottom offset in the app,
+   and it drifts. z-index 35 is the docked-footer rung of the ladder. */
+.imp-nav {
+  position: fixed;
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;
+  padding: 12px 16px 28px;
+  z-index: 35;
+  display: flex;
+  gap: 0.5rem;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, var(--bg-0) 46%);
+  pointer-events: none;
+}
+.imp-nav > * { pointer-events: auto; }
+.imp-nav__back,
+.imp-nav__next {
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--rounded-btn, 0.6rem);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.imp-nav__back {
+  flex: 0 0 auto;
+  padding: 0 1.1rem;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+}
+.imp-nav__next {
+  flex: 1;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.imp-nav__next:disabled { opacity: 0.5; }
+.imp-nav__next:active:not(:disabled) { background: var(--accent-hover); }
+.imp-nav__back:active:not(:disabled) { background: var(--accent-quiet); }
+
+@media (prefers-reduced-motion: reduce) {
+  .imp-chrome__seg::after, .imp-progress__fill { transition: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Play card — the run variant (.play-card--stack)
+   ══════════════════════════════════════════════════════════════════════════
+   One card standing for N identical imported plays (migration 005). It is the
+   same .play-card box — same widths, same flip, same place in the session rail
+   — with two paper edges peeking out behind it so the tile reads as a stack
+   before a single word is parsed, and the count where the photograph would be.
+
+   No photo on purpose: a snapshot of one of 58 indistinguishable plays would be
+   claiming to be a specific evening. The game's own art sits behind the count,
+   dimmed, so the tile still says which game without pretending to be a play.
+   ────────────────────────────────────────────────────────────────────────── */
+.play-card--stack { position: relative; }
+/* The edges are siblings of __inner, not children, so the 3D flip doesn't
+   carry them round with the face. */
+.play-card__stack-edge {
+  position: absolute;
+  inset: 6px -5px -5px 6px;
+  border-radius: inherit;
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--sh-1);
+  z-index: -1;
+}
+.play-card__stack-edge--2 { inset: 11px -10px -10px 11px; opacity: 0.65; }
+
+.play-card__photo--stack {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--polaroid-bg-soft, var(--well));
+}
+/* The base rule's bottom-edge gradient exists to give the box-art corner badge
+   a consistent surface on a bright photo. A run card carries no badge and no
+   photo, so the gradient is a smudge under the count and nothing else. */
+.play-card__photo--stack::after { content: none; }
+.play-card__stack-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Far enough back that the count reads at a glance on both grounds — the
+     art is here to name the game, not to be looked at. */
+  opacity: 0.22;
+  filter: saturate(0.7);
+}
+.play-card__stack-count {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  color: var(--polaroid-ink, #1D1812);
+}
+.play-card__stack-n {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 2.4rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+}
+.play-card__stack-unit {
+  margin-top: 2px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--polaroid-muted, #8B7E68);
+}
+
+.play-card__stack-back {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  justify-content: center;
+  /* flex:1, not height:100% — the parent .play-card__back is already a padded
+     flex column, so a percentage height resolves against the wrong box and
+     leaves the summary sitting high. */
+  flex: 1;
+  text-align: center;
+  color: var(--polaroid-ink, #1D1812);
+}
+.play-card__stack-back-n {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+  line-height: 1;
+}
+.play-card__stack-back-game {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.15;
+}
+.play-card__stack-back-line { font-size: 0.82rem; }
+.play-card__stack-back-date {
+  font-size: 0.74rem;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.play-card__stack-back-note {
+  margin-top: 0.35rem;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: var(--polaroid-muted, #8B7E68);
+}
+
+/* The plays log's run row — same idea, one line. */
+.plays-list__run {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+}
+/* A run row opens nothing, so it must not offer the press feedback that says
+   it would. */
+.plays-list__row--run { cursor: default; }
