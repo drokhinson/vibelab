@@ -3235,8 +3235,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .set-card__bgg-compare { padding: 0 0.9rem 0.9rem; }
 
 /* The two directions, side by side, BELOW the comparison they act on. Each
-   holds two 26px marks and an arrow — about 90px of content in a ~165px half at
-   390px, so the pair does not wrap. */
+   stacks two 26px marks and an arrow over the verb, so the wider of the two
+   captions ("Import to BgB", ~95px at 0.62rem) still clears a ~165px half at
+   390px without wrapping. */
 .set-card__bgg-sync {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -3244,7 +3245,22 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   padding: 0.85rem 0.9rem 0.9rem;
   border-top: 1px solid var(--polaroid-line, #DAC9A4);
 }
-.set-card__bgg-sync .btn { min-height: 46px; padding-inline: 0.6rem; }
+.set-card__bgg-sync .btn {
+  min-height: 52px;
+  padding-inline: 0.4rem;
+  flex-direction: column;
+  gap: 0.1rem;
+  line-height: 1.1;
+}
+.bgb-mark__row { display: inline-flex; align-items: center; gap: 0.15rem; }
+/* The verb under the marks. Sized to survive "Import to BgB" in a ~165px half
+   at 390px without wrapping. */
+.bgb-mark__cap {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
 
 /* Shown once a sync finishes: the comparison that authorised it is stale, the
    sync buttons are gone, and the way back is another check. */
@@ -3281,6 +3297,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .bgb-mark--bgg img { height: 17px; width: auto; }
 .bgb-mark--bgb img { width: 26px; height: 26px; border-radius: 7px; }
+/* Header scale, for the comparison table's two status columns. */
+.bgb-mark--sm { width: 22px; height: 22px; border-radius: 6px; }
+.bgb-mark--sm.bgb-mark--bgg img { height: 14px; }
+.bgb-mark--sm.bgb-mark--bgb img { width: 22px; height: 22px; border-radius: 6px; }
+/* The BgB mark carries its own dark plate, which vanishes into the card ground
+   in dark. A ring in the surface's line colour gives it the same defined tile
+   edge the BGG mark gets from its white plate, so the two column heads read as
+   a matched pair in both themes. */
+.bgb-mark--sm.bgb-mark--bgb { box-shadow: 0 0 0 1px var(--polaroid-line, #DAC9A4); }
 .bgb-mark__arrow { flex: none; opacity: 0.65; }
 .bgb-mark__word { font-size: 0.8rem; font-weight: 600; }
 
@@ -3302,19 +3327,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 0.74rem;
   color: var(--polaroid-muted, #8B7E68);
 }
-.bgg-diff__counts { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.4rem; }
-.bgg-diff__count {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.15rem 0.4rem;
-  border-radius: 0.4rem;
-  background: var(--well);
-  border: 1px solid var(--polaroid-line, #DAC9A4);
-}
-.bgg-diff__names { margin: 0; color: var(--polaroid-muted, #8B7E68); font-size: 0.78rem; }
 .bgg-diff__note,
 .bgg-diff__warn {
   margin: 0.5rem 0 0;
@@ -3324,59 +3336,99 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgg-diff__warn { border-left: 2px solid var(--warn); padding-left: 0.5rem; }
 .bgg-diff__error { font-size: 0.8rem; color: var(--rust); }
 
-/* Semantic stripe. `held` is a PROTECTION, not a change — it must never wear
-   the destructive red, or the sheet reads as though it is about to delete the
-   thing it is promising to keep. */
-.bgg-diff__stripe { width: 3px; align-self: stretch; border-radius: 2px; flex: none; }
-.bgg-diff__group--add .bgg-diff__stripe,
-.bgg-diff__count--add .bgg-diff__stripe { background: var(--ok); }
-.bgg-diff__group--change .bgg-diff__stripe,
-.bgg-diff__count--change .bgg-diff__stripe { background: var(--warn); }
-.bgg-diff__group--clear .bgg-diff__stripe,
-.bgg-diff__count--clear .bgg-diff__stripe { background: var(--rust); }
-.bgg-diff__group--held .bgg-diff__stripe,
-.bgg-diff__count--held .bgg-diff__stripe { background: var(--polaroid-muted, #8B7E68); }
-.bgg-diff__count .bgg-diff__stripe { height: 11px; align-self: center; }
+/* Semantic stripe. The three row kinds are DIRECTIONS, not verbs: a game only
+   in BgB (add), a status the two sides disagree on (change), a game only on BGG
+   (which a push would clear). Colour carries the same meaning in the legend and
+   on the row, so the key is read once. */
+.bgg-cmp__stripe { width: 3px; align-self: stretch; border-radius: 2px; flex: none; }
+.bgg-cmp__legend-item--add .bgg-cmp__stripe,
+.bgg-cmp__row--bgb-only .bgg-cmp__stripe { background: var(--ok); }
+.bgg-cmp__legend-item--change .bgg-cmp__stripe,
+.bgg-cmp__row--differs .bgg-cmp__stripe { background: var(--warn); }
+.bgg-cmp__legend-item--clear .bgg-cmp__stripe,
+.bgg-cmp__row--bgg-only .bgg-cmp__stripe { background: var(--rust); }
 
-.bgg-diff--sheet { display: flex; flex-direction: column; gap: 0.7rem; }
-.bgg-diff__group-hd {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding-bottom: 0.25rem;
+.bgg-diff--sheet { display: flex; flex-direction: column; gap: 0.2rem; }
+
+/* ── The comparison table ──────────────────────────────────────────────────
+   Three columns: the game, what BoardgameBuddy has, what BoardGameGeek has.
+   The two status columns are headed by the two logos, so the direction of a
+   difference is legible without reading a verb — a value opposite a dash is a
+   one-sided game, and which side it is on is the whole answer.
+
+   `table-layout: fixed` is load-bearing: a long game name must ellipsize
+   rather than push the two status columns off the card. The wrapper scrolls
+   horizontally only as an escape hatch for very narrow viewports. */
+.bgg-cmp__scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.bgg-cmp {
+  width: 100%;
+  min-width: 15rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.8rem;
+}
+.bgg-cmp__th {
+  padding: 0 0 0.3rem;
+  border-bottom: 1px solid var(--polaroid-line, #DAC9A4);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 0.82rem;
-}
-.bgg-diff__group-hd .bgg-diff__stripe { height: 14px; align-self: center; }
-.bgg-diff__group-label { flex: 1; }
-.bgg-diff__group-n {
-  font-weight: 700;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   color: var(--polaroid-muted, #8B7E68);
+  text-align: center;
+  vertical-align: bottom;
+}
+.bgg-cmp__th--game { text-align: left; }
+.bgg-cmp__th--bgb,
+.bgg-cmp__th--bgg { width: 5.6rem; }
+/* In a sync sheet, one column is the one being written. The chip names it and
+   the tint carries it down the column, so "which side moves" survives being
+   read one row at a time. */
+.bgg-cmp__th--writes,
+.bgg-cmp__cell--writes {
+  background: color-mix(in srgb, var(--accent-quiet) 60%, transparent);
+}
+.bgg-cmp__writes {
+  display: block;
+  margin-top: 0.12rem;
+  font-family: var(--font-body);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+
+.bgg-cmp__row { border-bottom: 1px solid color-mix(in srgb, var(--polaroid-line, #DAC9A4) 60%, transparent); }
+.bgg-cmp tbody tr:last-child { border-bottom: 0; }
+/* The flex row lives INSIDE the cell, never on it: a `display: flex` td drops
+   out of the table box model, and with table-layout: fixed that takes the
+   column sizing with it. */
+.bgg-cmp__game {
+  padding: 0.4rem 0.5rem 0.4rem 0;
+  font-weight: 600;
+  text-align: left;
+  color: var(--polaroid-ink, #1D1812);
+}
+.bgg-cmp__gamein { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.bgg-cmp__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bgg-cmp__cell {
+  padding: 0.4rem 0;
+  text-align: center;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.bgg-diff__list { list-style: none; margin: 0; padding: 0; }
-.bgg-diff__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.34rem 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--polaroid-line, #DAC9A4) 60%, transparent);
-}
-.bgg-diff__row:last-child { border-bottom: 0; }
-.bgg-diff__game { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bgg-diff__move {
-  font-size: 0.72rem;
-  font-weight: 600;
-  white-space: nowrap;
+.bgg-cmp__val { font-size: 0.74rem; font-weight: 600; color: var(--polaroid-ink, #1D1812); }
+.bgg-cmp__none { font-size: 0.8rem; color: var(--polaroid-muted, #8B7E68); }
+.bgg-cmp__kept {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--polaroid-muted, #8B7E68);
 }
-.bgg-diff__move em { font-style: normal; color: var(--accent-ink); }
-.bgg-diff__new {
+.bgg-cmp__new {
   display: inline-block;
-  margin-left: 0.35rem;
   padding: 0.02rem 0.28rem;
   border-radius: 0.3rem;
   font-size: 0.6rem;
@@ -3385,7 +3437,37 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   text-transform: uppercase;
   color: var(--accent-ink);
   background: var(--accent-quiet);
+  flex: none;
 }
+
+/* The sheet's one-line rule: what the tinted column becomes. Stated once,
+   because it holds for every row. */
+.bgg-cmp__rule {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.bgg-cmp__rule b { color: var(--polaroid-ink, #1D1812); font-weight: 700; }
+
+/* The key. This is the part that answers "which way do I sync?", so it names
+   both buttons by the marks they wear rather than by a verb. */
+.bgg-cmp__legend {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.bgg-cmp__legend-item {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.bgg-cmp__legend-item b { color: var(--polaroid-ink, #1D1812); font-weight: 700; white-space: nowrap; }
 
 /* ── The review sheet ──────────────────────────────────────────────────────── */
 .bgg-sync-sheet__list { padding-top: 0.2rem; }
