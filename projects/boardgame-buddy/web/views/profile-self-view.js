@@ -37,6 +37,14 @@
 
     async onMount() {
       this.listen("user", () => this.render());
+      // The Buddies card's request badge reads the store slot, not the bundle
+      // it was painted from — so accepting from the Buddies spoke and coming
+      // back finds the corner already clear.
+      this.listen("buddyRequestCount", () => this.render());
+      // Same for the badges: the spoke marks them seen on its way out, and the
+      // hub behind it must not still be advertising them when the user
+      // returns.
+      this.listen("achievementUnseenCount", () => this.render());
       this._loading = true;
       this._ach = window.Achievements.cached();
       this.render();
@@ -266,6 +274,9 @@
     }
 
     _achCardInner(a) {
+      // Counted off the payload this card is about to paint, not off the
+      // store slot the nav dot reads: the card should badge exactly what it is
+      // showing. Both are computed from the same seen-set on disk.
       const unseen = window.Achievements.unseen(a).length;
       const picks = this._badgePicks(a.achievements);
       const body = `
@@ -281,12 +292,13 @@
       `;
       return `
         <section class="preview-card">
+          ${this._countBadge(unseen, `${unseen} new achievement${unseen === 1 ? "" : "s"}`)}
           <header class="preview-card__head">
             <span class="preview-card__icon"><i data-icon="trophy" class="w-4 h-4"></i></span>
             <h3 class="preview-card__title font-display">Achievements</h3>
             <span class="preview-card__sub">${a.earned_count} of ${a.total}</span>
             <button class="preview-card__seeall" onclick="window.router.go('achievements')">
-              See all${unseen ? `<span class="preview-card__seeall-dot" aria-hidden="true"></span><span class="bgb-vis-hidden">, ${unseen} new</span>` : ""}
+              See all
               <i data-icon="chevron-right" class="w-3 h-3"></i>
             </button>
           </header>
@@ -372,18 +384,40 @@
           </div>
         `;
       }
+      // Incoming friend requests, not buddies — a thing to do rather than a
+      // thing to look at, which is why it gets the corner badge while the
+      // roster size stays a sub-head.
+      const waiting = window.Buddy.pendingCount();
       return this._previewCard({
         icon: "users",
         title: "Buddies",
         sub: `${count} ${count === 1 ? "player" : "players"}`,
         route: "buddies",
         body,
+        badge: waiting,
+        badgeLabel: `${waiting} buddy request${waiting === 1 ? "" : "s"} waiting`,
       });
     }
 
-    _previewCard({ icon, title, sub, route, body, modifier = "" }) {
+    /**
+     * The corner badge a hub card wears when something behind it is waiting —
+     * buddy requests, unseen achievements. The number is aria-hidden and the
+     * phrase beside it carries the meaning, because "3" alone in a card corner
+     * tells a screen reader nothing about what there are three of.
+     */
+    _countBadge(n, label) {
+      if (!n) return "";
+      return `
+        <span class="preview-card__count">
+          <span aria-hidden="true">${n > 99 ? "99+" : n}</span>
+          <span class="bgb-vis-hidden">${escapeHtml(label)}</span>
+        </span>`;
+    }
+
+    _previewCard({ icon, title, sub, route, body, modifier = "", badge = 0, badgeLabel = "" }) {
       return `
         <section class="preview-card ${modifier}">
+          ${this._countBadge(badge, badgeLabel)}
           <header class="preview-card__head">
             <span class="preview-card__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
             <h3 class="preview-card__title font-display">${escapeHtml(title)}</h3>

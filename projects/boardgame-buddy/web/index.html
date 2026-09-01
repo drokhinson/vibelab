@@ -170,6 +170,14 @@
             data-nav-views="profile-self,collection,wishlist,plays,buddies,stats,achievements,settings">
       <span class="bgb-nav__ico">
         <i data-icon="user" class="w-5 h-5"></i>
+        <!-- Something is waiting behind this tab — a buddy request, a badge
+             nobody has looked at. One dot for both, and no number: the counts
+             belong on the hub cards this tab leads to, where there is room to
+             say what they count. init.js#syncNavProfileDot drives it from the
+             `buddyRequestCount` and `achievementUnseenCount` store slots and
+             swaps the tab's accessible name, so the dot itself is
+             decoration. -->
+        <span class="bgb-nav__dot" aria-hidden="true" hidden></span>
       </span>
       <span class="bgb-nav__label">Profile</span>
     </button>

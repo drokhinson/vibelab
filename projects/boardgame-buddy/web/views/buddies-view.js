@@ -99,8 +99,11 @@
       // Requests aren't part of the cached bundle — always fetch fresh, in
       // parallel with the bundle, and fold in below without blocking the
       // first paint on the round-trip.
-      const requestsPromise = window.Buddy.requests()
-        .catch(() => ({ incoming: [], outgoing: [] }));
+      // Resolves null on failure, not an empty pair: `this._requests` falls
+      // back to the empty shape either way, but the badge must tell a failed
+      // fetch apart from a genuine zero — clearing the Profile tab's dot
+      // because the network dropped would be a lie the user acts on.
+      const requestsPromise = window.Buddy.requests().catch(() => null);
       // Same for the "may know" rail — a separate RPC, deliberately uncached
       // (see Buddy.suggested), so it rides alongside instead of gating paint.
       const suggestedPromise = window.Buddy.suggested()
@@ -134,6 +137,7 @@
       // newer than the server copy we're holding, so let it stand.
       if (seq !== this._mutationSeq) return;
       this._requests = requests || { incoming: [], outgoing: [] };
+      if (requests) this._publishRequestCount();
       this._suggested = suggested || [];
       this.render();
     }
@@ -910,6 +914,18 @@
       window.Buddy.invalidate();
     }
 
+    /**
+     * Republish the incoming count to the store. The Profile tab's dot and the
+     * hub's Buddies badge both read that slot, and this screen is its freshest
+     * writer — an accept here knows the new figure a round trip before
+     * /profile/bundle does. Called from every site that changes the incoming
+     * list, rollbacks included: a failed accept that left the dot cleared
+     * would be worse than one that never moved.
+     */
+    _publishRequestCount() {
+      window.Buddy.setPendingCount((this._requests.incoming || []).length);
+    }
+
     async _accept(requestId, userId) {
       const key = "accept:" + requestId;
       if (this._busy.has(key)) return;
@@ -924,6 +940,7 @@
       this._mutationSeq++;
       const req = idx >= 0 ? incoming[idx] : null;
       if (req) incoming.splice(idx, 1);
+      this._publishRequestCount();
 
       const otherId = (req && req.other_user_id) || userId;
       const person = this._personFor(otherId);
@@ -956,6 +973,7 @@
         edge = await window.Buddy.accept(requestId);
       } catch (e) {
         if (req) incoming.splice(idx, 0, req);
+        this._publishRequestCount();
         this._buddies = buddiesBefore;
         undoPlayed();
         this._resolved.delete(otherId);
@@ -1014,6 +1032,7 @@
       this._busy.add(key);
       this._mutationSeq++;
       const [req] = incoming.splice(idx, 1);
+      this._publishRequestCount();
       const undoPlayed = this._patchPlayedWith(req.other_user_id, {
         has_pending_request: false,
         pending_request_direction: null,
@@ -1025,6 +1044,7 @@
         await window.Buddy.reject(requestId);
       } catch (e) {
         incoming.splice(idx, 0, req);
+        this._publishRequestCount();
         undoPlayed();
         this._resolved.delete(req.other_user_id);
         this._busy.delete(key);

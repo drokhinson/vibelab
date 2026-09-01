@@ -127,6 +127,13 @@
   --rust: #C8553D;                       /* destructive */
   --rust-soft:   rgba(200, 85, 61, 0.28);
   --rust-strong: rgba(200, 85, 61, 0.85);
+  /* A count that has to be SEEN — the buddy-request badge. Its own pair
+     rather than --rust because the two roles diverge in dark: --rust is
+     re-pointed to a light terracotta on cards so it works as ink, which is
+     2.8:1 under white as a fill. This one is a fill and stays one.
+     White on #C0472F is 5.0:1; the pill on --bg-1 is 3.3:1. */
+  --alert-fill: #C0472F;
+  --on-alert:   #FFFFFF;
   --warm-gray-mid: rgba(165, 149, 136, 0.55);
 
   /* Paper — the play card surface */
@@ -204,6 +211,10 @@
   --rust: #A8452F;
   --rust-soft:   rgba(168, 69, 47, 0.24);
   --rust-strong: rgba(168, 69, 47, 0.85);
+  /* Nothing re-points --rust on a light card, so the badge can take the
+     destructive red as-is. White on it is 5.9:1. */
+  --alert-fill: #A8452F;
+  --on-alert:   #FFFFFF;
   --warm-gray-mid: rgba(120, 106, 92, 0.45);
 
   /* On a cream ground a cream card disappears — go white and add a hairline */
@@ -1999,8 +2010,29 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   height: 2px;
   background: var(--accent, #CDA23F);
 }
-.bgb-nav__ico { display: inline-flex; align-items: center; justify-content: center; }
+.bgb-nav__ico { display: inline-flex; align-items: center; justify-content: center; position: relative; }
 .bgb-nav__label { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
+
+/* Something waiting behind the Profile tab — a buddy request, an unseen
+   badge — as one bare dot pinned to the glyph. No count: the numbers live on
+   the hub cards one tap away, where there is room to say what they count. The
+   ring is the bar's own ground, so the dot reads as sitting on top of the icon
+   rather than merging with it. */
+.bgb-nav__dot {
+  position: absolute;
+  top: -1px;
+  right: -5px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--alert-fill);
+  border: 2px solid var(--nav-bg);
+  box-sizing: content-box;
+}
+/* No display of its own above, so the UA's [hidden] rule already wins — this
+   is here so a later `display:` added to the block can't silently un-hide it,
+   the way .bgb-outbox__badge's `display: grid` once did. */
+.bgb-nav__dot[hidden] { display: none; }
 
 /* Play stays the primary action — a gold-filled icon chip rather than a
    raised disc, so it reads as the CTA without breaking the bar's edge. */
@@ -8463,6 +8495,36 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-top: 0.75rem;
   border: 1px solid var(--card-border);
   box-shadow: var(--sh-3);
+  /* Anchors .preview-card__count in the corner. */
+  position: relative;
+}
+/* The hub's "something is waiting here" badge, on the top-right corner of the
+   card that owns it — pending buddy requests on Buddies, unseen badges on
+   Achievements. Those are the figures that are a thing to DO; every other
+   number on the hub is a thing to look at, and gets a sub-head instead.
+   Deliberately outside the card's own padding: a badge tucked inside the
+   corner radius reads as content, one straddling the edge reads as a count.
+   The hub's container has 1rem of gutter, so the overhang never clips. */
+.preview-card__count {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--alert-fill);
+  color: var(--on-alert);
+  border: 2px solid var(--polaroid-bg, #FFFBF1);
+  box-sizing: content-box;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--sh-1);
 }
 .preview-card__head {
   display: flex;
@@ -11599,13 +11661,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .preview-card__badge img { width: 100%; height: auto; display: block; aspect-ratio: 1 / 1; }
 .preview-card__badge.is-locked img { filter: grayscale(0.85) brightness(0.62); opacity: 0.7; }
-.preview-card__seeall-dot {
-  display: inline-block;
-  width: 6px; height: 6px;
-  border-radius: 999px;
-  background: var(--accent-fill);
-  margin-left: 0.15rem;
-}
 
 /* Narrow phones: three medallions plus their captions get tight under ~340px. */
 @media (max-width: 350px) {

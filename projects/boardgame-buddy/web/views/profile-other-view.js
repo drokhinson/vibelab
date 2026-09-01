@@ -245,6 +245,11 @@
         if (!id) throw new Error("That request is no longer pending");
         await window.Buddy.accept(id);
         if (window.Buddy.invalidate) window.Buddy.invalidate();
+        // One request off the pile the Profile tab's dot is counting. This
+        // screen holds no request list to re-measure, so it steps the store
+        // slot instead. After the await on purpose: a failed accept leaves the
+        // count untouched rather than needing a rollback of its own.
+        window.Buddy.setPendingCount(window.Buddy.pendingCount() - 1);
         this._refreshBundle();
       } catch (e) {
         Object.assign(p, before);
