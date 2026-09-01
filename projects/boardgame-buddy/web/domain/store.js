@@ -33,7 +33,7 @@
         // rather than one total: the nav dot only needs "something is
         // waiting", but each hub card names its own count.
         achievementUnseenCount: 0,
-        // Pending INCOMING ghost account claims (migration 069) — someone
+        // Pending INCOMING ghost account claims (migration 070) — someone
         // asking to link one of this user's ghost players to their account.
         // Third source on the same dot; the hub's Buddies card sums it with
         // buddyRequestCount, since both resolve behind that one card.

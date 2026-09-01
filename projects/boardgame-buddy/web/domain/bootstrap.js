@@ -159,7 +159,7 @@
       if (window.Buddy && window.Buddy.publishPendingFromBundle) {
         window.Buddy.publishPendingFromBundle(payload.profile_bundle);
       }
-      // Same seed, same dot: incoming ghost claims (migration 070's
+      // Same seed, same dot: incoming ghost claims (migration 071's
       // ghost_claims_incoming block).
       if (window.GhostClaim && window.GhostClaim.publishPendingFromBundle) {
         window.GhostClaim.publishPendingFromBundle(payload.profile_bundle);

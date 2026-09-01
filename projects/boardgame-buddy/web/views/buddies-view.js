@@ -57,7 +57,7 @@
       // lists actually re-form.
       this._resolved = new Map();
 
-      // Ghost account claims (migration 069). Two lists, opposite ends of the
+      // Ghost account claims (migration 070). Two lists, opposite ends of the
       // same conversation: suggestions are ghosts we might claim, requests are
       // people asking to claim ours. Their markup lives in
       // ui/ghost-claim-suggestions.js; only the state and the writes are here.

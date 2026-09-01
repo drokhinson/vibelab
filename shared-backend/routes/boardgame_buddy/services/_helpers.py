@@ -27,7 +27,7 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "participant_not_found": (404, "Participant not found"),
     "cannot_remove_host": (400, "Cannot remove the host"),
     "display_name_required": (400, "display_name is required"),
-    # Ghost account claims (migration 069). None of these reuse `not_found`
+    # Ghost account claims (migration 070). None of these reuse `not_found`
     # above — its detail is session-specific ("Session not found") and
     # widening it would change bgb_finalize_session's message for no reason.
     "claim_not_found": (404, "Claim not found"),

@@ -57,7 +57,7 @@ class BuddyEdgeStatus(StrEnum):
 
 
 class GhostClaimStatus(StrEnum):
-    """Lifecycle of a ghost account claim (boardgamebuddy_ghost_claims, 069).
+    """Lifecycle of a ghost account claim (boardgamebuddy_ghost_claims, 070).
 
     Unlike BuddyEdgeStatus this never deletes: the (owner, ghost_name_key,
     claimant) triple is unique, so status mutates in place and reject_count

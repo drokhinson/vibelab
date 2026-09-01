@@ -5483,7 +5483,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* No press lift: nothing here is waiting on another tap. */
 .buddies-row--resolved:active { transform: none; }
 
-/* ── Ghost account claims (migration 069) ─────────────────────────────────────
+/* ── Ghost account claims (migration 070) ─────────────────────────────────────
    Three sections on the Buddies screen — "Is this you?", "Link requests" and
    "Link requests sent" — all built out of .buddies-row so they read as the same
    screen rather than a transplant. Only the differences live here.

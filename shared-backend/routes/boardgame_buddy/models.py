@@ -834,7 +834,7 @@ class GhostMergeResponse(BaseModel):
     rows_updated: int
 
 
-# ── Ghost account claims (migration 069) ─────────────────────────────────────
+# ── Ghost account claims (migration 070) ─────────────────────────────────────
 #
 # The mirror image of GhostLinkRequest above. That one is the ghost's OWNER
 # saying "this nickname is Julia"; these are the claimant saying "that ghost is

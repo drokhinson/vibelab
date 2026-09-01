@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 070 (bgb_profile_bundle publishes the incoming
---               ghost-claim count) and 069 (ghost account claims — the merge
+-- Last updated: migration 071 (bgb_profile_bundle publishes the incoming
+--               ghost-claim count) and 070 (ghost account claims — the merge
 --               extracted as bgb_link_ghost_rows, plus the suggestion /
 --               detail / list / create / accept / reject / dismiss RPCs)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
@@ -222,12 +222,14 @@
 --                  neither the target nor an accepted buddy. The COUNT
 --                  `recent_plays_total` stays visible to everyone; it is one
 --                  of the four headline stats a public profile shows.)
---               db/migrations/boardgamebuddy/070_profile_bundle_ghost_claims.sql
+--               db/migrations/boardgamebuddy/071_profile_bundle_ghost_claims.sql
 --                 (new self-only `ghost_claims_incoming` block beside
 --                  `buddy_requests_incoming`, so the Profile tab's dot and the
 --                  Buddies card's count are right on first paint. Additive and
 --                  self-null, so bootstrap_version is deliberately NOT bumped —
---                  064's argument, verbatim.)
+--                  064's argument, verbatim. Its body is 069's verbatim: this
+--                  function is replaced wholesale, so a migration that adds a
+--                  key MUST be rebased onto whichever one defined it last.)
 
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)
@@ -663,7 +665,7 @@
 -- bgb_link_ghost(p_viewer UUID, p_display_name TEXT, p_target UUID)
 --   → JSONB { "updated": INT } | { "error": "not_found" }
 --   Defined in: db/migrations/boardgamebuddy/050_ghost_rpcs_and_status_map.sql
---   Last updated in: 069_ghost_claims.sql — now a thin wrapper over
+--   Last updated in: 070_ghost_claims.sql — now a thin wrapper over
 --               bgb_link_ghost_rows, and matches on lower(btrim(...)) rather
 --               than ILIKE, so ' Davo ' is caught too. The widening is what
 --               makes this and the claim key agree on one set of rows.
@@ -747,7 +749,7 @@
 --               continent rather than failing the whole screen.
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Ghost account claims (migration 069)
+-- Ghost account claims (migration 070)
 --
 -- A ghost is a play_players row with player_user_id NULL, owned implicitly by
 -- whoever logged the play. bgb_link_ghost runs owner → ghost; these run the
@@ -757,7 +759,7 @@
 
 -- bgb_link_ghost_rows(p_owner UUID, p_name_key TEXT, p_target UUID)
 --   → INT (rows moved)
---   Defined in: db/migrations/boardgamebuddy/069_ghost_claims.sql
+--   Defined in: db/migrations/boardgamebuddy/070_ghost_claims.sql
 --   Called by:  bgb_link_ghost, bgb_accept_ghost_claim (SQL only — no route)
 --   Purpose:    THE ghost→account merge, extracted so the owner-initiated link
 --               and the claimant-initiated claim move exactly the same rows.
@@ -767,7 +769,7 @@
 -- bgb_ghost_summary(p_viewer UUID, p_owner UUID, p_name_key TEXT)
 --   → JSONB { exists, play_count, last_played_at, last_game_name,
 --             ghost_display_name, collides, visible }
---   Defined in: db/migrations/boardgamebuddy/069_ghost_claims.sql
+--   Defined in: db/migrations/boardgamebuddy/070_ghost_claims.sql
 --   Called by:  bgb_ghost_claim_detail, bgb_create_ghost_claim,
 --               bgb_accept_ghost_claim, bgb_dismiss_ghost_claim (SQL only)
 --   Purpose:    The four facts every single-ghost path needs, computed once so
@@ -781,7 +783,7 @@
 --   → JSONB [ {owner_user_id, owner_display_name, owner_username, owner_avatar,
 --              ghost_display_name, ghost_name_key, play_count, last_played_at,
 --              last_game_name, match_score, claim_status, claim_id} ]
---   Defined in: db/migrations/boardgamebuddy/069_ghost_claims.sql
+--   Defined in: db/migrations/boardgamebuddy/070_ghost_claims.sql
 --   Called by:  services/ghost_claim_service.fetch_suggestions
 --               (GET /ghost-claims/suggestions)
 --   Purpose:    The Buddies screen's "Is this you?" list. Scans ACCEPTED
@@ -799,7 +801,7 @@
 -- bgb_ghost_claim_detail(p_viewer UUID, p_play_id UUID, p_display_name TEXT)
 --   → JSONB { …suggestion fields…, can_claim, blocked_reason }
 --            | { "error": "not_visible" | "ghost_gone" | ... }
---   Defined in: db/migrations/boardgamebuddy/069_ghost_claims.sql
+--   Defined in: db/migrations/boardgamebuddy/070_ghost_claims.sql
 --   Called by:  services/ghost_claim_service.fetch_detail (GET /ghost-claims/lookup)
 --   Purpose:    Backs the claim sheet opened from a polaroid back or the
 --               play-detail players list. Takes the PLAY id because that is
@@ -810,7 +812,7 @@
 
 -- bgb_ghost_claims(p_viewer UUID)
 --   → JSONB { incoming: [...], outgoing: [...] }
---   Defined in: db/migrations/boardgamebuddy/069_ghost_claims.sql
+--   Defined in: db/migrations/boardgamebuddy/070_ghost_claims.sql
 --   Called by:  services/ghost_claim_service.list_claims (GET /ghost-claims)
 --   Purpose:    Both sides of the request list, mirroring GET /buddies/requests.
 --               An RPC because every row needs a live play_count /
@@ -820,7 +822,7 @@
 -- bgb_create_ghost_claim(p_claimant UUID, p_owner UUID, p_display_name TEXT)
 --   → JSONB (the outgoing claim) | { "error": "own_roster" | "ghost_gone" |
 --     "not_visible" | "already_seated" | "already_linked" | "declined_twice" }
---   Defined in: db/migrations/boardgamebuddy/069_ghost_claims.sql
+--   Defined in: db/migrations/boardgamebuddy/070_ghost_claims.sql
 --   Called by:  services/ghost_claim_service.create_claim (POST /ghost-claims)
 --   Purpose:    Send a claim. Validation and upsert in one call so there is no
 --               window between "the ghost exists, is visible, does not collide"
@@ -831,7 +833,7 @@
 -- bgb_accept_ghost_claim(p_owner UUID, p_claim_id UUID)
 --   → JSONB { updated: INT, claim: {...} } | { "error": "claim_not_found" |
 --     "not_pending" | "already_seated" | "ghost_gone" }
---   Defined in: db/migrations/boardgamebuddy/069_ghost_claims.sql
+--   Defined in: db/migrations/boardgamebuddy/070_ghost_claims.sql
 --   Called by:  services/ghost_claim_service.accept_claim
 --               (POST /ghost-claims/{id}/accept)
 --   Purpose:    Approve and merge, in one transaction. Re-checks the double-seat
@@ -844,7 +846,7 @@
 
 -- bgb_reject_ghost_claim(p_owner UUID, p_claim_id UUID)
 --   → JSONB { "rejected": true } | { "error": "claim_not_found" | "not_pending" }
---   Defined in: db/migrations/boardgamebuddy/069_ghost_claims.sql
+--   Defined in: db/migrations/boardgamebuddy/070_ghost_claims.sql
 --   Called by:  services/ghost_claim_service.reject_claim
 --               (POST /ghost-claims/{id}/reject)
 --   Purpose:    Owner declines, and reject_count is incremented — an RPC
@@ -855,7 +857,7 @@
 
 -- bgb_dismiss_ghost_claim(p_claimant UUID, p_owner UUID, p_display_name TEXT)
 --   → JSONB { "dismissed": true } | { "error": "own_roster" | ... }
---   Defined in: db/migrations/boardgamebuddy/069_ghost_claims.sql
+--   Defined in: db/migrations/boardgamebuddy/070_ghost_claims.sql
 --   Called by:  services/ghost_claim_service.dismiss_suggestion
 --               (POST /ghost-claims/dismiss)
 --   Purpose:    The claimant's "Not me". Writes the same row a real claim would,

@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- BoardgameBuddy — ghost account claims ("is this you?")
+-- 070_ghost_claims.sql — BoardgameBuddy ghost account claims ("is this you?")
 --
 -- A ghost player is not an entity. It is a boardgamebuddy_play_players row
 -- with player_user_id IS NULL and a free-text player_display_name, and its

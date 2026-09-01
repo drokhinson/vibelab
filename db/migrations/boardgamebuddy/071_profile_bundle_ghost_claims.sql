@@ -1,7 +1,7 @@
--- 070_profile_bundle_ghost_claims.sql — publish the incoming ghost-claim count
+-- 071_profile_bundle_ghost_claims.sql — publish the incoming ghost-claim count
 -- on the profile bundle.
 --
--- Migration 069 added ghost account claims. The owner of a claimed ghost needs
+-- Migration 070 added ghost account claims. The owner of a claimed ghost needs
 -- to KNOW one is waiting, and the two places that say so — the Profile tab's
 -- notification dot and the count on the Buddies card — both paint before the
 -- Buddies screen is ever opened. They read /bootstrap's profile_bundle, so the
@@ -12,15 +12,17 @@
 -- profile. An absent key means "not my business", not "zero waiting" — the
 -- distinction web/domain/buddy.js already relies on for the buddy count.
 --
--- bootstrap_version is deliberately NOT bumped, for exactly the reason
--- migration 064 gives (its header, lines 16-20): the key is additive and
--- self-null, so a cached pre-070 bundle behaves precisely as it did before —
--- the new dot simply stays at 0 until the next refresh. A wipe would cost
--- every user a cold boot to publish one integer. EXPECTED_BOOTSTRAP_VERSION in
--- web/domain/bootstrap.js stays at 2.
+-- bootstrap_version is deliberately NOT bumped, for the reason migrations 064
+-- and 069 both give: the key is additive and self-null, so a cached pre-071
+-- bundle behaves precisely as it did before — the new dot simply stays at 0
+-- until the next refresh. A wipe would cost every user a cold boot to publish
+-- one integer. EXPECTED_BOOTSTRAP_VERSION in web/domain/bootstrap.js stays at 2.
 --
 -- Signature unchanged, so 064's GRANT survives. The rest of the body is
--- migration 064's verbatim.
+-- migration 069_prev_owned_status.sql's VERBATIM — this must be rebased onto
+-- whichever migration last defined bgb_profile_bundle, or replacing the
+-- function here silently reverts that one. 069 widened owned_page to include
+-- prev_owned rows and added owned_parted_total; both are carried through below.
 
 BEGIN;
 
@@ -40,6 +42,7 @@ DECLARE
   v_stats JSONB;
   v_owned_page JSONB;
   v_owned_total BIGINT;
+  v_owned_parted_total BIGINT;
   v_wishlist_page JSONB;
   v_wishlist_total BIGINT;
   v_played_page JSONB;
@@ -91,9 +94,17 @@ BEGIN
     'owned_games', 0, 'owned_expansions', 0, 'favorite_game', NULL
   ));
 
-  SELECT COUNT(*) INTO v_owned_total
+  -- owned_total is games you actually OWN, so it keeps the bare 'owned'
+  -- predicate: a prev_owned row (sold, gifted, donated — 069) is on the Owned
+  -- shelf for display only and is counted separately, in owned_parted_total.
+  -- owned_page below returns BOTH, because it is the Collection spoke's
+  -- first-frame seed and has to hold the same rows bgb_collection_shelf will.
+  SELECT
+    COUNT(*) FILTER (WHERE c.status = 'owned'),
+    COUNT(*) FILTER (WHERE c.status = 'prev_owned')
+    INTO v_owned_total, v_owned_parted_total
     FROM boardgamebuddy_collections c
-    WHERE c.user_id = target AND c.status = 'owned'
+    WHERE c.user_id = target AND c.status IN ('owned', 'prev_owned')
       AND COALESCE(c.game_is_expansion, false) = false;
 
   SELECT COALESCE(jsonb_agg(row_jsonb ORDER BY sort_order_a DESC NULLS LAST, sort_order_b DESC), '[]'::jsonb)
@@ -143,7 +154,7 @@ BEGIN
             )
           )
       ) ps ON true
-      WHERE c.user_id = target AND c.status = 'owned'
+      WHERE c.user_id = target AND c.status IN ('owned', 'prev_owned')
         AND COALESCE(c.game_is_expansion, false) = false
       ORDER BY ps.last_played_at DESC NULLS LAST, c.added_at DESC
       LIMIT col_per_page
@@ -366,6 +377,8 @@ BEGIN
     v_recent_plays := NULL;
   END IF;
 
+  -- No status filter, so prev_owned (069) reaches the map unaided — which is
+  -- what the status tag and its picker sheet read to know which row to check.
   SELECT COALESCE(jsonb_object_agg(game_id, status), '{}'::jsonb)
     INTO v_status_map
     FROM (
@@ -383,6 +396,8 @@ BEGIN
         )
     ) m;
 
+  -- Owned-only on purpose (069): an expansion you sold is no longer clutter on
+  -- the base game's shelf. Mirrors bgb_collection_status_map's block exactly.
   SELECT COALESCE(jsonb_object_agg(base_bgg, cnt), '{}'::jsonb)
     INTO v_expansion_counts
     FROM (
@@ -511,7 +526,7 @@ BEGIN
         AND be.status = 'pending'
         AND be.requested_by = viewer;
 
-    -- Ghost claims waiting on the viewer (migration 069). Same shape and same
+    -- Ghost claims waiting on the viewer (migration 070). Same shape and same
     -- reason as buddy_requests_incoming: the Profile tab's dot and the Buddies
     -- card's count both have to be right on FIRST PAINT, and /bootstrap
     -- already carries this bundle. A separate fetch would put a round trip on
@@ -541,6 +556,7 @@ BEGIN
     'stats', v_stats,
     'owned_page', v_owned_page,
     'owned_total', v_owned_total,
+    'owned_parted_total', v_owned_parted_total,
     'wishlist_page', v_wishlist_page,
     'wishlist_total', v_wishlist_total,
     'played_page', v_played_page,

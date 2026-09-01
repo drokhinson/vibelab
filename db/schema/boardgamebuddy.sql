@@ -179,7 +179,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_edges (
 );
 ALTER TABLE public.boardgamebuddy_buddy_edges ENABLE ROW LEVEL SECURITY;
 
--- Ghost account claims (migration 069). A ghost player is not an entity — it
+-- Ghost account claims (migration 070). A ghost player is not an entity — it
 -- is a play_players row with player_user_id NULL — so a claim is keyed by the
 -- only thing that identifies one: its owner (whoever logged the play) plus the
 -- normalized name. Consent runs claimant → owner, the opposite direction from
