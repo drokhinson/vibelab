@@ -1,9 +1,13 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 071 (bgb_profile_bundle publishes the incoming
---               ghost-claim count) and 070 (ghost account claims — the merge
---               extracted as bgb_link_ghost_rows, plus the suggestion /
---               detail / list / create / accept / reject / dismiss RPCs)
+-- Last updated: migration 072 (a buddy request you have SENT now counts as a
+--               first-hop link in both suggestion functions, which gained
+--               pending_mutual_count + via_user_id; plus the new
+--               bgb_onboarding_suggestion_network) — and 071 (bgb_profile_bundle
+--               publishes the incoming ghost-claim count) and 070 (ghost account
+--               claims — the merge extracted as bgb_link_ghost_rows, plus the
+--               suggestion / detail / list / create / accept / reject / dismiss
+--               RPCs)
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -109,7 +113,8 @@
 --               "Featured from your collection" Feed card.
 
 -- bgb_suggested_buddies(uid UUID, lim INT DEFAULT 5)
---   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT)
+--   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT,
+--            pending_mutual_count BIGINT, via_user_id UUID)
 --   Defined in: db/migrations/boardgamebuddy/012_rpcs_feed_and_stats.sql
 --               db/migrations/boardgamebuddy/057_suggested_buddies_mutuals.sql
 --                 (DROP + CREATE — the return type gained play_count. Adds
@@ -125,13 +130,27 @@
 --                  local-part as its display name, default badge — is no longer
 --                  suggestable here either. 063 had the filter and this did
 --                  not, which was an oversight rather than a decision.)
+--               db/migrations/boardgamebuddy/072_suggestions_from_sent_requests.sql
+--                 (DROP + CREATE — the return type gained pending_mutual_count
+--                  and via_user_id. A pending request the VIEWER sent is now a
+--                  first-hop link: the second traversal hops from those targets
+--                  over their accepted edges. It gets its own count rather than
+--                  being folded into mutual_count, so the tile's "Mutual buddy"
+--                  stays true and no existing caller's number changes meaning.
+--                  via_user_id names which first-hop person explains a
+--                  candidate — an accepted link preferred over a pending one —
+--                  so the tile can say "Buddy of Priya". The second hop stays
+--                  accepted-only, and `connected` still excludes the people the
+--                  viewer has asked.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --               (embedded Feed rail, lim 5)
 --               shared-backend/routes/boardgame_buddy/buddy_routes.py
 --               (GET /buddies/suggested, lim 12)
 --   Purpose:    Suggestion candidates the viewer is not yet connected to:
 --               people they have shared a play with (ranked first, most plays
---               first) then friends-of-friends (by mutual count), top `lim`.
+--               first), then friends-of-friends (by mutual count), then the
+--               buddies of people the viewer has sent a request to and who
+--               have not answered yet (weakest, sorted last), top `lim`.
 --               Shared plays are counted the same way bgb_play_partners counts
 --               them, so the Feed rail and the Buddies screen's "Played with"
 --               list agree. Powers the Feed's "Buddies you may know" rail and
@@ -140,8 +159,16 @@
 
 -- bgb_onboarding_buddy_suggestions(uid UUID, lim INT DEFAULT 12,
 --                                  active_window_days INT DEFAULT 90)
---   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT, source TEXT)
+--   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT,
+--            pending_mutual_count BIGINT, via_user_id UUID, source TEXT)
 --   Defined in: db/migrations/boardgamebuddy/063_onboarding_buddy_suggestions.sql
+--               db/migrations/boardgamebuddy/072_suggestions_from_sent_requests.sql
+--                 (DROP + CREATE — the same two columns and the same
+--                  sent-request traversal as bgb_suggested_buddies above, so
+--                  the two functions stay the mirror of each other they were
+--                  written to be. tier_graph's floor widened to admit a
+--                  candidate whose only signal is a request the viewer sent;
+--                  tier_active rows carry 0 and NULL for the new columns.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --               (GET /buddies/suggested/onboarding, lim 12)
 --   Purpose:    The onboarding "Add buddies" step's candidate list. Same
@@ -158,6 +185,27 @@
 --               Shared plays are counted exactly as bgb_suggested_buddies
 --               counts them, so the two suggestion surfaces can never disagree
 --               about who the viewer has already played with.
+
+-- bgb_onboarding_suggestion_network(uid UUID, seed_ids UUID[],
+--                                   per_seed INT DEFAULT 6, lim INT DEFAULT 48)
+--   → TABLE (via_user_id UUID, user_id UUID, buddy_count BIGINT,
+--            rank_in_seed INT)
+--   Defined in: db/migrations/boardgamebuddy/072_suggestions_from_sent_requests.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
+--               (GET /buddies/suggested/onboarding, alongside the tier list)
+--   Purpose:    The second hop, shipped up front. For each of the suggestions
+--               the onboarding list just returned, who that person knows —
+--               accepted edges only — so the onboarding deck can promote them
+--               into the grid in the same frame as the tick that earned them,
+--               with no round trip. Ranked inside a seed by the candidate's own
+--               accepted-buddy count, so a `per_seed` cap keeps the
+--               most-connected rather than the alphabetically luckiest, and
+--               interleaved by rank so a global `lim` takes every seed's best
+--               before any seed's second. Excludes the seeds themselves, the
+--               viewer, anyone already on an edge with the viewer, and
+--               needs_setup profiles — the same three exclusions the tier
+--               function applies, for the same reasons. One candidate can be
+--               returned under several seeds; the client keeps the first.
 
 -- bgb_distinct_mechanics()
 --   → TABLE (mechanic TEXT)
