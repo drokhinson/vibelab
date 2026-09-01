@@ -1,19 +1,35 @@
 // StatusTag — the one collection-status pill for every game tile. Renders the
-// owned / wishlist / played pill, or a "+" button when there's no relationship.
-// Tapping opens a shared picker that flips shelf state via the app-wide
-// setCollectionStatus action, so every mounted tile re-renders from
+// owned / prev_owned / wishlist / played pill, or a "+" button when there's no
+// relationship. Tapping opens a shared picker that flips shelf state via the
+// app-wide setCollectionStatus action, so every mounted tile re-renders from
 // myCollectionMap. Ported from web/ui/status-tag.js (CustomEvent → context).
 
 import React, { useState } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet } from 'react-native';
-import { LibraryBig, Star, History, Plus, Trash2, GitFork } from 'lucide-react-native';
+import { LibraryBig, Star, History, Archive, Plus, Trash2, GitFork } from 'lucide-react-native';
 import { COLORS, FONTS, RADII, SPACING, SHADOWS } from '../theme';
 import { useAppState, useAppActions } from '../store/AppContext';
 
+// Every status the map can hold needs an entry, not just the settable ones:
+// a game with no META renders a blank pill, which is how a status added on the
+// server reaches a user as a missing control rather than an error.
 const META = {
   owned: { Icon: LibraryBig, label: 'Owned', color: COLORS.owned },
+  prev_owned: { Icon: Archive, label: 'Prev. owned', color: COLORS.prevOwned },
   wishlist: { Icon: Star, label: 'Wishlist', color: COLORS.wishlist },
   played: { Icon: History, label: 'Played', color: COLORS.played },
+};
+
+// What the picker offers, in the order it lists them. Prev. owned sits under
+// Owned because it IS a kind of owned — the game stays on the Owned shelf.
+// 'played' is absent: it is derived from logged plays, with no row to set.
+const CHOICES = ['owned', 'prev_owned', 'wishlist'];
+
+// Sub-labels, so "Prev. owned" doesn't have to be self-explanatory.
+const BLURB = {
+  owned: 'On your shelf',
+  prev_owned: 'Sold, gifted or donated',
+  wishlist: 'Games you want',
 };
 
 /**
@@ -71,15 +87,21 @@ export default function StatusTag({ gameId, size = 'sm', compact = false, addLab
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Shelf status</Text>
-            {['owned', 'wishlist'].map((s) =>
+            {CHOICES.map((s) =>
               s === status ? null : (
                 <Pressable key={s} style={styles.opt} disabled={busy} onPress={() => choose(s)}>
                   {React.createElement(META[s].Icon, { size: 18, color: META[s].color })}
-                  <Text style={styles.optLabel}>{META[s].label}</Text>
+                  <View style={styles.optText}>
+                    <Text style={styles.optLabel}>{META[s].label}</Text>
+                    <Text style={styles.optSub}>{BLURB[s]}</Text>
+                  </View>
                 </Pressable>
               ),
             )}
-            {(status === 'owned' || status === 'wishlist') && (
+            {/* Remove stays separate from "Prev. owned" even though the two
+                overlap in practice: Prev. owned means "I had this and let it
+                go" and keeps the row; Remove means "this was never mine". */}
+            {CHOICES.includes(status) && (
               <Pressable style={styles.opt} disabled={busy} onPress={() => choose(null)}>
                 <Trash2 size={18} color={COLORS.rustText} />
                 <Text style={[styles.optLabel, { color: COLORS.rustText }]}>Remove</Text>
@@ -118,8 +140,10 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'center', padding: SPACING.xl },
   sheet: { backgroundColor: COLORS.card, borderRadius: RADII.lg, padding: SPACING.md, ...SHADOWS.lg },
   sheetTitle: { fontFamily: FONTS.display, color: COLORS.text, fontSize: 18, marginBottom: SPACING.sm },
-  opt: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  opt: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56 },
+  optText: { flex: 1 },
   optLabel: { fontFamily: FONTS.sansMedium, color: COLORS.text, fontSize: 15 },
+  optSub: { fontFamily: FONTS.sans, color: COLORS.textMuted, fontSize: 12, marginTop: 1 },
   expBadge: {
     flexDirection: 'row',
     alignItems: 'center',

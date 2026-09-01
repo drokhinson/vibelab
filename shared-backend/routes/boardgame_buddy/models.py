@@ -299,6 +299,10 @@ CollectionItem.model_rebuild()
 class CollectionPageResponse(BaseModel):
     items: list[CollectionItem]
     total: int
+    # How many of `total` are prev_owned (migration 069). The owned shelf
+    # returns games you sold alongside games you have, so the caller needs this
+    # to show a count that means "games you own". Always 0 on other shelves.
+    parted_total: int = 0
     page: int
     per_page: int
 
@@ -311,9 +315,11 @@ class CollectionStatusMapResponse(BaseModel):
     and discarded the rest. This is that consumer's actual contract.
     """
 
-    # game_id (UUID string) -> "owned" | "wishlist" | "played"
+    # game_id (UUID string) -> "owned" | "wishlist" | "played" | "prev_owned"
     status_map: dict[str, str] = Field(default_factory=dict)
-    # base game's bgg_id (as a string key) -> count of expansions the viewer owns
+    # base game's bgg_id (as a string key) -> count of expansions the viewer
+    # owns. prev_owned expansions are NOT counted — one you sold is no longer
+    # clutter on the base game's shelf.
     expansion_counts: dict[str, int] = Field(default_factory=dict)
 
 
@@ -328,7 +334,13 @@ class CollectionShelfResponse(BaseModel):
     """
 
     items: list[CollectionItem]
+    # Counts every row in `items`' source set, prev_owned included, because
+    # `truncated` below is about the rows on offer.
     total: int
+    # How many of `total` are prev_owned (migration 069). The owned shelf
+    # returns games you sold alongside games you have, so the caller subtracts
+    # this to show a count that means "games you own". Always 0 elsewhere.
+    parted_total: int = 0
     # True when the shelf is larger than the requested limit, so `items` is a
     # prefix rather than the whole shelf. The web client falls back to the
     # server-side grid for search/filter when this is set, rather than
@@ -993,7 +1005,9 @@ class UnifiedSearchHit(BaseModel):
     source: Literal["collection", "db"]
     game: GameSummary
     # Present when source='collection': which shelf this game sits on for the
-    # viewer ('owned' | 'wishlist'). None otherwise.
+    # viewer ('owned' | 'wishlist' | 'prev_owned'). None otherwise. A sold game
+    # is still a collection hit and still ranks collection-first — you know the
+    # game, which is what that ranking is about.
     collection_status: Optional[str] = None
 
 

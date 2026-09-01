@@ -53,6 +53,7 @@
     return {
       items: (data && data.items) || [],
       total: (data && data.total) || 0,
+      parted_total: (data && data.parted_total) || 0,
       truncated: !!(data && data.truncated),
     };
   }
@@ -129,7 +130,7 @@
      * .claude/rules/ui-object-design.md §4 says to extract at instance #2.
      *
      * @param {string} gameId
-     * @param {("owned"|"wishlist"|"played"|null)} status
+     * @param {("owned"|"prev_owned"|"wishlist"|"played"|null)} status
      */
     static applyLocalStatus(gameId, status) {
       if (!gameId) return;
@@ -204,10 +205,15 @@
      * bgg_id, and nesting in SQL would silently drop owned expansions whose
      * base game the viewer doesn't own.
      *
+     * `"owned"` returns prev_owned rows too — a game you sold is still on your
+     * Owned shelf, dimmed and stamped — and `parted_total` is how many of
+     * `total` those are, so a caller can show a count that means "games you
+     * own". There is no `"prev_owned"` shelf to ask for by name.
+     *
      * @param {string} targetUserId
      * @param {"owned"|"wishlist"|"played"} status
      * @param {{force?: boolean, includeExpansions?: boolean}} [opts]
-     * @returns {Promise<{items: any[], total: number, truncated: boolean}>}
+     * @returns {Promise<{items: any[], total: number, parted_total: number, truncated: boolean}>}
      */
     static shelf(targetUserId, status, { force = false, includeExpansions = false } = {}) {
       const key = _shelfKey(targetUserId, status, includeExpansions);

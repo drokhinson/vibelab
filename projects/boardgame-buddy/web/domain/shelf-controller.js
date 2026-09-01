@@ -27,6 +27,22 @@
 //     middle of results they never scrolled to.
 
 (function () {
+  /**
+   * The collection statuses a shelf mode actually contains. "owned" is a SET,
+   * not a single value: a prev_owned game (sold, gifted or donated) stays on
+   * the Owned shelf in its alphabetical place, dimmed and stamped, and the
+   * server widens the same way (bgb_collection_shelf, migration 069). Every
+   * other mode is its own single-element set.
+   *
+   * It is NOT a set for counting: `parted` below is what the view subtracts so
+   * the Owned count still means "games you own".
+   * @param {string} mode
+   * @returns {string[]}
+   */
+  function statusesFor(mode) {
+    return mode === "owned" ? ["owned", "prev_owned"] : [mode];
+  }
+
   class ShelfController {
     /**
      * @param {Object} opts
@@ -55,8 +71,11 @@
       this.shelf = byMode(null);
       /** The rows on screen — the first `limit` of the derived list. */
       this.items = byMode(() => []);
-      /** Filtered total, derived. */
+      /** Filtered total, derived. Counts prev_owned rows — see `parted`. */
       this.total = byMode(0);
+      /** How many of `total` are prev_owned, so a view can show a count that
+          means "games you own" without changing what the grid draws. */
+      this.parted = byMode(0);
       /** How many rows the derived list can yield right now — see hasMore. */
       this.available = byMode(0);
       /** Size of the visible window, grown one batch at a time by loadMore(). */
@@ -137,6 +156,7 @@
       if (!sh) {
         this.items[mode] = [];
         this.total[mode] = 0;
+        this.parted[mode] = 0;
         this.available[mode] = 0;
         return;
       }
@@ -163,6 +183,14 @@
       this.total[mode] = (sh.partial && !this.isNarrowing())
         ? (sh.total || filtered.length)
         : filtered.length;
+      // Counted off the filtered list rather than carried from the response,
+      // so it tracks a search or filter the same way `total` does. The partial
+      // seed is the one case that can't: it holds one page of a shelf whose
+      // size it only knows in aggregate, so trust its own figure there — the
+      // same trade `total` makes one line up.
+      this.parted[mode] = (sh.partial && !this.isNarrowing())
+        ? (sh.parted_total || 0)
+        : filtered.filter((it) => it && it.status === "prev_owned").length;
     }
 
     /** Is there another batch behind the rows on screen? */
@@ -201,10 +229,19 @@
      * real alphabetical head of the shelf. It is a first-frame stand-in for a
      * cache miss and load() overwrites it with the whole shelf; hydrate() from
      * a cached shelf is tried first and is exact.
+     *
+     * `total` and `parted` are the whole shelf's figures even though `items`
+     * is one page of it, which is what derive() keys its `partial` branch off.
      */
-    seedPartial(mode, items, total) {
+    seedPartial(mode, items, total, parted) {
       if (!Array.isArray(items) || !items.length) return false;
-      this.shelf[mode] = { items, total: total || items.length, truncated: false, partial: true };
+      this.shelf[mode] = {
+        items,
+        total: total || items.length,
+        parted_total: parted || 0,
+        truncated: false,
+        partial: true,
+      };
       return true;
     }
 
@@ -285,6 +322,9 @@
         const rows = (data && data.items) || [];
         this.items[mode] = append ? (this.items[mode] || []).concat(rows) : rows;
         this.total[mode] = (data && data.total) || 0;
+        // Whole-shelf figure, not this batch's — the endpoint counts it over
+        // the filtered shelf, which is what the displayed count is about.
+        this.parted[mode] = (data && data.parted_total) || 0;
       } catch (e) {
         if (seq !== this._seq[mode]) return;
         if (append) {
@@ -296,6 +336,7 @@
           this.error[mode] = e.message || "Failed to load";
           this.items[mode] = [];
           this.total[mode] = 0;
+          this.parted[mode] = 0;
         }
       } finally {
         if (seq === this._seq[mode]) {
@@ -308,21 +349,39 @@
 
     // ── Mutations from the UI ───────────────────────────────────────────────
     /**
-     * Drop a game from any shelf it no longer belongs on, so its tile goes in
-     * the same frame as the tap. Adding can't be done optimistically (the full
-     * row isn't in hand), so that waits for the refetch the mutation kicks off.
+     * Reconcile one game's shelf membership with a status change from anywhere
+     * in the app, so its tile settles in the same frame as the tap. Adding
+     * can't be done optimistically (the full row isn't in hand), so that waits
+     * for the refetch the mutation kicks off.
+     *
+     * Two outcomes, because owned ⇄ prev_owned is a move WITHIN a shelf rather
+     * than off it: a game that no longer belongs is dropped, and one that still
+     * belongs has its row's `status` patched so the view repaints it dimmed (or
+     * un-dimmed) without waiting for the network.
      */
     spliceGame(gameId, status) {
       for (const mode of this.modes) {
         const sh = this.shelf[mode];
         if (!sh || !Array.isArray(sh.items)) continue;
         // Any collection row at all disqualifies a game from "played, not owned".
-        const gone = mode === "played" ? status != null : status !== mode;
-        if (!gone) continue;
-        const next = sh.items.filter((it) => it.game_id !== gameId);
-        if (next.length !== sh.items.length) {
-          this.shelf[mode] = { ...sh, items: next, total: Math.max(0, (sh.total || 0) - 1) };
+        const gone = mode === "played"
+          ? status != null
+          : !statusesFor(mode).includes(status);
+        if (gone) {
+          const next = sh.items.filter((it) => it.game_id !== gameId);
+          if (next.length !== sh.items.length) {
+            this.shelf[mode] = { ...sh, items: next, total: Math.max(0, (sh.total || 0) - 1) };
+          }
+          continue;
         }
+        // Still on this shelf, but possibly on the other side of it. Rebuild
+        // the array rather than mutating in place: derive() slices from it and
+        // the view compares identities to decide what to repaint.
+        const idx = sh.items.findIndex((it) => it.game_id === gameId);
+        if (idx === -1 || sh.items[idx].status === status) continue;
+        const next = sh.items.slice();
+        next[idx] = { ...next[idx], status };
+        this.shelf[mode] = { ...sh, items: next };
       }
     }
 
@@ -399,5 +458,6 @@
     }
   }
 
+  ShelfController.statusesFor = statusesFor;
   window.ShelfController = ShelfController;
 })();

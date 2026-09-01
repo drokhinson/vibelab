@@ -240,7 +240,11 @@
      */
     _sortedShelf(shelf) {
       if (this._sortedSrc === shelf) return this._sorted;
-      const arr = shelf.items.slice();
+      // The owned shelf carries prev_owned rows (migration 069) and this scope
+      // does not want them: "My games" here is a shortlist to pick tonight's
+      // game from, and a game you sold is not one you can put on the table.
+      // The Collection spoke is where a sold game still belongs, dimmed.
+      const arr = shelf.items.filter((it) => it && it.status !== "prev_owned");
       arr.sort((a, b) => {
         const x = a.added_at || "", y = b.added_at || "";
         if (x !== y) return x < y ? 1 : -1;
@@ -288,8 +292,14 @@
       const qs = this._queryString() + "&status=owned&sort=added_at";
       const data = await window.api.get("/collection/grid?" + qs);
       if (seq !== this._loadSeq) return;
-      this._games = (data && data.items ? data.items.map((it) => it.game) : []);
-      this._total = (data && data.total) || 0;
+      // Drop prev_owned rows and discount them from the total, matching
+      // _sortedShelf on the local path — crossing the row cap must not change
+      // which games this scope shows. `parted_total` is over the whole
+      // filtered shelf, which is what `total` counts, so the two subtract.
+      const rows = (data && data.items ? data.items : [])
+        .filter((it) => it && it.status !== "prev_owned");
+      this._games = rows.map((it) => it.game);
+      this._total = Math.max(0, ((data && data.total) || 0) - ((data && data.parted_total) || 0));
     }
 
     async _loadAll(seq) {

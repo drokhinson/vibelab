@@ -216,7 +216,16 @@
         this._statusMap = { ...seed.status_map };
         this._statusMapReady = true;
       }
-      return this.ctl.seedPartial(MODE_OWNED, seed.owned_page, seed.owned_total);
+      // owned_total is owned-ONLY (prev_owned is counted separately), while
+      // owned_page carries both — so the seed's total has to be the sum, or
+      // the first paint reports fewer rows than it is about to draw.
+      const parted = seed.owned_parted_total || 0;
+      return this.ctl.seedPartial(
+        MODE_OWNED,
+        seed.owned_page,
+        (seed.owned_total || 0) + parted,
+        parted,
+      );
     }
 
     async _initFromParams() {
@@ -416,16 +425,34 @@
       this._infinite.observe(host && host.querySelector("#collection-scroll-sentinel"));
     }
 
+    /**
+     * The count for a mode's pill and header — what the user OWNS, which on
+     * the Owned shelf is fewer than the tiles on screen: a prev_owned game
+     * (sold, gifted, donated) is listed there but not counted there. The
+     * difference is named rather than hidden — see _countLabel.
+     */
     _modeTotal(mode) {
       if (mode === MODE_EXPANSIONS) return this._tree.totalOwned;
-      return this.ctl.total[mode] || 0;
+      return Math.max(0, (this.ctl.total[mode] || 0) - (this.ctl.parted[mode] || 0));
     }
 
-    _countLabel(mode) {
-      const n = this._modeTotal(mode);
+    /**
+     * "12 games · 3 prev. owned" — the owned count, plus the prev-owned tally
+     * it excludes. Without that suffix the header reads "12 games" over 15
+     * tiles and looks like a bug; the suffix is what makes the subtraction
+     * legible.
+     *
+     * `rows: true` asks instead for a plain count of the TILES, which is what
+     * an end-of-list marker is about — it says the scroll is finished, not
+     * what the shelf is worth.
+     */
+    _countLabel(mode, { rows = false } = {}) {
       const entry = MODES.find((m) => m.id === mode);
       const noun = (entry && entry.noun) || "game";
-      return `${n} ${noun}${n === 1 ? "" : "s"}`;
+      const parted = mode === MODE_EXPANSIONS ? 0 : (this.ctl.parted[mode] || 0);
+      const n = rows ? this._modeTotal(mode) + parted : this._modeTotal(mode);
+      const label = `${n} ${noun}${n === 1 ? "" : "s"}`;
+      return !rows && parted > 0 ? `${label} · ${parted} prev. owned` : label;
     }
 
     /** Header count + toggle pills — text only, so no teardown. */
@@ -632,12 +659,23 @@
       // game page's "Expansions (N)" heading shows. bgb_collection_shelf
       // computes it in SQL, so the badge is right on the first cached paint.
       const expCount = g.expansion_count || 0;
+      // The dim + stamp read `item.status` — the ROW's status — where the
+      // corner chip reads the viewer's map. That looks like a contradiction
+      // and isn't: the chip is the viewer's control over their own shelf, so
+      // it must show their relationship; the dim describes the shelf being
+      // browsed. On someone else's Collection their sold games are the ones
+      // that show dimmed, which is right.
+      const parted = item.status === "prev_owned";
+      const stamp = parted
+        ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`
+        : "";
       return `
-        <div class="collection-tile" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})">
+        <div class="collection-tile${parted ? " is-prev-owned" : ""}" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})">
           ${window.renderStatusTag(g.id, status, { corner: true, pending, gameName: g.name })}
           <div class="collection-tile__art">
             ${gameArtImg(g, "card")
               || `<div class="collection-tile__placeholder"><i data-icon="dice-6"></i></div>`}
+            ${stamp}
             ${window.renderExpansionBadge(expCount, { context: "total" })}
           </div>
           <div class="collection-tile__name">${escapeHtml(g.name || "Unknown")}</div>
@@ -748,7 +786,14 @@
     }
 
     _setTreeRows(items, truncated) {
-      this._treeRows = items || [];
+      // The owned shelf now carries prev_owned rows (migration 069), and this
+      // tab is specifically about the expansions you HAVE — its tally is the
+      // same number the status map's expansion_counts reports, which excludes
+      // them. So they are dropped here rather than in expansion-tree.js, which
+      // stays a pure reshape. A base game you sold falls out with them, and
+      // any expansions of it you still own land in the orphan bucket — which
+      // is exactly what that bucket is for: you don't own the base game.
+      this._treeRows = (items || []).filter((it) => it && it.status !== "prev_owned");
       this._treeTruncated = !!truncated;
       this._rebuildTree();
     }
@@ -810,6 +855,10 @@
      * Keep the tree in step with a status change from anywhere in the app.
      * Removal only: an "owned" we didn't put here ourselves has no row to
      * build from, and the next load picks it up.
+     *
+     * prev_owned deliberately falls through to the removal path, matching
+     * _setTreeRows: marking an expansion sold takes it off this tab and out of
+     * its group's tally, the same way it leaves expansion_counts.
      */
     _spliceTree(gameId, status) {
       if (!this._treeRows) return;
@@ -1019,7 +1068,9 @@
         onRetry: "window.collectionView._retryMore()",
         // Only worth saying once the list actually ran past a batch; on a
         // twelve-game shelf the end of the list is self-evident.
-        endLabel: shown > BATCH_SIZE ? `That's all ${this._countLabel(mode)}.` : "",
+        endLabel: shown > BATCH_SIZE
+          ? `That's all ${this._countLabel(mode, { rows: true })}.`
+          : "",
       });
     }
 

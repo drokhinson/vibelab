@@ -20,7 +20,12 @@ from .models import (
     GameSummary,
     MessageResponse,
 )
-from .constants import CollectionSort, CollectionStatus, PlayMode
+from .constants import (
+    OWNED_SHELF_STATUSES,
+    CollectionSort,
+    CollectionStatus,
+    PlayMode,
+)
 from .dependencies import CurrentUser, get_current_user
 from .game_routes import (
     COLLECTION_DENORM_GAME_FIELDS,
@@ -96,7 +101,11 @@ async def get_collection(
                 play_count=play_counts.get(row["game_id"], 0),
                 game=GameSummary(**game_data),
             ))
-            if row["status"] == CollectionStatus.OWNED.value:
+            # prev_owned counts here too: this set suppresses the synthetic
+            # "played" row below, and the test it stands for is "does this game
+            # already have a collection row", not "do you still own it". A sold
+            # game with plays would otherwise appear twice in one response.
+            if row["status"] in OWNED_SHELF_STATUSES:
                 owned_game_ids.add(row["game_id"])
 
     # Derive a synthetic "played" row for every game the user has a play for —
@@ -388,7 +397,9 @@ async def collection_shelf(
         description=(
             "Which shelf to return — owned (default), wishlist, or played "
             "(games the user has plays for but does not own / wishlist). "
-            "Wishlist is only returned to its owner."
+            "Wishlist is only returned to its owner. `owned` also returns "
+            "prev_owned rows — a game you sold is still on your Owned shelf — "
+            "and `parted_total` says how many of them there are."
         ),
     ),
     exclude_expansions: bool = Query(
@@ -433,6 +444,7 @@ async def collection_shelf(
     return CollectionShelfResponse(
         items=[CollectionItem(**row) for row in (data.get("items") or [])],
         total=data.get("total") or 0,
+        parted_total=data.get("parted_total") or 0,
         truncated=bool(data.get("truncated")),
         generated_at=datetime.now(timezone.utc),
     )
@@ -560,14 +572,26 @@ async def collection_grid(
         return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
 
     # Round-trip 1: every shelf row, with the joined game payload embedded.
+    #
+    # `owned` matches the SET ('owned', 'prev_owned') — a game you sold is still
+    # on your Owned shelf, just dimmed and stamped by the client. This has to
+    # agree with bgb_collection_shelf's widening (069), because a shelf past
+    # /collection/shelf's row cap falls back here mid-scroll and a different
+    # row set would reshuffle the grid under the reader. `status` joins the
+    # select so each item reports its own value rather than the query's.
+    shelf_statuses = (
+        list(OWNED_SHELF_STATUSES)
+        if status == CollectionStatus.OWNED
+        else [status_value]
+    )
     coll_rows = (
         sb.table("boardgamebuddy_collections")
         .select(
-            "id, added_at, game_id, "
+            "id, added_at, game_id, status, "
             f"boardgamebuddy_games({game_select_clause()})"
         )
         .eq("user_id", target_user_id)
-        .eq("status", status_value)
+        .in_("status", shelf_statuses)
         .execute()
         .data
         or []
@@ -637,7 +661,7 @@ async def collection_grid(
         CollectionItem(
             id=r["id"],
             game_id=r["game_id"],
-            status=status_value,
+            status=r.get("status") or status_value,
             added_at=r["added_at"],
             last_played_at=last_played.get(r["game_id"]),
             play_count=play_counts.get(r["game_id"], 0),
@@ -646,4 +670,16 @@ async def collection_grid(
         for r in page_rows
     ]
     _attach_page_expansion_counts(sb, items)
-    return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
+    # Counted over `filtered`, not the page: the client subtracts it from the
+    # shelf's displayed count, which is about the whole filtered shelf.
+    parted_total = sum(
+        1 for r in filtered
+        if r.get("status") == CollectionStatus.PREV_OWNED.value
+    )
+    return CollectionPageResponse(
+        items=items,
+        total=total,
+        parted_total=parted_total,
+        page=page,
+        per_page=per_page,
+    )

@@ -190,10 +190,19 @@
 --                    plays_per_page INT DEFAULT 10)
 --   → JSONB
 --   Defined in: db/migrations/boardgamebuddy/021_profile_and_game_detail_bundles.sql
---   Last updated in: db/migrations/boardgamebuddy/029_profile_avatar_config.sql
---               (buddy + buddy-request blocks now emit `other_avatar` JSONB
---               instead of `other_avatar_url` TEXT, following the
---               avatar_url → avatar rename on boardgamebuddy_profiles)
+--   Last updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
+--               (owned_page returns the SET ('owned','prev_owned') so the
+--                Collection spoke's first-frame seed holds the same rows
+--                bgb_collection_shelf will; owned_total stays owned-only and
+--                is joined by the new owned_parted_total. status_map carries
+--                'prev_owned' unaided — it has never had a status filter.
+--                expansion_counts stays owned-only. bootstrap_version NOT
+--                bumped: the added key is additive and a pre-069 bundle
+--                missing it reads as zero, which is the old behaviour.)
+--               db/migrations/boardgamebuddy/029_profile_avatar_config.sql
+--                 (buddy + buddy-request blocks now emit `other_avatar` JSONB
+--                  instead of `other_avatar_url` TEXT, following the
+--                  avatar_url → avatar rename on boardgamebuddy_profiles)
 --               db/migrations/boardgamebuddy/045_participated_play_stats.sql
 --                 (played-shelf play_count reached play_players with a
 --                  LEFT JOIN then COUNT(*), so a play the user logged was
@@ -599,13 +608,22 @@
 -- bgb_collection_shelf(viewer UUID, target UUID, p_status TEXT DEFAULT 'owned',
 --                      p_exclude_expansions BOOLEAN DEFAULT true,
 --                      p_limit INT DEFAULT 1000)
---   → JSONB { "items": [CollectionItem…], "total": BIGINT, "truncated": BOOLEAN }
+--   → JSONB { "items": [CollectionItem…], "total": BIGINT,
+--              "parted_total": BIGINT, "truncated": BOOLEAN }
 --   Defined in: db/migrations/boardgamebuddy/049_collection_shelf.sql
---   Last updated in: db/migrations/boardgamebuddy/055_hi_res_tile_art.sql
---               (owned/wishlist items emit a real image_url instead of NULL,
---                via a LEFT JOIN to boardgamebuddy_games for that one column;
---                collection tiles crop square and were upscaling the ~200px
---                thumbnail. The 'played' branch already had `g` in scope.)
+--   Last updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
+--               (p_status='owned' now matches the SET ('owned','prev_owned') —
+--                a game you sold is still on your Owned shelf, just dimmed —
+--                and the new `parted_total` counts how many of the returned
+--                rows are prev_owned so the client can subtract them from the
+--                shelf's displayed count. `total` deliberately counts BOTH,
+--                because `truncated` is about the rows on offer. Zero on the
+--                wishlist and played branches.)
+--               db/migrations/boardgamebuddy/055_hi_res_tile_art.sql
+--                 (owned/wishlist items emit a real image_url instead of NULL,
+--                  via a LEFT JOIN to boardgamebuddy_games for that one column;
+--                  collection tiles crop square and were upscaling the ~200px
+--                  thumbnail. The 'played' branch already had `g` in scope.)
 --   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
 --               (GET /collection/shelf), which the web Collection and Wishlist
 --               spokes call once per shelf via domain/collection.js.
@@ -628,7 +646,9 @@
 --               narrowing an incomplete list. Wishlist is self-only, matching
 --               bgb_profile_bundle. The 'played' branch DOES join
 --               boardgamebuddy_games — those games have no collection row by
---               definition, so no denormalized columns exist for them.
+--               definition, so no denormalized columns exist for them, and by
+--               the same token a prev_owned game stays OFF the played shelf:
+--               it still has a collection row.
 --   NOTE:       /collection/grid is deliberately still live — the native app
 --               (app/src/api/client.js) and the web game explorer page against it.
 
@@ -657,6 +677,10 @@
 -- bgb_collection_status_map(p_viewer UUID)
 --   → JSONB { "status_map": {game_id: status}, "expansion_counts": {base_bgg_id: n} }
 --   Defined in: db/migrations/boardgamebuddy/050_ghost_rpcs_and_status_map.sql
+--   Last updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
+--               (status_map now carries 'prev_owned'. expansion_counts stays
+--                owned-only on purpose — an expansion you sold is no longer
+--                clutter on the base game's shelf.)
 --   Called by:  collection_routes.collection_status_map (GET /collection/status-map),
 --               which web/domain/collection.js reads for status pills and
 --               expansion badges.

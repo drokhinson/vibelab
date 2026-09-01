@@ -1,11 +1,11 @@
 // ui/status-tag.js — one badge component for every boardgame tile.
 //
 // Renders:
-//   - owned / wishlist / played → coloured pill with icon + label
-//   - none → "+" button that opens the picker ("Owned" or "Wishlist")
+//   - owned / prev_owned / wishlist / played → coloured pill with icon + label
+//   - none → "+" button that opens the picker
 //
-// EXCEPT on a corner-of-artwork slot (`corner: true`), where all three states
-// collapse into one neutral chip. A tile's corner restates whatever the screen
+// EXCEPT on a corner-of-artwork slot (`corner: true`), where every state
+// collapses into one neutral chip. A tile's corner restates whatever the screen
 // around it already said — twelve "Owned" pills on the Owned tab — so there it
 // is a control, not a readout: same glyph, same colour, whatever the status.
 // The state itself lives in the accessible name and in the sheet the chip
@@ -35,19 +35,39 @@
 (function () {
   const ICON = {
     owned: "library-big",
+    prev_owned: "archive",
     wishlist: "star",
     played: "history",
   };
+  // "Prev. owned" rather than "Previously owned": this string is the pill's
+  // whole content at every size, including the default one on an Add Games row
+  // where the full phrase wraps. It is also the tile stamp's wording, so the
+  // grid and the sheet say the same thing.
   const LABEL = {
     owned: "Owned",
+    prev_owned: "Prev. owned",
     wishlist: "Wishlist",
     played: "Played",
   };
   // Sub-labels only the sheet shows — the pill is too small to carry them.
   const BLURB = {
     owned: "On your shelf",
+    prev_owned: "Sold, gifted or donated",
     wishlist: "Games you want",
   };
+  // The statuses the picker offers, in the order it lists them. Prev. owned
+  // sits directly under Owned because it IS a kind of owned — the game stays
+  // on the Owned shelf, dimmed. See the Remove row below for the distinction.
+  const CHOICES = ["owned", "prev_owned", "wishlist"];
+
+  /**
+   * A status's CSS class suffix. The status tokens are snake_case (they come
+   * straight from the DB column) and the stylesheet's class families are
+   * kebab-case, so `prev_owned` has to land as `.status-tag--prev-owned`.
+   */
+  function statusCls(status) {
+    return String(status).replace(/_/g, "-");
+  }
 
   /**
    * The status the SHEET and the PILL must both show: the VIEWER's own
@@ -108,7 +128,7 @@
   /**
    * Build the HTML for a tile's status tag.
    * @param {string} gameId
-   * @param {("owned"|"wishlist"|"played"|null|undefined)} status
+   * @param {("owned"|"prev_owned"|"wishlist"|"played"|null|undefined)} status
    * @param {Object} [opts]
    * @param {"lg"} [opts.size] Size preset for the LABELLED pill. "lg" is the
    *   game-detail hero; omit it for the default pill. Ignored by `corner`,
@@ -134,7 +154,7 @@
     // (a bare " in a game name would otherwise close the onclick attribute).
     const gid = esc(jsStr(gameId));
     const name = esc(jsStr(opts.gameName || ""));
-    const isStatus = status === "owned" || status === "wishlist" || status === "played";
+    const isStatus = !!LABEL[status];
     if (isStatus) {
       // title/aria-label are computed ONCE, above the branch, so the corner
       // chip cannot announce anything different from the pill it replaces.
@@ -150,7 +170,7 @@
       // and dropping it is the point.
       const cls = opts.corner
         ? "status-tag status-tag--corner"
-        : `status-tag status-tag--${status}${sizeCls}`;
+        : `status-tag status-tag--${statusCls(status)}${sizeCls}`;
       return `
         <button class="${cls}"
                 title="${label} — change status"
@@ -226,7 +246,7 @@
       // Unlike the old popover, the CURRENT status is listed and checked —
       // that's what makes this a radio group rather than a menu of "the other
       // things you could be".
-      for (const s of ["owned", "wishlist"]) {
+      for (const s of CHOICES) {
         const on = s === cur;
         parts.push(`
           <button class="status-sheet__opt" type="button" role="radio"
@@ -240,7 +260,13 @@
       // Remove is only meaningful when a real collection row exists.
       // Played-only games have no row to delete — clearing it would mean
       // deleting plays, which isn't what this control does.
-      if (cur === "owned" || cur === "wishlist") {
+      //
+      // It stays a separate, rule-separated action even though "Prev. owned"
+      // now covers the common reason for reaching for it. The two claims are
+      // different and both worth keeping: Prev. owned means "I had this and
+      // let it go" and keeps the row; Remove means "this was never mine" and
+      // deletes it.
+      if (CHOICES.includes(cur)) {
         parts.push(`<div class="status-sheet__rule"></div>`);
         parts.push(`
           <button class="status-sheet__opt status-sheet__opt--danger" type="button"
@@ -267,7 +293,8 @@
     /**
      * @param {Event} event      The originating tap (focus returns here on close).
      * @param {string} gameId
-     * @param {string} currentStatus  "" when the viewer has no relationship.
+     * @param {("owned"|"prev_owned"|"wishlist"|"played"|"")} currentStatus
+     *   "" when the viewer has no relationship.
      *   Only a fallback — the viewer's own map wins, see viewerStatus().
      * @param {string} [gameName]     Titles the sheet.
      */
@@ -312,7 +339,7 @@
       const gameId = this._gameId;
       const prev = this._currentStatus;
       this.close();
-      if (!gameId || (status !== "owned" && status !== "wishlist")) return;
+      if (!gameId || !CHOICES.includes(status)) return;
       if (status === prev) return;                 // re-picking the current row is a no-op
       window.Collection.applyLocalStatus(gameId, status);
       try {
@@ -346,5 +373,15 @@
 
   window.renderStatusTag = renderStatusTag;
   window.renderExpansionBadge = renderExpansionBadge;
+  /**
+   * The one place a collection status is turned into words. Exported because
+   * other surfaces name statuses too — the Add Games row's "on your other
+   * shelf" note, for one — and a second table of these would drift the moment
+   * a status is added, which is how `prev_owned` arrived at a note reading
+   * "Collection".
+   * @param {string|null|undefined} status
+   * @returns {string|null} null for a status this app has no word for.
+   */
+  window.statusLabel = (status) => LABEL[status] || null;
   window.statusPicker = new StatusPicker();
 })();
