@@ -235,9 +235,14 @@
         return;
       }
       if (seq !== this._seq) return;
-      // The count only moves for the OWNER, who is not the person holding this
-      // phone — so there is nothing local to publish here, just the sheet to
-      // close and the caller to tell.
+      // The REQUEST count only moves for the owner, who is not the person
+      // holding this phone. The SUGGESTION count is ours though: if this ghost
+      // was one the app was offering on the Buddies screen, it is settled now
+      // and must come off the Profile tab's dot without waiting for a visit
+      // there. A ghost that was never suggested — this sheet opens off any
+      // play's scoreboard and reaches wider than that list — is not in the key
+      // set, and settleSuggestion no-ops on it rather than undercounting.
+      window.GhostClaim.settleSuggestion(window.GhostClaim.suggestionKey(d));
       this.close();
       if (typeof showToast === "function") {
         showToast(`Asked ${d.owner_display_name} to link these plays`, "success");
@@ -262,6 +267,8 @@
         return;
       }
       if (seq !== this._seq) return;
+      // Same as _claim above: "Not me" settles the suggestion for this device.
+      window.GhostClaim.settleSuggestion(window.GhostClaim.suggestionKey(d));
       this.close();
     }
   }

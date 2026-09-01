@@ -2021,11 +2021,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-nav__ico { display: inline-flex; align-items: center; justify-content: center; position: relative; }
 .bgb-nav__label { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
 
-/* Something waiting behind the Profile tab — a buddy request, an unseen
-   badge — as one bare dot pinned to the glyph. No count: the numbers live on
-   the hub cards one tap away, where there is room to say what they count. The
-   ring is the bar's own ground, so the dot reads as sitting on top of the icon
-   rather than merging with it. */
+/* Something waiting behind a nav tab — a buddy request, a ghost someone thinks
+   is you, an unseen badge — as one bare dot pinned to the glyph. No count: the
+   numbers live on the hub cards one tap away, where there is room to say what
+   they count. The ring is the bar's own ground, so the dot reads as sitting on
+   top of the icon rather than merging with it. Which signals feed which tab is
+   domain/notifications.js; init.js#syncNavDots paints it. */
 .bgb-nav__dot {
   position: absolute;
   top: -1px;

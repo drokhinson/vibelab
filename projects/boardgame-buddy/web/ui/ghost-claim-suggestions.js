@@ -66,9 +66,13 @@
    * The key a suggestion row is addressed by. A ghost has no id, so the pair
    * that identifies it is the key — and it is the NORMALIZED name, so two
    * spellings of one ghost stay one row under the finger.
+   *
+   * Delegates to domain/ghost-claim.js, which addresses the same rows by the
+   * same key to keep its actionable-suggestion count. Two copies of this
+   * format is two ways for the badge and the row under it to disagree.
    */
   function suggestionKey(s) {
-    return `${s.owner_user_id}|${s.ghost_name_key}`;
+    return window.GhostClaim.suggestionKey(s);
   }
 
   function suggestionActions(s, state) {

@@ -169,13 +169,15 @@
             data-nav-views="profile-self,collection,plays,buddies,stats,achievements,settings">
       <span class="bgb-nav__ico">
         <i data-icon="user" class="w-5 h-5"></i>
-        <!-- Something is waiting behind this tab — a buddy request, a badge
-             nobody has looked at. One dot for both, and no number: the counts
-             belong on the hub cards this tab leads to, where there is room to
-             say what they count. init.js#syncNavProfileDot drives it from the
-             `buddyRequestCount` and `achievementUnseenCount` store slots and
-             swaps the tab's accessible name, so the dot itself is
-             decoration. -->
+        <!-- Something is waiting behind this tab — a buddy request, a ghost
+             someone thinks is you, a badge nobody has looked at. One dot for
+             all of them, and no number: the counts belong on the hub cards
+             this tab leads to, where there is room to say what they count.
+             init.js#syncNavDots drives it from every store slot
+             domain/notifications.js maps to this tab, and swaps the tab's
+             accessible name, so the dot itself is decoration. A tab earns a
+             dot by having this span — add one here and a matching row in the
+             registry, and nothing else changes. -->
         <span class="bgb-nav__dot" aria-hidden="true" hidden></span>
       </span>
       <span class="bgb-nav__label">Profile</span>
@@ -213,6 +215,7 @@
   <!-- Domain -->
   <script src="domain/api.js"></script>
   <script src="domain/store.js"></script>
+  <script src="domain/notifications.js"></script>
   <script src="domain/theme.js"></script>
   <script src="domain/net.js"></script>
   <script src="domain/outbox.js"></script>

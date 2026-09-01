@@ -38,7 +38,17 @@
         // Third source on the same dot; the hub's Buddies card sums it with
         // buddyRequestCount, since both resolve behind that one card.
         ghostClaimRequestCount: 0,
+        // "Is this you?" — ghosts on a BUDDY's roster that look like this
+        // user, still awaiting a "That's me" or a "Not me". The other
+        // direction from ghostClaimRequestCount above, and the fourth source
+        // on the same dot. Counted by domain/ghost-claim.js, which holds the
+        // key set behind it; only rows with no claim of their own count, since
+        // a row already asked for comes back with claim_status='pending'.
+        ghostClaimSuggestionCount: 0,
       };
+      // Which slot feeds which nav tab and which hub card is domain/
+      // notifications.js's table, not this file's business — store is a signal
+      // bus. Adding a slot here is half the job; the other half is a row there.
       this._subs = new Map(); // key → Set<fn>
     }
 
@@ -105,6 +115,9 @@
         achievementUnseenCount: 0,
         // And the same again: the next account's ghosts are not this one's.
         ghostClaimRequestCount: 0,
+        // Nor are the next account's near-matches. GhostClaim.forgetSuggestions()
+        // drops the key set that backs this on the same sign-out.
+        ghostClaimSuggestionCount: 0,
       };
       for (const subs of this._subs.values()) {
         for (const fn of subs) {
