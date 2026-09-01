@@ -52,14 +52,8 @@
   // scrolling wall on an account with hundreds of missing games.
   const MAX_NAMES = 20;
 
-  function step(state, body) {
-    const icon = state === "done"
-      ? `<i data-icon="check" class="bgg-log__icon"></i>`
-      : state === "active"
-        ? `<i data-icon="loader-2" class="bgg-log__icon bgg-log__icon--spin"></i>`
-        : `<span class="bgg-log__icon bgg-log__icon--idle"></span>`;
-    return `<li class="bgg-log__step bgg-log__step--${state}">${icon}<span class="bgg-log__body">${body}</span></li>`;
-  }
+  // Shared with ui/bgg-push-log.js — see ui/bgg-log-step.js.
+  const step = window.bggLogStep;
 
   /**
    * @param {BggImportLogState} state

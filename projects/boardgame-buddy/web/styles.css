@@ -365,6 +365,7 @@
      .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
+     .bgg-sync-sheet,
      .ach-sheet,
      .exp-picker,
      .import-exp-modal,
@@ -407,6 +408,7 @@
      .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
+     .bgg-sync-sheet,
      .ach-sheet,
      .exp-picker,
      .import-exp-modal,
@@ -3214,6 +3216,213 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    gutters — so the log drops its default top margin and takes the card's.
    Was an inline style before the log became a shared component. */
 .bgg-log--card { margin: 0 0.9rem 0.9rem; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   BGG comparison + the two sync buttons (Settings > Connections)
+
+   Both surfaces this lands on — the Settings card and .bgg-sync-sheet — are in
+   the polaroid re-point list above, so every colour here reads a --polaroid-*
+   token and inverts with the theme for free. Never oklch(var(--b1)) and never
+   --accent-hover as ink (.claude/rules/theming.md §6).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Check status sits alone: it is the button you press first, and its result is
+   what the two below act on. */
+.set-card__bgg-actions { padding: 0 0.9rem 0.9rem; }
+.set-card__bgg-actions .btn { width: 100%; min-height: 44px; }
+
+.set-card__bgg-compare { padding: 0 0.9rem 0.9rem; }
+
+/* The two directions, side by side, BELOW the comparison they act on. Each
+   holds two 26px marks and an arrow — about 90px of content in a ~165px half at
+   390px, so the pair does not wrap. */
+.set-card__bgg-sync {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  padding: 0.85rem 0.9rem 0.9rem;
+  border-top: 1px solid var(--polaroid-line, #DAC9A4);
+}
+.set-card__bgg-sync .btn { min-height: 46px; padding-inline: 0.6rem; }
+
+/* Shown once a sync finishes: the comparison that authorised it is stale, the
+   sync buttons are gone, and the way back is another check. */
+.set-card__bgg-restale {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.7rem 0.9rem 0.95rem;
+  border-top: 1px solid var(--polaroid-line, #DAC9A4);
+  font-size: 0.78rem;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.set-card__bgg-restale i { flex: none; margin-top: 0.1rem; }
+
+/* Brand marks. BGG's is BGG's artwork, cropped from the vendored lockup — never
+   recoloured, never brightness-filtered. Its orange sits at poor contrast on the
+   amber primary fill, so it gets the light plate it was drawn for rather than a
+   filter (.claude/rules/assets.md). Matching both marks to one 26px rounded tile
+   is also what makes "mark -> mark" read as a direction. */
+.bgb-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+.bgb-mark img { display: block; }
+.bgb-mark--bgg {
+  background: #FFFFFF;
+  box-shadow: inset 0 0 0 1px rgba(36, 28, 20, 0.10);
+}
+.bgb-mark--bgg img { height: 17px; width: auto; }
+.bgb-mark--bgb img { width: 26px; height: 26px; border-radius: 7px; }
+.bgb-mark__arrow { flex: none; opacity: 0.65; }
+.bgb-mark__word { font-size: 0.8rem; font-weight: 600; }
+
+/* ── The comparison itself ─────────────────────────────────────────────────── */
+.bgg-diff { font-size: 0.82rem; color: var(--polaroid-ink, #1D1812); }
+.bgg-diff__headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.45rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.bgg-diff__headline--ok { color: var(--ok); align-items: center; }
+.bgg-diff__insync {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.74rem;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.bgg-diff__counts { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.4rem; }
+.bgg-diff__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.4rem;
+  background: var(--well);
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+}
+.bgg-diff__names { margin: 0; color: var(--polaroid-muted, #8B7E68); font-size: 0.78rem; }
+.bgg-diff__note,
+.bgg-diff__warn {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.bgg-diff__warn { border-left: 2px solid var(--warn); padding-left: 0.5rem; }
+.bgg-diff__error { font-size: 0.8rem; color: var(--rust); }
+
+/* Semantic stripe. `held` is a PROTECTION, not a change — it must never wear
+   the destructive red, or the sheet reads as though it is about to delete the
+   thing it is promising to keep. */
+.bgg-diff__stripe { width: 3px; align-self: stretch; border-radius: 2px; flex: none; }
+.bgg-diff__group--add .bgg-diff__stripe,
+.bgg-diff__count--add .bgg-diff__stripe { background: var(--ok); }
+.bgg-diff__group--change .bgg-diff__stripe,
+.bgg-diff__count--change .bgg-diff__stripe { background: var(--warn); }
+.bgg-diff__group--clear .bgg-diff__stripe,
+.bgg-diff__count--clear .bgg-diff__stripe { background: var(--rust); }
+.bgg-diff__group--held .bgg-diff__stripe,
+.bgg-diff__count--held .bgg-diff__stripe { background: var(--polaroid-muted, #8B7E68); }
+.bgg-diff__count .bgg-diff__stripe { height: 11px; align-self: center; }
+
+.bgg-diff--sheet { display: flex; flex-direction: column; gap: 0.7rem; }
+.bgg-diff__group-hd {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding-bottom: 0.25rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+.bgg-diff__group-hd .bgg-diff__stripe { height: 14px; align-self: center; }
+.bgg-diff__group-label { flex: 1; }
+.bgg-diff__group-n {
+  font-weight: 700;
+  font-size: 0.74rem;
+  color: var(--polaroid-muted, #8B7E68);
+  font-variant-numeric: tabular-nums;
+}
+.bgg-diff__list { list-style: none; margin: 0; padding: 0; }
+.bgg-diff__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.34rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--polaroid-line, #DAC9A4) 60%, transparent);
+}
+.bgg-diff__row:last-child { border-bottom: 0; }
+.bgg-diff__game { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bgg-diff__move {
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.bgg-diff__move em { font-style: normal; color: var(--accent-ink); }
+.bgg-diff__new {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.02rem 0.28rem;
+  border-radius: 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  background: var(--accent-quiet);
+}
+
+/* ── The review sheet ──────────────────────────────────────────────────────── */
+.bgg-sync-sheet__list { padding-top: 0.2rem; }
+.bgg-sync-sheet__foot { display: flex; flex-direction: column; gap: 0.45rem; }
+.bgg-sync-sheet__go { min-height: 52px; }
+
+/* ── The push log's own bits (the step rows are shared with the import log) ── */
+.bgg-log__bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--polaroid-line, #DAC9A4);
+  overflow: hidden;
+  margin-top: 0.45rem;
+}
+.bgg-log__bar-fill { height: 100%; background: var(--accent-fill); border-radius: 3px; }
+.bgg-log__meta {
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--polaroid-muted, #8B7E68);
+  font-variant-numeric: tabular-nums;
+}
+.bgg-log__muted { color: var(--polaroid-muted, #8B7E68); font-weight: 400; }
+.bgg-log__ok {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ok);
+}
+.bgg-log__errors { margin-top: 0.6rem; font-size: 0.78rem; }
+.bgg-log__errors-hd { margin: 0 0 0.3rem; font-weight: 700; color: var(--rust); }
+.bgg-log__errors ul { list-style: none; margin: 0; padding: 0; }
+.bgg-log__errors li { padding: 0.15rem 0; color: var(--polaroid-muted, #8B7E68); }
+.bgg-log__errors-ft { margin: 0.35rem 0 0; color: var(--polaroid-muted, #8B7E68); }
+.bgg-log__error { margin: 0.5rem 0 0; font-size: 0.78rem; color: var(--rust); }
 .bgg-log__footer {
   margin-top: 0.55rem;
   font-size: 0.78rem;
@@ -3332,7 +3541,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .settings-bgg-credit__logo {
   width: 110px; height: auto;
-  filter: brightness(0.95);
+  /* No filter: a fixed third-party brand lockup is never recoloured and never
+     brightness-filtered (.claude/rules/assets.md). If it ever needs help
+     against a ground, it gets the plate it was drawn for. */
 }
 .settings-bgg-credit__text {
   font-size: 0.74rem;
