@@ -13,6 +13,9 @@ from pydantic import (
 )
 
 from .constants import (
+    IMPORT_CHUNK_MAX,
+    MAX_IMPORT_CHARS,
+    MAX_IMPORT_HINT_CHARS,
     BggAuthState,
     BggPullChange,
     BggPushChange,
@@ -1400,3 +1403,95 @@ class AchievementsResponse(BaseModel):
     metrics: dict[str, int] = {}
     groups: list[AchievementGroup] = []
     achievements: list[AchievementItem] = []
+
+
+# ── Play importer ─────────────────────────────────────────────────────────────
+# The Settings importer turns one pasted note into plays. Parse and write are
+# two separate endpoints on purpose: everything between them — mapping names to
+# accounts, matching game names to the catalog, filling in dates — happens in
+# the wizard, so nothing the model guessed reaches the database unreviewed.
+
+
+class PlayImportParseRequest(BaseModel):
+    """A pasted note, plus the user's optional description of its layout."""
+
+    text: str = Field(..., min_length=1, max_length=MAX_IMPORT_CHARS)
+    # Step 2 of the wizard. Appended to the prompt verbatim when non-empty —
+    # "tally marks, one per game won" is the difference between reading the
+    # Carcassonne note right and reading it as two plays.
+    hint: Optional[str] = Field(None, max_length=MAX_IMPORT_HINT_CHARS)
+
+
+class ParsedPlayer(BaseModel):
+    """One seat in a parsed play, before any mapping to an account."""
+
+    name: str
+    is_winner: bool = False
+    score: Optional[int] = None
+
+
+class ParsedPlay(BaseModel):
+    """One play the model found — or `count` identical repeats of it.
+
+    `count` is what keeps a 106-play tally note inside one small reply: the
+    model writes the run once and says how long it is, and the client expands
+    it into individual draft plays.
+    """
+
+    game: str
+    played_at: Optional[date] = None
+    count: int = 1
+    notes: Optional[str] = None
+    players: list[ParsedPlayer] = []
+
+
+class ParsedGameRef(BaseModel):
+    """A distinct game name from the note, with its catalog candidates."""
+
+    name: str
+    # Best matches from boardgamebuddy_search_games, best first.
+    candidates: list[GameSummary] = []
+    # True when exactly one candidate matched the name case-insensitively and
+    # exactly. The wizard pre-selects those and asks about the rest.
+    confident: bool = False
+
+
+class PlayImportParseResponse(BaseModel):
+    """Everything the wizard needs to open its Players and Games steps."""
+
+    plays: list[ParsedPlay] = []
+    # Distinct player names in first-seen order — the Players step's rows.
+    players: list[str] = []
+    games: list[ParsedGameRef] = []
+    # Total plays after `count` expansion, so the client can show the real
+    # number before it builds the list.
+    total_plays: int = 0
+    # Anything the model flagged as guessed or unreadable. Shown on the
+    # Review step; never a reason to fail the request.
+    warnings: list[str] = []
+
+
+class PlayImportRequest(BaseModel):
+    """One chunk of an import. Same per-play shape as POST /plays."""
+
+    plays: list[PlayCreate] = Field(..., min_length=1, max_length=IMPORT_CHUNK_MAX)
+
+
+class PlayImportResultItem(BaseModel):
+    """What happened to one play in the chunk, by its index in the request."""
+
+    index: int
+    id: Optional[str] = None
+    # True when this play's client_key was already stored — a retry of a chunk
+    # whose response was lost, which is what makes resuming an import safe.
+    duplicate: bool = False
+    error: Optional[str] = None
+
+
+class PlayImportResponse(BaseModel):
+    """Per-play outcomes for one chunk, so a partial failure stays legible."""
+
+    imported: int = 0
+    duplicate: int = 0
+    failed: int = 0
+    results: list[PlayImportResultItem] = []

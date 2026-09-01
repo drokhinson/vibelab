@@ -257,3 +257,41 @@ EXPANSION_COLOR_PALETTE: list[str] = [
     "#ec4899",  # pink
     "#3b82f6",  # blue
 ]
+
+
+# ── Play importer (Settings → Import plays) ──────────────────────────────────
+# Budgets for the paste-a-note importer. These are true compile-time values —
+# request ceilings and a model budget — not an option set, so they belong here
+# rather than in a table (.claude/rules/database-supabase.md).
+
+# Longest note the parse endpoint accepts. A phone screenshot transcribed by
+# hand runs to a few thousand characters; 20k is roomy for a multi-year Notes
+# entry and still ~5k prompt tokens.
+MAX_IMPORT_CHARS = 20_000
+
+# Longest optional "how is this organised" hint. Long enough for a paragraph,
+# short enough that it can't smuggle a second note past MAX_IMPORT_CHARS.
+MAX_IMPORT_HINT_CHARS = 1_000
+
+# Ceiling on plays after `count` expansion. The reference note is 106 plays;
+# 500 leaves headroom for a multi-game note without letting one paste write an
+# unbounded number of rows.
+MAX_IMPORT_PLAYS = 500
+
+# Ceiling on a single play entry's `count`. A tally run of a few hundred is
+# plausible; anything past this is the model mis-reading a number.
+MAX_REPEAT_COUNT = 300
+
+# Plays per POST /plays/import call. The client chunks to this so a long import
+# reports real progress and a failure costs one chunk, not the whole run.
+IMPORT_CHUNK_MAX = 50
+
+# Players per parsed play. Guards a malformed reply from expanding into a
+# thousand play_players rows.
+MAX_IMPORT_PLAYERS_PER_PLAY = 12
+
+# Longest player / game name kept from the model's reply.
+MAX_IMPORT_NAME_CHARS = 80
+
+# Catalog candidates offered per unmatched game name in the Games step.
+IMPORT_GAME_CANDIDATES = 6

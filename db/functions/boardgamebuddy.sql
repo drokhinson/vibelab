@@ -1,12 +1,13 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: the 2026-09-01 migration collapse. All 48 functions now live
+-- Last updated: 004_import_plays_rpc.sql (bgb_import_plays). The other 48
+--               functions come from the 2026-09-01 collapse and live
 --               in db/migrations/boardgamebuddy/003_rpcs.sql; each entry below
 --               also names the archived migration its surviving definition
 --               came from, since that file is where the reasoning is.
 --               Reconciled against a database built from the collapsed
---               migrations: the 48 documented here are exactly the 48 that
---               exist, with no stale or missing entries.
+--               migrations: the 48 documented there are exactly the 48 that
+--               existed at the collapse, with no stale or missing entries.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -466,6 +467,23 @@
 --               rows it had just inserted. Idempotent when the payload
 --               carries a client_key, which is what makes the web app's
 --               offline outbox safe to retry after a lost response.
+
+-- bgb_import_plays(p_user UUID, p_payload JSONB)
+--   → JSONB { imported: INT, duplicate: INT, failed: INT,
+--             results: [ { index, id|null, duplicate, error|null } ] }
+--   p_payload is { "plays": [ <PlayCreate.model_dump(mode="json")>, ... ] } —
+--   the same per-play shape bgb_log_play takes, in an array.
+--   Defined in: db/migrations/boardgamebuddy/004_import_plays_rpc.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
+--               (import_plays — POST /plays/import, the Settings play importer)
+--   Purpose:    Writes one chunk of an import in a single call. Owns no insert
+--               logic: it loops the payload and calls bgb_log_play per element,
+--               so game resolution, the denormalized game columns, client_key
+--               idempotency and the player/expansion inserts have exactly one
+--               implementation. A game_not_found element reports in `results`
+--               and the rest of the chunk still lands — a batch that aborted
+--               wholesale would make a 300-play import unfinishable over one
+--               typo.
 
 -- bgb_finalize_session(p_host UUID, p_code TEXT, p_payload JSONB)
 --   → JSONB (PlayResponse, via bgb_log_play), {"duplicate": true, "id": UUID}
