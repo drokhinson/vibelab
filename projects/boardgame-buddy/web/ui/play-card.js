@@ -1,14 +1,22 @@
 // ui/play-card.js — Polaroid play card rendered in the Feed and Profile.
 //
 // Two-faced flip card styled like an instant photo: cream surface, soft drop
-// shadow, photo at the top in its natural aspect ratio.
+// shadow, photo at the top.
+//
+// ONE HEIGHT, TWO WIDTHS. The photo frame is a fixed height (--pc-photo-h) in
+// both variants, so every card in the app is the same height; orientation picks
+// only the WIDTH — .play-card--wide for a landscape image, .play-card--tall for
+// a portrait one. The image is never cropped: it is contained in the frame and
+// whatever it does not cover is filled by a blurred, dimmed copy of itself
+// (.play-card__photo-bg), so a landscape shot gets blur above and below and a
+// portrait shot gets blur down each side.
 //   Front  → maximize button (top-right, over the photo) into the in-place
 //            play-detail popup, the photo, then a two-row caption:
 //              title row — game name + an explicit open button
 //              meta row  — the winner, on its own above a hairline
 //            When the user uploaded their own snapshot the game's box art
 //            rides along as a small bottom-right badge at its natural aspect;
-//            with no snapshot the box art IS the photo, height-capped.
+//            with no snapshot the box art IS the photo.
 //   Back   → game title + duration, ranked scoreboard with the winner row
 //            tinted — a registered player's row opens their profile —
 //            optional notes, the same maximize button (top-right), and a
@@ -26,9 +34,9 @@
   // scoped: { flipped, hydrated (full PlayResponse), hydrating, error }.
   const cardState = new Map();
 
-  // Photo aspect ratio cache, keyed by image URL. Populated by onPhotoLoad
-  // after the image decodes; survives rerenderCard so a card that already
-  // settled into is-portrait keeps that classification on subsequent renders.
+  // Orientation cache, keyed by image URL. Populated by onPhotoLoad after the
+  // image decodes; survives rerenderCard so a card that already settled into
+  // the tall width keeps that classification on subsequent renders.
   const aspectCache = new Map();
 
   // Registry of the latest card payload seen by `renderPlayCard`, keyed by
@@ -45,12 +53,6 @@
         hydrated: null,
         hydrating: false,
         error: null,
-        // Cached at first render so rerenderCard (which looks the card up
-        // from the raw, ungrouped feed page) can still pick the strip vs
-        // single variant after a flip. 0 = "not in a session yet"; any
-        // positive value flips the card to the strip variant so single-play
-        // sessions read at the same size as multi-play sessions.
-        sessionPlayCount: 0,
       };
       cardState.set(playId, s);
     }
@@ -58,8 +60,7 @@
   }
 
   function orientFor(ratio) {
-    // Square (1:1) treated as landscape so BGG box art and matchstick photos
-    // both default to the wider strip-card width.
+    // Square (1:1) treated as landscape so a square photo takes the wider tile.
     return ratio < 0.95 ? "portrait" : "landscape";
   }
 
@@ -73,26 +74,19 @@
     // reel) silently fail to flip — state toggles but the DOM never paints.
     if (card && card.play_id) cardRegistry.set(card.play_id, card);
     const accent = (card.game && card.game.theme_color) || "var(--polaroid-accent)";
-    // Prefer the freshly-passed count, fall back to whatever the first render
-    // recorded. rerenderCard re-enters this function with the raw store card
-    // (no __sessionPlayCount) so the cached value keeps strip vs single stable.
-    if (card.__sessionPlayCount) s.sessionPlayCount = card.__sessionPlayCount;
-    // Inside a play_session (any size) → strip variant. Outside (no session
-    // context was ever set) → single. A 1-card session still uses strip so
-    // it reads at the same size as the multi-card rail.
-    const variant = s.sessionPlayCount > 0 ? "strip" : "single";
 
     // Pick photo source — user-uploaded snapshot wins, otherwise the game's
-    // own art so the polaroid always has a hero image at natural aspect.
+    // own art so the polaroid always has a hero image.
     const g = card.game || {};
     const photoSrc = card.photo_url || g.image_url || g.thumbnail_url || "";
     const cached = photoSrc ? aspectCache.get(photoSrc) : null;
-    const orient = cached ? cached.orient : "landscape";
-    const aspect = cached ? cached.ratio : 1;
+    // Before the image decodes we have to guess which width to paint. A play
+    // with no snapshot shows box art, which is portrait by construction
+    // (~0.75–0.80), so guess tall there and skip the reflow entirely; a real
+    // snapshot is more often landscape, so guess wide.
+    const orient = cached ? cached.orient : (card.photo_url ? "landscape" : "portrait");
 
-    const variantClass = variant === "strip"
-      ? `play-card--strip is-${orient}`
-      : "play-card--single";
+    const variantClass = orient === "portrait" ? "play-card--tall" : "play-card--wide";
     const flippedAttr = s.flipped ? " is-flipped" : "";
 
     return `
@@ -104,14 +98,14 @@
                onclick="window.playCardFlip.handleClick(event, '${escapeAttr(card.play_id)}')"
                onkeydown="window.playCardFlip.handleKey(event, '${escapeAttr(card.play_id)}')">
         <div class="play-card__inner">
-          <div class="play-card__front">${renderFront(card, { variant, photoSrc, aspect })}</div>
+          <div class="play-card__front">${renderFront(card, { photoSrc })}</div>
           <div class="play-card__back">${renderBack(card, s)}</div>
         </div>
       </article>
     `;
   }
 
-  function renderFront(card, { photoSrc, aspect }) {
+  function renderFront(card, { photoSrc }) {
     const g = card.game || {};
     const me = window.store && window.store.get && window.store.get("user");
     const gameName = escapeHtml(g.name || "Unknown game");
@@ -146,13 +140,21 @@
          </div>`
       : "";
 
-    // With no snapshot the box art fills the slot: --cover caps its height and
-    // letterboxes it rather than cropping, so a tall cover can't take over the
-    // feed. With a snapshot the slot keeps the photo's measured aspect ratio.
-    const coverClass = hasUserPhoto ? "" : " play-card__photo--cover";
-    const photoStyle = `--photo-aspect:${aspect}`;
+    // The frame is a fixed height in both variants, so the image is CONTAINED
+    // in it and never cropped — a landscape shot leaves space above and below,
+    // a portrait one leaves space to either side. That space is filled by the
+    // same image again, blurred and dimmed, so the card still reads as a
+    // photograph rather than as art on a grey plate. Same URL as the
+    // foreground, so the browser fetches once.
+    //
+    // The blurred copy goes through a real <img src> rather than an inline
+    // `background-image: url(...)`: escapeAttr neutralises the HTML layer, not
+    // the CSS one, and a `)` in a photo URL would break out of the url().
     const photoHtml = photoSrc
-      ? `<div class="play-card__photo${coverClass}" style="${photoStyle}">
+      ? `<div class="play-card__photo">
+           <img class="play-card__photo-bg"
+                src="${escapeAttr(photoSrc)}"
+                alt="" aria-hidden="true" loading="lazy" />
            <img class="play-card__photo-img"
                 src="${escapeAttr(photoSrc)}"
                 alt="${escapeAttr(g.name || "")}"
@@ -160,7 +162,7 @@
                 onload="window.playCardFlip.onPhotoLoad(event, '${escapeAttr(card.play_id)}')" />
            ${badgeHtml}
          </div>`
-      : `<div class="play-card__photo" style="${photoStyle}"></div>`;
+      : `<div class="play-card__photo"></div>`;
 
     // Notes live exclusively on the back of the card — the front stays tight
     // (photo + caption) so cards in a strip line up cleanly.
@@ -364,31 +366,21 @@
 
   // ── Aspect ratio detection ──────────────────────────────────────────────────
   //
-  // Detect the photo's natural aspect ratio after decode. We mutate the DOM
-  // in place — set the --photo-aspect CSS var on the photo frame and toggle
-  // is-portrait / is-landscape on the article — so there's no rerender and
-  // no scroll-position jump. Cache the result by URL so subsequent renders
-  // (e.g. after a flip) skip the placeholder square entirely.
+  // Detect the photo's orientation after decode and swap the article between
+  // the wide and tall widths in place — no rerender, no scroll-position jump.
+  // The frame's HEIGHT never changes, so this can only ever reflow the card
+  // sideways. Cache the verdict by URL so subsequent renders (e.g. after a
+  // flip) paint the right width immediately.
   function onPhotoLoad(event, playId) {
     const img = event && event.target;
     if (!img || !img.naturalWidth || !img.naturalHeight) return;
-    const w = img.naturalWidth;
-    const h = img.naturalHeight;
-    const ratio = w / h;
-    const orient = orientFor(ratio);
+    const orient = orientFor(img.naturalWidth / img.naturalHeight);
     const url = img.currentSrc || img.src;
-    if (url) {
-      const prev = aspectCache.get(url);
-      if (!prev || prev.orient !== orient || Math.abs(prev.ratio - ratio) > 0.02) {
-        aspectCache.set(url, { ratio, orient });
-      }
-    }
-    const photo = img.closest(".play-card__photo");
-    if (photo) photo.style.setProperty("--photo-aspect", ratio.toFixed(3));
+    if (url) aspectCache.set(url, { orient });
     const article = img.closest(".play-card");
-    if (article && article.classList.contains("play-card--strip")) {
-      article.classList.toggle("is-portrait", orient === "portrait");
-      article.classList.toggle("is-landscape", orient === "landscape");
+    if (article) {
+      article.classList.toggle("play-card--tall", orient === "portrait");
+      article.classList.toggle("play-card--wide", orient === "landscape");
     }
   }
 

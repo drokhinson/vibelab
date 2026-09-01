@@ -446,14 +446,10 @@
         gameCount: card.plays.length,
         gameNameForSingle,
       });
-      const sessionPlayCount = card.plays.length;
-      const isSingle = sessionPlayCount === 1;
-      // Annotate each play with the session play count so the polaroid
-      // renderer can pick the variant (single vs strip) without re-walking
-      // the DOM. The `__`-prefix keeps the field clearly UI-scoped.
-      const cards = card.plays
-        .map((p) => window.renderPlayCard({ ...p, __sessionPlayCount: sessionPlayCount }))
-        .join("");
+      // Every play is a tile of one of two widths now, so the rail needs no
+      // size hint. `isSingle` survives only to centre a lone tile.
+      const isSingle = card.plays.length === 1;
+      const cards = card.plays.map((p) => window.renderPlayCard(p)).join("");
       return `
         <section class="play-session${isSingle ? " play-session--single" : ""}">
           <header class="play-session__header">
