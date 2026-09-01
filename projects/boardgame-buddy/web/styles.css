@@ -2618,21 +2618,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   flex: 0 0 24px;
 }
 .user-badge.play-card__back-player-avatar .user-badge__initials { font-size: 10px; }
-.play-card__back-player-avatar-wrap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 120ms ease;
-  border-radius: 999px;
-}
-.play-card__back-player-avatar-wrap:hover {
-  transform: scale(1.06);
-}
-.play-card__back-player-avatar-wrap:focus-visible {
-  outline: 2px solid var(--polaroid-accent);
-  outline-offset: 2px;
-}
 .play-card__back-player.is-winner {
   font-weight: 700;
   background: linear-gradient(90deg, rgba(229,192,74,0.28), rgba(229,192,74,0.08));
@@ -2664,6 +2649,47 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .play-card__back-player.is-winner .play-card__back-player-score {
   color: var(--polaroid-accent);
+}
+/* A row for a registered player opens that player's profile. The whole row
+   is the target — the click used to live on the 24px avatar alone, which is
+   a hard tap on a touch-first surface and invisible as an affordance — and
+   the chevron is what advertises it. Ghost (free-text) players have no
+   account and so no profile, leaving their rows inert and un-chevroned; in
+   a table that mixes the two the ghost rows reserve the chevron's width so
+   every score stays in one column instead of one row's number hanging out
+   past the rest. .has-links gates that spacer: an all-ghost scoreboard has
+   no chevrons at all and so needs no reserved column. */
+.play-card__back-player.is-link { cursor: pointer; }
+/* The chevron is sized here rather than by a w-3/h-3 utility, and the ghost
+   spacer reads the same custom property, so the two can't drift: the sizing
+   utilities come from the Tailwind CDN, and when that doesn't load the
+   :where([data-icon-name]) floor near the top of this file falls the glyph
+   back to 1em (14px here) — which would leave the reserved column 2px short
+   and knock the ghost rows' scores out of the column after all. */
+.play-card__back-players { --row-chev: 0.75rem; }
+.play-card__back-players.has-links .play-card__back-player:not(.is-link)::after {
+  content: "";
+  flex: none;
+  width: var(--row-chev);
+}
+.play-card__back-player-go {
+  flex: none;
+  width: var(--row-chev);
+  height: var(--row-chev);
+  color: var(--polaroid-ink-soft);
+  opacity: 0.5;
+  transition: opacity 120ms var(--ease);
+}
+/* The winner row's gold border yields to the accent on hover — the hover
+   tint means "this goes somewhere", and the gold pill background still
+   carries the win. */
+.play-card__back-player.is-link:hover,
+.play-card__back-player.is-link:focus-visible { border-color: var(--polaroid-accent); }
+.play-card__back-player.is-link:hover .play-card__back-player-go { opacity: 0.9; }
+.play-card__back-player.is-link:active { transform: scale(0.99); filter: brightness(0.97); }
+.play-card__back-player.is-link:focus-visible {
+  outline: 2px solid var(--polaroid-accent);
+  outline-offset: 1px;
 }
 .play-card__back-empty {
   font-size: 0.85rem;
