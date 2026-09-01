@@ -49,6 +49,22 @@
    * @property {number} [seated]               Players already at the table.
    * @property {(picks: PlayerCandidate[]) => void} onConfirm  In tick order.
    * @property {Element|null} [returnFocus]
+   * @property {boolean} [singleSelect]        One answer, not a set: a tap
+   *   confirms and closes, there is no confirm button, and rows read as radios.
+   *   The play importer's "who is this name?" step is one question per row, so
+   *   a multi-select sheet would make every answer take three taps.
+   * @property {string} [title]                Defaults to "Add players".
+   * @property {string} [sub]                  Replaces the seated-count line.
+   * @property {string} [guestName]           The name the guest row offers when
+   *   the search box is empty. Deliberately NOT a pre-filled query: seeding the
+   *   box would filter every buddy out of a list whose whole job is to offer
+   *   them. Typing still overrides it, so a different spelling is one field away.
+   * @property {string|null} [selectedName]    Ticked on open (singleSelect).
+   * @property {string} [guestTitle]           Overrides the guest row's title,
+   *   as PLAIN TEXT — escaped here, so a caller never has to remember to.
+   *   Written by the caller rather than templated here: "Add X as a guest" and
+   *   "Keep X as a ghost" are different acts, not one act in two voices.
+   * @property {string} [guestHint]            The subtitle, same contract.
    */
 
   const LIST_SEL = "[data-picker-list]";
@@ -66,6 +82,13 @@
       this._seated = 0;
       this._onConfirm = /** @type {any} */ (null);
       this._query = "";
+      this._single = false;
+      this._title = "Add players";
+      this._sub = "";
+      this._selected = "";
+      this._guestName = "";
+      this._guestTitle = "";
+      this._guestHint = "";
 
       this._sheet = new window.BgbBottomSheet({
         id: "bgb-player-picker-sheet",
@@ -100,7 +123,7 @@
     /** @param {PlayerCandidate} c */
     _row(c) {
       const ghost = !c.user_id;
-      const on = this._isPicked(c.name);
+      const on = this._single ? key(c.name) === key(this._selected) : this._isPicked(c.name);
       const badge = window.BgbBadge.render({
         avatar: c.avatar,
         displayName: c.name,
@@ -115,7 +138,8 @@
         ? `<span class="player-picker__meta">${escapeHtml(bits.join(" · "))}</span>`
         : "";
       return `
-        <button class="player-picker__row" type="button" role="checkbox"
+        <button class="player-picker__row" type="button"
+                role="${this._single ? "radio" : "checkbox"}"
                 aria-checked="${on}" data-picker-name="${escapeAttr(c.name)}">
           ${badge}
           <span class="player-picker__body">
@@ -131,22 +155,37 @@
     }
 
     /**
-     * The typed name is offerable as a guest unless it already matches someone
-     * listed or ticked — in which case that row is the better action and two
-     * near-identical rows would just be a trap.
+     * The guest row. In multi-select it offers the TYPED name, and only when
+     * that name doesn't already match someone listed or ticked — in which case
+     * that row is the better action and two near-identical rows would be a
+     * trap. In single-select it is the "none of these" answer and is always
+     * offered, falling back to `guestName` before anybody types.
      */
     _guestRow() {
-      const q = this._query.trim();
+      // The typed name wins; falling back to guestName is what keeps the
+      // "keep them as they are" answer on screen before anybody types.
+      const q = this._query.trim() || this._guestName.trim();
       if (!q) return "";
-      const known = this._candidates.some((c) => key(c.name) === key(q)) || this._isPicked(q);
-      if (known) return "";
+      // Multi-select hides the row once the typed name matches somebody listed
+      // or ticked, because that row is the better action. Single-select keeps
+      // it: "keep this name as a ghost" stays a legitimate answer even when a
+      // buddy of the same name exists, and it is often the RIGHT one.
+      if (!this._single
+          && (this._candidates.some((c) => key(c.name) === key(q)) || this._isPicked(q))) {
+        return "";
+      }
+      const title = this._guestTitle
+        ? escapeHtml(this._guestTitle)
+        : `Add “${escapeHtml(q)}” as a guest`;
+      const hint = escapeHtml(
+        this._guestHint || "No account — they'll show as a guest on the scorecard");
       return `
         <button class="player-picker__row player-picker__row--guest" type="button"
                 data-picker-action="guest">
           <span class="player-picker__plus"><i data-icon="plus" class="w-5 h-5"></i></span>
           <span class="player-picker__body">
-            <span class="player-picker__name">Add “${escapeHtml(q)}” as a guest</span>
-            <span class="player-picker__meta">No account — they'll show as a guest on the scorecard</span>
+            <span class="player-picker__name">${title}</span>
+            <span class="player-picker__meta">${hint}</span>
           </span>
         </button>
       `;
@@ -175,20 +214,28 @@
       if (!rows.length && !pickedFirst) {
         // Nothing matched, so the guest row IS the answer: lead with it and let
         // the note underneath explain the absence.
-        return guest
-          ? guest + `<div class="bgb-sheet__sec">No buddy matches “${escapeHtml(q)}”</div>`
-          : `<p class="bgb-sheet__empty">No buddies yet — type a name to add a guest.</p>`;
+        if (!guest) return `<p class="bgb-sheet__empty">No buddies yet — type a name to add a guest.</p>`;
+        return guest + (q
+          ? `<div class="bgb-sheet__sec">No buddy matches “${escapeHtml(q)}”</div>`
+          : `<div class="bgb-sheet__sec">No buddies yet — search to find one</div>`);
       }
       // Real people first when the query matched any: "add a guest called ok"
       // above Jess Okoro would be a strange thing to lead with. It stays
       // offered, though — the buddy list can hold a Dan while a different Dan
       // is at the table tonight.
+      // Single-select's guest row is the "none of these" answer, not an
+      // "add somebody new" one — and it is offered even when a buddy of the
+      // same name is listed, so "Not in your buddies?" would be a lie there.
+      const guestSec = this._single ? "Or" : "Not in your buddies?";
       return pickedFirst + header + rows.map((c) => this._row(c)).join("")
-        + (guest ? `<div class="bgb-sheet__sec">Not in your buddies?</div>` + guest : "");
+        + (guest ? `<div class="bgb-sheet__sec">${guestSec}</div>` + guest : "");
     }
 
     /** The confirm button's label and disabled state both track the tick count. */
     _renderConfirm() {
+      // A tap IS the answer in single-select, so a confirm button would only
+      // ever be a second tap on a decision already made.
+      if (this._single) return "";
       const n = this._picked.length;
       return `
         <button class="bgb-sheet__confirm" type="button" data-picker-action="confirm"
@@ -203,8 +250,10 @@
       return `
         <div class="bgb-sheet__panel">
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
-          <h3 class="bgb-sheet__title">Add players</h3>
-          ${seated ? `<p class="bgb-sheet__sub">${seated} already at the table</p>` : ""}
+          <h3 class="bgb-sheet__title">${escapeHtml(this._title)}</h3>
+          ${this._sub
+            ? `<p class="bgb-sheet__sub">${escapeHtml(this._sub)}</p>`
+            : (seated ? `<p class="bgb-sheet__sub">${seated} already at the table</p>` : "")}
           <div class="game-finder bgb-sheet__search" data-search-host>
             <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
             <input type="text" id="${INPUT_ID}"
@@ -214,7 +263,9 @@
                    autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" />
             ${window.BgbSearchField.clearButton()}
           </div>
-          <div class="bgb-sheet__list" role="group" aria-label="Players to add"
+          <div class="bgb-sheet__list"
+               role="${this._single ? "radiogroup" : "group"}"
+               aria-label="${escapeAttr(this._title)}"
                data-picker-list>${this._renderList()}</div>
           <div class="bgb-sheet__foot" data-picker-foot>${this._renderConfirm()}</div>
           <button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>
@@ -231,6 +282,13 @@
       this._seated = opts.seated || 0;
       this._onConfirm = opts.onConfirm;
       this._picked = [];
+      this._single = !!opts.singleSelect;
+      this._title = opts.title || "Add players";
+      this._sub = opts.sub || "";
+      this._selected = opts.selectedName || "";
+      this._guestName = opts.guestName || "";
+      this._guestTitle = opts.guestTitle || "";
+      this._guestHint = opts.guestHint || "";
       this._query = "";
 
       this._sheet.open({
@@ -278,6 +336,15 @@
           this._picked = [];
           this._onConfirm = null;
           this._query = "";
+          // This is a singleton, so a mode left set would reach the next
+          // opener — Gather would get a sheet that closes on the first tap.
+          this._single = false;
+          this._title = "Add players";
+          this._sub = "";
+          this._selected = "";
+          this._guestName = "";
+          this._guestTitle = "";
+          this._guestHint = "";
         },
       });
     }
@@ -346,6 +413,12 @@
 
     /** @param {string} name */
     _toggle(name) {
+      if (this._single) {
+        const c = this._candidates.find((x) => key(x.name) === key(name))
+          || this._recent.find((x) => key(x.name) === key(name));
+        if (c) this._answer(c);
+        return;
+      }
       const i = this._picked.findIndex((p) => key(p.name) === key(name));
       if (i >= 0) {
         this._picked.splice(i, 1);
@@ -359,12 +432,30 @@
       this._repaintList(true);
     }
 
-    /** Tick the typed name as a guest and clear the box, ready for the next. */
+    /**
+     * Multi-select: tick the typed name as a guest and clear the box, ready for
+     * the next. Single-select: it IS the answer, so it closes.
+     */
     _pickGuest() {
-      const name = this._query.trim();
-      if (!name || this._isPicked(name)) return;
-      this._picked.push({ source: "ghost", user_id: null, name, username: null, avatar: null });
+      const name = this._query.trim() || this._guestName.trim();
+      if (!name) return;
+      const guest = { source: "ghost", user_id: null, name, username: null, avatar: null };
+      if (this._single) { this._answer(guest); return; }
+      if (this._isPicked(name)) return;
+      this._picked.push(guest);
       this._clear();
+    }
+
+    /**
+     * Single-select's whole path: close first, then hand the pick back.
+     * Closing first means the caller's own re-render lands on a screen the
+     * sheet has already let go of, rather than under it.
+     * @param {PlayerCandidate} pick
+     */
+    _answer(pick) {
+      const cb = this._onConfirm;
+      this.close();
+      if (cb) cb([pick]);
     }
 
     /**
@@ -378,6 +469,7 @@
       if (!q) return;
       const exact = this._candidates.find((c) => key(c.name) === key(q));
       if (exact) {
+        if (this._single) { this._answer(exact); return; }
         if (!this._isPicked(exact.name)) this._picked.push(exact);
         this._clear();
         return;

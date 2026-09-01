@@ -27,6 +27,7 @@
   window.statsView       = new window.StatsView();
   window.achievementsView = new window.AchievementsView();
   window.settingsView    = new window.SettingsView();
+  window.importPlaysView = new window.ImportPlaysView();
   window.adminView       = new window.AdminView();
 
   // Widget singleton — the Play tab's Join half. Hoisted here (rather than
@@ -52,6 +53,7 @@
   window.router.register("stats",         window.statsView);
   window.router.register("achievements",  window.achievementsView);
   window.router.register("settings",      window.settingsView);
+  window.router.register("import-plays",  window.importPlaysView);
   window.router.register("admin",         window.adminView);
 
   // Supabase boot. We model this as a global helper (used by views directly)
