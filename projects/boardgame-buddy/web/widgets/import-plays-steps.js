@@ -311,9 +311,17 @@
           </button>
         </div>
         ${row.plays.length > 1 ? `
+          <label class="imp-field imp-field--count">
+            <span class="imp-field__label">How many plays</span>
+            <input class="imp-count-input" type="number" min="1" max="300" step="1"
+                   value="${row.plays.length}"
+                   aria-label="Number of plays in this run"
+                   onchange="${escapeAttr(`${V}._onRunCount('${jsStr(first.id)}', this.value)`)}" />
+          </label>
           <p class="imp-note">
-            Editing here changes all ${row.plays.length}. They came from one run
-            of repeats in your notes.
+            Editing anything else here changes all ${row.plays.length} — they
+            came from one run of repeats in your notes. If the tally was
+            misread, correct the number above.
           </p>
         ` : ""}
       </div>

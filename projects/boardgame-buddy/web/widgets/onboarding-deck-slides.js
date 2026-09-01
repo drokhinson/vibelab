@@ -1,4 +1,4 @@
-// widgets/onboarding-deck-slides.js — the four panels the deck slides between.
+// widgets/onboarding-deck-slides.js — the five panels the deck slides between.
 //
 // Each slide is `{ el, onEnter? }`: an element the shell appends to the track,
 // and an optional hook run when it arrives on screen. Nothing here knows how
@@ -13,6 +13,10 @@
 //   3 · BoardGameGeek — the fields and copy of the deleted
 //       widgets/onboarding-bgg-modal.js, whose import readout stays shared
 //       with Settings as ui/bgg-import-log.js
+//   4 · import hint — the one slide that reuses nothing, because it IS
+//       nothing: no fields, no write, no request. It exists because the note
+//       importer was otherwise invisible to a new account, and first-run is
+//       the one screen everybody passes through.
 //
 // THE RULE THIS FILE EXISTS TO KEEP: no handler below awaits anything. Continue
 // and Skip queue a write through deck.queue() and call deck.next() in the same
@@ -328,6 +332,40 @@
   }
 
   // ── 4 · The finale (uncounted) ─────────────────────────────────────────────
+  // ── 4 · Import your history ────────────────────────────────────────────────
+  // Purely informational — the only slide here that queues nothing and asks
+  // nothing. Placed after BoardGameGeek on purpose: someone who just tapped
+  // Skip on that step because they do not use BGG is exactly who the note
+  // importer is for, and this reaches them in the same breath.
+  //
+  // Deliberately does NOT offer a "take me there" button. Jumping into a
+  // six-step wizard from inside first-run setup would strand the user
+  // mid-onboarding with a half-finished deck behind them.
+  function buildImport(deck) {
+    const el = slideEl("ob-slide--import", `
+      <div class="ob-slide__scroll">
+        <div class="ob-done__mark">
+          <span class="ob-done__ring"><i data-icon="history" class="w-8 h-8"></i></span>
+        </div>
+        <h2 class="ob-slide__title ob-slide__title--center">Already keep score somewhere?</h2>
+        <p class="ob-slide__body ob-slide__body--center">
+          A page of tally marks, a note full of who-beat-who, a table you've kept
+          for years — paste it into <b>Settings &rsaquo; Import plays</b> and it
+          becomes real plays, with your scores and winners intact.
+        </p>
+        <p class="ob-slide__note">
+          Nothing to do now. You review every play it reads before anything is
+          saved, so there's no way to make a mess of your history by trying it.
+        </p>
+      </div>
+      <div class="ob-slide__actions">
+        <button type="button" class="btn btn-primary ob-btn ob-btn--go">Continue</button>
+      </div>
+    `);
+    el.querySelector(".ob-btn--go").addEventListener("click", () => deck.next());
+    return { el };
+  }
+
   function buildFinale(deck) {
     const el = slideEl("ob-slide--done", `
       <div class="ob-slide__scroll">
@@ -388,12 +426,16 @@
   }
 
   window.OnboardingDeckSlides = {
-    /** @returns {{profile: Object, buddies: Object, bgg: Object, finale: Object}} */
+    /**
+     * @returns {{profile: Object, buddies: Object, bgg: Object,
+     *            importHint: Object, finale: Object}}
+     */
     build(deck) {
       return {
         profile: buildProfile(deck),
         buddies: buildBuddies(deck),
         bgg: buildBgg(deck),
+        importHint: buildImport(deck),
         finale: buildFinale(deck),
       };
     },

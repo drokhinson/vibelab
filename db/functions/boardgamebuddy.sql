@@ -1,7 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 005_play_import_groups.sql (bgb_feed_plays, bgb_plays_page and
---               bgb_log_play grouped imported runs). The other 48
+-- Last updated: 006_play_import_batches.sql (import batches and the two
+--               delete RPCs; bgb_feed_plays also returns import_group_id
+--               now, and bgb_log_play persists the batch). The other 48
 --               functions come from the 2026-09-01 collapse and live
 --               in db/migrations/boardgamebuddy/003_rpcs.sql; each entry below
 --               also names the archived migration its surviving definition
@@ -75,11 +76,17 @@
 --            game_image_url TEXT, game_thumbnail_url TEXT, played_at DATE,
 --            created_at TIMESTAMPTZ, notes TEXT, photo_url TEXT,
 --            play_mode TEXT, winner_display_name TEXT,
---            participant_count INT, participants JSONB, group_count INT)
+--            participant_count INT, participants JSONB, group_count INT,
+--            import_group_id UUID)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/014_feed_order_by_played_at.sql)
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/005_play_import_groups.sql
+--   Last updated in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--               (also returns import_group_id — 005 returned the COUNT without
+--               the id, so the feed could say "58 plays" and had no way to act
+--               on them; the run sheet deletes by it. Another OUT column, so
+--               another DROP + CREATE.)
+--   Grouping from: db/migrations/boardgamebuddy/005_play_import_groups.sql
 --               (one card per imported run: `page` keeps only the lowest-id row
 --               of each import_group_id and reports the run's size as
 --               group_count. The filter sits INSIDE `page`, before the LIMIT,
@@ -456,6 +463,9 @@
 --               (persists p_payload.import_group_id, the tag the Settings
 --               importer puts on each run of identical plays, and echoes
 --               group_count: 1 — a freshly logged play stands for itself.)
+--   Last updated in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--               (also persists p_payload.import_batch_id and stamps
+--               imported_at server-side when one is present.)
 --               db/migrations/boardgamebuddy/044_cleanup.sql
 --                 (stops writing plays.game_image_url / game_play_mode, which
 --                  044 drops; stops writing the boardgamebuddy_buddies roster,
@@ -1013,3 +1023,37 @@
 --   Purpose:    The claimant's "Not me". Writes the same row a real claim would,
 --               so a later change of mind flips it back to pending rather than
 --               opening a second row. Never overwrites an 'accepted' row.
+
+
+-- bgb_delete_import_group(p_user UUID, p_group UUID)
+--   → JSONB { deleted: INT }
+--   Defined in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
+--               (delete_import_group — DELETE /plays/import-group/{id})
+--   Purpose:    Drop one run of identical imported plays, from its own feed
+--               card. Owner-scoped in the WHERE clause rather than by a
+--               separate check, so a group belonging to somebody else matches
+--               nothing and reports 0 — the same answer as a group that never
+--               existed, which is deliberate: distinguishing them would tell a
+--               caller that another user's run exists. play_players and
+--               play_expansions cascade on play_id.
+
+-- bgb_delete_import_batch(p_user UUID, p_batch UUID)
+--   → JSONB { deleted: INT }
+--   Defined in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
+--               (delete_import_batch — DELETE /plays/import-batch/{id})
+--   Purpose:    Undo a whole import — every play one paste wrote, including the
+--               one-offs that carry no group id and could not be found any
+--               other way. Same owner scoping as above.
+
+-- bgb_list_imports(p_user UUID)
+--   → JSONB [ { batch_id, imported_at, play_count, game_count, game_names[],
+--               first_played_at, last_played_at } ], newest first
+--   Defined in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
+--               (list_imports — GET /plays/imports, the Settings undo list)
+--   Purpose:    What Settings lists so a user can find the import to undo.
+--               game_names is capped at four — a batch spanning fifteen games
+--               would push a paragraph into a settings row — while game_count
+--               beside it stays exact.

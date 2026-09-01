@@ -134,6 +134,28 @@
     // a play create in everything but the URL and left every one of these
     // caches stale.
     static invalidateDeps() { _invalidatePlayDeps(); }
+
+    // ── Imported plays (migrations 005/006) ─────────────────────────────────
+    // Two units, because they answer two different regrets: one run of
+    // identical plays read wrong, versus a whole paste that should never have
+    // happened. Both are owner-scoped server-side and report what they removed.
+
+    /** Delete one run of identical imported plays. @returns {Promise<{deleted:number}>} */
+    static deleteImportGroup(groupId) {
+      return window.api.del(`/plays/import-group/${encodeURIComponent(groupId)}`)
+        .then((r) => { _invalidatePlayDeps(); return r; });
+    }
+
+    /** Delete everything one import wrote. @returns {Promise<{deleted:number}>} */
+    static deleteImportBatch(batchId) {
+      return window.api.del(`/plays/import-batch/${encodeURIComponent(batchId)}`)
+        .then((r) => { _invalidatePlayDeps(); return r; });
+    }
+
+    /** Past imports, newest first — the Settings list. */
+    static listImports() {
+      return window.api.get("/plays/imports").then((r) => (r && r.imports) || []);
+    }
   }
 
   // Note: the `play.last` seed is deliberately NOT cleared here. This also runs

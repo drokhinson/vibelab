@@ -365,6 +365,7 @@
      .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
+     .play-run-sheet,
      .bgg-sync-sheet,
      .ach-sheet,
      .exp-picker,
@@ -409,6 +410,7 @@
      .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
+     .play-run-sheet,
      .bgg-sync-sheet,
      .ach-sheet,
      .exp-picker,
@@ -11420,6 +11422,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    rule sets only the family, so this floor is what sizes both. */
 .imp-textarea,
 .imp-date,
+.imp-count-input,
 .cascade-exp-filter__input,
 /* Every labelled field on a polaroid card — the avatar customizer's display
    name and the first-run BGG credentials — in one selector. */
@@ -12400,9 +12403,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
      transition — 240ms of travel, never a wait on a request. */
   transition: transform 240ms var(--ease);
 }
+/* One panel of the track. The width is a fraction of the TRACK, which is
+   --ob-panels screens wide — the deck sets that property in JS from the length
+   of its own PANELS array (widgets/onboarding-deck.js), so adding a slide is
+   one edit there and nothing here. The fallback matches today's count for the
+   case where the property never lands. */
 .ob-slide {
-  width: 25%;
-  flex: 0 0 25%;
+  width: calc(100% / var(--ob-panels, 5));
+  flex: 0 0 calc(100% / var(--ob-panels, 5));
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -13122,20 +13130,45 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    No photo on purpose: a snapshot of one of 58 indistinguishable plays would be
    claiming to be a specific evening. The game's own art sits behind the count,
    dimmed, so the tile still says which game without pretending to be a play.
+
+   THE EDGES, AND WHY THE FIRST VERSION CROSSED ITSELF. They were
+   `inset: 6px -5px -5px 6px; z-index: -1` — which insets the top and left
+   edges INWARD, so those two borders drew across the face of the card, and the
+   z-index could not push them back because .play-card__inner is
+   `transform-style: preserve-3d` and so makes its own stacking context. The
+   result was crossing lines, not a stack.
+
+   They are now identical-size copies of the card translated down-right, so the
+   only part of each that is ever visible is the sliver past the card's own
+   corner — which is exactly what a stack of paper looks like. A run card does
+   not flip, so `transform-style: flat` below costs nothing and is what lets
+   ordinary z-ordering work again.
    ────────────────────────────────────────────────────────────────────────── */
 .play-card--stack { position: relative; }
-/* The edges are siblings of __inner, not children, so the 3D flip doesn't
-   carry them round with the face. */
+/* No flip on a run card, so no 3D context — this is the line that makes the
+   edges sit behind the face instead of through it. */
+.play-card--stack .play-card__inner {
+  transform-style: flat;
+  position: relative;
+  z-index: 1;
+}
+/* Opaque, or the edges show through the face they are supposed to be behind. */
+.play-card--stack .play-card__front { background: var(--polaroid-bg, #FFFBF1); }
+/* Siblings of __inner, and same-size: only the offset corner shows. */
 .play-card__stack-edge {
   position: absolute;
-  inset: 6px -5px -5px 6px;
+  inset: 0;
   border-radius: inherit;
   background: var(--polaroid-bg, #FFFBF1);
   border: 1px solid var(--card-border);
   box-shadow: var(--sh-1);
-  z-index: -1;
+  transform: translate(5px, 5px);
 }
-.play-card__stack-edge--2 { inset: 11px -10px -10px 11px; opacity: 0.65; }
+/* Deeper in the pile, so further out and fainter. Rendered FIRST in the
+   markup so it sits under its neighbour without needing a z-index of its own. */
+.play-card__stack-edge--2 { transform: translate(10px, 10px); opacity: 0.7; }
+/* Room for the slivers, or the rail's edge clips the illusion. */
+.play-card--stack { margin-right: 12px; margin-bottom: 12px; }
 
 .play-card__photo--stack {
   position: relative;
@@ -13182,43 +13215,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--polaroid-muted, #8B7E68);
 }
 
-.play-card__stack-back {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  justify-content: center;
-  /* flex:1, not height:100% — the parent .play-card__back is already a padded
-     flex column, so a percentage height resolves against the wrong box and
-     leaves the summary sitting high. */
-  flex: 1;
-  text-align: center;
-  color: var(--polaroid-ink, #1D1812);
-}
-.play-card__stack-back-n {
-  font-family: var(--font-score);
-  font-weight: 700;
-  font-size: 1.5rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent-ink);
-  line-height: 1;
-}
-.play-card__stack-back-game {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 0.95rem;
-  line-height: 1.15;
-}
-.play-card__stack-back-line { font-size: 0.82rem; }
-.play-card__stack-back-date {
-  font-size: 0.74rem;
-  color: var(--polaroid-muted, #8B7E68);
-}
-.play-card__stack-back-note {
-  margin-top: 0.35rem;
-  font-size: 0.66rem;
-  line-height: 1.35;
-  color: var(--polaroid-muted, #8B7E68);
-}
+/* The run card's caption is a sentence with the winner at the front ("You won
+   all 58"), where the ordinary card's is a label with a name after it ("Won by
+   Dave"). It is one flex child so the words space naturally — see the note in
+   stackOutcome() — and the name inside it carries the weight. */
+.play-card__caption-meta .win-run { font-weight: 500; }
+.play-card__caption-meta .win-run b { font-weight: 700; }
 
 /* The plays log's run row — same idea, one line. */
 .plays-list__run {
@@ -13230,3 +13232,66 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* A run row opens nothing, so it must not offer the press feedback that says
    it would. */
 .plays-list__row--run { cursor: default; }
+
+/* ── The run sheet (widgets/play-run-sheet.js) ────────────────────────────── */
+.run-sheet__body { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.2rem 0; }
+.run-sheet__line { font-size: 0.9rem; line-height: 1.45; color: var(--sheet-ink, var(--ink)); margin: 0; }
+.run-sheet__note {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--sheet-ink-muted, var(--ink-muted));
+  margin: 0;
+}
+.run-sheet__delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  /* 52px: this is a commit button, and the one it commits to is destructive. */
+  min-height: 52px;
+  border-radius: var(--rounded-btn, 0.6rem);
+  border: 1px solid color-mix(in srgb, var(--rust) 45%, transparent);
+  background: color-mix(in srgb, var(--rust) 12%, transparent);
+  color: var(--rust);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.run-sheet__delete:active:not(:disabled) { background: color-mix(in srgb, var(--rust) 22%, transparent); }
+.run-sheet__delete:disabled { opacity: 0.5; }
+
+/* Settings' past-imports rows: the trailing delete affordance. */
+.set-card__row-del {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--polaroid-muted, #8B7E68);
+  position: relative;
+}
+/* 44px hit area without inflating the glyph (.claude/rules/mobile-web.md §5). */
+.set-card__row-del::before { content: ""; position: absolute; inset: -6px; }
+.set-card__row-del:active:not(:disabled) {
+  color: var(--rust);
+  background: color-mix(in srgb, var(--rust) 14%, transparent);
+}
+.set-card__row-del:disabled { opacity: 0.5; }
+
+/* The run-size field on the review step's run row. Narrow on purpose: it holds
+   at most three digits, and a full-width number input reads as a text field. */
+.imp-field--count { flex: 0 0 auto; }
+.imp-count-input {
+  width: 6.5rem;
+  min-height: 40px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 0.45rem;
+  background: var(--well);
+  color: var(--polaroid-ink);
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
