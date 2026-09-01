@@ -1,6 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: migration 072 (a buddy request you have SENT now counts as a
+-- Last updated: migration 073 (bgb_bgg_push_status — the outbound twin of
+--               bgb_bgg_sync_status, polled while a BgB->BGG push drains) — and
+--               072 (a buddy request you have SENT now counts as a
 --               first-hop link in both suggestion functions, which gained
 --               pending_mutual_count + via_user_id; plus the new
 --               bgb_onboarding_suggestion_network) — and 071 (bgb_profile_bundle
@@ -524,6 +526,24 @@
 --               20 most recently completed. has_credentials mirrors
 --               bgg_client.has_stored_credentials so auth_state derives
 --               without shipping the encrypted secret.
+
+-- bgb_bgg_push_status(p_user UUID)
+--   → JSONB { bgg_username, has_credentials, pending_count, errored_count,
+--             last_completed_at, session_started_at, session_total,
+--             session_done, session_errored, session_game_names[],
+--             session_errors[{game_name, message}] }
+--   Defined in: db/migrations/boardgamebuddy/073_bgg_push_queue.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/bgg_push_routes.py
+--               (get_push_status — GET /bgg/push/status, FE poll target)
+--   Purpose:    The outbound twin of bgb_bgg_sync_status. Simpler: the queue
+--               is UNIQUE(user_id, bgg_id), so one row per game and no
+--               per-id roll-up or games join. session_errors has no import
+--               counterpart and is the reason this is not a copy — a
+--               half-failed import can be re-run and idempotency cleans up,
+--               but a half-failed push has left flags on a third-party
+--               account in an unknown state, so the user has to be told
+--               which games. has_credentials uses the same expression as
+--               bgb_bgg_sync_status so auth_state derives identically.
 
 -- boardgamebuddy_search_games(p_viewer UUID, p_query TEXT, p_limit INT DEFAULT 20,
 --                             p_include_expansions BOOLEAN DEFAULT false)
