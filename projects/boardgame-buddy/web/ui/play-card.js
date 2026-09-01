@@ -303,24 +303,26 @@
         ${durationMeta ? `<span class="play-card__back-meta">${escapeHtml(durationMeta)}</span>` : ""}
       </header>
 
-      <ul class="play-card__back-players${ranked.some((pl) => pl.user_id) ? " has-links" : ""}">
+      <ul class="play-card__back-players${ranked.some((pl) => playerAction(pl, p, me)) ? " has-links" : ""}">
         ${ranked.length === 0
           ? `<li class="play-card__back-empty">No players recorded.</li>`
           : ranked.map((pl) => {
-              // A registered player's whole row opens their profile; the
-              // chevron is the affordance. Ghost players have no account and
-              // so no profile, leaving their row inert (and un-styled as a
-              // link) — see playerNav.
-              const nav = playerNav(pl, me);
+              // A registered player's whole row opens their profile; a ghost's
+              // opens the claim sheet, with a different trailing icon because
+              // it is a different destination. A ghost the viewer cannot
+              // possibly be (their own roster, or a play they already sit on)
+              // stays inert and un-styled as a link — see BgbPlayerRowAction.
+              const act = playerAction(pl, p, me);
+              const nav = act ? act.handler : "";
               return `
-              <li class="play-card__back-player ${pl.is_winner ? "is-winner" : ""}${nav ? " is-link" : ""}"
-                  ${nav ? `role="button" tabindex="0" data-no-flip
-                  aria-label="Open ${escapeAttr(pl.name)}'s profile"
-                  onclick="${nav}"
-                  onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}"` : ""}>
+              <li class="play-card__back-player ${pl.is_winner ? "is-winner" : ""}${act ? " is-link" : ""}${act && act.kind === "claim" ? " play-card__back-player--claim" : ""}"
+                  ${act ? `role="button" tabindex="0" data-no-flip
+                  aria-label="${escapeAttr(act.ariaLabel)}"
+                  onclick="${escapeAttr(nav)}"
+                  onkeydown="${escapeAttr(`if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}`)}"` : ""}>
                 ${renderPlayerRow(pl, me)}
                 <span class="play-card__back-player-score">${pl.score != null ? escapeHtml(String(pl.score)) : ""}</span>
-                ${nav ? `<i data-icon="chevron-right" class="play-card__back-player-go"></i>` : ""}
+                ${act ? `<i data-icon="${escapeAttr(act.icon)}" class="play-card__back-player-go"></i>` : ""}
               </li>`;
             }).join("")}
       </ul>
@@ -331,20 +333,20 @@
     `;
   }
 
-  // Inline handler that routes a scoreboard row to that player's profile
-  // (own → profile-self, anyone else → profile-other). Returns "" for
-  // free-text / ghost players — they have no account and no profile page.
+  // What a scoreboard row does when tapped — a real player's profile, or the
+  // claim sheet for a ghost that might be the viewer. The decision lives in
+  // ui/player-row-action.js because widgets/play-detail-popup.js draws the
+  // same list and used to answer the same question in its own copy of this
+  // function (ui-object-design.md §4: extract at instance #2).
   //
-  // stopPropagation keeps the click off the article, which would otherwise
-  // flip the card out from under the navigation; the row also carries
-  // data-no-flip so the flip controller skips it even if a future change
-  // lets the event through.
-  function playerNav(pl, me) {
-    if (!pl || !pl.user_id) return "";
-    const route = (me && me.id === pl.user_id)
-      ? `window.router.go('profile-self')`
-      : `window.router.go('profile-other',{userId:'${escapeAttr(pl.user_id)}'})`;
-    return `event.stopPropagation();${route}`;
+  // stopPropagation, inside the returned handler, keeps the click off the
+  // article, which would otherwise flip the card out from under the
+  // navigation; the row also carries data-no-flip so the flip controller
+  // skips it even if a future change lets the event through.
+  function playerAction(pl, play, me) {
+    return window.BgbPlayerRowAction
+      ? window.BgbPlayerRowAction.for(pl, play, me)
+      : null;
   }
 
   // Render the leading half of a back-side player row: badge, then name.

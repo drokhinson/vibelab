@@ -223,16 +223,22 @@
       && players.some((pl) => Array.isArray(pl[k]) && pl[k].length > 1);
   }
 
-  // Inline handler that routes a scoreboard row to that player's profile
-  // (own → profile-self, anyone else → profile-other), dismissing the popup
-  // first so the destination isn't left behind a backdrop. Returns "" for
-  // free-text / ghost players — they have no account and no profile page.
-  function playerNav(pl, me) {
-    if (!pl || !pl.user_id) return "";
-    const route = (me && me.id === pl.user_id)
-      ? `window.router.go('profile-self')`
-      : `window.router.go('profile-other',{userId:'${escapeAttr(pl.user_id)}'})`;
-    return `event.stopPropagation();window.PlayDetailPopup.dismiss();${route}`;
+  // What a scoreboard row does when tapped — a real player's profile, or the
+  // claim sheet for a ghost that might be the viewer. Shared with
+  // ui/play-card.js, which draws the same list; the decision lives in
+  // ui/player-row-action.js so the two cannot drift again.
+  //
+  // dismissFirst is this surface's whole difference: the popup is a
+  // body-level overlay, so it stands down before the destination appears.
+  // That matters twice as much for the claim branch — stacking a sheet over
+  // this popup would give two competing scroll locks and an ambiguous Escape
+  // order.
+  function playerAction(pl, play, me) {
+    return window.BgbPlayerRowAction
+      ? window.BgbPlayerRowAction.for(pl, play, me, {
+          dismissFirst: "window.PlayDetailPopup.dismiss();",
+        })
+      : null;
   }
 
   // ── View mode ─────────────────────────────────────────────────────────────
@@ -293,19 +299,20 @@
           </h3>
           ${ranked.length === 0
             ? `<div class="text-sm opacity-60">No players recorded.</div>`
-            : `<ul class="play-detail__players${ranked.some((pl) => pl.user_id) ? " has-links" : ""}">
+            : `<ul class="play-detail__players${ranked.some((pl) => playerAction(pl, p, me)) ? " has-links" : ""}">
                 ${ranked.map((pl) => {
-                  // Registered players' rows open their profile; the popup
-                  // dismisses first so the destination view isn't buried
-                  // under a backdrop. Ghost players have no profile to open,
-                  // so their row stays inert (and un-styled as a link).
-                  const nav = playerNav(pl, me);
+                  // Registered players' rows open their profile; a ghost's
+                  // opens the claim sheet, with its own trailing icon because
+                  // it is a different destination. Either way the popup
+                  // dismisses first. A ghost the viewer cannot be stays inert.
+                  const act = playerAction(pl, p, me);
+                  const nav = act ? act.handler : "";
                   return `
-                  <li class="play-detail__player ${pl.is_winner ? "is-winner" : ""}${nav ? " is-link" : ""}"
-                      ${nav ? `role="button" tabindex="0"
-                      aria-label="Open ${escapeAttr(pl.name)}'s profile"
-                      onclick="${nav}"
-                      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}"` : ""}>
+                  <li class="play-detail__player ${pl.is_winner ? "is-winner" : ""}${act ? " is-link" : ""}${act && act.kind === "claim" ? " play-detail__player--claim" : ""}"
+                      ${act ? `role="button" tabindex="0"
+                      aria-label="${escapeAttr(act.ariaLabel)}"
+                      onclick="${escapeAttr(nav)}"
+                      onkeydown="${escapeAttr(`if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}`)}"` : ""}>
                     <span class="play-detail__player-name">
                       ${window.BgbBadge ? window.BgbBadge.render({
                         avatar: pl.avatar || null,
@@ -319,7 +326,7 @@
                       ${pl.is_winner ? `<i data-icon="crown" class="w-3.5 h-3.5 play-detail__player-crown"></i>` : ""}
                     </span>
                     <span class="play-detail__player-score">${pl.score != null ? pl.score : ""}</span>
-                    ${nav ? `<i data-icon="chevron-right" class="w-3.5 h-3.5 play-detail__player-go"></i>` : ""}
+                    ${act ? `<i data-icon="${escapeAttr(act.icon)}" class="w-3.5 h-3.5 play-detail__player-go"></i>` : ""}
                   </li>
                 `;}).join("")}
               </ul>`}

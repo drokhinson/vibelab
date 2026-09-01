@@ -364,6 +364,7 @@
      .shelf-sheet,
      .shelf-picker-sheet,
      .buddy-qr-sheet,
+     .ghost-claim-sheet,
      .ach-sheet,
      .exp-picker,
      .import-exp-modal,
@@ -404,6 +405,7 @@
      .shelf-sheet,
      .shelf-picker-sheet,
      .buddy-qr-sheet,
+     .ghost-claim-sheet,
      .ach-sheet,
      .exp-picker,
      .import-exp-modal,
@@ -4671,6 +4673,79 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-muted);
 }
 
+/* ── Ghost claim sheet ("is this you?") ───────────────────────────────────
+   One person, one question, two ways forward. Panel, grip, title and Cancel
+   come from .bgb-sheet__*; only the head, the copy and the action pair are
+   this sheet's own. It adds no backdrop rule, so it needs no class-doubling
+   (overlays.md §3) — .bgb-sheet already anchors it to the bottom.
+
+   .ghost-claim-sheet IS named in both re-point lists at the top of this file:
+   it is body-level chrome opened from a polaroid back, so without that it
+   would keep the root PAPER aliases and render cream over a dark feed
+   (theming.md §8). */
+.ghost-claim-sheet__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 2px 0.75rem;
+}
+.ghost-claim-sheet__name {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--polaroid-ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The one growable child, so the head and Cancel stay put if the copy grows. */
+.ghost-claim-sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 2px;
+}
+.ghost-claim-sheet__summary {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--polaroid-ink);
+}
+.ghost-claim-sheet__summary strong { color: var(--accent-ink); }
+.ghost-claim-sheet__note {
+  margin: 0 0 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--polaroid-muted);
+}
+.ghost-claim-sheet__note--loading { opacity: 0.7; }
+.ghost-claim-sheet__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+/* 52px, per mobile-web.md §5. Deliberately quieter than .bgb-sheet__cancel
+   below it: "Not me" is a real write (it suppresses the suggestion for good),
+   but it is the answer nobody came here to give, so it must not compete with
+   the primary — and it must not read as the way OUT of the sheet, which is
+   what Cancel is for. Transparent with a hairline, one step below Cancel's
+   filled treatment. `.ghost-claim-sheet .btn` doubles the class so it beats
+   DaisyUI's own .btn-ghost (0,1,0) rather than tying and losing on source
+   order (mobile-web.md §3). */
+.ghost-claim-sheet .ghost-claim-sheet__dismiss {
+  min-height: 52px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--polaroid-muted);
+  font-weight: 600;
+}
+.ghost-claim-sheet .ghost-claim-sheet__dismiss:hover {
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-ink);
+}
+
 /* ── Add-a-buddy QR sheet ─────────────────────────────────────────────────
    Two tabs on one panel: show your own code, or scan someone else's. Panel,
    grip, title, tab strip and Done button all come from .bgb-sheet__*; only the
@@ -5438,6 +5513,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .ghost-claim-row .buddies-row__name strong {
   font-weight: 600;
   color: var(--accent-ink);
+}
+
+/* A ghost row that offers a claim. The row is otherwise identical to a profile
+   link — same size, same press feedback — because it is the same kind of tap;
+   only the trailing mark differs, since it goes somewhere else
+   (ui-object-design.md §3b). */
+.play-card__back-player--claim .play-card__back-player-go,
+.play-detail__player--claim .play-detail__player-go {
+  color: var(--accent-ink);
+  opacity: 0.85;
 }
 
 /* Destructive icon button — tints the glyph and outlines on hover so the X
