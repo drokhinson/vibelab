@@ -249,11 +249,11 @@
       for (const s of CHOICES) {
         const on = s === cur;
         parts.push(`
-          <button class="status-sheet__opt" type="button" role="radio"
+          <button class="bgb-sheet__opt" type="button" role="radio"
                   aria-checked="${on ? "true" : "false"}" data-status="${s}">
             <i data-icon="${ICON[s]}" class="w-5 h-5"></i>
-            <span class="status-sheet__opt-label">${LABEL[s]}<span class="status-sheet__opt-sub">${BLURB[s]}</span></span>
-            <span class="status-sheet__radio" aria-hidden="true"></span>
+            <span class="bgb-sheet__opt-label">${LABEL[s]}<span class="bgb-sheet__opt-sub">${BLURB[s]}</span></span>
+            <span class="bgb-sheet__radio" aria-hidden="true"></span>
           </button>`);
       }
 
@@ -269,10 +269,10 @@
       if (CHOICES.includes(cur)) {
         parts.push(`<div class="status-sheet__rule"></div>`);
         parts.push(`
-          <button class="status-sheet__opt status-sheet__opt--danger" type="button"
+          <button class="bgb-sheet__opt bgb-sheet__opt--danger" type="button"
                   data-action="remove">
             <i data-icon="trash-2" class="w-5 h-5"></i>
-            <span class="status-sheet__opt-label">Remove from collection</span>
+            <span class="bgb-sheet__opt-label">Remove from collection</span>
           </button>`);
       }
 
@@ -320,7 +320,7 @@
         // screen-reader user hears their state before the alternatives.
         onOpen: (root) => {
           const focusTarget = root.querySelector('[aria-checked="true"]')
-            || root.querySelector(".status-sheet__opt");
+            || root.querySelector(".bgb-sheet__opt");
           if (focusTarget) focusTarget.focus();
         },
       });

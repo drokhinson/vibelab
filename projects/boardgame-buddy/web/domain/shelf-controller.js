@@ -1,9 +1,13 @@
 // @ts-check
 // domain/shelf-controller.js — the data half of a collection spoke.
 //
-// Collection and Wishlist are the same screen with different shelves, and
-// before this they carried byte-identical copies of the load / filter / page
-// logic. That state lives here now; the views own only their markup.
+// Collection and Wishlist were two screens with the same shelf machinery, and
+// they carried byte-identical copies of the load / filter / page logic. That
+// state moved here; the views owned only their markup. The two screens then
+// became one — the Collection spoke, with a shelf dropdown — so this class now
+// serves one view holding three modes rather than two views holding one each.
+// It is written for N modes either way, which is what made that merge a
+// one-word change at the construction site.
 //
 // The model: pull a whole shelf once via Collection.shelf() (cached, SWR),
 // then derive the visible window, filter and search from it locally. The

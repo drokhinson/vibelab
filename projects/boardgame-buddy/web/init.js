@@ -21,7 +21,6 @@
   window.profileSelfView = new window.ProfileSelfView();
   window.profileOtherView = new window.ProfileOtherView();
   window.collectionView  = new window.CollectionView();
-  window.wishlistView    = new window.WishlistView();
   window.playsView       = new window.PlaysView();
   window.sessionViewerView = new window.SessionViewerView();
   window.buddiesView     = new window.BuddiesView();
@@ -47,7 +46,6 @@
   window.router.register("profile-self",  window.profileSelfView);
   window.router.register("profile-other", window.profileOtherView);
   window.router.register("collection",    window.collectionView);
-  window.router.register("wishlist",      window.wishlistView);
   window.router.register("plays",         window.playsView);
   window.router.register("session-viewer", window.sessionViewerView);
   window.router.register("buddies",       window.buddiesView);
@@ -675,8 +673,8 @@
 
     // Resolve the initial URL → route so a deep-link / refresh on
     // /play/{code}, /game/{id}, /profile/collection, etc. resumes there
-    // after auth. Querystring values are merged onto params by the route
-    // table; we also pull anything not consumed by the path template here.
+    // after auth. matchPath() extracts the path params, folds the querystring
+    // in and resolves any route alias, so there is nothing to unpack here.
     //
     // /b/<token> — the add-a-buddy QR link — is handled here rather than in the
     // router's path table on purpose. It is inbound-only: nothing in the app
@@ -706,16 +704,10 @@
         history.replaceState(null, "", window.router.pathFor("buddies", {}) || "/profile/buddies");
       } catch (_) {}
     }
+    // matchPath folds window.location.search into params itself, so a deep link
+    // like /profile/collection?shelf=wishlist hydrates the destination view.
     const initialMatch = qrMatch || window.router.matchPath(window.location.pathname);
-    if (initialMatch) {
-      try {
-        const qs = new URLSearchParams(window.location.search);
-        for (const [k, v] of qs.entries()) {
-          if (initialMatch.params[k] == null) initialMatch.params[k] = v;
-        }
-      } catch (_) {}
-      window.store.set("pendingRoute", initialMatch);
-    }
+    if (initialMatch) window.store.set("pendingRoute", initialMatch);
 
     // First paint = splash. initSupabase() flips us forward to either
     // the pending deep-link route or the feed. skipPush keeps the original

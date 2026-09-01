@@ -128,7 +128,6 @@
     <main data-view="profile-self" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="profile-other" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="collection" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
-    <main data-view="wishlist" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="plays" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <!-- No container padding: the cascade screens inside own their own
          gutters, exactly like play-flow above. The old px-4 py-4 doubled up
@@ -167,7 +166,7 @@
       <span class="bgb-nav__label">Play</span>
     </button>
     <button class="bgb-nav__tab" data-nav="profile-self"
-            data-nav-views="profile-self,collection,wishlist,plays,buddies,stats,achievements,settings">
+            data-nav-views="profile-self,collection,plays,buddies,stats,achievements,settings">
       <span class="bgb-nav__ico">
         <i data-icon="user" class="w-5 h-5"></i>
         <!-- Something is waiting behind this tab — a buddy request, a badge
@@ -276,6 +275,7 @@
   <script src="widgets/play-detail-popup.js"></script>
   <script src="widgets/game-finder.js"></script>
   <script src="widgets/game-picker-sheet.js"></script>
+  <script src="widgets/shelf-picker-sheet.js"></script>
   <script src="widgets/shelf-of-shame-sheet.js"></script>
   <script src="widgets/player-picker-sheet.js"></script>
   <script src="widgets/game-search-sheet.js"></script>
@@ -304,7 +304,6 @@
   <script src="views/profile-self-view.js"></script>
   <script src="views/profile-other-view.js"></script>
   <script src="views/collection-view.js"></script>
-  <script src="views/wishlist-view.js"></script>
   <script src="views/plays-view.js"></script>
   <script src="views/session-viewer-view.js"></script>
   <script src="views/buddies-view.js"></script>

@@ -283,7 +283,7 @@ behaviour, the caller owns the markup:
 
 | | For |
 |---|---|
-| `render(opts)` | a plain box with no chrome of its own (the Collection / Wishlist / Plays / Buddies / Add Games searches). Emits `.search-field`. |
+| `render(opts)` | a plain box with no chrome of its own (the Collection / Plays / Buddies / Add Games searches). Emits `.search-field`. |
 | `clearButton(opts)` | a host that already draws its own field — `.game-finder`, the parchment scroll's search row. Those add `data-search-host` to the wrapper they have. |
 
 The × itself is one class, `.field-clear-btn`, 44×44 whatever the field's own
@@ -412,15 +412,18 @@ Most navigation between screens is **drill-into-an-object**. The graph below sho
                  │              │
   ┌──────────────┴──┐           │
   ↓                 ↓           ↓
-collection /     plays      session-viewer (joiner)
-wishlist                    play-flow (host) ◀───────── Bottom-nav "Play"
+collection       plays      session-viewer (joiner)
+?shelf=owned|               play-flow (host) ◀───────── Bottom-nav "Play"
+ wishlist|played|
+ expansions
 (spokes from profile-self)
   │
   │ "+ Add"
   ↓
 add-games  ── the whole catalog as one scroll; one tap per row shelves a game.
-              Both spokes land here, and its own toggle says which shelf the
-              tap fills, so it is one screen rather than two near-copies.
+              Its own toggle says which shelf the tap fills, so it is one
+              screen rather than two near-copies — the same argument that
+              later collapsed the wishlist spoke into `collection`.
 
 
 Bottom-nav "Profile"
@@ -433,7 +436,7 @@ Bottom-nav "Profile"
          ├── Your stats  → stats     (podium + per-game breakdown)
          ├── See all → achievements  (nineteen badges, five groups)
          ├── See all → collection
-         ├── See all → wishlist
+         ├── See all → collection?shelf=wishlist
          ├── See all → plays
          ├── See all → buddies
          └── Settings icon → settings → admin (gated)
