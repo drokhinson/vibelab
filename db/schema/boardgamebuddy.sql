@@ -102,8 +102,18 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_collections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
   game_id UUID NOT NULL REFERENCES public.boardgamebuddy_games(id) ON DELETE CASCADE,
-  -- migration 010 tightened this from ('owned','played','wishlist').
-  status TEXT NOT NULL CHECK (status IN ('owned', 'wishlist')),
+  -- Migration 010 tightened this from ('owned','played','wishlist'); migration
+  -- 069 added 'prev_owned'.
+  --
+  -- 'prev_owned' is a game you sold, gifted or donated. It is a SUBSET OF
+  -- OWNED for display — bgb_collection_shelf('owned') and bgb_profile_bundle's
+  -- owned_page return it alongside 'owned' rows, and the client renders it
+  -- dimmed with a "Prev. owned" stamp — and NOT OWNED for counting: every
+  -- `status = 'owned'` predicate elsewhere in this schema (owned_games,
+  -- owned_expansions, the expansion_counts blocks, bgb_user_stats_detail's
+  -- Shelf of Shame) deliberately excludes it. That asymmetry is the whole
+  -- reason this is a third status value rather than a flag on the owned row.
+  status TEXT NOT NULL CHECK (status IN ('owned', 'wishlist', 'prev_owned')),
   added_at TIMESTAMPTZ DEFAULT now(),
   -- Private fields from BGG /collection?showprivate=1 (migration 003).
   -- Populated only when the BGG sync request was authenticated as the

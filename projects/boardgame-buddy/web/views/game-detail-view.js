@@ -263,6 +263,10 @@
           <div class="expansion-reel">
             ${list.map((e) => {
               const status = (this._statusMap || {})[e.expansion_game_id] || null;
+              // prev_owned is deliberately absent: this check means "you have
+              // this one", and an expansion you sold is the one case where
+              // having a collection row does not mean you have it. Same call
+              // the owned-expansion counts make.
               const owned = status === "owned" || status === "played" || status === "wishlist";
               // The page title already says the base game, so the caption drops
               // it — the cap is 2-line clamped and the prefix ate one of them.

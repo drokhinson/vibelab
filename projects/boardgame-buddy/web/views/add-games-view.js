@@ -569,10 +569,16 @@
       const name = game.name || "this game";
 
       // Only worth saying when it differs from what the button reports: on the
-      // Collection tab a wishlisted game is a one-tap move, and "Played" is
-      // derived from logged plays, so the row explains why it isn't a "+".
-      const other = (!on && status)
-        ? `<span class="catalog-row__note">${escapeHtml(status === "played" ? "Played" : shelfOf(status).label)}</span>`
+      // Collection tab a wishlisted game is a one-tap move, "Played" is
+      // derived from logged plays, and "Prev. owned" is a game you had and
+      // sold — each explains why the row isn't already a check.
+      //
+      // window.statusLabel, not shelfOf(): shelfOf falls back to SHELVES[0]
+      // for anything it doesn't know, so a prev_owned game read "Collection" —
+      // the one word that is actively wrong for it.
+      const note = status ? window.statusLabel(status) : null;
+      const other = (!on && note)
+        ? `<span class="catalog-row__note">${escapeHtml(note)}</span>`
         : "";
 
       const label = on

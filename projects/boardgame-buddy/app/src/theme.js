@@ -34,8 +34,13 @@ export const COLORS = {
   polaroidLine: '#DAC9A4',
   polaroidAccent: '#C8553D',
 
-  // Status pill colors.
+  // Status pill colors. prevOwned (a game sold, gifted or donated) is the one
+  // DESATURATED entry on purpose: it sits on the same Owned shelf as `owned`,
+  // so "retired" has to read next to "on my shelf" at a glance, and another
+  // hue would land as just another category. Mirrors .status-tag--prev-owned
+  // in web/styles.css.
   owned: '#C9922A',
+  prevOwned: '#9A8F80',
   wishlist: '#7a5293',
   played: '#2f6a93',
 

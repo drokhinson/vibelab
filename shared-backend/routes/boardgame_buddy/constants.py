@@ -29,6 +29,23 @@ class CollectionStatus(StrEnum):
     # the new Feed/Profile views replace them.
     PLAYED = "played"
     WISHLIST = "wishlist"
+    # A game the user sold, gifted or donated (migration 069). Persisted, and
+    # deliberately asymmetric: it is a SUBSET OF OWNED for display — the Owned
+    # shelf lists it alongside owned games, dimmed and stamped — and NOT OWNED
+    # for counting, so every owned total (the Owned tab count, the profile
+    # "Owned Games" stat, owned-expansion counts, the Shelf of Shame) skips it.
+    # Distinct from deleting the row, which means "this was never mine".
+    PREV_OWNED = "prev_owned"
+
+
+# The statuses a request for the "owned" shelf actually matches. Only the
+# surfaces that BUILD the Owned grid use this; every plain `status = 'owned'`
+# filter elsewhere is correct as it stands, because prev_owned must not be
+# counted as owned. See constants above and migration 069.
+OWNED_SHELF_STATUSES: tuple[str, ...] = (
+    CollectionStatus.OWNED.value,
+    CollectionStatus.PREV_OWNED.value,
+)
 
 
 class BuddyEdgeStatus(StrEnum):

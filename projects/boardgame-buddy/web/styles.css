@@ -3969,6 +3969,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: oklch(0.32 0.10 270);
   color: oklch(0.95 0.08 270);
 }
+/* Prev. owned — a game sold, gifted or donated. Deliberately the one
+   DESATURATED fill in this family: it sits on the same Owned shelf as
+   .status-tag--owned, so "retired" has to be legible next to "on my shelf"
+   at a glance, and hue alone would read as just another category. Ink on
+   plate is 10.4:1, and — like every fill here — the pair is literal rather
+   than tokenised, because the ground is box art in both themes. */
+.status-tag--prev-owned {
+  background: oklch(0.30 0.012 60);
+  color: oklch(0.92 0.008 85);
+}
 .status-tag--add {
   background: oklch(var(--b1));
   color: oklch(var(--bc));
@@ -4981,6 +4991,54 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .collection-tile { position: relative; }
 .collection-tile .status-tag { position: absolute; top: 4px; right: 4px; z-index: 2; }
 .expansion-list__row .status-tag { margin-left: auto; }
+
+/* ── Prev. owned: the sold/gifted/donated tile ────────────────────────────
+   A prev_owned game (migration 069) stays on the Owned shelf in its
+   alphabetical place, so the tile itself has to carry the state — the corner
+   chip cannot, by design: it is one neutral glyph whatever the status (see
+   the .status-tag--corner block above). Two marks, because either alone is
+   ambiguous: greyed-out art on its own reads as a tile that hasn't loaded,
+   and a stamp on full-colour art gives a game you no longer have the same
+   visual weight as one you do.
+
+   The dim goes on the ART, not the tile: dimming the whole tile would take
+   the corner chip and the expansion badge with it, and both are still live
+   controls on a sold game. */
+.collection-tile.is-prev-owned .collection-tile__art img,
+.collection-tile.is-prev-owned .collection-tile__placeholder {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.collection-tile.is-prev-owned .collection-tile__name { color: var(--ink-muted); }
+
+/* Colours are LITERAL here for the same reason the .status-tag--corner block
+   spells out at length: the ground is a photograph. Box art does not lighten
+   when the viewer switches to light mode, so a token plate would go pale in
+   light and drop light ink onto pale cover art. Ink on plate is 11.5:1, the
+   same in both themes by construction.
+
+   pointer-events: none so the stamp never eats the tile's tap, and no
+   accessible name — the corner chip's aria-label already carries the state,
+   and a second announcement of it would be noise. */
+.collection-tile__stamp {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-12deg);
+  z-index: 3;
+  pointer-events: none;
+  padding: 0.16rem 0.5rem;
+  border: 2px solid oklch(0.96 0.006 85 / 0.85);
+  border-radius: var(--r-xs, 4px);
+  background: oklch(0.21 0.014 55 / 0.88);
+  color: oklch(0.96 0.006 85);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
 
 /* ── Scoring rounds table ─────────────────────────────────────────────────
    The grid lands on TWO kinds of surface: paper (the play-detail popup, and
@@ -8599,6 +8657,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .preview-card__cover img {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
+/* Prev. owned, same treatment as the Collection grid's tile art (see the
+   .collection-tile.is-prev-owned block) minus the stamp, which is unreadable
+   at a quarter-row cover. */
+.preview-card__cover.is-prev-owned img,
+.preview-card__cover.is-prev-owned .preview-card__cover-fallback {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
 .preview-card__cover-fallback {
   width: 100%; height: 100%;
   display: grid; place-items: center;
@@ -9478,6 +9544,15 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border: 1px solid var(--sheet-line);
 }
 .bgb-spoke-screen .collection-tile__name { color: var(--polaroid-ink, #1D1812); }
+/* The tile lands on a CHROME surface here, so the muted ink comes from the
+   surface family, not the ground's --ink-muted (.claude/rules/theming.md §6).
+   Three classes on purpose: the base .collection-tile.is-prev-owned rule near
+   the .collection-tile block is (0,2,0) and would TIE with the line above and
+   lose on source order, leaving a sold game's title at full ink on the one
+   screen the grid actually lives on. (.claude/rules/mobile-web.md §3.) */
+.bgb-spoke-screen .collection-tile.is-prev-owned .collection-tile__name {
+  color: var(--polaroid-muted);
+}
 .bgb-spoke-screen .collection-tile__placeholder {
   background: var(--polaroid-line, #DAC9A4);
   color: var(--polaroid-ink-soft, #4A3F2F);

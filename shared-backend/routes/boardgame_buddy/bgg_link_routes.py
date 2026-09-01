@@ -57,10 +57,20 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
-# BGG-collection statuses we import. Anything else (prevowned, want, fortrade,
-# preordered, …) is ignored for now; users can curate those flags on BGG and
-# they won't pollute the BoardgameBuddy closet.
-_BGG_STATUSES = {"own": "owned", "wishlist": "wishlist", "wanttoplay": "wishlist"}
+# BGG-collection statuses we import. Anything else (want, fortrade, preordered,
+# …) is ignored; users can curate those flags on BGG and they won't pollute the
+# BoardgameBuddy closet.
+#
+# ORDER IS LOAD-BEARING: _derive_collection_status walks this dict in insertion
+# order after checking `own`, so a game flagged both prevowned and wishlist
+# comes in as prev_owned. Each key is also its own (subtype, status) request in
+# the batch sweep below, so adding one costs two more BGG calls per sync.
+_BGG_STATUSES = {
+    "own": "owned",
+    "prevowned": "prev_owned",
+    "wishlist": "wishlist",
+    "wanttoplay": "wishlist",
+}
 
 # Subtypes we sweep when batching the /collection request. Each (subtype,
 # status) pair is its own xmlapi2 call so BGG can serve a smaller, more
@@ -97,6 +107,39 @@ def _existing_game_map(sb: Client, bgg_ids: list[int]) -> dict[int, dict]:
     return {r["bgg_id"]: r for r in (rows.data or []) if r.get("bgg_id")}
 
 
+def _prev_owned_game_ids(sb: Client, user_id: str) -> set[str]:
+    """Game ids this user has marked "previously owned" in the app.
+
+    See _hold_prev_owned for why a sync needs to know. One bounded read per
+    sync — the set is small by nature, and it is the whole set rather than a
+    per-game lookup because the bulk writer would otherwise do one read a row.
+    """
+    rows = (
+        sb.table("boardgamebuddy_collections")
+        .select("game_id")
+        .eq("user_id", user_id)
+        .eq("status", "prev_owned")
+        .execute()
+        .data
+        or []
+    )
+    return {r["game_id"] for r in rows}
+
+
+def _hold_prev_owned(status: str, prev_owned_ids: set[str], game_id: str) -> str:
+    """Never let a sync resurrect a game the user marked "previously owned".
+
+    BGG's own `own` flag is not curated the way an in-app tap is: people leave
+    a sold game flagged own for years, and the whole point of prev_owned is
+    that the user told us they let it go. So a local prev_owned row outranks an
+    incoming `owned` and the sync leaves it alone. Every other transition still
+    lands — a game that moves to wishlist on BGG still moves here.
+    """
+    if status == "owned" and game_id in prev_owned_ids:
+        return "prev_owned"
+    return status
+
+
 def _upsert_collection_row(
     sb: Client,
     user_id: str,
@@ -114,6 +157,21 @@ def _upsert_collection_row(
     BGG's <privateinfo>). Keys missing from BGG come through as None so
     re-syncing after BGG-side deletion still nulls our copy.
     """
+    # One row at a time here (the pending-import worker), so scope the
+    # prev_owned check to this game rather than reading the user's whole set.
+    if status == "owned":
+        existing = (
+            sb.table("boardgamebuddy_collections")
+            .select("status")
+            .eq("user_id", user_id)
+            .eq("game_id", game["id"])
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if existing and existing[0].get("status") == "prev_owned":
+            status = "prev_owned"  # see _hold_prev_owned
     sb.table("boardgamebuddy_collections").upsert(
         _collection_payload(user_id, game, status, private),
         on_conflict="user_id,game_id",
@@ -271,7 +329,9 @@ def _chunked(seq: list, size: int = _BATCH):
 
 def _upsert_collection_rows(sb: Client, user_id: str, items: list[tuple]) -> int:
     """Bulk-upsert collection rows. `items` is [(game_row, status, private)]."""
-    rows = [_collection_payload(user_id, game, status, private)
+    held = _prev_owned_game_ids(sb, user_id) if items else set()
+    rows = [_collection_payload(
+                user_id, game, _hold_prev_owned(status, held, game["id"]), private)
             for game, status, private in items]
     if not rows:
         return 0
@@ -372,7 +432,9 @@ def _derive_collection_status(item) -> Optional[str]:
     status_el = item.find("status")
     if status_el is None:
         return None
-    # Priority: own > wishlist/wanttoplay (latter two collapse into 'wishlist').
+    # Priority: own > prevowned > wishlist/wanttoplay (latter two collapse into
+    # 'wishlist'). `own` is checked out of band because it wins outright: BGG
+    # sets prevowned alongside own for a copy you replaced, and you do have it.
     if status_el.get("own") == "1":
         return "owned"
     for flag, mapped in _BGG_STATUSES.items():
@@ -642,8 +704,13 @@ async def _process_pending_imports(user_id: str) -> None:
 
 def _status_priority(status: str) -> int:
     """Higher means stronger — used to pick a winner when one game shows up
-    in multiple per-status batches (e.g. owned AND wishlisted)."""
-    return {"owned": 2, "wishlist": 1}.get(status, 0)
+    in multiple per-status batches (e.g. owned AND wishlisted).
+
+    prev_owned sits between the two: a game BGG reports as both prevowned and
+    wishlisted is one you had, sold, and want back — the shelf it belongs on is
+    the one that says you had it. Mirrors _derive_collection_status's ordering.
+    """
+    return {"owned": 3, "prev_owned": 2, "wishlist": 1}.get(status, 0)
 
 
 def _merge_collection_row(

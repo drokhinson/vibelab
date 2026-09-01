@@ -434,8 +434,13 @@
     _cover(item) {
       const g = item.game || {};
       const click = `onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})"`;
+      // owned_page carries prev_owned rows while owned_total counts only what
+      // you still have, so a sold game can take a slot in this strip. Dimmed,
+      // matching the Collection grid — no stamp, which is unreadable at this
+      // size; the title attribute and the spoke behind it carry the detail.
+      const parted = item.status === "prev_owned" ? " is-prev-owned" : "";
       return `
-        <div class="preview-card__cover" ${click} title="${escapeAttr(g.name || "")}">
+        <div class="preview-card__cover${parted}" ${click} title="${escapeAttr(g.name || "")}">
           ${gameArtImg(g, "card", { alt: g.name || "" })
             || `<div class="preview-card__cover-fallback">${escapeHtml((g.name || "?").slice(0, 14))}</div>`}
         </div>

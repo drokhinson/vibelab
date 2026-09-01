@@ -14,12 +14,14 @@
   // host/join landing. Cream surface + Fraunces caption matching the play
   // cards. clickHandler is the raw JS to run on tap (e.g.
   // "window.logPlayView._pickFromGrid('uuid')"). collectionStatus drives
-  // the corner badge (owned / wishlist / played / null → "+" button).
+  // the corner badge (owned / prev_owned / wishlist / played / null → "+"
+  // button) — though a corner badge renders the same neutral chip for every
+  // one of them; see ui/status-tag.js.
   /**
    * @param {any} game
    * @param {Object} [opts]
    * @param {string} [opts.clickHandler] Raw JS run on tap.
-   * @param {string|null} [opts.collectionStatus] owned / wishlist / played / null.
+   * @param {string|null} [opts.collectionStatus] owned / prev_owned / wishlist / played / null.
    * @param {"polaroid"|"rail"|"row"} [opts.variant] Surface preset. Default "polaroid".
    * @param {boolean} [opts.showStatus] Render the corner status pill. The
    *   Expansions tree turns this off: every row there is owned by definition,
