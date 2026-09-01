@@ -155,10 +155,20 @@ function escapeAttr(s) {
   return escapeHtml(s);
 }
 
-// JS-string escape for safely embedding text inside inline onclicks
-// (e.g. `onclick="...router.go('game-detail',{gameName:'${jsStr(name)}'})"`).
-// Handles backslashes, single quotes, and newlines — that's enough for
-// every place we use it today.
+// JS-string escape for text embedded inside an inline handler.
+//
+// This is ONE of the two layers such a handler needs, and it is the inner one:
+// it closes the JS string literal. The handler is itself written inside a
+// double-quoted HTML attribute, and jsStr deliberately does NOT escape a
+// double quote — so the whole handler must also go through escapeAttr():
+//
+//   onclick="${escapeAttr(`…go('game-detail',{gameName:'${jsStr(name)}'})`)}"
+//
+// The browser decodes the entities before the JS parser ever sees the string,
+// so the value arrives intact. Skipping the outer layer means any name
+// containing a double quote ends the attribute early — which is a rendering
+// bug for text the user typed themselves, and an injection for text somebody
+// else typed.
 function jsStr(s) {
   return String(s ?? "")
     .replace(/\\/g, "\\\\")

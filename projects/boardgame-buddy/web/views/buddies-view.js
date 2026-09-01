@@ -56,6 +56,16 @@
       // which list the row belongs to. Cleared by _load(), which is where the
       // lists actually re-form.
       this._resolved = new Map();
+
+      // Ghost account claims (migration 069). Two lists, opposite ends of the
+      // same conversation: suggestions are ghosts we might claim, requests are
+      // people asking to claim ours. Their markup lives in
+      // ui/ghost-claim-suggestions.js; only the state and the writes are here.
+      this._claimSuggestions = [];
+      this._claimRequests = { incoming: [], outgoing: [] };
+      // Same verb-not-state reasoning as _resolved above, keyed by
+      // "<ownerId>|<nameKey>" for a suggestion and by claim id for a request.
+      this._claimResolved = new Map();
     }
 
     async onMount() {
@@ -109,6 +119,12 @@
       const suggestedPromise = window.Buddy.suggested()
         .then((r) => (r && r.suggestions) || [])
         .catch(() => []);
+      // Ghost claims, both directions. Uncached for the same reason as the
+      // rail (GhostClaim.suggestions), and null-on-failure for the same reason
+      // as requests: the Profile dot must not be cleared because the network
+      // dropped.
+      const claimSuggestionsPromise = window.GhostClaim.suggestions().catch(() => []);
+      const claimsPromise = window.GhostClaim.list().catch(() => null);
       try {
         // Buddies + ghosts + played-with come from the SWR-cached aggregate
         // (seeded by /bootstrap as 'buddy:all'): usually resolves straight
@@ -132,13 +148,21 @@
         this._loading = false;
         this.render();
       }
-      const [requests, suggested] = await Promise.all([requestsPromise, suggestedPromise]);
+      const [requests, suggested, claimSuggestions, claims] = await Promise.all([
+        requestsPromise, suggestedPromise, claimSuggestionsPromise, claimsPromise,
+      ]);
       // A friend-graph edit landed while these were in flight — local state is
       // newer than the server copy we're holding, so let it stand.
       if (seq !== this._mutationSeq) return;
       this._requests = requests || { incoming: [], outgoing: [] };
       if (requests) this._publishRequestCount();
       this._suggested = suggested || [];
+      this._claimSuggestions = claimSuggestions || [];
+      this._claimRequests = claims || { incoming: [], outgoing: [] };
+      if (claims) this._publishClaimCount();
+      // The lists are re-forming, so this session's past-tense chips retire —
+      // the same point in the cycle where _resolved is cleared above.
+      this._claimResolved.clear();
       this.render();
     }
 
@@ -157,7 +181,9 @@
           && this._requests.incoming.length === 0
           && this._requests.outgoing.length === 0
           && (this._playedWith || []).length === 0
-          && (this._ghosts || []).length === 0) {
+          && (this._ghosts || []).length === 0
+          && (this._claimSuggestions || []).length === 0
+          && (this._claimRequests.incoming || []).length === 0) {
         this.container.innerHTML = `
           ${this._renderTopbar()}
           <div class="profile-loading">
@@ -217,6 +243,10 @@
           </section>
         ` : ""}
 
+        ${window.renderGhostClaimRequests(this._claimRequests.incoming, {
+          stateFor: (id) => this._claimStateFor(id),
+        })}
+
         ${this._requests.outgoing.length > 0 ? `
           <section class="buddies-section">
             <h3>Sent</h3>
@@ -268,6 +298,14 @@
           cancelHandler: "window.buddiesView._cancelFromTile",
           flush: true,
           stateFor: (id) => this._tileStateFor(id),
+        })}
+
+        ${window.renderGhostClaimsSent(this._claimRequests.outgoing, {
+          stateFor: (id) => this._claimStateFor(id),
+        })}
+
+        ${window.renderGhostClaimSection(this._claimSuggestions, {
+          stateFor: (key) => this._claimStateFor(key),
         })}
 
         ${this._renderPlayedWithSection()}
@@ -415,7 +453,7 @@
             </div>
             <div class="buddies-row__when">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}${g.last_played_at ? " · last " + formatDate(g.last_played_at) : ""}</div>
           </div>
-          <button class="btn btn-ghost btn-xs" onclick="window.buddiesView._toggleLinkPanel('${jsStr(g.display_name)}')">
+          <button class="btn btn-ghost btn-xs" onclick="${escapeAttr(`window.buddiesView._toggleLinkPanel('${jsStr(g.display_name)}')`)}">
             ${isOpen ? "Cancel" : "Link"}
           </button>
           ${isOpen ? this._renderLinkPanel(g.display_name) : ""}
@@ -449,14 +487,14 @@
           ${this._linkQuery && (hasAccounts || hasGhosts) ? `
             <ul class="buddies-link-results">
               ${this._linkResults.map((u) => `
-                <li onclick="window.buddiesView._confirmLink('${jsStr(displayName)}', '${u.id}')">
+                <li onclick="${escapeAttr(`window.buddiesView._confirmLink('${jsStr(displayName)}', '${u.id}')`)}">
                   ${window.BgbBadge.render({ avatar: u.avatar, displayName: u.display_name, size: "xs" })}
                   <span class="buddies-link-results__name">${escapeHtml(u.display_name)}</span>
                   <span class="buddies-link-results__chip">Account</span>
                 </li>
               `).join("")}
               ${ghostMatches.map((g) => `
-                <li onclick="window.buddiesView._confirmMerge('${jsStr(displayName)}', '${jsStr(g.display_name)}')">
+                <li onclick="${escapeAttr(`window.buddiesView._confirmMerge('${jsStr(displayName)}', '${jsStr(g.display_name)}')`)}">
                   ${window.BgbBadge.render({ avatar: null, displayName: g.display_name, size: "xs", isGhost: true })}
                   <span class="buddies-link-results__name">${escapeHtml(g.display_name)}</span>
                   <span class="buddies-link-results__email">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}</span>
@@ -924,6 +962,195 @@
      */
     _publishRequestCount() {
       window.Buddy.setPendingCount((this._requests.incoming || []).length);
+    }
+
+    // The freshest writer of the ghost-claim count: these handlers know the
+    // new figure a round trip before the profile bundle does. Called on
+    // rollback too, or a failed accept would leave the Profile dot short.
+    _publishClaimCount() {
+      window.GhostClaim.setPendingCount((this._claimRequests.incoming || []).length);
+    }
+
+    // One lookup for both claim lists — the busy key and the resolved verb are
+    // namespaced by the same key, so a suggestion ("<ownerId>|<nameKey>") and
+    // a request (claim id) can never collide.
+    _claimStateFor(key) {
+      if (this._busy.has("claim:" + key)) return "busy";
+      return this._claimResolved.get(key) || null;
+    }
+
+    // ── Ghost account claims ────────────────────────────────────────────────
+    //
+    // All five follow the discipline documented at the top of this file:
+    // take a _busy key, bump _mutationSeq, patch the ONE row rather than
+    // re-rendering (the button is under the user's finger), and roll the patch
+    // back with a toast on failure. The lists re-form on the next _load().
+
+    /** Ask the ghost's owner to link it to us. */
+    async _claimGhost(ownerId, nameKey, displayName) {
+      const key = `${ownerId}|${nameKey}`;
+      const busyKey = "claim:" + key;
+      if (this._busy.has(busyKey)) return;
+      this._busy.add(busyKey);
+      this._mutationSeq++;
+      window.patchGhostClaimRow(key, "busy");
+      const row = (this._claimSuggestions || []).find(
+        (s) => s.owner_user_id === ownerId && s.ghost_name_key === nameKey
+      );
+      try {
+        await window.GhostClaim.create(ownerId, displayName);
+      } catch (e) {
+        window.patchGhostClaimRow(key, null, row, "suggestion");
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't send that request", "error");
+        }
+        return;
+      } finally {
+        this._busy.delete(busyKey);
+      }
+      this._claimResolved.set(key, "requested");
+      window.patchGhostClaimRow(key, "requested");
+    }
+
+    /** "Not me" — stop suggesting this ghost. The owner is never told. */
+    async _dismissGhost(ownerId, nameKey, displayName) {
+      const key = `${ownerId}|${nameKey}`;
+      const busyKey = "claim:" + key;
+      if (this._busy.has(busyKey)) return;
+      this._busy.add(busyKey);
+      this._mutationSeq++;
+      window.patchGhostClaimRow(key, "busy");
+      const row = (this._claimSuggestions || []).find(
+        (s) => s.owner_user_id === ownerId && s.ghost_name_key === nameKey
+      );
+      try {
+        await window.GhostClaim.dismiss(ownerId, displayName);
+      } catch (e) {
+        window.patchGhostClaimRow(key, null, row, "suggestion");
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't dismiss that", "error");
+        }
+        return;
+      } finally {
+        this._busy.delete(busyKey);
+      }
+      // The row stays put and reads "Not you"; it drops out on the next
+      // _load(), where the whole section re-forms. Removing it here would
+      // collapse the list under the finger that just tapped it.
+      this._claimResolved.set(key, "dismissed");
+      window.patchGhostClaimRow(key, "dismissed");
+    }
+
+    /**
+     * Approve a claim on one of OUR ghosts. This is the merge: the ghost's
+     * rows on our plays become the claimant's, so every cache that reads a
+     * play has to go — hence Play.invalidateDeps() and not just
+     * Buddy.invalidate().
+     */
+    async _acceptClaim(claimId) {
+      const busyKey = "claim:" + claimId;
+      if (this._busy.has(busyKey)) return;
+      const incoming = this._claimRequests.incoming || [];
+      const idx = incoming.findIndex((r) => r.id === claimId);
+      if (idx < 0) return;
+      this._busy.add(busyKey);
+      this._mutationSeq++;
+      const req = incoming[idx];
+      window.patchGhostClaimRow(claimId, "busy");
+      incoming.splice(idx, 1);
+      this._publishClaimCount();
+
+      let result;
+      try {
+        result = await window.GhostClaim.accept(claimId);
+      } catch (e) {
+        incoming.splice(idx, 0, req);
+        this._publishClaimCount();
+        window.patchGhostClaimRow(claimId, null, req, "request");
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't accept that request", "error");
+        }
+        return;
+      } finally {
+        this._busy.delete(busyKey);
+      }
+      this._claimResolved.set(claimId, "accepted");
+      window.patchGhostClaimRow(claimId, "accepted");
+      window.GhostClaim.invalidate();
+      // The plays themselves changed hands, so the play-shaped caches (feed,
+      // stats, achievements, profile bundle, collection shelves) are stale.
+      if (window.Play && window.Play.invalidateDeps) window.Play.invalidateDeps();
+      const moved = (result && result.rows_merged) || 0;
+      if (typeof showToast === "function" && moved) {
+        showToast(
+          `${moved} ${moved === 1 ? "play" : "plays"} moved to ${req.other_display_name}`,
+          "success",
+        );
+      }
+    }
+
+    /** Decline a claim on one of our ghosts. They may ask once more. */
+    async _rejectClaim(claimId) {
+      const busyKey = "claim:" + claimId;
+      if (this._busy.has(busyKey)) return;
+      const incoming = this._claimRequests.incoming || [];
+      const idx = incoming.findIndex((r) => r.id === claimId);
+      if (idx < 0) return;
+      this._busy.add(busyKey);
+      this._mutationSeq++;
+      const req = incoming[idx];
+      window.patchGhostClaimRow(claimId, "busy");
+      incoming.splice(idx, 1);
+      this._publishClaimCount();
+      try {
+        await window.GhostClaim.reject(claimId);
+      } catch (e) {
+        incoming.splice(idx, 0, req);
+        this._publishClaimCount();
+        window.patchGhostClaimRow(claimId, null, req, "request");
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't decline that request", "error");
+        }
+        return;
+      } finally {
+        this._busy.delete(busyKey);
+      }
+      this._claimResolved.set(claimId, "declined");
+      window.patchGhostClaimRow(claimId, "declined");
+    }
+
+    /**
+     * Withdraw a claim WE sent, from the "Link requests sent" list. The mirror
+     * of _rejectClaim, and unlike a decline it costs no strike against the
+     * two-ask limit — see ghost_claim_service.cancel_claim.
+     */
+    async _cancelClaim(claimId) {
+      const busyKey = "claim:" + claimId;
+      if (this._busy.has(busyKey)) return;
+      const outgoing = this._claimRequests.outgoing || [];
+      const idx = outgoing.findIndex((r) => r.id === claimId);
+      if (idx < 0) return;
+      this._busy.add(busyKey);
+      this._mutationSeq++;
+      const req = outgoing[idx];
+      window.patchGhostClaimRow(claimId, "busy");
+      outgoing.splice(idx, 1);
+      try {
+        await window.GhostClaim.cancel(claimId);
+      } catch (e) {
+        outgoing.splice(idx, 0, req);
+        window.patchGhostClaimRow(claimId, null, req, "sent");
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't withdraw that request", "error");
+        }
+        return;
+      } finally {
+        this._busy.delete(busyKey);
+      }
+      // "Cancelled", reusing the declined chip's past tense — the row holds
+      // its place and drops on the next _load(), like every other verb here.
+      this._claimResolved.set(claimId, "cancelled");
+      window.patchGhostClaimRow(claimId, "cancelled");
     }
 
     async _accept(requestId, userId) {

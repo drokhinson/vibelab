@@ -5408,6 +5408,38 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* No press lift: nothing here is waiting on another tap. */
 .buddies-row--resolved:active { transform: none; }
 
+/* ── Ghost account claims (migration 069) ─────────────────────────────────────
+   Three sections on the Buddies screen — "Is this you?", "Link requests" and
+   "Link requests sent" — all built out of .buddies-row so they read as the same
+   screen rather than a transplant. Only the differences live here.
+
+   Like .buddies-row--resolved above, these resolve --polaroid-* to the app's
+   CHROME tokens: the Buddies screen is a spoke screen, not paper
+   (.claude/rules/theming.md §6). */
+.ghost-claim-section__lede {
+  font-size: 0.78rem;
+  color: var(--polaroid-muted);
+  margin: -0.25rem 0 0.5rem;
+}
+/* Unlike a buddy row, a claim row is not itself a link — there is no profile
+   behind a ghost. The buttons are the only targets, so the row must not offer
+   a pointer or a press lift it cannot honour. */
+.ghost-claim-row { cursor: default; }
+.ghost-claim-row:active { transform: none; }
+.ghost-claim-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+/* The ghost's name is the thing being claimed, so it carries the emphasis
+   while the owner's name stays ordinary weight around it. */
+.ghost-claim-row .buddies-row__name { font-weight: 400; }
+.ghost-claim-row .buddies-row__name strong {
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+
 /* Destructive icon button — tints the glyph and outlines on hover so the X
    reads as a destructive action even before the confirm. The icon inherits it
    through currentColor; the `i` selector covers the frame before
