@@ -6564,19 +6564,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   outline-offset: -3px;
 }
 .cascade-where__body { flex: 1 1 auto; min-width: 0; }
-.cascade-where__value,
-.cascade-where__hint {
+.cascade-where__value {
   display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .cascade-where__value { font-size: 0.97rem; font-weight: 600; line-height: 1.2; }
 /* Nothing recorded is a state, not an error — muted, not rust. */
 .cascade-where__value--empty { font-weight: 500; color: var(--polaroid-muted); }
-.cascade-where__hint {
-  margin-top: 3px;
-  font-size: 0.74rem;
-  color: var(--polaroid-muted);
-}
 .cascade-where__caret { flex: none; color: var(--polaroid-muted); }
 
 /* ── Play tab, Host half — heading + the option-card list ───────────────── */

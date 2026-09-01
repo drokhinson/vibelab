@@ -1774,8 +1774,8 @@
      * thing this app should have; showing it also makes it correctable, which
      * is the only way the eventual by-country numbers are worth reading.
      *
-     * Country only, and the hint says so: nobody should have to open the sheet
-     * to find out how precise "where" is.
+     * The row itself is just the country: how precise "where" is, and why it
+     * is kept, is spelled out in the picker sheet rather than under the value.
      */
     _renderCountryCard() {
       const code = this._ps.countryCode;
@@ -1790,7 +1790,6 @@
               <span class="cascade-where__value${name ? "" : " cascade-where__value--empty"}">${
                 name ? escapeHtml(name) : "Not recorded"
               }</span>
-              <span class="cascade-where__hint">Country only, so plays can be counted by region</span>
             </span>
             <i data-icon="chevron-down" class="w-4 h-4 cascade-where__caret"></i>
           </button>
