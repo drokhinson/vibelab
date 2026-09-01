@@ -5775,6 +5775,52 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* No press lift: nothing here is waiting on another tap. */
 .buddies-row--resolved:active { transform: none; }
 
+/* ── In-flight placeholder ────────────────────────────────────────────────────
+   Stands in for "Buddies you may know" and "Is this you?" while their two
+   uncached fetches are in the air — see buddies-view.js#_renderSuggestionsSkeleton
+   for why it carries no heading. Reuses the row shell so it occupies roughly the
+   height the real rows will, and reuses importExpPulse rather than introducing a
+   second skeleton animation (same call the import-expansions rows made).
+
+   Bars are --polaroid-line: this is a spoke screen, so that alias resolves to
+   the app's chrome tokens and reads on both grounds (theming.md §6). */
+.buddies-skel__row {
+  pointer-events: none;
+  cursor: default;
+}
+.buddies-skel__avatar,
+.buddies-skel__bar {
+  display: block;
+  background: var(--polaroid-line);
+  animation: importExpPulse 1.2s ease-in-out infinite;
+}
+.buddies-skel__avatar {
+  flex: none;
+  width: 28px;               /* .user-badge--sm */
+  height: 28px;
+  border-radius: 50%;
+}
+.buddies-skel__bar { border-radius: 4px; }
+.buddies-skel__bar--name { width: 45%; height: 11px; }
+.buddies-skel__bar--sub  { width: 65%; height: 9px; margin-top: 6px; opacity: 0.7; }
+/* Stagger, so the block reads as one loading surface rather than a flash. */
+.buddies-skel__row:nth-child(2) .buddies-skel__avatar,
+.buddies-skel__row:nth-child(2) .buddies-skel__bar { animation-delay: 160ms; }
+.buddies-skel__row:nth-child(2) .buddies-skel__bar--name { width: 60%; }
+.buddies-skel__row:nth-child(2) .buddies-skel__bar--sub  { width: 40%; }
+/* The same bar reused as the sub-line of a bundle-seeded link request, where it
+   stands alone in .buddies-row__when rather than under a name bar — so it drops
+   the stacking margin it needs there. See renderGhostClaimRequests. */
+.buddies-row__when > .buddies-skel__bar--sub {
+  width: 55%;
+  margin-top: 2px;
+}
+/* Slowed, not killed — the precedent set by .shelf-more__spinner below. */
+@media (prefers-reduced-motion: reduce) {
+  .buddies-skel__avatar,
+  .buddies-skel__bar { animation-duration: 3.2s; }
+}
+
 /* ── Ghost account claims (migration 070) ─────────────────────────────────────
    Three sections on the Buddies screen — "Is this you?", "Link requests" and
    "Link requests sent" — all built out of .buddies-row so they read as the same

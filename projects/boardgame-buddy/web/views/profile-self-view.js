@@ -41,6 +41,10 @@
       // it was painted from — so accepting from the Buddies spoke and coming
       // back finds the corner already clear.
       this.listen("buddyRequestCount", () => this.render());
+      // And the other half of that same card's badge — it sums buddy requests
+      // with ghost link requests (see _renderBuddiesPreview), so answering a
+      // link request on the spoke has to clear the corner here too.
+      this.listen("ghostClaimRequestCount", () => this.render());
       // Same for the badges: the spoke marks them seen on its way out, and the
       // hub behind it must not still be advertising them when the user
       // returns.

@@ -172,6 +172,12 @@
    * both are "someone is waiting on you", and separating them by half a
    * screen would make the second one easy to miss.
    *
+   * A row seeded from the profile bundle (buddies-view.js#_seedRequestsFromBundle)
+   * arrives without play_count / last_played_at — that block does not join the
+   * plays. Those rows paint a pulsing bar for the sub-line until GET
+   * /ghost-claims lands, rather than a flat "0 of your plays", which would be
+   * wrong rather than merely unknown.
+   *
    * @param {Array} incoming GhostClaimResponse[] with direction "incoming"
    * @param {{stateFor: (id: string) => string|null}} opts
    */
@@ -197,7 +203,9 @@
                   <strong>${escapeHtml(r.ghost_display_name)}</strong>
                 </div>
                 <div class="buddies-row__when">
-                  ${escapeHtml(playsLine(r.play_count, r.last_played_at, "of your plays"))}
+                  ${r.play_count == null
+                    ? `<span class="buddies-skel__bar buddies-skel__bar--sub" aria-hidden="true"></span>`
+                    : escapeHtml(playsLine(r.play_count, r.last_played_at, "of your plays"))}
                 </div>
               </div>
               <div class="ghost-claim-row__actions" data-claim-actions="${escapeAttr(r.id)}">
