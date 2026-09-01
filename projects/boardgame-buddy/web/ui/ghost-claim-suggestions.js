@@ -38,10 +38,15 @@
     cancelled: "Withdrawn",
   };
 
-  /** "12 plays · last 4 Aug 2026" — the line under every row in both lists. */
-  function playsLine(playCount, lastPlayedAt, prefix) {
+  /**
+   * "12 plays · last 4 Aug 2026" — the line under every row in both lists.
+   * `noun` lets the incoming list say "7 of your plays" while the suggestion
+   * list says "12 plays"; the date always comes last, or the possessive ends
+   * up stranded after it.
+   */
+  function playsLine(playCount, lastPlayedAt, noun) {
     const n = Number(playCount) || 0;
-    const plays = `${prefix || ""}${n} ${n === 1 ? "play" : "plays"}`;
+    const plays = `${n} ${noun || (n === 1 ? "play" : "plays")}`;
     return lastPlayedAt ? `${plays} · last ${formatDate(lastPlayedAt)}` : plays;
   }
 
@@ -192,8 +197,7 @@
                   <strong>${escapeHtml(r.ghost_display_name)}</strong>
                 </div>
                 <div class="buddies-row__when">
-                  ${escapeHtml(playsLine(r.play_count, r.last_played_at, "on "))}
-                  of yours
+                  ${escapeHtml(playsLine(r.play_count, r.last_played_at, "of your plays"))}
                 </div>
               </div>
               <div class="ghost-claim-row__actions" data-claim-actions="${escapeAttr(r.id)}">

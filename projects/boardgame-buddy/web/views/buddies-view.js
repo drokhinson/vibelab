@@ -265,6 +265,10 @@
           </section>
         ` : ""}
 
+        ${window.renderGhostClaimsSent(this._claimRequests.outgoing, {
+          stateFor: (id) => this._claimStateFor(id),
+        })}
+
         <section class="buddies-section">
           <h3>Buddies (${this._buddies.length})</h3>
           ${this._buddies.length === 0
@@ -298,10 +302,6 @@
           cancelHandler: "window.buddiesView._cancelFromTile",
           flush: true,
           stateFor: (id) => this._tileStateFor(id),
-        })}
-
-        ${window.renderGhostClaimsSent(this._claimRequests.outgoing, {
-          stateFor: (id) => this._claimStateFor(id),
         })}
 
         ${window.renderGhostClaimSection(this._claimSuggestions, {
