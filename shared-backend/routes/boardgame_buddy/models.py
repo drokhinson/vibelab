@@ -14,6 +14,9 @@ from pydantic import (
 
 from .constants import (
     BggAuthState,
+    BggPullChange,
+    BggPushChange,
+    BggUnpushableReason,
     BuddySuggestionSource,
     CollectionStatus,
     FeedCardKind,
@@ -161,6 +164,107 @@ class BggSyncStatus(BaseModel):
     # without polling a separate endpoint. Empty until at least one
     # previously-unknown game has been fetched from BGG.
     session_game_names: list[str] = []
+
+
+class BggDiffItem(BaseModel):
+    """One planned BgB -> BGG change, as one row of the comparison."""
+    bgg_id: int
+    game_id: Optional[str] = None          # None for a clear — no local row
+    game_name: str
+    thumbnail_url: Optional[str] = None
+    change: BggPushChange
+    local_status: Optional[CollectionStatus] = None    # None for a clear
+    remote_status: Optional[CollectionStatus] = None   # None for an add
+    # True when POST /bgg/check had to import this game into the catalog just
+    # to be able to name it here. The FE tags those rows, because they are the
+    # surprising ones: they are NOT on the BgB shelf, so the push clears them.
+    newly_catalogued: bool = False
+
+
+class BggPullItem(BaseModel):
+    """The same comparison read the other way: what an import would do here."""
+    bgg_id: int
+    game_name: str
+    change: BggPullChange
+    local_status: Optional[CollectionStatus] = None
+    remote_status: Optional[CollectionStatus] = None
+
+
+class BggUnpushableItem(BaseModel):
+    """A BgB row that cannot be represented on BoardGameGeek at all."""
+    game_id: str
+    game_name: str
+    reason: BggUnpushableReason
+
+
+class BggDiffResponse(BaseModel):
+    """Result of POST /bgg/check — the comparison both sync buttons act on.
+
+    Carries BOTH directions from one sweep: the push sheet and the pull sheet
+    are the same data read opposite ways, and re-sweeping BGG for the second
+    one would double a 12-second call for no new information.
+    """
+    bgg_username: str
+    checked_at: datetime
+    in_sync_count: int = 0
+    local_total: int = 0
+    remote_total: int = 0
+    # Full counts even when the item lists are truncated for payload size.
+    push_total: int = 0
+    pull_total: int = 0
+    push_changes: list[BggDiffItem] = []
+    pull_changes: list[BggPullItem] = []
+    unpushable: list[BggUnpushableItem] = []
+    truncated: bool = False
+    # Games queued for a catalog-only import by this check. The FE polls
+    # /bgg/sync/status until these drain, then re-checks to get their names.
+    catalog_pending: int = 0
+    # At least one BGG batch gave up warming. The sweep is therefore partial,
+    # and a partial sweep reads as "not on BGG" — so the push is refused
+    # rather than allowed to clear flags off games it simply did not see.
+    warm_up_retry_pending: bool = False
+
+
+class BggPushBody(BaseModel):
+    """POST /bgg/push. `checked_at` echoes the comparison the user reviewed so
+    the response can tell them if the plan moved underneath it."""
+    checked_at: Optional[datetime] = None
+
+
+class BggPushSummary(BaseModel):
+    """Result of POST /bgg/push — what was queued, before the worker runs."""
+    bgg_username: str
+    queued: int = 0
+    adds: int = 0
+    updates: int = 0
+    clears: int = 0
+    unpushable: int = 0
+    plan_changed: bool = False
+    warm_up_retry_pending: bool = False
+
+
+class BggPushError(BaseModel):
+    """One game whose push failed, named so the user knows what is unresolved."""
+    game_name: str
+    message: str
+
+
+class BggPushStatus(BaseModel):
+    """Result of GET /bgg/push/status. The FE poll target while a push drains."""
+    bgg_username: Optional[str] = None
+    auth_state: BggAuthState = BggAuthState.UNLINKED
+    pending_count: int = 0
+    errored_count: int = 0
+    last_completed_at: Optional[datetime] = None
+    session_started_at: Optional[datetime] = None
+    session_total: int = 0
+    session_done: int = 0
+    session_errored: int = 0
+    session_game_names: list[str] = []
+    # No import counterpart: a half-failed import can be re-run and idempotency
+    # cleans up, but a half-failed push has left flags on a third-party account
+    # in an unknown state, so the user has to be told which games.
+    session_errors: list[BggPushError] = []
 
 
 # ── Games ─────────────────────────────────────────────────────────────────────

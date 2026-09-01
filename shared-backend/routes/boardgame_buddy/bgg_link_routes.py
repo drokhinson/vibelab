@@ -818,6 +818,16 @@ async def sync_bgg(
     sb = get_supabase()
     username = _require_linked_username(sb, user.user_id)
 
+    # Both directions drive the same BGG session, and an import landing
+    # mid-push would overwrite shelf rows the queued plan was computed from.
+    # Enforced here, not only in the UI: two tabs, two devices.
+    push_state = sb.rpc("bgb_bgg_push_status", {"p_user": user.user_id}).execute().data or {}
+    if int(push_state.get("pending_count") or 0):
+        raise HTTPException(
+            status_code=409,
+            detail="A BoardGameGeek push is still running. Wait for it to finish, then try again.",
+        )
+
     summary = await _run_sync(user.user_id, username)
 
     # Schedule the worker to drain any missing-game queue we just created
