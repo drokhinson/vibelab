@@ -37,18 +37,16 @@
 
     async onMount() {
       this.listen("user", () => this.render());
-      // The Buddies card's request badge reads the store slot, not the bundle
-      // it was painted from — so accepting from the Buddies spoke and coming
-      // back finds the corner already clear.
-      this.listen("buddyRequestCount", () => this.render());
-      // And the other half of that same card's badge — it sums buddy requests
-      // with ghost link requests (see _renderBuddiesPreview), so answering a
-      // link request on the spoke has to clear the corner here too.
-      this.listen("ghostClaimRequestCount", () => this.render());
-      // Same for the badges: the spoke marks them seen on its way out, and the
-      // hub behind it must not still be advertising them when the user
-      // returns.
-      this.listen("achievementUnseenCount", () => this.render());
+      // Every hub card's corner badge reads its store slot, not the bundle the
+      // card was painted from — so answering a buddy request, a link request
+      // or an "is this you?" on the Buddies spoke, or marking badges seen on
+      // the Achievements spoke, finds the corner already clear on the way
+      // back. Which slots exist is domain/notifications.js's table; this view
+      // just listens to all of them rather than naming four by hand and
+      // forgetting the fifth.
+      for (const slot of window.BgbNotifications.slots()) {
+        this.listen(slot, () => this.render());
+      }
       this._loading = true;
       this._ach = window.Achievements.cached();
       this.render();
@@ -280,6 +278,14 @@
       // Counted off the payload this card is about to paint, not off the
       // store slot the nav dot reads: the card should badge exactly what it is
       // showing. Both are computed from the same seen-set on disk.
+      //
+      // So this deliberately does NOT go through
+      // BgbNotifications.forSection("achievements") the way the Buddies card
+      // goes through forSection("buddies"). The registry row is still correct
+      // — this is where an unseen badge resolves, and it belongs on the tab's
+      // dot — but between the cached payload painting and the fresh one
+      // landing, the slot and this card can name different numbers, and the
+      // one under the user's eyes is the one to trust.
       const unseen = window.Achievements.unseen(a).length;
       const picks = this._badgePicks(a.achievements);
       const body = `
@@ -372,21 +378,13 @@
           </div>
         `;
       }
-      // Incoming requests, not buddies — things to do rather than things to
-      // look at, which is why they get the corner badge while the roster size
-      // stays a sub-head. Buddy requests and ghost link requests are summed
-      // because both are answered on the one screen this card opens; the label
+      // Things to do rather than things to look at, which is why they get the
+      // corner badge while the roster size stays a sub-head. Buddy requests,
+      // ghost link requests and "is this you?" suggestions are summed because
+      // all three are answered on the one screen this card opens — that is
+      // what `section: "buddies"` means in domain/notifications.js. The label
       // names them separately so the badge is never just an unexplained "3".
-      const waitingBuddies = window.Buddy.pendingCount();
-      const waitingClaims = window.GhostClaim ? window.GhostClaim.pendingCount() : 0;
-      const waiting = waitingBuddies + waitingClaims;
-      const labelParts = [];
-      if (waitingBuddies) {
-        labelParts.push(`${waitingBuddies} buddy request${waitingBuddies === 1 ? "" : "s"}`);
-      }
-      if (waitingClaims) {
-        labelParts.push(`${waitingClaims} link request${waitingClaims === 1 ? "" : "s"}`);
-      }
+      const { total: waiting, parts } = window.BgbNotifications.forSection("buddies");
       return this._previewCard({
         icon: "users",
         title: "Buddies",
@@ -394,7 +392,7 @@
         route: "buddies",
         body,
         badge: waiting,
-        badgeLabel: `${labelParts.join(" and ")} waiting`,
+        badgeLabel: `${window.BgbNotifications.phrase(parts)} waiting`,
       });
     }
 

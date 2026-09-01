@@ -7,6 +7,10 @@
 // the approval running that same merge.
 
 (function () {
+  // Keys of the suggestions currently awaiting an answer. See
+  // GhostClaim.setSuggestions below for why this is a set and not a number.
+  const _suggestionKeys = new Set();
+
   class GhostClaim {
     // ── Reads ───────────────────────────────────────────────────────────────
     //
@@ -107,6 +111,61 @@
     static publishPendingFromBundle(bundle) {
       if (!bundle || !Array.isArray(bundle.ghost_claims_incoming)) return;
       GhostClaim.setPendingCount(bundle.ghost_claims_incoming.length);
+    }
+
+    // ── Actionable suggestion count ─────────────────────────────────────────
+    // The FOURTH source on the Profile tab's dot, and the other direction from
+    // the count above: these are ghosts on a buddy's roster that look like the
+    // viewer, waiting on a "That's me" or a "Not me".
+    //
+    // A Set of keys rather than a bare integer, because a suggestion can be
+    // settled from a screen that never loaded the list — the claim sheet opens
+    // off any play's scoreboard, and reaches wider than this list does. A
+    // decrement keyed by identity is a no-op for a ghost that was never
+    // suggested; a blind `count - 1` would quietly undercount what is really
+    // waiting. The set is in memory only: it is rebuilt by the boot warm-up
+    // and by every visit to the Buddies screen, and dropped on sign-out.
+
+    /** `${owner_user_id}|${ghost_name_key}` — the key ui/ghost-claim-suggestions.js uses. */
+    static suggestionKey(s) {
+      return `${s.owner_user_id}|${s.ghost_name_key}`;
+    }
+
+    /**
+     * Rebuild the set from a fetched list and publish its size.
+     *
+     * Only rows with no claim of their own count. The RPC deliberately keeps a
+     * row whose claim is already pending — so the button doesn't vanish under
+     * the finger that just tapped it — and hands it back with
+     * claim_status='pending'. That row is settled; badging it would advertise
+     * work the user has already done.
+     */
+    static setSuggestions(list) {
+      _suggestionKeys.clear();
+      for (const s of Array.isArray(list) ? list : []) {
+        if (!s || s.claim_status) continue;
+        _suggestionKeys.add(GhostClaim.suggestionKey(s));
+      }
+      GhostClaim._publishSuggestionCount();
+    }
+
+    /** One suggestion acted on — claimed or dismissed. No-op if unknown. */
+    static settleSuggestion(key) {
+      if (!_suggestionKeys.delete(key)) return;
+      GhostClaim._publishSuggestionCount();
+    }
+
+    static suggestionCount() { return window.store.get("ghostClaimSuggestionCount") || 0; }
+
+    /** Sign-out. The next account's near-matches are not this one's. */
+    static forgetSuggestions() {
+      _suggestionKeys.clear();
+      // No publish: store.reset() zeroes the slot on the same sign-out, and
+      // publishing into a store that is about to be rebuilt is noise.
+    }
+
+    static _publishSuggestionCount() {
+      window.store.set("ghostClaimSuggestionCount", _suggestionKeys.size);
     }
 
     /**

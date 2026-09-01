@@ -64,9 +64,9 @@
       this._claimSuggestions = [];
       this._claimRequests = { incoming: [], outgoing: [] };
       // True while /buddies/suggested and /ghost-claims/suggestions are in the
-      // air. Neither list has a count anywhere before it answers, so this is
-      // the only thing that distinguishes "nothing to suggest" from "we have
-      // not asked yet" — see _renderSuggestionsSkeleton.
+      // air. Neither list arrives with the bundle, so this is the only thing
+      // that distinguishes "nothing to suggest" from "we have not asked yet" —
+      // see _renderMayKnowSkeleton and _renderGhostSuggestionsSkeleton.
       this._suggestionsPending = false;
       // Same verb-not-state reasoning as _resolved above, keyed by
       // "<ownerId>|<nameKey>" for a suggestion and by claim id for a request.
@@ -175,8 +175,10 @@
       // Ghost claims, both directions. Uncached for the same reason as the
       // rail (GhostClaim.suggestions), and null-on-failure for the same reason
       // as requests: the Profile dot must not be cleared because the network
-      // dropped.
-      const claimSuggestionsPromise = window.GhostClaim.suggestions().catch(() => []);
+      // dropped. Suggestions caught [] rather than null until they joined that
+      // dot — which is exactly the failure the line above describes, so both
+      // catch null now.
+      const claimSuggestionsPromise = window.GhostClaim.suggestions().catch(() => null);
       const claimsPromise = window.GhostClaim.list().catch(() => null);
       try {
         // Buddies + ghosts + played-with come from the SWR-cached aggregate
@@ -215,6 +217,10 @@
       if (requests) this._publishRequestCount();
       this._suggested = suggested || [];
       this._claimSuggestions = claimSuggestions || [];
+      // The freshest writer of the suggestion count, same as _publishClaimCount
+      // below is for the request count — and the one that seeds the key set the
+      // claim sheet decrements from anywhere else in the app.
+      if (claimSuggestions) window.GhostClaim.setSuggestions(claimSuggestions);
       this._claimRequests = claims || { incoming: [], outgoing: [] };
       if (claims) this._publishClaimCount();
       // The lists are re-forming, so this session's past-tense chips retire —
@@ -265,6 +271,14 @@
       this._buddiesPage = Math.min(this._buddiesPage, buddiesPages);
       const buddiesSlice = pageSlice(this._buddies, this._buddiesPage);
 
+      // Section order is deliberate: everything the user can CLEAR sits above
+      // everything they can only browse. Incoming requests, link requests and
+      // "Is this you?" are the three lists waiting on an answer, so they come
+      // first and shrink to nothing once answered; Sent and Link requests sent
+      // are waiting on someone else; then the durable roster, the may-know
+      // rail and Played with, none of which ever empty. Every clearable
+      // section renders "" when it has no rows, so an account with nothing
+      // pending sees the roster right under the Add button.
       this.container.innerHTML = `
         ${this._renderTopbar()}
 
@@ -303,6 +317,12 @@
 
         ${window.renderGhostClaimRequests(this._claimRequests.incoming, {
           stateFor: (id) => this._claimStateFor(id),
+        })}
+
+        ${this._renderGhostSuggestionsSkeleton()}
+
+        ${window.renderGhostClaimSection(this._claimSuggestions, {
+          stateFor: (key) => this._claimStateFor(key),
         })}
 
         ${this._requests.outgoing.length > 0 ? `
@@ -355,17 +375,13 @@
           ${this._renderPager(this._buddiesPage, buddiesPages, "_goBuddiesPage", "Buddies pagination")}
         </section>
 
-        ${this._renderSuggestionsSkeleton()}
+        ${this._renderMayKnowSkeleton()}
 
         ${window.renderSuggestedBuddiesRail(this._suggested, {
           addHandler: "window.buddiesView._request",
           cancelHandler: "window.buddiesView._cancelFromTile",
           flush: true,
           stateFor: (id) => this._tileStateFor(id),
-        })}
-
-        ${window.renderGhostClaimSection(this._claimSuggestions, {
-          stateFor: (key) => this._claimStateFor(key),
         })}
 
         ${this._renderPlayedWithSection()}
@@ -385,31 +401,59 @@
     }
 
     /**
-     * The one placeholder standing in for every section still in flight here:
-     * "Buddies you may know" and "Is this you?".
+     * The placeholder standing in for "Buddies you may know" while its own
+     * fetch is out.
      *
-     * Deliberately UNLABELLED. Neither list has a count anywhere before its own
-     * fetch answers — not in the profile bundle, not in /bootstrap — so a
-     * heading would be a promise the app cannot keep, and the whole section
-     * would have to vanish when the answer is "nothing". That is exactly the
-     * failure ui/ghost-claim-suggestions.js argues against: the app announcing
-     * that it looked for you and found nothing, every single visit. Two
-     * anonymous pulsing rows say "something is still loading" and claim
-     * nothing about what — which is all this slot can honestly say.
+     * Deliberately UNLABELLED. That list has no count anywhere before it
+     * answers — not in the profile bundle, not in /bootstrap — so a heading
+     * would be a promise the app cannot keep, and the whole section would have
+     * to vanish when the answer is "nothing". That is exactly the failure
+     * ui/ghost-claim-suggestions.js argues against: the app announcing that it
+     * looked for you and found nothing, every single visit. Two anonymous
+     * pulsing rows say "something is still loading" and claim nothing about
+     * what — which is all this slot can honestly say.
      *
      * The request sections above need none of this: the bundle carries their
      * rows, so they paint for real (see _seedRequestsFromBundle).
      */
-    _renderSuggestionsSkeleton() {
+    _renderMayKnowSkeleton() {
       if (!this._suggestionsPending) return "";
       // Something already arrived and is painting below — nothing left to
       // stand in for.
-      if (this._suggested.length || this._claimSuggestions.length) return "";
+      if (this._suggested.length) return "";
+      return this._skeletonRows(2, "Looking for buddies you may know…");
+    }
+
+    /**
+     * The same placeholder for "Is this you?", which now sits ABOVE the
+     * roster. Height, not decoration: this list is uncached and is not in the
+     * profile bundle, so without a reservation the section pops in mid-load
+     * and shoves the whole screen down under the user's thumb.
+     *
+     * Its sibling above cannot know how much to reserve; this one can. The
+     * boot warm-up publishes the actionable count into the store
+     * (init.js#warmGhostSuggestionsWhenIdle → GhostClaim.setSuggestions), so
+     * by the time anyone reaches this screen the app already knows roughly how
+     * many rows are coming — and, just as importantly, knows when the answer
+     * is none, which is the common case and reserves nothing at all.
+     *
+     * Capped at 3: past that the reservation is worse than the shift it saves.
+     */
+    _renderGhostSuggestionsSkeleton() {
+      if (!this._suggestionsPending) return "";
+      if (this._claimSuggestions.length) return "";
+      const expected = window.GhostClaim ? window.GhostClaim.suggestionCount() : 0;
+      if (!expected) return "";
+      return this._skeletonRows(Math.min(expected, 3), "Looking for plays that might be yours…");
+    }
+
+    /** `n` anonymous pulsing rows under a screen-reader-only status line. */
+    _skeletonRows(n, status) {
       return `
         <section class="buddies-section buddies-skel">
-          <p class="bgb-vis-hidden" role="status">Looking for buddies you may know…</p>
+          <p class="bgb-vis-hidden" role="status">${escapeHtml(status)}</p>
           <ul class="buddies-list" aria-hidden="true">
-            ${[0, 1].map(() => `
+            ${Array.from({ length: n }, () => `
               <li class="buddies-row buddies-skel__row">
                 <span class="buddies-skel__avatar"></span>
                 <div class="buddies-row__body">
@@ -1107,6 +1151,10 @@
         this._busy.delete(busyKey);
       }
       this._claimResolved.set(key, "requested");
+      // Settled — off the badge now, not at the next _load(). No rollback
+      // counterpart: the failure path above returns before this line, so the
+      // count was never wrong to begin with.
+      window.GhostClaim.settleSuggestion(key);
       window.patchGhostClaimRow(key, "requested");
     }
 
@@ -1136,6 +1184,7 @@
       // _load(), where the whole section re-forms. Removing it here would
       // collapse the list under the finger that just tapped it.
       this._claimResolved.set(key, "dismissed");
+      window.GhostClaim.settleSuggestion(key);
       window.patchGhostClaimRow(key, "dismissed");
     }
 

@@ -253,6 +253,7 @@
     }
     warmGameBundlesWhenIdle();
     warmOwnedShelfWhenIdle();
+    warmGhostSuggestionsWhenIdle();
   }
 
   // The per-owned-game detail bundles are no longer part of /bootstrap (they're
@@ -274,6 +275,33 @@
       const me = window.store.get("user");
       if (!me || !me.id) return;
       window.Collection.shelf(me.id, "owned").catch(() => {});
+    };
+    if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 5000 });
+    else setTimeout(kick, 0);
+  }
+
+  // "Is this you?" → the Profile tab's dot, one call per page load.
+  //
+  // This is the only signal on that dot with nowhere else to come from: buddy
+  // requests and incoming claims ride the profile bundle, and unseen badges are
+  // read off this device's own receipts. bgb_ghost_claim_suggestions could join
+  // the bundle, and deliberately does not — it scans every accepted buddy's
+  // plays and play_players, groups by normalized name and runs trigram
+  // similarity over the lot, and the bundle is on /bootstrap AND on every
+  // tab-focus warmRefresh. That is the app's two hottest paths, paying for one
+  // integer. Once, on idle, after the first screen is up, is the right price.
+  //
+  // Unlike /achievements — a write as well as a read, which is why boot reads
+  // its cache instead of fetching — this RPC is STABLE, so firing it to light a
+  // dot costs nothing but time. Failure leaves the count where it was: the
+  // Buddies screen republishes on its own next visit.
+  function warmGhostSuggestionsWhenIdle() {
+    if (!window.GhostClaim || !window.GhostClaim.suggestions) return;
+    const kick = () => {
+      if (!window.store.get("user")) return;
+      window.GhostClaim.suggestions()
+        .then((list) => window.GhostClaim.setSuggestions(list))
+        .catch(() => {});
     };
     if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 5000 });
     else setTimeout(kick, 0);
@@ -421,41 +449,44 @@
     });
   }
 
-  // Everything waiting behind the Profile tab → one dot on it. It sits at this
-  // level for the same reason the offline banner does: the nav bar is app
-  // chrome, it outlives every view, and something that lands while the user is
-  // on the Feed has to be announced by a surface already on screen.
+  // Everything waiting behind a nav tab → one dot on it. It sits at this level
+  // for the same reason the offline banner does: the nav bar is app chrome, it
+  // outlives every view, and something that lands while the user is on the
+  // Feed has to be announced by a surface already on screen.
   //
-  // Three sources today — pending buddy requests, unseen achievements, and
-  // incoming ghost account claims — and deliberately ONE dot for all of them.
-  // Three tabs of chrome is the wrong place to read a figure or to distinguish
-  // kinds of news; the dot says "there is something here", and the hub's
-  // cards, one tap away, carry the counts (profile-self-view.js#_countBadge).
+  // Four sources behind Profile today — pending buddy requests, incoming ghost
+  // account claims, "is this you?" suggestions and unseen achievements — and
+  // deliberately ONE dot for all of them. A tab of chrome is the wrong place
+  // to read a figure or to distinguish kinds of news; the dot says "there is
+  // something here", and the hub's cards, one tap away, carry the counts
+  // (profile-self-view.js#_countBadge).
+  //
+  // Which slot belongs to which tab is domain/notifications.js's table, not
+  // this function's: it walks every tab in the bar and asks. A tab with no
+  // .bgb-nav__dot in its markup is skipped, so lighting a second tab is a span
+  // in index.html plus a row in the registry — never an edit here.
   //
   // Reads the store rather than the subscriber's argument, because it fires
-  // for either slot and needs both — and because store.reset() calls
+  // for one slot and needs them all — and because store.reset() calls
   // subscribers with null after zeroing the data.
-  function syncNavProfileDot() {
-    const tab = document.querySelector('.bgb-nav__tab[data-nav="profile-self"]');
-    const dot = tab && tab.querySelector(".bgb-nav__dot");
-    if (!dot) return;
-    const requests = Math.max(0, Number(window.store.get("buddyRequestCount")) || 0);
-    const badges = Math.max(0, Number(window.store.get("achievementUnseenCount")) || 0);
-    const claims = Math.max(0, Number(window.store.get("ghostClaimRequestCount")) || 0);
-    dot.hidden = requests + badges + claims === 0;
-    // The dot is aria-hidden, so the tab's own name is what has to change —
-    // otherwise the one control that knows something is waiting announces
-    // itself identically either way.
-    const parts = [];
-    if (requests) parts.push(`${requests} buddy request${requests === 1 ? "" : "s"} waiting`);
-    if (badges) parts.push(`${badges} new achievement${badges === 1 ? "" : "s"}`);
-    if (claims) parts.push(`${claims} link request${claims === 1 ? "" : "s"} waiting`);
-    if (parts.length) tab.setAttribute("aria-label", `Profile — ${parts.join(", ")}`);
-    else tab.removeAttribute("aria-label");
+  function syncNavDots() {
+    if (!window.BgbNotifications) return;
+    document.querySelectorAll(".bgb-nav__tab[data-nav]").forEach((tab) => {
+      const dot = tab.querySelector(".bgb-nav__dot");
+      if (!dot) return;
+      const { total, parts } = window.BgbNotifications.forTab(tab.dataset.nav);
+      dot.hidden = total === 0;
+      // The dot is aria-hidden, so the tab's own name is what has to change —
+      // otherwise the one control that knows something is waiting announces
+      // itself identically either way. The label is rebuilt from the tab's
+      // resting name so a tab that empties out doesn't keep a stale one.
+      const base = tab.querySelector(".bgb-nav__label");
+      const name = (base && base.textContent.trim()) || tab.dataset.nav;
+      if (parts.length) tab.setAttribute("aria-label", `${name} — ${parts.join(", ")} waiting`);
+      else tab.removeAttribute("aria-label");
+    });
   }
-  window.store.subscribe("buddyRequestCount", syncNavProfileDot);
-  window.store.subscribe("achievementUnseenCount", syncNavProfileDot);
-  window.store.subscribe("ghostClaimRequestCount", syncNavProfileDot);
+  if (window.BgbNotifications) window.BgbNotifications.subscribe(syncNavDots);
 
   // Pending uploads live in the header. Two keys drive it: the count itself,
   // and connectivity (which changes what the dialog offers).
@@ -532,6 +563,9 @@
     // next account on this phone inherits them.
     if (window.BgbAchievementPopup) window.BgbAchievementPopup.reset();
     if (window.Achievements) window.Achievements.forget();
+    // Same reasoning, other signal: the next account's near-matches are not
+    // this one's, and the key set behind the count outlives store.reset().
+    if (window.GhostClaim) window.GhostClaim.forgetSuggestions();
     if (window.bgbCache) window.bgbCache.unbindUser();
     window.store.reset();
     window.router.go("auth");
