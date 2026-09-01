@@ -272,7 +272,13 @@
         (w.user_id && me && w.user_id === me.id) ||
         (me && (w.name || "") === (me.display_name || ""))
       );
+      // Migration 005: one row can stand for a whole run of identical
+      // imported plays. The count leads the sub-line, because it is the thing
+      // that makes this row different from the one above it.
+      const n = p.group_count || 1;
+      const isRun = n > 1;
       const subParts = [];
+      if (isRun) subParts.push(`<span class="plays-list__run">${n} plays</span>`);
       if (winnerLabel) subParts.push(`<span class="plays-list__winner"><i data-icon="trophy" class="w-3 h-3"></i> ${winnerLabel}</span>`);
       if (playerCount > 0) subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
       const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
@@ -286,9 +292,12 @@
              { corner: true, pending: !this._statusMapReady, gameName: p.game_name },
            )}</span>`
         : "";
+      // A run row opens nothing: the popup shows ONE play, and picking an
+      // arbitrary member of 58 identical ones to present as "the" play would
+      // be a lie about what the row represents.
       return `
-        <li class="plays-list__row" data-play-id="${p.id}"
-            onclick="window.PlayDetailPopup.show('${p.id}')">
+        <li class="plays-list__row${isRun ? " plays-list__row--run" : ""}" data-play-id="${p.id}"
+            ${isRun ? "" : `onclick="window.PlayDetailPopup.show('${p.id}')"`}>
           <div class="plays-list__thumb">
             ${p.game_thumbnail
               ? `<img src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`

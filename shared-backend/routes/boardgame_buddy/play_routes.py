@@ -385,6 +385,13 @@ async def update_play(
         "played_at": body.played_at.isoformat(),
         "notes": body.notes,
         "photo_url": body.photo_url,
+        # Migration 005. An edited play leaves its imported run: the run's card
+        # says "58 identical plays", and the moment one of them carries a score
+        # or a different winner that sentence is false. Unconditional, unlike
+        # play_mode and country_code above — those are omitted-means-keep
+        # because the edit form doesn't offer them, whereas ANY edit here is
+        # itself the evidence that this play is no longer one of the crowd.
+        "import_group_id": None,
     }
     if body.play_mode is not None:
         update_payload["play_mode"] = body.play_mode.value

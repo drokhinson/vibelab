@@ -434,16 +434,22 @@
       const me = window.store && window.store.get && window.store.get("user");
       const viewer = me ? { id: me.id, display_name: me.display_name } : null;
       const firstPlay = card.plays[0];
+      // Count PLAYS, not cards. Since migration 005 one card can stand for a
+      // whole run of identical imported plays, so a night of 106 Carcassonne
+      // games arrives as six cards — and a header reading "played 6 games"
+      // would be the one number on screen that is wrong.
+      const playCount = card.plays.reduce((n, p) => n + (p.group_count || 1), 0);
       // When the session is a single play, surface the game name in the
-      // title ("You played Catan") instead of the count.
-      const gameNameForSingle = (card.plays.length === 1 && firstPlay && firstPlay.game)
+      // title ("You played Catan") instead of the count. A lone run card is
+      // not a single play, so it keeps the count.
+      const gameNameForSingle = (playCount === 1 && firstPlay && firstPlay.game)
         ? firstPlay.game.name
         : null;
       const title = formatSessionTitleHtml({
         participants: card.participants || [],
         viewer,
         loggerFallback: firstPlay && firstPlay.user,
-        gameCount: card.plays.length,
+        gameCount: playCount,
         gameNameForSingle,
       });
       // Every play is a tile of one of two widths now, so the rail needs no
@@ -638,7 +644,12 @@
   // Plays are identified by id; rails by kind alone, since their contents are
   // server-chosen and a reshuffle isn't worth a repaint mid-scroll.
   function cardsSig(cards) {
-    return cards.map((c) => (c.kind === "play" ? `p:${c.play_id}` : c.kind)).join("|");
+    // group_count rides in the signature: a play edited out of an imported run
+    // changes the card's count without changing its id, and a signature blind
+    // to that would skip the repaint that corrects the number.
+    return cards.map((c) => (
+      c.kind === "play" ? `p:${c.play_id}:${c.group_count || 1}` : c.kind
+    )).join("|");
   }
 
   function sessionKey(card) {

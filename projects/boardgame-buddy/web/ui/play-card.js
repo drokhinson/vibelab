@@ -89,20 +89,114 @@
     const variantClass = orient === "portrait" ? "play-card--tall" : "play-card--wide";
     const flippedAttr = s.flipped ? " is-flipped" : "";
 
+    // A run of identical imported plays (migration 005) is ONE card standing
+    // for many. It is a variant of this component rather than a component of
+    // its own (.claude/rules/ui-object-design.md §2): it is still a Play, it
+    // still flips, and it still lives in the session rail beside the ordinary
+    // cards. What changes is that the count is the headline and the back is a
+    // summary of the run — there is no single scorecard to show, and no photo
+    // to hydrate, because the run's whole claim is that its plays are alike.
+    const stack = (card.group_count || 1) > 1;
+    const stackClass = stack ? " play-card--stack" : "";
+
     return `
-      <article class="play-card ${variantClass}${flippedAttr}"
+      <article class="play-card ${variantClass}${stackClass}${flippedAttr}"
                data-play-id="${escapeAttr(card.play_id)}"
                style="--game-accent:${escapeAttr(accent)}"
                role="button" tabindex="0"
                aria-expanded="${s.flipped ? "true" : "false"}"
                onclick="window.playCardFlip.handleClick(event, '${escapeAttr(card.play_id)}')"
                onkeydown="window.playCardFlip.handleKey(event, '${escapeAttr(card.play_id)}')">
+        ${stack ? `<span class="play-card__stack-edge" aria-hidden="true"></span>
+        <span class="play-card__stack-edge play-card__stack-edge--2" aria-hidden="true"></span>` : ""}
         <div class="play-card__inner">
-          <div class="play-card__front">${renderFront(card, { photoSrc })}</div>
-          <div class="play-card__back">${renderBack(card, s)}</div>
+          <div class="play-card__front">${
+            stack ? renderStackFront(card) : renderFront(card, { photoSrc })
+          }</div>
+          <div class="play-card__back">${
+            stack ? renderStackBack(card) : renderBack(card, s)
+          }</div>
         </div>
       </article>
     `;
+  }
+
+  /**
+   * The front of a run card: the count, the game, and the one outcome every
+   * play in the run shares. No photo — a photograph of one of 58 identical
+   * plays would be claiming to be a specific evening.
+   */
+  function renderStackFront(card) {
+    const g = card.game || {};
+    const n = card.group_count || 1;
+    const me = window.store && window.store.get && window.store.get("user");
+    const gameName = escapeHtml(g.name || "Unknown game");
+    const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${escapeAttr(jsStr(g.name || ""))}'})`;
+    const thumb = g.thumbnail_url || g.image_url || "";
+    return `
+      <div class="play-card__photo play-card__photo--stack">
+        ${thumb
+          ? `<img class="play-card__stack-art" src="${escapeAttr(thumb)}" alt="" loading="lazy" />`
+          : ""}
+        <div class="play-card__stack-count">
+          <span class="play-card__stack-n">${n}</span>
+          <span class="play-card__stack-unit">plays</span>
+        </div>
+      </div>
+      <div class="play-card__caption">
+        <div class="play-card__title-row">
+          <a class="play-card__caption-name" data-no-flip onclick="${gameNav}">${gameName}</a>
+          <button class="play-card__open" type="button" data-no-flip
+                  aria-label="Open ${gameName}" title="Open ${gameName}"
+                  onclick="${gameNav}">
+            <i data-icon="arrow-up-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div class="play-card__meta-row">
+          <div class="play-card__caption-meta">${stackOutcome(card, me, n)}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  /** The back: what the run is, in one readable summary. */
+  function renderStackBack(card) {
+    const n = card.group_count || 1;
+    const me = window.store && window.store.get && window.store.get("user");
+    const g = card.game || {};
+    return `
+      <div class="play-card__back-body play-card__stack-back">
+        <div class="play-card__stack-back-n">${n} plays</div>
+        <div class="play-card__stack-back-game">${escapeHtml(g.name || "Unknown game")}</div>
+        <div class="play-card__stack-back-line">${stackOutcome(card, me, n)}</div>
+        <div class="play-card__stack-back-date">${escapeHtml(formatDate(card.played_at))}</div>
+        <div class="play-card__stack-back-note">
+          Imported from notes — these plays were recorded together with nothing
+          to tell them apart.
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * The one sentence a run can honestly make. Reuses the winner buckets the
+   * ordinary caption uses, so a run reads like the plays it stands for.
+   */
+  function stackOutcome(card, me, n) {
+    const winnerCount = countWinners(card.winner_display_name);
+    if (winnerCount === 0) return `<span class="win-loss">No winner recorded</span>`;
+    const everyoneWon = (card.participant_count || 0) > 0
+      && winnerCount >= (card.participant_count || 0);
+    if (everyoneWon) {
+      const we = viewerInPlay(card, me) ? "We" : "They";
+      return `<span class="win">${we} won all ${n}</span>`;
+    }
+    const isSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
+    const name = isSelf ? "You" : escapeHtml(card.winner_display_name);
+    // The space is in the markup, not left to a margin: the caption slot lays
+    // its children out with a flex gap, and the back face does not — the same
+    // string has to read on both.
+    return `<span class="win"><span class="win-label">Won all ${n}</span> ${name}</span>`;
   }
 
   function renderFront(card, { photoSrc }) {
@@ -454,6 +548,15 @@
       const s = getState(playId);
       const next = !s.flipped;
       s.flipped = next;
+      // A run card's back is built entirely from what the feed already sent
+      // (the count, the game, the shared outcome, the date), so hydrating it
+      // would spend a request per flip fetching one arbitrary member of the
+      // run — whose scorecard the back deliberately does not show.
+      const known = cardRegistry.get(playId);
+      if (known && (known.group_count || 1) > 1) {
+        rerenderCard(playId);
+        return;
+      }
       if (next && !s.hydrated && !s.hydrating) {
         s.hydrating = true;
         s.error = null;

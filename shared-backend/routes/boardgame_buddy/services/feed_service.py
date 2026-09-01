@@ -55,6 +55,10 @@ def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
         participants=[
             FeedPlayParticipant(**p) for p in (row.get("participants") or [])
         ],
+        # Migration 005. Defaults to 1 the same way `participants` defaults to
+        # [], so the route keeps answering against an RPC that predates the
+        # column — an unmigrated database serves ordinary cards rather than 500s.
+        group_count=int(row.get("group_count") or 1),
     )
 
 

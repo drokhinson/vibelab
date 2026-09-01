@@ -21,6 +21,13 @@
 //     already holds with {duplicate: true}, so re-running a half-finished
 //     import lands the rest and re-writes nothing.
 //
+//   • runId AND import_group_id ARE DIFFERENT THINGS. `runId` collapses the
+//     REVIEW list and comes from the model's `count`. `import_group_id` is
+//     computed at write time from what a play actually holds (groupKeyFor
+//     below) and decides what the FEED collapses. A play with a score or a
+//     note of its own never joins a group however the model counted it,
+//     because the group's card cannot say what that play has to say.
+//
 //   • THE DRAFT IS SAVED, NOT THE PARSE. localStorage holds the whole draft
 //     under a versioned key. A refresh three steps in resumes where it was; a
 //     build that changes the shape bumps DRAFT_VERSION and drops what it can
@@ -358,8 +365,77 @@
 
     // ── The write ────────────────────────────────────────────────────────────
 
-    /** One draft play as the PlayCreate body the API takes. */
-    toPayload(play) {
+    /**
+     * The identity of a play for FEED grouping, or null when it has something
+     * of its own to say.
+     *
+     * A score on any seat or a note is disqualifying: those are exactly the
+     * plays a reader wants to see individually — the biggest win, the closest
+     * game, the one with a comment. Everything else is identified by what a
+     * reader would use to tell two plays apart: the game, the day, who was
+     * there, and who won.
+     *
+     * Deliberately NOT play.runId. The run id says "the model wrote these as
+     * one line"; this says "these are indistinguishable". The second is the
+     * claim the collapsed card actually makes, and it survives the model
+     * splitting a run across entries or lumping a scored play into one.
+     * @param {DraftPlay} play
+     * @returns {string|null}
+     */
+    groupKeyFor(play) {
+      if (play.notes) return null;
+      if (play.players.some((p) => p.score === 0 || p.score)) return null;
+      const game = this.playGame(play);
+      if (!game) return null;
+      const names = play.players.map((p) => key(this.playerMapping(p.name).label || p.name));
+      const winners = play.players.filter((p) => p.isWinner)
+        .map((p) => key(this.playerMapping(p.name).label || p.name));
+      // Sorted, so seating order is not part of the identity — two plays with
+      // the same people in a different order are still the same play.
+      return [
+        game.id,
+        this.dateFor(play),
+        names.slice().sort().join(","),
+        winners.slice().sort().join(","),
+      ].join("|");
+    }
+
+    /**
+     * Mint one group id per key that covers MORE THAN ONE play, and hand back
+     * a play-id → group-id map.
+     *
+     * The "more than one" is the whole point: a lone winner-only play is not a
+     * run, and tagging it would put a "1 plays" stack card in the feed where an
+     * ordinary polaroid belongs.
+     *
+     * Computed once over the whole importable set before any chunk goes out,
+     * so plays that land in different requests still agree on their group.
+     * @param {DraftPlay[]} plays
+     * @returns {Map<string, string>}
+     */
+    assignGroups(plays) {
+      const byKey = new Map();
+      for (const play of plays) {
+        const k = this.groupKeyFor(play);
+        if (!k) continue;
+        if (!byKey.has(k)) byKey.set(k, []);
+        byKey.get(k).push(play.id);
+      }
+      const out = new Map();
+      for (const ids of byKey.values()) {
+        if (ids.length < 2) continue;
+        const groupId = uid();
+        for (const id of ids) out.set(id, groupId);
+      }
+      return out;
+    }
+
+    /**
+     * One draft play as the PlayCreate body the API takes.
+     * @param {DraftPlay} play
+     * @param {Map<string, string>} [groups] From assignGroups().
+     */
+    toPayload(play, groups) {
       const game = this.playGame(play);
       return {
         game_id: game ? game.id : null,
@@ -378,6 +454,10 @@
         // the draft play's own id — so a chunk re-sent after a lost response
         // comes back as duplicates rather than a second set of plays.
         client_key: play.id,
+        // Migration 005. Present only for a play that is one of several
+        // indistinguishable ones; the feed and the plays log then show the
+        // whole run as a single card.
+        import_group_id: (groups && groups.get(play.id)) || null,
       };
     }
 
@@ -387,10 +467,13 @@
      */
     async run(onProgress) {
       const plays = this.importable();
+      // Once, over the whole set, before the first chunk: a run split across
+      // two requests has to carry the same group id in both.
+      const groups = this.assignGroups(plays);
       this.progress = { done: 0, total: plays.length, imported: 0, duplicate: 0, failed: 0, errors: [] };
       for (let i = 0; i < plays.length; i += CHUNK_SIZE) {
         const chunk = plays.slice(i, i + CHUNK_SIZE);
-        const body = { plays: chunk.map((p) => this.toPayload(p)) };
+        const body = { plays: chunk.map((p) => this.toPayload(p, groups)) };
         let res;
         try {
           res = await window.api.post("/plays/import", body, { timeoutMs: IMPORT_TIMEOUT_MS });

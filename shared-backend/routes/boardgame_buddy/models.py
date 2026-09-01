@@ -520,6 +520,12 @@ class PlayCreate(BaseModel):
     # the host can correct it in Settle Up; None whenever it can't be resolved,
     # which is a legitimate row and never an error.
     country_code: Optional[CountryCode] = None
+    # Migration 005. Shared by every play in one run of identical imported
+    # plays — same game, same date, same players, same winner, and no score or
+    # note to tell any of them apart. The feed and the plays log show one card
+    # per run; every counter still sees the individual rows. Set ONLY by the
+    # Settings importer: a live log is one play and stands for itself.
+    import_group_id: Optional[UUID4] = None
 
 
 class PlayUpdate(BaseModel):
@@ -590,6 +596,11 @@ class PlayResponse(BaseModel):
     logged_by_id: str
     logged_by_name: str
     is_own: bool = True
+    # How many plays this row stands for (migration 005). 1 for everything the
+    # app logs live; the run's size when this row represents a group of
+    # identical imported plays. The plays log renders one row per group and
+    # reads this for its "58 plays" line.
+    group_count: int = 1
 
 
 
@@ -1250,6 +1261,11 @@ class FeedPlayCard(BaseModel):
     # Drives the session grouping key on the FE and the clickable names in
     # the session header. Sorted by display_name in the RPC.
     participants: list[FeedPlayParticipant] = []
+    # How many plays this card stands for (migration 005). 1 for every play the
+    # app logs live, so the ordinary card is unaffected; the run's size when
+    # the card represents a group of identical imported plays, which
+    # ui/play-card.js renders as a stack rather than a polaroid.
+    group_count: int = 1
 
 
 class FeedHotGamesEntry(BaseModel):

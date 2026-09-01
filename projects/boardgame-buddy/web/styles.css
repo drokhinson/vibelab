@@ -13027,3 +13027,123 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 @media (prefers-reduced-motion: reduce) {
   .imp-chrome__seg::after, .imp-progress__fill { transition: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Play card — the run variant (.play-card--stack)
+   ══════════════════════════════════════════════════════════════════════════
+   One card standing for N identical imported plays (migration 005). It is the
+   same .play-card box — same widths, same flip, same place in the session rail
+   — with two paper edges peeking out behind it so the tile reads as a stack
+   before a single word is parsed, and the count where the photograph would be.
+
+   No photo on purpose: a snapshot of one of 58 indistinguishable plays would be
+   claiming to be a specific evening. The game's own art sits behind the count,
+   dimmed, so the tile still says which game without pretending to be a play.
+   ────────────────────────────────────────────────────────────────────────── */
+.play-card--stack { position: relative; }
+/* The edges are siblings of __inner, not children, so the 3D flip doesn't
+   carry them round with the face. */
+.play-card__stack-edge {
+  position: absolute;
+  inset: 6px -5px -5px 6px;
+  border-radius: inherit;
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--sh-1);
+  z-index: -1;
+}
+.play-card__stack-edge--2 { inset: 11px -10px -10px 11px; opacity: 0.65; }
+
+.play-card__photo--stack {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--polaroid-bg-soft, var(--well));
+}
+/* The base rule's bottom-edge gradient exists to give the box-art corner badge
+   a consistent surface on a bright photo. A run card carries no badge and no
+   photo, so the gradient is a smudge under the count and nothing else. */
+.play-card__photo--stack::after { content: none; }
+.play-card__stack-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Far enough back that the count reads at a glance on both grounds — the
+     art is here to name the game, not to be looked at. */
+  opacity: 0.22;
+  filter: saturate(0.7);
+}
+.play-card__stack-count {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  color: var(--polaroid-ink, #1D1812);
+}
+.play-card__stack-n {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 2.4rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+}
+.play-card__stack-unit {
+  margin-top: 2px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--polaroid-muted, #8B7E68);
+}
+
+.play-card__stack-back {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  justify-content: center;
+  /* flex:1, not height:100% — the parent .play-card__back is already a padded
+     flex column, so a percentage height resolves against the wrong box and
+     leaves the summary sitting high. */
+  flex: 1;
+  text-align: center;
+  color: var(--polaroid-ink, #1D1812);
+}
+.play-card__stack-back-n {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+  line-height: 1;
+}
+.play-card__stack-back-game {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.15;
+}
+.play-card__stack-back-line { font-size: 0.82rem; }
+.play-card__stack-back-date {
+  font-size: 0.74rem;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.play-card__stack-back-note {
+  margin-top: 0.35rem;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: var(--polaroid-muted, #8B7E68);
+}
+
+/* The plays log's run row — same idea, one line. */
+.plays-list__run {
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+}
+/* A run row opens nothing, so it must not offer the press feedback that says
+   it would. */
+.plays-list__row--run { cursor: default; }
