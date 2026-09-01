@@ -624,6 +624,18 @@ section { margin-top: 3.2rem; }
                 permanent home for every one of these is Settings.</div>
               </div>
             </div>
+            <div class="rule">
+              <div class="rule__n">5</div>
+              <div>
+                <div class="rule__t">Ticking someone teaches the grid</div>
+                <div class="rule__d">Tick <b>Priya</b> on step 2 and the people <i>she</i> knows
+                appear underneath, named <code>Buddy of Priya</code>. They arrived with the
+                suggestions (migration 072 ships the second hop), so it costs no request and
+                happens in the tap's own frame. It only ever <b>appends</b> — nothing on screen
+                is re-rendered or moved, and an untick takes nothing back, because a grid that
+                removes a row moves everything below it under a thumb that is still there.</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -668,8 +680,8 @@ section { margin-top: 3.2rem; }
           </tr>
           <tr>
             <td>Buddy suggestions</td>
-            <td class="now">Fetched between step 1 and step 2 — an empty response silently drops the step.</td>
-            <td class="next">Prefetched during slide 1. Slide 2 renders instantly with whatever landed.</td>
+            <td class="now">Fetched between step 1 and step 2 — an empty response silently drops the step. Static once shown, and a request you send teaches the ranking nothing until it is accepted.</td>
+            <td class="next">Prefetched the moment <code>needs_setup</code> is seen, so slide 2 paints from a request made while the user was still naming themselves — and ships each candidate's own buddies, so ticking promotes them with no round trip. A pending request you sent is now a first-hop link server-side too.</td>
           </tr>
           <tr>
             <td>BGG import</td>
@@ -732,6 +744,23 @@ section { margin-top: 3.2rem; }
     { name: "Dev Raman",         handle: "devr",   reason: "Mutual buddy",    icon: "hourglass", ic: "#2a2014", bg: "#c79a5b" }
   ];
 
+  // The second hop, shipped WITH the suggestions above
+  // (bgb_onboarding_suggestion_network, migration 072). Ticking a suggestion
+  // promotes their buddies out of this — no request, in the tap's own frame.
+  var NETWORK = {
+    priya: [
+      { name: "Ana Beltrán",  handle: "anab",  icon: "shield",    ic: "#f7f0df", bg: "#2f6a93" },
+      { name: "Noor Haddad",  handle: "noorh", icon: "spade",     ic: "#ffffff", bg: "#2a8a7a" }
+    ],
+    mbell: [
+      { name: "Ana Beltrán",  handle: "anab",  icon: "shield",    ic: "#f7f0df", bg: "#2f6a93" },
+      { name: "Kier Donnell", handle: "kierd", icon: "rook",      ic: "#2a2014", bg: "#c79a5b" }
+    ],
+    jenok: [
+      { name: "Sam Achebe",   handle: "sama",  icon: "sword",     ic: "#f7f0df", bg: "#b23b34" }
+    ]
+  };
+
   var STEPS = 3;
 
   var state = {
@@ -743,6 +772,11 @@ section { margin-top: 3.2rem; }
     bgColor: "#2a2014",
     target: "iconColor",
     picked: {},
+    // Everyone currently in the grid, in render order — the base suggestions
+    // plus anything promoted into it. Promotions append here and are never
+    // removed, which is the whole point (see promoteFrom).
+    rows: SUGGESTIONS.slice(),
+    issued: {},
     search: "",
     bggUser: "",
     jobs: []
@@ -845,34 +879,72 @@ section { margin-top: 3.2rem; }
   }
 
   // ── Step 2 · tiles ─────────────────────────────────────────────────────
+  function tileHtml(s) {
+    var on = state.picked[s.handle] ? " on" : "";
+    return '<button class="ob-tile' + on + '" data-handle="' + s.handle + '" aria-pressed="' + (on ? "true" : "false") + '">' +
+      '<span class="ob-tile__tick"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg></span>' +
+      badgeHtml({ icon: s.icon, ic: s.ic, bg: s.bg, name: s.name }, 44) +
+      '<span class="ob-tile__name">' + esc(s.name) + "</span>" +
+      '<span class="ob-tile__reason">' + esc(s.reason) + "</span>" +
+      "</button>";
+  }
+
+  // A full repaint. Only three things ask for one — the first paint, a search,
+  // and clearing a search — and none of them happen under a finger.
   function paintTiles() {
     var q = state.search.trim().toLowerCase().replace(/^@/, "");
-    var rows = SUGGESTIONS.filter(function (s) {
-      return !q || s.name.toLowerCase().indexOf(q) >= 0 || s.handle.indexOf(q) >= 0;
-    });
-    if (!rows.length) {
-      tilesEl.innerHTML = '<div class="ob-empty">Nobody by that name yet.<br />Skip and add them later.</div>';
-    } else {
-      tilesEl.innerHTML = rows.map(function (s) {
-        var on = state.picked[s.handle] ? " on" : "";
-        return '<button class="ob-tile' + on + '" data-handle="' + s.handle + '" aria-pressed="' + (on ? "true" : "false") + '">' +
-          '<span class="ob-tile__tick"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg></span>' +
-          badgeHtml({ icon: s.icon, ic: s.ic, bg: s.bg, name: s.name }, 44) +
-          '<span class="ob-tile__name">' + esc(s.name) + "</span>" +
-          '<span class="ob-tile__reason">' + esc(s.reason) + "</span>" +
-          "</button>";
-      }).join("");
-      $$(".ob-tile", tilesEl).forEach(function (t) {
-        t.addEventListener("click", function () {
-          var h = t.dataset.handle;
-          if (state.picked[h]) delete state.picked[h]; else state.picked[h] = true;
-          paintTiles();
-        });
-      });
-    }
+    var rows = q
+      ? state.rows.filter(function (s) {
+          return s.name.toLowerCase().indexOf(q) >= 0 || s.handle.indexOf(q) >= 0;
+        })
+      : state.rows;
+    tilesEl.innerHTML = rows.length
+      ? rows.map(tileHtml).join("")
+      : '<div class="ob-empty">Nobody by that name yet.<br />Skip and add them later.</div>';
+    syncSendLabel();
+  }
+
+  function syncSendLabel() {
     var n = Object.keys(state.picked).length;
     sendLabel.textContent = n === 0 ? "Send requests" : "Send " + n + " request" + (n === 1 ? "" : "s");
   }
+
+  // Ticking someone introduces the people they know, out of NETWORK — the
+  // payload that arrived WITH the suggestions, so this costs no request.
+  //
+  // It APPENDS. Nothing already on screen is re-rendered or moved, so the tile
+  // under the user's finger survives and the grid does not scroll. Unticking
+  // takes nothing back for the same reason: a grid that removes a row moves
+  // everything below it under a thumb that is still there.
+  function promoteFrom(handle) {
+    var seed = SUGGESTIONS.filter(function (s) { return s.handle === handle; })[0];
+    var rows = (NETWORK[handle] || []).filter(function (c) {
+      if (state.issued[c.handle]) return false;
+      return !state.rows.some(function (r) { return r.handle === c.handle; });
+    });
+    if (!rows.length || state.search) return;
+    rows.forEach(function (c) {
+      state.issued[c.handle] = true;
+      // The tile's reason names who introduced them — the honest line for a
+      // suggestion earned this way, and one a count could not produce.
+      var row = Object.assign({}, c, { reason: "Buddy of " + seed.name.split(" ")[0] });
+      state.rows.push(row);
+      tilesEl.insertAdjacentHTML("beforeend", tileHtml(row));
+    });
+  }
+
+  // Toggling repaints ONE tile — never the grid.
+  tilesEl.addEventListener("click", function (ev) {
+    var t = ev.target.closest ? ev.target.closest(".ob-tile") : null;
+    if (!t) return;
+    var h = t.dataset.handle;
+    var nowOn = !state.picked[h];
+    if (nowOn) state.picked[h] = true; else delete state.picked[h];
+    t.classList.toggle("on", nowOn);
+    t.setAttribute("aria-pressed", nowOn ? "true" : "false");
+    syncSendLabel();
+    if (nowOn) promoteFrom(h);
+  });
 
   // ── The background queue ───────────────────────────────────────────────
   // The whole point of the redesign: a step hands its write to this and
@@ -1016,6 +1088,8 @@ section { margin-top: 3.2rem; }
     state.jobs.forEach(function (j) { if (j.timer) clearTimeout(j.timer); });
     state.jobs = [];
     state.picked = {};
+    state.rows = SUGGESTIONS.slice();
+    state.issued = {};
     state.search = "";
     state.bggUser = "";
     state.index = 0;
