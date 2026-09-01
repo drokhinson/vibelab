@@ -2680,9 +2680,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card__back-player.is-link:focus-visible { border-color: var(--polaroid-accent); }
 .play-card__back-player.is-link:hover .play-card__back-player-go { opacity: 0.9; }
 .play-card__back-player.is-link:active { transform: scale(0.99); filter: brightness(0.97); }
+/* Inset, not outset: the scoreboard is a scroll container now (a fixed card
+   height can't grow to fit a big table), and per .claude/rules/overlays.md a
+   scroller clips an outset ring — the first and last rows would lose theirs. */
 .play-card__back-player.is-link:focus-visible {
   outline: 2px solid var(--polaroid-accent);
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 .play-card__back-empty {
   font-size: 0.85rem;
