@@ -28,6 +28,12 @@
       this._bggSummary = null;
       this._bggPollHandle = null;
 
+      // True between the confirm and the sign-out that follows a successful
+      // delete. Unlike everything else in this app, this one write IS waited
+      // on and says so: a user who has just asked for something permanent
+      // must not be left unsure whether it happened.
+      this._deleting = false;
+
       // True while a manual outbox flush is in flight — drives the Upload now
       // button's disabled/"Uploading…" state.
     }
@@ -113,7 +119,7 @@
         ${this._renderPendingUploadsSection()}
         <div class="set-card-label">Local cache</div>
         ${this._renderCacheCard()}
-        ${this._renderLogout()}
+        ${this._renderAccountActions()}
         ${this._renderBggAttribution()}
         <div style="height: 1rem"></div>
       `;
@@ -471,14 +477,73 @@
       }
     }
 
-    _renderLogout() {
+    // Two account actions, and the whole point of this block is that they do
+    // not look alike. Logging out is reversible — you sign back in and
+    // everything is where you left it — so it reads as a neutral control.
+    // Deleting is not, so it is separated by a rule, inked in --rust, carries
+    // the bin glyph, and says underneath exactly what goes with it. Before
+    // this, logout was itself a filled red button "so it gets the same visual
+    // weight as a delete affordance", which left the app's one genuinely
+    // irreversible action with nowhere louder to stand.
+    _renderAccountActions() {
       return `
-        <div class="settings-logout">
-          <button class="btn btn-sm settings-logout__btn" onclick="window.handleLogout()">
+        <div class="settings-account">
+          <button class="btn btn-sm settings-account__logout"
+                  ${this._deleting ? "disabled" : ""} onclick="window.handleLogout()">
             <i data-icon="log-out" class="w-4 h-4"></i> Log out
           </button>
+          <div class="settings-account__danger">
+            <button class="btn btn-sm settings-account__delete"
+                    ${this._deleting ? "disabled" : ""}
+                    onclick="window.settingsView._confirmDeleteAccount()">
+              <i data-icon="trash-2" class="w-4 h-4"></i>
+              ${this._deleting ? "Deleting…" : "Delete account"}
+            </button>
+            <p class="settings-account__note">
+              Permanently removes your profile, plays, collection and buddies.
+              This can't be undone.
+            </p>
+          </div>
         </div>
       `;
+    }
+
+    // ── Delete account ────────────────────────────────────────────────────────
+    // One confirm, through the project's single destructive surface
+    // (.claude/rules/ui-object-design.md §3c) with the same words the native
+    // app uses, so the two platforms describe the same act identically.
+    async _confirmDeleteAccount() {
+      if (this._deleting) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Delete your account?",
+        body: "This permanently deletes your profile, plays, collection, buddies "
+            + "and chapters. This cannot be undone.",
+        confirmLabel: "Delete forever",
+        cancelLabel: "Keep my account",
+        destructive: true,
+      });
+      if (!ok) return;
+
+      this._deleting = true;
+      this.render();
+      try {
+        await window.User.deleteAccount();
+      } catch (e) {
+        this._deleting = false;
+        this.render();
+        // An alert, not a toast: the user just asked for something permanent
+        // and has to know it did not happen, even if they navigate away.
+        await window.PolaroidPopup.alert({
+          title: "Couldn't delete your account",
+          body: (e && e.message) ? String(e.message) : "Please try again.",
+        });
+        return;
+      }
+      // The row is gone but this device still holds a token that looks valid
+      // and a cache full of the account's data. handleLogout is what clears
+      // both and returns to /auth — deleting without it would leave the app
+      // signed in to nothing.
+      await window.handleLogout();
     }
 
     _renderBggAttribution() {

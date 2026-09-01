@@ -3250,24 +3250,77 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: flex; align-items: center; gap: 0.4rem;
   margin-bottom: 0.5rem;
 }
-.settings-logout {
-  display: flex; justify-content: center;
-  padding: 1.25rem 0 0.5rem;
+/* ── The two account actions ──────────────────────────────────────────────────
+   They must not look alike. Logging out is reversible — sign back in and
+   everything is where you left it — so it is a neutral control. Deleting is
+   the one irreversible act in the app, so it sits below a rule, inked in
+   --rust, and states its consequence underneath.
+
+   This block replaced a `.settings-logout__btn` that was a FILLED RED button,
+   with a comment explaining that logout "gets the same visual weight as a
+   delete affordance". That was defensible while there was no delete; the
+   moment one existed it left the dangerous action with nowhere louder to
+   stand, and two unlike things wearing one costume. Its three oklch literals
+   went with it — every colour here is a token (.claude/rules/theming.md §10),
+   which is also what makes the pair read correctly in light. */
+.settings-account {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 1.25rem 1rem 0.5rem;
 }
-/* Red-themed destructive button — logout is the only thing that signs
-   the user out of the whole app, so it gets the same visual weight as
-   a "delete" affordance. */
-.settings-logout__btn {
-  background: oklch(0.42 0.18 25);
-  color: oklch(0.97 0.04 25);
-  border: 1px solid oklch(0.5 0.2 25);
+.settings-account__logout {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
   display: inline-flex; align-items: center; gap: 0.4rem;
-  padding: 0.45rem 1rem;
+  min-height: 44px;
+  padding: 0.45rem 1.1rem;
   font-weight: 600;
 }
-.settings-logout__btn:hover {
-  background: oklch(0.5 0.21 25);
-  border-color: oklch(0.6 0.22 25);
+.settings-account__logout:hover { background: var(--bg-2); border-color: var(--ink-faint); }
+.settings-account__logout:active { transform: scale(0.98); }
+
+/* The rule is the separation: what is above it you can undo. */
+.settings-account__danger {
+  width: 100%;
+  max-width: 320px;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* Outlined rather than filled. A solid red block beside a plain Log out would
+   be the loudest thing on the screen and would read as the primary action of
+   the page, which it is emphatically not — the affordance has to look
+   dangerous without inviting the tap. --rust is 4.5:1+ on the ground in both
+   themes; the 12% wash on hover keeps the ink well clear of its own fill. */
+.settings-account__delete {
+  background: transparent;
+  color: var(--rust);
+  border: 1px solid var(--rust-soft);
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.45rem 1.1rem;
+  font-weight: 600;
+}
+.settings-account__delete:hover {
+  background: color-mix(in srgb, var(--rust) 12%, transparent);
+  border-color: var(--rust-strong);
+}
+.settings-account__delete:active { transform: scale(0.98); }
+.settings-account__delete[disabled] { opacity: 0.6; }
+.settings-account__note {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+  text-align: center;
+  max-width: 30ch;
+  margin: 0;
 }
 
 /* BGG attribution block under logout — small logo + neutral blurb so it
@@ -7265,6 +7318,23 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border-color: #b3492f;
 }
 .polaroid-popup__actions .btn-ghost { color: var(--polaroid-ink); }
+/* The destructive confirm (PolaroidPopup.confirm({destructive:true})).
+   It has to out-signal the ordinary confirm, and the ordinary confirm is
+   ALREADY terracotta — .btn-primary above fills with --polaroid-accent — so a
+   light red would say nothing. --rust-ink is the deeper red the token system
+   keeps for exactly this: rust as ink on a surface that is light in every
+   theme, which the polaroid card is. Being theme-independent, it also needs no
+   dark branch: white on #A8452F is 5.9:1 on both grounds. */
+.polaroid-popup__actions .polaroid-popup__confirm--danger {
+  background: var(--rust-ink);
+  border-color: var(--rust-ink);
+  color: var(--on-rust);
+  font-weight: 700;
+}
+.polaroid-popup__actions .polaroid-popup__confirm--danger:hover {
+  background: color-mix(in srgb, var(--rust-ink) 88%, #000);
+  border-color: color-mix(in srgb, var(--rust-ink) 88%, #000);
+}
 
 /* ── Game finder widget (Gather screen + Add Game modal) ────────────────── */
 .game-finder {
@@ -9773,10 +9843,15 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .bgb-spoke-screen .settings-bgg-credit { color: var(--polaroid-muted, #8B7E68); }
 .bgb-spoke-screen .settings-bgg-credit__text { color: var(--polaroid-muted, #8B7E68); }
 
-/* BGG sync progress bar reads with proper contrast on the cream surface */
-/* Logout button sits below the cards — keep the destructive red wash but
-   bump its border so it reads on cream. */
-.bgb-spoke-screen .settings-logout__btn {
+/* The two account actions sit below the cards, on the spoke's own surface.
+   Both take a slightly heavier hairline so their outlines read against cream;
+   their ink already comes from tokens the spoke re-points. The old rule here
+   propped up a filled-red LOGOUT button — that button is neutral now, and the
+   red belongs to the one action that earns it. */
+.bgb-spoke-screen .settings-account__logout {
+  border-width: 1.5px;
+}
+.bgb-spoke-screen .settings-account__delete {
   border: 1.5px solid color-mix(in srgb, var(--rust, #b23b34) 45%, transparent);
 }
 
