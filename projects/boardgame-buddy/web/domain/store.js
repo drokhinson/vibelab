@@ -33,6 +33,11 @@
         // rather than one total: the nav dot only needs "something is
         // waiting", but each hub card names its own count.
         achievementUnseenCount: 0,
+        // Pending INCOMING ghost account claims (migration 070) — someone
+        // asking to link one of this user's ghost players to their account.
+        // Third source on the same dot; the hub's Buddies card sums it with
+        // buddyRequestCount, since both resolve behind that one card.
+        ghostClaimRequestCount: 0,
       };
       this._subs = new Map(); // key → Set<fn>
     }
@@ -98,6 +103,8 @@
         // Same: Achievements.forget() wipes the device receipts on sign-out,
         // so the count they backed goes with them.
         achievementUnseenCount: 0,
+        // And the same again: the next account's ghosts are not this one's.
+        ghostClaimRequestCount: 0,
       };
       for (const subs of this._subs.values()) {
         for (const fn of subs) {

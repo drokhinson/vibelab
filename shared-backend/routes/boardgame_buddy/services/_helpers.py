@@ -27,6 +27,17 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "participant_not_found": (404, "Participant not found"),
     "cannot_remove_host": (400, "Cannot remove the host"),
     "display_name_required": (400, "display_name is required"),
+    # Ghost account claims (migration 070). None of these reuse `not_found`
+    # above — its detail is session-specific ("Session not found") and
+    # widening it would change bgb_finalize_session's message for no reason.
+    "claim_not_found": (404, "Claim not found"),
+    "not_pending": (409, "That request is no longer pending"),
+    "already_linked": (409, "That ghost is already linked to your account"),
+    "already_seated": (409, "You're already a player on one of those plays"),
+    "own_roster": (400, "That's your own ghost — link it from Buddies instead"),
+    "declined_twice": (409, "They've already declined that link"),
+    "ghost_gone": (410, "That ghost is no longer on their plays"),
+    "not_visible": (403, "You can't see that play"),
     # `invalid_transition` is deliberately absent: its detail is dynamic
     # (from/to), so update_phase composes and raises that one itself.
 }

@@ -387,10 +387,21 @@
           </div>
         `;
       }
-      // Incoming friend requests, not buddies — a thing to do rather than a
-      // thing to look at, which is why it gets the corner badge while the
-      // roster size stays a sub-head.
-      const waiting = window.Buddy.pendingCount();
+      // Incoming requests, not buddies — things to do rather than things to
+      // look at, which is why they get the corner badge while the roster size
+      // stays a sub-head. Buddy requests and ghost link requests are summed
+      // because both are answered on the one screen this card opens; the label
+      // names them separately so the badge is never just an unexplained "3".
+      const waitingBuddies = window.Buddy.pendingCount();
+      const waitingClaims = window.GhostClaim ? window.GhostClaim.pendingCount() : 0;
+      const waiting = waitingBuddies + waitingClaims;
+      const labelParts = [];
+      if (waitingBuddies) {
+        labelParts.push(`${waitingBuddies} buddy request${waitingBuddies === 1 ? "" : "s"}`);
+      }
+      if (waitingClaims) {
+        labelParts.push(`${waitingClaims} link request${waitingClaims === 1 ? "" : "s"}`);
+      }
       return this._previewCard({
         icon: "users",
         title: "Buddies",
@@ -398,15 +409,16 @@
         route: "buddies",
         body,
         badge: waiting,
-        badgeLabel: `${waiting} buddy request${waiting === 1 ? "" : "s"} waiting`,
+        badgeLabel: `${labelParts.join(" and ")} waiting`,
       });
     }
 
     /**
      * The corner badge a hub card wears when something behind it is waiting —
-     * buddy requests, unseen achievements. The number is aria-hidden and the
-     * phrase beside it carries the meaning, because "3" alone in a card corner
-     * tells a screen reader nothing about what there are three of.
+     * buddy requests, ghost link requests, unseen achievements. The number is
+     * aria-hidden and the phrase beside it carries the meaning, because "3"
+     * alone in a card corner tells a screen reader nothing about what there
+     * are three of.
      */
     _countBadge(n, label) {
       if (!n) return "";

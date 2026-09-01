@@ -16,6 +16,7 @@ from . import game_routes      # noqa: F401, E402
 from . import collection_routes  # noqa: F401, E402
 from . import play_routes      # noqa: F401, E402
 from . import buddy_routes     # noqa: F401, E402
+from . import ghost_claim_routes  # noqa: F401, E402
 from . import session_routes   # noqa: F401, E402
 from . import feed_routes      # noqa: F401, E402
 from . import stats_routes     # noqa: F401, E402

@@ -5,9 +5,10 @@
 --               051 and 060, the achievement objects from 062 (the catalog,
 --               its groups, the per-user unlock rows and
 --               profiles.app_installed_at), plays.country_code from 065 and the
---               country→continent lookup from 068, folded in below. Migrations
---               047-059 are NOT yet reflected here — read them directly until
---               someone catches this snapshot up.
+--               country→continent lookup from 068, and the ghost-claim table
+--               from 069, folded in below. Migrations 047-059 are NOT yet
+--               reflected here — read them directly until someone catches this
+--               snapshot up.
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
 --
 -- Note: the legacy boardgamebuddy_buddies table is now strictly for free-text
@@ -177,6 +178,45 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_edges (
   CONSTRAINT bgb_buddy_edges_canonical CHECK (user_a < user_b)
 );
 ALTER TABLE public.boardgamebuddy_buddy_edges ENABLE ROW LEVEL SECURITY;
+
+-- Ghost account claims (migration 070). A ghost player is not an entity — it
+-- is a play_players row with player_user_id NULL — so a claim is keyed by the
+-- only thing that identifies one: its owner (whoever logged the play) plus the
+-- normalized name. Consent runs claimant → owner, the opposite direction from
+-- bgb_link_ghost, and accepting runs that same merge.
+--
+-- Deliberately unlike boardgamebuddy_buddy_edges in two ways: no requested_by
+-- (direction is structural — claimant_id asks, owner_id answers), and a FULL
+-- unique on the triple rather than a partial unique on 'pending', so status
+-- mutates in place and rejections cannot stack into a nag.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_ghost_claims (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  -- lower(btrim(player_display_name)) — the key bgb_link_ghost_rows matches on.
+  ghost_name_key TEXT NOT NULL,
+  -- Original casing, denormalized: a sent request keeps reading the way it was
+  -- sent even after the owner renames or deletes the underlying rows.
+  ghost_display_name TEXT NOT NULL,
+  claimant_id UUID NOT NULL REFERENCES public.boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  --   pending / accepted / rejected / dismissed ("not me", claimant-side) /
+  --   superseded (another claimant's accept took the ghost)
+  status TEXT NOT NULL
+    CHECK (status IN ('pending', 'accepted', 'rejected', 'dismissed', 'superseded')),
+  rows_merged INT,          -- how many play_players rows the accept moved
+  reject_count INT NOT NULL DEFAULT 0,  -- two strikes, then no more asking
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at TIMESTAMPTZ,
+  CONSTRAINT bgb_ghost_claims_not_self CHECK (owner_id <> claimant_id),
+  CONSTRAINT bgb_ghost_claims_key_normalized
+    CHECK (ghost_name_key = lower(btrim(ghost_name_key)) AND ghost_name_key <> ''),
+  CONSTRAINT uq_bgb_ghost_claims_triple UNIQUE (owner_id, ghost_name_key, claimant_id)
+);
+ALTER TABLE public.boardgamebuddy_ghost_claims ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_ghost_claims TO boardgamebuddy_role;
+CREATE INDEX IF NOT EXISTS idx_bgb_ghost_claims_owner_pending
+  ON public.boardgamebuddy_ghost_claims (owner_id) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_bgb_ghost_claims_claimant
+  ON public.boardgamebuddy_ghost_claims (claimant_id, status);
 
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
