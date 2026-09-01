@@ -109,7 +109,7 @@
         <div class="bgb-sheet__panel">
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
           <h3 class="bgb-sheet__title">${escapeHtml(title)}</h3>
-          <p class="bgb-sheet__sub">Country only — it rides along with the play so game nights can be counted by region later.</p>
+          <p class="bgb-sheet__sub">Country level data used for game popularity analytics</p>
           <div class="game-finder bgb-sheet__search">
             <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
             <input type="text" id="country-picker-search"
