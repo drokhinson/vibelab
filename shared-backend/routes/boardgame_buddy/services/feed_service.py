@@ -16,9 +16,16 @@ from ..models import (
     FeedSuggestedBuddy,
     GameSummary,
     HotGamesResponse,
+    OnboardingSuggestionsResponse,
     SuggestedBuddiesResponse,
+    SuggestionNetworkGroup,
 )
-from ..constants import BuddySuggestionSource, PlayMode
+from ..constants import (
+    ONBOARDING_NETWORK_LIMIT,
+    ONBOARDING_NETWORK_PER_SEED,
+    BuddySuggestionSource,
+    PlayMode,
+)
 from ._helpers import fetch_games_by_ids, fetch_profiles_by_ids
 
 
@@ -117,35 +124,73 @@ def fetch_hot_games(sb, *, window_days: int = 7, limit: int = 10) -> HotGamesRes
     return HotGamesResponse(games=entries, window_days=window_days)
 
 
+def _suggestion_from_row(
+    row: dict,
+    profiles: dict,
+    *,
+    source: Optional[BuddySuggestionSource] = None,
+) -> Optional[FeedSuggestedBuddy]:
+    """Shape one suggestion row against an already-fetched profile map.
+
+    Returns None when the candidate has no profile row — both RPCs inner-join
+    profiles, so this only fires on a delete that landed between the two
+    reads. Shared by the rail, the onboarding tiers and the preloaded second
+    hop, so all three carry the same fields and a `via` never resolves one way
+    on one surface and another way on the next."""
+    p = profiles.get(row["user_id"])
+    if not p:
+        return None
+    via_id = row.get("via_user_id")
+    via = profiles.get(via_id) if via_id else None
+    return FeedSuggestedBuddy(
+        user_id=row["user_id"],
+        display_name=p["display_name"],
+        avatar=p.get("avatar"),
+        mutual_count=int(row.get("mutual_count") or 0),
+        play_count=int(row.get("play_count") or 0),
+        pending_mutual_count=int(row.get("pending_mutual_count") or 0),
+        via_user_id=via_id,
+        # Null when the via profile did not come back — the tile falls back to
+        # a name-free line rather than printing an id.
+        via_display_name=via["display_name"] if via else None,
+        source=source,
+    )
+
+
 def fetch_suggested_buddies(sb, viewer_id: str, *, limit: int = 5) -> SuggestedBuddiesResponse:
     """Candidates the viewer has played with, then friends-of-friends.
 
-    Every suggestion shares at least one play or one accepted buddy with the
-    viewer; the RPC ranks shared plays first and returns the top `limit`."""
+    Every suggestion shares at least one play, one accepted buddy, or one
+    person the viewer has sent a request to (migration 072) with the viewer;
+    the RPC ranks shared plays first and returns the top `limit`."""
     rows = sb.rpc(
         "bgb_suggested_buddies",
         {"uid": viewer_id, "lim": limit},
     ).execute().data or []
-    user_ids = [r["user_id"] for r in rows]
-    profiles = fetch_profiles_by_ids(sb, user_ids)
-    suggestions: list[FeedSuggestedBuddy] = []
-    for r in rows:
-        p = profiles.get(r["user_id"])
-        if not p:
-            continue
-        suggestions.append(FeedSuggestedBuddy(
-            user_id=r["user_id"],
-            display_name=p["display_name"],
-            avatar=p.get("avatar"),
-            mutual_count=int(r.get("mutual_count") or 0),
-            play_count=int(r.get("play_count") or 0),
-        ))
+    # The via ids ride the same fetch — a second round trip to name the person
+    # a suggestion is explained by would cost more than the suggestions did.
+    profiles = fetch_profiles_by_ids(sb, _suggestion_profile_ids(rows))
+    suggestions = [
+        s for s in (_suggestion_from_row(r, profiles) for r in rows) if s
+    ]
     return SuggestedBuddiesResponse(suggestions=suggestions)
+
+
+def _suggestion_profile_ids(*row_groups: list[dict]) -> list[str]:
+    """Every profile id a group of suggestion rows needs: the candidates and
+    whoever explains them. Duplicates are fine — fetch_profiles_by_ids dedupes."""
+    ids: list[str] = []
+    for rows in row_groups:
+        for r in rows:
+            ids.append(r["user_id"])
+            if r.get("via_user_id"):
+                ids.append(r["via_user_id"])
+    return ids
 
 
 def fetch_onboarding_buddy_suggestions(
     sb, viewer_id: str, *, limit: int = 12
-) -> SuggestedBuddiesResponse:
+) -> OnboardingSuggestionsResponse:
     """Candidates for the onboarding "Add buddies" step.
 
     Deliberately NOT fetch_suggested_buddies with a bigger limit. That one
@@ -159,22 +204,56 @@ def fetch_onboarding_buddy_suggestions(
         "bgb_onboarding_buddy_suggestions",
         {"uid": viewer_id, "lim": limit},
     ).execute().data or []
-    user_ids = [r["user_id"] for r in rows]
-    profiles = fetch_profiles_by_ids(sb, user_ids)
+
+    # The second hop, for the people we are about to suggest. The deck holds
+    # it until the user ticks someone and then promotes that person's buddies
+    # into the grid with no round trip, which is only possible if it is
+    # already here — hence one extra RPC now rather than one per tick later.
+    seed_ids = [r["user_id"] for r in rows]
+    network_rows = []
+    if seed_ids:
+        network_rows = sb.rpc(
+            "bgb_onboarding_suggestion_network",
+            {
+                "uid": viewer_id,
+                "seed_ids": seed_ids,
+                "per_seed": ONBOARDING_NETWORK_PER_SEED,
+                "lim": ONBOARDING_NETWORK_LIMIT,
+            },
+        ).execute().data or []
+
+    # One profile fetch for both sets — the candidates, their vias, and every
+    # person the second hop reaches.
+    profiles = fetch_profiles_by_ids(
+        sb, _suggestion_profile_ids(rows, network_rows)
+    )
+
     suggestions: list[FeedSuggestedBuddy] = []
     for r in rows:
-        p = profiles.get(r["user_id"])
-        if not p:
-            continue
-        suggestions.append(FeedSuggestedBuddy(
-            user_id=r["user_id"],
-            display_name=p["display_name"],
-            avatar=p.get("avatar"),
-            mutual_count=int(r.get("mutual_count") or 0),
-            play_count=int(r.get("play_count") or 0),
+        shaped = _suggestion_from_row(
+            r,
+            profiles,
             source=BuddySuggestionSource(r.get("source") or BuddySuggestionSource.GRAPH),
-        ))
-    return SuggestedBuddiesResponse(suggestions=suggestions)
+        )
+        if shaped:
+            suggestions.append(shaped)
+
+    # Group the hop by seed, preserving the RPC's rank order within each.
+    grouped: dict[str, list[FeedSuggestedBuddy]] = {}
+    for r in network_rows:
+        shaped = _suggestion_from_row(
+            {**r, "via_user_id": r["via_user_id"]},
+            profiles,
+            source=BuddySuggestionSource.NETWORK,
+        )
+        if shaped:
+            grouped.setdefault(r["via_user_id"], []).append(shaped)
+    network = [
+        SuggestionNetworkGroup(via_user_id=via, buddies=buddies)
+        for via, buddies in grouped.items()
+    ]
+
+    return OnboardingSuggestionsResponse(suggestions=suggestions, network=network)
 
 
 def build_feed_page(

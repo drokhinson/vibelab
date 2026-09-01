@@ -90,6 +90,19 @@ class BuddySuggestionSource(StrEnum):
     # step uses this tier, because a brand-new account has no earned signal
     # to rank on and an empty discovery screen is the failure case there.
     ACTIVE = "active"
+    # A candidate promoted client-side out of the preloaded second hop
+    # (migration 072): a buddy of someone the user has just ticked. Never
+    # returned in the top-level `suggestions` list — the server sets it on the
+    # rows inside `network`, and the deck renders them when that tick happens.
+    NETWORK = "network"
+
+
+# How many of each suggestion's buddies to preload, and the ceiling on the
+# whole second hop. 12 suggestions × 6 is 72 rows before the total bites, and
+# the endpoint ships a profile for every one it returns — so the pair is the
+# payload budget for the onboarding step, not a ranking knob.
+ONBOARDING_NETWORK_PER_SEED = 6
+ONBOARDING_NETWORK_LIMIT = 48
 
 
 class PlaySessionStatus(StrEnum):
