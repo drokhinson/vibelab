@@ -97,10 +97,20 @@
 
     _paint() {
       const root = this._sheet.el;
-      const body = root && root.querySelector("[data-claim-body]");
-      if (!body) return;
-      body.innerHTML = this._body();
-      if (window.BgbIcons) window.BgbIcons.render(body);
+      if (!root) return;
+      const body = root.querySelector("[data-claim-body]");
+      if (body) {
+        body.innerHTML = this._body();
+        if (window.BgbIcons) window.BgbIcons.render(body);
+      }
+      // The buttons live outside the scroller (see _foot), so they need their
+      // own patch — this is what carries "Looking this up…" to the real
+      // answer, and the claim button to "Asking…".
+      const foot = root.querySelector("[data-claim-foot]");
+      if (foot) {
+        foot.innerHTML = this._foot();
+        if (window.BgbIcons) window.BgbIcons.render(foot);
+      }
     }
 
     _panel() {
@@ -122,7 +132,9 @@
           <div class="ghost-claim-sheet__body" data-claim-body>
             ${this._body()}
           </div>
-          <button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>
+          <div class="ghost-claim-sheet__foot" data-claim-foot>
+            ${this._foot()}
+          </div>
         </div>`;
     }
 
@@ -151,15 +163,38 @@
         return `${summary}<p class="ghost-claim-sheet__note">${escapeHtml(why)}</p>`;
       }
 
-      // The primary action names the person who has to answer it, because that
-      // is the part a user needs to weigh before tapping: this is not a
-      // setting, it is a message to a friend.
       return `
         ${summary}
         <p class="ghost-claim-sheet__note">
           Claiming asks ${escapeHtml(owner)} to link these plays to your account.
           Nothing changes until they say yes.
-        </p>
+        </p>`;
+    }
+
+    /**
+     * The sheet's buttons. ONE set per state, and never a "Not me" next to a
+     * "Cancel": the sheet asks a single yes/no question, so it offers exactly
+     * the two answers to it. The way out WITHOUT answering is the backdrop,
+     * Escape and the grip — a third button competing with "Not me" only made
+     * the two look interchangeable, which they are not ("Not me" is a write
+     * that suppresses the suggestion for good).
+     *
+     * Rendered into a flex:none host rather than inside [data-claim-body], per
+     * overlays.md §3: the prose is the growable child, and commit buttons must
+     * not be able to scroll out from under the thumb.
+     */
+    _foot() {
+      const d = this._detail;
+      // Still looking it up, an error, or a blocked reason — there is no
+      // question on screen to answer, so the only control is the way out.
+      if (!d || !d.can_claim) {
+        return `<button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>`;
+      }
+      // The primary action names the person who has to answer it, because that
+      // is the part a user needs to weigh before tapping: this is not a
+      // setting, it is a message to a friend.
+      const owner = d.owner_display_name || "someone";
+      return `
         <div class="ghost-claim-sheet__actions">
           <button class="btn btn-primary bgb-sheet__confirm" type="button"
                   data-claim-action="claim" ${this._sending ? "disabled" : ""}>

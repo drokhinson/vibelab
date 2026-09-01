@@ -63,6 +63,11 @@
       // ui/ghost-claim-suggestions.js; only the state and the writes are here.
       this._claimSuggestions = [];
       this._claimRequests = { incoming: [], outgoing: [] };
+      // True while /buddies/suggested and /ghost-claims/suggestions are in the
+      // air. Neither list has a count anywhere before it answers, so this is
+      // the only thing that distinguishes "nothing to suggest" from "we have
+      // not asked yet" — see _renderSuggestionsSkeleton.
+      this._suggestionsPending = false;
       // Same verb-not-state reasoning as _resolved above, keyed by
       // "<ownerId>|<nameKey>" for a suggestion and by claim id for a request.
       this._claimResolved = new Map();
@@ -102,9 +107,57 @@
       `;
     }
 
+    /**
+     * Seed the two request sections from the cached profile bundle so they
+     * paint with the FIRST frame instead of appearing at the third.
+     *
+     * bgb_profile_bundle already carries the rows themselves — not just the
+     * counts the nav dot reads — and /bootstrap fetches it before the user
+     * lands, so this costs no round trip.
+     *
+     * Only ever fills a list that is EMPTY, and only on a first load: after a
+     * mutation the local copy is newer than any cached bundle, and re-seeding
+     * would put a request the user just answered back on screen.
+     *
+     * Profile.cachedBundle() is a synchronous peek() — null on a miss, which
+     * leaves every list as it was and the cold loader to do its job.
+     */
+    _seedRequestsFromBundle() {
+      if (this._mutationSeq > 0) return;
+      const b = (window.Profile && window.Profile.cachedBundle)
+        ? window.Profile.cachedBundle()
+        : null;
+      if (!b) return;
+      // .slice() on every one of these: the optimistic accept / decline / cancel
+      // handlers splice these arrays IN PLACE, and `b` is the live cached bundle
+      // object bgbCache handed back — splicing it would quietly rewrite the
+      // cache (and its localStorage write-through) that the hub's badge and the
+      // next visit both read.
+      if (!this._requests.incoming.length && Array.isArray(b.buddy_requests_incoming)) {
+        this._requests.incoming = b.buddy_requests_incoming.slice();
+      }
+      if (!this._requests.outgoing.length && Array.isArray(b.buddy_requests_outgoing)) {
+        this._requests.outgoing = b.buddy_requests_outgoing.slice();
+      }
+      if (!this._claimRequests.incoming.length && Array.isArray(b.ghost_claims_incoming)) {
+        // These rows carry no play_count / last_played_at — the bundle's block
+        // does not join the plays. renderGhostClaimRequests paints a skeleton
+        // bar for that sub-line rather than a false "0 of your plays".
+        this._claimRequests.incoming = b.ghost_claims_incoming.slice();
+      }
+    }
+
     async _load() {
       this._loading = true;
+      this._suggestionsPending = true;
       const seq = this._mutationSeq;
+      // Paint the requests /bootstrap has already fetched, BEFORE any await.
+      // Both request lists ride along in the profile bundle, which is the same
+      // payload the Profile hub's badge counts — so tapping a card that says
+      // "2 waiting" can no longer open a screen with nothing on it for as long
+      // as /buddies/requests takes. The network results below overwrite this;
+      // it only governs what is on screen until they land.
+      this._seedRequestsFromBundle();
       this.render();
       // Requests aren't part of the cached bundle — always fetch fresh, in
       // parallel with the bundle, and fold in below without blocking the
@@ -151,6 +204,10 @@
       const [requests, suggested, claimSuggestions, claims] = await Promise.all([
         requestsPromise, suggestedPromise, claimSuggestionsPromise, claimsPromise,
       ]);
+      // Cleared before the seq check, not after: these four have answered
+      // either way, so the placeholder has nothing left to stand in for. On
+      // the bail-out path the next render() drops it.
+      this._suggestionsPending = false;
       // A friend-graph edit landed while these were in flight — local state is
       // newer than the server copy we're holding, so let it stand.
       if (seq !== this._mutationSeq) return;
@@ -183,7 +240,8 @@
           && (this._playedWith || []).length === 0
           && (this._ghosts || []).length === 0
           && (this._claimSuggestions || []).length === 0
-          && (this._claimRequests.incoming || []).length === 0) {
+          && (this._claimRequests.incoming || []).length === 0
+          && (this._claimRequests.outgoing || []).length === 0) {
         this.container.innerHTML = `
           ${this._renderTopbar()}
           <div class="profile-loading">
@@ -297,6 +355,8 @@
           ${this._renderPager(this._buddiesPage, buddiesPages, "_goBuddiesPage", "Buddies pagination")}
         </section>
 
+        ${this._renderSuggestionsSkeleton()}
+
         ${window.renderSuggestedBuddiesRail(this._suggested, {
           addHandler: "window.buddiesView._request",
           cancelHandler: "window.buddiesView._cancelFromTile",
@@ -322,6 +382,44 @@
           }
         }
       }
+    }
+
+    /**
+     * The one placeholder standing in for every section still in flight here:
+     * "Buddies you may know" and "Is this you?".
+     *
+     * Deliberately UNLABELLED. Neither list has a count anywhere before its own
+     * fetch answers — not in the profile bundle, not in /bootstrap — so a
+     * heading would be a promise the app cannot keep, and the whole section
+     * would have to vanish when the answer is "nothing". That is exactly the
+     * failure ui/ghost-claim-suggestions.js argues against: the app announcing
+     * that it looked for you and found nothing, every single visit. Two
+     * anonymous pulsing rows say "something is still loading" and claim
+     * nothing about what — which is all this slot can honestly say.
+     *
+     * The request sections above need none of this: the bundle carries their
+     * rows, so they paint for real (see _seedRequestsFromBundle).
+     */
+    _renderSuggestionsSkeleton() {
+      if (!this._suggestionsPending) return "";
+      // Something already arrived and is painting below — nothing left to
+      // stand in for.
+      if (this._suggested.length || this._claimSuggestions.length) return "";
+      return `
+        <section class="buddies-section buddies-skel">
+          <p class="bgb-vis-hidden" role="status">Looking for buddies you may know…</p>
+          <ul class="buddies-list" aria-hidden="true">
+            ${[0, 1].map(() => `
+              <li class="buddies-row buddies-skel__row">
+                <span class="buddies-skel__avatar"></span>
+                <div class="buddies-row__body">
+                  <span class="buddies-skel__bar buddies-skel__bar--name"></span>
+                  <span class="buddies-skel__bar buddies-skel__bar--sub"></span>
+                </div>
+              </li>`).join("")}
+          </ul>
+        </section>
+      `;
     }
 
     // The Played-with sequence, as one list of tagged rows: real-account rows

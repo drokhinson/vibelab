@@ -4991,19 +4991,30 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-muted);
 }
 .ghost-claim-sheet__note--loading { opacity: 0.7; }
+/* The buttons, outside .ghost-claim-sheet__body so the prose scrolls and they
+   do not (overlays.md §3). Holds ONE control set at a time — the claim pair,
+   or a lone Cancel while the lookup is in flight / blocked. See _foot(). */
+.ghost-claim-sheet__foot {
+  flex: none;
+  margin: 0 2px;
+}
 .ghost-claim-sheet__actions {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
-/* 52px, per mobile-web.md §5. Deliberately quieter than .bgb-sheet__cancel
-   below it: "Not me" is a real write (it suppresses the suggestion for good),
-   but it is the answer nobody came here to give, so it must not compete with
-   the primary — and it must not read as the way OUT of the sheet, which is
-   what Cancel is for. Transparent with a hairline, one step below Cancel's
-   filled treatment. `.ghost-claim-sheet .btn` doubles the class so it beats
-   DaisyUI's own .btn-ghost (0,1,0) rather than tying and losing on source
-   order (mobile-web.md §3). */
+/* 52px, per mobile-web.md §5. Deliberately quieter than the primary above it:
+   "Not me" is a real write (it suppresses the suggestion for good), but it is
+   the answer nobody came here to give, so it must not compete.
+
+   It IS the second of the sheet's only two buttons. There is no Cancel beside
+   it any more: the sheet asks one yes/no question, and a Cancel sitting next
+   to "Not me" made the two read as interchangeable ways out when only one of
+   them is. Leaving without answering is the backdrop, Escape or the grip.
+   Transparent with a hairline so it still reads as subordinate to the primary.
+   `.ghost-claim-sheet .btn` doubles the class so it beats DaisyUI's own
+   .btn-ghost (0,1,0) rather than tying and losing on source order
+   (mobile-web.md §3). */
 .ghost-claim-sheet .ghost-claim-sheet__dismiss {
   min-height: 52px;
   border: 1px solid var(--polaroid-line);
@@ -5774,6 +5785,52 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .buddies-row--resolved .buddies-row__when { opacity: 0.45; }
 /* No press lift: nothing here is waiting on another tap. */
 .buddies-row--resolved:active { transform: none; }
+
+/* ── In-flight placeholder ────────────────────────────────────────────────────
+   Stands in for "Buddies you may know" and "Is this you?" while their two
+   uncached fetches are in the air — see buddies-view.js#_renderSuggestionsSkeleton
+   for why it carries no heading. Reuses the row shell so it occupies roughly the
+   height the real rows will, and reuses importExpPulse rather than introducing a
+   second skeleton animation (same call the import-expansions rows made).
+
+   Bars are --polaroid-line: this is a spoke screen, so that alias resolves to
+   the app's chrome tokens and reads on both grounds (theming.md §6). */
+.buddies-skel__row {
+  pointer-events: none;
+  cursor: default;
+}
+.buddies-skel__avatar,
+.buddies-skel__bar {
+  display: block;
+  background: var(--polaroid-line);
+  animation: importExpPulse 1.2s ease-in-out infinite;
+}
+.buddies-skel__avatar {
+  flex: none;
+  width: 28px;               /* .user-badge--sm */
+  height: 28px;
+  border-radius: 50%;
+}
+.buddies-skel__bar { border-radius: 4px; }
+.buddies-skel__bar--name { width: 45%; height: 11px; }
+.buddies-skel__bar--sub  { width: 65%; height: 9px; margin-top: 6px; opacity: 0.7; }
+/* Stagger, so the block reads as one loading surface rather than a flash. */
+.buddies-skel__row:nth-child(2) .buddies-skel__avatar,
+.buddies-skel__row:nth-child(2) .buddies-skel__bar { animation-delay: 160ms; }
+.buddies-skel__row:nth-child(2) .buddies-skel__bar--name { width: 60%; }
+.buddies-skel__row:nth-child(2) .buddies-skel__bar--sub  { width: 40%; }
+/* The same bar reused as the sub-line of a bundle-seeded link request, where it
+   stands alone in .buddies-row__when rather than under a name bar — so it drops
+   the stacking margin it needs there. See renderGhostClaimRequests. */
+.buddies-row__when > .buddies-skel__bar--sub {
+  width: 55%;
+  margin-top: 2px;
+}
+/* Slowed, not killed — the precedent set by .shelf-more__spinner below. */
+@media (prefers-reduced-motion: reduce) {
+  .buddies-skel__avatar,
+  .buddies-skel__bar { animation-duration: 3.2s; }
+}
 
 /* ── Ghost account claims (migration 070) ─────────────────────────────────────
    Three sections on the Buddies screen — "Is this you?", "Link requests" and
