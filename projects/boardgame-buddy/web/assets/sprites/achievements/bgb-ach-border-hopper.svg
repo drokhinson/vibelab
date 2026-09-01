@@ -1,0 +1,49 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Border Hopper badge — Buddy leaping across a dashed frontier, a different country either side">
+  <title>Border Hopper badge — Buddy leaping across a dashed frontier, a different country either side</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold. -->
+  <defs>
+    <linearGradient id="border-hopper-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="border-hopper-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="border-hopper-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#border-hopper-disc)"/>
+  <g clip-path="url(#border-hopper-clip)">
+    <rect x="4" y="4" width="52" height="152" fill="#8A5A32" opacity="0.22"/>
+    <rect x="56" y="4" width="100" height="152" fill="#000000" opacity="0.28"/>
+    <rect x="4" y="126" width="52" height="34" fill="#8A5A32"/>
+    <rect x="56" y="126" width="100" height="34" fill="#241408"/>
+    <path d="M4 126 H156" stroke="#A9682F" stroke-width="4" stroke-linecap="round"/>
+    <path d="M24 122 Q66 62 118 96" stroke="#F0C662" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="4 9" opacity="0.55"/>
+    <path d="M56 58 V160" stroke="#F8F2E5" stroke-width="6" stroke-linecap="round" stroke-dasharray="10 8"/>
+    <rect x="51" y="110" width="10" height="18" rx="2.5" fill="#F3E6CE"/>
+    <rect x="51" y="110" width="10" height="6" rx="2.5" fill="#C8553D"/>
+    <g transform="translate(40.00 17.20) scale(0.56)">
+      <path d="M84 152 L46 138" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/>
+      <path d="M116 152 L154 138" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/>
+      <circle cx="100" cy="148" r="14" fill="url(#border-hopper-gold)"/>
+      <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#border-hopper-gold)"/>
+      <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#border-hopper-gold)"/>
+      <path d="M70 66 Q80 60 90 64" stroke="#1A0F0B" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+      <path d="M110 64 Q120 60 130 66" stroke="#1A0F0B" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+      <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+      <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+      <path d="M80 102 Q100 118 120 102" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+    </g>
+    <path d="M26 47 Q27.3 50.9 31 52 Q27.3 53.1 26 57 Q24.7 53.1 21 52 Q24.7 50.9 26 47 Z" fill="#F0C662" opacity="0.9"/>
+    <path d="M134 111 Q135.3 114.9 139 116 Q135.3 117.1 134 121 Q132.7 117.1 129 116 Q132.7 114.9 134 111 Z" fill="#F0C662" opacity="0.9"/>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#A9682F" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#A9682F" stroke-width="1.4" opacity="0.34"/>
+</svg>
