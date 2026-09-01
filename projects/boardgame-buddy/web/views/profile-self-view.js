@@ -1,7 +1,7 @@
 // views/profile-self-view.js — Profile Hub.
 //
 // Account card → a tappable "Your stats" block → warm-cream preview cards
-// (Achievements / Collection / Wishlist / Recent plays / Buddies). Each
+// (Achievements / Collection / Recent plays / Buddies). Each
 // preview's "See all →" routes to a dedicated full-screen spoke, and the stats
 // block routes to /profile/stats. Settings is reachable via the avatar in the
 // global header. Every card but Achievements seeds from a single
@@ -95,7 +95,6 @@
         ${this._error ? `<div class="alert alert-error text-sm mt-3">${escapeHtml(this._error)}</div>` : ""}
         ${this._renderAchievementsPreview()}
         ${this._renderCollectionPreview(b)}
-        ${this._renderWishlistPreview(b)}
         ${this._renderPlaysPreview(b)}
         ${this._renderBuddiesPreview(b)}
         <div style="height: 1rem"></div>
@@ -333,24 +332,6 @@
       });
     }
 
-    _renderWishlistPreview(b) {
-      const items = (b && b.wishlist_page) || [];
-      const count = (b && b.wishlist_total) || 0;
-      return this._previewCard({
-        icon: "star",
-        title: "Wishlist",
-        sub: `${count} game${count === 1 ? "" : "s"}`,
-        // Same spoke as the card above it, on its wishlist shelf — the two used
-        // to be separate screens.
-        route: "collection",
-        params: { shelf: "wishlist" },
-        body: items.length
-          ? `<div class="preview-card__covers">${items.slice(0, PREVIEW_COVERS).map((it) => this._cover(it)).join("")}</div>`
-          : `<div class="preview-card__empty">Nothing on your wishlist yet.</div>`,
-        modifier: "preview-card--wishlist",
-      });
-    }
-
     _renderPlaysPreview(b) {
       const plays = (b && b.recent_plays) || [];
       const total = (b && b.recent_plays_total) || 0;
@@ -429,24 +410,15 @@
         </span>`;
     }
 
-    /**
-     * @param {Object} opts
-     * @param {Object} [opts.params] Route params for "See all". The Collection
-     *   spoke takes ?shelf=, so two cards on this hub point at the same route.
-     */
-    _previewCard({ icon, title, sub, route, params, body, modifier = "", badge = 0, badgeLabel = "" }) {
-      // escapeAttr, not raw: the onclick is a double-quoted attribute and
-      // JSON.stringify emits double quotes, which would close it. The parser
-      // decodes &quot; back to " before the JS ever runs.
-      const args = params ? `,${escapeAttr(JSON.stringify(params))}` : "";
+    _previewCard({ icon, title, sub, route, body, badge = 0, badgeLabel = "" }) {
       return `
-        <section class="preview-card ${modifier}">
+        <section class="preview-card">
           ${this._countBadge(badge, badgeLabel)}
           <header class="preview-card__head">
             <span class="preview-card__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
             <h3 class="preview-card__title font-display">${escapeHtml(title)}</h3>
             <span class="preview-card__sub">${escapeHtml(sub)}</span>
-            <button class="preview-card__seeall" onclick="window.router.go('${route}'${args})">
+            <button class="preview-card__seeall" onclick="window.router.go('${route}')">
               See all <i data-icon="chevron-right" class="w-3 h-3"></i>
             </button>
           </header>

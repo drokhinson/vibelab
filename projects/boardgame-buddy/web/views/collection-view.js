@@ -533,8 +533,7 @@
     /**
      * The count for a shelf's picker row and header — what the user OWNS,
      * which on the Owned shelf is fewer than the tiles on screen: a prev_owned
-     * game (sold, gifted, donated) is listed there but not counted there. The
-     * difference is named rather than hidden — see _countLabel.
+     * game (sold, gifted, donated) is listed there but not counted there.
      */
     _modeTotal(mode) {
       // The visible tree, so the header count follows a search the same way
@@ -547,10 +546,10 @@
     }
 
     /**
-     * "12 games · 3 prev. owned" — the owned count, plus the prev-owned tally
-     * it excludes. Without that suffix the header reads "12 games" over 15
-     * tiles and looks like a bug; the suffix is what makes the subtraction
-     * legible.
+     * "12 games" — the owned count for the header and the shelf picker. The
+     * prev-owned tally it excludes is not named here: those games carry their
+     * own "Prev. owned" stamp on the tile, which is where the difference
+     * between the count and the tiles on screen is explained.
      *
      * `rows: true` asks instead for a plain count of the TILES, which is what
      * an end-of-list marker is about — it says the scroll is finished, not
@@ -561,8 +560,7 @@
       const noun = (entry && entry.noun) || "game";
       const parted = mode === MODE_EXPANSIONS ? 0 : (this.ctl.parted[mode] || 0);
       const n = rows ? this._modeTotal(mode) + parted : this._modeTotal(mode);
-      const label = `${n} ${noun}${n === 1 ? "" : "s"}`;
-      return !rows && parted > 0 ? `${label} · ${parted} prev. owned` : label;
+      return `${n} ${noun}${n === 1 ? "" : "s"}`;
     }
 
     /**
