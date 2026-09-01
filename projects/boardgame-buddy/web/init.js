@@ -308,6 +308,12 @@
     // Dismissing without saving leaves the flag set so the modal returns on
     // next load.
     if (me && me.needs_setup) {
+      // Ask for the buddy suggestions NOW, not when the step that needs them
+      // opens: the user is about to spend several seconds naming themselves,
+      // and that is the window this request should be spent in.
+      if (window.Buddy && window.Buddy.prefetchOnboarding) {
+        window.Buddy.prefetchOnboarding(12);
+      }
       // Park it if a QR arrival owns the screen; releaseQrHold() runs it when
       // the sheet closes (or when the deadline gives up on it).
       const run = () => maybePromptFirstTimeSetup(me);
@@ -384,110 +390,23 @@
     }
   }
 
+  // First-run setup: one deck, three counted slides and an uncounted finale
+  // (widgets/onboarding-deck.js). It replaced three modals opened back to back,
+  // each awaiting its own write before the next appeared — so this function is
+  // now a mount rather than a sequence, and every write it makes is queued
+  // inside the deck rather than awaited out here.
+  //
+  // Still best-effort in exactly the way the sequence was: an absent widget is
+  // a no-op, and every exit leaves the user on their feed. What changed is
+  // where a failure lands — the deck's finale ledger says what did not go
+  // through and that Settings is where to do it again, instead of an alert
+  // that ends the flow.
   async function maybePromptFirstTimeSetup(me) {
-    // The auto-created display name is the email local-part — usable but not
-    // personal. Seed the input with it so the user can keep it or rewrite.
-    const picked = await window.PolaroidPopup.avatarCustomizer({
-      headerTitle: "Create your profile",
-      includeNameField: true,
-      saveLabel: "Get started",
-      current: me.avatar || null,
-      displayName: me.display_name,
-    });
-    if (!picked) return; // Dismissed; modal returns next load (needs_setup still true).
+    if (!window.OnboardingDeck) return;
     try {
-      const updated = await window.api.post("/profile", {
-        display_name: picked.displayName,
-        avatar: {
-          icon: picked.icon,
-          iconColor: picked.iconColor,
-          bgColor: picked.bgColor,
-        },
-      });
-      window.store.set("user", new window.User({ ...me, ...updated }));
+      await window.OnboardingDeck.open(me);
     } catch (e) {
-      window.PolaroidPopup.alert({
-        title: "Couldn't save your profile",
-        body: (e && e.message) ? String(e.message) : "Please try again from Settings.",
-      });
-      // Setup didn't complete, so don't move them on to the later steps — the
-      // whole modal returns on the next load (needs_setup is still true).
-      return;
-    }
-    await promptAddBuddies();
-    await promptLinkBgg();
-  }
-
-  // Step two of first-time setup: offer a few people to add, multi-select,
-  // one batch of requests or skip. Runs only on this path — an established
-  // account meets the same suggestions as the Feed and Buddies rails.
-  //
-  // Deliberately best-effort. Every failure mode here (no candidates, a dead
-  // network, a rejected batch) ends with the user on their feed with a
-  // finished profile, because a discovery step is not worth blocking a
-  // completed signup on.
-  async function promptAddBuddies() {
-    if (!window.AddBuddiesModal) return;
-    let suggestions = [];
-    try {
-      const res = await window.Buddy.onboardingSuggestions(12);
-      suggestions = (res && res.suggestions) || [];
-    } catch (e) {
-      console.warn("Buddy suggestions unavailable; skipping the step:", e);
-      return;
-    }
-    // The card itself tolerates an empty list — it has a search field, so
-    // there is always something to do on it. This guard survives for a
-    // different reason, particular to first-run: an account ninety seconds old
-    // has nobody to search FOR. Interrupting someone's first minute with an
-    // empty grid and a box they cannot fill reads as a broken feature; from
-    // the Buddies screen, where the user asked for this card, it does not.
-    if (suggestions.length === 0) return;
-
-    let result;
-    try {
-      result = await window.AddBuddiesModal.open({ suggestions });
-    } catch (e) {
-      console.warn("Add-buddies step failed:", e);
-      return;
-    }
-    if (!result || result.action !== "sent") return;
-
-    // Partial failures are benign and self-evident — the ones that landed show
-    // as pending on the Buddies screen and the rest simply don't. A batch
-    // where NOTHING landed is not self-evident, though: the user ticked
-    // several people, watched the screen close, and got nothing. Say so.
-    if (result.sent.length === 0 && result.failed.length > 0) {
-      const first = result.failed[0];
-      window.PolaroidPopup.alert({
-        title: "Couldn't send those requests",
-        body: first && first.detail
-          ? `${first.detail}. You can add buddies any time from the Buddies screen.`
-          : "You can add buddies any time from the Buddies screen.",
-      });
-    }
-  }
-
-  // Step three of first-time setup: offer to link BoardGameGeek and, if they
-  // do, watch the import land.
-  //
-  // Last of the three deliberately. The two steps before it are a tap and a
-  // batch of taps — seconds each — whereas this one can legitimately sit on
-  // screen for minutes while a large collection imports, and whatever is
-  // behind the last card is the user's feed, which needs nobody's permission
-  // to wait. Putting it second would have parked "Add buddies" behind an
-  // import nobody asked to watch to the end.
-  //
-  // Best-effort in exactly the same way as step two: the modal never rejects,
-  // an absent widget is a no-op, and every exit leaves the user on their feed
-  // with a finished profile. Skipping costs nothing — the same link lives in
-  // Settings → Connections.
-  async function promptLinkBgg() {
-    if (!window.OnboardingBggModal) return;
-    try {
-      await window.OnboardingBggModal.open();
-    } catch (e) {
-      console.warn("Link-BoardGameGeek step failed:", e);
+      console.warn("First-run setup failed:", e);
     }
   }
 

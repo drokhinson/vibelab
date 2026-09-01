@@ -108,6 +108,11 @@
    *   skip TO. Opened from the Buddies screen there is no sequence and the same
    *   button is just backing out, so that caller passes "Cancel".
    * @param {string} [opts.dismissAriaLabel="Skip for now"]  the ×'s name.
+   * @param {Object} [opts.network]  the preloaded second hop from
+   *   GET /buddies/suggested/onboarding (migration 072). Ticking someone
+   *   appends the people THEY know to the bottom of the grid, in the same
+   *   frame, with no request. Omitted by the Buddies-screen caller, which has
+   *   no such payload — the card then behaves exactly as it did before.
    * @returns {Promise<AddBuddiesResult>}
    */
   function open(opts) {
@@ -115,8 +120,15 @@
     return new Promise((resolve) => {
       teardown();
 
-      const list = o.suggestions || [];
+      // `let`, not `const`: promotions append to it, so a full repaint (the
+      // search query being cleared) reproduces the grid the user built.
+      let list = o.suggestions || [];
       const relationFor = o.relationFor || function () { return null; };
+      // Empty index when the caller passed no network — every call below is
+      // then a no-op, which is how the Buddies-screen caller opts out.
+      const network = window.BuddyNetwork
+        ? window.BuddyNetwork.from(o.network ? { network: o.network } : null)
+        : null;
       const dismissLabel = o.dismissLabel || "Skip";
       const dismissAriaLabel = o.dismissAriaLabel || "Skip for now";
 
@@ -251,6 +263,8 @@
       // and its caret (.claude/rules/overlays.md §6). The host's own box is a
       // fixed three rows, so nothing outside it moves either.
       function paintGrid() {
+        // Anything promoted while the grid was showing search results is
+        // already in `list`; this paint is where it becomes visible.
         const rows = query ? results : pinnedThenSuggestions();
         // `searching` is checked before the zero-results branch, or an
         // in-flight search renders "No one matches" for 300ms
@@ -272,6 +286,52 @@
         grid.classList.toggle("is-message", !!message);
         // A scroll cue that costs no layout, so it cannot reintroduce the
         // resizing the fixed height exists to remove.
+        grid.classList.toggle("is-scrollable", grid.scrollHeight > grid.clientHeight + 1);
+      }
+
+      /**
+       * Everyone currently rendered or pinned — what a promotion must not
+       * duplicate.
+       */
+      function onScreenIds() {
+        const ids = new Set(list.map((s) => s.user_id));
+        picked.forEach((_p, id) => ids.add(id));
+        results.forEach((r) => ids.add(r.user_id));
+        return ids;
+      }
+
+      /**
+       * Ticking someone introduces the people they know (migration 072).
+       *
+       * APPENDS. It never re-renders the grid and never touches a tile that
+       * is already there: `insertAdjacentHTML("beforeend", …)` adds nodes
+       * below the last one, so the tile under the user's finger survives, the
+       * scroll position is untouched, and nothing above the insertion point
+       * moves (.claude/rules/overlays.md §6). That is also why an untick takes
+       * nothing back — see domain/buddy-network.js.
+       *
+       * Deferred, not skipped, while a query is showing (the grid is painted
+       * from search results, where a suggestion tile does not belong) or
+       * while the batch is sending (the grid is frozen under a "Sending…"
+       * footer). The next full paint flushes them.
+       */
+      function promoteFrom(userId) {
+        if (!network || network.isEmpty) return;
+        const rows = network.promote(userId, onScreenIds());
+        if (!rows.length) return;
+        list = list.concat(rows);
+        // Nothing more to do while a query is showing (the grid is painted
+        // from search results) or mid-send (it is frozen under "Sending…").
+        // The rows are in `list`, so the next full paint renders them.
+        if (query || sending) return;
+        // A message is occupying the host — "No suggestions right now" — so
+        // there is nothing to append to. Paint instead; the rows are in
+        // `list` already.
+        if (grid.classList.contains("is-message")) { paintGrid(); return; }
+        grid.insertAdjacentHTML("beforeend", rows.map(tileFor).join(""));
+        // Re-hydrate ONLY what was added: BgbIcons.render over the whole grid
+        // would walk every tile including the one being pressed.
+        window.BgbIcons.render(grid);
         grid.classList.toggle("is-scrollable", grid.scrollHeight > grid.clientHeight + 1);
       }
 
@@ -315,6 +375,9 @@
         tile.classList.toggle("is-selected", nowOn);
         tile.setAttribute("aria-pressed", nowOn ? "true" : "false");
         syncFooter();
+        // After the tile and the footer have settled, so the tap's own frame
+        // does the smallest possible amount of work.
+        if (nowOn) promoteFrom(id);
       }
 
       // ── Search ────────────────────────────────────────────────────────────

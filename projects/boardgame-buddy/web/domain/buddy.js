@@ -11,6 +11,9 @@
   const FRESH_TTL_MS = 24 * 60 * 60 * 1000;
   const STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+  // The one-shot first-run suggestion prefetch — see prefetchOnboarding below.
+  let _onboardingPrefetch = null;
+
   class Buddy {
     constructor(raw) { Object.assign(this, raw || {}); }
 
@@ -64,6 +67,32 @@
     // candidate carries a `source` saying which tier it came from.
     static onboardingSuggestions(limit) {
       return window.api.get("/buddies/suggested/onboarding", limit ? { limit } : {});
+    }
+
+    // First-run's suggestions, asked for the moment we learn the account needs
+    // setting up — while the user is still on the deck's first slide naming
+    // themselves. By the time slide 2 arrives the grid usually paints from
+    // this instead of opening on a spinner.
+    //
+    // A single-slot, consume-once channel rather than a cache entry, in the
+    // shape of PlaySession.prefetchLobby: the payload is for exactly one
+    // screen in one session, and the reasons suggested()/onboardingSuggestions()
+    // are uncached (a stale copy offers Add for a request already sent) apply
+    // just as hard to a second reader of this one.
+    static prefetchOnboarding(limit) {
+      if (_onboardingPrefetch) return _onboardingPrefetch;
+      // Swallowed here so an unconsumed rejection never reaches the console as
+      // an unhandled promise; the consumer sees the rejection it awaits.
+      _onboardingPrefetch = Buddy.onboardingSuggestions(limit || 12);
+      _onboardingPrefetch.catch(() => {});
+      return _onboardingPrefetch;
+    }
+
+    /** The prefetched promise, if one is parked. Clears the slot. */
+    static takePrefetchedOnboarding() {
+      const p = _onboardingPrefetch;
+      _onboardingPrefetch = null;
+      return p;
     }
 
     // Multi-select send. Resolves { sent: string[], sent_count, failed:
