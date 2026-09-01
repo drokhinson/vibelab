@@ -4991,19 +4991,30 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-muted);
 }
 .ghost-claim-sheet__note--loading { opacity: 0.7; }
+/* The buttons, outside .ghost-claim-sheet__body so the prose scrolls and they
+   do not (overlays.md §3). Holds ONE control set at a time — the claim pair,
+   or a lone Cancel while the lookup is in flight / blocked. See _foot(). */
+.ghost-claim-sheet__foot {
+  flex: none;
+  margin: 0 2px;
+}
 .ghost-claim-sheet__actions {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
-/* 52px, per mobile-web.md §5. Deliberately quieter than .bgb-sheet__cancel
-   below it: "Not me" is a real write (it suppresses the suggestion for good),
-   but it is the answer nobody came here to give, so it must not compete with
-   the primary — and it must not read as the way OUT of the sheet, which is
-   what Cancel is for. Transparent with a hairline, one step below Cancel's
-   filled treatment. `.ghost-claim-sheet .btn` doubles the class so it beats
-   DaisyUI's own .btn-ghost (0,1,0) rather than tying and losing on source
-   order (mobile-web.md §3). */
+/* 52px, per mobile-web.md §5. Deliberately quieter than the primary above it:
+   "Not me" is a real write (it suppresses the suggestion for good), but it is
+   the answer nobody came here to give, so it must not compete.
+
+   It IS the second of the sheet's only two buttons. There is no Cancel beside
+   it any more: the sheet asks one yes/no question, and a Cancel sitting next
+   to "Not me" made the two read as interchangeable ways out when only one of
+   them is. Leaving without answering is the backdrop, Escape or the grip.
+   Transparent with a hairline so it still reads as subordinate to the primary.
+   `.ghost-claim-sheet .btn` doubles the class so it beats DaisyUI's own
+   .btn-ghost (0,1,0) rather than tying and losing on source order
+   (mobile-web.md §3). */
 .ghost-claim-sheet .ghost-claim-sheet__dismiss {
   min-height: 52px;
   border: 1px solid var(--polaroid-line);
