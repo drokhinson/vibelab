@@ -3229,12 +3229,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    screen, and the first-run "Link BoardGameGeek" polaroid card, which is a
    body-level overlay and so escapes the spoke screen's own re-point (§8).
    Add the next light surface that hosts an import log here by name. */
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log { color: var(--polaroid-ink, #1D1812); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__icon { color: var(--accent-ink); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__icon--idle { background: var(--polaroid-line, #DAC9A4); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__step--idle .bgg-log__body { color: var(--polaroid-muted, #8B7E68); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__sublist { color: var(--polaroid-muted, #8B7E68); }
-:is(.bgb-spoke-screen, .onboarding-bgg) .bgg-log__footer { color: var(--polaroid-muted, #8B7E68); }
+.bgb-spoke-screen .bgg-log { color: var(--polaroid-ink, #1D1812); }
+.bgb-spoke-screen .bgg-log__icon { color: var(--accent-ink); }
+.bgb-spoke-screen .bgg-log__icon--idle { background: var(--polaroid-line, #DAC9A4); }
+.bgb-spoke-screen .bgg-log__step--idle .bgg-log__body { color: var(--polaroid-muted, #8B7E68); }
+.bgb-spoke-screen .bgg-log__sublist { color: var(--polaroid-muted, #8B7E68); }
+.bgb-spoke-screen .bgg-log__footer { color: var(--polaroid-muted, #8B7E68); }
 /* The errored-name tail is the one line above that is NOT the same problem on
    both surfaces. Settings' spoke screen is chrome — dark in dark — so it keeps
    the base red, which is tuned for a dark ground. The onboarding card is paper
@@ -3242,7 +3242,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    the paper's own ink brings it to 5.84 dark / 7.91 light, and keeps it a token
    expression rather than a second literal red. Same mix as the sibling step's
    .add-buddies__error. */
-.onboarding-bgg .bgg-log__sublist-error {
+.bgb-spoke-screen .bgg-log__sublist-error {
   color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
 }
 .profile-panel { display: flex; flex-direction: column; gap: 0.55rem; }
@@ -9904,12 +9904,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .avatar-cust .polaroid-popup__title { margin-bottom: 4px; }
 
 /* ── "Add buddies" ───────────────────────────────────────────────────────────
-   Two callers: first-run setup's step two, and the Buddies screen's Add button
-   (widgets/add-buddies-modal.js). On the onboarding path it is a sibling of
-   .avatar-cust and .onboarding-bgg — same polaroid card, same trimmed padding —
-   because those three are consecutive screens of one flow and any difference
-   between their chrome reads as a jump. Wider than the customizer: this one
-   holds a three-column grid, not a single carousel.
+   One caller now: the Buddies screen's Add button
+   (widgets/add-buddies-modal.js). It was also first-run setup's step two, as a
+   sibling of .avatar-cust and the since-deleted .onboarding-bgg, until the
+   first-run deck (.ob-deck) took that path over — which is why the card is
+   still sized for a grid rather than a carousel, and why its select-mode tile
+   is shared rather than owned. Wider than the customizer: this one holds a
+   three-column grid.
 
    The card is deliberately PAPER in both themes and must NOT be added to the
    chrome re-point list near the top of this file: the measured ratios in
@@ -10044,93 +10045,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   flex: 1 1 0;
   min-height: 52px;
   height: auto;
-}
-
-/* ── Onboarding step three: "Link BoardGameGeek" ─────────────────────────────
-   Third sibling of .avatar-cust / .add-buddies — same polaroid card,
-   same trimmed padding, same inner scroll, because the three are consecutive
-   screens of one flow and any difference between their chrome reads as a jump.
-   Shares the 420px cap with the buddies grid: the import log's game-name
-   sublist wants the same width the tiles do. */
-.onboarding-bgg {
-  width: min(420px, 92vw);
-  /* Let the close button overhang the corner without a scrollbar; the
-     vertical scroll lives on __body, exactly as its two siblings do. */
-  overflow: visible;
-  padding: 0;
-}
-.onboarding-bgg:focus { outline: none; }   /* programmatic focus only */
-.onboarding-bgg__body {
-  padding: 18px 14px 16px;
-  max-height: calc(100vh - 36px);
-  max-height: calc(var(--bgb-vv-h, 100dvh) - 36px);
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-.onboarding-bgg .polaroid-popup__title { margin-bottom: 4px; }
-.onboarding-bgg .polaroid-popup__body { margin-bottom: 12px; }
-
-/* BGG's own lockup: a fixed-colour navy/orange mark we neither recolour nor
-   filter (.claude/rules/assets.md). It needs no plate here — the polaroid card
-   is paper, so it is light in both themes, which is the ground the mark was
-   drawn for. */
-.onboarding-bgg__mark {
-  display: block;
-  width: 132px;
-  height: auto;
-  margin: 0 auto 12px;
-}
-
-.onboarding-bgg__form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.onboarding-bgg__error {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.35;
-  /* Same deepened rust as the sibling step's error: --rust straight is 3.9:1
-     on the dark theme's paper, under the 4.5:1 that 12px body text needs. */
-  color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
-  text-align: left;
-}
-
-.onboarding-bgg__note {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--polaroid-muted);
-  text-align: left;
-}
-
-/* Both commit buttons get the 52px target (.claude/rules/mobile-web.md §5) and
-   share the row evenly — Skip is a real destination here, not a corner escape.
-   Same button sizing as .add-buddies__actions; the two steps are one flow. It
-   does NOT take that row's divider, because this card scrolls as one block and
-   its buttons sit at the end of the content rather than pinned above it. */
-.onboarding-bgg__actions {
-  gap: 10px;
-}
-.onboarding-bgg__actions .btn {
-  flex: 1 1 0;
-  min-height: 52px;
-  height: auto;
-}
-
-/* The log is the shared ui/bgg-import-log.js readout; the card owns only where
-   it sits. Left-aligned against the card's centred title, because it is a list
-   of statements to read down, not a caption. */
-.onboarding-bgg__log { text-align: left; }
-/* The footer stacks a note over the action row; the gap is the parent's so the
-   action row itself carries no vertical margin of its own (the form above
-   spaces its children the same way). */
-.onboarding-bgg__foot {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 /* ── A labelled text field on a polaroid card ────────────────────────────────

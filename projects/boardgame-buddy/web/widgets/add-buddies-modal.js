@@ -2,10 +2,11 @@
 //
 // Both of them put the same question to the user — who do you want to add? —
 // so they get the same screen rather than two that drift:
-//   • first-run setup, as step 2 of 3: the user has just saved a display name
-//     and a badge in PolaroidPopup.avatarCustomizer, and this offers a grid of
-//     people they may know before the BoardGameGeek step closes the sequence
-//     (widgets/onboarding-bgg-modal.js).
+//   • first-run setup, as step 2 of 3 — until widgets/onboarding-deck.js
+//     replaced that sequence with one deck. The deck renders the same
+//     select-mode tile and shares this card's promote logic
+//     (domain/buddy-network.js), so the two surfaces still agree
+//     (the deck's BGG slide).
 //   • the Buddies screen's Add button, which replaced the profile-search bar
 //     that used to sit at the top of that page (views/buddies-view.js).
 //
@@ -21,7 +22,7 @@
 // starts in a modal, it has no URL worth deep-linking, and a real view would
 // need a back-stack entry that means nothing once setup is done. It borrows
 // the .polaroid-popup__* chrome so the three steps read as one flow — the same
-// thing widgets/onboarding-bgg-modal.js does.
+// thing the first-run deck's own slides do.
 //
 // The tiles are NOT bespoke markup: they are the canonical buddy-suggestion
 // tile in its "select" mode (ui/buddy-suggestion-rail.js), which is what the

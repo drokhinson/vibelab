@@ -640,7 +640,8 @@ projects/boardgame-buddy/web/
 │   ├── add-buddies-modal.js  → the Buddies screen's Add button: search or pick, one
 │   │     batched send. Was also first-run step 2 until the deck replaced it, and
 │   │     still shares the deck's promote logic (domain/buddy-network.js)
-│   ├── onboarding-bgg-modal.js      → Settings → Connections: link BGG, watch the import
+│   │     (widgets/onboarding-bgg-modal.js was deleted here — the deck's slide 3
+│   │      replaced its only caller, and Settings could already link and sync)
 │   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
 │
 ├── views/                  ← One file per screen / route

@@ -10,7 +10,9 @@
 //       PolaroidPopup.avatarCustomizer when this became its second caller
 //   2 · buddies — ui/buddy-suggestion-rail.js's select-mode tile, the same one
 //       the Add-buddies card and both rails render
-//   3 · BoardGameGeek — the fields and copy of widgets/onboarding-bgg-modal.js
+//   3 · BoardGameGeek — the fields and copy of the deleted
+//       widgets/onboarding-bgg-modal.js, whose import readout stays shared
+//       with Settings as ui/bgg-import-log.js
 //
 // THE RULE THIS FILE EXISTS TO KEEP: no handler below awaits anything. Continue
 // and Skip queue a write through deck.queue() and call deck.next() in the same
