@@ -1,0 +1,1050 @@
+<title>BoardgameBuddy Onboarding Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@500;700&display=swap" />
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   ONBOARDING DECK — design board
+   Same chrome as stats-mock.html / feed-card-sizes-mock.html: a dark "pin-up
+   wall" that holds on either host ground. The PHONE SCREEN carries the real
+   BGB token palettes (both themes, verbatim from web/styles.css) and is
+   flipped by the toggle.
+
+   What it shows: first-run setup rebuilt as ONE slide deck instead of three
+   stacked polaroid modals.
+     • every step is a slide on a single track
+     • a step counter + segment bar pinned at the top
+     • Continue / Skip move the track on the same frame as the tap
+     • every write is queued and forgotten — nothing awaits a round trip
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: dark;
+  --board-bg:    #140F0C;
+  --board-panel: #1C1511;
+  --board-line:  rgba(224, 169, 74, 0.16);
+  --board-ink:   #EFE5D6;
+  --board-dim:   #A2937F;
+  --board-faint: #756455;
+  --gold:        #E0A94A;
+  --gold-deep:   #B9832C;
+  --terra:       #C8553D;
+  --green:       #6FBF7F;
+  --sans:  'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --disp:  'Fraunces', Georgia, serif;
+  --mono:  'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--board-bg);
+  background-image: radial-gradient(ellipse 90% 46% at 50% -8%, rgba(224,169,74,0.13), transparent 64%);
+  color: var(--board-ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 2.6rem 1.5rem 5rem; }
+
+/* ── Masthead ─────────────────────────────────────────────────────────── */
+.mast { border-bottom: 1px solid var(--board-line); padding-bottom: 1.6rem; margin-bottom: 2.4rem; }
+.mast__eyebrow {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--gold-deep); margin-bottom: 0.6rem;
+}
+.mast h1 {
+  font-family: var(--disp); font-weight: 600; font-size: clamp(2rem, 4.4vw, 3rem);
+  line-height: 1.04; letter-spacing: -0.02em; margin: 0 0 0.7rem; text-wrap: balance;
+}
+.mast h1 em { font-style: normal; color: var(--gold); }
+.mast p { margin: 0; max-width: 66ch; font-size: 1rem; line-height: 1.62; color: var(--board-dim); }
+.mast p b { color: var(--board-ink); font-weight: 600; }
+
+/* ── Toolbar ──────────────────────────────────────────────────────────── */
+.toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-top: 1.5rem; }
+.tool {
+  font: inherit; font-size: 0.8rem; font-weight: 600;
+  background: rgba(224,169,74,0.08); color: var(--board-ink);
+  border: 1px solid var(--board-line); border-radius: 999px;
+  padding: 0.5rem 0.95rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.45rem;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.tool:hover { background: rgba(224,169,74,0.16); border-color: rgba(224,169,74,0.34); }
+.tool:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.tool__key { font-family: var(--mono); font-size: 0.72rem; color: var(--board-faint); }
+
+/* ── Sections ─────────────────────────────────────────────────────────── */
+section { margin-top: 3.2rem; }
+.sec-head { display: flex; align-items: baseline; gap: 0.85rem; margin-bottom: 0.7rem; }
+.sec-num {
+  font-family: var(--mono); font-size: 0.72rem; font-weight: 700; color: var(--gold-deep);
+  border: 1px solid var(--board-line); border-radius: 5px; padding: 0.15rem 0.4rem; flex: 0 0 auto;
+}
+.sec-head h2 {
+  font-family: var(--disp); font-weight: 600; font-size: 1.5rem; letter-spacing: -0.015em;
+  margin: 0; text-wrap: balance;
+}
+.sec-lede { font-size: 0.94rem; line-height: 1.65; color: var(--board-dim); max-width: 68ch; margin: 0 0 1.6rem; }
+.sec-lede b { color: var(--board-ink); font-weight: 600; }
+.sec-lede code {
+  font-family: var(--mono); font-size: 0.85em; color: var(--gold);
+  background: rgba(224,169,74,0.10); padding: 0.1em 0.35em; border-radius: 4px;
+}
+
+/* ── Stage ────────────────────────────────────────────────────────────── */
+.stage { display: flex; gap: 2.4rem; align-items: flex-start; flex-wrap: wrap; }
+.stage__info { flex: 1 1 380px; min-width: 320px; }
+
+/* Phone shell */
+.phone {
+  width: 392px; flex: 0 0 392px;
+  border-radius: 34px; padding: 8px;
+  background: linear-gradient(160deg, #2B211A, #17110D);
+  box-shadow: 0 30px 60px -24px rgba(0,0,0,0.85), 0 0 0 1px rgba(224,169,74,0.14);
+}
+.screen {
+  border-radius: 27px; overflow: hidden; position: relative;
+  height: 720px; display: flex; flex-direction: column;
+  background: var(--bg-0); color: var(--ink);
+  font-family: var(--font-sans);
+  background-image: var(--screen-glow);
+}
+
+/* ── BGB token palettes, copied from web/styles.css ───────────────────── */
+[data-bgb="dark"] .tokens {
+  color-scheme: dark;
+  --bg-0:#1A1310; --bg-1:#251C16; --bg-2:#33261C;
+  --ink:#F0E7D8; --ink-muted:#B0A18E; --ink-faint:#847665;
+  --line:rgba(255,255,255,0.08); --line-strong:rgba(255,255,255,0.16);
+  --accent:#E0A94A; --accent-hover:#EFBC62; --accent-quiet:rgba(224,169,74,0.14);
+  --accent-ink:#8A5F0B; --accent-fill:#E0A94A; --on-accent:#2B1E06;
+  --accent-fill-grad:linear-gradient(120deg,#F0C662,#E0A94A 60%,#EFBC62);
+  --accent-fill-sh:0 6px 14px -4px rgba(201,146,42,0.55), inset 0 1px 0 rgba(255,255,255,0.4);
+  --win:#C8553D; --ok:#3E9E52;
+  --paper:#F8F2E5; --paper-ink:#211A12; --paper-muted:#6F6556; --paper-line:#E6DCC8;
+  --card-border:transparent;
+  --shadow-c:rgba(12,5,0,0.62);
+  --nav-bg:#241809;
+  --screen-glow: radial-gradient(ellipse 130% 42% at 50% -4%, rgba(224,169,74,0.20), transparent 62%);
+  --field-bg:#FFFFFF; --field-ink:#211A12; --field-line:rgba(42,32,20,0.18);
+}
+[data-bgb="light"] .tokens {
+  color-scheme: light;
+  --bg-0:#F7F0E1; --bg-1:#FFFBF2; --bg-2:#FFFFFF;
+  --ink:#2A2016; --ink-muted:#6F6252; --ink-faint:#93856F;
+  --line:rgba(36,28,20,0.11); --line-strong:rgba(36,28,20,0.20);
+  --accent:#A87215; --accent-hover:#8E5F10; --accent-quiet:rgba(168,114,21,0.13);
+  --accent-ink:#7F540D; --accent-fill:#8E5F10; --on-accent:#FFFFFF;
+  --accent-fill-grad:linear-gradient(120deg,#9C6812,#8E5F10 55%,#7A4F0B);
+  --accent-fill-sh:0 6px 14px -4px rgba(122,79,11,0.32), inset 0 1px 0 rgba(255,255,255,0.22);
+  --win:#A8452F; --ok:#1B6029;
+  --paper:#FFFFFF; --paper-ink:#2A2016; --paper-muted:#7C7263; --paper-line:#E8DFCD;
+  --card-border:rgba(48,34,20,0.12);
+  --shadow-c:rgba(120,88,44,0.20);
+  --nav-bg:#FFFBF2;
+  --screen-glow: radial-gradient(ellipse 130% 42% at 50% -4%, rgba(224,169,74,0.26), transparent 62%);
+  --field-bg:#FFFFFF; --field-ink:#2A2016; --field-line:rgba(42,32,20,0.18);
+}
+.tokens {
+  --font-sans:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font-polaroid:'Fraunces',Georgia,serif;
+  --font-score:'JetBrains Mono',ui-monospace,monospace;
+  --ease:cubic-bezier(.32,.72,0,1);
+  --sh-3:0 10px 26px -12px var(--shadow-c), 0 2px 6px -2px var(--shadow-c);
+}
+
+/* ═══ THE DECK ════════════════════════════════════════════════════════════ */
+
+/* Header: back · step counter · segment bar. Pinned, outlives every slide. */
+.ob-head {
+  flex: 0 0 auto; padding: 14px 16px 12px;
+  display: grid; grid-template-columns: 32px 1fr 32px; align-items: center; row-gap: 10px;
+}
+.ob-back {
+  width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line);
+  background: transparent; color: var(--ink-muted); cursor: pointer;
+  display: grid; place-items: center; padding: 0;
+  transition: opacity 140ms ease, background 140ms ease;
+}
+.ob-back:hover { background: var(--accent-quiet); color: var(--ink); }
+.ob-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ob-back[hidden] { visibility: hidden; display: grid; }
+.ob-count {
+  grid-column: 2; text-align: center;
+  font-family: var(--font-score); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.ob-count b { color: var(--accent); font-weight: 700; }
+.ob-bar { grid-column: 1 / -1; display: flex; gap: 5px; }
+.ob-bar__seg {
+  flex: 1; height: 4px; border-radius: 999px; background: var(--line-strong);
+  overflow: hidden; position: relative;
+}
+.ob-bar__seg::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: var(--accent); transform: scaleX(0); transform-origin: left;
+  transition: transform 260ms var(--ease);
+}
+.ob-bar__seg.is-done::after { transform: scaleX(1); }
+
+/* Track: one row of slides, moved by transform. */
+.ob-track-clip { flex: 1 1 auto; overflow: hidden; }
+.ob-track {
+  display: flex; height: 100%; width: 400%;
+  transition: transform 240ms var(--ease);
+}
+.ob-slide {
+  width: 25%; height: 100%; flex: 0 0 25%;
+  display: flex; flex-direction: column; padding: 4px 16px 0;
+}
+.ob-slide__scroll { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 8px; }
+.ob-slide__scroll::-webkit-scrollbar { width: 0; }
+.ob-eyebrow {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent-ink); margin-bottom: 6px;
+}
+[data-bgb="dark"] .ob-eyebrow { color: var(--accent); opacity: 0.85; }
+.ob-title {
+  font-family: var(--font-polaroid); font-weight: 600; font-size: 25px; line-height: 1.1;
+  letter-spacing: -0.02em; margin: 0 0 6px; color: var(--ink); text-wrap: balance;
+}
+.ob-body { font-size: 13.5px; line-height: 1.5; color: var(--ink-muted); margin: 0 0 14px; }
+
+/* Actions row — lives inside each slide, so its labels are the slide's own. */
+.ob-actions {
+  flex: 0 0 auto; display: flex; gap: 10px; align-items: center;
+  padding: 12px 0 18px; border-top: 1px solid var(--line);
+}
+.ob-btn {
+  font: inherit; font-family: var(--font-sans); font-size: 15px; font-weight: 600;
+  min-height: 46px; padding: 0 18px; border-radius: 12px; cursor: pointer;
+  border: 1px solid transparent; transition: filter 140ms ease, background 140ms ease;
+}
+.ob-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ob-btn--primary {
+  flex: 1; background: var(--accent-fill-grad); color: var(--on-accent);
+  box-shadow: var(--accent-fill-sh);
+}
+.ob-btn--primary:hover { filter: brightness(1.05); }
+.ob-btn--ghost { background: transparent; color: var(--ink-muted); border-color: var(--line-strong); }
+.ob-btn--ghost:hover { background: var(--accent-quiet); color: var(--ink); }
+
+/* Paper island — the polaroid surface, kept for the pieces that were on it. */
+.ob-paper {
+  background: var(--paper); color: var(--paper-ink);
+  border: 1px solid var(--card-border); border-radius: 14px;
+  box-shadow: var(--sh-3); padding: 14px 12px 12px; margin-bottom: 12px;
+}
+
+/* Fields */
+.ob-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.ob-field__label {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ob-paper .ob-field__label { color: var(--paper-muted); }
+.ob-input {
+  width: 100%; box-sizing: border-box; min-height: 46px; padding: 10px 12px;
+  background: var(--field-bg); color: var(--field-ink);
+  border: 1px solid var(--field-line); border-radius: 10px;
+  font-family: var(--font-sans); font-size: 15px; font-weight: 600;
+}
+.ob-input::placeholder { color: #9A8F7E; font-weight: 500; }
+.ob-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Badge + carousel (step 1) */
+.ob-badge { border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; }
+.ob-badge svg { width: 62%; height: 62%; display: block; }
+.ob-badge span {
+  font-family: var(--font-polaroid); font-weight: 700; letter-spacing: -0.01em; line-height: 1;
+}
+.ob-reel { position: relative; height: 92px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.ob-reel__badge {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  width: 76px; height: 76px; border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--paper-line);
+  pointer-events: none; z-index: 2;
+}
+.ob-reel__track { display: flex; align-items: center; gap: 14px; transition: transform 220ms var(--ease); }
+.ob-reel__slot {
+  width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer; opacity: 0.34;
+  color: var(--paper-ink); background: rgba(33,26,18,0.06);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.ob-reel__slot svg { width: 26px; height: 26px; }
+.ob-reel__slot span { font-family: var(--font-polaroid); font-weight: 700; font-size: 15px; }
+.ob-reel__slot.is-active { opacity: 0; }
+.ob-reel__name {
+  text-align: center; font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--paper-muted); margin-top: 2px;
+}
+.ob-toggle { display: flex; gap: 6px; margin: 12px 0 10px; }
+.ob-tg {
+  flex: 1; min-height: 34px; border-radius: 9px; cursor: pointer;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: transparent; color: var(--paper-muted); border: 1px solid var(--paper-line);
+}
+.ob-tg.on { background: rgba(224,169,74,0.16); color: var(--paper-ink); border-color: rgba(184,131,44,0.5); }
+.ob-tg__dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18); }
+.ob-swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.ob-sw {
+  aspect-ratio: 1; border-radius: 50%; cursor: pointer; padding: 0;
+  border: 1px solid rgba(33,26,18,0.16); display: grid; place-items: center;
+}
+.ob-sw.on { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent-ink); }
+.ob-sw__tick { width: 12px; height: 12px; display: none; }
+.ob-sw.on .ob-sw__tick { display: block; }
+
+/* Buddy tiles (step 2) */
+.ob-search { position: relative; margin-bottom: 10px; }
+.ob-search .ob-input { padding-left: 38px; }
+.ob-search__icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  width: 17px; height: 17px; color: #8A7F6E; pointer-events: none;
+}
+.ob-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ob-tile {
+  position: relative; text-align: left; cursor: pointer; padding: 10px 9px;
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  font-family: var(--font-sans); color: var(--ink);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.ob-tile:hover { border-color: var(--line-strong); }
+.ob-tile.on { border-color: var(--accent); background: var(--accent-quiet); }
+.ob-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ob-tile__name { font-size: 12.5px; font-weight: 600; line-height: 1.2; text-align: center; }
+.ob-tile__reason { font-size: 10.5px; color: var(--ink-faint); text-align: center; }
+.ob-tile__tick {
+  position: absolute; top: 7px; right: 7px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent-fill); color: var(--on-accent);
+  display: none; place-items: center;
+}
+.ob-tile.on .ob-tile__tick { display: grid; }
+.ob-empty { grid-column: 1 / -1; padding: 24px 8px; text-align: center; font-size: 12.5px; color: var(--ink-faint); }
+
+/* BGG plate (step 3) — a fixed third-party lockup keeps its own light plate. */
+.ob-plate {
+  background: #FFFFFF; border-radius: 10px; padding: 9px 14px; margin: 0 auto 12px;
+  width: max-content; box-shadow: var(--sh-3);
+}
+.ob-plate img { display: block; height: 26px; width: auto; }
+.ob-note { font-size: 11.5px; line-height: 1.45; color: var(--ink-faint); margin: 10px 0 0; }
+
+/* Ledger — the background writes, on the last slide and on the board */
+.ob-ledger { display: flex; flex-direction: column; gap: 2px; }
+.ob-job {
+  display: grid; grid-template-columns: 20px 1fr auto; align-items: start; gap: 9px;
+  padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px;
+}
+.ob-job:first-child { border-top: 0; }
+.ob-job__mark { width: 18px; height: 18px; margin-top: 1px; }
+.ob-job__label { font-weight: 600; color: var(--ink); line-height: 1.25; }
+.ob-job__meta {
+  font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; line-height: 1.35;
+  font-family: var(--font-score); font-variant-numeric: tabular-nums;
+}
+.ob-job__ms { font-family: var(--font-score); font-size: 10.5px; color: var(--ink-faint); padding-top: 2px; }
+.ob-job--running .ob-job__mark { color: var(--accent); animation: obSpin 1.1s linear infinite; }
+.ob-job--done .ob-job__mark { color: var(--ok); }
+[data-bgb="dark"] .ob-job--done .ob-job__mark { color: #6FBF7F; }
+@keyframes obSpin { to { transform: rotate(360deg); } }
+
+.ob-done-mark { display: grid; place-items: center; margin: 6px 0 12px; }
+.ob-done-mark__ring {
+  width: 74px; height: 74px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent-quiet); color: var(--accent);
+  animation: obPop 420ms var(--ease) both;
+}
+[data-bgb="light"] .ob-done-mark__ring { color: var(--accent-ink); }
+@keyframes obPop { from { transform: scale(0.72); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* ── Board-side ledger + rules ────────────────────────────────────────── */
+.panel {
+  background: var(--board-panel); border: 1px solid var(--board-line); border-radius: 14px;
+  padding: 1.1rem 1.15rem; margin-bottom: 1.1rem;
+}
+.panel__cap {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase;
+  color: var(--board-faint); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.85rem;
+}
+.panel__cap .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
+.log { display: flex; flex-direction: column; gap: 0.1rem; font-family: var(--mono); font-size: 0.76rem; }
+.log__row {
+  display: grid; grid-template-columns: 8px 1fr auto; gap: 0.6rem; align-items: baseline;
+  padding: 0.5rem 0; border-top: 1px solid rgba(224,169,74,0.10);
+}
+.log__row:first-child { border-top: 0; }
+.log__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--board-faint); align-self: center; }
+.log__row--running .log__dot { background: var(--gold); animation: obPulse 1s ease-in-out infinite; }
+.log__row--done .log__dot { background: var(--green); }
+@keyframes obPulse { 50% { opacity: 0.35; } }
+.log__ep { color: var(--board-ink); }
+.log__when { color: var(--board-faint); font-size: 0.7rem; display: block; margin-top: 0.2rem; font-family: var(--sans); }
+.log__ms { color: var(--board-dim); font-size: 0.72rem; }
+.log__idle { color: var(--board-faint); font-size: 0.78rem; font-family: var(--sans); line-height: 1.5; }
+
+.rules { display: flex; flex-direction: column; gap: 0.9rem; margin: 0; }
+.rule { display: grid; grid-template-columns: 26px 1fr; gap: 0.75rem; }
+.rule__n {
+  font-family: var(--mono); font-size: 0.7rem; font-weight: 700; color: var(--gold-deep);
+  border: 1px solid var(--board-line); border-radius: 5px; height: 22px; display: grid; place-items: center;
+}
+.rule__t { font-size: 0.86rem; font-weight: 700; color: var(--board-ink); margin-bottom: 0.2rem; }
+.rule__d { font-size: 0.82rem; line-height: 1.55; color: var(--board-dim); }
+.rule__d code { font-family: var(--mono); font-size: 0.86em; color: var(--gold); }
+
+/* ── Compare table ────────────────────────────────────────────────────── */
+.cmp { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.cmp th, .cmp td { text-align: left; padding: 0.72rem 0.85rem; border-top: 1px solid var(--board-line); vertical-align: top; }
+.cmp thead th {
+  border-top: 0; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--board-faint);
+}
+.cmp td:first-child { color: var(--board-ink); font-weight: 600; width: 22%; }
+.cmp td { color: var(--board-dim); line-height: 1.5; }
+.cmp .now { color: #D9927F; }
+.cmp .next { color: var(--board-ink); }
+.cmp code { font-family: var(--mono); font-size: 0.85em; color: var(--gold); }
+.cmp-scroll { overflow-x: auto; }
+
+@media (max-width: 900px) {
+  .phone { width: 100%; flex: 1 1 auto; max-width: 392px; margin: 0 auto; }
+  .stage { gap: 1.6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-track, .ob-reel__track, .ob-bar__seg::after { transition: none; }
+  .ob-job--running .ob-job__mark, .log__row--running .log__dot, .ob-done-mark__ring { animation: none; }
+}
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="mast__eyebrow">BoardgameBuddy · first run · mock</div>
+    <h1>Onboarding as <em>one deck</em></h1>
+    <p>
+      Today first-run setup is three separate polaroid modals opened back to back, and each one
+      <b>waits on the network before the next appears</b> — the profile POST is awaited, the buddy
+      batch is awaited, the BGG import holds the last card open on a 2s poll. This mock rebuilds it
+      as a single slide deck: <b>a step counter pinned at the top</b>, slides that move on the same
+      frame as the tap, and <b>every write queued and forgotten</b>. Tap through the phone — the
+      ledger beside it shows what got sent while you were already two slides ahead.
+    </p>
+    <div class="toolbar">
+      <button class="tool" data-act="theme"><span data-theme-label>Light theme</span></button>
+      <button class="tool" data-act="replay">Replay from step 1</button>
+      <span class="tool" style="cursor:default; background:transparent">
+        <span class="tool__key">tip</span> nothing here calls a real API — writes are simulated with real-ish latencies
+      </span>
+    </div>
+  </header>
+
+  <!-- ── 01 · the deck ──────────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2>Three steps, one track</h2>
+    </div>
+    <p class="sec-lede">
+      Same content as today — display name and badge, add buddies, link BoardGameGeek — but the
+      user is never handed off between overlays. The counter says how far in they are and how much
+      is left, <code>Back</code> is a real move, and the finale is uncounted: the bar is full, so
+      "Step 4 of 3" never has to be printed.
+    </p>
+
+    <div class="stage">
+      <div class="phone tokens" data-phone>
+        <div class="screen">
+          <div class="ob-head">
+            <button class="ob-back" data-act="back" aria-label="Back">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <div class="ob-count" data-count aria-live="polite">Step <b>1</b> of 3</div>
+            <div class="ob-bar" data-bar>
+              <div class="ob-bar__seg"></div><div class="ob-bar__seg"></div><div class="ob-bar__seg"></div>
+            </div>
+          </div>
+
+          <div class="ob-track-clip">
+            <div class="ob-track" data-track>
+
+              <!-- ── Slide 1 · profile ─────────────────────────────────── -->
+              <div class="ob-slide">
+                <div class="ob-slide__scroll">
+                  <div class="ob-eyebrow">Your table name</div>
+                  <h2 class="ob-title">Who's playing?</h2>
+                  <p class="ob-body">Pick the name and badge your buddies will see on a scorecard.</p>
+
+                  <div class="ob-field">
+                    <label class="ob-field__label" for="ob-name">Display name</label>
+                    <input id="ob-name" class="ob-input" type="text" maxlength="40" autocomplete="off"
+                           placeholder="Your name" data-name-input />
+                  </div>
+
+                  <div class="ob-paper">
+                    <div class="ob-reel">
+                      <div class="ob-reel__badge" data-preview></div>
+                      <div class="ob-reel__track" data-reel></div>
+                    </div>
+                    <div class="ob-reel__name" data-icon-name>Initials</div>
+                    <div class="ob-toggle">
+                      <button class="ob-tg on" data-target="iconColor"><span class="ob-tg__dot" data-dot-icon></span>Icon</button>
+                      <button class="ob-tg" data-target="bgColor"><span class="ob-tg__dot" data-dot-bg></span>Background</button>
+                    </div>
+                    <div class="ob-swatches" data-swatches></div>
+                  </div>
+                </div>
+                <div class="ob-actions">
+                  <button class="ob-btn ob-btn--primary" data-act="next" data-step="1">Continue</button>
+                </div>
+              </div>
+
+              <!-- ── Slide 2 · buddies ─────────────────────────────────── -->
+              <div class="ob-slide">
+                <div class="ob-slide__scroll">
+                  <div class="ob-eyebrow">Your table</div>
+                  <h2 class="ob-title">Add your buddies</h2>
+                  <p class="ob-body">Tick anyone you know. We'll send the requests while you carry on.</p>
+                  <div class="ob-search">
+                    <svg class="ob-search__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+                    <input class="ob-input" type="search" placeholder="Search by name or username" data-search />
+                  </div>
+                  <div class="ob-tiles" data-tiles></div>
+                </div>
+                <div class="ob-actions">
+                  <button class="ob-btn ob-btn--ghost" data-act="skip" data-step="2">Skip</button>
+                  <button class="ob-btn ob-btn--primary" data-act="next" data-step="2" data-send-label>Send requests</button>
+                </div>
+              </div>
+
+              <!-- ── Slide 3 · BoardGameGeek ───────────────────────────── -->
+              <div class="ob-slide">
+                <div class="ob-slide__scroll">
+                  <div class="ob-plate">
+                    <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iMzQycHgiIGhlaWdodD0iNzZweCIgdmlld0JveD0iMCAwIDM0MiA3NiIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIj4KICAgIDx0aXRsZT5wb3dlcmVkLWJ5LWJnZy1yZ2I8L3RpdGxlPgogICAgPGcgaWQ9InBvd2VyZWQtYnktYmdnLXJnYiIgc3Ryb2tlPSJub25lIiBzdHJva2Utd2lkdGg9IjEiIGZpbGw9Im5vbmUiIGZpbGwtcnVsZT0iZXZlbm9kZCI+CiAgICAgICAgPGcgaWQ9Ikdyb3VwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLjY1NDMwMCwgMC4yOTY5MDApIj4KICAgICAgICAgICAgPHBhdGggZD0iTTEwNi4zMzcyLDI1Ljc1MzUgQzEwOC4wMDIyLDI1Ljc1MzUgMTA5LjAwNjIsMjYuODg1NSAxMDguODE4MiwyOC41NTA1IEwxMDYuNzQ5Miw0Ni44NTY1IEMxMDYuNTYxMiw0OC41MTk1IDEwNS4zMDIyLDQ5LjY1MzUgMTAzLjYzNzIsNDkuNjUzNSBMOTEuMzQ5Miw0OS42NTM1IEM4OS42ODQyLDQ5LjY1MzUgODguNjgxMiw0OC41MTk1IDg4Ljg2ODIsNDYuODU2NSBMOTAuOTM2MiwyOC41NTA1IEM5MS4xMjQyLDI2Ljg4NTUgOTIuMzg2MiwyNS43NTM1IDk0LjA1MDIsMjUuNzUzNSBMMTA2LjMzNzIsMjUuNzUzNSBaIE0xMTkuNDAyMywyNS43NTM0IEwxMTkuNzk1Myw0MC43NjQ0IEwxMjQuNzEyMywyNS43NTM0IEwxMjkuNzc2MywyNS43NTM0IEwxMzEuMTcyMyw0MC4zNDA0IEwxMzUuMDg4MywyNS43NTM0IEwxNDAuNjExMywyNS43NTM0IEwxMzMuNDEzMyw0OS42NTM0IEwxMjcuOTk1Myw0OS42NTM0IEwxMjUuODE4MywzNi4zMzk0IEwxMjAuNTI1Myw0OS42NTM0IEwxMTUuMjE1Myw0OS42NTM0IEwxMTMuMzgyMywyNS43NTM0IEwxMTkuNDAyMywyNS43NTM0IFogTTE2MC42ODQ4LDI1Ljc1MzQgTDE2MC4xMDQ4LDMwLjg4NjQgTDE1MC42MTQ4LDMwLjg4NjQgTDE1MC4xNDE4LDM1LjA2NjQgTDE1OC4zNTc4LDM1LjA2NjQgTDE1Ny43ODA4LDQwLjE2NDQgTDE0OS41NjY4LDQwLjE2NDQgTDE0OS4wNzg4LDQ0LjQ4NDQgTDE1OC41Njc4LDQ0LjQ4NDQgTDE1Ny45ODQ4LDQ5LjY1MzQgTDE0Mi4zNjk4LDQ5LjY1MzQgTDE0NS4wNjk4LDI1Ljc1MzQgTDE2MC42ODQ4LDI1Ljc1MzQgWiBNMjA2LjI4NDksMjUuNzUzNCBMMjA1LjcwNDksMzAuODg2NCBMMTk2LjIxNjksMzAuODg2NCBMMTk1Ljc0NDksMzUuMDY2NCBMMjAzLjk1OTksMzUuMDY2NCBMMjAzLjM4MjksNDAuMTY0NCBMMTk1LjE2NzksNDAuMTY0NCBMMTk0LjY4MDksNDQuNDg0NCBMMjA0LjE2ODksNDQuNDg0NCBMMjAzLjU4NDksNDkuNjUzNCBMMTg3Ljk3MTksNDkuNjUzNCBMMTkwLjY3MDksMjUuNzUzNCBMMjA2LjI4NDksMjUuNzUzNCBaIE0yODkuODkzMiwyNS43NTMzIEMyOTEuODQzMiwyNS43NTMzIDI5Mi45NDAyLDI2Ljk5MTMgMjkyLjc0MTIsMjguNzYyMyBMMjkyLjE0MTIsMzQuMDcyMyBDMjkxLjk1NzIsMzUuNzAyMyAyOTAuNzE4MiwzNy4yNTkzIDI4OC40NjMyLDM3Ljc5MTMgQzI5MC41OTkyLDM4LjMyMTMgMjkxLjY2OTIsMzkuODA4MyAyOTEuNDg5Miw0MS40MDMzIEwyOTAuOTAxMiw0Ni42MDYzIEMyOTAuNjg5Miw0OC40ODQzIDI4OS4zMTgyLDQ5LjY1MzMgMjg3LjM3MDIsNDkuNjUzMyBMMjcyLjQ2NDIsNDkuNjUzMyBMMjc1LjE2NDIsMjUuNzUzMyBMMjg5Ljg5MzIsMjUuNzUzMyBaIE04My43MTQsMjUuNzUyOSBDODUuMTY1LDI1Ljc1MjkgODYuMjcyLDI2LjkyMDkgODYuMDk5LDI4LjQ0MjkgTDg0LjcxMSw0MC43MzA5IEM4NC41NTEsNDIuMTQ2OSA4My4xNjksNDMuNDIxOSA4MS43MTcsNDMuNDIxOSBMNzMuMjUzLDQzLjQyMTkgTDcyLjU1LDQ5LjY1MjkgTDY2LjM4OSw0OS42NTI5IEw2OS4wOSwyNS43NTI5IEw4My43MTQsMjUuNzUyOSBaIE0xODEuNjQ0OCwyNS43NTM3IEMxODMuMDk2OCwyNS43NTM3IDE4NC4yMDI4LDI2LjkyMDcgMTg0LjAzMDgsMjguNDQyNyBMMTgyLjc5NDgsMzkuMzg0NyBDMTgyLjYzMDgsNDAuODM2NyAxODEuMjUxOCw0Mi4wNzQ3IDE3OS43OTk4LDQyLjA3NDcgTDE3OS42MjI4LDQyLjA3NDcgTDE4MS43MDQ4LDQ5LjY1MjcgTDE3NS42ODU4LDQ5LjY1MjcgTDE3My41Njg4LDQyLjA3NDcgTDE3MC45NDc4LDQyLjA3NDcgTDE3MC4wOTE4LDQ5LjY1MjcgTDE2My45MzE4LDQ5LjY1MjcgTDE2Ni42MzE4LDI1Ljc1MzcgTDE4MS42NDQ4LDI1Ljc1MzcgWiBNMjI1LjA4NTIsMjUuNzUzMSBDMjI3LjcwNTIsMjUuNzUzMSAyMjkuNjkzMiwyNy45MTMxIDIyOS4zODkyLDMwLjYwMzEgTDIyNy43ODkyLDQ0Ljc2NzEgQzIyNy40ODAyLDQ3LjQ5NDEgMjI1LjAwNjIsNDkuNjUyMSAyMjIuMzg2Miw0OS42NTIxIEwyMDkuNTMxMiw0OS42NTIxIEwyMTIuMjMxMiwyNS43NTMxIEwyMjUuMDg1MiwyNS43NTMxIFogTTMxNi44Mzg2LDI1Ljc1MzEgTDMxNi4yNTg2LDMwLjg4NzEgTDMwNS4xNzQ2LDMwLjg4NzEgQzMwNC45OTc2LDMwLjg4NzEgMzA0LjgwMTYsMzEuMDY0MSAzMDQuNzc3NiwzMS4yNzYxIEwzMDQuNzc3NiwzMS4yNzYxIEwzMDMuMzI5Niw0NC4wOTQxIEMzMDMuMzA0Niw0NC4zMDcxIDMwMy40NjU2LDQ0LjQ0ODEgMzAzLjY0MjYsNDQuNDQ4MSBMMzAzLjY0MjYsNDQuNDQ4MSBMMzA4LjYwMDYsNDQuNDQ4MSBDMzA4Ljg0NzYsNDQuNDQ4MSAzMDkuMDA1Niw0NC4zMDcxIDMwOS4wMzA2LDQ0LjA5NDEgTDMwOS4wMzA2LDQ0LjA5NDEgTDMwOS40ODY2LDQwLjA1ODEgTDMwNi4xOTk2LDQwLjA1ODEgTDMwOC43Njc2LDM0Ljk5NDEgTDMxNS43MTk2LDM0Ljk5NDEgTDMxNC4zMzg2LDQ2LjkyNzEgQzMxNC4xNjI2LDQ4LjQ4NDEgMzEyLjgyNjYsNDkuNjUyMSAzMTEuMzA0Niw0OS42NTIxIEwzMTEuMzA0Niw0OS42NTIxIEwyOTkuMzM3Niw0OS42NTIxIEMyOTcuODEzNiw0OS42NTIxIDI5Ni43MDY2LDQ4LjQ4NDEgMjk2Ljg4MjYsNDYuOTI3MSBMMjk2Ljg4MjYsNDYuOTI3MSBMMjk4Ljk3MTYsMjguNDQzMSBDMjk5LjEzNTYsMjYuOTkyMSAzMDAuNTEzNiwyNS43NTMxIDMwMi4wMzg2LDI1Ljc1MzEgTDMwMi4wMzg2LDI1Ljc1MzEgTDMxNi44Mzg2LDI1Ljc1MzEgWiBNMzQwLjY5MTEsMjUuNzUzMSBMMzQwLjExMTEsMzAuODg3MSBMMzI5LjAyNzEsMzAuODg3MSBDMzI4Ljg1MDEsMzAuODg3MSAzMjguNjU0MSwzMS4wNjQxIDMyOC42MzExLDMxLjI3NjEgTDMyOC42MzExLDMxLjI3NjEgTDMyNy4xODIxLDQ0LjA5NDEgQzMyNy4xNTcxLDQ0LjMwNzEgMzI3LjMxODEsNDQuNDQ4MSAzMjcuNDk1MSw0NC40NDgxIEwzMjcuNDk1MSw0NC40NDgxIEwzMzIuNDUzMSw0NC40NDgxIEMzMzIuNjk5MSw0NC40NDgxIDMzMi44NTgxLDQ0LjMwNzEgMzMyLjg4MzEsNDQuMDk0MSBMMzMyLjg4MzEsNDQuMDk0MSBMMzMzLjMzOTEsNDAuMDU4MSBMMzMwLjA1MjEsNDAuMDU4MSBMMzMyLjYyMDEsMzQuOTk0MSBMMzM5LjU3MjEsMzQuOTk0MSBMMzM4LjE5MTEsNDYuOTI3MSBDMzM4LjAxNjEsNDguNDg0MSAzMzYuNjc5MSw0OS42NTIxIDMzNS4xNTcxLDQ5LjY1MjEgTDMzNS4xNTcxLDQ5LjY1MjEgTDMyMy4xOTAxLDQ5LjY1MjEgQzMyMS42NjYxLDQ5LjY1MjEgMzIwLjU1OTEsNDguNDg0MSAzMjAuNzM0MSw0Ni45MjcxIEwzMjAuNzM0MSw0Ni45MjcxIEwzMjIuODIzMSwyOC40NDMxIEMzMjIuOTg4MSwyNi45OTIxIDMyNC4zNjYxLDI1Ljc1MzEgMzI1Ljg5MTEsMjUuNzUzMSBMMzI1Ljg5MTEsMjUuNzUzMSBMMzQwLjY5MTEsMjUuNzUzMSBaIE0yODUuMjIxMiwzOS44NDQzIEwyNzkuNjk3MiwzOS44NDQzIEwyNzkuMTAwMiw0NS4xMjAzIEwyODQuNjI1Miw0NS4xMjAzIEMyODQuODczMiw0NS4xMjAzIDI4NC45OTkyLDQ0Ljk0NDMgMjg1LjAxODIsNDQuNzY2MyBMMjg1LjUzMTIsNDAuMjM0MyBDMjg1LjU1MTIsNDAuMDU4MyAyODUuNDY5MiwzOS44NDQzIDI4NS4yMjEyLDM5Ljg0NDMgWiBNMjQ4LjQwOCwzMC41NDE3IEMyNDkuNTc2LDMwLjU0MTcgMjUwLjIzNCwzMS4yODM3IDI1MC4xMTQsMzIuMzQ1NyBMMjQ5Ljc1NSwzNS41Mjg3IEMyNDkuNjQ1LDM2LjUwMzcgMjQ4LjkwMiwzNy40Mzg3IDI0Ny41NSwzNy43NTc3IEMyNDguODMsMzguMDc0NyAyNDkuNDczLDM4Ljk2NTcgMjQ5LjM2MywzOS45MjA3IEwyNDkuMDEyLDQzLjAzOTcgQzI0OC44ODUsNDQuMTYzNyAyNDguMDYzLDQ0Ljg2NDcgMjQ2Ljg5Niw0NC44NjQ3IEwyMzcuOTYzLDQ0Ljg2NDcgTDIzOS41ODEsMzAuNTQxNyBMMjQ4LjQwOCwzMC41NDE3IFogTTI1Ny4yNTU4LDMwLjU0MTIgTDI1Ni41MDk4LDM3LjE0MDIgQzI1Ni40OTc4LDM3LjI0NzIgMjU2LjYxMjgsMzcuMzUzMiAyNTYuNzE4OCwzNy4zNTMyIEwyNTkuNjY4OCwzNy4zNTMyIEMyNTkuNzk1OCwzNy4zNTMyIDI1OS44Mjk4LDM3LjI0NzIgMjU5Ljg0MTgsMzcuMTQwMiBMMjYwLjU4NTgsMzAuNTQxMiBMMjY0LjI3OTgsMzAuNTQxMiBMMjYzLjMyNjgsMzguOTY1MiBDMjYzLjIyMTgsMzkuODk5MiAyNjIuMzkxOCw0MC42NjMyIDI2MS41MjM4LDQwLjY2MzIgTDI1OS42MzM4LDQwLjY2MzIgTDI1OS4xNTc4LDQ0Ljg2NDIgTDI1NS40NjY4LDQ0Ljg2NDIgTDI1NS45NDE4LDQwLjY2MzIgTDI1NC4wMzA4LDQwLjY2MzIgQzI1My4xNjI4LDQwLjY2MzIgMjUyLjUwNTgsMzkuODk5MiAyNTIuNjExOCwzOC45NjUyIEwyNTMuNTYzOCwzMC41NDEyIEwyNTcuMjU1OCwzMC41NDEyIFogTTEwMS45OTkyLDMwLjkyMTUgTDk3LjE0OTIsMzAuOTIxNSBDOTcuMDA3MiwzMC45MjE1IDk2LjgxMDIsMzEuMDk5NSA5Ni43ODcyLDMxLjMxMTUgTDk1LjMzMzIsNDQuMTY0NSBDOTUuMzEzMiw0NC4zNDE1IDk1LjQ3NDIsNDQuNDg0NSA5NS42MTcyLDQ0LjQ4NDUgTDEwMC40NjcyLDQ0LjQ4NDUgQzEwMC42NzkyLDQ0LjQ4NDUgMTAwLjg3MzIsNDQuMzQxNSAxMDAuODkzMiw0NC4xNjQ1IEwxMDIuMzQ2MiwzMS4zMTE1IEMxMDIuMzY5MiwzMS4wOTk1IDEwMi4yMTEyLDMwLjkyMTUgMTAxLjk5OTIsMzAuOTIxNSBaIE0yMjEuNDk2MiwzMC44ODcxIEwyMTcuODEyMiwzMC44ODcxIEwyMTYuMjc2Miw0NC40ODQxIEwyMTkuOTYwMiw0NC40ODQxIEMyMjAuOTg3Miw0NC40ODQxIDIyMS43NzUyLDQzLjc3NjEgMjIxLjg5MDIsNDIuNzQ4MSBMMjIzLjAzNTIsMzIuNjIxMSBDMjIzLjE1MTIsMzEuNTk1MSAyMjIuNTIzMiwzMC44ODcxIDIyMS40OTYyLDMwLjg4NzEgWiBNMjQ1LjYwNywzOC45ODc3IEwyNDIuMjk4LDM4Ljk4NzcgTDI0MS45MzksNDIuMTQ4NyBMMjQ1LjI1LDQyLjE0ODcgQzI0NS40LDQyLjE0ODcgMjQ1LjQ3NSw0Mi4wNDI3IDI0NS40ODYsNDEuOTM2NyBMMjQ1Ljc5MywzOS4yMjA3IEMyNDUuODA2LDM5LjExNDcgMjQ1Ljc1NywzOC45ODc3IDI0NS42MDcsMzguOTg3NyBaIE03OS4zNDUsMzAuODg2OSBMNzQuNjcsMzAuODg2OSBMNzMuODI2LDM4LjM1NzkgTDc4LjUsMzguMzU3OSBDNzguNjc4LDM4LjM1NzkgNzguODM4LDM4LjE4MDkgNzguODU0LDM4LjAzOTkgTDc5LjYyMywzMS4yNDA5IEM3OS42NDMsMzEuMDY0OSA3OS41MjIsMzAuODg2OSA3OS4zNDUsMzAuODg2OSBaIE0xNzcuMzEwOCwzMC44ODY3IEwxNzIuMjEyOCwzMC44ODY3IEwxNzEuNDkyOCwzNy4yNTk3IEwxNzYuNTkwOCwzNy4yNTk3IEMxNzYuNzMzOCwzNy4yNTk3IDE3Ni45Mjk4LDM3LjA4NDcgMTc2Ljk0NDgsMzYuOTQwNyBMMTc3LjU4OTgsMzEuMjQwNyBDMTc3LjYwOTgsMzEuMDYzNyAxNzcuNDUyOCwzMC44ODY3IDE3Ny4zMTA4LDMwLjg4NjcgWiBNMjQ2LjI0LDMzLjM4NDcgTDI0Mi45MywzMy4zODQ3IEwyNDIuNTk2LDM2LjM1NTcgTDI0NS45MDQsMzYuMzU1NyBDMjQ2LjA1NCwzNi4zNTU3IDI0Ni4xMjksMzYuMjQ5NyAyNDYuMTQ0LDM2LjEyMjcgTDI0Ni40MjcsMzMuNjE3NyBDMjQ2LjQzOSwzMy41MTE3IDI0Ni4zOSwzMy4zODQ3IDI0Ni4yNCwzMy4zODQ3IFogTTI4Ni4yNzcyLDMwLjQ5NjMgTDI4MC43NTUyLDMwLjQ5NjMgTDI4MC4xOTMyLDM1LjQ1NDMgTDI4NS43MTcyLDM1LjQ1NDMgQzI4NS45NjYyLDM1LjQ1NDMgMjg2LjA5MTIsMzUuMjc2MyAyODYuMTE0MiwzNS4wNjYzIEwyODYuNTg3MiwzMC44ODczIEMyODYuNjA2MiwzMC43MDkzIDI4Ni41MjcyLDMwLjQ5NjMgMjg2LjI3NzIsMzAuNDk2MyBaIiBpZD0iQ29tYmluZWQtU2hhcGUiIGZpbGw9IiMzRjNBNjAiPjwvcGF0aD4KICAgICAgICAgICAgPHBvbHlnb24gaWQ9IkZpbGwtMjUiIGZpbGw9IiNGRjUxMDAiIHBvaW50cz0iNDkuMzc0IDEzLjkzNiA0MS45MDMgMTUuOTczIDQ5LjIxOSAtNC44MzE2OTA2ZS0xMyAxLjc4NyAxNy40ODIgNC4zNzkgMzguNDI0IC0zLjM3NTA3Nzk5ZS0xMyA0Mi42NTEgMTMuMDU4IDc1LjQwNiA0MC44MTMgNjUuMTY2IDUwLjQ2MSA0Mi40ODMgNDYuMzE5IDM4LjQ4NSI+PC9wb2x5Z29uPgogICAgICAgICAgICA8cG9seWdvbiBpZD0iRmlsbC0yNyIgZmlsbD0iI0ZGRkZGRiIgcG9pbnRzPSIxNS4xMTk2IDYzLjMwODYgMzMuODU3NiA0NC4wMDM2IDI2Ljc2MDYgMzMuNDA1NiAzNC42ODE2IDE2LjAzNTYgMTcuMjI4NiAzNC4xNjM2IDIzLjk0MzYgNDQuMjkzNiI+PC9wb2x5Z29uPgogICAgICAgIDwvZz4KICAgIDwvZz4KPC9zdmc+" alt="Powered by BoardGameGeek" />
+                  </div>
+                  <h2 class="ob-title">Bring your shelf across</h2>
+                  <p class="ob-body">
+                    Already keep your games on BGG? Link it and we'll pull your collection, wishlist
+                    and play history. We use your password once to sign in, then store it encrypted
+                    so later syncs run on their own.
+                  </p>
+                  <div class="ob-field">
+                    <label class="ob-field__label" for="ob-bgg-user">BGG username</label>
+                    <input id="ob-bgg-user" class="ob-input" type="text" autocomplete="username"
+                           autocapitalize="none" spellcheck="false" placeholder="Your BGG handle" data-bgg-user />
+                  </div>
+                  <div class="ob-field">
+                    <label class="ob-field__label" for="ob-bgg-pass">BGG password</label>
+                    <input id="ob-bgg-pass" class="ob-input" type="password" autocomplete="current-password"
+                           placeholder="Your BGG password" />
+                  </div>
+                  <p class="ob-note">
+                    No BGG account, or rather not right now? Skip — you can link one any time from
+                    Settings. The import runs in the background either way.
+                  </p>
+                </div>
+                <div class="ob-actions">
+                  <button class="ob-btn ob-btn--ghost" data-act="skip" data-step="3">Skip</button>
+                  <button class="ob-btn ob-btn--primary" data-act="next" data-step="3">Link account</button>
+                </div>
+              </div>
+
+              <!-- ── Slide 4 · done (uncounted) ────────────────────────── -->
+              <div class="ob-slide">
+                <div class="ob-slide__scroll">
+                  <div class="ob-done-mark">
+                    <div class="ob-done-mark__ring">
+                      <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg>
+                    </div>
+                  </div>
+                  <h2 class="ob-title" style="text-align:center" data-done-title>You're all set</h2>
+                  <p class="ob-body" style="text-align:center">
+                    Everything below is already on its way. Nothing here needs you.
+                  </p>
+                  <div class="ob-ledger" data-phone-ledger></div>
+                </div>
+                <div class="ob-actions">
+                  <button class="ob-btn ob-btn--primary" data-act="finish">Start playing</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage__info">
+        <div class="panel">
+          <div class="panel__cap"><span class="dot"></span>Background writes</div>
+          <div class="log" data-log>
+            <div class="log__idle">Nothing queued yet. Tap <b>Continue</b> in the phone and watch a
+            write get posted <i>after</i> the slide has already moved.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel__cap"><span class="dot"></span>The four rules</div>
+          <div class="rules">
+            <div class="rule">
+              <div class="rule__n">1</div>
+              <div>
+                <div class="rule__t">Every step is a slide</div>
+                <div class="rule__d">One mounted deck, one <code>translateX</code>. No modal opens,
+                closes and hands off to the next — so no gap where the user sees the empty feed
+                behind three cards.</div>
+              </div>
+            </div>
+            <div class="rule">
+              <div class="rule__n">2</div>
+              <div>
+                <div class="rule__t">The counter is pinned</div>
+                <div class="rule__d">“Step 2 of 3” plus a three-segment bar, always on screen.
+                The user knows how far in they are before they decide whether to skip.</div>
+              </div>
+            </div>
+            <div class="rule">
+              <div class="rule__n">3</div>
+              <div>
+                <div class="rule__t">Continue and Skip cycle instantly</div>
+                <div class="rule__d">The tap handler moves the track and returns. No
+                <code>await</code>, no spinner, no disabled button, no “Sending…”. The 240ms is the
+                slide travelling, not a request.</div>
+              </div>
+            </div>
+            <div class="rule">
+              <div class="rule__n">4</div>
+              <div>
+                <div class="rule__t">Writes are fire-and-forget</div>
+                <div class="rule__d">Each step queues its POST and forgets it. A failure never
+                blocks the flow — it lands as a line on the last slide with a retry, and the
+                permanent home for every one of these is Settings.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 02 · what changes ──────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2>What moves where</h2>
+    </div>
+    <p class="sec-lede">
+      The screens keep their content. What changes is the container, the wayfinding, and when the
+      network is allowed to matter.
+    </p>
+    <div class="cmp-scroll">
+      <table class="cmp">
+        <thead>
+          <tr><th></th><th>Today</th><th>This mock</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Container</td>
+            <td class="now">Three <code>polaroid-popup</code> overlays opened in sequence, each awaiting the one before.</td>
+            <td class="next">One deck mounted once; slides on a track. Overlay chrome retired for first run.</td>
+          </tr>
+          <tr>
+            <td>Wayfinding</td>
+            <td class="now">None. The user learns there was a step 3 when it appears.</td>
+            <td class="next">Counter + segment bar pinned above every slide; Back returns to a filled-in slide.</td>
+          </tr>
+          <tr>
+            <td>Profile save</td>
+            <td class="now"><code>await POST /profile</code> before the buddies card opens; an error dead-ends the flow.</td>
+            <td class="next">Queued on Continue. Slide 2 is already on screen; an error surfaces on the last slide.</td>
+          </tr>
+          <tr>
+            <td>Buddy requests</td>
+            <td class="now">Button becomes “Sending…”, awaits <code>/buddies/requests/bulk</code>, then closes.</td>
+            <td class="next">Button sends and moves in the same frame. The result is a ledger line, not a wait.</td>
+          </tr>
+          <tr>
+            <td>Buddy suggestions</td>
+            <td class="now">Fetched between step 1 and step 2 — an empty response silently drops the step.</td>
+            <td class="next">Prefetched during slide 1. Slide 2 renders instantly with whatever landed.</td>
+          </tr>
+          <tr>
+            <td>BGG import</td>
+            <td class="now">Last card holds open on a 2s poll with a live import log.</td>
+            <td class="next">Link is queued; the import reports as one line on the finale and continues after “Start playing”.</td>
+          </tr>
+          <tr>
+            <td>Dismissal</td>
+            <td class="now">Closing any card leaves <code>needs_setup</code> true — the whole sequence returns next load.</td>
+            <td class="next">Reaching the finale clears it. Skipped steps stay offered in Settings, not re-prompted.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── Badge library — verbatim from web/ui/user-badge.js ─────────────────
+  var PALETTE = [
+    { hex: "#f7f0df", light: true }, { hex: "#ffffff", light: true },
+    { hex: "#e0a02e", light: true }, { hex: "#c79a5b", light: true },
+    { hex: "#3f7d4a", light: false }, { hex: "#2a8a7a", light: false },
+    { hex: "#2f6a93", light: false }, { hex: "#7a5293", light: false },
+    { hex: "#b23b34", light: false }, { hex: "#d2691e", light: false },
+    { hex: "#2a2014", light: false }, { hex: "#39424f", light: false }
+  ];
+  var ICONS = {
+    buddy: '<g transform="translate(0,1.27)" fill="currentColor"><path fill-rule="evenodd" d="M8 2.5 H16 A2.5 2.5 0 0 1 18.5 5 V11 A2.5 2.5 0 0 1 16 13.5 H8 A2.5 2.5 0 0 1 5.5 11 V5 A2.5 2.5 0 0 1 8 2.5 Z M9.85 7 A0.85 0.85 0 1 1 8.15 7 A0.85 0.85 0 1 1 9.85 7 Z M15.85 7 A0.85 0.85 0 1 1 14.15 7 A0.85 0.85 0 1 1 15.85 7 Z M9 9.8 Q12 11.6 15 9.8 Q12 10.7 9 9.8 Z"/><circle cx="12" cy="14.5" r="1.5"/><rect x="9" y="15.75" width="6" height="2.75" rx="1"/><rect x="7" y="18.5" width="10" height="2.5" rx="1"/></g>',
+    meeple: '<path fill="currentColor" d="M12 2c-1.5 0-2.7 1.2-2.7 2.7 0 .9.5 1.8 1.2 2.3-1.3.4-2.5 1-3.6 1.8C5.4 9.7 3.7 10 3.7 11.4c0 .9.8 1.4 1.7 1.4.8 0 1.6-.2 2.3-.6-.7 1.6-1.3 3.2-1.3 4.7 0 1.4 1.2 1.6 2.5 1.6h6.2c1.3 0 2.5-.2 2.5-1.6 0-1.5-.6-3.1-1.3-4.7.7.4 1.5.6 2.3.6.9 0 1.7-.5 1.7-1.4 0-1.4-1.7-1.7-3.2-2.6-1.1-.8-2.3-1.4-3.6-1.8.7-.5 1.2-1.4 1.2-2.3C14.7 3.2 13.5 2 12 2z"/>',
+    die: '<path fill="currentColor" fill-rule="evenodd" d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4Zm1 3.6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm8 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM8 14.4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm8 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/>',
+    sword: '<path fill="currentColor" d="M12 1.4 13.4 4v9.2h-2.8V4L12 1.4ZM7.4 13.7h9.2v2.3H7.4v-2.3ZM11 16.4h2v3.8h-2v-3.8Zm1 4a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8Z"/>',
+    shield: '<g transform="translate(0,1.64)"><path fill="currentColor" d="M12 1.8 3.6 4.9v6.2c0 5.2 3.6 8.9 8.4 11.1 4.8-2.2 8.4-5.9 8.4-11.1V4.9L12 1.8Z"/></g>',
+    crown: '<g transform="translate(0,-2.27)"><path fill="currentColor" d="M2 7.5 6.6 11 12 3.6 17.4 11 22 7.5l-2 12H4l-2-12Zm2.5 13.5h15v1.5h-15V21Z"/></g>',
+    spade: '<path fill="currentColor" d="M12 2C9 6.2 3.6 9 3.6 13.4A3.9 3.9 0 0 0 10.5 16c-.2 2.2-1 3.5-2.2 4.6h7.4c-1.2-1.1-2-2.4-2.2-4.6a3.9 3.9 0 0 0 6.9-2.6C20.4 9 15 6.2 12 2Z"/>',
+    heart: '<g transform="translate(0.71,-0.45)"><path fill="currentColor" d="M12 21.3 4.3 14C1.4 11 2.6 6 6.4 5.2c2-.4 3.8.6 4.8 2.1 1-1.5 2.8-2.5 4.8-2.1C19.8 6 21 11 18.1 14L12 21.3Z"/></g>',
+    rook: '<g transform="translate(0,0.48)"><path fill="currentColor" d="M6 3.5h2.4v2h2.1v-2h2.6v2h2.1v-2H18v4.2l-2 1.8v6.8h2v3H6v-3h2V9.5L6 7.7V3.5Z"/></g>',
+    hourglass: '<path fill="currentColor" d="M5 2h14v2H5V2Zm2 3h10v2.6l-3.6 4.4 3.6 4.4V19H7v-2.6l3.6-4.4L7 7.6V5ZM5 20h14v2H5v-2Z"/>'
+  };
+  var ITEMS = [
+    { key: "initials", name: "Initials" }, { key: "buddy", name: "Buddy" },
+    { key: "meeple", name: "Meeple" }, { key: "die", name: "Die" },
+    { key: "sword", name: "Sword" }, { key: "shield", name: "Shield" },
+    { key: "crown", name: "Crown" }, { key: "spade", name: "Spade" },
+    { key: "heart", name: "Heart" }, { key: "rook", name: "Rook" },
+    { key: "hourglass", name: "Hourglass" }
+  ];
+
+  // Sample suggestions. `reason` strings are the three the real tile can
+  // render (ui/buddy-suggestion-rail.js#suggestionReason).
+  var SUGGESTIONS = [
+    { name: "Priya Raghunathan", handle: "priya",  reason: "Active recently", icon: "crown",     ic: "#f7f0df", bg: "#7a5293" },
+    { name: "Marcus Bell",       handle: "mbell",  reason: "Played with",     icon: "die",       ic: "#2a2014", bg: "#e0a02e" },
+    { name: "Jen Okafor",        handle: "jenok",  reason: "Mutual buddy",    icon: "initials",  ic: "#f7f0df", bg: "#3f7d4a" },
+    { name: "Tom Whitfield",     handle: "tomw",   reason: "Active recently", icon: "meeple",    ic: "#f7f0df", bg: "#2f6a93" },
+    { name: "Sofia Marchetti",   handle: "sofiam", reason: "Active recently", icon: "heart",     ic: "#ffffff", bg: "#b23b34" },
+    { name: "Dev Raman",         handle: "devr",   reason: "Mutual buddy",    icon: "hourglass", ic: "#2a2014", bg: "#c79a5b" }
+  ];
+
+  var STEPS = 3;
+
+  var state = {
+    step: 0,
+    theme: "dark",
+    name: "dana",
+    index: 0,
+    iconColor: "#f7f0df",
+    bgColor: "#2a2014",
+    target: "iconColor",
+    picked: {},
+    search: "",
+    bggUser: "",
+    jobs: []
+  };
+
+  var $ = function (sel, host) { return (host || document).querySelector(sel); };
+  var $$ = function (sel, host) { return Array.prototype.slice.call((host || document).querySelectorAll(sel)); };
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  var phone = $("[data-phone]");
+  var track = $("[data-track]");
+  var countEl = $("[data-count]");
+  var barSegs = $$(".ob-bar__seg", $("[data-bar]"));
+  var backBtn = $("[data-act='back']");
+  var reelEl = $("[data-reel]");
+  var previewEl = $("[data-preview]");
+  var iconNameEl = $("[data-icon-name]");
+  var swatchEl = $("[data-swatches]");
+  var nameInput = $("[data-name-input]");
+  var tilesEl = $("[data-tiles]");
+  var searchEl = $("[data-search]");
+  var sendLabel = $("[data-send-label]");
+  var bggUserEl = $("[data-bgg-user]");
+  var logEl = $("[data-log]");
+  var phoneLedger = $("[data-phone-ledger]");
+  var doneTitle = $("[data-done-title]");
+
+  // ── Badge rendering ────────────────────────────────────────────────────
+  function initials(name) {
+    var parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  function badgeHtml(cfg, size) {
+    var inner = cfg.icon === "initials"
+      ? '<span style="color:' + cfg.ic + ';font-size:' + Math.round(size * 0.4) + 'px">' + esc(initials(cfg.name)) + "</span>"
+      : '<svg viewBox="0 0 24 24" style="color:' + cfg.ic + '">' + ICONS[cfg.icon] + "</svg>";
+    return '<div class="ob-badge" style="width:' + size + "px;height:" + size + "px;background:" + cfg.bg + '">' + inner + "</div>";
+  }
+
+  // ── Step 1 · carousel ──────────────────────────────────────────────────
+  function buildReel() {
+    reelEl.innerHTML = ITEMS.map(function (it, i) {
+      var inner = it.key === "initials"
+        ? '<span data-ini>' + esc(initials(state.name)) + "</span>"
+        : '<svg viewBox="0 0 24 24">' + ICONS[it.key] + "</svg>";
+      return '<div class="ob-reel__slot" data-i="' + i + '">' + inner + "</div>";
+    }).join("");
+    $$(".ob-reel__slot", reelEl).forEach(function (slot) {
+      slot.addEventListener("click", function () {
+        state.index = Number(slot.dataset.i);
+        paintStep1();
+      });
+    });
+  }
+  function buildSwatches() {
+    swatchEl.innerHTML = PALETTE.map(function (p) {
+      var tick = '<svg class="ob-sw__tick" viewBox="0 0 24 24" fill="none" stroke="' +
+        (p.light ? "#211A12" : "#FFFFFF") + '" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg>';
+      return '<button class="ob-sw" data-hex="' + p.hex + '" style="background:' + p.hex + '" aria-label="' + p.hex + '">' + tick + "</button>";
+    }).join("");
+    $$(".ob-sw", swatchEl).forEach(function (sw) {
+      sw.addEventListener("click", function () {
+        state[state.target] = sw.dataset.hex;
+        paintStep1();
+      });
+    });
+  }
+  function paintStep1() {
+    var item = ITEMS[state.index];
+    var cfg = { icon: item.key, ic: state.iconColor, bg: state.bgColor, name: state.name };
+    previewEl.innerHTML = badgeHtml(cfg, 76);
+    previewEl.firstChild.style.width = "100%";
+    previewEl.firstChild.style.height = "100%";
+    iconNameEl.textContent = item.name;
+
+    var slots = $$(".ob-reel__slot", reelEl);
+    slots.forEach(function (s, i) {
+      s.classList.toggle("is-active", i === state.index);
+      var ini = $("[data-ini]", s);
+      if (ini) ini.textContent = initials(state.name);
+    });
+    var active = slots[state.index];
+    if (active) {
+      var reelW = reelEl.parentElement.getBoundingClientRect().width;
+      var center = active.offsetLeft + active.offsetWidth / 2;
+      reelEl.style.transform = "translateX(" + (reelW / 2 - center) + "px)";
+    }
+
+    $$(".ob-tg").forEach(function (tg) { tg.classList.toggle("on", tg.dataset.target === state.target); });
+    $("[data-dot-icon]").style.background = state.iconColor;
+    $("[data-dot-bg]").style.background = state.bgColor;
+    var live = state[state.target];
+    $$(".ob-sw", swatchEl).forEach(function (sw) { sw.classList.toggle("on", sw.dataset.hex === live); });
+  }
+
+  // ── Step 2 · tiles ─────────────────────────────────────────────────────
+  function paintTiles() {
+    var q = state.search.trim().toLowerCase().replace(/^@/, "");
+    var rows = SUGGESTIONS.filter(function (s) {
+      return !q || s.name.toLowerCase().indexOf(q) >= 0 || s.handle.indexOf(q) >= 0;
+    });
+    if (!rows.length) {
+      tilesEl.innerHTML = '<div class="ob-empty">Nobody by that name yet.<br />Skip and add them later.</div>';
+    } else {
+      tilesEl.innerHTML = rows.map(function (s) {
+        var on = state.picked[s.handle] ? " on" : "";
+        return '<button class="ob-tile' + on + '" data-handle="' + s.handle + '" aria-pressed="' + (on ? "true" : "false") + '">' +
+          '<span class="ob-tile__tick"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg></span>' +
+          badgeHtml({ icon: s.icon, ic: s.ic, bg: s.bg, name: s.name }, 44) +
+          '<span class="ob-tile__name">' + esc(s.name) + "</span>" +
+          '<span class="ob-tile__reason">' + esc(s.reason) + "</span>" +
+          "</button>";
+      }).join("");
+      $$(".ob-tile", tilesEl).forEach(function (t) {
+        t.addEventListener("click", function () {
+          var h = t.dataset.handle;
+          if (state.picked[h]) delete state.picked[h]; else state.picked[h] = true;
+          paintTiles();
+        });
+      });
+    }
+    var n = Object.keys(state.picked).length;
+    sendLabel.textContent = n === 0 ? "Send requests" : "Send " + n + " request" + (n === 1 ? "" : "s");
+  }
+
+  // ── The background queue ───────────────────────────────────────────────
+  // The whole point of the redesign: a step hands its write to this and
+  // returns. Nothing here can hold a slide.
+  var jobSeq = 0;
+  function queue(label, endpoint, ms, detail) {
+    var job = {
+      id: ++jobSeq,
+      label: label,
+      endpoint: endpoint,
+      detail: detail || "",
+      queuedAtStep: state.step + 1,
+      doneAtStep: null,
+      status: "running",
+      ms: ms,
+      elapsed: 0
+    };
+    state.jobs.push(job);
+    paintLog();
+    job.timer = setTimeout(function () {
+      job.status = "done";
+      job.doneAtStep = state.step + 1;
+      paintLog();
+    }, ms);
+    return job;
+  }
+  function stepName(n) {
+    return n > STEPS ? "the finale" : "step " + n;
+  }
+  function paintLog() {
+    if (!state.jobs.length) {
+      logEl.innerHTML = '<div class="log__idle">Nothing queued yet. Tap <b>Continue</b> in the phone and watch a write get posted <i>after</i> the slide has already moved.</div>';
+    } else {
+      logEl.innerHTML = state.jobs.map(function (j) {
+        var when = j.status === "done"
+          ? (j.doneAtStep === j.queuedAtStep
+              ? "queued and landed on " + stepName(j.queuedAtStep)
+              : "queued on " + stepName(j.queuedAtStep) + " · landed while you were on " + stepName(j.doneAtStep))
+          : "queued on " + stepName(j.queuedAtStep) + " · still in flight";
+        return '<div class="log__row log__row--' + j.status + '">' +
+          '<span class="log__dot"></span>' +
+          '<span><span class="log__ep">' + esc(j.endpoint) + "</span>" +
+          '<span class="log__when">' + esc(when) + "</span></span>" +
+          '<span class="log__ms">' + (j.status === "done" ? j.ms + "ms" : "…") + "</span>" +
+          "</div>";
+      }).join("");
+    }
+    paintPhoneLedger();
+  }
+  function paintPhoneLedger() {
+    if (!state.jobs.length) {
+      phoneLedger.innerHTML = '<div class="ob-empty">You skipped every step — nothing to send. It\'s all in Settings when you want it.</div>';
+      return;
+    }
+    phoneLedger.innerHTML = state.jobs.map(function (j) {
+      var mark = j.status === "done"
+        ? '<svg class="ob-job__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg>'
+        : '<svg class="ob-job__mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9" /></svg>';
+      var meta = j.status === "done" ? (j.detail || "Done") : "Running — carry on, it keeps going";
+      return '<div class="ob-job ob-job--' + j.status + '">' + mark +
+        '<div><div class="ob-job__label">' + esc(j.label) + "</div>" +
+        '<div class="ob-job__meta">' + esc(meta) + "</div></div>" +
+        '<div class="ob-job__ms">' + (j.status === "done" ? j.ms + "ms" : "…") + "</div></div>";
+    }).join("");
+  }
+
+  // ── Deck movement ──────────────────────────────────────────────────────
+  function go(i) {
+    state.step = Math.max(0, Math.min(STEPS, i));
+    track.style.transform = "translateX(-" + (state.step * 25) + "%)";
+    countEl.innerHTML = state.step >= STEPS
+      ? "All set"
+      : "Step <b>" + (state.step + 1) + "</b> of " + STEPS;
+    barSegs.forEach(function (seg, n) { seg.classList.toggle("is-done", n <= state.step); });
+    backBtn.hidden = state.step === 0 || state.step === STEPS;
+    if (state.step === STEPS) paintPhoneLedger();
+    // Focus lands on the slide that arrived, not on the button left behind.
+    var slide = track.children[state.step];
+    var first = slide && slide.querySelector("input, .ob-btn");
+    if (first && window.matchMedia("(min-width: 900px)").matches) {
+      // Deliberately not auto-focusing text inputs on touch — a keyboard
+      // launching itself over a fresh slide is the thing this redesign avoids.
+      if (first.classList.contains("ob-btn")) first.focus({ preventScroll: true });
+    }
+  }
+
+  // ── Wiring ─────────────────────────────────────────────────────────────
+  nameInput.addEventListener("input", function () {
+    state.name = nameInput.value;
+    paintStep1();
+  });
+  searchEl.addEventListener("input", function () {
+    state.search = searchEl.value;
+    paintTiles();
+  });
+  bggUserEl.addEventListener("input", function () { state.bggUser = bggUserEl.value; });
+  $$(".ob-tg").forEach(function (tg) {
+    tg.addEventListener("click", function () { state.target = tg.dataset.target; paintStep1(); });
+  });
+  backBtn.addEventListener("click", function () { go(state.step - 1); });
+
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest ? ev.target.closest("[data-act]") : null;
+    if (!btn) return;
+    var act = btn.dataset.act;
+
+    if (act === "next" || act === "skip") {
+      var step = Number(btn.dataset.step);
+      // ── The rule, in three lines: queue, move, return. ──
+      if (act === "next") {
+        if (step === 1) {
+          queue("Profile saved", "POST /profile", 610,
+            (state.name || "dana") + " · " + ITEMS[state.index].name.toLowerCase() + " badge");
+        } else if (step === 2) {
+          var n = Object.keys(state.picked).length;
+          if (n) {
+            queue(n + " buddy request" + (n === 1 ? "" : "s") + " sent", "POST /buddies/requests/bulk", 880,
+              "All " + n + " delivered");
+          }
+        } else if (step === 3) {
+          var who = state.bggUser.trim() || "your BGG account";
+          queue("BoardGameGeek linked", "POST /bgg/link", 940, "@" + who.replace(/^@/, "") + " · encrypted");
+          queue("Importing your collection", "GET /bgg/sync", 7200, "214 games, 96 plays");
+        }
+      }
+      go(step); // slide index `step` is the NEXT slide — 1 → slide 2, 3 → finale
+      return;
+    }
+
+    if (act === "finish") { go(0); reset(); return; }
+    if (act === "replay") { go(0); reset(); return; }
+    if (act === "theme") {
+      state.theme = state.theme === "dark" ? "light" : "dark";
+      phone.parentElement.setAttribute("data-bgb", state.theme);
+      $("[data-theme-label]").textContent = state.theme === "dark" ? "Light theme" : "Dark theme";
+      return;
+    }
+  });
+
+  function reset() {
+    state.jobs.forEach(function (j) { if (j.timer) clearTimeout(j.timer); });
+    state.jobs = [];
+    state.picked = {};
+    state.search = "";
+    state.bggUser = "";
+    state.index = 0;
+    state.iconColor = "#f7f0df";
+    state.bgColor = "#2a2014";
+    state.target = "iconColor";
+    state.name = "dana";
+    nameInput.value = state.name;
+    searchEl.value = "";
+    bggUserEl.value = "";
+    paintStep1();
+    paintTiles();
+    paintLog();
+  }
+
+  // data-bgb sits on the host, not on the phone itself: the token blocks are
+  // descendant selectors, so an element cannot theme itself.
+  var host = document.createElement("div");
+  host.setAttribute("data-bgb", "dark");
+  phone.parentNode.insertBefore(host, phone);
+  host.appendChild(phone);
+
+  nameInput.value = state.name;
+  buildReel();
+  buildSwatches();
+  paintStep1();
+  paintTiles();
+  paintLog();
+  go(0);
+  window.addEventListener("resize", paintStep1);
+})();
+</script>
