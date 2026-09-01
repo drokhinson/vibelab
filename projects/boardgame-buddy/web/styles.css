@@ -2237,13 +2237,15 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
 /* ── Play card — Polaroid ──────────────────────────────────────────────────
    The card reads like an instant photo pinned to the page: cream surface,
-   soft drop shadow, photo at the top in its natural aspect ratio, then a
-   two-row caption: the game name with an open button, and below a hairline
-   the winner with the collection-status pill. Three sizes via modifier
-   classes:
-     .play-card--single                  → full-width standalone play
-     .play-card--strip.is-landscape      → in a multi-game session, wide photo
-     .play-card--strip.is-portrait       → in a multi-game session, tall photo
+   soft drop shadow, photo at the top, then a two-row caption: the game name
+   with an open button, and below a hairline the winner.
+
+   ONE HEIGHT, TWO WIDTHS. --pc-photo-h fixes the photo frame's height in both
+   variants, so with one caption spec every card in the app resolves to the
+   same total height and a rail of mixed cards sits on a single baseline:
+     .play-card--wide   280px — a landscape image, blur above and below
+     .play-card--tall   208px — a portrait image, blur to either side
+   Nothing is ever cropped; see .play-card__photo below for the mechanism.
    The flip mechanic, hydration on first flip, click routing, and the
    scroll-position-preserving rerender are unchanged — see ui/play-card.js. */
 .play-card {
@@ -2317,22 +2319,37 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   overflow-x: visible;
   scroll-snap-type: none;
 }
-.play-session--single .play-session__scroll > .play-card--strip,
-.play-session--single .play-session__scroll > .play-card--single {
+.play-session--single .play-session__scroll > .play-card {
   transform: none;
 }
 
 /* ── Photo frame ──────────────────────────────────────────────────────────
-   --photo-aspect is set inline by JS once the natural image dimensions are
-   known. Defaults to 1 so the placeholder square renders before decode. */
+   A fixed height in BOTH variants — this is what makes every card the same
+   height. The image is contained rather than cropped, and the leftover space
+   is filled by --photo-bg: the same image again, scaled up, blurred and
+   dimmed. A landscape image therefore gets blur above and below, a portrait
+   one gets it to either side, and a play with no snapshot (box art at ~0.78
+   against the tall variant's 0.80 frame) gets hairlines. */
 .play-card__photo {
   position: relative;
   width: 100%;
-  aspect-ratio: var(--photo-aspect, 1);
+  height: var(--pc-photo-h);
   border-radius: 3px;
   overflow: hidden;
   background: var(--polaroid-line);
   flex-shrink: 0;
+}
+/* Oversized on purpose: a blur samples past its own edges, so a backdrop sized
+   exactly to the frame haloes along all four sides. z-index 0 keeps it under
+   the contained image, the ::after gradient and the box-art badge. */
+.play-card__photo-bg {
+  position: absolute;
+  inset: -12%;
+  width: 124%;
+  height: 124%;
+  object-fit: cover;
+  filter: blur(16px) saturate(1.35) brightness(0.66);
+  z-index: 0;
 }
 .play-card__photo::after {
   /* Subtle bottom-edge darkening so the game-thumbnail corner badge has a
@@ -2340,32 +2357,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 2;
   background: linear-gradient(180deg, transparent 65%, rgba(0,0,0,0.18));
   pointer-events: none;
 }
 .play-card__photo-img {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
-
-/* No session photo → the game's box art IS the photo. Cap its height and
-   letterbox it on the soft paper ground instead of cropping, so a tall cover
-   can't take over the feed. --photo-aspect is unused here; the intrinsic
-   ratio drives the box until max-height clamps it. */
-.play-card__photo--cover {
-  aspect-ratio: auto;
-  background: var(--polaroid-bg-soft);
-}
-.play-card__photo--cover::after { content: none; }   /* no badge to protect */
-.play-card__photo--cover .play-card__photo-img {
-  width: 100%;
-  height: auto;
-  max-height: 220px;
-  object-fit: contain;
-}
-.play-card--strip .play-card__photo--cover .play-card__photo-img { max-height: 150px; }
 
 /* Box-art badge — bottom-right of a session photo. Fixed height, auto width:
    because it's absolutely positioned it shrink-wraps the decoded image, so a
@@ -2375,12 +2378,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    game page now, so a tap here flips the card like the rest of the photo. */
 .play-card__game-overlay {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  height: 76px;
+  right: 8px;
+  bottom: 8px;
+  height: 56px;
   width: auto;
   max-width: 45%;
-  border-radius: 9px;
+  border-radius: 7px;
   overflow: hidden;
   background: var(--polaroid-bg);
   border: 2px solid var(--polaroid-bg);
@@ -2392,29 +2395,24 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card__game-overlay img {
   height: 100%; width: auto; object-fit: contain; display: block;
 }
-.play-card--strip .play-card__game-overlay {
-  height: 56px;
-  right: 8px;
-  bottom: 8px;
-  border-radius: 7px;
-}
 
 /* ── Caption ──────────────────────────────────────────────────────────────
    Two stacked rows. The title row carries the game name and an explicit open
-   button; the meta row carries the winner and the collection-status pill,
-   separated by a hairline.
+   button; the meta row carries the winner, separated by a hairline.
 
    This replaced a single row that put the name and the winner on the same
    line, which needed a post-paint re-measure (.has-long-meta) to decide
-   whether they fit. In the meta row the pill never shrinks and the WINNER
-   takes the ellipsis — the reverse of the old rule — so a 220px strip card
-   still reads its status. */
+   whether they fit. The collection-status pill used to share the meta row and
+   won every width fight in it; with it gone the winner has the row to itself
+   and only ellipsises against the card edge. Owned / played / wishlist still
+   live on the collection grid, wishlist, game detail and the hot-games rail —
+   the feed card is the one surface that dropped them. */
 .play-card__caption {
   width: 100%;
-  padding: 12px 4px 2px;
+  padding: 10px 2px 2px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 .play-card__title-row {
   display: flex;
@@ -2425,7 +2423,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card__caption-name {
   font-family: var(--font-polaroid);
   font-weight: 700;
-  font-size: 22px;
+  font-size: 17px;
   line-height: 1.15;
   letter-spacing: -0.01em;
   color: var(--polaroid-ink);
@@ -2438,13 +2436,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .play-card__caption-name:hover { text-decoration: underline; }
 
-/* 32px of visible chrome inside a 44px hit box (the ::before), pulled back
+/* 28px of visible chrome inside a 44px hit box (the ::before), pulled back
    with negative margins so the button doesn't inflate the row's height. */
 .play-card__open {
   position: relative;
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   margin: -6px -4px -6px 0;
   display: grid;
   place-items: center;
@@ -2455,7 +2453,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   transition: background 140ms var(--ease), color 140ms var(--ease);
 }
-.play-card__open::before { content: ""; position: absolute; inset: -6px; }
+.play-card__open::before { content: ""; position: absolute; inset: -8px; }
 .play-card__open:hover,
 .play-card__open:focus-visible {
   background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
@@ -2467,19 +2465,24 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card__meta-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  padding-top: 7px;
+  padding-top: 6px;
   border-top: 1px solid var(--polaroid-line);
 }
 .play-card__caption-meta {
   flex: 1 1 auto;
   min-width: 0;
   text-align: left;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--polaroid-muted);
   font-weight: 500;
   letter-spacing: 0.02em;
+  /* Pinned, not left to the fonts: --font-score has taller metrics than
+     --font-sans, so a winner line WITH a score measured 1px more than a coop
+     "We won!" without one — and one card height is the contract now, not a
+     coincidence of which spans a caption happens to hold. */
+  line-height: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2490,7 +2493,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   gap: 5px;
   color: var(--polaroid-accent);
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 16px;
 }
 /* "Won by" — the winner has its own row now, so it can afford to say what
    the name means. Team/co-op outcomes ("We won!") read as sentences already
@@ -2511,51 +2515,26 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   gap: 4px;
   color: var(--polaroid-muted);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 16px;
   font-style: italic;
 }
-.play-card__status-slot { flex: 0 0 auto; margin-left: auto; }
 
-/* Owned / wishlist / played take the app-wide .status-tag--* fills here, same
-   as on every other surface. This slot used to restate them as tinted
-   outlines drawn from unrelated tokens (--ok, --accent-ink, --polaroid-muted)
-   so they'd sit lighter on cream paper; the cost was that the one status pill
-   people look at most was the one that didn't match the rest of the app —
-   played lost its violet identity to plain grey entirely.
-   --add keeps its override below: it is the neutral "+" affordance, not a
-   status, and the canonical fill is built from dark-theme tokens that read
-   wrong on the polaroid ground. */
-.play-card__status-slot .status-tag--add {
-  color: var(--polaroid-ink-soft);
-  background: transparent;
-  border-color: var(--polaroid-line);
-}
-.play-card__status-slot .status-tag--add:hover {
-  background: transparent;
-  color: var(--polaroid-ink);
-  border-color: var(--polaroid-muted);
-}
-.play-card__status-slot .status-tag:focus-visible {
-  outline: 2px solid var(--accent-ink);
-  outline-offset: 1px;
-}
-
-/* ── Size variants ─────────────────────────────────────────────────────── */
-.play-card--strip {
-  flex: 0 0 240px;            /* default before image decodes (matches landscape) */
-  min-width: 220px;           /* never let the polaroid get smaller than this */
+/* ── Size variants ───────────────────────────────────────────────────────
+   Two widths, and ONE caption spec shared by both — per-variant caption
+   typography is exactly what would make the two total heights diverge, so
+   there is deliberately none. The photo height lives on .play-card as a token
+   so the two variants cannot drift apart, and so it is tunable in one place. */
+.play-card {
+  --pc-photo-h: 230px;
+  /* Stated, not inherited from Tailwind's preflight: these widths are the
+     card's whole contract, and under content-box the 12px padding and the
+     light theme's 1px border would silently add 26px to both of them. */
+  box-sizing: border-box;
   scroll-snap-align: start;
 }
-.play-card--strip.is-landscape { flex: 0 0 260px; }
-.play-card--strip.is-portrait  { flex: 0 0 220px; }
-.play-card--strip .play-card__caption       { padding: 10px 2px 2px; gap: 5px; }
-.play-card--strip .play-card__caption-name  { font-size: 17px; }
-.play-card--strip .play-card__open          { width: 28px; height: 28px; }
-.play-card--strip .play-card__meta-row      { padding-top: 6px; gap: 6px; }
-.play-card--strip .play-card__caption-meta  { font-size: 10px; }
-.play-card--strip .play-card__caption-meta .win { font-size: 11px; }
-.play-card--strip .play-card__caption-meta .win-loss { font-size: 11px; }
-.play-card--single { min-width: 280px; }
+.play-card--wide { flex: 0 0 280px; width: 280px; }
+.play-card--tall { flex: 0 0 208px; width: 208px; }
 .play-card { transition: transform 200ms var(--ease), box-shadow 200ms var(--ease); }
 .play-card:hover { transform: translateY(-3px); }
 
@@ -2587,10 +2566,24 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 700;
   flex-shrink: 0;
 }
+/* The scoreboard is the back's only growable child, and it scrolls. It used to
+   have all the room it needed because a solo play rendered full-width and grew
+   to whatever its photo demanded; now every card is a fixed 230px photo plus a
+   caption, so a big table would clip against `overflow: hidden` above with no
+   way to reach the last rows. min-height:0 is load-bearing — a flex item's
+   min-height defaults to its content size, so without it the list refuses to
+   shrink and pushes the footer out of the card instead of scrolling. */
 .play-card__back-players {
   list-style: none; margin: 0; padding: 0;
   display: flex; flex-direction: column; gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
+.play-card__back-head,
+.play-card__back-footer { flex: none; }
 .play-card__back-player {
   display: flex;
   align-items: center;
@@ -2687,9 +2680,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card__back-player.is-link:focus-visible { border-color: var(--polaroid-accent); }
 .play-card__back-player.is-link:hover .play-card__back-player-go { opacity: 0.9; }
 .play-card__back-player.is-link:active { transform: scale(0.99); filter: brightness(0.97); }
+/* Inset, not outset: the scoreboard is a scroll container now (a fixed card
+   height can't grow to fit a big table), and per .claude/rules/overlays.md a
+   scroller clips an outset ring — the first and last rows would lose theirs. */
 .play-card__back-player.is-link:focus-visible {
   outline: 2px solid var(--polaroid-accent);
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 .play-card__back-empty {
   font-size: 0.85rem;
@@ -2784,9 +2780,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* ── Play sessions (same-day, same-buddy-set plays) ───────────────────────
-   The session wrapper is the dark gallery wall the polaroids sit on. When a
-   session holds a single play we drop the rail and render the polaroid full
-   width via .play-card--single — see ui/play-card.js for the variant pick. */
+   The session wrapper is the dark gallery wall the polaroids sit on. Every
+   play is a tile of one of the two widths, so a session holding a single play
+   just centres its lone tile — see .play-session--single above. */
 .play-session {
   padding: 0.5rem 0 0.5rem;
   margin: 0 0 0.75rem;
@@ -3849,19 +3845,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   cursor: pointer;
   white-space: nowrap;
 }
-/* The labelled pill in a play card's meta row. Sized for a 44px hit box via
-   the ::before below rather than 44px of visible chrome, which would tower
-   over an 11px winner line. Colours are the shared .status-tag--* fills
-   below — the same ones every other surface uses. */
-.status-tag--sm-row {
-  min-height: 28px;
-  padding: 4px 10px;
-  font-size: 0.72rem;
-  gap: 0.3rem;
-  position: relative;
-}
-.status-tag--sm-row::before { content: ""; position: absolute; inset: -8px; }
-.status-tag--sm-row i { width: 0.82rem; height: 0.82rem; }
 .status-tag--lg {
   min-height: 2.5rem;
   padding: 0.4rem 0.9rem;

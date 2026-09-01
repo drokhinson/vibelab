@@ -53,7 +53,7 @@
       if (warmStatus) {
         this._statusMap = warmStatus;
         this._statusReady = true;
-        // Play cards read the store copy directly (ui/play-card.js), so
+        // ui/status-tag.js resolves every pill against the store copy, so
         // publish it too. Set before the listeners below are bound: this is a
         // seed, not a change worth re-entering _refreshCollectionData for.
         window.store.set("myCollectionMap", warmStatus);
@@ -99,9 +99,11 @@
     /**
      * Repaint just the status pills for one game instead of re-rendering the
      * whole feed. A full render() resets the scroll position and flips every
-     * open card back over — cheap to ignore when the pill was a corner chip,
-     * obvious now that it sits in the card's meta row. Mirrors _syncCardStatus
-     * in views/game-explorer-view.js.
+     * open play card back over. Mirrors _syncCardStatus in
+     * views/game-explorer-view.js.
+     *
+     * Only the hot-games rail is patched: the play card carries no status pill
+     * any more, so the feed's only owned/played/wishlist surface is that rail.
      *
      * Nothing to patch is not a problem: _statusMap is already updated above,
      * so a game that isn't on screen picks the new status up on the next paint.
@@ -110,18 +112,6 @@
       const root = this.container;
       if (!root) return;
       const sel = cssAttrEscape(gameId);
-
-      // Play cards. The slot is always emitted (it holds an empty string while
-      // the collection map is in flight), so this finds the host either way.
-      root.querySelectorAll(`.play-card__status-slot[data-game-id="${sel}"]`)
-        .forEach((host) => {
-          host.innerHTML = window.renderStatusTag(gameId, status || null, {
-            size: "sm-row",
-            addLabel: "Add",
-            gameName: host.dataset.gameName || "",
-          });
-          this.refreshIcons(host);
-        });
 
       // Hot-games rail tiles render the same game through renderGamePolaroid,
       // so the patch lives there too — same writer as the initial paint and as
@@ -456,14 +446,10 @@
         gameCount: card.plays.length,
         gameNameForSingle,
       });
-      const sessionPlayCount = card.plays.length;
-      const isSingle = sessionPlayCount === 1;
-      // Annotate each play with the session play count so the polaroid
-      // renderer can pick the variant (single vs strip) without re-walking
-      // the DOM. The `__`-prefix keeps the field clearly UI-scoped.
-      const cards = card.plays
-        .map((p) => window.renderPlayCard({ ...p, __sessionPlayCount: sessionPlayCount }))
-        .join("");
+      // Every play is a tile of one of two widths now, so the rail needs no
+      // size hint. `isSingle` survives only to centre a lone tile.
+      const isSingle = card.plays.length === 1;
+      const cards = card.plays.map((p) => window.renderPlayCard(p)).join("");
       return `
         <section class="play-session${isSingle ? " play-session--single" : ""}">
           <header class="play-session__header">

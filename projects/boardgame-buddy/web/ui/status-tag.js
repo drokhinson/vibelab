@@ -110,10 +110,9 @@
    * @param {string} gameId
    * @param {("owned"|"wishlist"|"played"|null|undefined)} status
    * @param {Object} [opts]
-   * @param {"sm-row"|"lg"} [opts.size] Size preset for the LABELLED pill.
-   *   "sm-row" sits in a play card's meta row on the cream polaroid ground and
-   *   takes its colours from .play-card__status-slot; "lg" is the game-detail
-   *   hero. Ignored by `corner`, which is one fixed size everywhere.
+   * @param {"lg"} [opts.size] Size preset for the LABELLED pill. "lg" is the
+   *   game-detail hero; omit it for the default pill. Ignored by `corner`,
+   *   which is one fixed size everywhere.
    * @param {boolean} [opts.corner] This tag is a corner banner over box art —
    *   collection/wishlist tiles, polaroid photos, plays-list thumbs. Corner
    *   marks render as ONE neutral chip whatever the status: no colour, no
@@ -128,10 +127,7 @@
    *   generic heading when a call site doesn't have the name to hand.
    */
   function renderStatusTag(gameId, status, opts = {}) {
-    const sizeCls =
-      opts.size === "sm-row" ? " status-tag--sm-row" :
-      opts.size === "lg" ? " status-tag--lg" :
-      "";
+    const sizeCls = opts.size === "lg" ? " status-tag--lg" : "";
     const cornerCls = opts.corner ? " status-tag--corner" : "";
     // Values land inside a single-quoted JS string inside an HTML attribute.
     // jsStr backslash-escapes the quote, esc then neutralises the HTML layer
