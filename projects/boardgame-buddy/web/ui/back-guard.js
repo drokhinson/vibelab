@@ -16,6 +16,14 @@
 // Escape, a pick) unwinds the entry again, so back still means "previous
 // screen" the moment the overlay is gone.
 //
+// The entry is an optimisation, not the mechanism. A browser can refuse the
+// pushState — History API throttling is the one seen in the wild — and an
+// overlay is registered either way, so the press is spent on it regardless.
+// What the entry buys is a still address bar: pop it and nothing moves. Without
+// one the press reaches the router's entry instead, so the close is followed by
+// putting the url back (restoreScreen), which also repairs the url when the
+// router replaced it out from under an open overlay.
+//
 // Two presses, not one, when a keyboard is up: the first dismisses the
 // keyboard, the second closes the overlay. That is what every native picker
 // does. No overlay raises a keyboard on open any more (overlays.md §5), but the
@@ -46,6 +54,10 @@
    * @property {number} token
    * @property {() => void} close
    * @property {Element|null} root
+   * @property {boolean} owns  Did an entry of ours actually land? A browser
+   *   may refuse the pushState (History API throttling is the one seen in the
+   *   wild), and an overlay whose entry never landed still has to eat the
+   *   press — see arm().
    */
 
   /** Innermost overlay last. @type {Layer[]} */
@@ -111,6 +123,63 @@
     return true;
   }
 
+  /**
+   * Put the address bar back on the screen the overlay was opened over.
+   *
+   * Usually a no-op, and that is the point: a guard entry shares its url with
+   * the screen below, so the press that pops it moves nothing. Two cases DO
+   * move it, and in both the screen behind never navigated — only the url did,
+   * which is worse than it sounds because a reload then resolves it. On
+   * play-flow that is the sharp end: /play opens a FRESH lobby where
+   * /play/{code} resumes the one the host is in the middle of.
+   *
+   *   1. The overlay owns no entry (arm()'s push was refused), so the press
+   *      landed on whatever sat under the screen. Push the screen back on:
+   *      the entry we walked onto has to stay reachable behind us.
+   *   2. The router replaced the url while the overlay was open — play-flow
+   *      swapping /play for /play/{code} once _ensureLobbyOpen resolves. Only
+   *      the guard entry, the one being replaced, got the new url; the screen's
+   *      own entry below it still carries the old one. That entry IS the
+   *      screen, so fix it in place rather than pushing a second copy of it.
+   *
+   * The route comes from the store rather than the popped entry: the router
+   * never navigated, so `currentRoute` is still the screen on display, and
+   * replaceUrl() keeps it in step with the url the screen ought to have.
+   *
+   * @param {Layer} layer
+   */
+  function restoreScreen(layer) {
+    // close() is allowed to re-arm rather than close (the onboarding deck
+    // answers a press by walking back a slide). Its fresh entry is the current
+    // one and is exactly where the user should be — anything pushed on top of
+    // it would bury it. This also covers landing on the entry of an overlay
+    // still open underneath, which is likewise nobody's to restore.
+    const armedNow = history.state && history.state[KEY];
+    if (armedNow && isArmed(armedNow)) return;
+
+    const route = window.store && window.store.get("currentRoute");
+    if (!route || !route.name) return;
+    if (!window.router || !window.router.pathFor) return;
+    const url = window.router.pathFor(route.name, route.params || {});
+    if (!url) return;
+    let want;
+    try { want = new URL(url, window.location.href).href; } catch (_) { return; }
+
+    const st = history.state;
+    // Case 2 only when our entry really was the one consumed AND we landed on
+    // this same screen. Anything else is case 1 — including our entry being
+    // skipped rather than popped, which lands on a foreign entry that must not
+    // be overwritten.
+    const onScreenEntry = layer.owns && st && st.name === route.name;
+    if (onScreenEntry && want === window.location.href) return;
+
+    const state = { name: route.name, params: route.params || {} };
+    try {
+      if (onScreenEntry) history.replaceState(state, "", want);
+      else history.pushState(state, "", want);
+    } catch (_) {}
+  }
+
   function isArmed(token) {
     for (let i = 0; i < _layers.length; i++) {
       if (_layers[i].token === token) return true;
@@ -147,24 +216,35 @@
     if (!isTextEntry(el)) return false;
     if (layer.root && !layer.root.contains(el)) return false;
     try { /** @type {any} */ (el).blur(); } catch (_) {}
-    pushEntry(layer.token);
+    // The press we are spending on the keyboard consumed our entry, so put one
+    // back for the press that closes the overlay. If that push is refused too,
+    // the layer simply stops owning an entry — same fallback as arm().
+    layer.owns = pushEntry(layer.token);
     return true;
   }
 
   /**
    * Arm a guard for an overlay that is now on screen.
+   *
+   * The layer is registered whether or not the entry lands. It used to be
+   * registered only on a successful pushState, which made a refused push
+   * (History API throttling; a browser with no History API at all) fail in the
+   * worst possible way — SILENTLY, and as the pre-guard bug itself: the sheet
+   * stays up and the back press walks the page behind it, host → play → feed,
+   * with nothing in the console to say why. Registering regardless means the
+   * press is still spent on the overlay; all that is lost is the entry that
+   * would have kept the address bar still, and handlePopstate puts that back.
+   *
    * @param {{close: () => void, root?: Element|null}} opts
    *   `close` runs the overlay's own dismissal — the same path its X takes.
    *   `root` is the overlay's outermost element; when given, a keyboard is only
    *   dismissed first if the focus that raised it is inside this overlay.
-   * @returns {number} the token to hand back to release(), or 0 when no guard
-   *   could be armed (no History API) — release(0) is a no-op, so callers never
-   *   need to branch on it.
+   * @returns {number} the token to hand back to release().
    */
   function arm(opts) {
     const token = ++_seq;
-    if (!pushEntry(token)) return 0;
-    _layers.push({ token, close: opts.close, root: opts.root || null });
+    const owns = pushEntry(token);
+    _layers.push({ token, close: opts.close, root: opts.root || null, owns });
     return token;
   }
 
@@ -180,7 +260,12 @@
       if (_layers[i].token === token) { found = i; break; }
     }
     if (found === -1) return;   // already popped — the back press did it
+    const layer = _layers[found];
     _layers.splice(found, 1);
+    // No entry of ours to unwind (arm()'s pushState was refused). Unwinding
+    // anyway would take the press out of the router's stack and walk the user
+    // off the screen they are still looking at.
+    if (!layer.owns) return;
 
     // Deferred a task on purpose. A pick that closes the overlay and then
     // navigates (game picker → the play flow) does both synchronously, and an
@@ -210,6 +295,8 @@
       if (keyboardFirst(layer)) return true;
       _layers.pop();
       try { layer.close(); } catch (e) { console.warn("back guard close:", e); }
+      // The press closed the overlay; it must not also have moved the page.
+      restoreScreen(layer);
       // Two overlays in a row (one opened as the last was closing) leave a
       // spent entry directly under this one. Collapse it now rather than
       // spending the user's next press on an entry for the screen they are
