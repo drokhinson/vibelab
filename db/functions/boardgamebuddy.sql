@@ -573,9 +573,19 @@
 -- bgb_bgg_sync_status(p_user UUID)
 --   → JSONB { bgg_username, has_credentials, pending_count, errored_count,
 --             last_completed_at, session_started_at, session_total,
---             session_done, session_errored, session_game_names[] }
+--             session_done, session_errored, session_game_names[],
+--             catalog_session_started_at, catalog_session_total,
+--             catalog_session_done, catalog_session_errored,
+--             catalog_session_game_names[] }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/039_perf_rpcs_and_indexes.sql)
+--   Last updated in: db/migrations/boardgamebuddy/006_bgg_check_session.sql
+--               (the import roll-up gained `AND kind <> 'catalog'`, because a
+--                POST /bgg/check queues catalog rows into the same table and
+--                they were being counted into the last IMPORT's window —
+--                which made a finished import read as unfinished. The new
+--                catalog_session_* keys are the same roll-up for those rows,
+--                anchored on profiles.bgg_last_check_started_at.)
 --   Called by:  shared-backend/routes/boardgame_buddy/bgg_link_routes.py
 --               (get_sync_status — GET /bgg/sync/status, FE poll target)
 --   Purpose:    One-call import-progress poll (was up to 7 round trips per
@@ -583,7 +593,9 @@
 --               Python precedence (pending > error > done); names are the
 --               20 most recently completed. has_credentials mirrors
 --               bgg_client.has_stored_credentials so auth_state derives
---               without shipping the encrypted secret.
+--               without shipping the encrypted secret. The catalog roll-up
+--               needs no per-bgg_id grouping: (user_id, bgg_id, kind) is
+--               unique, so one catalog row IS one game.
 
 -- bgb_bgg_push_status(p_user UUID)
 --   → JSONB { bgg_username, has_credentials, pending_count, errored_count,

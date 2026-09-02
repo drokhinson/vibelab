@@ -211,6 +211,49 @@ class BggUnpushableReason(StrEnum):
     NO_BGG_ID = "no_bgg_id"  # A game BgB has that BoardGameGeek does not
 
 
+class BggCheckPhase(StrEnum):
+    """The phases POST /bgg/check walks, in the order it runs them.
+
+    ORDER IS LOAD-BEARING: the FE renders the checklist by iterating this enum,
+    so a phase's position here is its position on screen. Every phase is
+    emitted from the start — including COLLIDS, which is often skipped — because
+    a row appearing halfway down a running checklist reads worse than one that
+    turns out not to have been needed.
+    """
+
+    GUARDS = "guards"
+    COLLECTION = "collection"
+    SHELF = "shelf"
+    COMPARE = "compare"
+    CATALOG = "catalog"
+    COLLIDS = "collids"
+    QUEUE = "queue"
+
+
+class BggCheckState(StrEnum):
+    """Whether a comparison is running, and whether we can still see it.
+
+    UNKNOWN is not an error. Progress lives in an in-process cache, so a
+    restart — or a poll landing on a worker that never ran the check — reads as
+    UNKNOWN while the POST itself is still perfectly alive. The FE must render
+    that as "still working", never as done.
+    """
+
+    UNKNOWN = "unknown"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class BggCheckStepState(StrEnum):
+    """One checklist row's state. SKIPPED is a step that was not needed."""
+
+    IDLE = "idle"
+    ACTIVE = "active"
+    DONE = "done"
+    SKIPPED = "skipped"
+
+
 class PlayMode(StrEnum):
     """Scoring style for a game / play. Persisted on boardgamebuddy_games.play_mode."""
 

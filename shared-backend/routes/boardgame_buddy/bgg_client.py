@@ -92,6 +92,7 @@ async def _fetch_with_warmup_retry(
     params: dict,
     attempts: int = 3,
     delays: tuple[float, ...] = (5.0, 10.0, 20.0),
+    on_warm_up: Optional[Callable[[int, int, float], None]] = None,
 ) -> httpx.Response:
     """Call do_get() with retries when BGG signals it's still computing the result.
 
@@ -115,6 +116,11 @@ async def _fetch_with_warmup_retry(
             "BGG warm-up on %s %s — sleeping %.1fs (attempt %d/%d)",
             path, params, delay, attempt + 1, attempts,
         )
+        # The user is watching a checklist while this sleeps. Telling them BGG
+        # is warming up, and for how long, is the difference between a wait and
+        # a hang.
+        if on_warm_up is not None:
+            on_warm_up(attempt + 1, attempts, delay)
         await asyncio.sleep(delay)
     logger.warning(
         "BGG warm-up exhausted on %s %s after %d attempts",
@@ -504,6 +510,7 @@ async def fetch_bgg_as_user(
     params: dict,
     *,
     timeout: float,
+    on_warm_up: Optional[Callable[[int, int, float], None]] = None,
 ) -> str:
     """GET a BGG xmlapi2 path authenticated AS the linked user.
 
@@ -530,7 +537,9 @@ async def fetch_bgg_as_user(
             # nesting: a placeholder response is retried before we ever consider
             # the session dead, and the post-re-login attempt gets the same
             # treatment.
-            return await _fetch_with_warmup_retry(_do_get, path=path, params=params)
+            return await _fetch_with_warmup_retry(
+                _do_get, path=path, params=params, on_warm_up=on_warm_up,
+            )
 
     resp = await _run_as_user(user_id, attempt=_attempt, context=f"GET {path}")
     _map_bgg_status(resp, path=path, params=params)

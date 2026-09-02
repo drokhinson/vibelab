@@ -881,4 +881,9 @@ async def get_sync_status(
         session_done=data.get("session_done") or 0,
         session_errored=data.get("session_errored") or 0,
         session_game_names=data.get("session_game_names") or [],
+        catalog_session_started_at=data.get("catalog_session_started_at"),
+        catalog_session_total=data.get("catalog_session_total") or 0,
+        catalog_session_done=data.get("catalog_session_done") or 0,
+        catalog_session_errored=data.get("catalog_session_errored") or 0,
+        catalog_session_game_names=data.get("catalog_session_game_names") or [],
     )

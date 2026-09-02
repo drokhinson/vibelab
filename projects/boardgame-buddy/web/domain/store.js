@@ -22,6 +22,10 @@
         offline: false,       // BgbNet.isOffline() — see domain/net.js
         outboxCount: 0,       // plays queued for upload — see domain/outbox.js
         theme: "dark",        // "light" | "dark" — see domain/theme.js
+        // The BGG comparison / sync run, published by domain/bgg-sync-flow.js.
+        // Lives here rather than on either surface because the flow's screen
+        // and the Settings progress strip are never mounted at the same time.
+        bggSync: null,
         // Pending INCOMING buddy requests. The app's one notification signal:
         // the Profile nav tab paints a dot from it, the hub's Buddies card
         // paints the number. Lives here rather than on either surface because
@@ -118,6 +122,10 @@
         // Nor are the next account's near-matches. GhostClaim.forgetSuggestions()
         // drops the key set that backs this on the same sign-out.
         ghostClaimSuggestionCount: 0,
+        // Zeroed too: a comparison is one account's shelf against one BGG
+        // handle, and the next person signing in on this device shares
+        // neither. BggSyncFlow.reset() drops the saved draft to match.
+        bggSync: null,
       };
       for (const subs of this._subs.values()) {
         for (const fn of subs) {

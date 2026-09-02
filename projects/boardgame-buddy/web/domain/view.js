@@ -152,6 +152,8 @@
           build: (p) => `/u/${encodeURIComponent(p.userId || "")}` },
         { name: "import-plays",        pattern: /^\/settings\/import-plays\/?$/,
           build: () => "/settings/import-plays" },
+        { name: "bgg-sync",            pattern: /^\/settings\/bgg\/?$/,
+          build: () => "/settings/bgg" },
         { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
         { name: "admin",               pattern: /^\/admin\/?$/,                   build: () => "/admin" },
         { name: "feed",                pattern: /^\/(feed)?\/?$/,                 build: () => "/feed" },
