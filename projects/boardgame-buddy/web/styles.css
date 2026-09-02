@@ -793,6 +793,34 @@ body {
   border-color: var(--accent);
 }
 
+/* Same field, mounted on the Play step and the spectator's mirror. Both host
+   the scroll inside a `.cascade-card`, and that card's form-control rule —
+   `.cascade-card input[type="text"]`, (0,2,1) — outranks the island's own
+   `.scroll-panel__search`, (0,1,0). So the parchment's cream field arrived
+   repainted from --well + --polaroid-ink: a dark well cut into cream paper on
+   the two live-game screens, and a field that did not match the identical
+   scroll on Game Detail in either theme.
+
+   The island's literals restated at (0,3,0) — two classes plus the attribute
+   the card rule matches on — so the card cannot reach them by specificity or
+   by source order. Scoped inside `.scroll-panel`, so every other field on a
+   cascade card keeps the card's chrome; this is the parchment reclaiming its
+   own control, the same move `.cascade-card--scoring` makes for the scorepad.
+   Focus is doubled up for the same reason: `.cascade-card input:focus` is
+   (0,2,1) and was landing `outline: none` plus the card's accent ring over the
+   scroll's outline. */
+.scroll-panel .scroll-panel__search[type="text"] {
+  background: rgba(255, 250, 235, 0.75);
+  border: 1px solid rgba(139, 111, 60, 0.35);
+  color: #2B1D0A;
+}
+.scroll-panel .scroll-panel__search[type="text"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
 .scroll-chapter-list {
   list-style: none;
   margin: 0;
