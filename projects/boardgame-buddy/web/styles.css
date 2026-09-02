@@ -3246,8 +3246,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0.35rem 4px 0;
   background: oklch(var(--bc) / 0.25);
 }
+.bgg-log__icon--error { color: var(--rust); }
 .bgg-log__step--active .bgg-log__body { color: oklch(var(--bc) / 0.95); }
 .bgg-log__step--idle   .bgg-log__body { color: oklch(var(--bc) / 0.55); }
+.bgg-log__step--error  .bgg-log__body { color: var(--rust); }
+/* A failed step's own bar must not read as a full one. */
+.bgg-log__step--error .bgg-log__bar-fill { background: var(--rust); }
 .bgg-log__body { flex: 1; min-width: 0; }
 .bgg-log__sublist {
   list-style: disc;
@@ -3548,6 +3552,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgg-log__errors-hd { margin: 0 0 0.3rem; font-weight: 700; color: var(--rust); }
 .bgg-log__errors ul { list-style: none; margin: 0; padding: 0; }
 .bgg-log__errors li { padding: 0.15rem 0; color: var(--polaroid-muted, #8B7E68); }
+/* The games a grouped failure covers — named, but quieter than the cause. */
+.bgg-log__errors-names {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.74rem;
+  opacity: 0.75;
+}
 .bgg-log__errors-ft { margin: 0.35rem 0 0; color: var(--polaroid-muted, #8B7E68); }
 .bgg-log__error { margin: 0.5rem 0 0; font-size: 0.78rem; color: var(--rust); }
 .bgg-log__footer {
@@ -3579,6 +3590,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    expression rather than a second literal red. Same mix as the sibling step's
    .add-buddies__error. */
 .bgb-spoke-screen .bgg-log__sublist-error {
+  color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
+}
+/* Same argument for a failed step's own mark and text — and the icon needs the
+   re-point regardless of contrast, because .bgb-spoke-screen .bgg-log__icon
+   above would otherwise paint a failure in the accent. */
+.bgb-spoke-screen .bgg-log__icon--error,
+.bgb-spoke-screen .bgg-log__step--error .bgg-log__body {
   color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
 }
 

@@ -223,9 +223,11 @@
     const copy = COPY[dir];
     const running = snap.screen === "running";
 
-    // A push re-plans server-side before it queues anything — the same sweep
-    // as a check. Narrate it rather than showing an empty screen for the 10-40
-    // seconds before the first queue count exists.
+    // A push that has to re-sweep runs the same 10-40 seconds as a check
+    // before the first queue count exists. Narrate that rather than showing an
+    // empty screen; on the fast path — the server still holds the comparison
+    // being committed — the summary lands before this is on screen long enough
+    // to read.
     const body = (dir === "push" && !snap.summary)
       ? window.renderBggCheckLog(snap.progress, { className: "bgg-log--screen" })
       : dir === "push"

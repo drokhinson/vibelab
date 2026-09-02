@@ -25,6 +25,7 @@ from routes.boardgame_buddy.bgg_write import (
     BGG_PRESERVED_FLAGS,
     build_status_form,
     interpret_save_response,
+    looks_signed_out,
 )
 
 # A realistic <status> element: the three flags BgB owns, the ones it must not
@@ -159,11 +160,27 @@ def test_error_key_is_a_failure():
     assert e.value.status_code == 502
 
 
-def test_login_form_body_asks_for_a_relink():
-    body = '<html><form action="/login"><input name="password"></form></html>'
+LOGIN_PAGE = '<html><form action="/login"><input name="password"></form></html>'
+
+
+def test_a_login_page_is_recognised_as_a_dead_session():
+    """The hook post_bgg_form_as_user spends its one free re-login on."""
+    assert looks_signed_out(_resp(LOGIN_PAGE))
+
+
+def test_a_normal_save_body_is_not_a_dead_session():
+    assert not looks_signed_out(_resp('{"collid": 88881}'))
+
+
+def test_login_form_body_is_never_a_password_problem():
+    """It used to raise 409 "re-link required" and send the user off to
+    re-enter a password that was stored, correct, and one login away from
+    working. The session is what died; the credentials are fine."""
     with pytest.raises(HTTPException) as e:
-        interpret_save_response(_resp(body))
-    assert e.value.status_code == 409
+        interpret_save_response(_resp(LOGIN_PAGE))
+    assert e.value.status_code == 502
+    assert "re-link" not in str(e.value.detail).lower()
+    assert "password" not in str(e.value.detail).lower()
 
 
 @pytest.mark.parametrize("body", ["", "OK", "<html>whatever</html>", "[1,2]", "null"])

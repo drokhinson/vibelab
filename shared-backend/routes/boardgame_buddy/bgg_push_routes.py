@@ -4,15 +4,23 @@ Three routes:
 
   POST /bgg/check       Sweep the live BGG collection, diff it against the BgB
                         shelf, and fill catalog gaps. Writes nothing to BGG.
-  POST /bgg/push        Re-plan server-side, queue every change, drain it in
-                        the background.
+                        Parks its plan in services/bgg_check_cache.py.
+  POST /bgg/push        Queue every change in that plan, drain it in the
+                        background.
   GET  /bgg/push/status One RPC; the FE polls this while the queue drains.
 
 Neither sync is offered by the UI until a check has run, so no sync starts
 against a state the user has not seen. The server enforces the parts that
-matter regardless of the UI: /bgg/push re-plans rather than trusting the
-client's list, refuses to run on a partial sweep, and 409s while an import is
-in flight (and vice versa) because both workers drive the same BGG session.
+matter regardless of the UI: /bgg/push works from a plan IT built — the client
+sends the timestamp of the comparison it reviewed and gets back the stored plan
+or nothing, never a list of writes it supplied — refuses to run on a partial
+sweep, and 409s while an import is in flight (and vice versa) because both
+workers drive the same BGG session.
+
+A push whose comparison the server no longer holds falls back to sweeping
+again, which is what both syncs used to do unconditionally: the same forty
+seconds of BoardGameGeek reads the check had just finished, charged to the user
+a second time for pressing a button on the answer.
 """
 
 import asyncio
@@ -28,6 +36,7 @@ from db import get_supabase
 
 from . import router
 from .bgg_link_routes import _require_linked_username
+from .bgg_client import BggRefusedError
 from .bgg_write import push_collection_status
 from .constants import BggAuthState, BggCheckPhase, BggPushChange
 from .dependencies import CurrentUser, get_current_user
@@ -43,7 +52,7 @@ from .models import (
     BggUnpushableItem,
 )
 from .services.bgg_compare_service import ComparePlan, build_plan
-from .services import bgg_progress
+from .services import bgg_check_cache, bgg_progress
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +121,9 @@ def _queue_catalog_imports(sb: Client, user_id: str, bgg_ids: list[int]) -> None
     ).execute()
 
 
-def _diff_response(username: str, plan: ComparePlan, catalog_pending: int) -> BggDiffResponse:
+def _diff_response(
+    username: str, plan: ComparePlan, catalog_pending: int, checked_at: datetime,
+) -> BggDiffResponse:
     push_items = [
         BggDiffItem(
             bgg_id=p.bgg_id, game_id=p.game_id, game_name=p.game_name,
@@ -131,7 +142,10 @@ def _diff_response(username: str, plan: ComparePlan, catalog_pending: int) -> Bg
     ]
     return BggDiffResponse(
         bgg_username=username,
-        checked_at=datetime.now(timezone.utc),
+        # Passed in, not taken here: this exact value is the key POST /bgg/push
+        # matches its stored plan against, so it has to be the one the cache
+        # was written with.
+        checked_at=checked_at,
         in_sync_count=plan.in_sync_count,
         local_total=plan.local_total,
         remote_total=plan.remote_total,
@@ -194,6 +208,13 @@ async def check_bgg(
         if plan.warm_up_failed:
             progress.note_warm_up_failure()
         progress.finish()
+
+        # Park it for whichever direction the user picks next. Everything the
+        # two syncs used to re-derive is in here — the plan for the push, the
+        # sweep it was built from for the import — and both are minutes-fresh
+        # reads of an account that took forty seconds to read once.
+        checked_at = datetime.now(timezone.utc)
+        bgg_check_cache.store(user.user_id, checked_at=checked_at, plan=plan)
     except HTTPException as exc:
         progress.fail(str(exc.detail))
         raise
@@ -201,7 +222,7 @@ async def check_bgg(
         progress.fail(str(exc))
         raise
 
-    return _diff_response(username, plan, len(plan.catalog_missing))
+    return _diff_response(username, plan, len(plan.catalog_missing), checked_at)
 
 
 def _stamp_check_session(sb: Client, user_id: str, started_at: datetime) -> None:
@@ -239,29 +260,39 @@ async def push_bgg(
     background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> BggPushSummary:
-    """Re-plan the comparison, queue every change, and drain it in the background."""
+    """Queue every change in the reviewed comparison and drain it in the background."""
     sb = get_supabase()
     username = _require_linked_username(sb, user.user_id)
     await _reject_if_import_running(sb, user.user_id)
     await _reject_if_push_running(sb, user.user_id)
 
-    # Re-plan rather than trusting the client's list. Their view can be minutes
-    # old, and a stale plan sent to a write endpoint on a third-party service
-    # is the worst possible place to trust a cache.
-    #
-    # Reported under kind="push_plan" so the progress screen can narrate this
-    # sweep too: it is the same 10-40 seconds as a check, and it used to be a
-    # completely blank wait between "Push" and the first queue count.
-    progress = bgg_progress.BggCheckProgress(user.user_id, kind="push_plan")
-    try:
-        plan = await build_plan(sb, user.user_id, username, progress=progress)
-        progress.finish()
-    except HTTPException as exc:
-        progress.fail(str(exc.detail))
-        raise
-    except Exception as exc:  # noqa: BLE001
-        progress.fail(str(exc))
-        raise
+    # The plan the user reviewed, when the server still holds it and the client
+    # can name it. NOT the client's list — the client sends a timestamp and
+    # gets back the server's own stored plan or nothing, so it still cannot
+    # dictate a single write. That was always the property worth defending; the
+    # forty-second re-sweep was just the crudest way to get it, and it charged
+    # the user the entire comparison a second time for a comparison they were
+    # looking at when they pressed the button.
+    plan = bgg_check_cache.pop_plan(user.user_id, checked_at=body.checked_at)
+    reused = plan is not None
+
+    if plan is None:
+        # No stored comparison, or not the one they reviewed. Sweep.
+        #
+        # Reported under kind="push_plan" so the progress screen can narrate
+        # this sweep too: it is the same 10-40 seconds as a check, and it used
+        # to be a completely blank wait between "Push" and the first queue
+        # count.
+        progress = bgg_progress.BggCheckProgress(user.user_id, kind="push_plan")
+        try:
+            plan = await build_plan(sb, user.user_id, username, progress=progress)
+            progress.finish()
+        except HTTPException as exc:
+            progress.fail(str(exc.detail))
+            raise
+        except Exception as exc:  # noqa: BLE001
+            progress.fail(str(exc))
+            raise
 
     if plan.warm_up_failed:
         # A batch that exhausted its warm-up retries returned ZERO items, which
@@ -287,6 +318,7 @@ async def push_bgg(
         clears=counts[BggPushChange.CLEAR],
         unpushable=len(plan.unpushable),
         plan_changed=_plan_moved(body.checked_at, plan),
+        reused_comparison=reused,
     )
 
 
@@ -434,9 +466,9 @@ async def _process_push_queue(user_id: str, username: str) -> None:
         see the comment in _run_sync.
       * A 429 does NOT burn an attempt — it backs off and leaves the row
         pending, bounded so a rate-limited account cannot spin forever.
-      * A 409 aborts the whole run. Every remaining row would fail identically,
-        and hammering BGG's login endpoint with a dead password is how an
-        account gets locked.
+      * A 409, and a BggRefusedError, abort the whole run. Every remaining row
+        would fail identically, and hammering BGG's login endpoint with a dead
+        password is how an account gets locked.
       * Rows are never re-planned. The frozen payload is what gets sent.
     """
     sb = get_supabase()
@@ -457,6 +489,18 @@ async def _process_push_queue(user_id: str, username: str) -> None:
                     target_status=row.get("target_status"),
                     raw_status=payload,
                 )
+            except BggRefusedError as exc:
+                # BGG turned us away holding a session it had just issued —
+                # its bot protection, or an endpoint that has moved. Every
+                # remaining row would be refused the same way, so stop:
+                # eighteen games each burning three attempts two seconds apart
+                # is a minute and a half of hammering a door that is shut.
+                logger.warning(
+                    "BGG push: refused for user=%s (ray=%s); aborting run",
+                    user_id, exc.ray_id or "-",
+                )
+                await asyncio.to_thread(_abort_remaining, sb, user_id, str(exc.detail))
+                return
             except HTTPException as exc:
                 if exc.status_code == 429:
                     backoffs += 1

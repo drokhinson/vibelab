@@ -335,6 +335,11 @@ class BggPushSummary(BaseModel):
     unpushable: int = 0
     plan_changed: bool = False
     warm_up_retry_pending: bool = False
+    # True when this committed the comparison the user reviewed rather than
+    # sweeping BoardGameGeek all over again. The push log narrates the two
+    # differently, because "Re-checked your BoardGameGeek collection" is a
+    # sentence about work that, on the fast path, nobody did.
+    reused_comparison: bool = False
 
 
 class BggPushError(BaseModel):

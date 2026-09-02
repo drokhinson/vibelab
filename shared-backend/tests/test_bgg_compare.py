@@ -71,8 +71,11 @@ def _plan(monkeypatch, *, local, remote, catalog=None, warm=False, collids=None)
              + [i.bgg_id for i in remote])
         ],
     }
-    async def fake_sweep(_u, _n): return remote, warm
-    async def fake_collids(_u, _n, ids): return collids or {}
+    # Both fakes take **kw because build_plan threads a `progress` ledger into
+    # the real ones. A positional-only stub silently stops matching the moment
+    # the sweep gains a keyword, which is exactly how this file went red.
+    async def fake_sweep(_u, _n, **kw): return remote, warm
+    async def fake_collids(_u, _n, ids, **kw): return collids or {}
     monkeypatch.setattr(S, "_fetch_collection_items", fake_sweep)
     monkeypatch.setattr(S, "_resolve_collids", fake_collids)
     return asyncio.run(S.build_plan(_SB(store), "u1", "tester"))

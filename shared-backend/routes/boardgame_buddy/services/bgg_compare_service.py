@@ -81,6 +81,11 @@ class ComparePlan:
     remote_total: int = 0
     catalog_missing: list[int] = field(default_factory=list)
     warm_up_failed: bool = False
+    # The sweep this plan was derived from, kept rather than discarded so the
+    # import can reuse it — see services/bgg_check_cache.py. It is the same
+    # eight throttled BGG requests _run_sync would otherwise make for itself,
+    # thirty seconds after we already made them.
+    remote_items: list[BggCollectionItem] = field(default_factory=list)
 
 
 def _load_local_collection(sb: Client, user_id: str) -> list[dict]:
@@ -209,6 +214,7 @@ async def build_plan(
         local_total=len(local_rows),
         remote_total=sum(1 for it in remote_items if it.status is not None),
         warm_up_failed=warm_up_failed,
+        remote_items=remote_items,
     )
 
     prog.begin(BggCheckPhase.COMPARE)
