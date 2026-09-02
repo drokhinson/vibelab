@@ -7,7 +7,8 @@ A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code a
 > Pass 1 + 2 (dead code) 2026-05-23, Pass 2 2026-08-20 (§9),
 > Pass 3 (feed-card rework) 2026-08-29, Pass 4 (theme system + sheet system)
 > 2026-08-30, Pass 5 (Wishlist → a shelf) 2026-09-01, Pass 6 (first-run deck)
-> 2026-09-01, **Pass 7 (one picker for "who is this person?") 2026-09-02**.
+> 2026-09-01, Pass 7 (one picker for "who is this person?") 2026-09-02,
+> **Pass 8 (the header's upload button retires) 2026-09-02**.
 >
 > ⚠️ Every `file:line` citation in §§2-8 dates from 2026-05-23 and has drifted.
 > Treat the *claims* as current only where a later pass confirms them; re-grep
@@ -928,3 +929,52 @@ copies, which is the empirical case for extracting `ui/collection-tile.js`.~~
 there is now one `_renderTile`, in `views/collection-view.js`. A shared
 `ui/collection-tile.js` is still the right answer for the *other* four tile
 implementations listed above.
+
+---
+
+## Cleanup log — Pass 8 (the header's upload button retires), 2026-09-02
+
+The global header carried a pending-upload control that opened the outbox
+dialog. It is gone, and a notification bell took its slot.
+
+The control had two jobs and they came apart cleanly. Its **affordance** — a
+way into the queue — was already duplicated by Settings' "Pending uploads"
+section, which opens the same `widgets/outbox-modal.js`; nothing was lost by
+deleting the second door. Its **signal** — "something is waiting", visible from
+any screen — is the half worth keeping, and that is a dot, so it became one
+appended row in `domain/notifications.js` pointed at the Settings gear's
+existing `.bgb-global-header__dot`. No new mechanism: `subscribe()` already
+covers every slot in that table, and `outboxCount` was already a store slot.
+
+**JS removed:** `ui/outbox-indicator.js` (53 lines) whole, its `<script>` tag,
+and `init.js#syncOutboxIndicator` plus its two `store.subscribe` lines. The
+`offline` subscription went with it — it only ever changed the old indicator's
+*copy*, and a dot has none. `widgets/outbox-modal.js` **stays**: it is still the
+one rendering of the queue, now with one caller instead of two.
+
+**CSS removed:** the whole `.bgb-outbox*` family (~75 lines) — the button, its
+`::before` hit-area expander, `.is-zero`, `.is-busy`, `__ring`,
+`__badge`, `__badge--failed`, `@keyframes bgb-outbox-spin` and its
+`prefers-reduced-motion` branch. `.outbox-modal*` is a different family and is
+untouched.
+
+**Stale comments fixed:** three named the deleted family — two in the header
+block (`.bgb-global-header__settings` describing itself as "the same 36px
+chrome box as `.bgb-outbox` next to it", and its `::before` citing
+"`.bgb-outbox::before`"), and the `[hidden]` guard on `.bgb-nav__dot`, whose
+reason for existing was a bug in `.bgb-outbox__badge`. The last one keeps the
+lesson and drops the dead selector: the control is gone, the reason the guard
+exists is not.
+
+**Extraction at instance #2:** `init.js#syncGearDot` became
+`syncHeaderDot(selector, tally, restingName)` with two call sites, when the
+bell needed the same twelve lines. Likewise `.linknotif-bar` joined the
+existing `.bgg-flow__nav, .imp-nav` docked-footer rule rather than restating
+its geometry a third time.
+
+**Not done:** the four bespoke modals `overlays.md` §7 names as consolidation
+debt (`play-detail-popup`, `outbox-modal`, `add-game-modal`,
+`import-expansions-modal`) each still re-implement `_previousFocus` /
+`_escHandler` / singleton-by-id. This pass touched `outbox-modal.js`'s header
+comment only, which is not the "substantive touch" that rule says should
+trigger the extraction.

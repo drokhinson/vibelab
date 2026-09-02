@@ -81,43 +81,59 @@ def link_ghost(
     return int(data.get("updated") or 0)
 
 
-def ghost_out_of_play(
+def ghost_out_of_plays(
     sb,
     viewer_id: str,
-    play_id: str,
-    fallback_display_name: str,
+    play_ids: list[str] | None = None,
+    group_ids: list[str] | None = None,
+    batch_ids: list[str] | None = None,
 ) -> int:
-    """Convert the caller's own player row in `play_id` back into a ghost.
+    """Convert the caller's own player rows back into ghosts, in one statement.
 
     The inverse of `link_ghost`: instead of stamping a `player_user_id` onto a
     free-text ghost, it nulls the caller's `player_user_id` while keeping the
-    display name. Used when someone was added to a play they didn't actually
-    take part in — they self-remove from the game log without deleting the play
-    (the owner keeps it, seeing them as a named ghost). Returns the number of
-    rows updated (0 if the caller isn't a player in this play).
+    display name. Used when someone was added to plays they didn't take part in
+    — they self-remove from the game log without deleting anything (the owner
+    keeps the play, seeing them as a named ghost). Returns the rows moved.
 
-    Scoped on `player_user_id = viewer_id`, so a caller can only ever affect
-    their own row — the play owner is never trusted from the client.
+    Takes runs and batches as well as individual plays, because that is what
+    the notifications screen selects: one tick on an imported batch has to
+    unlink 214 plays without the client holding 214 ids.
+
+    One RPC rather than the two PostgREST calls it replaced, for two reasons.
+    A per-play loop over a batch is two round trips per play. And the
+    identity-check backfill and the null-out are now a single UPDATE, so no
+    concurrent write can land between them and abort on
+    bgb_play_players_identity_chk.
+
+    Scoping lives in the RPC and is doubled: `player_user_id = viewer_id` (a
+    caller can only ever move their own seat) and `plays.user_id <> viewer_id`
+    (never a play they logged themselves). An id failing either — including
+    somebody else's batch — matches zero rows and contributes 0 rather than
+    erroring, so one stale id cannot sink a batch of sixty. The fallback
+    display name is read from the profile inside the function rather than
+    trusted from the client.
     """
-    # Step 1 — defensive backfill so nulling player_user_id can never trip the
-    # bgb_play_players_identity_chk constraint (a row must keep either a
-    # user_id or a display_name). Rows written by _write_play_players always
-    # carry a display_name, so this normally updates nothing.
-    sb.table("boardgamebuddy_play_players").update(
-        {"player_display_name": fallback_display_name}
-    ).eq("play_id", play_id).eq("player_user_id", viewer_id).is_(
-        "player_display_name", "null"
+    res = sb.rpc(
+        "bgb_ghost_out_of_plays",
+        {
+            "p_viewer": viewer_id,
+            "p_play_ids": play_ids or [],
+            "p_group_ids": group_ids or [],
+            "p_batch_ids": batch_ids or [],
+        },
     ).execute()
+    return int(res.data or 0)
 
-    # Step 2 — drop the account link; the row lives on as a ghost.
-    res = (
-        sb.table("boardgamebuddy_play_players")
-        .update({"player_user_id": None})
-        .eq("play_id", play_id)
-        .eq("player_user_id", viewer_id)
-        .execute()
-    )
-    return len(res.data or [])
+
+def ghost_out_of_play(sb, viewer_id: str, play_id: str) -> int:
+    """Single-play wrapper over `ghost_out_of_plays`, for POST /plays/{id}/leave.
+
+    Kept as its own name because the route around it has a different error
+    contract — it 404s an unknown play and 400s one the caller logged, which
+    the play-detail popup relies on — but the write itself is the same one.
+    """
+    return ghost_out_of_plays(sb, viewer_id, play_ids=[play_id])
 
 
 def merge_ghosts(

@@ -45,8 +45,9 @@
       // the case where that call threw.
       this._hydrateFromCache();
       // Signal dropping (or returning) changes which host cards make sense.
-      // The upload queue is account-level state and now lives in the global
-      // header (ui/outbox-indicator.js), so this view no longer watches it.
+      // The upload queue is account-level state and lives in Settings' Pending
+      // uploads section, with the gear's dot as its signal, so this view no
+      // longer watches it.
       // View.listen auto-unsubscribes on unmount.
       this.listen("offline", () => {
         this._patchChooserCards();

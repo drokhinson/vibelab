@@ -130,6 +130,17 @@
      * @param {{playId?: string, kind?: string}} detail
      */
     _onPlayChanged({ playId, kind }) {
+      // A bulk unlink from the notifications screen. It can remove hundreds of
+      // plays across pages this view is not holding, and a batch selection
+      // doesn't even send its play ids — so there is nothing to splice by id.
+      // Drop what we have and re-pull the first page, which is cheap because
+      // LinkNotifications.unlink() already busted the cache this reads.
+      if (kind === "leave-bulk") {
+        // `initial` is the reset: it nulls _page before the fetch and _load
+        // re-sets _firstPageLen from the page that comes back.
+        this._load({ initial: true });
+        return;
+      }
       // "update" is left alone: the edit popup owns its own repaint and
       // Play.update() already busted the cache for the next mount.
       if (!playId || (kind !== "delete" && kind !== "leave")) return;

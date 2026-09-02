@@ -1150,10 +1150,101 @@ class GhostClaimAcceptResponse(BaseModel):
 
 
 class PlayLeaveResponse(BaseModel):
-    """Result of a player self-removing from a play (turning their row into a
-    ghost). rows_updated is 1 on success, 0 if the caller wasn't a player."""
+    """Result of a player self-removing from one or more plays (turning their
+    rows into ghosts). rows_updated is how many seats actually moved — 0 when
+    the caller wasn't a player, or when every id named a play they logged
+    themselves."""
 
     rows_updated: int
+
+
+# ── Link notifications: "someone put me in a play" ────────────────────────────
+
+class LinkNotification(BaseModel):
+    """One entry on the notifications screen.
+
+    An entry is not a play — it is one act of linking. `kind` says which of the
+    three groupings produced it (see bgb_link_notifications): `batch` is one
+    paste of an imported note, `run` a run of identical plays inside a pre-batch
+    import, `act` everything else keyed on (owner, linked_at) so a retroactive
+    ghost link across forty old plays reads as the one thing it was.
+
+    `play_id` is the entry's representative — the most recent play in it, which
+    is what the card names and opens. `play_ids` holds the whole set, but the
+    unlink does NOT send it back for a batch: `import_batch_id` does that job in
+    one field, so a 214-play import is one tick and one short request.
+    """
+
+    entry_key: str
+    kind: Literal["batch", "run", "act"]
+    play_id: str
+    play_ids: list[str]
+    group_count: int
+    game_count: int
+    played_from: date | None = None
+    played_to: date | None = None
+    linked_at: datetime
+    game_id: str | None = None
+    game_name: str | None = None
+    game_thumbnail_url: str | None = None
+    owner_id: str | None = None
+    owner_display_name: str | None = None
+    owner_username: str | None = None
+    owner_avatar: dict[str, Any] | None = None
+    import_batch_id: str | None = None
+    is_unread: bool = False
+
+
+class LinkNotificationsResponse(BaseModel):
+    """A page of notifications plus the unread total.
+
+    `unread` counts every unread entry the account has, not just this page — it
+    feeds the header bell's dot, which has to be right before anything is
+    scrolled. `next_cursor` is the oldest `linked_at` on this page, or None at
+    the end of the list.
+    """
+
+    items: list[LinkNotification]
+    next_cursor: datetime | None = None
+    unread: int = 0
+
+
+class LinkNotificationsSeenRequest(BaseModel):
+    """How far the client actually read.
+
+    Sending the newest `linked_at` the client was shown, rather than letting the
+    server use now(), is what stops a link that arrives between the list request
+    and this call from being marked seen without ever having been displayed.
+    """
+
+    through: datetime | None = None
+
+
+class LinkNotificationsSeenResponse(BaseModel):
+    """The watermark that now stands, after the monotonic merge."""
+
+    seen_at: datetime
+    unread: int = 0
+
+
+class LinkUnlinkRequest(BaseModel):
+    """What to remove yourself from — plays, runs, or whole imports.
+
+    All three lists are optional but at least one must be non-empty, or the
+    request is a no-op that reads like a bug. Capped because the body is the
+    only thing bounding the UPDATE; a batch id stands in for its whole import,
+    so the caps bound the request, not what one tap can undo.
+    """
+
+    play_ids: list[str] = Field(default_factory=list, max_length=500)
+    import_group_ids: list[str] = Field(default_factory=list, max_length=200)
+    import_batch_ids: list[str] = Field(default_factory=list, max_length=200)
+
+    @model_validator(mode="after")
+    def _at_least_one(self) -> "LinkUnlinkRequest":
+        if not (self.play_ids or self.import_group_ids or self.import_batch_ids):
+            raise ValueError("Name at least one play, run or import to unlink from.")
+        return self
 
 
 # ── Public profile view (Strava-style) ────────────────────────────────────────

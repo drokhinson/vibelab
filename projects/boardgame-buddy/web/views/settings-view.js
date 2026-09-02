@@ -408,8 +408,15 @@
      *
      * The whole section is absent when the queue is empty — an always-present
      * "0 pending uploads" row would train people to ignore the one place that
-     * tells them a play is still only on this phone. (The header indicator is
-     * the always-present affordance; it greys out instead of vanishing.)
+     * tells them a play is still only on this phone.
+     *
+     * That reasoning got STRONGER when the header's upload button was deleted.
+     * It used to be the always-present affordance, greying out at zero, which
+     * is what made this section safe to hide; now the always-present thing is
+     * the gear's DOT, fed by the `outboxCount` row in domain/notifications.js.
+     * A dot only lights when there is something here, so arriving to find
+     * nothing is no longer reachable — you are sent by the signal or not at
+     * all.
      *
      * The list, the upload action and the per-entry retry/remove all live in
      * widgets/outbox-modal.js, which the global header opens too. Settings had

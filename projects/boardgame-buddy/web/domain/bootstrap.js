@@ -164,6 +164,14 @@
       if (window.GhostClaim && window.GhostClaim.publishPendingFromBundle) {
         window.GhostClaim.publishPendingFromBundle(payload.profile_bundle);
       }
+      // And the bell: plays other people have seated this account in. Read off
+      // the payload's own top-level key rather than out of profile_bundle,
+      // because that is where the backend puts it — bgb_profile_bundle is 542
+      // lines and adding one integer to it would have meant re-emitting all of
+      // them, so /bootstrap gathers the count in parallel instead.
+      if (window.LinkNotifications && window.LinkNotifications.publishUnreadFromBoot) {
+        window.LinkNotifications.publishUnreadFromBoot(payload);
+      }
 
       // Identity seed. This is the one entry init.js reads synchronously right
       // after bindUser(), before any await — it's what lets the next boot paint

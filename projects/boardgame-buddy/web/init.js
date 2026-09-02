@@ -26,6 +26,7 @@
   window.buddiesView     = new window.BuddiesView();
   window.statsView       = new window.StatsView();
   window.achievementsView = new window.AchievementsView();
+  window.notificationsView = new window.NotificationsView();
   window.settingsView    = new window.SettingsView();
   window.importPlaysView = new window.ImportPlaysView();
   window.bggSyncView    = new window.BggSyncView();
@@ -58,6 +59,7 @@
   window.router.register("buddies",       window.buddiesView);
   window.router.register("stats",         window.statsView);
   window.router.register("achievements",  window.achievementsView);
+  window.router.register("notifications", window.notificationsView);
   window.router.register("settings",      window.settingsView);
   window.router.register("import-plays",  window.importPlaysView);
   window.router.register("bgg-sync",      window.bggSyncView);
@@ -512,37 +514,53 @@
       else tab.removeAttribute("aria-label");
     });
   }
-  // The Settings gear carries the admin signals, which have no bottom-nav tab
-  // of their own — an admin queue is not something the Play/Feed/Profile tabs
-  // resolve. Same contract as the nav dots: the dot is aria-hidden, so the
-  // button's aria-label is what has to change, rebuilt from a constant so a
-  // queue that empties doesn't keep a stale one.
-  function syncGearDot() {
-    if (!window.BgbNotifications) return;
-    const btn = document.querySelector(".bgb-global-header__settings");
+  // The two global-header buttons carry the signals that have no bottom-nav
+  // tab of their own — an admin queue, a stuck upload and a play someone put
+  // you in are none of them things the Play/Feed/Profile tabs resolve.
+  //
+  // One helper rather than one function per button: this is the second
+  // instance of the same twelve lines, which is where .claude/rules/
+  // ui-object-design.md §4 says to extract. Same contract as the nav dots —
+  // the dot is aria-hidden, so the BUTTON's accessible name is what has to
+  // change, rebuilt from its resting name so a queue that empties doesn't keep
+  // a stale one.
+  function syncHeaderDot(selector, tally, restingName) {
+    const btn = document.querySelector(selector);
     const dot = btn && btn.querySelector(".bgb-global-header__dot");
     if (!btn || !dot) return;
-    const { total, parts } = window.BgbNotifications.forGear();
+    const { total, parts } = tally();
     dot.hidden = total === 0;
+    // A sentence here, not the nav bar's comma list: one button announcing two
+    // unrelated things ("2 chapter reports and 1 play to upload") reads as
+    // speech, and the single "waiting" lands after the join rather than after
+    // every clause — which is why each label in the registry is a bare noun
+    // phrase.
     const label = parts.length
-      ? `Settings \u2014 ${window.BgbNotifications.phrase(parts)} waiting`
-      : "Settings";
+      ? `${restingName} \u2014 ${window.BgbNotifications.phrase(parts)} waiting`
+      : restingName;
     btn.setAttribute("aria-label", label);
     btn.setAttribute("title", label);
   }
 
-  if (window.BgbNotifications) {
-    window.BgbNotifications.subscribe(syncNavDots);
-    window.BgbNotifications.subscribe(syncGearDot);
+  function syncHeaderDots() {
+    if (!window.BgbNotifications) return;
+    syncHeaderDot(".bgb-global-header__bell",
+                  window.BgbNotifications.forBell, "Notifications");
+    syncHeaderDot(".bgb-global-header__settings",
+                  window.BgbNotifications.forGear, "Settings");
   }
 
-  // Pending uploads live in the header. Two keys drive it: the count itself,
-  // and connectivity (which changes what the dialog offers).
-  function syncOutboxIndicator() {
-    if (window.BgbOutboxIndicator) window.BgbOutboxIndicator.render();
+  if (window.BgbNotifications) {
+    window.BgbNotifications.subscribe(syncNavDots);
+    window.BgbNotifications.subscribe(syncHeaderDots);
   }
-  window.store.subscribe("outboxCount", syncOutboxIndicator);
-  window.store.subscribe("offline", syncOutboxIndicator);
+
+  // The header's pending-upload button is gone — the queue's affordance is the
+  // Pending uploads section in Settings, and its signal is now the gear's dot,
+  // fed by the `outboxCount` row in domain/notifications.js. That row is in
+  // BgbNotifications.slots(), so the subscribe above already repaints it and
+  // there is nothing left to wire here. `offline` is not a subscriber either:
+  // it only ever changed the old indicator's COPY, and a dot has none.
 
   // Persistent offline banner under the global header. Lives at this level
   // rather than in a View because connectivity is app state, not screen state:
@@ -669,8 +687,8 @@
     // would never fire the subscriber. Paint the banner from the current state.
     syncOfflineBanner(window.BgbNet.isOffline());
     // Same reasoning: store.set above only notifies when the value CHANGES, so
-    // a cold load with items already queued would never paint the badge.
-    syncOutboxIndicator();
+    // a cold load with items already queued would never paint the gear's dot.
+    syncHeaderDots();
 
     // Restore a previously-active play session, if any.
     const ps = window.PlaySession.load();

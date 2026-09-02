@@ -2070,7 +2070,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 /* No display of its own above, so the UA's [hidden] rule already wins — this
    is here so a later `display:` added to the block can't silently un-hide it,
-   the way .bgb-outbox__badge's `display: grid` once did. */
+   the way the header upload badge's `display: grid` once did (that control is
+   gone; the lesson it taught is not). */
 .bgb-nav__dot[hidden] { display: none; }
 
 /* The Settings gear's admin dot. Same visual language and same [hidden]
@@ -2191,9 +2192,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   white-space: nowrap;
   line-height: 1.1;
 }
-/* Settings gear at the right end. Deliberately the same 36px chrome box as
-   .bgb-outbox next to it — the two header controls read as one pair of
-   utilities rather than "an icon and an identity". */
+/* The two header controls — notification bell, then Settings gear at the right
+   end. One 36px chrome box for both, so they read as a pair of utilities rather
+   than "an icon and an identity". They differ only in the gear's rotate-on-hover
+   (a gear turns; a bell would just look loose) and in the bell carrying the
+   margins below for being the middle child of a space-between header. */
+.bgb-global-header__bell,
 .bgb-global-header__settings {
   position: relative;
   width: 36px; height: 36px;
@@ -2209,17 +2213,28 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   transition: color 160ms var(--ease), border-color 160ms var(--ease),
               transform 260ms var(--ease);
 }
-/* 44x44 hit area without inflating the visible control — same trick as
-   .bgb-outbox::before. */
+/* 44x44 hit area without inflating the visible control. */
+.bgb-global-header__bell::before,
 .bgb-global-header__settings::before {
   content: "";
   position: absolute;
   inset: -4px;
 }
+.bgb-global-header__bell:hover { border-color: var(--accent); }
 .bgb-global-header__settings:hover {
   border-color: var(--accent);
   transform: rotate(30deg);
 }
+/* The bell inherits the outbox button's old job of being the middle child of a
+   `justify-content: space-between` header: `auto` on the left collapses the gap
+   after the brand so both controls sit together at the trailing edge, and the
+   right margin buys back the 4px the ::before hit area above reaches into the
+   header's own 0.6rem gap, keeping the two 44px targets >= 8px apart. */
+.bgb-global-header__bell {
+  margin-left: auto;
+  margin-right: var(--s-1);
+}
+.bgb-global-header__bell:focus-visible,
 .bgb-global-header__settings:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -3702,7 +3717,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    rules live once and both families name them. The markup stays each screen's
    own — only the presentation is shared. */
 .bgg-flow__nav,
-.imp-nav {
+.imp-nav,
+.linknotif-bar {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
   left: 50%;
@@ -3718,7 +3734,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   pointer-events: none;
 }
 .bgg-flow__nav > *,
-.imp-nav > * { pointer-events: auto; }
+.imp-nav > *,
+.linknotif-bar > * { pointer-events: auto; }
 .bgg-flow__nav-back,
 .bgg-flow__nav-next,
 .imp-nav__back,
@@ -11482,81 +11499,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .lp-opt__discard:hover { color: var(--rust); }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Header upload indicator
-   Always present so it is discoverable, greyed at zero so it is plainly inert.
-   ══════════════════════════════════════════════════════════════════════════ */
-.bgb-outbox {
-  position: relative;
-  width: 36px; height: 36px;
-  flex-shrink: 0;
-  /* The header is justify-content: space-between over three children, which
-     parks this button in the middle of the gap after the brand. `auto` on the
-     left collapses that gap so the upload bubble sits flush against the
-     profile bubble at the right edge. */
-  margin-left: auto;
-  /* The header's own `gap: 0.6rem` already separates the two controls; this
-     just buys back the 4px the ::before hit area below reaches into it, so
-     the two 44px targets stay ≥8px apart. */
-  margin-right: var(--s-1);
-  display: grid;
-  place-items: center;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid var(--line);
-  color: var(--accent);
-  cursor: pointer;
-  transition: color 160ms var(--ease), border-color 160ms var(--ease);
-}
-/* 44x44 hit area without inflating the visible control */
-.bgb-outbox::before {
-  content: "";
-  position: absolute;
-  inset: -4px;
-}
-.bgb-outbox.is-zero {
-  color: var(--ink-faint);
-  border-color: transparent;
-  opacity: 0.55;
-}
-.bgb-outbox__badge {
-  position: absolute;
-  top: -5px; right: -5px;
-  min-width: 18px; height: 18px;
-  padding: 0 5px;
-  border-radius: var(--r-pill);
-  background: var(--accent);
-  color: var(--bg-0);
-  font-family: var(--font-sans);
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  font-variant-numeric: tabular-nums;
-  border: 2px solid oklch(var(--b1));
-}
-/* `display: grid` above is an author rule and outranks the UA stylesheet's
-   `[hidden] { display: none }`, so outbox-indicator.js setting badge.hidden
-   did nothing and an empty gold pill painted on every screen. Same guard as
-   .import-exp-search[hidden] / .field-clear-btn[hidden] elsewhere in here. */
-.bgb-outbox__badge[hidden] { display: none; }
-.bgb-outbox__badge--failed { background: var(--rust); color: #fff; }
-.bgb-outbox__ring { display: none; }
-.bgb-outbox.is-busy .bgb-outbox__ring {
-  display: block;
-  position: absolute;
-  inset: -1px;
-  border-radius: var(--r-sm);
-  border: 1.5px solid transparent;
-  border-top-color: var(--accent);
-  animation: bgb-outbox-spin 900ms linear infinite;
-}
-@keyframes bgb-outbox-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .bgb-outbox.is-busy .bgb-outbox__ring { animation: none; opacity: 0.6; }
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
    Outbox dialog (widgets/outbox-modal.js)
    Chrome comes from polaroid-popup; only the body is ours. The height cap
    mirrors .chapter-guide__card so the action row clears the keyboard.
@@ -13689,4 +13631,208 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-family: var(--font-score);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Notifications — "somebody put me in a play" (views/notifications-view.js)
+
+   A bgb-spoke-screen, so the chrome re-point near the top of this file has
+   already pointed --polaroid-* at the ground tokens: these rows are UI cards,
+   not photographs, and every colour below reads from the chrome column
+   (--polaroid-bg / --polaroid-ink / --polaroid-muted / --card-border /
+   --accent-ink) rather than oklch(var(--b*)), which would invert on paper.
+   .linknotif-bar's geometry lives with the other docked footers above.
+   ══════════════════════════════════════════════════════════════════════════ */
+.linknotif-select {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  background: none;
+  color: var(--accent-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 0.6rem;
+}
+.linknotif-select:hover { background: oklch(var(--bc) / 0.07); }
+.linknotif-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.linknotif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Clear the docked bar when select mode is open; harmless otherwise. */
+  padding-bottom: 8px;
+}
+
+.linknotif-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  background: var(--polaroid-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.9rem;
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+  animation: fadeUp 320ms var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+/* The unread mark is a rail rather than a dot: the row already carries an
+   avatar and a thumbnail, and a third small circle in that cluster reads as
+   another piece of data instead of as state. */
+.linknotif-row.is-unread { border-left: 3px solid var(--alert-fill); }
+.linknotif-row.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-quiet);
+}
+
+.linknotif-row__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* 56px, not 44: rows sit flush against each other, so a slightly-off thumb
+     lands on the neighbour. */
+  min-height: 56px;
+  padding: 10px 8px 10px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.linknotif-row__main:active { background: oklch(var(--bc) / 0.05); }
+.linknotif-row__main:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+
+/* Reserved whether or not the row is ticked, so entering select mode and
+   ticking a row don't shove the name sideways under the thumb. */
+.linknotif-row__tick {
+  flex: none;
+  width: 0;
+  display: grid;
+  place-items: center;
+  color: var(--accent-ink);
+  transition: width 140ms var(--ease);
+}
+.linknotif-list[role="group"] .linknotif-row__tick { width: 20px; }
+
+.linknotif-row__who { flex: none; }
+
+.linknotif-row__art {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  background: var(--well);
+}
+.linknotif-row__art--none {
+  display: grid;
+  place-items: center;
+  color: var(--polaroid-muted);
+}
+
+.linknotif-row__body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.linknotif-row__title {
+  color: var(--polaroid-ink);
+  font-size: 0.92rem;
+  line-height: 1.25;
+  /* Two lines, then ellipsis: a long game name plus a long display name would
+     otherwise push the row to four lines and lose the list's rhythm. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.linknotif-row__title strong { font-weight: 700; }
+.linknotif-row__sub {
+  color: var(--polaroid-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.linknotif-row__count {
+  flex: none;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: grid;
+  place-items: center;
+}
+
+.linknotif-row__unlink {
+  flex: none;
+  width: 48px;
+  border: none;
+  border-left: 1px solid var(--card-border);
+  background: none;
+  color: var(--polaroid-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.linknotif-row__unlink:hover:not(:disabled) { color: var(--rust); background: oklch(var(--bc) / 0.05); }
+.linknotif-row__unlink:active:not(:disabled) { background: oklch(var(--bc) / 0.1); }
+.linknotif-row__unlink:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.linknotif-row__unlink:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.linknotif-bar {
+  align-items: center;
+  justify-content: space-between;
+}
+.linknotif-bar__all {
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--rounded-btn, 0.6rem);
+  background: var(--bg-1);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.linknotif-bar__go {
+  flex: 1 1 auto;
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--rounded-btn, 0.6rem);
+  /* --rust-ink, not --rust: this button is the dangerous one and has to read
+     that way on a surface that is light in both themes. */
+  background: var(--rust-ink);
+  color: var(--on-rust);
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.linknotif-bar__go:disabled { opacity: 0.5; cursor: not-allowed; }
+.linknotif-bar__all:focus-visible,
+.linknotif-bar__go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.linknotif-state { padding: 40px 24px; text-align: center; }
+.linknotif-state__art { width: 120px; height: 120px; margin: 0 auto 12px; opacity: 0.55; }
+.linknotif-state__title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.linknotif-state__sub {
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  margin-bottom: 14px;
+}
+
+@media (hover: hover) {
+  .linknotif-row__main:hover { background: oklch(var(--bc) / 0.04); }
 }

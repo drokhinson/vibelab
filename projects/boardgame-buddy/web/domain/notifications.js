@@ -2,8 +2,8 @@
 //
 // One table saying, for every signal the app can raise: which store slot
 // carries its count, which surface it sits behind (a bottom-nav tab, the
-// global header's Settings gear), which section or admin spoke resolves it,
-// and how to say it out loud.
+// global header's Settings gear, the global header's notification bell),
+// which section or admin spoke resolves it, and how to say it out loud.
 //
 // Before this existed the same three sums were written by hand in two places —
 // init.js#syncNavDots and profile-self-view.js#_renderBuddiesPreview — and a
@@ -16,9 +16,11 @@
 // forever and would stop meaning anything.
 //
 // To add one: append a row, publish the count into its slot from wherever
-// knows the number, and — if its surface has no dot yet — drop a
-// `<span class="bgb-nav__dot" aria-hidden="true" hidden>` into that tab in
-// index.html. Nothing else changes.
+// knows the number, and — if its surface has no dot yet — drop the dot span
+// its surface uses into index.html (`.bgb-nav__dot` inside a tab's `__ico`,
+// `.bgb-global-header__dot` inside a header button). Nothing else changes:
+// subscribe() covers every slot in this table, so the surfaces repaint on
+// their own.
 
 (function () {
   const SIGNALS = [
@@ -73,6 +75,29 @@
       gear: true,
       adminTool: "descriptions",
       label: (n) => `${n} game${n === 1 ? "" : "s"} missing a description`,
+    },
+    // Pending uploads. The header's own upload button is gone: a queue that
+    // drains itself is the app doing something FOR you, which is plumbing, and
+    // plumbing lives in Settings — where a "Pending uploads" section has always
+    // rendered it. What the header control was really providing was the
+    // SIGNAL, and that is a dot, so it joins the gear's.
+    //
+    // The slot is Outbox.count(), not pendingCount(): a play the server
+    // rejected outright is not "waiting to upload" but it is still the one
+    // thing on this device that needs a human, so it keeps the dot lit.
+    {
+      slot: "outboxCount",
+      gear: true,
+      label: (n) => `${n} play${n === 1 ? "" : "s"} to upload`,
+    },
+    // Plays somebody else seated you in. Its own surface — the bell — because
+    // it resolves on the notifications screen, not in Settings, and because it
+    // is the one signal here about something done TO the user rather than
+    // something they or the app has left undone.
+    {
+      slot: "linkNotifCount",
+      bell: true,
+      label: (n) => `${n} play${n === 1 ? "" : "s"} you were added to`,
     },
   ];
 
@@ -144,6 +169,11 @@
     /** Everything waiting behind the global header's Settings gear. */
     forGear() {
       return tally({ gear: true });
+    },
+
+    /** Everything waiting behind the global header's notification bell. */
+    forBell() {
+      return tally({ bell: true });
     },
 
     /** What one admin spoke has to act on, by its tool key. */
