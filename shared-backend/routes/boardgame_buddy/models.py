@@ -577,10 +577,14 @@ class PlayCreate(BaseModel):
     # which is a legitimate row and never an error.
     country_code: Optional[CountryCode] = None
     # Migration 005. Shared by every play in one run of identical imported
-    # plays — same game, same date, same players, same winner, and no score or
-    # note to tell any of them apart. The feed and the plays log show one card
-    # per run; every counter still sees the individual rows. Set ONLY by the
-    # Settings importer: a live log is one play and stands for itself.
+    # plays — same game, same date, same players, same winner, and the same
+    # note and scores as each other, if any. Indistinguishable, which is not
+    # the same as featureless: a run whose entry carried "league night" is
+    # still one run, and the client's own key is what decides (a play with a
+    # detail nobody else shares is alone at its key and never tagged). The feed
+    # and the plays log show one card per run; every counter still sees the
+    # individual rows. Set ONLY by the Settings importer: a live log is one
+    # play and stands for itself.
     import_group_id: Optional[UUID4] = None
     # Migration 007. One id per IMPORT, where the group above is one per RUN.
     # It is what makes "undo that whole paste" expressible — a series of run

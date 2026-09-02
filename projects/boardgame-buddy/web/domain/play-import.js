@@ -519,14 +519,24 @@
     // ── The write ────────────────────────────────────────────────────────────
 
     /**
-     * The identity of a play for FEED grouping, or null when it has something
-     * of its own to say.
+     * The identity of a play for FEED grouping, or null when it cannot be
+     * grouped at all.
      *
-     * A score on any seat or a note is disqualifying: those are exactly the
-     * plays a reader wants to see individually — the biggest win, the closest
-     * game, the one with a comment. Everything else is identified by what a
-     * reader would use to tell two plays apart: the game, the day, who was
-     * there, and who won.
+     * THE ROW IDENTITY, WHOLE. It used to disqualify any play carrying a note
+     * or a score, on the reasoning that those are the plays a reader wants to
+     * see individually — the biggest win, the closest game, the one with a
+     * comment. That reasoning is about a play that DIFFERS from its
+     * neighbours, and the identity key is already the test for that: a play
+     * with a note or a score nobody else in the import shares is alone at its
+     * key, and assignGroups only mints an id for a key covering more than one
+     * play, so it gets its own card either way.
+     *
+     * What the disqualifiers actually caught was the opposite case — plays
+     * that are identical INCLUDING their note or their score, which is exactly
+     * what a stack is for. A nineteen-play run whose entry carried "league
+     * night" imported as nineteen separate cards, while the review list, which
+     * keys on rowKeyFor, had shown it as one row of nineteen. The two surfaces
+     * disagreeing is the bug; sharing one key is the fix.
      *
      * Deliberately NOT play.runId. The run id says "the model wrote these as
      * one line"; this says "these are indistinguishable". The second is the
@@ -536,13 +546,9 @@
      * @returns {string|null}
      */
     groupKeyFor(play) {
-      if (play.notes) return null;
-      if (play.players.some((p) => p.score === 0 || p.score)) return null;
+      // The one genuine disqualifier: a play with no catalog game is not
+      // importable, so it has nothing to be grouped with.
       if (!this.playGame(play)) return null;
-      // The review row's identity, unchanged. With no note and no scores, what
-      // rowKeyFor holds IS the game, the day, who was there and who won — and
-      // sharing it is the point: a row the user reviewed as one play must not
-      // arrive in the feed as several, nor two rows as one.
       return this.rowKeyFor(play);
     }
 
@@ -552,7 +558,10 @@
      *
      * The "more than one" is the whole point: a lone winner-only play is not a
      * run, and tagging it would put a "1 plays" stack card in the feed where an
-     * ordinary polaroid belongs.
+     * ordinary polaroid belongs. It is also what keeps a distinctive play — the
+     * closest game, the one with a comment — on its own card without
+     * groupKeyFor having to guess at which details are distinctive: whatever is
+     * unique is alone at its key, and whatever is alone is never tagged.
      *
      * Computed once over the whole importable set before any chunk goes out,
      * so plays that land in different requests still agree on their group.

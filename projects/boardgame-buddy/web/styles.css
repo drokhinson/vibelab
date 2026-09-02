@@ -13440,6 +13440,46 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--sheet-ink-muted, var(--ink-muted));
   margin: 0;
 }
+/* The one line every play in the run shares. Quoted rather than labelled: it
+   is the user's own words, and a "Notes" heading over one sentence is chrome
+   for its own sake. */
+.run-sheet__quote {
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--sheet-ink, var(--ink));
+  margin: 0;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--sheet-line, var(--line));
+  font-style: italic;
+}
+/* The scoreline every play in the run shares. A list, not a scorecard: there
+   is one result here, however many plays stand behind it. */
+.run-sheet__seats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run-sheet__seat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.86rem;
+  color: var(--sheet-ink, var(--ink));
+  padding: 0.2rem 0;
+  border-bottom: 1px solid var(--sheet-line, var(--line));
+}
+.run-sheet__seat:last-child { border-bottom: none; }
+.run-sheet__seat.is-winner .run-sheet__seat-name { font-weight: 700; }
+.run-sheet__seat-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-sheet__seat-score {
+  flex: none;
+  font-family: var(--font-score, inherit);
+  font-variant-numeric: tabular-nums;
+}
 .run-sheet__delete {
   display: flex;
   align-items: center;
