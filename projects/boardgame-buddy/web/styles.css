@@ -10725,6 +10725,26 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .polaroid-field__error {
   margin: 0;
 }
+/* Character budget for a length-capped field (display name), sitting under the
+   input on the same paper ground as the label. Typing is already capped by
+   maxlength, so this is the readout that explains why the field stopped taking
+   letters — and, in the --over state, that a name saved before the cap has to
+   come under it before it can be saved again. */
+.polaroid-field__count {
+  align-self: flex-end;
+  margin-top: -2px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--polaroid-muted);
+}
+/* --rust deepened toward the surface ink, same as .buddy-qr-sheet__line--error:
+   straight --rust is under 4.5:1 at this size. Both grounds are covered — the
+   polaroid aliases re-point to the chrome well inside .ob-deck. */
+.polaroid-field__count--over {
+  color: color-mix(in srgb, var(--rust) 76%, var(--polaroid-ink));
+}
 
 .avatar-cust__name {
   margin: 10px 0 4px;

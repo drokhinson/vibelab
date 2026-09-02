@@ -539,12 +539,20 @@
       // .polaroid-field* is the shared look for a labelled field on a polaroid
       // card (also the first-run BGG step); .avatar-cust__name* stays as this
       // card's layout offset and as the JS hooks below.
+      //
+      // maxlength stops NEW typing at the ceiling; a name saved before the
+      // ceiling existed is longer and the browser keeps it in the field
+      // untouched (maxlength only constrains user edits). finish() is what
+      // holds the line for those — see the length check there.
+      const nameMax = window.User.DISPLAY_NAME_MAX;
+      const seededName = String(displayName || "");
       const nameFieldHtml = includeNameField ? `
           <div class="polaroid-field avatar-cust__name">
             <label class="polaroid-field__label" for="avatar-cust-name">Display name</label>
             <input id="avatar-cust-name" type="text" class="input input-bordered input-sm polaroid-field__input avatar-cust__name-input"
-                   value="${escapeAttr(String(displayName || ""))}" maxlength="40" autocomplete="off"
+                   value="${escapeAttr(seededName)}" maxlength="${nameMax}" autocomplete="off"
                    placeholder="Your name" />
+            <div class="polaroid-field__count avatar-cust__name-count"></div>
             <div class="polaroid-field__error avatar-cust__name-error text-error text-xs" hidden></div>
           </div>
         ` : "";
@@ -584,12 +592,32 @@
 
       const nameInput = root.querySelector(".avatar-cust__name-input");
       const nameErrorEl = root.querySelector(".avatar-cust__name-error");
+      const nameCountEl = root.querySelector(".avatar-cust__name-count");
       let nameError = null;
+
+      function showNameError(message) {
+        nameError = message;
+        if (nameErrorEl) { nameErrorEl.hidden = false; nameErrorEl.textContent = message; }
+        if (nameInput) nameInput.focus();
+      }
+
+      // The counter is the only warning a legacy over-length name gets before
+      // Save: typing is already capped, so what it tells the user is how much
+      // room is left and — in the over state — that this name is above the
+      // ceiling and any edit has to bring it back under.
+      function paintNameCount() {
+        if (!nameCountEl || !nameInput) return;
+        const len = nameInput.value.trim().length;
+        nameCountEl.textContent = `${len}/${nameMax}`;
+        nameCountEl.classList.toggle("polaroid-field__count--over", len > nameMax);
+      }
 
       // Initials slot listens to the name input — typing re-paints it live.
       if (nameInput) {
+        paintNameCount();
         nameInput.addEventListener("input", () => {
           picker.setDisplayName(nameInput.value);
+          paintNameCount();
           if (nameError) {
             nameError = null;
             if (nameErrorEl) { nameErrorEl.hidden = true; nameErrorEl.textContent = ""; }
@@ -603,9 +631,15 @@
         if (includeNameField) {
           const trimmed = ((nameInput && nameInput.value) || "").trim();
           if (!trimmed) {
-            nameError = "Display name can't be empty.";
-            if (nameErrorEl) { nameErrorEl.hidden = false; nameErrorEl.textContent = nameError; }
-            if (nameInput) nameInput.focus();
+            showNameError("Display name can't be empty.");
+            return;
+          }
+          // Names saved before the ceiling existed stay as they are — leaving
+          // the field alone saves the avatar and nothing else (the caller only
+          // sends display_name when it changed). Touching the name is what
+          // opts into the ceiling, and then it has to come all the way under.
+          if (trimmed.length > nameMax && trimmed !== seededName.trim()) {
+            showNameError(`Display name can't be longer than ${nameMax} characters.`);
             return;
           }
           payload.displayName = trimmed;
