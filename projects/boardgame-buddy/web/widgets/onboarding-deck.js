@@ -8,7 +8,7 @@
 //   • THE STEPS ARE SLIDES. One track, one transform. Nothing opens, closes
 //     and hands off, so the user never sees the empty feed flash between
 //     cards, and Back is a real move rather than a dead end.
-//   • THE COUNTER IS PINNED. "Step 2 of 3" plus a segment bar, above every
+//   • THE COUNTER IS PINNED. "Step 2 of 4" plus a segment bar, above every
 //     slide. Someone deciding whether to skip can see what skipping costs.
 //   • CONTINUE AND SKIP NEVER AWAIT. The handler queues the write and moves
 //     the track in the same frame. There is no spinner, no disabled button
@@ -16,7 +16,7 @@
 //     travelling, not a request. Results land on the finale slide's ledger.
 //
 // The finale is deliberately UNCOUNTED: the bar is full and the counter says
-// "All set", so "Step 4 of 3" never has to be printed.
+// "All set", so "Step 5 of 4" never has to be printed.
 //
 // Slide bodies live in widgets/onboarding-deck-slides.js — this file is the
 // shell, the queue and the ledger. Both stay under the ~300-line rule in
@@ -27,7 +27,11 @@
   const ROOT_ID = "bgb-onboarding-deck";
   // Must match the .is-closing animation duration in styles.css.
   const CLOSE_MS = 200;
-  const STEPS = 3;
+  // Counted steps. The finale sits at index STEPS and is uncounted, so this
+  // one number drives the segment bar, the clamp, the counter, "All set" and
+  // the back-hidden rule. The PANEL geometry does not follow from it — see the
+  // width/transform below, and .ob-slide's width in styles.css.
+  const STEPS = 4;
 
   let _open = false;
 
@@ -159,15 +163,27 @@
       };
 
       slides = window.OnboardingDeckSlides.build(deck);
-      [slides.profile, slides.buddies, slides.bgg, slides.finale].forEach(function (s) {
-        track.appendChild(s.el);
-      });
-      // 4 panels: three counted steps plus the uncounted finale.
-      track.style.width = "400%";
+      // ORDER IS THE DECK. This literal and the one inside go() must list the
+      // same slides in the same order — they are the append order and the
+      // index→slide lookup for onEnter, and a mismatch shows as the wrong
+      // slide's hook firing rather than as an error.
+      const PANELS = [
+        slides.profile, slides.buddies, slides.bgg, slides.importHint, slides.finale,
+      ];
+      PANELS.forEach(function (s) { track.appendChild(s.el); });
+      // 5 panels: four counted steps plus the uncounted finale. The panel
+      // count used to live in FOUR places — this width, the transform below,
+      // and .ob-slide's width AND flex-basis in styles.css — so adding a slide
+      // meant changing all four or watching the track land on two half-slides.
+      // It is now one number, published to CSS as a custom property.
+      track.style.width = `${PANELS.length * 100}%`;
+      track.style.setProperty("--ob-panels", String(PANELS.length));
 
       function go(i) {
         step = Math.max(0, Math.min(STEPS, i));
-        track.style.transform = `translateX(-${step * 25}%)`;
+        // Percent OF THE TRACK, which is PANELS.length screens wide — so one
+        // screen is 100/PANELS.length of it, not a hardcoded 25.
+        track.style.transform = `translateX(-${step * (100 / PANELS.length)}%)`;
         countEl.innerHTML = step >= STEPS
           ? "All set"
           : `Step <b>${step + 1}</b> of ${STEPS}`;
@@ -176,7 +192,7 @@
         // (every write behind it has already fired — walking back into a step
         // whose job is queued would offer to do it twice).
         backBtn.hidden = step === 0 || step === STEPS;
-        const slide = [slides.profile, slides.buddies, slides.bgg, slides.finale][step];
+        const slide = PANELS[step];
         if (slide && slide.onEnter) slide.onEnter();
       }
 

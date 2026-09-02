@@ -37,6 +37,11 @@
 
       // True while a manual outbox flush is in flight — drives the Upload now
       // button's disabled/"Uploading…" state.
+
+      // Past imports (migration 007). null = not loaded yet, so the section is
+      // absent rather than flashing an empty card on the first paint.
+      this._imports = null;
+      this._deletingImport = null;
     }
 
     async onMount() {
@@ -60,6 +65,9 @@
       });
       this.render();
       await this._loadBggStatus();
+      // Not awaited before the first paint — the section appears when it lands,
+      // and Settings is fully usable without it.
+      this._loadImports();
       const me = window.store.get("user");
       if (me && me.is_admin) {
         // Don't block the first paint on this — render once on resolve.
@@ -120,6 +128,7 @@
         ${this._renderBggCard()}
         <div class="set-card-label">Import</div>
         ${this._renderImportCard()}
+        ${this._renderPastImportsSection()}
         ${this._renderPendingUploadsSection()}
         <div class="set-card-label">Local cache</div>
         ${this._renderCacheCard()}
@@ -412,6 +421,90 @@
           </button>
         </div>
       `;
+    }
+
+    /**
+     * Past imports, each undoable.
+     *
+     * Absent entirely when there are none, like the pending-uploads section
+     * above: a permanent "0 imports" row would be chrome that never says
+     * anything. Loaded on mount rather than behind a tap, because the whole
+     * point is that somebody who regrets an import finds the undo without
+     * knowing to look for it.
+     */
+    _renderPastImportsSection() {
+      const rows = this._imports;
+      if (!rows || !rows.length) return "";
+      return `
+        <div class="set-card">
+          ${rows.map((imp) => {
+            const n = imp.play_count || 0;
+            const names = imp.game_names || [];
+            const games = names.join(", ") + ((imp.game_count || 0) > names.length ? "…" : "");
+            const busy = this._deletingImport === imp.batch_id;
+            return `
+              <div class="set-card__row set-card__row--static">
+                <span class="set-card__row-icon"><i data-icon="history" class="w-4 h-4"></i></span>
+                <span class="set-card__row-body">
+                  <span class="set-card__row-title">
+                    ${n} play${n === 1 ? "" : "s"}${games ? ` · ${escapeHtml(games)}` : ""}
+                  </span>
+                  <span class="set-card__row-sub">
+                    Imported ${escapeHtml(formatDate(imp.imported_at))}
+                  </span>
+                </span>
+                <button class="set-card__row-del" ${busy ? "disabled" : ""}
+                        aria-label="Delete this import"
+                        onclick="${escapeAttr(`window.settingsView._deleteImport('${jsStr(imp.batch_id)}')`)}">
+                  <i data-icon="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    async _loadImports() {
+      try {
+        this._imports = await window.Play.listImports();
+      } catch (_) {
+        // Non-fatal: the section stays absent. An import you cannot list is no
+        // worse off than one you could not have deleted anyway.
+        this._imports = [];
+      }
+      this.render();
+    }
+
+    /** @param {string} batchId */
+    async _deleteImport(batchId) {
+      const imp = (this._imports || []).find((i) => i.batch_id === batchId);
+      if (!imp || this._deletingImport) return;
+      const n = imp.play_count || 0;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Delete this import?",
+        body: `All ${n} play${n === 1 ? "" : "s"} it added will be removed from your history and your stats. This can't be undone — you'd have to import the note again.`,
+        confirmLabel: "Delete",
+        cancelLabel: "Keep them",
+        destructive: true,
+      });
+      if (!ok) return;
+      this._deletingImport = batchId;
+      this.render();
+      let deleted = 0;
+      try {
+        const res = await window.Play.deleteImportBatch(batchId);
+        deleted = (res && res.deleted) || 0;
+      } catch (e) {
+        this._deletingImport = null;
+        this.render();
+        showToast((e && e.message) || "Couldn't delete that import", "error");
+        return;
+      }
+      this._deletingImport = null;
+      this._imports = (this._imports || []).filter((i) => i.batch_id !== batchId);
+      this.render();
+      showToast(`Deleted ${deleted} play${deleted === 1 ? "" : "s"}`, "success");
     }
 
     /**

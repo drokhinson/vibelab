@@ -582,6 +582,11 @@ class PlayCreate(BaseModel):
     # per run; every counter still sees the individual rows. Set ONLY by the
     # Settings importer: a live log is one play and stands for itself.
     import_group_id: Optional[UUID4] = None
+    # Migration 007. One id per IMPORT, where the group above is one per RUN.
+    # It is what makes "undo that whole paste" expressible — a series of run
+    # deletions could never say it, because an import also writes one-offs that
+    # carry no group at all. imported_at is stamped server-side from this.
+    import_batch_id: Optional[UUID4] = None
 
 
 class PlayUpdate(BaseModel):
@@ -1322,6 +1327,11 @@ class FeedPlayCard(BaseModel):
     # the card represents a group of identical imported plays, which
     # ui/play-card.js renders as a stack rather than a polaroid.
     group_count: int = 1
+    # The run's id (migration 007), so the card can act on what it represents —
+    # the run sheet deletes by this. None for every ordinary play; 005 returned
+    # the count without it, which let the feed say "58 plays" and do nothing
+    # about them.
+    import_group_id: Optional[str] = None
 
 
 class FeedHotGamesEntry(BaseModel):
@@ -1567,3 +1577,33 @@ class PlayImportResponse(BaseModel):
     duplicate: int = 0
     failed: int = 0
     results: list[PlayImportResultItem] = []
+
+
+class PlayImportDeleteResponse(BaseModel):
+    """How many plays a delete actually removed.
+
+    Zero is a legitimate answer, not an error: an id that belongs to somebody
+    else matches no rows, which is the same outcome as an id that never
+    existed. The routes deliberately do not distinguish the two — telling a
+    caller "that batch exists but is not yours" would be a disclosure.
+    """
+
+    deleted: int = 0
+
+
+class PlayImportSummary(BaseModel):
+    """One past import, as the Settings list shows it."""
+
+    batch_id: str
+    imported_at: Optional[datetime] = None
+    play_count: int = 0
+    game_count: int = 0
+    # Capped at four in the RPC — a batch spanning fifteen games would push a
+    # paragraph into a settings row. `game_count` beside it stays exact.
+    game_names: list[str] = []
+    first_played_at: Optional[date] = None
+    last_played_at: Optional[date] = None
+
+
+class PlayImportListResponse(BaseModel):
+    imports: list[PlayImportSummary] = []

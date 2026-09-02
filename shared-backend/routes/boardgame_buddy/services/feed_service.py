@@ -59,6 +59,7 @@ def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
         # [], so the route keeps answering against an RPC that predates the
         # column — an unmigrated database serves ordinary cards rather than 500s.
         group_count=int(row.get("group_count") or 1),
+        import_group_id=(str(row["import_group_id"]) if row.get("import_group_id") else None),
     )
 
 

@@ -391,7 +391,22 @@
 
     _openPlayerSheet(name) {
       const p = this._partners || { accounts: [], ghosts: [], recent: [] };
+      const me = window.store.get("user");
       const candidates = [
+        // YOU, first. GET /play-partners returns buddies and ghosts and never
+        // the viewer, because every other caller has already seated them — in
+        // Gather you are at the table by construction. Here you are not, so a
+        // note recording your own name had no way to become you, and every
+        // imported play landed with the importer absent from their own
+        // history. That also cost them the wins.
+        ...(me ? [{
+          source: "account",
+          user_id: me.id,
+          name: me.display_name || "You",
+          username: me.username || null,
+          avatar: me.avatar || null,
+          isViewer: true,
+        }] : []),
         ...(p.accounts || []).map((a) => ({
           source: "account",
           user_id: a.user_id || a.id,
@@ -408,11 +423,20 @@
           plays: g.play_count || 0,
         })),
       ].filter((c) => c.name);
+      // A viewer who somehow also appears in their own partner list would
+      // otherwise be offered twice, with only one row marked "You".
+      const seenIds = new Set();
+      const deduped = candidates.filter((c) => {
+        if (!c.user_id) return true;
+        if (seenIds.has(c.user_id)) return false;
+        seenIds.add(c.user_id);
+        return true;
+      });
       const current = this._draft.playerMapping(name);
 
       window.PlayerPickerSheet.open({
-        candidates,
-        recent: candidates,
+        candidates: deduped,
+        recent: deduped,
         singleSelect: true,
         title: `Who is “${name}”?`,
         sub: "Match an account, or keep them as a ghost player.",
@@ -505,6 +529,21 @@
 
     _onBulkDate(value) {
       this._draft.bulkDate = value || null;
+      this._draft.save();
+      this.render();
+    }
+
+    /**
+     * The tally was misread. Resize the run in place and repaint.
+     *
+     * The row stays open and keeps its identity, because the anchor play is
+     * never the one removed — a control that closed the thing it just edited
+     * would make correcting 58 → 44 → 46 three separate hunts down the list.
+     */
+    _onRunCount(playId, value) {
+      const before = this._draft.liveCount;
+      this._draft.setRunCount(playId, value);
+      if (this._draft.liveCount === before) return;
       this._draft.save();
       this.render();
     }

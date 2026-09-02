@@ -45,6 +45,9 @@
   const MAX_CHARS = 20000;
   // Mirrors MAX_IMPORT_HINT_CHARS.
   const MAX_HINT_CHARS = 1000;
+  // Mirrors MAX_REPEAT_COUNT — the ceiling the parser already clamps a run to,
+  // so hand-editing one cannot get past what the model was allowed to say.
+  const MAX_RUN = 300;
   // The parse walks a whole note through a model; 15s is a JSON round trip.
   const PARSE_TIMEOUT_MS = 90000;
   const IMPORT_TIMEOUT_MS = 60000;
@@ -215,9 +218,24 @@
     suggestPlayers(partners) {
       const accounts = (partners && partners.accounts) || [];
       const ghosts = (partners && partners.ghosts) || [];
+      // The viewer is checked FIRST and separately, because /play-partners
+      // never returns them: a note that records your own name should map to
+      // your account without a tap, and getting that wrong is the difference
+      // between an import counting toward your win record and toward a ghost's.
+      const me = (window.store && window.store.get && window.store.get("user")) || null;
+      const meRow = me ? [{ user_id: me.id, display_name: me.display_name, username: me.username }] : [];
       for (const name of this.playerNames) {
         const k = key(name);
         if (this.playerMap[k]) continue;
+        const self = PlayImport._bestMatch(name, meRow, (a) => a.display_name || a.username || "");
+        if (self) {
+          this.playerMap[k] = {
+            kind: "buddy",
+            userId: self.user_id,
+            label: self.display_name || self.username || name,
+          };
+          continue;
+        }
         const account = PlayImport._bestMatch(name, accounts, (a) => a.display_name || a.username || "");
         if (account) {
           this.playerMap[k] = {
@@ -353,6 +371,49 @@
       return this.plays.filter((p) => !p.dropped && !!this.playGame(p));
     }
 
+    /**
+     * Resize a run — the tally said 58 and it was really 44.
+     *
+     * Grows by cloning the run's first play (a fresh id, which IS the
+     * client_key, so an added play is a new play and not a duplicate of one
+     * already sent) and shrinks by dropping from the tail. Insertions land
+     * beside the run rather than at the end of the draft, so the review list
+     * does not reorder under the reader while they are typing in it.
+     *
+     * Only offered before the import: after it, the plays are rows, and adding
+     * rows to match a number is a different and much more dangerous act.
+     *
+     * @param {string} playId  Any play in the run (the row's first).
+     * @param {number} next    Desired size, clamped to [1, MAX_RUN].
+     */
+    setRunCount(playId, next) {
+      const anchor = this.plays.find((p) => p.id === playId);
+      if (!anchor || !anchor.runId) return;
+      const members = this.plays.filter((p) => p.runId === anchor.runId && !p.dropped);
+      const want = Math.max(1, Math.min(MAX_RUN, Math.floor(Number(next) || 1)));
+      const have = members.length;
+      if (want === have) return;
+
+      if (want < have) {
+        // Drop rather than splice, so the same undo path as the trash control
+        // applies and a mis-typed number is recoverable by typing another.
+        this.dropPlays(members.slice(want).map((p) => p.id));
+        return;
+      }
+      const seed = members[0];
+      const at = this.plays.indexOf(members[members.length - 1]) + 1;
+      const added = [];
+      for (let i = 0; i < want - have; i++) {
+        added.push({
+          ...seed,
+          id: uid(),
+          players: seed.players.map((pl) => ({ ...pl })),
+          dropped: false,
+        });
+      }
+      this.plays.splice(at, 0, ...added);
+    }
+
     dropPlays(ids) {
       const set = new Set(ids);
       for (const p of this.plays) if (set.has(p.id)) p.dropped = true;
@@ -435,7 +496,7 @@
      * @param {DraftPlay} play
      * @param {Map<string, string>} [groups] From assignGroups().
      */
-    toPayload(play, groups) {
+    toPayload(play, groups, batchId) {
       const game = this.playGame(play);
       return {
         game_id: game ? game.id : null,
@@ -458,6 +519,10 @@
         // indistinguishable ones; the feed and the plays log then show the
         // whole run as a single card.
         import_group_id: (groups && groups.get(play.id)) || null,
+        // Migration 007. Every play in THIS import shares one, so the whole
+        // paste can be undone from Settings later — including the one-offs,
+        // which carry no group id and could never be found any other way.
+        import_batch_id: batchId || null,
       };
     }
 
@@ -468,12 +533,14 @@
     async run(onProgress) {
       const plays = this.importable();
       // Once, over the whole set, before the first chunk: a run split across
-      // two requests has to carry the same group id in both.
+      // two requests has to carry the same group id in both, and every play in
+      // this import has to share one batch id however many chunks it takes.
       const groups = this.assignGroups(plays);
+      const batchId = uid();
       this.progress = { done: 0, total: plays.length, imported: 0, duplicate: 0, failed: 0, errors: [] };
       for (let i = 0; i < plays.length; i += CHUNK_SIZE) {
         const chunk = plays.slice(i, i + CHUNK_SIZE);
-        const body = { plays: chunk.map((p) => this.toPayload(p, groups)) };
+        const body = { plays: chunk.map((p) => this.toPayload(p, groups, batchId)) };
         let res;
         try {
           res = await window.api.post("/plays/import", body, { timeoutMs: IMPORT_TIMEOUT_MS });

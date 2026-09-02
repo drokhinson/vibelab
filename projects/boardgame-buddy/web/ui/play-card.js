@@ -91,31 +91,50 @@
 
     // A run of identical imported plays (migration 005) is ONE card standing
     // for many. It is a variant of this component rather than a component of
-    // its own (.claude/rules/ui-object-design.md §2): it is still a Play, it
-    // still flips, and it still lives in the session rail beside the ordinary
-    // cards. What changes is that the count is the headline and the back is a
-    // summary of the run — there is no single scorecard to show, and no photo
-    // to hydrate, because the run's whole claim is that its plays are alike.
+    // its own (.claude/rules/ui-object-design.md §2): still a Play, still in
+    // the session rail beside the ordinary cards. Two things differ.
+    //
+    // IT DOES NOT FLIP, and so has no back face at all. A flip promises a
+    // scorecard, and a run has none to show — its whole claim is that its
+    // plays are indistinguishable. Tapping opens the run sheet instead, which
+    // is where the one thing you can actually do with a run lives: delete it.
+    //
+    // Losing the flip also fixes the stack art. The edges behind the card
+    // could not sit behind it while .play-card__inner was `preserve-3d`,
+    // because that makes its own stacking context and z-index below it does
+    // nothing — so the edges drew ACROSS the face as crossing borders. With no
+    // flip there is no 3D, and they stack the ordinary way.
     const stack = (card.group_count || 1) > 1;
-    const stackClass = stack ? " play-card--stack" : "";
+
+    if (stack) {
+      return `
+        <article class="play-card ${variantClass} play-card--stack"
+                 data-play-id="${escapeAttr(card.play_id)}"
+                 style="--game-accent:${escapeAttr(accent)}"
+                 role="button" tabindex="0"
+                 aria-label="${escapeAttr(`${card.group_count} identical plays`)}"
+                 onclick="window.playCardFlip.handleClick(event, '${escapeAttr(card.play_id)}')"
+                 onkeydown="window.playCardFlip.handleKey(event, '${escapeAttr(card.play_id)}')">
+          <span class="play-card__stack-edge play-card__stack-edge--2" aria-hidden="true"></span>
+          <span class="play-card__stack-edge" aria-hidden="true"></span>
+          <div class="play-card__inner">
+            <div class="play-card__front">${renderStackFront(card)}</div>
+          </div>
+        </article>
+      `;
+    }
 
     return `
-      <article class="play-card ${variantClass}${stackClass}${flippedAttr}"
+      <article class="play-card ${variantClass}${flippedAttr}"
                data-play-id="${escapeAttr(card.play_id)}"
                style="--game-accent:${escapeAttr(accent)}"
                role="button" tabindex="0"
                aria-expanded="${s.flipped ? "true" : "false"}"
                onclick="window.playCardFlip.handleClick(event, '${escapeAttr(card.play_id)}')"
                onkeydown="window.playCardFlip.handleKey(event, '${escapeAttr(card.play_id)}')">
-        ${stack ? `<span class="play-card__stack-edge" aria-hidden="true"></span>
-        <span class="play-card__stack-edge play-card__stack-edge--2" aria-hidden="true"></span>` : ""}
         <div class="play-card__inner">
-          <div class="play-card__front">${
-            stack ? renderStackFront(card) : renderFront(card, { photoSrc })
-          }</div>
-          <div class="play-card__back">${
-            stack ? renderStackBack(card) : renderBack(card, s)
-          }</div>
+          <div class="play-card__front">${renderFront(card, { photoSrc })}</div>
+          <div class="play-card__back">${renderBack(card, s)}</div>
         </div>
       </article>
     `;
@@ -159,28 +178,11 @@
     `;
   }
 
-  /** The back: what the run is, in one readable summary. */
-  function renderStackBack(card) {
-    const n = card.group_count || 1;
-    const me = window.store && window.store.get && window.store.get("user");
-    const g = card.game || {};
-    return `
-      <div class="play-card__back-body play-card__stack-back">
-        <div class="play-card__stack-back-n">${n} plays</div>
-        <div class="play-card__stack-back-game">${escapeHtml(g.name || "Unknown game")}</div>
-        <div class="play-card__stack-back-line">${stackOutcome(card, me, n)}</div>
-        <div class="play-card__stack-back-date">${escapeHtml(formatDate(card.played_at))}</div>
-        <div class="play-card__stack-back-note">
-          Imported from notes — these plays were recorded together with nothing
-          to tell them apart.
-        </div>
-      </div>
-    `;
-  }
-
   /**
-   * The one sentence a run can honestly make. Reuses the winner buckets the
-   * ordinary caption uses, so a run reads like the plays it stands for.
+   * The one sentence a run can honestly make, and it is a SENTENCE: the winner
+   * leads. "Won all 58 You" was the ordinary card's "Won by <name>" shape bent
+   * around a count, and it read as a label with a name stuck on the end.
+   * "You won all 58" is the thing a person would actually say.
    */
   function stackOutcome(card, me, n) {
     const winnerCount = countWinners(card.winner_display_name);
@@ -193,10 +195,10 @@
     }
     const isSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
     const name = isSelf ? "You" : escapeHtml(card.winner_display_name);
-    // The space is in the markup, not left to a margin: the caption slot lays
-    // its children out with a flex gap, and the back face does not — the same
-    // string has to read on both.
-    return `<span class="win"><span class="win-label">Won all ${n}</span> ${name}</span>`;
+    // ONE flex item, not two. .win is inline-flex with a 5px gap, so a bare
+    // <span>name</span> followed by text renders as two items with that gap
+    // between them — a visibly wider space than the sentence wants.
+    return `<span class="win"><span class="win-run"><b>${name}</b> won all ${n}</span></span>`;
   }
 
   function renderFront(card, { photoSrc }) {
@@ -545,18 +547,17 @@
     },
 
     async toggle(playId) {
+      // A run card has no back face — it opens its sheet instead. That is also
+      // the only place a run can be acted on, since the plays inside it are by
+      // definition interchangeable and there is no single one to open.
+      const known = cardRegistry.get(playId);
+      if (known && (known.group_count || 1) > 1) {
+        if (window.PlayRunSheet) window.PlayRunSheet.open(known);
+        return;
+      }
       const s = getState(playId);
       const next = !s.flipped;
       s.flipped = next;
-      // A run card's back is built entirely from what the feed already sent
-      // (the count, the game, the shared outcome, the date), so hydrating it
-      // would spend a request per flip fetching one arbitrary member of the
-      // run — whose scorecard the back deliberately does not show.
-      const known = cardRegistry.get(playId);
-      if (known && (known.group_count || 1) > 1) {
-        rerenderCard(playId);
-        return;
-      }
       if (next && !s.hydrated && !s.hydrating) {
         s.hydrating = true;
         s.error = null;

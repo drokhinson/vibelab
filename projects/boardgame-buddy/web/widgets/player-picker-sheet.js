@@ -38,6 +38,10 @@
    * @property {string|null} [username]
    * @property {string|null} [avatar]
    * @property {number} [plays]        Plays together, when known.
+   * @property {boolean} [isViewer]    This candidate is the signed-in user.
+   *   Labelled "You" and pinned first — the play importer is the one caller
+   *   that offers the viewer at all, since everywhere else they are already
+   *   seated.
    */
 
   /**
@@ -132,6 +136,7 @@
         extraClass: "player-picker__avatar",
       });
       const bits = [];
+      if (c.isViewer) bits.push("You");
       if (c.username) bits.push("@" + c.username);
       if (c.plays) bits.push(`${c.plays} play${c.plays === 1 ? "" : "s"} together`);
       const meta = bits.length
@@ -146,7 +151,8 @@
             <span class="player-picker__name">${escapeHtml(c.name)}</span>
             ${meta}
           </span>
-          ${ghost ? `<span class="player-picker__pill">Guest</span>` : ""}
+          ${c.isViewer ? `<span class="player-picker__pill player-picker__pill--you">You</span>`
+            : (ghost ? `<span class="player-picker__pill">Guest</span>` : "")}
           <span class="player-picker__tick" aria-hidden="true">
             ${on ? `<i data-icon="check" class="w-4 h-4"></i>` : ""}
           </span>

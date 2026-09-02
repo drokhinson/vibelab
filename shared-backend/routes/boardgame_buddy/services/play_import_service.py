@@ -1,6 +1,6 @@
-"""Play importer — catalog matching and the batched write.
+"""Play importer — catalog matching, the batched write, and undo.
 
-Two jobs, both sitting between the model's reply (services/play_import_ai.py)
+Jobs, all sitting between the model's reply (services/play_import_ai.py)
 and the plays table:
 
   • match_games — every play needs a real boardgamebuddy_games row, and the
@@ -8,6 +8,10 @@ and the plays table:
     means the Games step opens already populated instead of firing a search
     per row after it paints.
   • import_plays — one chunk of the wizard's write, as a single RPC.
+  • list_imports / delete_import_group / delete_import_batch — the undo side
+    (migration 007). A run is deletable from its own feed card; a whole import
+    from Settings. Both RPCs are owner-scoped in their WHERE clause, so an id
+    belonging to somebody else deletes nothing and reports zero.
 """
 
 import logging
@@ -18,8 +22,10 @@ from ..models import (
     GameSummary,
     ParsedGameRef,
     PlayCreate,
+    PlayImportListResponse,
     PlayImportResponse,
     PlayImportResultItem,
+    PlayImportSummary,
 )
 from ._helpers import game_summary_from_row
 
@@ -136,3 +142,35 @@ def distinct_game_names(plays: list[Any]) -> list[str]:
         if key and key not in seen:
             seen[key] = play.game
     return list(seen.values())
+
+
+def list_imports(sb, user_id: str) -> PlayImportListResponse:
+    """Past imports for the Settings list, newest first."""
+    rows = sb.rpc("bgb_list_imports", {"p_user": user_id}).execute().data or []
+    return PlayImportListResponse(
+        imports=[PlayImportSummary(**r) for r in rows if isinstance(r, dict)]
+    )
+
+
+def _deleted_count(data: Any) -> int:
+    return int((data or {}).get("deleted") or 0) if isinstance(data, dict) else 0
+
+
+def delete_import_group(sb, user_id: str, group_id: str) -> int:
+    """Delete one run of identical imported plays. Returns rows removed."""
+    data = (
+        sb.rpc("bgb_delete_import_group", {"p_user": user_id, "p_group": group_id})
+        .execute()
+        .data
+    )
+    return _deleted_count(data)
+
+
+def delete_import_batch(sb, user_id: str, batch_id: str) -> int:
+    """Delete everything one import wrote. Returns rows removed."""
+    data = (
+        sb.rpc("bgb_delete_import_batch", {"p_user": user_id, "p_batch": batch_id})
+        .execute()
+        .data
+    )
+    return _deleted_count(data)
