@@ -1,6 +1,6 @@
 # BoardgameBuddy Web UI Audit
 
-A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code as `path:line` so each finding can be jumped to and verified. The scope is the web frontend only; the React Native app under `app/` is out of scope.
+A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code as `path:line` so each finding can be jumped to and verified. The scope is the web frontend, which since the native tier's deletion is the whole project.
 
 > **Status:** Original audit produced 2026-05-23. Four passes have been applied
 > since; read the **Cleanup log** at the bottom, newest first:
@@ -647,9 +647,7 @@ visual-regression risk across many screens and deserves its own change:
   *within* `views/feed-view.js` at two call sites. (`.collection-tile` was the
   other, duplicated between the collection and wishlist views — resolved by
   merging those two screens; see the Cleanup log.)
-  The native tier is the healthier model — `components/GameTile.js` is one
-  component used everywhere. Fold the web side onto a single
-  `renderGameTile(game, { variant })`.
+  Fold the web side onto a single `renderGameTile(game, { variant })`.
 - **`renderStatusTag` still takes three option shapes** (`{size:"xs"}`,
   `{size:"lg", addLabel}`, `{compact:true}`), two of which produce the same
   visual outcome. Collapse to a single `size` scale.
@@ -697,9 +695,6 @@ bottom-right is the title row. Collection and wishlist tiles gained a
 pass" above. Note that `renderStatusTag`'s option shapes grew rather than
 shrank — `size: "sm-row"` joins `xs` / `lg` / `compact` for the pill on the
 card's cream ground. The collapse to a single scale is still owed.
-
-**Known web/native drift:** `app/src/components/PlayCard.js` has no status
-control and a fixed 180px photo. It does not track this rework.
 
 ### Pass 4 (theme system + sheet system) — 2026-08-30
 
