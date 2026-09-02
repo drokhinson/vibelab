@@ -30,6 +30,8 @@
   let _previousFocus = null;
   let _finder = null;
   let _escHandler = null;
+  // Device-back guard token — see ui/back-guard.js.
+  let _back = 0;
 
   /** @param {AddGameModalOpts} opts */
   function open(opts) {
@@ -63,6 +65,11 @@
     });
     document.body.appendChild(root);
     window.BgbIcons.render(root);
+    // The back gesture closes the modal rather than the screen behind it, and
+    // dismisses the keyboard first — this modal opens with the finder focused.
+    _back = window.BgbBackGuard
+      ? window.BgbBackGuard.arm({ root: root, close: dismiss })
+      : 0;
 
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => dismiss());
@@ -130,6 +137,8 @@
   }
 
   function dismiss() {
+    if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
+    _back = 0;
     if (_finder) { try { _finder.unmount(); } catch (_) {} _finder = null; }
     if (_escHandler) {
       document.removeEventListener("keydown", _escHandler, true);

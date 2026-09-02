@@ -54,6 +54,8 @@
   let _previousFocus = null;
   let _escHandler = null;
   let _opts = null;
+  // Device-back guard token — see ui/back-guard.js.
+  let _back = 0;
   /** @type {ExpansionCandidate[]} Everything loaded, minus what's been imported. */
   let _candidates = [];
   let _query = "";
@@ -325,6 +327,11 @@
     });
     document.body.appendChild(root);
     window.BgbIcons.render(root);
+    // Back closes this modal instead of the game page behind it, dismissing
+    // the filter keyboard first (ui/back-guard.js).
+    _back = window.BgbBackGuard
+      ? window.BgbBackGuard.arm({ root: root, close: dismiss })
+      : 0;
 
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => dismiss());
@@ -377,6 +384,8 @@
   }
 
   function dismiss() {
+    if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
+    _back = 0;
     if (_escHandler) {
       document.removeEventListener("keydown", _escHandler, true);
       _escHandler = null;

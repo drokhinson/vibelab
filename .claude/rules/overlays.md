@@ -268,6 +268,61 @@ for visual consistency; they do not share the shell.
   sheet shell already solves. Extract a modal shell the next time one of them is
   touched substantively.
 
+## 8. The device back button closes the overlay, not the screen behind it
+
+An overlay is body-level and the screen under it never navigated, so with
+nothing else in place the phone's back button (Android) or edge swipe (iOS)
+walks the page *behind* the sheet and leaves the sheet sitting on top of it.
+The user's model is the opposite: back means "close this", the same as the ×
+they can see.
+
+The mechanism is **one history entry per overlay**, in
+`projects/boardgame-buddy/web/ui/back-guard.js`. Opening pushes an entry at the
+**same url** as the screen below — nothing about the address bar or a reload
+changes — and the press that pops it is spent on the overlay instead of reaching
+the router. Two calls wire a surface in, and `release()` goes on **every** exit
+path, beside the listener teardown it already has:
+
+```js
+this._back = window.BgbBackGuard.arm({ root, close: () => this.close() });
+window.BgbBackGuard.release(this._back);          // X, backdrop, Escape, a pick
+```
+
+- **`close` is the exit the backdrop tap takes**, not a special one. A back press
+  and a backdrop tap must mean the same thing, or the two affordances disagree
+  (`ui-object-design.md` §3b). For a confirm dialog that means *cancel*.
+- **`root` scopes the keyboard step** — a keyboard raised by something outside
+  this overlay is not this overlay's to dismiss.
+- **The router asks the guard first.** `Router._onPopstate` returns early on
+  `BgbBackGuard.handlePopstate(ev)`, and `Router.replaceUrl` runs its state
+  through `BgbBackGuard.stamp()` so a replace does not strip the marking off the
+  entry an open sheet is standing on.
+- **A guard may be re-armed from inside its own `close`.** That is how an overlay
+  answers a press without closing — the onboarding deck walks back one slide, a
+  card mid-save refuses — rather than letting the press fall through to the page.
+
+**Two presses when a keyboard is up: the keyboard first, then the overlay.**
+Both search-shaped overlays this was reported against open with a field in
+reach, and native pickers behave this way. The signal is `.bgb-kb-open`
+(`ui/viewport-lock.js`), **not** "is a field focused": Android hides the keyboard
+on its own back press without blurring anything, so focus alone would demand a
+third press for a keyboard that is already gone. A browser with no
+`visualViewport` never sets the class and closes on the first press, which is
+right for a device with no software keyboard.
+
+**Back is two levels, not three.** It does not mirror the layered Escape of §5 —
+Escape clears the query first because a keyboard user has nothing else to lose,
+whereas making a phone user press back three times to leave a sheet they typed
+in is worse than the bug this fixes.
+
+Consumers: the sheet shell (`ui/bottom-sheet.js`, so every sheet), the whole
+`ui/polaroid-popup.js` family (splash, achievement, confirm, alert, avatar
+customizer), `widgets/add-buddies-modal.js`, `widgets/add-game-modal.js`,
+`widgets/import-expansions-modal.js`, `widgets/outbox-modal.js`,
+`widgets/play-detail-popup.js`, `widgets/onboarding-deck.js`, and the authoring
+guide in `views/reference-guide-add-view.js`. Grep `BgbBackGuard` rather than
+trusting the list. A new overlay that skips this is the bug again.
+
 ## Anti-patterns to refactor away when touching a project
 
 - Any `position: absolute` list anchored to an input that is **not** already
@@ -280,6 +335,8 @@ for visual consistency; they do not share the shell.
   model is a set (a roster, a tag list), the sheet is multi-select with one
   confirm — and tick order is preserved, because it is often the model's order.
 - A per-screen bespoke dialog for a destructive action.
+- An overlay that does not arm a back guard (§8). It looks fine on a desktop
+  and eats the page out from under every phone user who reaches for back.
 
 ## Related rules
 

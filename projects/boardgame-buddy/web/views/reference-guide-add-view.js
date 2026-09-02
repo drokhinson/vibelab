@@ -152,6 +152,10 @@ components above.
       this._activePop = null;        // null | "table" | "color"
       this._tablePickLabel = "1 × 1";
       this._showGuide = false;       // authoring-guide modal open?
+      // This reset also runs on every re-mount, so a guide left open when the
+      // user walked away has a back guard to hand back (ui/back-guard.js).
+      if (window.BgbBackGuard) window.BgbBackGuard.release(this._guideBack || 0);
+      this._guideBack = 0;
       // Caret captured when a popover opens — the re-render that shows the
       // popover recreates the textarea and resets its caret to 0, so inserts
       // fired from a popover (table / colour) must restore it.
@@ -1018,6 +1022,20 @@ components above.
 
     _toggleGuide() {
       this._showGuide = !this._showGuide;
+      // The guide is an overlay like any other: the phone's back gesture
+      // closes it rather than leaving the editor (ui/back-guard.js). It is
+      // rendered inside the view rather than at body level, so the guard is
+      // armed here instead of by a shell.
+      if (window.BgbBackGuard) {
+        if (this._showGuide) {
+          this._guideBack = window.BgbBackGuard.arm({
+            close: () => this._toggleGuide(),
+          });
+        } else {
+          window.BgbBackGuard.release(this._guideBack || 0);
+          this._guideBack = 0;
+        }
+      }
       this.render();
     }
 

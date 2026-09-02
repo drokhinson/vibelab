@@ -139,6 +139,8 @@
 
       let step = 0;
       let settled = false;
+      // Device-back guard token — see ui/back-guard.js and armBack() below.
+      let backGuard = 0;
 
       // Declared before the queue so the queue's callback can close over it;
       // assigned below, once the deck object it needs exists.
@@ -199,6 +201,8 @@
       function finish() {
         if (settled) return;
         settled = true;
+        if (window.BgbBackGuard) window.BgbBackGuard.release(backGuard);
+        backGuard = 0;
         root.classList.add("is-closing");
         setTimeout(function () {
           root.remove();
@@ -215,6 +219,24 @@
       // Escape does NOT close the deck. Every other overlay in the app is
       // something the user opened; this one is the app's own first screen,
       // and the way out of it is Skip, three times if that is what they want.
+      //
+      // The phone's back gesture gets the same answer, and it needs a guard to
+      // give it: with nothing armed it would walk the page BEHIND the deck
+      // (ui/back-guard.js). So it does what the header's own Back button does
+      // — one slide back, and nothing at all on the slides where that button
+      // is hidden — then re-arms, because the press it just answered spent the
+      // guard's history entry.
+      function armBack() {
+        if (!window.BgbBackGuard) return;
+        backGuard = window.BgbBackGuard.arm({
+          root: root,
+          close: function () {
+            if (!backBtn.hidden) go(step - 1);
+            armBack();
+          },
+        });
+      }
+      armBack();
       window.BgbIcons.render(root);
       go(0);
     });

@@ -30,6 +30,9 @@
     buddies: [],        // buddy datalist for the add-player input
   };
 
+  // Device-back guard token — see ui/back-guard.js.
+  let _back = 0;
+
   async function show(playId) {
     if (!playId) return;
     dismiss();
@@ -62,6 +65,8 @@
   }
 
   function dismiss() {
+    if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
+    _back = 0;
     const existing = document.getElementById(BACKDROP_ID);
     if (existing && existing.parentNode) {
       existing.parentNode.removeChild(existing);
@@ -88,6 +93,12 @@
       if (ev.target === root) dismiss();
     });
     document.body.appendChild(root);
+    // Back closes the card, not the screen it was opened from — the same exit
+    // the corner X takes (ui/back-guard.js). In edit mode that discards the
+    // draft, which is what the X does too.
+    _back = window.BgbBackGuard
+      ? window.BgbBackGuard.arm({ root: root, close: dismiss })
+      : 0;
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
