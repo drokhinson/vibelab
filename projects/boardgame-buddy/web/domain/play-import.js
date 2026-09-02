@@ -13,20 +13,25 @@
 //     the model loses count of. expand() turns each run into individual draft
 //     plays the moment the parse lands, so every screen after that — the
 //     review list, the counts, the write — deals in plays, not in runs. The
-//     run survives only as `runId`, which is what lets the review list collapse
-//     58 identical rows back into one line.
+//     run survives only as `runId`, which by the review step is no longer what
+//     collapses the list (see rows()) — only what lets the row's detail panel
+//     say where its repeats came from.
 //
 //   • EVERY DRAFT PLAY CARRIES ITS OWN client_key. Stamped at expansion, kept
 //     in the saved draft, sent on every attempt. bgb_log_play answers a key it
 //     already holds with {duplicate: true}, so re-running a half-finished
 //     import lands the rest and re-writes nothing.
 //
-//   • runId AND import_group_id ARE DIFFERENT THINGS. `runId` collapses the
-//     REVIEW list and comes from the model's `count`. `import_group_id` is
-//     computed at write time from what a play actually holds (groupKeyFor
-//     below) and decides what the FEED collapses. A play with a score or a
-//     note of its own never joins a group however the model counted it,
-//     because the group's card cannot say what that play has to say.
+//   • GROUPING HAPPENS AFTER THE ASSIGNMENTS, NEVER BEFORE. What collapses the
+//     review list is `rowKeyFor`: the CATALOG game, the day, the note, and the
+//     seats as the user resolved them (an account id wherever there is one).
+//     The parse cannot know that "Jas" and "Jasmine" are one buddy — by the
+//     review step the user has said so, and a list keyed on how the note wrote
+//     them would be showing the user their own note back rather than the plays
+//     they are about to import. `import_group_id` is that same identity at
+//     write time (groupKeyFor), minus the plays with something of their own to
+//     say: a score or a note disqualifies a play from the feed's group however
+//     the model counted it, because the group's card cannot say it.
 //
 //   • THE DRAFT IS SAVED, NOT THE PARSE. localStorage holds the whole draft
 //     under a versioned key. A refresh three steps in resumes where it was; a
@@ -351,24 +356,91 @@
     }
 
     /**
-     * One group's plays as review rows: a run of identical repeats collapses
-     * into a single row carrying all of them, anything else is its own row.
-     * Order is preserved, so a run and the detailed plays around it stay where
-     * the note put them.
+     * One group's plays as review rows: everything indistinguishable collapses
+     * into a single row carrying all of it.
+     *
+     * KEYED ON WHAT THE PLAY RESOLVED TO, not on how the note wrote it. A note
+     * that says "Jas" in one line and "Jasmine" in another wrote two entries,
+     * and the parse has no way to know they are one person — but by this step
+     * the user has said so on the Players screen, and a review list that still
+     * shows them as two different people is showing the user their own note
+     * back rather than the plays they are about to import. Same for two
+     * spellings of a game matched to one catalog entry.
+     *
+     * This is the same identity `groupKeyFor` uses for the feed, so the row
+     * the user reviews and the card the feed will show cannot disagree.
+     *
+     * Rows appear where their FIRST play does, so a run and the plays around
+     * it stay where the note put them, and a late duplicate joins the row it
+     * matches rather than opening a second one further down.
      * @param {DraftPlay[]} plays
+     * @returns {Array<{key: string, runId: string|null, plays: DraftPlay[]}>}
      */
-    static rows(plays) {
+    rows(plays) {
+      /** @type {Array<{key: string, runId: string|null, plays: DraftPlay[]}>} */
       const out = [];
-      let current = null;
-      for (const play of plays) {
-        if (play.runId && current && current.runId === play.runId) {
-          current.plays.push(play);
-          continue;
+      const byKey = new Map();
+      for (const play of plays || []) {
+        const k = this.rowKeyFor(play);
+        let row = byKey.get(k);
+        if (!row) {
+          row = { key: k, runId: play.runId || null, plays: [] };
+          byKey.set(k, row);
+          out.push(row);
+        } else if (row.runId !== (play.runId || null)) {
+          // Mixed provenance: a run plus a separately-written play that turned
+          // out identical. The row is still one row, but it is no longer "the
+          // model's tally", and the detail panel says so.
+          row.runId = null;
         }
-        current = { runId: play.runId, plays: [play] };
-        out.push(current);
+        row.plays.push(play);
       }
       return out;
+    }
+
+    /**
+     * What a reader would use to tell two plays apart, after everything the
+     * user has resolved: the catalog game, the day, the note, and who was
+     * there with what score. Seats are sorted, so seating order is not part of
+     * the identity — the same people in a different order are the same play.
+     * @param {DraftPlay} play
+     */
+    rowKeyFor(play) {
+      const game = this.playGame(play);
+      const seats = play.players.map((p) => this.seatKey(p)).sort();
+      return [
+        game ? `id:${game.id}` : `name:${key(play.gameName)}`,
+        this.dateFor(play),
+        play.notes || "",
+        seats.join(","),
+      ].join("|");
+    }
+
+    /**
+     * One seat's identity. The ACCOUNT when the name resolved to one, so two
+     * spellings of one buddy are one seat; the resolved ghost label otherwise,
+     * so two spellings kept as one ghost are too. Never the name the note
+     * wrote — that is the thing this step exists to translate.
+     * @param {DraftPlayer} player
+     */
+    seatKey(player) {
+      const m = this.playerMapping(player.name);
+      const who = m.userId ? `u:${m.userId}` : `g:${key(m.label || player.name)}`;
+      return `${who}#${player.isWinner ? "w" : ""}#${player.score == null ? "" : player.score}`;
+    }
+
+    /**
+     * The review row a play belongs to. Rows are derived, so this recomputes
+     * them rather than holding an index that a re-assignment would stale.
+     * @param {string} playId
+     */
+    rowFor(playId) {
+      for (const group of this.groups()) {
+        for (const row of this.rows(group.plays)) {
+          if (row.plays.some((p) => p.id === playId)) return row;
+        }
+      }
+      return null;
     }
 
     /** @param {DraftPlay} play */
@@ -385,38 +457,45 @@
     }
 
     /**
-     * Resize a run — the tally said 58 and it was really 44.
+     * Resize a row — the tally said 58 and it was really 44.
      *
-     * Grows by cloning the run's first play (a fresh id, which IS the
+     * Sized off the ROW, not the run: by this step a row can hold a run PLUS a
+     * separately-written play that resolved to the same thing, and the control
+     * sits under a heading that counts the row. Resizing anything narrower
+     * would answer a different number from the one on screen.
+     *
+     * Grows by cloning the row's first play (a fresh id, which IS the
      * client_key, so an added play is a new play and not a duplicate of one
      * already sent) and shrinks by dropping from the tail. Insertions land
-     * beside the run rather than at the end of the draft, so the review list
+     * beside the row rather than at the end of the draft, so the review list
      * does not reorder under the reader while they are typing in it.
      *
-     * Only offered before the import: after it, the plays are rows, and adding
-     * rows to match a number is a different and much more dangerous act.
+     * Only offered before the import, and only on a row that already holds
+     * more than one play: after the import the plays are rows, and conjuring
+     * plays out of a single one is a different and much more dangerous act.
      *
-     * @param {string} playId  Any play in the run (the row's first).
+     * @param {string} playId  Any play in the row (the row's first).
      * @param {number} next    Desired size, clamped to [1, MAX_RUN].
      */
-    setRunCount(playId, next) {
-      const anchor = this.plays.find((p) => p.id === playId);
-      if (!anchor || !anchor.runId) return;
-      const members = this.plays.filter((p) => p.runId === anchor.runId && !p.dropped);
+    setRowCount(playId, next) {
+      const row = this.rowFor(playId);
+      if (!row || row.plays.length < 2) return;
       const want = Math.max(1, Math.min(MAX_RUN, Math.floor(Number(next) || 1)));
-      const have = members.length;
+      const have = row.plays.length;
       if (want === have) return;
 
       if (want < have) {
         // Drop rather than splice, so the same undo path as the trash control
         // applies and a mis-typed number is recoverable by typing another.
-        this.dropPlays(members.slice(want).map((p) => p.id));
+        this.dropPlays(row.plays.slice(want).map((p) => p.id));
         return;
       }
-      const seed = members[0];
-      const at = this.plays.indexOf(members[members.length - 1]) + 1;
+      const seed = row.plays[0];
+      const at = this.plays.indexOf(row.plays[row.plays.length - 1]) + 1;
       const added = [];
       for (let i = 0; i < want - have; i++) {
+        // Spread, so a clone keeps the seed's runId: growing a row that IS a
+        // run keeps it one run rather than splitting it in two.
         added.push({
           ...seed,
           id: uid(),
@@ -459,19 +538,12 @@
     groupKeyFor(play) {
       if (play.notes) return null;
       if (play.players.some((p) => p.score === 0 || p.score)) return null;
-      const game = this.playGame(play);
-      if (!game) return null;
-      const names = play.players.map((p) => key(this.playerMapping(p.name).label || p.name));
-      const winners = play.players.filter((p) => p.isWinner)
-        .map((p) => key(this.playerMapping(p.name).label || p.name));
-      // Sorted, so seating order is not part of the identity — two plays with
-      // the same people in a different order are still the same play.
-      return [
-        game.id,
-        this.dateFor(play),
-        names.slice().sort().join(","),
-        winners.slice().sort().join(","),
-      ].join("|");
+      if (!this.playGame(play)) return null;
+      // The review row's identity, unchanged. With no note and no scores, what
+      // rowKeyFor holds IS the game, the day, who was there and who won — and
+      // sharing it is the point: a row the user reviewed as one play must not
+      // arrive in the feed as several, nor two rows as one.
+      return this.rowKeyFor(play);
     }
 
     /**
