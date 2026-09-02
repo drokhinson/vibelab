@@ -16,6 +16,7 @@ from shared_models import HealthResponse
 from . import router
 from .bgg_client import (
     BGG_USER_AGENT,
+    bgg_description_text,
     fetch_bgg,
     invalidate_bgg_thing_cache,
     normalize_image_url,
@@ -23,7 +24,14 @@ from .bgg_client import (
 )
 from .constants import EXPANSION_COLOR_PALETTE, CatalogSort, PlayMode, derive_play_mode
 from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
-from .models import GameDetail, GameListResponse, GameSummary, RefreshImagesResponse, RulebookUrlUpdate
+from .models import (
+    GameDetail,
+    GameListResponse,
+    GameSummary,
+    RefreshDescriptionsResponse,
+    RefreshImagesResponse,
+    RulebookUrlUpdate,
+)
 from .services import game_service
 from .services._helpers import game_select_clause
 
@@ -489,6 +497,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
         "thumbnail_url": await _upload_to_storage(
             sb, bgg_id, normalize_image_url(thumb_el.text if thumb_el is not None else None), "thumb"
         ),
+        "description": bgg_description_text(item),
         "categories": categories,
         "mechanics": mechanics,
         "is_expansion": is_expansion,
@@ -761,3 +770,186 @@ async def update_game_rulebook_url(
     return GameSummary(**updated.data[0])
 
 
+# ── Admin: description backfill ──────────────────────────────────────────────
+# The catalog predates description capture on import, so every row imported
+# before it has description NULL. These three endpoints mirror the missing-
+# images trio above, with one structural difference called out at the bulk
+# endpoint: it batches its BGG calls.
+
+# BGG accepts a comma-separated id list on /thing. 20 is the chunk size
+# fetch_owner_counts already settled on for the same API.
+_DESC_CHUNK_SIZE = 20
+
+
+async def _hydrate_description_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Optional[str]:
+    """Fetch one game's description from BGG and patch the row; returns the text.
+
+    Deliberately unlike `_hydrate_images_from_bgg` in one respect: it does NOT
+    call `_sync_denormalized_game_fields`. `description` is not in
+    COLLECTION_DENORM_GAME_FIELDS — no play or collection row caches it — so
+    the fan-out would be two bulk UPDATEs that change nothing.
+    """
+    body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
+    root = parse_bgg_xml(body, context=f"hydrate description bgg_id={bgg_id}")
+    item = root.find("item")
+    if item is None:
+        raise HTTPException(status_code=404, detail="Game not found on BGG")
+
+    description = bgg_description_text(item)
+    sb.table("boardgamebuddy_games").update(
+        {"description": description}
+    ).eq("id", game_id).execute()
+    _invalidate_game_caches(bgg_id=bgg_id)
+    return description
+
+
+@router.get(
+    "/games/admin/missing-descriptions",
+    response_model=list[GameSummary],
+    status_code=200,
+    summary="List games with no description (admin)",
+)
+async def list_games_missing_descriptions(
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> list[GameSummary]:
+    """Admin-only: games imported before descriptions were captured from BGG."""
+    sb = get_supabase()
+    result = (
+        sb.table("boardgamebuddy_games")
+        .select(game_select_clause())
+        .is_("description", "null")
+        .order("name")
+        .execute()
+    )
+    return [GameSummary(**g) for g in (result.data or [])]
+
+
+@router.post(
+    "/games/admin/{game_id}/refresh-description",
+    response_model=GameDetail,
+    status_code=200,
+    summary="Refresh one game's description from BGG (admin)",
+)
+async def refresh_single_game_description(
+    game_id: str = Path(..., description="Game UUID"),
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> GameDetail:
+    """Admin-only: re-fetch and store one game's description from BGG."""
+    sb = get_supabase()
+
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select("id, bgg_id")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    bgg_id = existing.data[0]["bgg_id"]
+    if not bgg_id:
+        raise HTTPException(status_code=400, detail="Game has no bgg_id; cannot refresh from BGG")
+
+    await _hydrate_description_from_bgg(sb, game_id, bgg_id)
+
+    # select("*") rather than game_select_clause(): GameDetail carries the
+    # description itself, so the admin panel can report what actually landed.
+    refreshed = (
+        sb.table("boardgamebuddy_games")
+        .select("*")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not refreshed.data:
+        raise HTTPException(status_code=500, detail="Failed to update game row")
+    return GameDetail(**refreshed.data[0])
+
+
+@router.post(
+    "/games/admin/backfill-descriptions",
+    response_model=RefreshDescriptionsResponse,
+    status_code=200,
+    summary="Backfill missing descriptions from BGG, in batches (admin)",
+)
+async def backfill_game_descriptions(
+    limit: int = Query(200, ge=1, le=1000, description="Max games to backfill in this call"),
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> RefreshDescriptionsResponse:
+    """Admin-only: fill in descriptions for games that have none, oldest first."""
+    sb = get_supabase()
+
+    missing = (
+        sb.table("boardgamebuddy_games")
+        .select("id, bgg_id")
+        .is_("description", "null")
+        .not_.is_("bgg_id", "null")
+        .order("name")
+        .execute()
+    )
+    rows = missing.data or []
+    total_missing = len(rows)
+    batch = rows[:limit]
+
+    # One BGG round trip per 20 games, not per game. The catalog seeds from
+    # BGG's top ~1000, so on a cold run every row needs a description: at ~1.5s
+    # per call, per-game requests would take 25 minutes and die on the platform
+    # request timeout with the catalog half-filled. Chunks go sequentially —
+    # this module has no rate-limit guard and _map_bgg_status turns BGG's 429
+    # into an exception, so parallel batches would trip it for every user.
+    by_bgg_id = {int(r["bgg_id"]): r["id"] for r in batch}
+    chunks = [
+        batch[i:i + _DESC_CHUNK_SIZE]
+        for i in range(0, len(batch), _DESC_CHUNK_SIZE)
+    ]
+
+    updated = 0
+    failed = 0
+    for chunk in chunks:
+        ids = ",".join(str(r["bgg_id"]) for r in chunk)
+        try:
+            # use_cache=False for the same reason fetch_owner_counts does it:
+            # 20 full game records is ~1MB of XML and the bgg.thing namespace
+            # caps at 500 entries, so admitting these would evict the per-game
+            # entries every page load reads.
+            body = await fetch_bgg(
+                "/thing", {"id": ids, "stats": 0}, timeout=20.0, use_cache=False
+            )
+            root = parse_bgg_xml(body, context=f"backfill descriptions ({len(chunk)} ids)")
+        except Exception:
+            # One bad chunk must not abort a 50-chunk run.
+            logger.warning("Description backfill chunk failed (%d ids)", len(chunk), exc_info=True)
+            failed += len(chunk)
+            continue
+
+        for item in root.findall("item"):
+            try:
+                item_bgg_id = int(item.get("id", "0"))
+            except (TypeError, ValueError):
+                continue
+            game_id = by_bgg_id.get(item_bgg_id)
+            if not game_id:
+                continue
+            description = bgg_description_text(item)
+            if not description:
+                # BGG genuinely has no blurb for this game. Leave it NULL so it
+                # keeps showing in the panel rather than silently disappearing.
+                continue
+            try:
+                sb.table("boardgamebuddy_games").update(
+                    {"description": description}
+                ).eq("id", game_id).execute()
+                updated += 1
+            except Exception:
+                logger.warning("Description write failed for game %s", game_id, exc_info=True)
+                failed += 1
+
+    # Once at the end, not per game: _invalidate_game_caches does a namespace
+    # -wide clear plus invalidate_bgg_thing_cache(), so calling it per row would
+    # defeat the /thing cache for every concurrent user for the whole run.
+    if updated:
+        _invalidate_game_caches()
+
+    return RefreshDescriptionsResponse(
+        updated=updated,
+        failed=failed,
+        remaining=max(0, total_missing - updated),
+    )

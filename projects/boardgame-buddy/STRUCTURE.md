@@ -62,7 +62,7 @@ Game catalog seeded from BGG top 1000.
 | min_players | INTEGER | |
 | max_players | INTEGER | |
 | playing_time | INTEGER | minutes |
-| description | TEXT | |
+| description | TEXT | plain-text blurb from BGG `/thing`, captured on import; entity-decoded and tag-stripped, capped at 2500 chars. Backfillable from the Admin screen |
 | image_url | TEXT | BGG box art |
 | thumbnail_url | TEXT | |
 | categories | TEXT[] | e.g. Strategy, Card Game |
@@ -506,10 +506,13 @@ Outbound queue for BgB→BGG (migration 070). One planned change per game per us
 - `GET  /api/v1/boardgame_buddy/games/admin/missing-images` — *admin-only* list of games whose `image_url` or `thumbnail_url` is NULL
 - `POST /api/v1/boardgame_buddy/games/admin/{game_id}/refresh-images` — *admin-only* re-fetch one game's box art + thumbnail from BGG and re-host in Storage
 - `POST /api/v1/boardgame_buddy/games/refresh-images` — *admin-only* bulk refresh of all games with missing or BGG-hosted image URLs
+- `GET  /api/v1/boardgame_buddy/games/admin/missing-descriptions` — *admin-only* list of games whose `description` is NULL
+- `POST /api/v1/boardgame_buddy/games/admin/{game_id}/refresh-description` — *admin-only* re-fetch one game's description from BGG
+- `POST /api/v1/boardgame_buddy/games/admin/backfill-descriptions?limit=N` — *admin-only* bulk description backfill. Batches 20 games per BGG call and caps the pass at `limit` (default 200), returning `{updated, failed, remaining}`; the admin panel re-invokes until `remaining` is 0. Note this sits under `/games/admin/` unlike the older bulk image route at `/games/refresh-images`
 - `PATCH /api/v1/boardgame_buddy/games/admin/{game_id}/rulebook-url` — *admin-only* set or clear a game's `rulebook_url` (body `{rulebook_url: string|null}`)
 
 ### Admin UI
-- Promote via **Settings** screen → "Have an admin key?" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the **Admin** screen with the chapter-reports moderation panel.
+- Promote via **Settings** screen → "Have an admin key?" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the **Admin** screen with the chapter-reports moderation panel and two catalog-backfill panels (missing images, missing descriptions). Both backfill panels are `AdminBackfillPanel` instances — see `web/widgets/admin-backfill-panel.js`.
 
 ## Routes & URL Map
 

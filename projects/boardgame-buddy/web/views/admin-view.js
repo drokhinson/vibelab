@@ -1,8 +1,12 @@
 // views/admin-view.js — admin tooling.
 //
-// Houses the chapter-reports moderation panel. Resolve closes a report
-// without touching the chapter; Delete chapter removes the chapter from
-// the pool (and cascades the report).
+// Houses the chapter-reports moderation panel (Resolve closes a report without
+// touching the chapter; Delete chapter removes the chapter from the pool and
+// cascades the report), plus the catalog-backfill panels.
+//
+// The two backfill panels are AdminBackfillPanel instances, not hand-rolled
+// markup — see widgets/admin-backfill-panel.js. This view only owns the config
+// for each and the two onclick delegators the inline handlers call back into.
 
 (function () {
   class AdminView extends window.View {
@@ -11,13 +15,65 @@
       this._reports = [];
       this._loading = false;
       this._status = "open"; // "open" | "resolved"
-      // Missing-images panel. _refreshingOne tracks the currently-refreshing
-      // single-game id so we can disable that row's button. _bulkRefreshing
-      // does the same for the "Refresh all" button.
-      this._missingImages = [];
-      this._missingImagesLoading = false;
-      this._refreshingOne = null;
-      this._bulkRefreshing = false;
+
+      const render = () => this.render();
+      this._panels = [
+        new window.AdminBackfillPanel({
+          key: "images",
+          title: "Games missing images",
+          icon: "image-off",
+          emptyText: "All catalog games have images.",
+          bulkLabel: "Refresh all",
+          busyLabel: "Refreshing…",
+          oneOkToast: "Image refreshed",
+          rowStatus: (g) => {
+            const missing = [];
+            if (!g.thumbnail_url) missing.push("thumb");
+            if (!g.image_url) missing.push("image");
+            return missing.length ? `Missing: ${missing.join(", ")}` : "OK";
+          },
+          bulkConfirm: (n) => (n > 0
+            ? `Re-host BGG images for ${n} game${n === 1 ? "" : "s"}? This calls BGG once per game and is throttled — may take a minute or two.`
+            : "Re-host images for every game with a missing or BGG-hosted URL? This calls BGG once per game and is throttled."),
+          list: () => window.Game.adminMissingImages(),
+          refreshOne: (id) => window.Game.adminRefreshOneImage(id),
+          refreshAll: () => window.Game.adminRefreshAllImages(),
+          render,
+        }),
+        new window.AdminBackfillPanel({
+          key: "descriptions",
+          title: "Games missing descriptions",
+          icon: "scroll-text",
+          emptyText: "Every catalog game has a description.",
+          bulkLabel: "Backfill all",
+          busyLabel: "Backfilling…",
+          oneOkToast: "Description refreshed",
+          rowStatus: () => "No description",
+          bulkConfirm: (n) => (n > 0
+            ? `Fetch BGG descriptions for ${n} game${n === 1 ? "" : "s"}? BGG is called in batches of 20 and the run continues automatically until every game is done — may take a minute or two.`
+            : "Fetch BGG descriptions for every game that has none? BGG is called in batches of 20."),
+          list: () => window.Game.adminMissingDescriptions(),
+          refreshOne: (id) => window.Game.adminRefreshOneDescription(id),
+          refreshAll: () => window.Game.adminBackfillDescriptions(),
+          render,
+        }),
+      ];
+    }
+
+    _panel(key) {
+      return this._panels.find((p) => p.key === key) || null;
+    }
+
+    // Delegators for the panels' inline onclick handlers — the panels render
+    // markup, this view stays the single `window.adminView` handle they call.
+    _panelOne(key, gameId) {
+      const p = this._panel(key);
+      if (p) p.refreshOne(gameId);
+    }
+
+    _panelAll(key) {
+      const p = this._panel(key);
+      if (p) p.refreshAll();
     }
 
     async onMount() {
@@ -31,10 +87,10 @@
         `;
         return;
       }
-      // Fan both panels' fetches out in parallel — they're independent.
+      // Fan every panel's fetch out in parallel — they're independent.
       await Promise.all([
         this._loadReports(),
-        this._loadMissingImages(),
+        ...this._panels.map((p) => p.load()),
       ]);
     }
 
@@ -48,62 +104,6 @@
         this._reports = [];
       } finally {
         this._loading = false;
-        this.render();
-      }
-    }
-
-    async _loadMissingImages() {
-      this._missingImagesLoading = true;
-      this.render();
-      try {
-        const rows = await window.Game.adminMissingImages();
-        this._missingImages = Array.isArray(rows) ? rows : [];
-      } catch (e) {
-        showToast(e.message || "Failed to load games with missing images", "error");
-        this._missingImages = [];
-      } finally {
-        this._missingImagesLoading = false;
-        this.render();
-      }
-    }
-
-    async _refreshOneImage(gameId) {
-      this._refreshingOne = gameId;
-      this.render();
-      try {
-        await window.Game.adminRefreshOneImage(gameId);
-        showToast("Image refreshed", "success");
-        // Drop the row optimistically so the user sees progress without
-        // waiting for the missing-images query to round-trip again.
-        this._missingImages = this._missingImages.filter((g) => g.id !== gameId);
-        this.render();
-      } catch (e) {
-        showToast(e.message || "Refresh failed", "error");
-      } finally {
-        this._refreshingOne = null;
-        this.render();
-      }
-    }
-
-    async _refreshAllImages() {
-      const count = this._missingImages.length;
-      const proceed = window.confirm(
-        count > 0
-          ? `Re-host BGG images for ${count} game${count === 1 ? "" : "s"}? This calls BGG once per game and is throttled — may take a minute or two.`
-          : "Re-host images for every game with a missing or BGG-hosted URL? This calls BGG once per game and is throttled.",
-      );
-      if (!proceed) return;
-      this._bulkRefreshing = true;
-      this.render();
-      try {
-        const result = await window.Game.adminRefreshAllImages();
-        const updated = (result && result.updated) || 0;
-        showToast(`Refreshed ${updated} game${updated === 1 ? "" : "s"}`, "success");
-        await this._loadMissingImages();
-      } catch (e) {
-        showToast(e.message || "Bulk refresh failed", "error");
-      } finally {
-        this._bulkRefreshing = false;
         this.render();
       }
     }
@@ -132,78 +132,11 @@
           ${this._renderBody()}
         </section>
 
-        <section class="p-3">
-          ${this._renderMissingImagesPanel()}
-        </section>
+        ${this._panels.map((p) => `
+          <section class="p-3">${p.html()}</section>
+        `).join("")}
       `;
       this.refreshIcons();
-    }
-
-    _renderMissingImagesPanel() {
-      const count = this._missingImages.length;
-      const bulkDisabled = this._bulkRefreshing || this._missingImagesLoading;
-      return `
-        <div class="admin-reports__header">
-          <h3 class="font-semibold flex items-center gap-2">
-            <i data-icon="image-off" class="w-4 h-4"></i>
-            Games missing images
-            ${this._missingImagesLoading ? "" : `<span class="opacity-60 font-normal text-sm">(${count})</span>`}
-          </h3>
-          <button class="btn btn-xs ${bulkDisabled ? "btn-ghost" : "btn-primary"}"
-                  ${bulkDisabled ? "disabled" : ""}
-                  onclick="window.adminView._refreshAllImages()">
-            ${this._bulkRefreshing
-              ? `<span class="loading loading-spinner loading-xs"></span> Refreshing…`
-              : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> Refresh all`}
-          </button>
-        </div>
-        ${this._renderMissingImagesBody()}
-      `;
-    }
-
-    _renderMissingImagesBody() {
-      if (this._missingImagesLoading && this._missingImages.length === 0) {
-        return window.buddyLoader({ size: 64 });
-      }
-      if (this._missingImages.length === 0) {
-        return `<div class="text-sm opacity-60 p-6 text-center">All catalog games have images.</div>`;
-      }
-      return `
-        <ul class="admin-reports__list">
-          ${this._missingImages.map((g) => this._renderMissingImageRow(g)).join("")}
-        </ul>
-      `;
-    }
-
-    _renderMissingImageRow(g) {
-      const refreshing = this._refreshingOne === g.id;
-      const disabled = refreshing || !g.bgg_id || this._bulkRefreshing;
-      const missingParts = [];
-      if (!g.thumbnail_url) missingParts.push("thumb");
-      if (!g.image_url) missingParts.push("image");
-      const label = missingParts.length ? `Missing: ${missingParts.join(", ")}` : "OK";
-      return `
-        <li class="admin-reports__row">
-          <div class="admin-reports__meta">
-            <span class="admin-reports__game">${escapeHtml(g.name)}</span>
-            ${g.bgg_id ? `<span class="admin-reports__type">BGG ${g.bgg_id}</span>` : `<span class="admin-reports__type">no bgg_id</span>`}
-            ${g.year_published ? `<span class="admin-reports__date">${g.year_published}</span>` : ""}
-          </div>
-          <div class="admin-reports__preview">${escapeHtml(label)}</div>
-          <div class="admin-reports__footer">
-            <span class="admin-reports__reporter">${g.bgg_id ? "" : "No BGG id — refresh disabled."}</span>
-            <div class="admin-reports__actions">
-              <button class="btn btn-xs ${disabled ? "btn-ghost" : "btn-primary"}"
-                      ${disabled ? "disabled" : ""}
-                      onclick="window.adminView._refreshOneImage('${g.id}')">
-                ${refreshing
-                  ? `<span class="loading loading-spinner loading-xs"></span> Refreshing…`
-                  : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> Refresh`}
-              </button>
-            </div>
-          </div>
-        </li>
-      `;
     }
 
     _renderBody() {

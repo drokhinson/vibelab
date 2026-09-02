@@ -17,8 +17,10 @@ Both paths share the same 202/429/non-200 mapping below.
 """
 
 import asyncio
+import html
 import logging
 import os
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable, Optional
@@ -697,3 +699,65 @@ def normalize_image_url(url: str | None) -> str | None:
     if url.startswith("//"):
         return "https:" + url
     return url
+
+
+# ── Description normalization ────────────────────────────────────────────────
+# BGG's <description> is a text node (like <image>/<thumbnail>, not a value=
+# attribute) and it is DOUBLE-encoded: the wire bytes carry `&amp;#10;` and
+# `&amp;quot;`, so after ElementTree's own decode we still hold the literal
+# strings `&#10;` and `&quot;`. One html.unescape pass finishes the job.
+
+# Longest description we persist. BGG's median is ~1200 chars but the tail runs
+# to 10k+ of component manifests and award lists. The game page clamps to a few
+# lines and links out to BGG, and bgb_game_bundles prewarms up to 250 bundles
+# into a 3 MB localStorage budget on the client — so an uncapped column would
+# start evicting the feed and stats caches for heavy collectors.
+_DESCRIPTION_MAX_CHARS = 2500
+
+_BLOCK_TAG_RE = re.compile(r"<\s*(?:br\s*/?|/p|/div|/li)\s*>", re.IGNORECASE)
+_ANY_TAG_RE = re.compile(r"<[^>]{0,200}>")
+_BLANK_LINES_RE = re.compile(r"\n{3,}")
+_INLINE_WS_RE = re.compile(r"[ \t]{2,}")
+
+
+def bgg_description_text(item: ET.Element) -> Optional[str]:
+    """Extract a BGG /thing item's description as normalized plain text.
+
+    Returns None (never "") when BGG has no description, so the column stays
+    NULL and the admin backfill's `description IS NULL` filter keeps working.
+
+    The stored value is plain text, not sanitized HTML: every frontend surface
+    renders through `innerHTML` template literals, so markup in this column
+    would be one missed escape away from being an injection vector, and BGG's
+    inline `<i>`/`<a>` carries nothing the game page needs.
+    """
+    el = item.find("description")
+    if el is None or not el.text:
+        return None
+
+    # Exactly one unescape pass. A second would turn a description that
+    # literally reads "&lt;script&gt;" into a live tag.
+    text = html.unescape(el.text)
+
+    text = _BLOCK_TAG_RE.sub("\n", text)
+    text = _ANY_TAG_RE.sub("", text)
+
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = _INLINE_WS_RE.sub(" ", text)
+    # BGG uses a doubled &#10; as a paragraph break and sometimes emits four.
+    text = _BLANK_LINES_RE.sub("\n\n", text)
+    text = "\n".join(line.strip() for line in text.split("\n")).strip()
+
+    if not text:
+        return None
+
+    if len(text) > _DESCRIPTION_MAX_CHARS:
+        cut = text[:_DESCRIPTION_MAX_CHARS]
+        # Prefer a word boundary, but only if one is reasonably close to the
+        # cap — a description with no spaces in its last 20% shouldn't lose it.
+        space = cut.rfind(" ")
+        if space > _DESCRIPTION_MAX_CHARS * 0.8:
+            cut = cut[:space]
+        text = cut.rstrip() + "…"
+
+    return text

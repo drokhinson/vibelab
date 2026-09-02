@@ -71,6 +71,22 @@ class RefreshImagesResponse(BaseModel):
     updated: int
 
 
+class RefreshDescriptionsResponse(BaseModel):
+    """Outcome of one pass of the admin description backfill.
+
+    The backfill is batched and bounded (see `backfill_game_descriptions`), so
+    one call is usually NOT the whole catalog: `remaining` is how many games
+    still have no description, and the admin panel re-invokes until it hits 0.
+    `failed` counts games in batches that errored out — the loop swallows those
+    so one bad chunk can't abort the run, which otherwise leaves an admin
+    staring at "updated: 40" with no hint that 20 more silently didn't land.
+    """
+
+    updated: int
+    failed: int = 0
+    remaining: int = 0
+
+
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 class Avatar(BaseModel):
