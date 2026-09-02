@@ -48,7 +48,7 @@
 
       this._sheet.open({
         html: `
-          <div class="bgb-sheet__panel">
+          <div class="bgb-sheet__panel" tabindex="-1">
             <div class="bgb-sheet__grip" aria-hidden="true"></div>
             <h3 class="bgb-sheet__title">${escapeHtml(title)}</h3>
             <div class="bgb-sheet__finder" data-finder-mount></div>
@@ -77,9 +77,16 @@
             },
           });
           this._finder.mount(/** @type {HTMLElement} */ (mount));
-          // Focus opens the finder's list, which is the recently-played seed
-          // on an empty query — the sheet lands showing something useful.
-          this._finder.focus();
+          // Seed the list — recently-played on an empty query — so the sheet
+          // lands showing something useful, but WITHOUT focusing the field:
+          // opening a sheet must not throw a software keyboard over the very
+          // list it is offering (.claude/rules/overlays.md §5). Tapping the
+          // search box is the opt-in.
+          this._finder.showList();
+          // Focus lands on the panel instead, so a screen reader reads the
+          // sheet's label and Tab walks into the search box from there.
+          const panel = /** @type {HTMLElement|null} */ (root.querySelector(".bgb-sheet__panel"));
+          if (panel) panel.focus();
         },
         onClose: () => {
           // unmount() also invalidates any in-flight search, so a late

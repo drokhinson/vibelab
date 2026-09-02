@@ -400,7 +400,7 @@
     _renderPanel() {
       const seated = this._seated;
       return `
-        <div class="bgb-sheet__panel">
+        <div class="bgb-sheet__panel" tabindex="-1">
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
           <h3 class="bgb-sheet__title">${escapeHtml(this._title)}</h3>
           ${this._sub
@@ -479,16 +479,21 @@
               e.preventDefault();
               this._submitTyped();
             });
-            // Unlike the game picker, this sheet takes focus: adding people is
-            // a typing task as often as a picking one, and the list is short
-            // enough that the keyboard doesn't bury it.
-            input.focus();
           }
           const list = /** @type {HTMLElement|null} */ (root.querySelector(LIST_SEL));
           // Written as a custom property, not min-height, so the stylesheet can
           // drop the pin when the software keyboard shrinks the sheet — an
           // inline min-height would out-specify any rule trying to.
           if (list) list.style.setProperty("--bgb-sheet-list-min", list.clientHeight + "px");
+          // Focus the first buddy, not the search box: opening the sheet must
+          // not raise a software keyboard over the list of people it is
+          // offering (.claude/rules/overlays.md §5). Typing a name is still one
+          // tap away. With nobody to list, the panel takes focus instead so a
+          // screen reader still lands on the sheet's label.
+          const firstRow = /** @type {HTMLElement|null} */ (root.querySelector(".player-picker__row"));
+          const panel = /** @type {HTMLElement|null} */ (root.querySelector(".bgb-sheet__panel"));
+          const landing = firstRow || panel;
+          if (landing) landing.focus({ preventScroll: true });
         },
         onClose: () => {
           this._candidates = [];

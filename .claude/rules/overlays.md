@@ -201,16 +201,33 @@ if (back && back.isConnected && root.contains(document.activeElement)) back.focu
 Where a repaint destroyed the trigger, recover **only when focus actually fell
 through** to `<body>` — never steal it from wherever the user has moved on to.
 
-**Focus-on-open is a per-sheet judgement, and it gets argued in a comment.**
-There is no default:
+**An overlay never focuses a text input on open.** Not the search box, not a
+name field, not "just this one, the list is short". Focusing a field raises the
+software keyboard the instant the overlay lands, burying the very list or card
+the user opened it to see, and it commits them to typing when most opens end in
+a tap. Tapping the field is always the opt-in.
 
-- A sheet the user opened to *read* focuses the current selection, not the
-  search box — opening it should not throw a keyboard over the list. Tapping the
-  field is the opt-in.
-- A sheet where adding is a typing task as often as a picking one focuses the
-  input, provided the list is short enough that the keyboard doesn't bury it.
+That leaves *where* focus lands, which is a per-overlay judgement and gets
+argued in a comment. Something inside the overlay should take it, so a screen
+reader reads the dialog's label and Tab walks the overlay rather than the page
+behind it:
+
+- A sheet over a list focuses the current selection, or the first row when
+  there is no selection (`widgets/country-picker-sheet.js`,
+  `widgets/shelf-of-shame-sheet.js`, `widgets/player-picker-sheet.js`).
 - A radio-group sheet focuses the checked row, so a keyboard or screen-reader
-  user hears their current state before the alternatives.
+  user hears their current state before the alternatives
+  (`ui/status-tag.js`).
+- With no meaningful row to land on, the panel or card itself takes focus via
+  `tabindex="-1"` (`widgets/add-game-modal.js`, `widgets/add-buddies-modal.js`,
+  `widgets/game-search-sheet.js`). Never a disabled button — a disabled button
+  cannot take focus, so focus would silently stay on whatever opened the
+  overlay.
+
+A search-backed overlay that wants to land showing results seeds the **list**
+without touching the field — `GameFinder.showList()` opens the dropdown on the
+recently-played seed, where `focus()` would have opened it *and* raised the
+keyboard. `GameFinder.focus()` is for user gestures only.
 
 The shell is **not** a focus trap. Escape, backdrop tap, an explicit close
 control, `aria-modal` and the scroll lock are the contract.

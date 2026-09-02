@@ -175,9 +175,23 @@
       this._gameById.clear();
     }
 
+    /**
+     * Put the caret in the field. Only ever called from a user gesture — an
+     * overlay must not call this on open (.claude/rules/overlays.md §5).
+     */
     focus() {
       const input = /** @type {HTMLInputElement|null} */ (document.getElementById(this.inputId));
       if (input) input.focus();
+    }
+
+    /**
+     * Open the results list — the recently-played seed on an empty query —
+     * WITHOUT taking focus, so a sheet can land showing something useful
+     * without a software keyboard covering it. Tapping the field is still
+     * what raises the keyboard.
+     */
+    showList() {
+      this._open({ requireFocus: false });
     }
 
     reset() {
@@ -263,7 +277,9 @@
       return this._recentGamesPromise;
     }
 
-    async _open() {
+    /** @param {{ requireFocus?: boolean }} [opts] */
+    async _open(opts) {
+      const requireFocus = !opts || opts.requireFocus !== false;
       // If recents aren't loaded yet, show a synchronous loading hint so
       // the user sees the dropdown immediately, then await the load and
       // render the real list.
@@ -279,8 +295,18 @@
         if (p) {
           try { await p; } catch (_) {}
         }
-        const input = /** @type {HTMLInputElement|null} */ (document.getElementById(this.inputId));
-        if (!input || document.activeElement !== input) return;
+        // A focus-driven open belongs to the field: if focus left while the
+        // recents were loading, don't pop a list back up behind the user. A
+        // seeded open (showList) has no focus to test, so it stays valid for
+        // as long as the dropdown it painted the hint into is still showing —
+        // a tap outside, a pick or a close will have hidden it by then.
+        const live = document.getElementById(this.dropdownId);
+        if (requireFocus) {
+          const input = /** @type {HTMLInputElement|null} */ (document.getElementById(this.inputId));
+          if (!input || document.activeElement !== input) return;
+        } else if (!live || live.classList.contains("hidden")) {
+          return;
+        }
       }
       const input = /** @type {HTMLInputElement|null} */ (document.getElementById(this.inputId));
       const q = input ? (input.value || "").trim() : "";
