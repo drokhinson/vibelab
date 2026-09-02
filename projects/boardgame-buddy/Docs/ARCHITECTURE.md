@@ -585,8 +585,8 @@ card and the host can change it through `widgets/country-picker-sheet.js`; a
 hand-pick is remembered against the timezone it was made in, so a correction
 sticks at home without following the host to a convention abroad. The value
 rides `PlaySession.toPlayCreate()`, which means it reaches the column the same
-way through all four write paths — solo log, hosted finalize, offline outbox
-flush, and the native app (`app/src/models/geo.js`, detection only for now).
+way through all three write paths — solo log, hosted finalize, and offline
+outbox flush.
 
 Nothing reads it yet. It exists so that "what gets played in Germany" is
 answerable later, and that answer can only be built from data collected
