@@ -19,18 +19,31 @@
 
   // ── Step 1: Source ─────────────────────────────────────────────────────────
 
-  function renderSource(draft) {
+  function renderSource(draft, opts) {
     const used = draft.text.length;
     const max = window.PlayImport.maxChars;
     const over = used > max;
+    const busy = !!(opts && opts.preparingPhotos);
+    // A draft resumed after a refresh keeps its plays and loses its photos —
+    // they are the one thing too big to save (see PlayImport#addPhoto). Left
+    // unexplained that is a blank source step under a wizard full of plays.
+    const photosWereDropped = !draft.photos.length && !draft.text.trim() && draft.plays.length > 0;
     return `
       <div class="imp-step">
-        <h3 class="imp-step__title font-display">Paste your notes</h3>
+        <h3 class="imp-step__title font-display">Your notes</h3>
         <p class="imp-step__lede">
           A list, a table, a page of tally marks — whatever you already keep.
-          It gets read into plays you'll review before anything is saved.
+          Paste it, or photograph the page. It gets read into plays you'll
+          review before anything is saved.
         </p>
-        <textarea id="imp-source" class="imp-textarea" rows="12"
+        ${photosWereDropped ? `
+          <p class="imp-note">
+            This import was read from photos. They aren't kept when the
+            importer reopens, but everything they were read into is —
+            carry on, or add photos again to read them afresh.
+          </p>
+        ` : ""}
+        <textarea id="imp-source" class="imp-textarea" rows="${draft.photos.length ? 5 : 12}"
                   placeholder="Carcassonne&#10;Sean - |||| |||| ||||&#10;Mick - |||| |||| |||&#10;Biggest win: Mick 644, Sean 429"
                   aria-label="Your notes"
                   oninput="${V}._onSourceInput(this.value)">${escapeHtml(draft.text)}</textarea>
@@ -41,12 +54,60 @@
             <i data-icon="upload" class="w-4 h-4"></i>
             <span>Choose a file</span>
           </label>
+          ${draft.photoRoom ? `
+            <label class="imp-filebtn${busy ? " is-busy" : ""}">
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
+                     multiple ${busy ? "disabled" : ""}
+                     onchange="${V}._onPhotoPick(event)" />
+              <i data-icon="${busy ? "loader-2" : "image-plus"}" class="w-4 h-4${busy ? " animate-spin" : ""}"></i>
+              <span>${busy ? "Preparing…" : (draft.photos.length ? "Add another" : "Add photos")}</span>
+            </label>
+          ` : ""}
           <span class="imp-count${over ? " is-over" : ""}">
             ${used.toLocaleString()} / ${max.toLocaleString()}
           </span>
         </div>
+        ${renderPhotoStrip(draft, busy)}
         ${over ? `<p class="imp-warn">That's longer than one import can take. Trim it, or split it across two runs.</p>` : ""}
       </div>
+    `;
+  }
+
+  /**
+   * The pages, in the order they'll be read. Numbered rather than merely
+   * ordered: "photo 2 was the blurred one" is the sentence someone needs when
+   * a warning comes back naming a page, and a grid of thumbnails alone cannot
+   * say which one it means.
+   */
+  function renderPhotoStrip(draft, busy) {
+    if (!draft.photos.length && !busy) return "";
+    const bytes = draft.photos.reduce((n, p) => n + (p.bytes || 0), 0);
+    const tiles = draft.photos.map((photo, i) => `
+      <li class="imp-photo">
+        <img class="imp-photo__img" src="${escapeAttr(photo.url)}" alt="Photo ${i + 1} of your notes" />
+        <span class="imp-photo__n">${i + 1}</span>
+        <button class="imp-photo__x" type="button"
+                aria-label="Remove photo ${i + 1}"
+                onclick="${call("_removePhoto", photo.id)}">
+          <i data-icon="x" class="w-3.5 h-3.5"></i>
+        </button>
+      </li>
+    `).join("");
+    return `
+      <ul class="imp-photos">
+        ${tiles}
+        ${busy ? `<li class="imp-photo imp-photo--busy" aria-hidden="true"><i data-icon="loader-2" class="w-5 h-5 animate-spin"></i></li>` : ""}
+      </ul>
+      ${draft.photos.length ? `
+        <p class="imp-note">
+          ${draft.photos.length === 1
+            ? `One page`
+            : `${draft.photos.length} pages, read in this order`} ·
+          ${(bytes / 1048576).toFixed(1)} MB.
+          Blurred or cut-off handwriting is where a read goes wrong — check the
+          whole page is in frame before continuing.
+        </p>
+      ` : ""}
     `;
   }
 

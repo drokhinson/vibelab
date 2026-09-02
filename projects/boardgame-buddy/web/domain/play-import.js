@@ -50,6 +50,11 @@
   const MAX_CHARS = 20000;
   // Mirrors MAX_IMPORT_HINT_CHARS.
   const MAX_HINT_CHARS = 1000;
+  // Mirrors MAX_IMPORT_IMAGES. A notebook page photographs as one image and a
+  // spread as two, so four covers a double spread or a long list shot in
+  // sections — and past that the model is being asked to hold more page than
+  // it reads reliably in one pass.
+  const MAX_PHOTOS = 4;
   // Mirrors MAX_REPEAT_COUNT — the ceiling the parser already clamps a run to,
   // so hand-editing one cannot get past what the model was allowed to say.
   const MAX_RUN = 300;
@@ -78,6 +83,15 @@
    *   run. Identical plays share one, which is what the review list collapses.
    * @property {boolean} dropped   Kept rather than spliced, so undo is possible
    *   and a run's counts stay stable while the user trims it.
+   */
+
+  /**
+   * @typedef {Object} DraftPhoto
+   * @property {string} id     Local, for the remove control.
+   * @property {string} mime   image/jpeg | image/png | image/webp.
+   * @property {string} data   Bare base64, no `data:` prefix.
+   * @property {string} url    Object URL for the thumbnail. Revoked on removal.
+   * @property {number} bytes  Compressed size, for the "N photos, 1.2 MB" line.
    */
 
   /**
@@ -115,6 +129,9 @@
       this.step = 0;
       this.text = "";
       this.hint = "";
+      this.clearPhotos();
+      /** @type {DraftPhoto[]} Photographs of the note, in page order. */
+      this.photos = [];
       /** @type {DraftPlay[]} */
       this.plays = [];
       /** @type {string[]} Distinct player names, first-seen order. */
@@ -138,14 +155,58 @@
     static get steps() { return STEPS.slice(); }
     static get maxChars() { return MAX_CHARS; }
     static get maxHintChars() { return MAX_HINT_CHARS; }
+    static get maxPhotos() { return MAX_PHOTOS; }
 
     // ── Parse ────────────────────────────────────────────────────────────────
 
     /** Send the note. Replaces every downstream field — a re-parse starts over. */
+    // ── Photographs of the note ──────────────────────────────────────────────
+    //
+    // Held in memory and NEVER in the saved draft: four pages of base64 is a
+    // couple of megabytes against a localStorage quota of five, so persisting
+    // them would trade a resume the user rarely needs for the save that keeps
+    // their whole reviewed import. save() writes an explicit field list, so
+    // this is enforced by that list rather than by a rule someone has to
+    // remember — but the source step still says so, because a refresh mid-
+    // wizard is otherwise an empty box with no explanation.
+
+    /** @param {DraftPhoto} photo */
+    addPhoto(photo) {
+      if (this.photos.length >= MAX_PHOTOS) return false;
+      this.photos.push(photo);
+      return true;
+    }
+
+    /** @param {string} id */
+    removePhoto(id) {
+      const i = this.photos.findIndex((p) => p.id === id);
+      if (i < 0) return;
+      const [gone] = this.photos.splice(i, 1);
+      // The object URL outlives the <img> that held it, so dropping the array
+      // entry alone leaks the blob for the life of the document.
+      if (gone && gone.url) { try { URL.revokeObjectURL(gone.url); } catch (_) {} }
+    }
+
+    clearPhotos() {
+      for (const p of this.photos || []) {
+        if (p && p.url) { try { URL.revokeObjectURL(p.url); } catch (_) {} }
+      }
+      this.photos = [];
+    }
+
+    /** Room left, so the picker can say how many more it will take. */
+    get photoRoom() { return Math.max(0, MAX_PHOTOS - this.photos.length); }
+
     async parse() {
       const res = await window.api.post(
         "/plays/import/parse",
-        { text: this.text.slice(0, MAX_CHARS), hint: this.hint.trim().slice(0, MAX_HINT_CHARS) || null },
+        {
+          text: this.text.slice(0, MAX_CHARS),
+          hint: this.hint.trim().slice(0, MAX_HINT_CHARS) || null,
+          // Page order is the order they were added, which is the order the
+          // prompt tells the model to read them in.
+          images: this.photos.map((p) => ({ mime_type: p.mime, data: p.data })),
+        },
         { timeoutMs: PARSE_TIMEOUT_MS },
       );
       this.plays = PlayImport.expand(res && res.plays);
@@ -670,6 +731,9 @@
 
     save() {
       try {
+        // Photos are deliberately absent — see addPhoto. Everything here is
+        // small and textual, which is what keeps a 500-play draft inside the
+        // quota.
         localStorage.setItem(DRAFT_KEY, JSON.stringify({
           v: DRAFT_VERSION,
           step: this.step,
@@ -705,6 +769,10 @@
       }
       this.step = Math.min(Math.max(0, Number(data.step) || 0), STEPS.length - 1);
       this.text = String(data.text || "");
+      // Never restored, because never saved. A draft that was read from photos
+      // resumes with its plays intact and its source empty; the source step
+      // recognises that shape and says so rather than showing a blank box.
+      this.clearPhotos();
       this.hint = String(data.hint || "");
       this.plays = data.plays;
       this.playerNames = data.playerNames || [];
@@ -721,7 +789,7 @@
     }
 
     /** True once there is anything a refresh or a close would lose. */
-    get isDirty() { return !!(this.text.trim() || this.plays.length); }
+    get isDirty() { return !!(this.text.trim() || this.photos.length || this.plays.length); }
   }
 
   window.PlayImport = PlayImport;

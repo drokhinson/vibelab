@@ -1,8 +1,13 @@
 """AI extraction for the Settings play importer.
 
 Someone arrives with years of play history already written down — an Apple
-Note of tally marks, an iCloud Notes table, a photo they typed up. This turns
-that block of text into structured plays for the import wizard to review.
+Note of tally marks, an iCloud Notes table, a spiral notebook on a shelf. This
+turns that note into structured plays for the import wizard to review, whether
+it arrives as pasted text, as photographs of the page, or as both.
+
+The photograph path exists because the most complete play histories are the
+oldest ones, and the oldest ones are on paper. Asking for them to be typed up
+first is asking for the import twice.
 
 Nothing here writes anything. The reply is a draft the user walks through
 across three resolution steps (players, games, dates) before a single row is
@@ -23,14 +28,19 @@ a reply the model loses count of halfway through, so it writes the run once and
 says how long it is. The client expands it.
 
 Larger job than chapter drafting (~5k in / ~4k out on a long note) but the same
-free-tier path — the shared caller in shared-backend/gemini.py.
+free-tier path — the shared caller in shared-backend/gemini.py. A photographed
+note goes to the stronger model there (GEMINI_MODEL_STRONG): Flash-Lite is fine
+at restructuring text that is already text, and unreliable at deciding whether
+a smudged row of tally marks is fourteen or fifteen — which is precisely the
+judgement a photo import turns on, and one the user cannot check without
+counting the marks themselves.
 """
 
 import logging
 from datetime import date
 from typing import Any, Optional
 
-from gemini import GeminiError, generate_json
+from gemini import GEMINI_MODEL_STRONG, GeminiError, generate_json
 
 from ..constants import (
     MAX_IMPORT_NAME_CHARS,
@@ -56,7 +66,8 @@ _LOG_EXCERPT = 200
 _SYSTEM = (
     "You extract board game play records from a person's private notes. The "
     "notes are informal — tally marks, tables, shorthand names, half-finished "
-    "sentences. You read what is actually written and never invent a score, a "
+    "sentences — and may arrive as text, as photographs of a page, or as both. "
+    "You read what is actually written and never invent a score, a "
     "date, or a player that is not there. Respond with ONLY a JSON object — no "
     "prose, no code fences."
 )
@@ -107,6 +118,26 @@ _RULES = """Rules:
   106 games and you can only account for 90, write the 90 and say so in
   "warnings"."""
 
+# Appended only when the request carries photographs. Kept separate from
+# _RULES so a pasted-text import's prompt is byte-for-byte what it was — the
+# same note must not start reading differently because this feature exists.
+_PHOTO_RULES = """Reading photographs:
+
+- The images ARE the note. Read every page you are given, in the order they
+  appear, and treat them as one continuous note rather than as separate ones.
+  Any text above is context from the same person, not a different note.
+- Count tally marks carefully. They are usually grouped in fives; count the
+  groups and then the remainder rather than counting one by one. If a row is
+  smudged, cut off by the edge of the photo, or you simply cannot tell whether
+  it is 14 or 15, use your best reading AND say which row you were unsure of
+  in "warnings". A count you are unsure of is still worth more than nothing —
+  the person reviews every number before it is saved — but an unflagged guess
+  is not.
+- Ignore anything that is not the note: a thumb at the edge of the frame, the
+  ruled lines of the paper, a shadow, the table underneath.
+- If a page is too blurred or too dark to read at all, do not guess at its
+  contents. Say so in "warnings" and read the pages you can."""
+
 _EXAMPLES = """Two examples of the kinds of notes this gets.
 
 A tally note:
@@ -136,7 +167,7 @@ Lachie, and Lachie beating Jasmine and Marco. No scores, no dates. "Jas" stays
 "Jas" if that is what a row says."""
 
 
-def _build_prompt(*, text: str, hint: Optional[str]) -> str:
+def _build_prompt(*, text: str, hint: Optional[str], image_count: int = 0) -> str:
     lines: list[str] = []
     if hint and hint.strip():
         # The user's own description of their shorthand. It goes ABOVE the
@@ -144,13 +175,28 @@ def _build_prompt(*, text: str, hint: Optional[str]) -> str:
         lines.append("Notes from the user about how this is organised:")
         lines.append(" ".join(hint.split()))
         lines.append("")
-    lines.append("The note to read:")
-    lines.append("---")
-    lines.append(text)
-    lines.append("---")
-    lines.append("")
+    if image_count:
+        # Named before the text block so the model knows the pages are coming
+        # and does not read a one-line caption as the whole note. The images
+        # themselves ride after this prompt as inline parts.
+        lines.append(
+            f"The note is {image_count} photograph{'s' if image_count != 1 else ''}, "
+            "attached below."
+        )
+        lines.append("")
+    if text.strip():
+        lines.append("Text from the user" if image_count else "The note to read:")
+        if image_count:
+            lines[-1] += " alongside the photographs:"
+        lines.append("---")
+        lines.append(text)
+        lines.append("---")
+        lines.append("")
     lines.append(_RULES)
     lines.append("")
+    if image_count:
+        lines.append(_PHOTO_RULES)
+        lines.append("")
     lines.append(_EXAMPLES)
     lines.append("")
     lines.append(_OUTPUT_CONTRACT)
@@ -264,17 +310,36 @@ def _coerce(data: dict) -> tuple[list[ParsedPlay], list[str]]:
     return plays, warnings
 
 
-async def parse_plays(*, text: str, hint: Optional[str]) -> tuple[list[ParsedPlay], list[str]]:
-    """Read a pasted note into draft plays. Returns (plays, warnings).
+async def parse_plays(
+    *,
+    text: str,
+    hint: Optional[str],
+    images: Optional[list[tuple[str, str]]] = None,
+) -> tuple[list[ParsedPlay], list[str]]:
+    """Read a note into draft plays. Returns (plays, warnings).
+
+    `images` are (mime_type, base64) pairs — photographs of the page, already
+    size-checked by the route. They may arrive with or without text.
 
     Raises GeminiError on every failure mode — the route maps it to a 502.
     """
+    images = images or []
     data = await generate_json(
         app=APP_NAME,
         system=_SYSTEM,
-        prompt=_build_prompt(text=text, hint=hint),
+        prompt=_build_prompt(text=text, hint=hint, image_count=len(images)),
         max_tokens=IMPORT_PARSE_MAX_TOKENS,
         temperature=IMPORT_PARSE_TEMPERATURE,
-        params={"chars": len(text), "hinted": bool(hint and hint.strip())},
+        params={
+            "chars": len(text),
+            "hinted": bool(hint and hint.strip()),
+            "photos": len(images),
+        },
+        images=images,
+        # Lite for text, the step up for photographs — see the module
+        # docstring. Not a quality knob to reach for elsewhere: it is the one
+        # path where the model is doing OCR and arithmetic rather than
+        # restructuring, and getting the count wrong is invisible to the user.
+        model=GEMINI_MODEL_STRONG if images else None,
     )
     return _coerce(data)

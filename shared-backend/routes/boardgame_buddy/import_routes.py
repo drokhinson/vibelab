@@ -1,12 +1,21 @@
 """Play importer endpoints (Settings → Import plays).
 
-Two calls, deliberately separate. `parse` reads a pasted note into draft plays
-and writes nothing; `import` writes one reviewed chunk. Everything between them
+Two calls, deliberately separate. `parse` reads a note into draft plays and
+writes nothing; `import` writes one reviewed chunk. Everything between them
 — mapping names onto accounts, matching game names to the catalog, filling in
 dates — happens in the wizard, so nothing the model guessed reaches the
 database without the user having seen it.
+
+The note can arrive as pasted text, as photographs of the page, or as both.
+Photographs are inline base64 on the parse request and are never persisted:
+they are read once and dropped with the request. A play photo earns a row in
+the storage bucket because the play keeps it forever; a picture of somebody's
+notebook is scaffolding for one call, and keeping it would mean deciding later
+who deletes it and when.
 """
 
+import base64
+import binascii
 import logging
 
 from fastapi import Depends, HTTPException, Path
@@ -15,9 +24,11 @@ from db import get_supabase
 from gemini import GeminiError
 
 from . import router
+from .constants import MAX_IMPORT_IMAGE_BYTES, MAX_IMPORT_IMAGES_TOTAL_BYTES
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     PlayImportDeleteResponse,
+    PlayImportImage,
     PlayImportListResponse,
     PlayImportParseRequest,
     PlayImportParseResponse,
@@ -27,6 +38,41 @@ from .models import (
 from .services import play_import_ai, play_import_service
 
 logger = logging.getLogger(__name__)
+
+
+def _decoded_images(images: list[PlayImportImage]) -> list[tuple[str, str]]:
+    """Validate the photographs and hand back (mime_type, base64) pairs.
+
+    The bytes are decoded to be MEASURED, then thrown away and the original
+    base64 forwarded — re-encoding would just spend CPU reproducing the string
+    we were given. A malformed or oversized image is a 400 rather than a 502:
+    it is the request that is wrong, not the model, and the client can say so
+    without telling the user to try again.
+    """
+    out: list[tuple[str, str]] = []
+    total = 0
+    for i, image in enumerate(images):
+        try:
+            raw = base64.b64decode(image.data, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Photo {i + 1} couldn't be read."
+            ) from exc
+        if not raw:
+            raise HTTPException(status_code=400, detail=f"Photo {i + 1} is empty.")
+        if len(raw) > MAX_IMPORT_IMAGE_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Photo {i + 1} is too large — {MAX_IMPORT_IMAGE_BYTES // (1024 * 1024)} MB is the limit.",
+            )
+        total += len(raw)
+        if total > MAX_IMPORT_IMAGES_TOTAL_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail="Those photos are too large together — try fewer, or smaller ones.",
+            )
+        out.append((image.mime_type, image.data))
+    return out
 
 
 @router.post(
@@ -40,19 +86,36 @@ async def parse_import(
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayImportParseResponse:
     """Read a note into draft plays, players and catalog game matches — nothing is saved."""
+    images = _decoded_images(body.images)
+    if not body.text.strip() and not images:
+        # Neither field carries a note. Said here rather than as min_length on
+        # `text`, so someone who photographed their note instead of typing it
+        # doesn't get an error pointing at the box they deliberately left empty.
+        raise HTTPException(
+            status_code=400,
+            detail="Paste your notes or add a photo of them first.",
+        )
     try:
         plays, warnings = await play_import_ai.parse_plays(
             text=body.text,
             hint=body.hint,
+            images=images,
         )
     except GeminiError as exc:
         # The real reason (missing key, safety block, model drift, an
         # unreadable note) is on the api_logs row; the user needs to know
         # whether to try again or edit what they pasted.
-        logger.warning("play import parse failed for user %s: %s", user.user_id, exc)
+        logger.warning(
+            "play import parse failed for user %s (%d photos): %s",
+            user.user_id, len(images), exc,
+        )
         raise HTTPException(
             status_code=502,
-            detail="Couldn't read that note — try again, or add a note about how it's organised.",
+            detail=(
+                "Couldn't read those photos — try again, or check they're in focus and the whole page is in frame."
+                if images
+                else "Couldn't read that note — try again, or add a note about how it's organised."
+            ),
         ) from exc
 
     sb = get_supabase()

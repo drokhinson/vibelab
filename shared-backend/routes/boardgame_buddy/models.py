@@ -16,6 +16,7 @@ from .constants import (
     IMPORT_CHUNK_MAX,
     MAX_IMPORT_CHARS,
     MAX_IMPORT_HINT_CHARS,
+    MAX_IMPORT_IMAGES,
     BggAuthState,
     BggCheckPhase,
     BggCheckState,
@@ -1498,14 +1499,40 @@ class AchievementsResponse(BaseModel):
 # the wizard, so nothing the model guessed reaches the database unreviewed.
 
 
-class PlayImportParseRequest(BaseModel):
-    """A pasted note, plus the user's optional description of its layout."""
+class PlayImportImage(BaseModel):
+    """One photograph of a note, inline.
 
-    text: str = Field(..., min_length=1, max_length=MAX_IMPORT_CHARS)
+    Base64 rather than an upload to storage: these are read once and thrown
+    away. A play photo earns a row in the bucket because the play keeps it
+    forever; a picture of somebody's notebook is scaffolding for one request,
+    and storing it would mean deciding later who deletes it and when.
+    """
+
+    mime_type: Literal["image/jpeg", "image/png", "image/webp"]
+    # Standard base64 of the image bytes, without a `data:` prefix — the client
+    # strips its own. Validated by decoding it, in the route: a field validator
+    # here would decode every image twice, once to check and once to measure.
+    data: str
+
+
+class PlayImportParseRequest(BaseModel):
+    """A note — pasted, photographed, or both — plus the user's optional
+    description of its layout."""
+
+    # Empty is legitimate when `images` carries the note. The route rejects a
+    # request with neither, which is a clearer error than min_length=1 pointing
+    # at a field the user never filled in because they took a photo instead.
+    text: str = Field("", max_length=MAX_IMPORT_CHARS)
     # Step 2 of the wizard. Appended to the prompt verbatim when non-empty —
     # "tally marks, one per game won" is the difference between reading the
     # Carcassonne note right and reading it as two plays.
     hint: Optional[str] = Field(None, max_length=MAX_IMPORT_HINT_CHARS)
+    # Photographs of the note. Read alongside `text` rather than instead of it:
+    # someone with three pages shot and a line of context typed should get both
+    # read, and the model is told which is which.
+    images: list[PlayImportImage] = Field(
+        default_factory=list, max_length=MAX_IMPORT_IMAGES
+    )
 
 
 class ParsedPlayer(BaseModel):
