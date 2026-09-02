@@ -46,7 +46,7 @@
     root.className = "polaroid-popup__backdrop";
     root.innerHTML = `
       <div class="polaroid-popup__card polaroid-popup__card--confirm add-game-modal"
-           role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+           role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}" tabindex="-1">
         <button class="polaroid-popup__close" aria-label="Close">
           <i data-icon="x" class="w-4 h-4"></i>
         </button>
@@ -103,9 +103,17 @@
     });
     const mount = /** @type {HTMLElement|null} */ (root.querySelector("[data-finder-mount]"));
     if (mount) _finder.mount(mount);
-    // Defer focus to next tick so the input exists in the DOM and the
-    // browser doesn't fight the modal's open animation for focus.
-    requestAnimationFrame(() => { if (_finder) _finder.focus(); });
+    // Focus the dialog itself, NOT the finder's input: opening a popup must
+    // not pre-select a text field, because that raises the software keyboard
+    // over the card the user just opened (.claude/rules/overlays.md §5).
+    // Tapping the search box is the opt-in. The card still takes focus so a
+    // screen reader reads the modal's label and Tab walks its controls rather
+    // than the page behind it; deferred a tick so the browser isn't fighting
+    // the open animation for it.
+    const card = /** @type {HTMLElement|null} */ (root.querySelector(".add-game-modal"));
+    requestAnimationFrame(() => {
+      if (card && card.isConnected) card.focus({ preventScroll: true });
+    });
 
     _escHandler = (e) => {
       if (e.key === "Escape") {

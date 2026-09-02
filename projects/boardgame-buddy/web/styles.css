@@ -4704,6 +4704,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* Keyboard up: 20% of the visible box held back so the page peeks through is
    a luxury there is no room for — take all of it. */
 :root.bgb-kb-open .bgb-sheet .bgb-sheet__panel { max-height: 100%; }
+/* Sheets that have no row worth landing on take focus on the panel itself
+   (tabindex="-1", .claude/rules/overlays.md §5). Programmatic focus only — it
+   is never tabbed to, so it must not draw a ring. */
+.bgb-sheet .bgb-sheet__panel:focus { outline: none; }
 .polaroid-popup__backdrop.bgb-sheet.is-closing { animation: fadeOut 200ms ease-out both; }
 .bgb-sheet.is-closing .bgb-sheet__panel { animation: sheetOut 200ms var(--ease) both; }
 
@@ -8058,6 +8062,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-align: left;
   padding-bottom: 18px;
 }
+.add-game-modal:focus { outline: none; }   /* programmatic focus only */
 .add-game-modal .polaroid-popup__title { text-align: left; }
 .add-game-modal__hint {
   margin: 4px 0 12px;
