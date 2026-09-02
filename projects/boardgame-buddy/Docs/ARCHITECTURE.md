@@ -418,6 +418,14 @@ one mapping from the `/play-partners` bundle to picker rows — `accounts` there
 are buddy EDGES (`other_user_id`, `other_display_name`), and reading them as
 profiles is what made that sheet show nothing but ghost players.
 
+Those answers then decide the review list. `PlayImport#rowKeyFor` keys a review
+row on what a play RESOLVED to — the catalog game, the day, the note, and the
+seats by account id — never on how the note wrote them, so two spellings of one
+buddy read as the one player the user said they were. `groupKeyFor` returns the
+same key (minus the plays with a score or a note of their own, which the feed's
+collapsed card could not speak for), so the row a user reviews and the card that
+lands in the feed cannot disagree.
+
 ### 4.4 Chrome, layering and mobile
 
 The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§ App chrome & layering) and `.claude/rules/mobile-web.md`. The parts specific to this app:

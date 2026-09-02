@@ -224,7 +224,7 @@
   }
 
   function renderGroup(draft, group, expanded) {
-    const rows = window.PlayImport.rows(group.plays);
+    const rows = draft.rows(group.plays);
     return `
       <section class="imp-group">
         <header class="imp-group__head">
@@ -237,9 +237,11 @@
   }
 
   /**
-   * One review row. A run of identical repeats is one row carrying all of
-   * them — a 58-play run as 58 rows is a list nobody scrolls, and every row
-   * would say the same thing.
+   * One review row. Everything indistinguishable is one row carrying all of
+   * it — a 58-play run as 58 rows is a list nobody scrolls, and every row
+   * would say the same thing. What counts as indistinguishable is decided
+   * AFTER the Players and Games steps (see PlayImport#rowKeyFor), so two
+   * spellings of one buddy read as the one player the user said they were.
    */
   function renderRow(draft, row, expanded) {
     const first = row.plays[0];
@@ -316,13 +318,16 @@
             <span class="imp-field__label">How many plays</span>
             <input class="imp-count-input" type="number" min="1" max="300" step="1"
                    value="${row.plays.length}"
-                   aria-label="Number of plays in this run"
-                   onchange="${escapeAttr(`${V}._onRunCount('${jsStr(first.id)}', this.value)`)}" />
+                   aria-label="Number of plays in this row"
+                   onchange="${escapeAttr(`${V}._onRowCount('${jsStr(first.id)}', this.value)`)}" />
           </label>
           <p class="imp-note">
-            Editing anything else here changes all ${row.plays.length} — they
-            came from one run of repeats in your notes. If the tally was
-            misread, correct the number above.
+            Editing anything else here changes all ${row.plays.length} —
+            ${row.runId
+              ? `they came from one run of repeats in your notes.`
+              : `your notes wrote them as separate entries that came out
+                 identical — same game, same day, same players.`}
+            If that's wrong, correct the number above.
           </p>
         ` : ""}
       </div>

@@ -536,7 +536,7 @@
 
     /** Per-play override, from inside an expanded review row. */
     _openRowGameSheet(playId) {
-      const row = this._rowFor(playId);
+      const row = this._draft.rowFor(playId);
       if (!row) return;
       window.GameSearchSheet.open({
         title: "Change this play's game",
@@ -556,23 +556,13 @@
 
     // ── Plays step ────────────────────────────────────────────────────────────
 
-    /** The review row a head/detail control belongs to, by its first play's id. */
-    _rowFor(playId) {
-      for (const group of this._draft.groups()) {
-        for (const row of window.PlayImport.rows(group.plays)) {
-          if (row.plays[0].id === playId) return row;
-        }
-      }
-      return null;
-    }
-
     _toggleRow(playId) {
       this._expanded[playId] = !this._expanded[playId];
       this.render();
     }
 
     async _dropRow(playId) {
-      const row = this._rowFor(playId);
+      const row = this._draft.rowFor(playId);
       if (!row) return;
       const n = row.plays.length;
       const ok = await window.PolaroidPopup.confirm({
@@ -595,22 +585,22 @@
     }
 
     /**
-     * The tally was misread. Resize the run in place and repaint.
+     * The tally was misread. Resize the row in place and repaint.
      *
      * The row stays open and keeps its identity, because the anchor play is
      * never the one removed — a control that closed the thing it just edited
      * would make correcting 58 → 44 → 46 three separate hunts down the list.
      */
-    _onRunCount(playId, value) {
+    _onRowCount(playId, value) {
       const before = this._draft.liveCount;
-      this._draft.setRunCount(playId, value);
+      this._draft.setRowCount(playId, value);
       if (this._draft.liveCount === before) return;
       this._draft.save();
       this.render();
     }
 
     _onRowDate(playId, value) {
-      const row = this._rowFor(playId);
+      const row = this._draft.rowFor(playId);
       if (!row) return;
       for (const p of row.plays) p.playedAt = value || null;
       this._draft.save();
