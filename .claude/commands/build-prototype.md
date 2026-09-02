@@ -25,7 +25,7 @@ Build the web prototype for project: $ARGUMENTS
 
    Then the app itself: `domain/<object>.js` per core object, one canonical render function in `ui/` per object, `views/<screen>-view.js` per route. Start single-file only if the whole app is under 300 lines; split at the threshold in `.claude/rules/web-frontend.md`.
 
-   Mobile-first, max-width 480px for single-column apps. Loading, empty and error are three separate branches on every fetch. Choice lists are bottom sheets (`.claude/rules/overlays.md`).
+   Mobile-first, max-width 480px for single-column apps. Loading, empty and error are three separate branches on every fetch. Choice lists are bottom sheets (`.claude/rules/overlays.md`) — and every overlay ships its four exits from the first commit: the ×, a tap outside the card, Escape, and the phone's back button, all on one close path, with no text field focused on open (`overlays.md` §5 and §8). Back is the one that has to be built in rather than retrofitted: it needs a history entry per overlay and a router that asks the overlay first.
 
 5. **Test locally**, in both themes:
    ```bash
@@ -33,7 +33,7 @@ Build the web prototype for project: $ARGUMENTS
    # In another terminal:
    npx serve projects/<project>/web -l 5500 --no-clipboard
    ```
-   Verify: data loads; the loading state shows and is not the empty state; a network failure shows the error branch with a retry; the page paints the right theme with no flash on reload; toggling the OS appearance follows live; every screen is legible in both themes; no request goes to an icon CDN.
+   Verify: data loads; the loading state shows and is not the empty state; a network failure shows the error branch with a retry; the page paints the right theme with no flash on reload; toggling the OS appearance follows live; every screen is legible in both themes; no request goes to an icon CDN; and for each overlay — it opens with no keyboard up, closes on a tap outside its card, and closes on the browser's back button without moving the page behind it.
 
 6. **Update STRUCTURE.md** — Fill in:
    - Status: Prototype

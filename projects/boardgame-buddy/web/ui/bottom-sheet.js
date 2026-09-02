@@ -8,9 +8,10 @@
 // ui/viewport-lock.js), then re-anchors itself to the bottom of the screen.
 //
 // This class owns the lifecycle only — create, scroll lock, delegated clicks,
-// Escape, focus return, the close animation. Each sheet still writes its own
-// panel markup and its own CSS family; nothing about how a sheet LOOKS lives
-// here. Extracted when the status sheet stopped being the only one
+// Escape, the device back gesture (ui/back-guard.js), focus return, the close
+// animation. Each sheet still writes its own panel markup and its own CSS
+// family; nothing about how a sheet LOOKS lives here.
+// Extracted when the status sheet stopped being the only one
 // (.claude/rules/ui-object-design.md §4: fix the root cause rather than ship a
 // second copy).
 //
@@ -62,6 +63,9 @@
       /** @type {HTMLElement|null} */
       this._el = null;
       this._opts = /** @type {BottomSheetOpenOpts|null} */ (null);
+      // Token for the device-back guard, so the phone's back gesture closes
+      // this sheet instead of the screen behind it (ui/back-guard.js).
+      this._back = 0;
       this._returnFocus = /** @type {any} */ (null);
       this._closeTimer = /** @type {any} */ (null);
       this._prevOverflow = "";
@@ -113,7 +117,13 @@
 
       root.addEventListener("click", (e) => {
         const t = /** @type {any} */ (e.target);
-        if (t === root) { this.close(); return; }                       // backdrop
+        // Outside the panel, not merely "on the backdrop element": a sheet's
+        // markup is one panel, so today the two tests agree — but chrome parked
+        // BESIDE the panel would be a sibling of it, and an `=== root` test
+        // leaves any such strip of apparent background inert
+        // (.claude/rules/overlays.md §8a, where exactly that shipped).
+        const panel = root.firstElementChild;
+        if (t === root || (panel && !panel.contains(t))) { this.close(); return; }
         if (t.closest('[data-action="close"]')) { this.close(); return; }
         if (opts.onClick) opts.onClick(e);
       });
@@ -125,6 +135,9 @@
       this._prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       document.addEventListener("keydown", this._onKeyDown, true);
+      this._back = window.BgbBackGuard
+        ? window.BgbBackGuard.arm({ root: root, close: () => this.close() })
+        : 0;
 
       if (opts.onOpen) opts.onOpen(root);
     }
@@ -138,6 +151,8 @@
 
       document.removeEventListener("keydown", this._onKeyDown, true);
       document.body.style.overflow = this._prevOverflow;
+      if (window.BgbBackGuard) window.BgbBackGuard.release(this._back);
+      this._back = 0;
 
       const back = this._returnFocus;
       this._returnFocus = null;
@@ -158,6 +173,8 @@
 
     /** Remove any live or orphaned instance of this sheet immediately. */
     _teardown() {
+      if (window.BgbBackGuard) window.BgbBackGuard.release(this._back);
+      this._back = 0;
       if (this._el && this._el.parentNode) this._el.parentNode.removeChild(this._el);
       const stale = document.getElementById(this._id);
       if (stale && stale.parentNode) stale.parentNode.removeChild(stale);

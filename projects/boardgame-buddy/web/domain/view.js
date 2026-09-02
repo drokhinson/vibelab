@@ -223,8 +223,13 @@
       if (!url) return;
       const stateName = name;
       const stateParams = params || {};
+      // stamp() carries an overlay guard's marking across the replace — the
+      // entry being replaced is the guard's own when a sheet is open, and an
+      // unmarked one is a back press that does nothing (ui/back-guard.js).
+      const state = { name: stateName, params: stateParams };
       try {
-        history.replaceState({ name: stateName, params: stateParams }, "", url);
+        history.replaceState(
+          window.BgbBackGuard ? window.BgbBackGuard.stamp(state) : state, "", url);
       } catch (_) {}
       // Keep the store entry consistent with the new URL.
       window.store.set("currentRoute", { name: stateName, params: stateParams });
@@ -385,6 +390,12 @@
     }
 
     async _onPopstate(ev) {
+      // An overlay on screen owns the back gesture: the press closes the sheet
+      // or modal the user is looking at (dismissing the keyboard first), and
+      // the screen behind it stays exactly where it was. Only once nothing is
+      // open does back mean "previous screen" again. See ui/back-guard.js.
+      if (window.BgbBackGuard && window.BgbBackGuard.handlePopstate(ev)) return;
+
       const state = ev && ev.state;
       let target = null;
       if (state && state.name) {

@@ -84,12 +84,21 @@
       // save is still in flight, in which case the card is modal. Read the
       // live opts off the element so an update() that clears `saving`
       // re-enables backdrop dismissal without re-binding this listener.
-      if (ev.target !== root) return;
+      if (!isOutsideCard(ev.target)) return;
       const live = root.__opts || opts;
       if (live && live.saving) return;
       handleDismiss(live);
     });
     document.body.appendChild(root);
+    // Back takes the backdrop's exit — including its refusal to dismiss a card
+    // whose save is still in flight, which re-arms the guard rather than
+    // spending the press on the screen underneath.
+    const backExit = () => {
+      const live = root.__opts || opts;
+      if (live && live.saving) { armBack(root, backExit); return; }
+      handleDismiss(live);
+    };
+    armBack(root, backExit);
     wire(root, opts);
     return root.__cardId;
   }
@@ -167,7 +176,38 @@
   // (see the QR gate in init.js).
   let _orphanHook = null;
 
+  // Device-back guard token for whichever card holds the singleton slot. Every
+  // entry point here arms one as it appends its root, and dismiss() — which
+  // every exit goes through — releases it. See ui/back-guard.js.
+  let _back = 0;
+
+  /**
+   * Did this tap land outside the card? Everything that is not the card reads
+   * as blurred background and dismisses — including the headline floating
+   * ABOVE it, which is a sibling of the card rather than part of the backdrop
+   * element, so an `event.target === root` test used to leave a dead strip of
+   * "background" right where the wrap-up and achievement cards put their
+   * biggest words.
+   * @param {any} target
+   */
+  function isOutsideCard(target) {
+    return !(target && target.closest && target.closest(".polaroid-popup__card"));
+  }
+
+  /**
+   * @param {HTMLElement} root
+   * @param {() => void} onBack  the exit the back gesture takes; give it the
+   *   same one the backdrop tap takes, so every dismissal means one thing.
+   */
+  function armBack(root, onBack) {
+    _back = window.BgbBackGuard
+      ? window.BgbBackGuard.arm({ root: root, close: onBack })
+      : 0;
+  }
+
   function dismiss() {
+    if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
+    _back = 0;
     const existing = document.getElementById(BACKDROP_ID);
     if (existing && existing.parentNode) {
       existing.parentNode.removeChild(existing);
@@ -361,7 +401,7 @@
     };
     root.addEventListener("click", (ev) => {
       const t = /** @type {any} */ (ev.target);
-      if (t === root) { close(); return; }
+      if (isOutsideCard(t)) { close(); return; }
       if (t.closest(".polaroid-popup__close")) { close(); return; }
       if (t.closest(".polaroid-popup__view")) {
         dismiss();
@@ -369,6 +409,7 @@
       }
     });
     document.body.appendChild(root);
+    armBack(root, close);
     window.BgbIcons.render(root);
   }
 
@@ -413,9 +454,12 @@
         </div>
       `;
       root.addEventListener("click", (ev) => {
-        if (ev.target === root) { dismiss(); resolve(false); }
+        if (isOutsideCard(ev.target)) { dismiss(); resolve(false); }
       });
       document.body.appendChild(root);
+      // Back cancels — the same answer a backdrop tap gives, and the safe one
+      // for a dialog whose other button is destructive.
+      armBack(root, () => { dismiss(); resolve(false); });
       window.BgbIcons.render(root);
       const cancelBtn = root.querySelector(".polaroid-popup__cancel");
       const confirmBtn = root.querySelector(".polaroid-popup__confirm");
@@ -451,9 +495,10 @@
       // Backdrop tap also resolves — the alert is informational, no
       // destructive consequence to dismissing it any way.
       root.addEventListener("click", (ev) => {
-        if (ev.target === root) { dismiss(); resolve(); }
+        if (isOutsideCard(ev.target)) { dismiss(); resolve(); }
       });
       document.body.appendChild(root);
+      armBack(root, () => { dismiss(); resolve(); });
       window.BgbIcons.render(root);
       const okBtn = root.querySelector(".polaroid-popup__confirm");
       if (okBtn) okBtn.addEventListener("click", () => { dismiss(); resolve(); });
@@ -582,7 +627,7 @@
       _orphanHook = () => settle(null);
 
       root.addEventListener("click", (ev) => {
-        if (ev.target === root) finish(false);
+        if (isOutsideCard(ev.target)) finish(false);
       });
       const closeBtn = root.querySelector(".polaroid-popup__close");
       if (closeBtn) closeBtn.addEventListener("click", () => finish(false));
@@ -590,6 +635,8 @@
       if (cancelBtn) cancelBtn.addEventListener("click", () => finish(false));
       const saveBtn = root.querySelector(".polaroid-popup__confirm");
       if (saveBtn) saveBtn.addEventListener("click", () => finish(true));
+      // Back cancels, and dismisses the display-name keyboard first.
+      armBack(root, () => finish(false));
 
       window.BgbIcons.render(root);
       // The card is in the DOM now, so the reel can measure itself.

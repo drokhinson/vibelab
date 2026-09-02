@@ -18,8 +18,12 @@
   let _escHandler = null;
   let _busy = false;
   let _unsub = null;
+  // Device-back guard token — see ui/back-guard.js.
+  let _back = 0;
 
   function dismiss() {
+    if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
+    _back = 0;
     const el = document.getElementById(BACKDROP_ID);
     if (el) el.remove();
     if (_escHandler) {
@@ -157,6 +161,10 @@
     });
     document.body.appendChild(root);
     window.BgbIcons.render(root);
+    // Back closes the queue card, not the screen underneath it.
+    _back = window.BgbBackGuard
+      ? window.BgbBackGuard.arm({ root: root, close: dismiss })
+      : 0;
 
     const closeBtn = root.querySelector(".polaroid-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", () => dismiss());

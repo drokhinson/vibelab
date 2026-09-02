@@ -173,7 +173,35 @@ strongly than any millisecond count does. Relatedly: rebuilding a container
 destroys the control under the user's finger before `:active` can apply, which
 is one more reason to repaint surgically (`.claude/rules/overlays.md` §6).
 
-## 6. Fixed chrome
+## 6. The back gesture belongs to whatever is on top
+
+The phone's back button (Android) and the edge swipe (iOS) are the same gesture
+to the user as the × on the overlay they are looking at. An overlay is a
+body-level element painted over a screen that never navigated, so unless
+something claims that gesture the router answers it: the page *behind* the sheet
+walks back and the sheet is left sitting on top of the wrong screen.
+
+Claiming it costs **one history entry per overlay**, pushed at the same url as
+the screen below so nothing about the address bar or a reload changes. The
+mechanism, the router hand-off and the consumer list are
+`.claude/rules/overlays.md` §8b; two things about it are phone facts rather than
+design choices, and belong here:
+
+- **With a keyboard up it takes two presses — the keyboard, then the overlay.**
+  Android's own back-with-keyboard is swallowed by the system and never reaches
+  the page, so this is what makes iOS and desktop agree with Android rather than
+  what implements it.
+- **The signal is the visible-viewport class from §1** (`.bgb-kb-open`), not "is
+  a field focused". Android hides the keyboard on its back press *without*
+  blurring anything, so a focus test would demand a third press for a keyboard
+  that is already gone. A browser with no `visualViewport` never sets the class
+  and closes on the first press — right for a device with no software keyboard.
+
+Related: an overlay must not focus a text input on open (`overlays.md` §5). The
+keyboard it raises buries the list the overlay exists to show, and on iOS a
+sub-16px field also zooms the page (§2).
+
+## 7. Fixed chrome
 
 Every piece of fixed or sticky chrome:
 

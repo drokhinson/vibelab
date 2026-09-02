@@ -202,6 +202,14 @@
       document.body.style.overflow = "hidden";
       window.BgbIcons.render(root);
 
+      // The phone's back gesture closes THIS card, not the screen under it —
+      // and with the search field focused, dismisses the keyboard first
+      // (ui/back-guard.js). Backing out this way is the Skip path, the same
+      // one the backdrop tap and Escape take.
+      const backToken = window.BgbBackGuard
+        ? window.BgbBackGuard.arm({ root: root, close: skip })
+        : 0;
+
       const grid = root.querySelector(".add-buddies__grid");
       const sendBtn = root.querySelector(".add-buddies__send");
       const skipBtn = root.querySelector(".add-buddies__skip");
@@ -212,6 +220,7 @@
         if (settled) return;
         settled = true;
         document.removeEventListener("keydown", onKeydown, true);
+        if (window.BgbBackGuard) window.BgbBackGuard.release(backToken);
         // A pending debounce would otherwise fire 300ms from now against a
         // detached grid, and its response 400ms after that.
         clearTimeout(searchTimer);
