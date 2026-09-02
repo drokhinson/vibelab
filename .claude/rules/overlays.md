@@ -329,6 +329,17 @@ window.BgbBackGuard.release(this._back);          // X, backdrop, Escape, a pick
 - **A guard may be re-armed from inside its own `close`.** That is how an overlay
   answers a press without closing — the onboarding deck walks back one slide, a
   card mid-save refuses — rather than letting the press fall through to the page.
+- **The entry is an optimisation, not the mechanism.** A browser can refuse the
+  `pushState` (History API throttling), so `arm()` registers the overlay whether
+  or not the entry lands and the press is spent on it either way. Registering
+  only on a successful push failed in the worst possible way — silently, and as
+  the original bug: sheet up, page walking host → play → feed behind it. What
+  the entry buys is a still address bar, and where it is missing the guard puts
+  the url back after the close instead. Same repair covers a `replaceUrl()` that
+  lands while an overlay is open: it reaches only the guard entry, leaving the
+  screen's own entry below it on the stale url, which on play-flow is the
+  difference between resuming `/play/{code}` and opening a fresh lobby at
+  `/play`.
 
 **Two presses when a keyboard is up: the keyboard first, then the overlay.**
 That is what a native picker does, and §5 keeps the keyboard out of the way on
