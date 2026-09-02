@@ -106,7 +106,7 @@
             <span class="imp-row__name">${escapeHtml(name)}</span>
             <span class="imp-row__sub">
               ${buddy
-                ? `<i data-icon="check" class="w-3.5 h-3.5 imp-row__ok"></i> ${escapeHtml(changed ? m.label : "Your buddy")}`
+                ? `<i data-icon="check" class="w-3.5 h-3.5 imp-row__ok"></i> ${escapeHtml(changed ? m.label : "Their account")}`
                 : `Ghost player${changed ? ` — ${escapeHtml(m.label)}` : ""}`}
             </span>
           </span>
@@ -121,8 +121,9 @@
         <h3 class="imp-step__title font-display">Who played?</h3>
         <p class="imp-step__lede">
           ${draft.playerNames.length} name${draft.playerNames.length === 1 ? "" : "s"} came out of your notes.
-          Match anyone who has an account; the rest come in as ghost players.
-          ${ghosts ? `They can claim themselves later.` : ""}
+          I've matched the ones close to someone you play with — tap any row to
+          pick a different buddy, or to search everyone on BoardgameBuddy.
+          ${ghosts ? `Whoever's left comes in as a ghost player, and can claim themselves later.` : ""}
         </p>
         ${loading ? `<p class="imp-note">Loading your buddies…</p>` : ""}
         <div class="imp-list">${rows}</div>

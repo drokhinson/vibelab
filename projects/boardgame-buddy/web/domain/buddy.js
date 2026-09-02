@@ -146,6 +146,91 @@
       );
     }
 
+    /**
+     * The partner bundle as PLAYER PICKER CANDIDATES — one shape, one place.
+     *
+     * Worth its own function because the bundle speaks three dialects and the
+     * picker speaks one. `accounts` are buddy EDGES, so a buddy's name is
+     * `other_display_name` and their id is `other_user_id` — `id` is the edge's
+     * own id. Reading them as if they were profiles is not a shape mismatch
+     * that shows up as a wrong name: it produces a nameless row that the
+     * picker's own `name` filter then drops, so the whole buddy list silently
+     * vanishes and only ghosts remain. That is exactly what the play importer
+     * shipped, which is why this mapping now lives here rather than at each
+     * call site.
+     *
+     * The viewer is NOT included — the RPC never returns them, and the one
+     * caller that wants them at the table (the importer) prepends its own row
+     * marked `isViewer`.
+     *
+     * @param {{accounts?: any[], ghosts?: any[], recent?: any[]}|null} partners
+     * @returns {Array<{source: "account"|"ghost", user_id: string|null,
+     *   name: string, username: string|null, avatar: any, plays?: number}>}
+     */
+    static toPlayerCandidates(partners) {
+      const p = partners || {};
+      /** @type {any[]} */
+      const out = [];
+      const seenIds = new Set();
+
+      // Plays together, so a buddy row can say why it's worth picking. Comes
+      // off `recent`, which is the only list that counts them.
+      /** @type {Object<string, number>} */
+      const together = {};
+      for (const r of (p.recent || [])) {
+        if (r && r.user_id) together[r.user_id] = r.play_count || 0;
+      }
+
+      for (const b of (p.accounts || [])) {
+        if (!b) continue;
+        const userId = b.other_user_id || b.user_id || null;
+        const name = b.other_display_name || b.display_name || b.other_username || b.username || "";
+        if (!userId || !name || seenIds.has(userId)) continue;
+        seenIds.add(userId);
+        out.push({
+          source: "account",
+          user_id: userId,
+          name,
+          username: b.other_username || b.username || null,
+          avatar: b.other_avatar || b.avatar || null,
+          plays: together[userId] || 0,
+        });
+      }
+
+      // People the viewer has shared a table with but never added. They are
+      // already in this user's plays, so they are the likeliest answer to
+      // "who is this name?" after the buddies themselves — and leaving them
+      // out would make an imported play land on a NEW ghost beside the account
+      // that already holds the rest of that person's history.
+      for (const r of (p.recent || [])) {
+        if (!r || !r.user_id || seenIds.has(r.user_id) || !r.display_name) continue;
+        seenIds.add(r.user_id);
+        out.push({
+          source: "account",
+          user_id: r.user_id,
+          name: r.display_name,
+          username: r.username || null,
+          avatar: r.avatar || null,
+          plays: r.play_count || 0,
+        });
+      }
+
+      for (const g of (p.ghosts || [])) {
+        if (!g) continue;
+        const name = g.display_name || g.name || "";
+        if (!name) continue;
+        out.push({
+          source: "ghost",
+          user_id: null,
+          name,
+          username: null,
+          avatar: null,
+          plays: g.play_count || 0,
+        });
+      }
+      return out;
+    }
+
     // ── Pending incoming requests ───────────────────────────────────────────
     // Two surfaces read this: the Profile nav tab's dot (shared with unseen
     // achievements — see domain/achievements.js#publishUnseen) and the red

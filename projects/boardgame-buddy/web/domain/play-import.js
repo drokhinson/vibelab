@@ -209,66 +209,79 @@
 
     /**
      * Auto-suggest a mapping for every unmapped name against the viewer's
-     * play partners. Exact, then case-insensitive, then a prefix match in
-     * either direction — that last one is what offers "Jasmine" for a note
-     * that says "Jas". Never applied silently to a name the user has already
-     * decided about.
-     * @param {{accounts: any[], ghosts: any[]}} partners
+     * play partners — their buddies, everyone they've shared a table with, and
+     * their own ghost players — scored by domain/name-match.js. Only matches
+     * clearing MIN_AUTO (an exact name, a first name, or a genuine shortening
+     * like "Jas" → "Jasmine") are applied; anything weaker is left for the
+     * picker sheet to offer, ranked by the same score. Never applied to a name
+     * the user has already decided about.
+     *
+     * Matching runs over the display name AND the username, in that order, so
+     * a note that writes "@marcus" finds Marcus Chen — and a display-name
+     * match wins a tie against a username one.
+     *
+     * @param {{accounts?: any[], ghosts?: any[], recent?: any[]}|null} partners
      */
     suggestPlayers(partners) {
-      const accounts = (partners && partners.accounts) || [];
-      const ghosts = (partners && partners.ghosts) || [];
+      const people = PlayImport.candidates(partners);
+      const accounts = people.filter((c) => c.user_id);
+      const ghosts = people.filter((c) => !c.user_id);
       // The viewer is checked FIRST and separately, because /play-partners
       // never returns them: a note that records your own name should map to
       // your account without a tap, and getting that wrong is the difference
       // between an import counting toward your win record and toward a ghost's.
       const me = (window.store && window.store.get && window.store.get("user")) || null;
-      const meRow = me ? [{ user_id: me.id, display_name: me.display_name, username: me.username }] : [];
+      const meRow = me
+        ? [{ user_id: me.id, name: me.display_name || me.username || "", username: me.username || null }]
+        : [];
       for (const name of this.playerNames) {
         const k = key(name);
         if (this.playerMap[k]) continue;
-        const self = PlayImport._bestMatch(name, meRow, (a) => a.display_name || a.username || "");
+        const self = PlayImport._bestMatch(name, meRow);
         if (self) {
-          this.playerMap[k] = {
-            kind: "buddy",
-            userId: self.user_id,
-            label: self.display_name || self.username || name,
-          };
+          this.playerMap[k] = { kind: "buddy", userId: self.user_id, label: self.name || name };
           continue;
         }
-        const account = PlayImport._bestMatch(name, accounts, (a) => a.display_name || a.username || "");
+        const account = PlayImport._bestMatch(name, accounts);
         if (account) {
-          this.playerMap[k] = {
-            kind: "buddy",
-            userId: account.user_id || account.id,
-            label: account.display_name || account.username || name,
-          };
+          this.playerMap[k] = { kind: "buddy", userId: account.user_id, label: account.name || name };
           continue;
         }
-        const ghost = PlayImport._bestMatch(name, ghosts, (g) => g.display_name || g.name || "");
+        const ghost = PlayImport._bestMatch(name, ghosts);
         this.playerMap[k] = {
           kind: "ghost",
           userId: null,
           // Matching an existing ghost adopts ITS spelling, so the import
           // lands on the same player rather than creating a near-duplicate.
-          label: ghost ? (ghost.display_name || ghost.name || name) : name,
+          label: ghost ? (ghost.name || name) : name,
         };
       }
     }
 
-    static _bestMatch(name, rows, nameOf) {
-      const k = key(name);
-      if (!k) return null;
-      let prefix = null;
-      for (const row of rows || []) {
-        const other = key(nameOf(row));
-        if (!other) continue;
-        if (other === k) return row;
-        // Shorthand only ever shortens, and a one-letter stem matches
-        // everybody — "A" must not silently become "Amelia".
-        if (!prefix && k.length >= 2 && (other.startsWith(k) || k.startsWith(other))) prefix = row;
-      }
-      return prefix;
+    /**
+     * The viewer's partners as picker candidates. One mapping, in
+     * domain/buddy.js, shared with the sheet the Players step opens — the two
+     * disagreeing is what produced a "Jas → ghost" row sitting above a picker
+     * that had Jasmine in it all along.
+     * @param {{accounts?: any[], ghosts?: any[], recent?: any[]}|null} partners
+     */
+    static candidates(partners) {
+      return (window.Buddy && window.Buddy.toPlayerCandidates)
+        ? window.Buddy.toPlayerCandidates(partners)
+        : [];
+    }
+
+    /** The names a candidate can be recognised by, best evidence first. */
+    static namesOf(candidate) {
+      return [candidate.name, candidate.username];
+    }
+
+    /**
+     * Confident enough to apply without asking. Below this bar the picker
+     * still offers the row — see MIN_SUGGEST in domain/name-match.js.
+     */
+    static _bestMatch(name, rows) {
+      return window.BgbNameMatch.best(name, rows || [], PlayImport.namesOf);
     }
 
     /** @param {string} name @param {NameMapping} mapping */

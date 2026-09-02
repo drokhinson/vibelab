@@ -397,6 +397,27 @@ deduped across seeds, in rank order. The deck and the Buddies-screen card share
 it, so "who does ticking Priya introduce" cannot answer differently on the two
 surfaces that ask.
 
+**`domain/name-match.js` (`BgbNameMatch`)** is the same shape again, for "is
+this the same person?". A pasted note writes people as they are said out loud —
+"Jas", "dave r", "@marcus" — and the play importer has to answer that against a
+buddy list twice: once to pre-fill each parsed name (`PlayImport.suggestPlayers`,
+above `MIN_AUTO`) and once to rank the picker sheet it opens
+(`views/import-plays-view.js`, above `MIN_SUGGEST`). The score is a ladder of
+named cases, not an edit distance: "Jas"/"Jasmine" is a confident match at three
+characters while "Sean"/"Shea" is four characters apart the other way and is not
+a match at all, and only a PREFIX rung can tell those apart. Both the display
+name and the username are matched, display name first — a tie goes to the name
+people actually see.
+
+The importer's picker also reaches past the buddy list: the local rows filter
+in memory off `Buddy.allBuddies()`'s day-long cache and so feel instant, and
+`PlayerPickerSheet`'s `searchAll` opt puts everyone else on BoardgameBuddy
+behind an explicit button (`/profiles/search`) rather than a debounce that would
+spend that instantness on every keystroke. `Buddy.toPlayerCandidates()` is the
+one mapping from the `/play-partners` bundle to picker rows — `accounts` there
+are buddy EDGES (`other_user_id`, `other_display_name`), and reading them as
+profiles is what made that sheet show nothing but ghost players.
+
 ### 4.4 Chrome, layering and mobile
 
 The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§ App chrome & layering) and `.claude/rules/mobile-web.md`. The parts specific to this app:
