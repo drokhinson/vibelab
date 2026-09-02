@@ -29,3 +29,4 @@ from . import bgg_link_routes  # noqa: F401, E402
 from . import bgg_push_routes  # noqa: F401, E402
 from . import bootstrap_routes  # noqa: F401, E402
 from . import import_routes  # noqa: F401, E402
+from . import admin_routes  # noqa: F401, E402

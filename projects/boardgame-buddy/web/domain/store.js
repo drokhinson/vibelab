@@ -49,6 +49,15 @@
         // key set behind it; only rows with no claim of their own count, since
         // a row already asked for comes back with claim_status='pending'.
         ghostClaimSuggestionCount: 0,
+        // Admin review queues, published by domain/admin-review.js from one
+        // /admin/review-counts call. Three slots rather than one total for the
+        // same reason as the ghost-claim pair above: the gear's dot only needs
+        // "something is waiting", but each row of the Settings admin card
+        // names its own count. All three stay 0 for non-admins, which is what
+        // keeps the dot dark for everyone else.
+        adminChapterReportCount: 0,
+        adminMissingImageCount: 0,
+        adminMissingDescriptionCount: 0,
       };
       // Which slot feeds which nav tab and which hub card is domain/
       // notifications.js's table, not this file's business — store is a signal
@@ -122,6 +131,12 @@
         // Nor are the next account's near-matches. GhostClaim.forgetSuggestions()
         // drops the key set that backs this on the same sign-out.
         ghostClaimSuggestionCount: 0,
+        // Zeroed as well: admin is a property of the account that just signed
+        // out, so a leftover count would light the gear for whoever signs in
+        // next — and for a non-admin there is nothing behind the dot at all.
+        adminChapterReportCount: 0,
+        adminMissingImageCount: 0,
+        adminMissingDescriptionCount: 0,
         // Zeroed too: a comparison is one account's shelf against one BGG
         // handle, and the next person signing in on this device shares
         // neither. BggSyncFlow.reset() drops the saved draft to match.

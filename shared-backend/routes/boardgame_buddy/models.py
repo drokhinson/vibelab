@@ -71,6 +71,24 @@ class RefreshImagesResponse(BaseModel):
     updated: int
 
 
+class AdminReviewCounts(BaseModel):
+    """How many items each admin tool has waiting.
+
+    Backs the notification dot on the Settings gear and the per-tool badges in
+    the Settings admin card. `total` is computed rather than sent so the two
+    can never disagree.
+    """
+
+    chapter_reports: int = 0
+    missing_images: int = 0
+    missing_descriptions: int = 0
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def total(self) -> int:
+        return self.chapter_reports + self.missing_images + self.missing_descriptions
+
+
 class RefreshDescriptionsResponse(BaseModel):
     """Outcome of one pass of the admin description backfill.
 

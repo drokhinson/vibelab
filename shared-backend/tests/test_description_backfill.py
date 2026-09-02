@@ -169,3 +169,94 @@ def test_backfill_requires_admin():
     app = FastAPI()
     app.include_router(bgb_router)
     assert TestClient(app).post(BASE).status_code in (401, 403)
+
+
+# ── Admin review counts ──────────────────────────────────────────────────────
+# The Settings gear's dot is painted on every boot for every admin, so this
+# endpoint must stay ONE round trip returning counts — not three, and not lists
+# the client counts itself.
+
+
+class _CountQuery:
+    def __init__(self, name, counts, log):
+        self.name, self.counts, self.log = name, counts, log
+        self._filters = []
+
+    def select(self, *_a, **kw):
+        self.log.append(("select", self.name, kw.get("count")))
+        return self
+
+    def eq(self, col, val):
+        self._filters.append(f"{col}={val}")
+        return self
+
+    def is_(self, col, val):
+        self._filters.append(f"{col} is {val}")
+        return self
+
+    def or_(self, expr):
+        self._filters.append(f"or({expr})")
+        return self
+
+    def limit(self, *_a):
+        return self
+
+    def execute(self):
+        key = (self.name, ",".join(sorted(self._filters)))
+        return type("R", (), {"data": [], "count": self.counts.get(key, 0)})()
+
+
+@pytest.fixture
+def counts_client(monkeypatch):
+    log = []
+    counts = {
+        ("boardgamebuddy_chapter_reports", "status=open"): 2,
+        ("boardgamebuddy_games", "or(image_url.is.null,thumbnail_url.is.null)"): 5,
+        ("boardgamebuddy_games", "description is null"): 40,
+    }
+
+    class _SB:
+        def table(self, name):
+            return _CountQuery(name, counts, log)
+
+    from routes.boardgame_buddy import admin_routes as A
+
+    monkeypatch.setattr(A, "get_supabase", lambda: _SB())
+    app = FastAPI()
+    app.include_router(bgb_router)
+    app.dependency_overrides[get_current_admin] = lambda: CurrentUser(
+        user_id="admin-1", display_name="Admin", username="admin", is_admin=True
+    )
+    c = TestClient(app)
+    c.log = log
+    return c
+
+
+COUNTS_URL = "/api/v1/boardgame_buddy/admin/review-counts"
+
+
+def test_review_counts_reports_each_queue(counts_client):
+    body = counts_client.get(COUNTS_URL).json()
+    assert body["chapter_reports"] == 2
+    assert body["missing_images"] == 5
+    assert body["missing_descriptions"] == 40
+
+
+def test_review_counts_total_is_derived_not_sent(counts_client):
+    # Computed server-side so the gear's dot and the per-row badges can never
+    # disagree about whether there is anything waiting.
+    assert counts_client.get(COUNTS_URL).json()["total"] == 47
+
+
+def test_review_counts_uses_exact_count_not_row_fetches(counts_client):
+    counts_client.get(COUNTS_URL)
+    selects = [row for row in counts_client.log if row[0] == "select"]
+    assert len(selects) == 3
+    # Every one asks PostgREST for the count header rather than the rows.
+    assert all(row[2] == "exact" for row in selects), selects
+
+
+def test_review_counts_requires_admin():
+    app = FastAPI()
+    app.include_router(bgb_router)
+    assert TestClient(app).get(COUNTS_URL).status_code in (401, 403)

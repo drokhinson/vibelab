@@ -98,6 +98,10 @@
       <button class="bgb-global-header__settings" title="Settings" aria-label="Settings"
               onclick="window.router.go('settings')">
         <i data-icon="gear" class="w-5 h-5"></i>
+        <!-- Admin review dot. Same contract as .bgb-nav__dot: aria-hidden, so
+             the button's own aria-label is what changes when work is waiting.
+             init.js#syncGearDot drives it off BgbNotifications.forGear(). -->
+        <span class="bgb-global-header__dot" aria-hidden="true" hidden></span>
       </button>
     </header>
 
@@ -140,7 +144,9 @@
     <main data-view="settings" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="import-plays" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="bgg-sync" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
-    <main data-view="admin" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="admin-reports" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
+    <main data-view="admin-images" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
+    <main data-view="admin-descriptions" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
 
     <!-- Toast -->
     <div id="toast" class="toast toast-end toast-top hidden z-50"></div>
@@ -218,6 +224,7 @@
   <script src="domain/api.js"></script>
   <script src="domain/store.js"></script>
   <script src="domain/notifications.js"></script>
+  <script src="domain/admin-review.js"></script>
   <script src="domain/theme.js"></script>
   <script src="domain/net.js"></script>
   <script src="domain/outbox.js"></script>
@@ -263,6 +270,7 @@
   <script src="ui/buddy-suggestion-rail.js"></script>
   <script src="ui/ghost-claim-suggestions.js"></script>
   <script src="ui/icons.js"></script>
+  <script src="ui/admin-gate.js"></script>
   <script src="ui/search-field.js"></script>
   <script src="ui/bottom-sheet.js"></script>
   <script src="ui/status-tag.js"></script>
@@ -313,7 +321,6 @@
   <script src="widgets/buddy-qr-scan.js"></script>
   <script src="widgets/buddy-qr-sheet.js"></script>
   <script src="widgets/ghost-claim-sheet.js"></script>
-  <script src="widgets/admin-backfill-panel.js"></script>
 
   <!-- Views -->
   <script src="views/splash-view.js"></script>
@@ -336,7 +343,9 @@
   <script src="views/settings-view.js"></script>
   <script src="views/import-plays-view.js"></script>
   <script src="views/bgg-sync-view.js"></script>
-  <script src="views/admin-view.js"></script>
+  <script src="widgets/admin-backfill-panel.js"></script>
+  <script src="views/admin-reports-view.js"></script>
+  <script src="views/admin-backfill-view.js"></script>
 
   <script src="init.js"></script>
 </body>
