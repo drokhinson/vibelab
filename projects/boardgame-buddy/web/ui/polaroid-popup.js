@@ -84,7 +84,7 @@
       // save is still in flight, in which case the card is modal. Read the
       // live opts off the element so an update() that clears `saving`
       // re-enables backdrop dismissal without re-binding this listener.
-      if (ev.target !== root) return;
+      if (!isOutsideCard(ev.target)) return;
       const live = root.__opts || opts;
       if (live && live.saving) return;
       handleDismiss(live);
@@ -180,6 +180,19 @@
   // entry point here arms one as it appends its root, and dismiss() — which
   // every exit goes through — releases it. See ui/back-guard.js.
   let _back = 0;
+
+  /**
+   * Did this tap land outside the card? Everything that is not the card reads
+   * as blurred background and dismisses — including the headline floating
+   * ABOVE it, which is a sibling of the card rather than part of the backdrop
+   * element, so an `event.target === root` test used to leave a dead strip of
+   * "background" right where the wrap-up and achievement cards put their
+   * biggest words.
+   * @param {any} target
+   */
+  function isOutsideCard(target) {
+    return !(target && target.closest && target.closest(".polaroid-popup__card"));
+  }
 
   /**
    * @param {HTMLElement} root
@@ -388,7 +401,7 @@
     };
     root.addEventListener("click", (ev) => {
       const t = /** @type {any} */ (ev.target);
-      if (t === root) { close(); return; }
+      if (isOutsideCard(t)) { close(); return; }
       if (t.closest(".polaroid-popup__close")) { close(); return; }
       if (t.closest(".polaroid-popup__view")) {
         dismiss();
@@ -441,7 +454,7 @@
         </div>
       `;
       root.addEventListener("click", (ev) => {
-        if (ev.target === root) { dismiss(); resolve(false); }
+        if (isOutsideCard(ev.target)) { dismiss(); resolve(false); }
       });
       document.body.appendChild(root);
       // Back cancels — the same answer a backdrop tap gives, and the safe one
@@ -482,7 +495,7 @@
       // Backdrop tap also resolves — the alert is informational, no
       // destructive consequence to dismissing it any way.
       root.addEventListener("click", (ev) => {
-        if (ev.target === root) { dismiss(); resolve(); }
+        if (isOutsideCard(ev.target)) { dismiss(); resolve(); }
       });
       document.body.appendChild(root);
       armBack(root, () => { dismiss(); resolve(); });
@@ -614,7 +627,7 @@
       _orphanHook = () => settle(null);
 
       root.addEventListener("click", (ev) => {
-        if (ev.target === root) finish(false);
+        if (isOutsideCard(ev.target)) finish(false);
       });
       const closeBtn = root.querySelector(".polaroid-popup__close");
       if (closeBtn) closeBtn.addEventListener("click", () => finish(false));

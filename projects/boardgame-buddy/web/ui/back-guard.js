@@ -18,11 +18,11 @@
 //
 // Two presses, not one, when a keyboard is up: the first dismisses the
 // keyboard, the second closes the overlay. That is what every native picker
-// does, and both of the search-shaped overlays this was reported against
-// (Add buddies, the game finder) open with a field focused. Android's own
-// back-with-keyboard is swallowed by the system and never reaches the page, so
-// the branch here is what makes iOS and desktop agree with it rather than what
-// implements it.
+// does. No overlay raises a keyboard on open any more (overlays.md §5), but the
+// user still raises one by tapping the search field, and back is how they put it
+// away. Android's own back-with-keyboard is swallowed by the system and never
+// reaches the page, so the branch here is what makes iOS and desktop agree with
+// it rather than what implements it.
 //
 // Wiring an overlay in is two calls — arm() when it goes into the DOM, and
 // release() on EVERY exit path, next to the listener teardown it already has:

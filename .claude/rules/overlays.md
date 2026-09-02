@@ -268,7 +268,37 @@ for visual consistency; they do not share the shell.
   sheet shell already solves. Extract a modal shell the next time one of them is
   touched substantively.
 
-## 8. The device back button closes the overlay, not the screen behind it
+## 8. Dismissal — four ways out, one meaning
+
+An overlay has four exits and they are **the same exit**: the ×, a tap outside
+it, Escape, and the device back gesture. Wire all four to one `close` path. Two
+affordances for one destination that behave differently is the anti-pattern
+`ui-object-design.md` §3b names; for a confirm dialog, all four mean *cancel*.
+
+### 8a. A tap outside the card dismisses
+
+Not "a tap on the backdrop element" — **a tap on anything that is not the card
+or panel**. The two are not the same set, and the difference is a dead strip of
+what reads as blurred background:
+
+```js
+// Wrong: a headline, a counter, any chrome the overlay parks BESIDE its card
+// is a sibling of the card, so this leaves it inert.
+if (ev.target === root) dismiss();
+
+// Right: outside the card is outside, whatever it landed on.
+if (!ev.target.closest(".polaroid-popup__card")) dismiss();
+```
+
+Boardgame-buddy's wrap-up and achievement cards each float a display-face
+headline above the card, inside the backdrop — the biggest words on the screen,
+and the natural place to tap to get rid of it. `=== root` did nothing there.
+
+A sheet whose panel is the backdrop's only child gets the same answer from
+either test; write the outside-the-panel one anyway, so adding chrome beside the
+panel later cannot silently break dismissal.
+
+### 8b. The device back button closes the overlay, not the screen behind it
 
 An overlay is body-level and the screen under it never navigated, so with
 nothing else in place the phone's back button (Android) or edge swipe (iOS)
@@ -288,9 +318,8 @@ this._back = window.BgbBackGuard.arm({ root, close: () => this.close() });
 window.BgbBackGuard.release(this._back);          // X, backdrop, Escape, a pick
 ```
 
-- **`close` is the exit the backdrop tap takes**, not a special one. A back press
-  and a backdrop tap must mean the same thing, or the two affordances disagree
-  (`ui-object-design.md` §3b). For a confirm dialog that means *cancel*.
+- **`close` is the exit the outside tap takes**, not a special one — the one
+  meaning from the top of this section.
 - **`root` scopes the keyboard step** — a keyboard raised by something outside
   this overlay is not this overlay's to dismiss.
 - **The router asks the guard first.** `Router._onPopstate` returns early on
@@ -302,8 +331,9 @@ window.BgbBackGuard.release(this._back);          // X, backdrop, Escape, a pick
   card mid-save refuses — rather than letting the press fall through to the page.
 
 **Two presses when a keyboard is up: the keyboard first, then the overlay.**
-Both search-shaped overlays this was reported against open with a field in
-reach, and native pickers behave this way. The signal is `.bgb-kb-open`
+That is what a native picker does, and §5 keeps the keyboard out of the way on
+*open* — but the user still raises one by tapping the field, and back is how
+they put it away. The signal is `.bgb-kb-open`
 (`ui/viewport-lock.js`), **not** "is a field focused": Android hides the keyboard
 on its own back press without blurring anything, so focus alone would demand a
 third press for a keyboard that is already gone. A browser with no
@@ -335,8 +365,11 @@ trusting the list. A new overlay that skips this is the bug again.
   model is a set (a roster, a tag list), the sheet is multi-select with one
   confirm — and tick order is preserved, because it is often the model's order.
 - A per-screen bespoke dialog for a destructive action.
-- An overlay that does not arm a back guard (§8). It looks fine on a desktop
+- An overlay that does not arm a back guard (§8b). It looks fine on a desktop
   and eats the page out from under every phone user who reaches for back.
+- A dismissal test written as `event.target === backdrop` (§8a), and any overlay
+  that focuses a text input on open (§5). Both read as fine on the machine they
+  were written on and are wrong in the hand.
 
 ## Related rules
 

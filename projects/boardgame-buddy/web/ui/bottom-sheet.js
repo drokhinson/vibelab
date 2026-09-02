@@ -117,7 +117,13 @@
 
       root.addEventListener("click", (e) => {
         const t = /** @type {any} */ (e.target);
-        if (t === root) { this.close(); return; }                       // backdrop
+        // Outside the panel, not merely "on the backdrop element": a sheet's
+        // markup is one panel, so today the two tests agree — but chrome parked
+        // BESIDE the panel would be a sibling of it, and an `=== root` test
+        // leaves any such strip of apparent background inert
+        // (.claude/rules/overlays.md §8a, where exactly that shipped).
+        const panel = root.firstElementChild;
+        if (t === root || (panel && !panel.contains(t))) { this.close(); return; }
         if (t.closest('[data-action="close"]')) { this.close(); return; }
         if (opts.onClick) opts.onClick(e);
       });
