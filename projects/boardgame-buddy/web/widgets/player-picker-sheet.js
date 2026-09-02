@@ -25,6 +25,17 @@
 //     dropdown HID itself on zero matches, so the guest path was invisible
 //     unless you already knew Enter would do it.
 //
+// Two more the play importer needed, both about a list that is no longer
+// simply "your buddies in alphabetical order":
+//   - SUGGESTIONS. A caller that already knows which rows are likely (the
+//     importer ranks its buddies against the name a note wrote) passes them as
+//     `suggestions`, and they sit above the full list rather than replacing it.
+//     Nobody is hidden; the likely answers are just first.
+//   - A GLOBAL SEARCH BUTTON. `candidates` is a cached bundle and filters with
+//     no round trip, which is what makes typing feel instant — so reaching past
+//     it is a separate, explicit act (`searchAll`) rather than a debounce that
+//     quietly turns every keystroke into a request.
+//
 // The shell is ui/bottom-sheet.js and the panel chrome is the shared
 // .bgb-sheet__* family; only the .player-picker__* row family is ours.
 
@@ -69,6 +80,20 @@
    *   Written by the caller rather than templated here: "Add X as a guest" and
    *   "Keep X as a ghost" are different acts, not one act in two voices.
    * @property {string} [guestHint]            The subtitle, same contract.
+   * @property {PlayerCandidate[]} [suggestions]  Rows worth reading first,
+   *   already ranked by the caller — the play importer ranks its buddy list by
+   *   how close each name is to the one the note wrote. Shown above the full
+   *   list while the search box is empty, so "who is this?" opens on the
+   *   likely answers WITHOUT hiding everyone else behind a search.
+   * @property {string} [suggestionsLabel]     Heading over them. Say what made
+   *   them suggestions ("Closest to “Jas”"), not that they are suggestions.
+   * @property {string} [restLabel]            Heading over everyone else.
+   * @property {(q: string) => Promise<PlayerCandidate[]>} [searchAll]
+   *   Look beyond the caller's own list — the whole app's accounts. A round
+   *   trip, so it is a BUTTON rather than something that fires as you type:
+   *   `candidates` is cached and filters instantly, and quietly turning every
+   *   keystroke into a request would spend that.
+   * @property {string} [searchAllLabel]       The button's title.
    */
 
   const LIST_SEL = "[data-picker-list]";
@@ -93,6 +118,22 @@
       this._guestName = "";
       this._guestTitle = "";
       this._guestHint = "";
+      /** @type {PlayerCandidate[]} */
+      this._suggestions = [];
+      this._suggestionsLabel = "";
+      this._restLabel = "";
+      /** @type {((q: string) => Promise<PlayerCandidate[]>)|null} */
+      this._searchAll = null;
+      this._searchAllLabel = "";
+      /** @type {PlayerCandidate[]} Results of the last global search. */
+      this._globalRows = [];
+      /** The query those results answer — cleared the moment it changes. */
+      this._globalQuery = "";
+      this._globalBusy = false;
+      this._globalError = "";
+      // Monotonic, so a slow search the user has typed past can't land under a
+      // different question (.claude/rules/web-frontend.md § Async state).
+      this._globalSeq = 0;
 
       this._sheet = new window.BgbBottomSheet({
         id: "bgb-player-picker-sheet",
@@ -107,10 +148,18 @@
      * Same predicate the dropdown used: case-insensitive substring over name
      * OR username. Kept identical so the sheet can't quietly surface a
      * different set from the one people are used to.
+     *
+     * LOCAL ONLY, and that is the point: these rows come off a cached bundle
+     * (domain/buddy.js SWRs it for a day), so typing filters them with no
+     * round trip. `searchAll` is the deliberate, button-pressed alternative.
      */
     _matches() {
       const q = this._query.trim().toLowerCase();
-      const base = !q && this._recent.length ? this._recent : this._candidates;
+      // Suggestions take over the empty-box slot when the caller ranked any,
+      // and the FULL list goes underneath them — so `recent` is not the base.
+      const base = !q && !this._suggestions.length && this._recent.length
+        ? this._recent
+        : this._candidates;
       if (!q) return base;
       return this._candidates.filter((c) => {
         const name = (c.name || "").toLowerCase();
@@ -208,22 +257,109 @@
         + this._picked.map((c) => this._row(c)).join("");
     }
 
+    /** A section heading. @param {string} text */
+    _sec(text) {
+      return `<div class="bgb-sheet__sec">${escapeHtml(text)}</div>`;
+    }
+
+    /**
+     * What the global search has to say right now: nothing before it is used,
+     * then a spinner, then either its rows or the fact that it found none.
+     * Rendered above the guest row, because "this person has an account after
+     * all" is a better answer than "keep them as a ghost".
+     */
+    _globalSection() {
+      if (this._globalBusy) {
+        return this._sec("Searching BoardgameBuddy…")
+          + `<div class="player-picker__busy">
+               <i data-icon="loader-2" class="w-5 h-5 animate-spin"></i>
+             </div>`;
+      }
+      if (this._globalError) {
+        return `<p class="bgb-sheet__empty">${escapeHtml(this._globalError)}</p>`;
+      }
+      if (!this._globalQuery) return "";
+      if (!this._globalRows.length) {
+        return this._sec(`No other account matches “${this._globalQuery}”`);
+      }
+      return this._sec("On BoardgameBuddy")
+        + this._globalRows.map((c) => this._row(c)).join("");
+    }
+
+    /**
+     * The button that reaches past the buddy list. Disabled until something is
+     * typed — searching everyone for the empty string is not a question — and
+     * it stands down once its own results are on screen, reappearing as a
+     * retry if the request failed or the query moved on.
+     */
+    _globalRow() {
+      if (!this._searchAll || this._globalBusy) return "";
+      const q = this._query.trim();
+      if (!this._globalError && this._globalQuery && key(this._globalQuery) === key(q)) return "";
+      const label = this._searchAllLabel || "Search all of BoardgameBuddy";
+      const hint = this._globalError
+        ? "Tap to try again"
+        : (q ? `Look beyond your buddies for “${escapeHtml(q)}”`
+             : "Type a name first — your buddies filter as you type");
+      return `
+        <button class="player-picker__row player-picker__row--global" type="button"
+                data-picker-action="global" ${q ? "" : "disabled"}>
+          <span class="player-picker__plus"><i data-icon="search" class="w-5 h-5"></i></span>
+          <span class="player-picker__body">
+            <span class="player-picker__name">${escapeHtml(label)}</span>
+            <span class="player-picker__meta">${hint}</span>
+          </span>
+        </button>
+      `;
+    }
+
+    /**
+     * The local rows, sectioned. With a query it is one flat filtered list;
+     * without one it is either the caller's ranking (closest first, everyone
+     * else underneath) or the old recent-first behaviour.
+     * @param {string} q
+     * @param {PlayerCandidate[]} local
+     */
+    _localSections(q, local) {
+      if (q || !this._suggestions.length) {
+        const header = !q && this._recent.length ? this._sec("Recently played with") : "";
+        return header + local.map((c) => this._row(c)).join("");
+      }
+      // Both lists are already in memory, so "search my whole buddy list" is
+      // scrolling rather than typing — the suggestions do not hide anyone.
+      const shown = new Set(this._suggestions.map((c) => key(c.name)));
+      const rest = local.filter((c) => !shown.has(key(c.name)));
+      return this._sec(this._suggestionsLabel || "Closest matches")
+        + this._suggestions.map((c) => this._row(c)).join("")
+        + (rest.length
+            ? this._sec(this._restLabel || "Everyone else") + rest.map((c) => this._row(c)).join("")
+            : "");
+    }
+
     _renderList() {
       const q = this._query.trim();
       const guest = this._guestRow();
       const pickedFirst = this._pickedSection();
-      const rows = this._matches().filter((c) => !(q && this._isPicked(c.name)));
-      const header = !q && this._recent.length
-        ? `<div class="bgb-sheet__sec">Recently played with</div>`
-        : "";
+      const local = this._matches().filter((c) => !(q && this._isPicked(c.name)));
+      const hasLocal = local.length || (!q && this._suggestions.length);
+      const tail = this._globalSection() + this._globalRow();
 
-      if (!rows.length && !pickedFirst) {
-        // Nothing matched, so the guest row IS the answer: lead with it and let
-        // the note underneath explain the absence.
-        if (!guest) return `<p class="bgb-sheet__empty">No buddies yet — type a name to add a guest.</p>`;
-        return guest + (q
-          ? `<div class="bgb-sheet__sec">No buddy matches “${escapeHtml(q)}”</div>`
-          : `<div class="bgb-sheet__sec">No buddies yet — search to find one</div>`);
+      if (!hasLocal && !pickedFirst) {
+        const note = q
+          ? this._sec(`No buddy matches “${q}”`)
+          : this._sec("No buddies yet — search to find one");
+        // Once the global search has been asked, ITS answer leads: the user
+        // pressed a button to get those rows, and burying them under "keep
+        // them as a ghost" would answer a question they didn't ask.
+        if (this._globalQuery || this._globalBusy || this._globalError) {
+          return note + tail + (guest ? this._sec(this._single ? "Or" : "Not in your buddies?") + guest : "");
+        }
+        // Until then the guest row IS the answer: lead with it, let the note
+        // underneath explain the absence, and offer the search below both.
+        if (!guest) {
+          return tail || `<p class="bgb-sheet__empty">No buddies yet — type a name to add a guest.</p>`;
+        }
+        return guest + note + tail;
       }
       // Real people first when the query matched any: "add a guest called ok"
       // above Jess Okoro would be a strange thing to lead with. It stays
@@ -233,8 +369,8 @@
       // "add somebody new" one — and it is offered even when a buddy of the
       // same name is listed, so "Not in your buddies?" would be a lie there.
       const guestSec = this._single ? "Or" : "Not in your buddies?";
-      return pickedFirst + header + rows.map((c) => this._row(c)).join("")
-        + (guest ? `<div class="bgb-sheet__sec">${guestSec}</div>` + guest : "");
+      return pickedFirst + this._localSections(q, local) + tail
+        + (guest ? this._sec(guestSec) + guest : "");
     }
 
     /** The confirm button's label and disabled state both track the tick count. */
@@ -295,6 +431,12 @@
       this._guestName = opts.guestName || "";
       this._guestTitle = opts.guestTitle || "";
       this._guestHint = opts.guestHint || "";
+      this._suggestions = Array.isArray(opts.suggestions) ? opts.suggestions : [];
+      this._suggestionsLabel = opts.suggestionsLabel || "";
+      this._restLabel = opts.restLabel || "";
+      this._searchAll = typeof opts.searchAll === "function" ? opts.searchAll : null;
+      this._searchAllLabel = opts.searchAllLabel || "";
+      this._resetGlobal();
       this._query = "";
 
       this._sheet.open({
@@ -302,6 +444,7 @@
         returnFocus: opts.returnFocus || null,
         onClick: (e) => {
           if (e.target.closest('[data-picker-action="guest"]')) { this._pickGuest(); return; }
+          if (e.target.closest('[data-picker-action="global"]')) { this._runGlobalSearch(); return; }
           if (e.target.closest('[data-picker-action="confirm"]')) { this._confirm(); return; }
           const row = e.target.closest("[data-picker-name]");
           if (row) this._toggle(row.dataset.pickerName);
@@ -351,6 +494,12 @@
           this._guestName = "";
           this._guestTitle = "";
           this._guestHint = "";
+          this._suggestions = [];
+          this._suggestionsLabel = "";
+          this._restLabel = "";
+          this._searchAll = null;
+          this._searchAllLabel = "";
+          this._resetGlobal();
         },
       });
     }
@@ -370,11 +519,15 @@
      * re-rendered from the same name key.
      * @param {PlayerCandidate[]} candidates
      * @param {PlayerCandidate[]} [recent]
+     * @param {PlayerCandidate[]} [suggestions] Re-ranked with the new list.
      */
-    setCandidates(candidates, recent) {
+    setCandidates(candidates, recent, suggestions) {
       if (!this._sheet.isOpen) return;
       this._candidates = Array.isArray(candidates) ? candidates : [];
       this._recent = Array.isArray(recent) ? recent : [];
+      if (suggestions !== undefined) {
+        this._suggestions = Array.isArray(suggestions) ? suggestions : [];
+      }
       this._repaintList(true);
     }
 
@@ -383,7 +536,57 @@
     /** @param {string} value */
     _setQuery(value) {
       this._query = value || "";
+      // Global results answer the query that fetched them and nothing else, so
+      // typing past one drops it — along with any request still in the air,
+      // which would otherwise land under a different question.
+      if (this._globalQuery && key(this._globalQuery) !== key(this._query.trim())) {
+        this._resetGlobal();
+      } else if (this._globalError) {
+        this._globalError = "";
+      }
       this._repaintList();
+    }
+
+    /** Forget the global search entirely, dropping anything in flight. */
+    _resetGlobal() {
+      this._globalSeq++;
+      this._globalRows = [];
+      this._globalQuery = "";
+      this._globalBusy = false;
+      this._globalError = "";
+    }
+
+    /**
+     * Search every account in the app for the typed name, on purpose and once.
+     * Anyone already listed above is filtered out rather than offered twice —
+     * the buddy row carries their play count and is the better row.
+     */
+    async _runGlobalSearch() {
+      const q = this._query.trim();
+      if (!q || !this._searchAll || this._globalBusy) return;
+      const seq = ++this._globalSeq;
+      this._globalRows = [];
+      this._globalError = "";
+      this._globalQuery = q;
+      this._globalBusy = true;
+      this._repaintList(true);
+
+      let rows = null;
+      try {
+        rows = await this._searchAll(q);
+      } catch (_) {
+        if (seq !== this._globalSeq || !this._sheet.isOpen) return;
+        this._globalBusy = false;
+        this._globalQuery = "";
+        this._globalError = "Couldn't search right now.";
+        this._repaintList(true);
+        return;
+      }
+      if (seq !== this._globalSeq || !this._sheet.isOpen) return;
+      this._globalBusy = false;
+      const listed = new Set(this._candidates.map((c) => c.user_id).filter(Boolean));
+      this._globalRows = (rows || []).filter((r) => r && r.name && !listed.has(r.user_id));
+      this._repaintList(true);
     }
 
     /**
@@ -417,11 +620,21 @@
 
     // ── Selection ───────────────────────────────────────────────────────────
 
+    /**
+     * The candidate behind a row, wherever it came from. Global results are
+     * searched too — a row the user can see must be a row the user can pick.
+     * @param {string} name
+     */
+    _find(name) {
+      const hit = (list) => (list || []).find((x) => key(x.name) === key(name));
+      return hit(this._candidates) || hit(this._suggestions)
+        || hit(this._recent) || hit(this._globalRows) || null;
+    }
+
     /** @param {string} name */
     _toggle(name) {
       if (this._single) {
-        const c = this._candidates.find((x) => key(x.name) === key(name))
-          || this._recent.find((x) => key(x.name) === key(name));
+        const c = this._find(name);
         if (c) this._answer(c);
         return;
       }
@@ -429,8 +642,7 @@
       if (i >= 0) {
         this._picked.splice(i, 1);
       } else {
-        const c = this._candidates.find((x) => key(x.name) === key(name))
-          || this._recent.find((x) => key(x.name) === key(name));
+        const c = this._find(name);
         if (!c) return;
         this._picked.push(c);
       }
@@ -473,7 +685,7 @@
     _submitTyped() {
       const q = this._query.trim();
       if (!q) return;
-      const exact = this._candidates.find((c) => key(c.name) === key(q));
+      const exact = this._find(q);
       if (exact) {
         if (this._single) { this._answer(exact); return; }
         if (!this._isPicked(exact.name)) this._picked.push(exact);

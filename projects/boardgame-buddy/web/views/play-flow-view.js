@@ -2924,6 +2924,12 @@
     // buddies, with avatar + username) + ghosts (free-text names from past
     // plays). Names already in the current draft are excluded. Account rows
     // win over ghost rows when both share a name.
+    //
+    // Deliberately not Buddy.toPlayerCandidates(): Gather holds the three
+    // lists separately because `recent` is its own SECTION here, and every row
+    // is filtered against the seated roster. Note the `other_*` keys, though —
+    // `accounts` are buddy EDGES, and reading them as profiles is what made
+    // the play importer's picker show nothing but ghosts.
     _buddyCandidates() {
       const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
       const seen = new Set();

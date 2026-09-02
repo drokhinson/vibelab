@@ -5588,6 +5588,29 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--polaroid-muted);
 }
 
+/* "Search all of BoardgameBuddy" — the one row in the sheet that costs a round
+   trip. Solid rather than dashed: it is not creating anybody, it is looking
+   further, so it reads as an action rather than as the guest row's sibling. */
+.player-picker__row--global {
+  border: 1px solid var(--polaroid-line);
+  margin-top: 2px;
+}
+.player-picker__row--global .player-picker__plus {
+  border-style: solid;
+  color: var(--accent-ink);
+}
+.player-picker__row--global[disabled] { cursor: default; opacity: 0.55; }
+.player-picker__row--global[disabled]:hover { background: transparent; }
+
+/* The wait between pressing it and the results landing. Sits where the rows
+   will, so the list doesn't jump when they arrive. */
+.player-picker__busy {
+  display: grid;
+  place-items: center;
+  min-height: 56px;
+  color: var(--polaroid-muted);
+}
+
 /* ── Game search sheet ────────────────────────────────────────────────────
    The library finder, mounted inside a sheet (widgets/game-search-sheet.js).
    The panel is already sized to the visible viewport, so the finder's results
