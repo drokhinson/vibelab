@@ -31,7 +31,7 @@
   class PlaySession {
     constructor(initial = {}) {
       this.gameId       = initial.gameId || null;
-      this.gameSnapshot = initial.gameSnapshot || null; // {id,name,thumbnail_url,...}
+      this.gameSnapshot = initial.gameSnapshot || null; // {id,name,thumbnail_url,image_url,...}
       this.playedAt     = initial.playedAt || new Date().toISOString().slice(0, 10);
       this.players      = initial.players || [];
       this.notes        = initial.notes || "";
@@ -187,6 +187,10 @@
           id: row.game_id,
           name: row.game_name || g.name || "",
           thumbnail_url: row.game_thumbnail || g.thumbnail_url || null,
+          // Play rows carry only the thumbnail; the full art rides along when
+          // the caller could resolve the game (warm "game.bundle"), which is
+          // what keeps the wrap-up card sharp on an Another-Round seed.
+          image_url: g.image_url || null,
           rulebook_url: g.rulebook_url || null,
           is_expansion: !!g.is_expansion,
         },

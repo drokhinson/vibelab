@@ -2059,6 +2059,9 @@
         id: game.id,
         name: game.name,
         thumbnail_url: game.thumbnail_url,
+        // Full-size box art, carried alongside the thumbnail so the wrap-up
+        // card can paint it at its ~292px photo slot without upscaling.
+        image_url: game.image_url || null,
         rulebook_url: game.rulebook_url,
         is_expansion: !!game.is_expansion,
       };
@@ -3113,7 +3116,7 @@
       this._cardId = window.PolaroidPopup.show({
         headline: "Well played!",
         gameName: game.name || "Game over",
-        gameThumbnail: game.thumbnail_url || game.image_url || null,
+        game: game,
         winnerName: winner ? winner.name : null,
         onAnotherRound: () => this._startAnotherRound(seed),
         // Re-arms the write gate, so a "Another round?" tapped during a retry

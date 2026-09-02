@@ -453,7 +453,7 @@
       window.PolaroidPopup.show({
         headline: "Well played!",
         gameName: game.name || "Game over",
-        gameThumbnail: game.thumbnail_url || game.image_url || null,
+        game: game,
         winnerName: winner,
       });
     }

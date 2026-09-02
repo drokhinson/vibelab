@@ -665,6 +665,7 @@
         id: g.id,
         name: g.name,
         thumbnail_url: g.thumbnail_url,
+        image_url: g.image_url || null,
         rulebook_url: g.rulebook_url,
         is_expansion: !!g.is_expansion,
       };

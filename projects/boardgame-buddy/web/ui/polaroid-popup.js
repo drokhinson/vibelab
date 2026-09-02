@@ -1,5 +1,5 @@
 // ui/polaroid-popup.js — Wrap-up splash polaroid. A medium cream card lands
-// in the middle of the screen showing the game thumbnail + winner with a
+// in the middle of the screen showing the game's box art + winner with a
 // close (X) in the top-right. Every exit from the card — the X, a backdrop
 // tap — lands on the feed, so "I'm done here" has exactly one destination.
 // Getting the just-finalized play into that feed is the caller's job, done
@@ -26,7 +26,12 @@
   /**
    * @typedef {Object} PolaroidPopupOptions
    * @property {string}  gameName
-   * @property {string=} gameThumbnail
+   * @property {{thumbnail_url?: string|null, image_url?: string|null}=} game —
+   *           the game whose box art fills the photo slot. Passed as the whole
+   *           game (not a single URL) so the card can go through gameArtImg at
+   *           "card" size like every other surface that paints art this big:
+   *           the slot is ~292 CSS px square, which BGG's ~150px thumbnail can
+   *           only reach by upscaling. See helpers.js.
    * @property {string=} winnerName
    * @property {string=} headline — orange display-font line rendered above
    *           the card (e.g. "Well played!"). Stacks the backdrop into a
@@ -274,9 +279,13 @@
            <span>${escapeHtml(opts.winnerName)}</span>
          </div>`
       : `<div class="polaroid-popup__winner polaroid-popup__winner--muted">No winner recorded</div>`;
-    const photo = opts.gameThumbnail
-      ? `<img class="polaroid-popup__photo" src="${escapeAttr(opts.gameThumbnail)}" alt="" />`
-      : `<div class="polaroid-popup__photo polaroid-popup__photo--placeholder">
+    // Full-size art, thumbnail-first: gameArtImg paints the thumbnail and
+    // swaps in the box art once it decodes, so the card is never empty and
+    // never stays soft. `eager` because the card is on screen the instant it
+    // is built — lazy loading would just delay the only image it has.
+    const photo = gameArtImg(opts.game, "card", {
+      cls: "polaroid-popup__photo", eager: true,
+    }) || `<div class="polaroid-popup__photo polaroid-popup__photo--placeholder">
            <i data-icon="dice-6" class="w-10 h-10"></i>
          </div>`;
     const viewBtn = opts.playId

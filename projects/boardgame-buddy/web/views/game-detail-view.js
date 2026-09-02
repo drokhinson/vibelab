@@ -581,6 +581,7 @@
         id: this._game.id,
         name: this._game.name,
         thumbnail_url: this._game.thumbnail_url,
+        image_url: this._game.image_url || null,
         rulebook_url: this._game.rulebook_url,
       };
       ps.playMode = this._game.play_mode || null;
