@@ -19,7 +19,7 @@
 //             public profile: what they own, and four headline numbers.
 //   buddy     the above, plus Head to head (the pair's shared record, drawn
 //             as the same split bar the Stats spoke's Nemesis card uses),
-//             Top games (their three most-played), and Recent plays.
+//             Top games (their three most-played), and Shared plays.
 //
 // The gate is `this._profile.is_buddy` from /users/{id}/profile, which is
 // fetched fresh on every mount — NOT the bundle, which is cached for up to
@@ -27,6 +27,16 @@
 // same rule server-side (migration 064 nulls recent_plays / together /
 // top_games for a stranger), so the client gate is presentation rather than
 // the enforcement — GET /plays?user_id= is 403 for a stranger too.
+//
+// SHARED PLAYS, NOT THEIR LOG. The plays card used to preview the bundle's
+// `recent_plays` — their whole history, most of which the viewer had nothing
+// to do with. It shows the pair's shared history instead: the same card, the
+// same rows, filtered to plays the viewer was at the table for. That set does
+// not ride the bundle, so it comes from GET /plays?user_id=<them>&buddy_id=<me>
+// — `p_buddy` is "this person appears in play_players", so the id passed is
+// the VIEWER's. Its total can sit a little above Head to head's: that block is
+// competitive-only and needs both people seated, this list keeps co-op nights
+// and plays one of you logged without sitting in.
 
 (function () {
   const PREVIEW_COVERS = 4;
@@ -38,6 +48,15 @@
       this._profile = null;
       this._bundle = null;
       this._error = null;
+      this._resetShared();
+    }
+
+    // The shared-plays card's own state. Separate from the bundle because it
+    // is a separate round trip, and separate from _error because a failure
+    // here must not blank the whole profile.
+    _resetShared() {
+      this._shared = null;
+      this._sharedError = null;
     }
 
     async onMount() {
@@ -59,9 +78,17 @@
       this._profile = null;
       this._bundle = null;
       this._error = null;
+      this._resetShared();
       this.render();
       const profilePromise = window.User.fetch(userId)
-        .then((p) => { this._profile = p; this.render(); })
+        .then((p) => {
+          this._profile = p;
+          this.render();
+          // Only once the FRESH relation says buddy. The bundle's is_buddy can
+          // be a cached pre-buddy copy, and /plays is a flat 403 for a
+          // stranger — a request we know will fail is one not worth making.
+          if (p && p.is_buddy) this._loadShared();
+        })
         .catch((e) => { this._error = e.message || "Failed to load profile"; this.render(); });
       const bundlePromise = window.Profile
         .bundle(userId, { colPerPage: PREVIEW_COVERS, playsPerPage: PREVIEW_PLAYS })
@@ -107,7 +134,7 @@
         ${this._renderTogether(b)}
         ${this._renderTopGames(b)}
         ${this._renderCollectionPreview(b)}
-        ${this._renderPlaysPreview(b)}
+        ${this._renderSharedPlays()}
         <div style="height: 1rem"></div>
       `;
       this.refreshIcons();
@@ -210,6 +237,7 @@
             pending_request_id: null,
           });
           this._refreshBundle();
+          this._loadShared();
         } else {
           p.pending_request_id = (res && res.id) || null;
         }
@@ -251,6 +279,7 @@
         // count untouched rather than needing a rollback of its own.
         window.Buddy.setPendingCount(window.Buddy.pendingCount() - 1);
         this._refreshBundle();
+        this._loadShared();
       } catch (e) {
         Object.assign(p, before);
         this.render();
@@ -284,12 +313,14 @@
       }
     }
 
-    // Becoming buddies unlocks three blocks the cached bundle was never given
-    // (head to head, top games, recent plays), so pull a fresh one. Force,
+    // Becoming buddies unlocks two blocks the cached bundle was never given
+    // (head to head, top games), so pull a fresh one. Force,
     // because the cached copy is still inside its fresh window and SWR would
     // hand back the stranger's payload without going to the network. Fire and
     // forget: the relation button has already flipped, and a failure here just
-    // leaves the new blocks to the next mount.
+    // leaves the new blocks to the next mount. The third block the relation
+    // unlocks, Shared plays, is not on the bundle — _loadShared() is called
+    // alongside this one wherever it fires.
     _refreshBundle() {
       const userId = this._userId();
       if (!userId) return;
@@ -304,6 +335,35 @@
         })
         .catch((e) => {
           if (window.console) console.warn("profile bundle refresh failed", e);
+        });
+    }
+
+    // ── Shared plays ──────────────────────────────────────────────────────────
+    //
+    // Buddies only, and fired from the profile fetch rather than from render()
+    // — a render-time fetch would re-fire on every relation tap.
+    _loadShared() {
+      const userId = this._userId();
+      const me = window.store.get("user");
+      if (!userId || !me || !me.id) return;
+      const opts = { userId, buddyId: me.id, page: 1, perPage: PREVIEW_PLAYS };
+      // Peek first so a return visit paints rows in its first frame instead of
+      // a loader; list() below is what corrects a stale page.
+      const cached = window.Play.cachedList ? window.Play.cachedList(opts) : null;
+      if (cached && Array.isArray(cached.plays)) this._shared = cached;
+      this._sharedError = null;
+      this.render();
+      window.Play.list(opts)
+        .then((data) => {
+          // Guard against landing after the user has navigated to someone else.
+          if (this._userId() !== userId) return;
+          this._shared = data || { plays: [], total: 0 };
+          this.render();
+        })
+        .catch((e) => {
+          if (this._userId() !== userId) return;
+          this._sharedError = e.message || "Couldn't load shared plays";
+          this.render();
         });
     }
 
@@ -448,27 +508,46 @@
       });
     }
 
-    // Buddies only. `recent_plays` is null rather than [] for a stranger, and
-    // the empty state below would otherwise announce "hasn't logged any plays
-    // yet" about someone who has logged plenty.
-    _renderPlaysPreview(b) {
+    // Buddies only — the list is the pair's, and /plays is 403 for a stranger.
+    //
+    // Three states, three branches (.claude/rules/web-frontend.md): the fetch
+    // is a round trip of its own, so an "unloaded" card must not fall through
+    // to the empty state and announce that two people who play together every
+    // week never have.
+    _renderSharedPlays() {
       if (!this._isBuddy()) return "";
-      const plays = (b && b.recent_plays) || [];
-      const total = (b && b.recent_plays_total) || 0;
-      const body = plays.length
-        ? `<ul class="preview-card__plays">${plays.slice(0, PREVIEW_PLAYS).map((p) => this._playRow(p)).join("")}</ul>`
-        : `<div class="preview-card__empty">${escapeHtml(this._profile.display_name || "They")} hasn't logged any plays yet.</div>`;
+      const them = this._firstName(this._profile.display_name);
+      const s = this._shared;
+      let body;
+      let sub;
+      if (this._sharedError && !s) {
+        sub = "";
+        body = `<div class="preview-card__empty">${escapeHtml(this._sharedError)}</div>`;
+      } else if (!s) {
+        // In flight with nothing cached to show meanwhile.
+        sub = "";
+        body = window.buddyLoader({ size: 56, padded: false });
+      } else {
+        const plays = s.plays || [];
+        const total = s.total || 0;
+        sub = `${total} total`;
+        body = plays.length
+          ? `<ul class="preview-card__plays">${plays.slice(0, PREVIEW_PLAYS).map((p) => this._playRow(p)).join("")}</ul>`
+          : `<div class="preview-card__empty">You and ${escapeHtml(them)} haven't played together yet.</div>`;
+      }
       return this._previewCard({
         icon: "dices",
-        title: "Recent plays",
-        sub: `${total} total`,
-        seeAllJs: "window.profileOtherView._goPlays()",
+        title: "Shared plays",
+        sub,
+        seeAllJs: "window.profileOtherView._goSharedPlays()",
         body,
       });
     }
 
     _goCollection() { window.router.go("collection", { userId: this._userId() }); }
-    _goPlays() { window.router.go("plays", { userId: this._userId() }); }
+    // ?shared=1 puts the plays spoke in the same buddy_id-filtered mode this
+    // card previews, so "See all" widens the list rather than changing it.
+    _goSharedPlays() { window.router.go("plays", { userId: this._userId(), shared: "1" }); }
 
     _previewCard({ icon, title, sub, seeAllJs, body }) {
       return `
@@ -502,7 +581,19 @@
       `;
     }
 
+    // Byte-for-byte the hub's row (profile-self-view.js#_playRow), because it
+    // is the same object on the same card. The "Won" tag earns its place here
+    // now that every row is a play the viewer sat in — it was meaningless on
+    // the old card, which listed plays they had nothing to do with.
     _playRow(p) {
+      const me = window.store.get("user");
+      const winners = (p.players || []).filter((pl) => pl.is_winner);
+      // Match on user_id first, fall back to display_name (older plays may not
+      // carry user_id on every player row).
+      const youWon = winners.some((w) =>
+        (w.user_id && me && w.user_id === me.id) ||
+        (me && (w.name || "") === (me.display_name || ""))
+      );
       const playerCount = (p.players || []).length;
       const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
       return `
@@ -511,7 +602,10 @@
             ? `<img class="preview-card__play-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
             : `<div class="preview-card__play-thumb preview-card__play-thumb--placeholder"><i data-icon="dice-6" class="w-4 h-4"></i></div>`}
           <div class="preview-card__play-info">
-            <div class="preview-card__play-name">${escapeHtml(p.game_name || "")}</div>
+            <div class="preview-card__play-name">
+              ${escapeHtml(p.game_name || "")}
+              ${youWon ? `<span class="preview-card__play-won"><i data-icon="trophy" class="w-3 h-3"></i> Won</span>` : ""}
+            </div>
             ${playerCount > 0 ? `<div class="preview-card__play-meta">${playerCount} ${playerCount === 1 ? "player" : "players"}</div>` : ""}
           </div>
           <div class="preview-card__play-date">${formatDateShort(p.played_at)}</div>

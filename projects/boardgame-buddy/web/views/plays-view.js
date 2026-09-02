@@ -3,6 +3,21 @@
 // Renders the full play history grouped into "This week / Last week /
 // Earlier" buckets computed client-side from played_at. No FAB — plays
 // are logged from the bottom-nav Play CTA.
+//
+// THREE MODES, one screen, picked by the route params:
+//
+//   (none)               your own log.
+//   ?userId=<them>       their log. Buddies only; /plays is 403 otherwise.
+//   ?userId=<them>&shared=1
+//                        the pair's shared history — their log narrowed to
+//                        plays YOU were at the table for. This is what
+//                        Profile Other's Shared plays card opens, and the
+//                        only mode anything links to for another user; the
+//                        bare ?userId= form stays live for bookmarks.
+//
+// Shared mode is the same request with buddy_id set. The filter reads "this
+// person appears in play_players", so the id sent is the VIEWER's, not the
+// target's — see _buddyId().
 
 (function () {
   const PER_PAGE = 20;
@@ -29,11 +44,30 @@
       this._statusMapReady = false;
       this._targetUserId = null;
       this._targetProfile = null;
+      this._sharedOnly = false;
     }
 
     _isOther() {
       const me = window.store.get("user");
       return !!(this._targetUserId && me && this._targetUserId !== me.id);
+    }
+
+    /**
+     * The `buddy_id` filter for shared mode — the VIEWER's own id, because the
+     * filter selects plays that person sat in and the target is already the
+     * `user_id`. undefined in every other mode, which is also what keeps the
+     * two modes on separate cache keys (domain/play.js#_listKey).
+     */
+    _buddyId() {
+      if (!this._sharedOnly || !this._isOther()) return undefined;
+      const me = window.store.get("user");
+      return (me && me.id) || undefined;
+    }
+
+    /** Read the route params into the fields that pick the mode. */
+    _applyParams() {
+      this._targetUserId = (this.params && this.params.userId) || null;
+      this._sharedOnly = !!(this.params && this.params.shared);
     }
 
     async onMount() {
@@ -57,7 +91,7 @@
       // Reset first so prior target's state doesn't paint while the new
       // fetch is in flight.
       this._resetState();
-      this._targetUserId = (this.params && this.params.userId) || null;
+      this._applyParams();
       if (this._isOther()) {
         this._hydrateStatusMap();
         this._hydrateFromCache();
@@ -120,6 +154,7 @@
         perPage: PER_PAGE,
         search: this._query || null,
         userId: this._isOther() ? this._targetUserId : undefined,
+        buddyId: this._buddyId(),
       });
       if (cached && Array.isArray(cached.plays)) {
         this._plays = cached.plays;
@@ -146,7 +181,7 @@
       // trusting instance fields — this view is a singleton and
       // _targetUserId still holds the PREVIOUS mount's target.
       this._resetState();
-      this._targetUserId = (this.params && this.params.userId) || null;
+      this._applyParams();
       this._hydrateStatusMap();
       this._hydrateFromCache();
       this._loading = true;
@@ -207,9 +242,14 @@
       let titleHtml;
       if (other && p && p.display_name) {
         const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm" });
-        titleHtml = `${badge}<span class="spoke-head__title-text">${escapeHtml(p.display_name)}'s plays</span>`;
+        // "Shared with X", not "X's plays": in shared mode every row is a play
+        // you were in too, so calling it their log would misdescribe the list.
+        const label = this._sharedOnly
+          ? `Shared with ${escapeHtml(p.display_name)}`
+          : `${escapeHtml(p.display_name)}'s plays`;
+        titleHtml = `${badge}<span class="spoke-head__title-text">${label}</span>`;
       } else {
-        titleHtml = `<span class="spoke-head__title-text">Recent plays</span>`;
+        titleHtml = `<span class="spoke-head__title-text">${this._sharedOnly ? "Shared plays" : "Recent plays"}</span>`;
       }
       return `
         <header class="spoke-head">
@@ -252,7 +292,10 @@
         // Never claim "none" while a fetch is still in flight — that covers
         // the search path, where the list is cleared before results land.
         if (this._loading) return window.buddyLoader({ size: 88 });
-        return `<div class="profile-empty">${this._query ? "No matches." : "No plays logged yet."}</div>`;
+        const none = this._sharedOnly
+          ? "You two haven't played together yet."
+          : "No plays logged yet.";
+        return `<div class="profile-empty">${this._query ? "No matches." : none}</div>`;
       }
       const groups = groupPlays(this._plays);
       return groups.map((grp) => `
@@ -268,7 +311,9 @@
       const winners = (p.players || []).filter((pl) => pl.is_winner);
       const winnerLabel = winners.map((w) => escapeHtml(w.name)).join(", ");
       const playerCount = (p.players || []).length;
-      const youWon = !this._isOther() && winners.some((w) =>
+      // Shared mode counts too: every row there is a play you sat in, so your
+      // own result is news. On someone else's unfiltered log it is not.
+      const youWon = (!this._isOther() || this._sharedOnly) && winners.some((w) =>
         (w.user_id && me && w.user_id === me.id) ||
         (me && (w.name || "") === (me.display_name || ""))
       );
@@ -342,6 +387,7 @@
           perPage: PER_PAGE,
           search: this._query || null,
           userId: this._isOther() ? this._targetUserId : undefined,
+          buddyId: this._buddyId(),
         });
         const fresh = (data && data.plays) || [];
         this._total = (data && data.total) || 0;
