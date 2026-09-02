@@ -1,8 +1,9 @@
 // domain/notifications.js — the transient-notification registry.
 //
 // One table saying, for every signal the app can raise: which store slot
-// carries its count, which bottom-nav tab it sits behind, which section of the
-// Profile hub resolves it, and how to say it out loud.
+// carries its count, which surface it sits behind (a bottom-nav tab, the
+// global header's Settings gear), which section or admin spoke resolves it,
+// and how to say it out loud.
 //
 // Before this existed the same three sums were written by hand in two places —
 // init.js#syncNavDots and profile-self-view.js#_renderBuddiesPreview — and a
@@ -15,7 +16,7 @@
 // forever and would stop meaning anything.
 //
 // To add one: append a row, publish the count into its slot from wherever
-// knows the number, and — if its tab has no dot yet — drop a
+// knows the number, and — if its surface has no dot yet — drop a
 // `<span class="bgb-nav__dot" aria-hidden="true" hidden>` into that tab in
 // index.html. Nothing else changes.
 
@@ -45,6 +46,34 @@
       section: "achievements",
       label: (n) => `${n} new achievement${n === 1 ? "" : "s"}`,
     },
+    // Admin signals. They carry `gear` instead of `tab` because they sit
+    // behind the global header's Settings gear, not a bottom-nav tab, and
+    // `adminTool` names the spoke that resolves each one so the Settings admin
+    // card can badge its rows individually. tally() matches on whatever keys
+    // it is handed, so forTab() skips these and forGear() skips the four
+    // above — no branch needed.
+    //
+    // These pass the transience test in the header comment: an admin resolves
+    // a report, and a backfill run empties a missing-X queue. They stay 0 for
+    // non-admins because domain/admin-review.js never fetches for them.
+    {
+      slot: "adminChapterReportCount",
+      gear: true,
+      adminTool: "reports",
+      label: (n) => `${n} chapter report${n === 1 ? "" : "s"}`,
+    },
+    {
+      slot: "adminMissingImageCount",
+      gear: true,
+      adminTool: "images",
+      label: (n) => `${n} game${n === 1 ? "" : "s"} missing images`,
+    },
+    {
+      slot: "adminMissingDescriptionCount",
+      gear: true,
+      adminTool: "descriptions",
+      label: (n) => `${n} game${n === 1 ? "" : "s"} missing a description`,
+    },
   ];
 
   // Same clamp the hand-written sums used: a slot can hold whatever a caller
@@ -55,7 +84,10 @@
   }
 
   /**
-   * Sum the signals matching `match` (a subset of {tab, section}).
+   * Sum the signals matching `match` — any subset of the routing keys a row
+   * can carry: {tab, section, gear, adminTool}. A row missing the key simply
+   * never matches, which is how one table serves four unrelated surfaces
+   * without a branch.
    *
    * Returns { total, parts }, where `parts` names each contributing signal
    * separately — a bare "3" in a card corner or on a tab tells a screen reader
@@ -107,6 +139,16 @@
     /** What is waiting behind one Profile hub section, by its section key. */
     forSection(key) {
       return tally({ section: key });
+    },
+
+    /** Everything waiting behind the global header's Settings gear. */
+    forGear() {
+      return tally({ gear: true });
+    },
+
+    /** What one admin spoke has to act on, by its tool key. */
+    forAdminTool(key) {
+      return tally({ adminTool: key });
     },
 
     /**

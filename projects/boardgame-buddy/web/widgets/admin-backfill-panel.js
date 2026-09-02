@@ -7,7 +7,9 @@
 // widget ships no CSS of its own.
 //
 // The host view owns the repaint: every state change calls opts.render(), and
-// the panel's html() is re-read from the host's own render pass.
+// the panel's html() is re-read from the host's own render pass. Inline
+// onclick attributes name `window.<opts.host>`, so two panels on two spokes
+// each route back to their own view rather than a shared global.
 
 (function () {
   // A bulk pass is bounded server-side, so a cold catalog needs several. Cap
@@ -29,6 +31,7 @@
      * @param {(id:string)=>Promise<any>} opts.refreshOne
      * @param {()=>Promise<{updated:number, remaining?:number, failed?:number}>} opts.refreshAll
      * @param {string}   opts.oneOkToast   toast after a single-row refresh
+     * @param {string}   opts.host         the `window.<name>` of the hosting view
      * @param {()=>void} opts.render       host repaint
      */
     constructor(opts) {
@@ -123,7 +126,7 @@
           </h3>
           <button class="btn btn-xs ${bulkDisabled ? "btn-ghost" : "btn-primary"}"
                   ${bulkDisabled ? "disabled" : ""}
-                  onclick="window.adminView._panelAll('${o.key}')">
+                  onclick="window.${o.host}._all()">
             ${this._bulk
               ? `<span class="loading loading-spinner loading-xs"></span> ${escapeHtml(this._bulkNote || o.busyLabel)}`
               : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> ${escapeHtml(o.bulkLabel)}`}
@@ -165,7 +168,7 @@
             <div class="admin-reports__actions">
               <button class="btn btn-xs ${disabled ? "btn-ghost" : "btn-primary"}"
                       ${disabled ? "disabled" : ""}
-                      onclick="window.adminView._panelOne('${this.opts.key}', '${g.id}')">
+                      onclick="window.${this.opts.host}._one('${g.id}')">
                 ${busy
                   ? `<span class="loading loading-spinner loading-xs"></span> Refreshing…`
                   : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> Refresh`}

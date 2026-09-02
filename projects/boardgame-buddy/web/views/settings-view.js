@@ -16,8 +16,9 @@
       this._adminPromoting = false;
       this._adminError = null;
 
-      // Live count of open chapter reports — fetched only for admins.
-      this._adminReportsCount = null;
+      // Admin queue counts live in the store (domain/admin-review.js), not on
+      // this view: the gear's dot needs them too, and it is painted by
+      // init.js while Settings is not even mounted.
 
       this._bgg = null;
       this._bggLoading = false;
@@ -68,11 +69,17 @@
       // Not awaited before the first paint — the section appears when it lands,
       // and Settings is fully usable without it.
       this._loadImports();
-      const me = window.store.get("user");
-      if (me && me.is_admin) {
-        // Don't block the first paint on this — render once on resolve.
-        this._loadAdminReportsCount();
+      // Repaint whenever a notification count moves, so resolving a report on
+      // the reports spoke leaves this card's badge already correct on the way
+      // back. Listens to every slot rather than naming the admin three by hand
+      // and forgetting the fourth — same as profile-self-view.
+      for (const slot of window.BgbNotifications.slots()) {
+        this.listen(slot, () => this.render());
       }
+      // Not awaited: no-ops for non-admins, and the badges appear when it
+      // lands. AdminReview publishes into the store, which the listen above
+      // turns into a repaint.
+      window.AdminReview.load();
       // Re-arm whatever was still running when the user last left. Idempotent
       // and cheap when there is nothing to resume.
       if (window.BggSyncFlow) window.BggSyncFlow.resume();
@@ -92,16 +99,6 @@
       }
     }
 
-    async _loadAdminReportsCount() {
-      try {
-        const reports = await window.api.get("/admin/chapter-reports?status=open");
-        this._adminReportsCount = Array.isArray(reports) ? reports.length : 0;
-      } catch (_) {
-        // Non-fatal — admin tools row just renders without the badge.
-        this._adminReportsCount = null;
-      }
-      this.render();
-    }
 
     render() {
       const me = window.store.get("user");
@@ -232,21 +229,68 @@
       this.render();
     }
 
+    // One row per admin tool, each its own spoke. Previously all three tools
+    // lived on one /admin screen behind a row labelled "Chapter reports" — so
+    // the two catalog backfills were unreachable by name, and the single badge
+    // could only ever count one of the three queues.
+    //
+    // `tool` keys into domain/notifications.js, which owns the count and how
+    // to say it; this table owns only how the row looks.
+    _adminTools() {
+      return [
+        {
+          route: "admin-reports",
+          tool: "reports",
+          icon: "flag",
+          title: "Chapter reports",
+          sub: "Moderate community-reported reference-guide chapters.",
+        },
+        {
+          route: "admin-images",
+          tool: "images",
+          icon: "image-off",
+          title: "Missing images",
+          sub: "Re-host box art and thumbnails from BoardGameGeek.",
+        },
+        {
+          route: "admin-descriptions",
+          tool: "descriptions",
+          icon: "scroll-text",
+          title: "Missing descriptions",
+          sub: "Backfill game descriptions from BoardGameGeek.",
+        },
+      ];
+    }
+
     _renderAdminCard() {
-      const n = this._adminReportsCount;
-      const badge = (n && n > 0) ? `<span class="set-card__badge">${n}</span>` : "";
       return `
         <div class="set-card">
-          <button class="set-card__row" onclick="window.router.go('admin')">
-            <span class="set-card__row-icon"><i data-icon="flag" class="w-4 h-4"></i></span>
-            <span class="set-card__row-body">
-              <span class="set-card__row-title">Chapter reports</span>
-              <span class="set-card__row-sub">Moderate community-reported reference-guide chapters.</span>
-            </span>
-            ${badge}
-            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
-          </button>
+          ${this._adminTools().map((t) => this._renderAdminRow(t)).join("")}
         </div>
+      `;
+    }
+
+    _renderAdminRow(t) {
+      const { total, parts } = window.BgbNotifications.forAdminTool(t.tool);
+      // The badge is decorative — the count is already in the row's
+      // aria-label, so a screen reader hearing "3" twice learns nothing.
+      const badge = total > 0
+        ? `<span class="set-card__badge" aria-hidden="true">${total}</span>`
+        : "";
+      const label = parts.length
+        ? `${t.title} — ${window.BgbNotifications.phrase(parts)} waiting`
+        : t.title;
+      return `
+        <button class="set-card__row" aria-label="${escapeAttr(label)}"
+                onclick="window.router.go('${t.route}')">
+          <span class="set-card__row-icon"><i data-icon="${t.icon}" class="w-4 h-4"></i></span>
+          <span class="set-card__row-body">
+            <span class="set-card__row-title">${escapeHtml(t.title)}</span>
+            <span class="set-card__row-sub">${escapeHtml(t.sub)}</span>
+          </span>
+          ${badge}
+          <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+        </button>
       `;
     }
 

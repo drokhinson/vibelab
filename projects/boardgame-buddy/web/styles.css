@@ -2073,6 +2073,24 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    the way .bgb-outbox__badge's `display: grid` once did. */
 .bgb-nav__dot[hidden] { display: none; }
 
+/* The Settings gear's admin dot. Same visual language and same [hidden]
+   guard as .bgb-nav__dot above, but bordered against the HEADER's ground
+   rather than the nav's — the two bars are different surfaces, and a dot
+   ringed in the wrong one reads as a rendering artefact. The gear button is
+   already position:relative, so this needs no host change. */
+.bgb-global-header__dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--alert-fill);
+  border: 2px solid var(--bg-0);
+  box-sizing: content-box;
+}
+.bgb-global-header__dot[hidden] { display: none; }
+
 /* Play stays the primary action — a gold-filled icon chip rather than a
    raised disc, so it reads as the CTA without breaking the bar's edge. */
 .bgb-nav__tab--play .bgb-nav__ico {
@@ -6398,6 +6416,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 @media (prefers-reduced-motion: reduce) {
   .game-detail__desc-more i { transition: none; }
 }
+/* Admin spokes. The screens sit on .bgb-spoke-screen (a CHROME surface, not
+   paper — theming.md §6), so the .admin-reports__* family below inherits the
+   spoke re-point and needs no per-theme rule of its own. This wrapper only
+   restores the vertical rhythm the old stacked /admin screen got from its
+   per-section .p-3. */
+.admin-spoke__body { padding-top: 0.25rem; }
+
 /* Unified section header for both Expansions and Recent plays so the
    two blocks read as siblings — same font size, same gap above/below. */
 .game-detail__section {

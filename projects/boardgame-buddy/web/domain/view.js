@@ -155,7 +155,14 @@
         { name: "bgg-sync",            pattern: /^\/settings\/bgg\/?$/,
           build: () => "/settings/bgg" },
         { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
-        { name: "admin",               pattern: /^\/admin\/?$/,                   build: () => "/admin" },
+        { name: "admin-reports",       pattern: /^\/admin\/reports\/?$/,          build: () => "/admin/reports" },
+        { name: "admin-images",        pattern: /^\/admin\/images\/?$/,           build: () => "/admin/images" },
+        { name: "admin-descriptions",  pattern: /^\/admin\/descriptions\/?$/,     build: () => "/admin/descriptions" },
+        // The admin tools used to be one stacked screen at /admin. Aliased
+        // rather than dropped so an old bookmark lands on the Settings card
+        // that now indexes the three spokes, instead of a 404-ish blank.
+        { name: "admin",               pattern: /^\/admin\/?$/,                   build: () => "/admin",
+          alias: "settings" },
         { name: "feed",                pattern: /^\/(feed)?\/?$/,                 build: () => "/feed" },
       ];
     }

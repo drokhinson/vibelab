@@ -506,13 +506,19 @@ Outbound queue for BgB→BGG (migration 070). One planned change per game per us
 - `GET  /api/v1/boardgame_buddy/games/admin/missing-images` — *admin-only* list of games whose `image_url` or `thumbnail_url` is NULL
 - `POST /api/v1/boardgame_buddy/games/admin/{game_id}/refresh-images` — *admin-only* re-fetch one game's box art + thumbnail from BGG and re-host in Storage
 - `POST /api/v1/boardgame_buddy/games/refresh-images` — *admin-only* bulk refresh of all games with missing or BGG-hosted image URLs
+- `GET  /api/v1/boardgame_buddy/admin/review-counts` — *admin-only* one call returning `{chapter_reports, missing_images, missing_descriptions, total}`. Counts only (PostgREST exact-count, no rows) — it backs the notification dot on the Settings gear, so it runs on every boot for every admin
 - `GET  /api/v1/boardgame_buddy/games/admin/missing-descriptions` — *admin-only* list of games whose `description` is NULL
 - `POST /api/v1/boardgame_buddy/games/admin/{game_id}/refresh-description` — *admin-only* re-fetch one game's description from BGG
 - `POST /api/v1/boardgame_buddy/games/admin/backfill-descriptions?limit=N` — *admin-only* bulk description backfill. Batches 20 games per BGG call and caps the pass at `limit` (default 200), returning `{updated, failed, remaining}`; the admin panel re-invokes until `remaining` is 0. Note this sits under `/games/admin/` unlike the older bulk image route at `/games/refresh-images`
 - `PATCH /api/v1/boardgame_buddy/games/admin/{game_id}/rulebook-url` — *admin-only* set or clear a game's `rulebook_url` (body `{rulebook_url: string|null}`)
 
 ### Admin UI
-- Promote via **Settings** screen → "Have an admin key?" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then exposes the **Admin** screen with the chapter-reports moderation panel and two catalog-backfill panels (missing images, missing descriptions). Both backfill panels are `AdminBackfillPanel` instances — see `web/widgets/admin-backfill-panel.js`.
+- Promote via **Settings** screen → "Have an admin key?" → enter `ADMIN_API_KEY`. Server sets `profiles.is_admin=true`; the client then shows an **Admin tools** card in Settings with one row per tool, each its own spoke:
+  - `/admin/reports` — chapter-reports moderation (`views/admin-reports-view.js`)
+  - `/admin/images` — re-host missing box art (`views/admin-backfill-view.js`)
+  - `/admin/descriptions` — backfill missing descriptions (same view class, different config)
+  The two backfill spokes are one `AdminBackfillView` class configured twice, each wrapping an `AdminBackfillPanel` (`web/widgets/admin-backfill-panel.js`). `/admin` is kept as an alias to Settings so old bookmarks still land.
+- **Notification dot.** Each row badges its own count, and the global header's Settings gear carries a dot whenever any queue is non-empty and the viewer is an admin. Counts come from `/admin/review-counts` via `web/domain/admin-review.js` into three store slots, registered as signals in `web/domain/notifications.js` — the same table that drives the bottom-nav dots. Non-admins never fetch, so their slots stay 0 and the dot stays dark.
 
 ## Routes & URL Map
 

@@ -29,7 +29,12 @@
   window.settingsView    = new window.SettingsView();
   window.importPlaysView = new window.ImportPlaysView();
   window.bggSyncView    = new window.BggSyncView();
-  window.adminView       = new window.AdminView();
+  window.adminReportsView = new window.AdminReportsView();
+  // Two instances of one class — the tools differ only in their strings and
+  // which three API calls they make. The configs live with the view rather
+  // than here so init.js stays a registry. See views/admin-backfill-view.js.
+  window.adminImagesView = window.AdminBackfillView.images();
+  window.adminDescriptionsView = window.AdminBackfillView.descriptions();
 
   // Widget singleton — the Play tab's Join half. Hoisted here (rather than
   // owned by LogPlayView) so its inline onclick handlers resolve the same way
@@ -56,7 +61,9 @@
   window.router.register("settings",      window.settingsView);
   window.router.register("import-plays",  window.importPlaysView);
   window.router.register("bgg-sync",      window.bggSyncView);
-  window.router.register("admin",         window.adminView);
+  window.router.register("admin-reports",      window.adminReportsView);
+  window.router.register("admin-images",       window.adminImagesView);
+  window.router.register("admin-descriptions", window.adminDescriptionsView);
 
   // Supabase boot. We model this as a global helper (used by views directly)
   // because Supabase's auth state listener fires async outside the view
@@ -258,6 +265,7 @@
     warmGameBundlesWhenIdle();
     warmOwnedShelfWhenIdle();
     warmGhostSuggestionsWhenIdle();
+    warmAdminReviewWhenIdle();
   }
 
   // The per-owned-game detail bundles are no longer part of /bootstrap (they're
@@ -307,6 +315,20 @@
         .then((list) => window.GhostClaim.setSuggestions(list))
         .catch(() => {});
     };
+    if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 5000 });
+    else setTimeout(kick, 0);
+  }
+
+  // Admin review queues → the Settings gear's dot. Rides the same idle slot as
+  // the warms above, and for the same reason: it lights a dot, so it can wait
+  // until the first screen is up.
+  //
+  // AdminReview.load() no-ops for non-admins, so this costs ordinary users
+  // nothing — no request, no 403. Failure leaves the counts where they were:
+  // the Settings screen re-reads on its own next visit.
+  function warmAdminReviewWhenIdle() {
+    if (!window.AdminReview) return;
+    const kick = () => window.AdminReview.load();
     if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 5000 });
     else setTimeout(kick, 0);
   }
@@ -490,7 +512,29 @@
       else tab.removeAttribute("aria-label");
     });
   }
-  if (window.BgbNotifications) window.BgbNotifications.subscribe(syncNavDots);
+  // The Settings gear carries the admin signals, which have no bottom-nav tab
+  // of their own — an admin queue is not something the Play/Feed/Profile tabs
+  // resolve. Same contract as the nav dots: the dot is aria-hidden, so the
+  // button's aria-label is what has to change, rebuilt from a constant so a
+  // queue that empties doesn't keep a stale one.
+  function syncGearDot() {
+    if (!window.BgbNotifications) return;
+    const btn = document.querySelector(".bgb-global-header__settings");
+    const dot = btn && btn.querySelector(".bgb-global-header__dot");
+    if (!btn || !dot) return;
+    const { total, parts } = window.BgbNotifications.forGear();
+    dot.hidden = total === 0;
+    const label = parts.length
+      ? `Settings \u2014 ${window.BgbNotifications.phrase(parts)} waiting`
+      : "Settings";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+  }
+
+  if (window.BgbNotifications) {
+    window.BgbNotifications.subscribe(syncNavDots);
+    window.BgbNotifications.subscribe(syncGearDot);
+  }
 
   // Pending uploads live in the header. Two keys drive it: the count itself,
   // and connectivity (which changes what the dialog offers).
