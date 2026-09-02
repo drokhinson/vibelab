@@ -23,10 +23,6 @@
       this._bggLoading = false;
       this._bggError = null;
       this._bggLinkOpen = false;
-      this._bggSyncing = false;
-      this._bggSyncResult = null;
-      this._bggSummary = null;
-      this._bggPollHandle = null;
 
       // True between the confirm and the sign-out that follows a successful
       // delete. Unlike everything else in this app, this one write IS waited
@@ -34,26 +30,15 @@
       // must not be left unsure whether it happened.
       this._deleting = false;
 
-      // The comparison both sync buttons act on. Null means the sync band is
-      // not rendered at all: neither direction is offered until the user has
-      // seen what it would do, and a finished sync clears the comparison that
-      // authorised it so the buttons go away again.
-      this._bggDiff = null;
-      this._bggChecking = false;
-      this._bggCompareError = null;
-
-      this._bggPushing = false;
-      this._bggPushSummary = null;
-      this._bggPush = null;
-      this._bggPushError = null;
-      // Its own handle. Two queues, two exit conditions; each poll no-ops
-      // while the other is armed.
-      this._bggPushPollHandle = null;
+      // The comparison, both syncs and everything they narrate live in
+      // domain/bgg-sync-flow.js now — they outlive this screen, which is what
+      // lets a sync keep running once the user closes the flow. This card
+      // reads the flow's snapshot and shows one row (see _renderBggSyncStrip).
 
       // True while a manual outbox flush is in flight — drives the Upload now
       // button's disabled/"Uploading…" state.
 
-      // Past imports (migration 006). null = not loaded yet, so the section is
+      // Past imports (migration 007). null = not loaded yet, so the section is
       // absent rather than flashing an empty card on the first paint.
       this._imports = null;
       this._deletingImport = null;
@@ -70,14 +55,13 @@
       // in Settings, or the sunset switch landed) — the Appearance card's
       // "currently light/dark" subtext has to follow. See domain/theme.js.
       this.listen("theme", () => this.render());
-      // The BGG import poll skips its ticks while the tab is hidden — fire
-      // one immediate catch-up tick when it becomes visible again (only
-      // while a poll is actually armed). Auto-removed on unmount via
-      // listenDom.
+      // The BGG flow's progress strip. The flow owns its own polling and
+      // outlives this view, so all this screen does is repaint on its ticks.
+      this.listen("bggSync", () => this.render());
+      // Its poll skips ticks while the tab is hidden; fire one catch-up when
+      // it comes back. Auto-removed on unmount via listenDom.
       this.listenDom("visibilitychange", () => {
-        if (document.hidden) return;
-        if (this._bggPollHandle) this._pollBggStatus();
-        if (this._bggPushPollHandle) this._pollBggPushStatus();
+        if (!document.hidden && window.BggSyncFlow) window.BggSyncFlow.catchUp();
       });
       this.render();
       await this._loadBggStatus();
@@ -89,26 +73,17 @@
         // Don't block the first paint on this — render once on resolve.
         this._loadAdminReportsCount();
       }
-      if (this._needsPoll()) this._startBggPoll();
-      else if (this._needsPushPoll()) this._startBggPushPoll();
-    }
-
-    async onUnmount() {
-      this._stopBggPoll();
-      this._stopBggPushPoll();
+      // Re-arm whatever was still running when the user last left. Idempotent
+      // and cheap when there is nothing to resume.
+      if (window.BggSyncFlow) window.BggSyncFlow.resume();
     }
 
     async _loadBggStatus() {
       this._bggLoading = true;
       try {
-        // Parallel, not serial: reopening Settings mid-push has to resume that
-        // readout, and two round trips before first paint is a visible stall.
-        const [sync, push] = await Promise.all([
-          window.Bgg.status(),
-          window.Bgg.pushStatus().catch(() => null),
-        ]);
-        this._bgg = sync;
-        if (push) this._bggPush = push;
+        // One call: the card needs the linked handle and the last-synced line,
+        // and the push readout moved to the flow, which fetches its own.
+        this._bgg = await window.Bgg.status();
       } catch (e) {
         this._bggError = e.message || "Failed to load BGG status";
       } finally {
@@ -321,6 +296,10 @@
           </div>
         `;
       } else {
+        // Disabled only while something is actually running. A finished
+        // comparison does NOT block a fresh one: re-checking is how you
+        // recover from a plan that went stale while you were reading it.
+        const busy = !!(window.BggSyncFlow && window.BggSyncFlow.isBusy());
         body = `
           <div class="set-card__bgg-body">
             <div class="set-card__bgg-info">
@@ -336,18 +315,13 @@
           </div>
           <div class="set-card__bgg-actions">
             <button class="btn btn-ghost btn-sm set-card__bgg-check"
-                    ${this._bggBusy() ? "disabled" : ""}
-                    onclick="window.settingsView._checkBggStatus()">
-              <i data-icon="${this._bggChecking ? "loader-2" : "shuffle"}"
-                 class="w-4 h-4 ${this._bggChecking ? "animate-spin" : ""}"></i>
-              ${this._bggChecking ? "Checking…" : "Check status"}
+                    ${busy ? "disabled" : ""}
+                    onclick="window.settingsView._startBggCheck()">
+              <i data-icon="shuffle" class="w-4 h-4"></i>
+              Check status
             </button>
           </div>
-          ${this._renderBggCompare()}
-          ${this._renderBggSyncActions()}
-          ${this._renderBggProgress()}
-          ${this._renderBggPushProgress()}
-          ${this._renderBggRestale()}
+          ${this._renderBggSyncStrip()}
         `;
       }
 
@@ -531,6 +505,119 @@
       this._imports = (this._imports || []).filter((i) => i.batch_id !== batchId);
       this.render();
       showToast(`Deleted ${deleted} play${deleted === 1 ? "" : "s"}`, "success");
+    }
+
+    /**
+     * The one row a running or finished BGG flow leaves behind on this card.
+     *
+     * The flow itself lives on its own screen (views/bgg-sync-view.js), and
+     * closing that screen must not end a sync — so the run keeps going in
+     * domain/bgg-sync-flow.js and this row is how the user knows. Tapping it
+     * goes back to whichever face of the flow is current.
+     *
+     * Built on .set-card__row, the same shape the play importer's entry uses,
+     * plus the log family's bar. Nothing renders while the flow is idle.
+     */
+    _renderBggSyncStrip() {
+      const flow = window.BggSyncFlow;
+      const snap = flow ? flow.snapshot() : null;
+      if (!snap || snap.screen === "idle") return "";
+
+      const st = snap.status || {};
+      const settled = (st.session_done || 0) + (st.session_errored || 0);
+      const total = st.session_total || 0;
+      const diff = snap.diff || {};
+      const differences = Math.max(diff.push_total || 0, diff.pull_total || 0);
+
+      let icon = "loader-2";
+      let spin = true;
+      let title = "Working…";
+      let sub = "Tap to watch";
+      let pct = null;
+
+      switch (snap.screen) {
+        case "checking": {
+          const step = (snap.progress && snap.progress.steps || [])
+            .find((x) => x.state === "active");
+          title = "Comparing with BoardGameGeek…";
+          sub = step && step.total
+            ? `${step.done || 0} of ${step.total} · tap to watch`
+            : "Tap to watch";
+          if (step && step.total) pct = Math.round(((step.done || 0) / step.total) * 100);
+          break;
+        }
+        case "review":
+          icon = "shuffle"; spin = false;
+          title = differences
+            ? `${differences} ${differences === 1 ? "difference" : "differences"} found`
+            : "Everything matches";
+          sub = "Tap to review";
+          break;
+        case "confirm":
+          icon = "shuffle"; spin = false;
+          title = `Review ${differences} ${differences === 1 ? "change" : "changes"}`;
+          sub = "Not started yet · tap to finish";
+          break;
+        case "running":
+          title = snap.direction === "push"
+            ? (total ? `Pushing ${settled} of ${total}…` : "Pushing to BoardGameGeek…")
+            : (total ? `Importing ${settled} of ${total}…` : "Importing from BoardGameGeek…");
+          if (total) pct = Math.round((settled / total) * 100);
+          break;
+        case "done":
+          icon = "check"; spin = false;
+          title = "Sync complete";
+          sub = "Tap for the details";
+          break;
+        case "error":
+          icon = "alert-triangle"; spin = false;
+          title = "That didn\u2019t finish";
+          sub = "Tap to try again";
+          break;
+        default:
+          return "";
+      }
+
+      // The bar's width is data — the one inline style the rules allow.
+      const bar = pct === null ? "" : `
+        <div class="bgg-log__bar set-card__row-bar">
+          <div class="bgg-log__bar-fill" style="width:${pct}%"></div>
+        </div>`;
+
+      return `
+        <button class="set-card__row set-card__row--progress"
+                onclick="window.settingsView._openBggSync()">
+          <span class="set-card__row-icon">
+            <i data-icon="${icon}" class="w-4 h-4 ${spin ? "animate-spin" : ""}"></i>
+          </span>
+          <span class="set-card__row-body">
+            <span class="set-card__row-title">${escapeHtml(title)}</span>
+            <span class="set-card__row-sub">${escapeHtml(sub)}</span>
+            ${bar}
+          </span>
+          <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+        </button>
+      `;
+    }
+
+    /**
+     * The strip: go to whichever face of the flow is current, changing nothing.
+     */
+    _openBggSync() {
+      window.router.go("bgg-sync");
+    }
+
+    /**
+     * The button: always a NEW comparison, then the flow's screen to watch it.
+     *
+     * Starting here rather than letting the view's onMount decide is what makes
+     * the button mean what it says. A flow left sitting on a finished
+     * comparison is not idle, so an onMount that only started when idle would
+     * take "Check status" to a comparison from ten minutes ago.
+     */
+    _startBggCheck() {
+      if (window.BggSyncFlow) window.BggSyncFlow.start();
+      window.router.go("bgg-sync");
     }
 
     _renderCacheCard() {
@@ -762,292 +849,12 @@
       await this._loadBggStatus();
     }
 
-    async _syncBgg() {
-      this._bggSyncing = true;
-      this._bggSyncResult = null;
-      this._bggSummary = null;
-      // The comparison authorised this run; once it starts it is spent. The
-      // sync band stays rendered while _bggSyncing so the log has a heading.
-      this._bggDiff = null;
-      this._bggCompareError = null;
-      this._stopBggPoll();
-      this.render();
-      let summary;
-      try {
-        summary = await window.Bgg.sync();
-      } catch (e) {
-        this._bggSyncing = false;
-        // A deadline is not a failure: the handler finishes the sync and
-        // queues the worker whether or not we are still listening, so
-        // "Sync failed" would be a lie the next status poll contradicts.
-        this._bggSyncResult = (e && e.timeout)
-          ? "BoardGameGeek is taking a while. The import is still running in the background — check back in a few minutes."
-          : (e && e.message) || "Sync failed";
-        await this._loadBggStatus();
-        return;
-      }
-      this._bggSummary = summary;
-      if (summary && summary.warm_up_retry_pending) {
-        this._bggSyncing = false;
-        this._bggSyncResult = "BoardGameGeek is still preparing your collection — try again in a minute.";
-        await this._loadBggStatus();
-        return;
-      }
-      await this._loadBggStatus();
-      const needsImport = summary && summary.unique_games_to_import > 0;
-      if (needsImport && this._needsPoll()) {
-        this._startBggPoll();
-        return;
-      }
-      this._bggSyncing = false;
-      // The step log derives the final summary from _bggSummary + _bgg
-      // directly; no separate result string needed for the happy path.
-      window.Bgg.invalidateImportedData();
-      this.render();
-    }
-
-    _needsPoll() {
-      return !window.Bgg.importDrained(this._bgg);
-    }
-
-    _startBggPoll() {
-      // One queue at a time: the two workers are mutually exclusive
-      // server-side, so two live polls would only fight over the same render.
-      if (this._bggPollHandle || this._bggPushPollHandle) return;
-      this._bggPollHandle = setInterval(() => this._pollBggStatus(), 2000);
-    }
-
-    _stopBggPoll() {
-      if (this._bggPollHandle) {
-        clearInterval(this._bggPollHandle);
-        this._bggPollHandle = null;
-      }
-    }
-
-    async _pollBggStatus() {
-      // Hidden tab: skip the fetch — the visibilitychange listener (onMount)
-      // fires one catch-up tick the moment the tab is visible again.
-      if (document.hidden) return;
-      try {
-        this._bgg = await window.Bgg.status();
-      } catch (_) {
-        return;
-      }
-      if (!this._needsPoll()) {
-        this._stopBggPoll();
-        this._bggSyncing = false;
-        // Step log derives the final summary from _bggSummary + _bgg.
-        window.Bgg.invalidateImportedData();
-      }
-      this.render();
-    }
-
     // ── The comparison, and the two syncs it gates ──────────────────────────
     //
     // Neither sync button is rendered until a comparison exists, so no sync can
     // be started against a state the user has not seen — and a finished sync
     // clears the comparison that authorised it, so they disappear again rather
     // than sitting there one tap from a re-run against a stale plan.
-
-    _bggBusy() {
-      return this._bggChecking || this._bggSyncing || this._bggPushing
-        || !!this._bggPollHandle || !!this._bggPushPollHandle;
-    }
-
-    _renderBggCompare() {
-      if (this._bggCompareError) {
-        return `<div class="set-card__bgg-compare bgg-diff__error">${escapeHtml(this._bggCompareError)}</div>`;
-      }
-      if (!this._bggDiff) return "";
-      return `<div class="set-card__bgg-compare">
-        ${window.renderBggDiffList(this._bggDiff, { variant: "card" })}
-      </div>`;
-    }
-
-    _renderBggSyncActions() {
-      // The gate. Kept rendered while a sync runs so its progress log has a
-      // heading to sit under.
-      if (!this._bggDiff && !this._bggSyncing && !this._bggPushing) return "";
-      const busy = this._bggBusy() ? "disabled" : "";
-      const mark = (which) => which === "bgg"
-        ? `<span class="bgb-mark bgb-mark--bgg"><img src="assets/credits/bgg-mark.svg" alt="" /></span>`
-        : `<span class="bgb-mark bgb-mark--bgb"><img src="assets/brand/bgb-logo.svg" alt="" /></span>`;
-      const arrow = `<i data-icon="chevron-right" class="w-4 h-4 bgb-mark__arrow"></i>`;
-      // The marks carry the direction; the caption carries the verb. Two
-      // unlabelled logo pairs left the user having to infer which one moved
-      // data which way — the same ambiguity the comparison table above fixes.
-      const face = (marks, cap) =>
-        `<span class="bgb-mark__row">${marks}</span><span class="bgb-mark__cap">${cap}</span>`;
-      return `<div class="set-card__bgg-sync">
-        <button class="btn btn-ghost btn-sm" ${busy}
-                title="Import from BoardGameGeek"
-                aria-label="Import from BoardGameGeek into BoardgameBuddy"
-                onclick="window.settingsView._pullBgg()">
-          ${this._bggSyncing
-            ? `<i data-icon="loader-2" class="w-4 h-4 animate-spin"></i><span class="bgb-mark__word">Importing…</span>`
-            : face(mark("bgg") + arrow + mark("bgb"), "Import to BgB")}
-        </button>
-        <button class="btn btn-primary btn-sm" ${busy}
-                title="Push to BoardGameGeek"
-                aria-label="Push from BoardgameBuddy up to BoardGameGeek"
-                onclick="window.settingsView._pushBgg()">
-          ${this._bggPushing
-            ? `<i data-icon="loader-2" class="w-4 h-4 animate-spin"></i><span class="bgb-mark__word">Pushing…</span>`
-            : face(mark("bgb") + arrow + mark("bgg"), "Push to BGG")}
-        </button>
-      </div>`;
-    }
-
-    _renderBggRestale() {
-      if (this._bggDiff || this._bggBusy()) return "";
-      if (!this._bggSummary && !this._bggPushSummary) return "";
-      return `<p class="set-card__bgg-restale">
-        <i data-icon="shuffle" class="w-4 h-4"></i>
-        That comparison is out of date now. Check status again to sync further.
-      </p>`;
-    }
-
-    async _checkBggStatus() {
-      this._bggChecking = true;
-      this._bggCompareError = null;
-      this._bggDiff = null;
-      this._bggSummary = null;
-      this._bggPushSummary = null;
-      this._bggSyncResult = null;
-      this._bggPushError = null;
-      this.render();
-      try {
-        this._bggDiff = await window.Bgg.check();
-      } catch (e) {
-        this._bggCompareError = (e && e.timeout)
-          ? "BoardGameGeek is taking a while. Try Check status again in a moment."
-          : (e && e.message) || "Couldn't compare with BoardGameGeek";
-      } finally {
-        this._bggChecking = false;
-        this.render();
-      }
-      // The catalog fill runs as a background import; its games only get names
-      // once it drains, so reuse the import poll and let the user re-check.
-      if (this._bggDiff && this._bggDiff.catalog_pending) {
-        await this._loadBggStatus();
-        if (this._needsPoll()) this._startBggPoll();
-      }
-    }
-
-    _pullBgg() {
-      window.BggSyncSheet.open({
-        diff: this._bggDiff,
-        direction: "pull",
-        onConfirm: () => this._syncBgg(),
-      });
-    }
-
-    _pushBgg() {
-      window.BggSyncSheet.open({
-        diff: this._bggDiff,
-        direction: "push",
-        onConfirm: () => this._commitPush(),
-      });
-    }
-
-    async _commitPush() {
-      this._bggPushing = true;
-      this._bggPushSummary = null;
-      this._bggPushError = null;
-      this._stopBggPushPoll();
-      this.render();
-      let summary;
-      try {
-        summary = await window.Bgg.push(this._bggDiff && this._bggDiff.checked_at);
-      } catch (e) {
-        this._bggPushing = false;
-        // A deadline is not a failure: the handler queues the worker whether or
-        // not we are still listening, same as _syncBgg.
-        this._bggPushError = (e && e.timeout)
-          ? "BoardGameGeek is taking a while. The push is still running in the background — check back in a few minutes."
-          : (e && e.message) || "Push failed";
-        this._bggDiff = null;
-        await this._loadBggStatus();
-        return;
-      }
-      this._bggPushSummary = summary;
-      // The comparison described the state before this push. It cannot describe
-      // the state after it, so it goes — and the buttons with it.
-      this._bggDiff = null;
-      await this._loadBggPushStatus();
-      if (summary && summary.queued > 0 && this._needsPushPoll()) {
-        this._startBggPushPoll();
-        return;
-      }
-      this._bggPushing = false;
-      this.render();
-    }
-
-    async _loadBggPushStatus() {
-      try {
-        this._bggPush = await window.Bgg.pushStatus();
-      } catch (_) {
-        // Non-fatal — the log renders from the summary until the next tick.
-      }
-    }
-
-    _needsPushPoll() {
-      return !window.Bgg.pushDrained(this._bggPush);
-    }
-
-    _startBggPushPoll() {
-      // One queue at a time: the two workers are mutually exclusive server-side.
-      if (this._bggPushPollHandle || this._bggPollHandle) return;
-      this._bggPushPollHandle = setInterval(() => this._pollBggPushStatus(), 2000);
-    }
-
-    _stopBggPushPoll() {
-      if (this._bggPushPollHandle) {
-        clearInterval(this._bggPushPollHandle);
-        this._bggPushPollHandle = null;
-      }
-    }
-
-    async _pollBggPushStatus() {
-      if (document.hidden) return;
-      try {
-        this._bggPush = await window.Bgg.pushStatus();
-      } catch (_) {
-        return;
-      }
-      if (!this._needsPushPoll()) {
-        this._stopBggPushPoll();
-        this._bggPushing = false;
-        // Deliberately NOT invalidateImportedData(): a push writes nothing
-        // locally, so dropping the status map and the feed would be churn.
-      }
-      this.render();
-    }
-
-    _renderBggPushProgress() {
-      return window.renderBggPushLog({
-        pushing: this._bggPushing,
-        summary: this._bggPushSummary,
-        status: this._bggPush,
-        error: this._bggPushError,
-        className: "bgg-log--card",
-      });
-    }
-
-    // The step log itself is ui/bgg-import-log.js — the same readout the
-    // first-run "Link BoardGameGeek" modal shows, because it is the same
-    // import (.claude/rules/ui-object-design.md §2). This method only supplies
-    // the two payloads and the inset margin that belongs to the card, not to
-    // the log.
-    _renderBggProgress() {
-      return window.renderBggImportLog({
-        syncing: this._bggSyncing,
-        summary: this._bggSummary,
-        status: this._bgg,
-        error: this._bggSyncResult,
-        className: "bgg-log--card",
-      });
-    }
   }
 
   function formatRelative(iso) {

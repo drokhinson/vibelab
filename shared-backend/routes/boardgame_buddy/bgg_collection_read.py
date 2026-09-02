@@ -24,10 +24,13 @@ BackgroundTask rather than at import.
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
 from .bgg_client import BggWarmUpError, fetch_bgg_as_user, parse_bgg_xml
+from .constants import BggCheckPhase
+from .services.bgg_progress import BggCheckProgress, NullProgress
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +55,19 @@ _BGG_STATUSES = {
 # placeholder response that returns zero items.
 _COLLECTION_SUBTYPES: tuple[str, ...] = ("boardgame", "boardgameexpansion")
 
+# What the checklist calls each subtype. The API's own spelling
+# ("boardgameexpansion") is not a word anyone says out loud.
+_SUBTYPE_LABEL = {"boardgame": "Board games", "boardgameexpansion": "Expansions"}
+
 # Throttle between BGG calls inside the sweep. BGG's public limit is loose
 # (a few req/sec) but they 429 aggressively if you blast them. The import
 # worker reuses this same value for its per-game /thing fetches.
-BGG_THROTTLE_SECONDS = 1.5
+#
+# Env-tunable for the same reason as _PUSH_THROTTLE_SECONDS, plus one more:
+# this is what sets the pace of the comparison checklist, and raising it
+# locally is the only way to watch the sweep advance a batch at a time without
+# a thousand-game BoardGameGeek account.
+BGG_THROTTLE_SECONDS = float(os.getenv("BGG_THROTTLE_SECONDS", "1.5"))
 
 
 def _derive_collection_status(item) -> Optional[str]:
@@ -234,6 +246,7 @@ def _merge_collection_item(
 
 async def _fetch_collection_items(
     user_id: str, username: str,
+    *, progress: Optional[BggCheckProgress] = None,
 ) -> tuple[list[BggCollectionItem], bool]:
     """Sweep the linked user's collection at full fidelity.
 
@@ -248,14 +261,22 @@ async def _fetch_collection_items(
     items, which downstream reads as "not on BGG", so a push must refuse to run
     on a partial sweep rather than clear flags off games it simply did not see.
     """
+    prog = progress or NullProgress()
     merged: dict[int, BggCollectionItem] = {}
     warm_up_failed = False
     first = True
+    total = len(_COLLECTION_SUBTYPES) * len(_BGG_STATUSES)
+    done = 0
+    prog.begin(BggCheckPhase.COLLECTION, total=total)
     for subtype in _COLLECTION_SUBTYPES:
         for status_flag in _BGG_STATUSES.keys():
             if not first:
                 await asyncio.sleep(BGG_THROTTLE_SECONDS)
             first = False
+            prog.tick(
+                BggCheckPhase.COLLECTION, done,
+                detail=f"{_SUBTYPE_LABEL.get(subtype, subtype)} · {status_flag}",
+            )
             params = {
                 "username": username,
                 status_flag: 1,
@@ -266,6 +287,10 @@ async def _fetch_collection_items(
             try:
                 body = await fetch_bgg_as_user(
                     user_id, "/collection", params, timeout=20.0,
+                    on_warm_up=lambda attempt, of, wait: prog.retry(
+                        BggCheckPhase.COLLECTION,
+                        attempt=attempt, of=of, wait_seconds=wait,
+                    ),
                 )
             except BggWarmUpError:
                 logger.warning(
@@ -273,12 +298,18 @@ async def _fetch_collection_items(
                     user_id, subtype, status_flag,
                 )
                 warm_up_failed = True
+                done += 1
                 continue
             for item in _parse_collection_items(body, username=username):
                 prev = merged.get(item.bgg_id)
                 merged[item.bgg_id] = (
                     _merge_collection_item(prev, item) if prev is not None else item
                 )
+            done += 1
+    prog.tick(
+        BggCheckPhase.COLLECTION, done,
+        detail=f"{len(merged)} {'game' if len(merged) == 1 else 'games'} on BoardGameGeek",
+    )
     return list(merged.values()), warm_up_failed
 
 

@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 006_play_import_batches.sql (import batches and the two
+-- Last updated: 007_play_import_batches.sql (import batches and the two
 --               delete RPCs; bgb_feed_plays also returns import_group_id
 --               now, and bgb_log_play persists the batch). The other 48
 --               functions come from the 2026-09-01 collapse and live
@@ -81,7 +81,7 @@
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/014_feed_order_by_played_at.sql)
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--   Last updated in: db/migrations/boardgamebuddy/007_play_import_batches.sql
 --               (also returns import_group_id — 005 returned the COUNT without
 --               the id, so the feed could say "58 plays" and had no way to act
 --               on them; the run sheet deletes by it. Another OUT column, so
@@ -463,7 +463,7 @@
 --               (persists p_payload.import_group_id, the tag the Settings
 --               importer puts on each run of identical plays, and echoes
 --               group_count: 1 — a freshly logged play stands for itself.)
---   Last updated in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--   Last updated in: db/migrations/boardgamebuddy/007_play_import_batches.sql
 --               (also persists p_payload.import_batch_id and stamps
 --               imported_at server-side when one is present.)
 --               db/migrations/boardgamebuddy/044_cleanup.sql
@@ -583,9 +583,19 @@
 -- bgb_bgg_sync_status(p_user UUID)
 --   → JSONB { bgg_username, has_credentials, pending_count, errored_count,
 --             last_completed_at, session_started_at, session_total,
---             session_done, session_errored, session_game_names[] }
+--             session_done, session_errored, session_game_names[],
+--             catalog_session_started_at, catalog_session_total,
+--             catalog_session_done, catalog_session_errored,
+--             catalog_session_game_names[] }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/039_perf_rpcs_and_indexes.sql)
+--   Last updated in: db/migrations/boardgamebuddy/006_bgg_check_session.sql
+--               (the import roll-up gained `AND kind <> 'catalog'`, because a
+--                POST /bgg/check queues catalog rows into the same table and
+--                they were being counted into the last IMPORT's window —
+--                which made a finished import read as unfinished. The new
+--                catalog_session_* keys are the same roll-up for those rows,
+--                anchored on profiles.bgg_last_check_started_at.)
 --   Called by:  shared-backend/routes/boardgame_buddy/bgg_link_routes.py
 --               (get_sync_status — GET /bgg/sync/status, FE poll target)
 --   Purpose:    One-call import-progress poll (was up to 7 round trips per
@@ -593,7 +603,9 @@
 --               Python precedence (pending > error > done); names are the
 --               20 most recently completed. has_credentials mirrors
 --               bgg_client.has_stored_credentials so auth_state derives
---               without shipping the encrypted secret.
+--               without shipping the encrypted secret. The catalog roll-up
+--               needs no per-bgg_id grouping: (user_id, bgg_id, kind) is
+--               unique, so one catalog row IS one game.
 
 -- bgb_bgg_push_status(p_user UUID)
 --   → JSONB { bgg_username, has_credentials, pending_count, errored_count,
@@ -1027,7 +1039,7 @@
 
 -- bgb_delete_import_group(p_user UUID, p_group UUID)
 --   → JSONB { deleted: INT }
---   Defined in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--   Defined in: db/migrations/boardgamebuddy/007_play_import_batches.sql
 --   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
 --               (delete_import_group — DELETE /plays/import-group/{id})
 --   Purpose:    Drop one run of identical imported plays, from its own feed
@@ -1040,7 +1052,7 @@
 
 -- bgb_delete_import_batch(p_user UUID, p_batch UUID)
 --   → JSONB { deleted: INT }
---   Defined in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--   Defined in: db/migrations/boardgamebuddy/007_play_import_batches.sql
 --   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
 --               (delete_import_batch — DELETE /plays/import-batch/{id})
 --   Purpose:    Undo a whole import — every play one paste wrote, including the
@@ -1050,7 +1062,7 @@
 -- bgb_list_imports(p_user UUID)
 --   → JSONB [ { batch_id, imported_at, play_count, game_count, game_names[],
 --               first_played_at, last_played_at } ], newest first
---   Defined in: db/migrations/boardgamebuddy/006_play_import_batches.sql
+--   Defined in: db/migrations/boardgamebuddy/007_play_import_batches.sql
 --   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
 --               (list_imports — GET /plays/imports, the Settings undo list)
 --   Purpose:    What Settings lists so a user can find the import to undo.

@@ -29,9 +29,10 @@ from db import get_supabase
 from . import router
 from .bgg_link_routes import _require_linked_username
 from .bgg_write import push_collection_status
-from .constants import BggAuthState, BggPushChange
+from .constants import BggAuthState, BggCheckPhase, BggPushChange
 from .dependencies import CurrentUser, get_current_user
 from .models import (
+    BggCheckProgressResponse,
     BggDiffItem,
     BggDiffResponse,
     BggPullItem,
@@ -42,6 +43,7 @@ from .models import (
     BggUnpushableItem,
 )
 from .services.bgg_compare_service import ComparePlan, build_plan
+from .services import bgg_progress
 
 logger = logging.getLogger(__name__)
 
@@ -159,22 +161,71 @@ async def check_bgg(
 ) -> BggDiffResponse:
     """Diff BgB against BoardGameGeek in both directions, filling catalog gaps."""
     sb = get_supabase()
-    username = _require_linked_username(sb, user.user_id)
-    await _reject_if_import_running(sb, user.user_id)
-    await _reject_if_push_running(sb, user.user_id)
+    # Opened before the first guard so a 400 or a 409 is narrated too: those
+    # answer in milliseconds, but the FE has already navigated to the checklist
+    # screen and an empty one would flash.
+    progress = bgg_progress.BggCheckProgress(user.user_id)
+    try:
+        progress.begin(BggCheckPhase.GUARDS)
+        username = _require_linked_username(sb, user.user_id)
+        await _reject_if_import_running(sb, user.user_id)
+        await _reject_if_push_running(sb, user.user_id)
+        # Anchors the catalog-fill counters this check is about to create. The
+        # rows land in the same queue an import uses, so without a separate
+        # stamp they would be counted into the last IMPORT's session window —
+        # see migration 006.
+        started_at = datetime.now(timezone.utc)
+        await asyncio.to_thread(_stamp_check_session, sb, user.user_id, started_at)
 
-    plan = await build_plan(sb, user.user_id, username)
+        plan = await build_plan(sb, user.user_id, username, progress=progress)
 
-    # The only write this route makes, and it lands in the game catalog, never
-    # on anyone's shelf.
-    if plan.catalog_missing:
-        await asyncio.to_thread(
-            _queue_catalog_imports, sb, user.user_id, plan.catalog_missing,
-        )
-        from .bgg_link_routes import _process_pending_imports
-        background_tasks.add_task(_process_pending_imports, user.user_id)
+        # The only write this route makes, and it lands in the game catalog,
+        # never on anyone's shelf.
+        if plan.catalog_missing:
+            progress.begin(BggCheckPhase.QUEUE, total=len(plan.catalog_missing))
+            await asyncio.to_thread(
+                _queue_catalog_imports, sb, user.user_id, plan.catalog_missing,
+            )
+            from .bgg_link_routes import _process_pending_imports
+            background_tasks.add_task(_process_pending_imports, user.user_id)
+        else:
+            progress.skip(BggCheckPhase.QUEUE, detail="Every game was already known")
+
+        if plan.warm_up_failed:
+            progress.note_warm_up_failure()
+        progress.finish()
+    except HTTPException as exc:
+        progress.fail(str(exc.detail))
+        raise
+    except Exception as exc:  # noqa: BLE001 — the ledger must record any failure
+        progress.fail(str(exc))
+        raise
 
     return _diff_response(username, plan, len(plan.catalog_missing))
+
+
+def _stamp_check_session(sb: Client, user_id: str, started_at: datetime) -> None:
+    """Anchor for the catalog-fill counters on GET /bgg/sync/status."""
+    sb.table("boardgamebuddy_profiles").update(
+        {"bgg_last_check_started_at": started_at.isoformat()}
+    ).eq("id", user_id).execute()
+
+
+@router.get(
+    "/bgg/check/progress",
+    response_model=BggCheckProgressResponse,
+    status_code=200,
+    summary="Live progress of an in-flight BoardGameGeek comparison",
+)
+async def get_check_progress(
+    user: CurrentUser = Depends(get_current_user),
+) -> BggCheckProgressResponse:
+    """Which phase POST /bgg/check is on right now. Reads memory, not the DB."""
+    snapshot = bgg_progress.read(user.user_id)
+    if not snapshot:
+        # No record is NOT "finished" — see BggCheckState.UNKNOWN.
+        return BggCheckProgressResponse()
+    return BggCheckProgressResponse(**snapshot)
 
 
 @router.post(
@@ -197,7 +248,20 @@ async def push_bgg(
     # Re-plan rather than trusting the client's list. Their view can be minutes
     # old, and a stale plan sent to a write endpoint on a third-party service
     # is the worst possible place to trust a cache.
-    plan = await build_plan(sb, user.user_id, username)
+    #
+    # Reported under kind="push_plan" so the progress screen can narrate this
+    # sweep too: it is the same 10-40 seconds as a check, and it used to be a
+    # completely blank wait between "Push" and the first queue count.
+    progress = bgg_progress.BggCheckProgress(user.user_id, kind="push_plan")
+    try:
+        plan = await build_plan(sb, user.user_id, username, progress=progress)
+        progress.finish()
+    except HTTPException as exc:
+        progress.fail(str(exc.detail))
+        raise
+    except Exception as exc:  # noqa: BLE001
+        progress.fail(str(exc))
+        raise
 
     if plan.warm_up_failed:
         # A batch that exhausted its warm-up retries returned ZERO items, which

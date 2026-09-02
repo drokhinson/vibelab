@@ -17,6 +17,9 @@ from .constants import (
     MAX_IMPORT_CHARS,
     MAX_IMPORT_HINT_CHARS,
     BggAuthState,
+    BggCheckPhase,
+    BggCheckState,
+    BggCheckStepState,
     BggPullChange,
     BggPushChange,
     BggUnpushableReason,
@@ -167,6 +170,17 @@ class BggSyncStatus(BaseModel):
     # without polling a separate endpoint. Empty until at least one
     # previously-unknown game has been fetched from BGG.
     session_game_names: list[str] = []
+    # The catalog fill a POST /bgg/check kicked off, anchored separately on
+    # profiles.bgg_last_check_started_at (migration 006). A check queues
+    # kind='catalog' rows into the same table an import uses, so without their
+    # own window they were counted as part of the last import — which made a
+    # finished import read as unfinished, and made this poll exit instantly for
+    # anyone who had never synced.
+    catalog_session_started_at: Optional[datetime] = None
+    catalog_session_total: int = 0
+    catalog_session_done: int = 0
+    catalog_session_errored: int = 0
+    catalog_session_game_names: list[str] = []
 
 
 class BggDiffItem(BaseModel):
@@ -226,6 +240,48 @@ class BggDiffResponse(BaseModel):
     # and a partial sweep reads as "not on BGG" — so the push is refused
     # rather than allowed to clear flags off games it simply did not see.
     warm_up_retry_pending: bool = False
+
+
+class BggCheckRetry(BaseModel):
+    """A BGG warm-up backoff, in flight.
+
+    `resume_at` is an absolute epoch second rather than a duration so the FE
+    counts down against the moment the request actually resumes, instead of
+    starting its own timer however long after the fact its poll happened to
+    land.
+    """
+    attempt: int
+    of: int
+    wait_seconds: float
+    resume_at: float
+
+
+class BggCheckStep(BaseModel):
+    """One row of the comparison checklist."""
+    key: BggCheckPhase
+    state: BggCheckStepState = BggCheckStepState.IDLE
+    done: Optional[int] = None
+    total: Optional[int] = None
+    detail: Optional[str] = None
+    retry: Optional[BggCheckRetry] = None
+
+
+class BggCheckProgressResponse(BaseModel):
+    """Result of GET /bgg/check/progress — what POST /bgg/check is doing now.
+
+    `state = unknown` means we have no record, which is NOT the same as
+    finished: the record lives in an in-process cache that a restart clears
+    while the POST itself is still running. The FE renders unknown as "still
+    working" and takes completion from the POST's own resolution.
+    """
+    state: BggCheckState = BggCheckState.UNKNOWN
+    kind: Literal["check", "push_plan", "none"] = "none"
+    check_id: Optional[str] = None
+    started_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    steps: list[BggCheckStep] = []
+    warm_up_failed: bool = False
+    error: Optional[str] = None
 
 
 class BggPushBody(BaseModel):
@@ -526,7 +582,7 @@ class PlayCreate(BaseModel):
     # per run; every counter still sees the individual rows. Set ONLY by the
     # Settings importer: a live log is one play and stands for itself.
     import_group_id: Optional[UUID4] = None
-    # Migration 006. One id per IMPORT, where the group above is one per RUN.
+    # Migration 007. One id per IMPORT, where the group above is one per RUN.
     # It is what makes "undo that whole paste" expressible — a series of run
     # deletions could never say it, because an import also writes one-offs that
     # carry no group at all. imported_at is stamped server-side from this.
@@ -1271,7 +1327,7 @@ class FeedPlayCard(BaseModel):
     # the card represents a group of identical imported plays, which
     # ui/play-card.js renders as a stack rather than a polaroid.
     group_count: int = 1
-    # The run's id (migration 006), so the card can act on what it represents —
+    # The run's id (migration 007), so the card can act on what it represents —
     # the run sheet deletes by this. None for every ordinary play; 005 returned
     # the count without it, which let the feed say "58 plays" and do nothing
     # about them.

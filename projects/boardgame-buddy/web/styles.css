@@ -366,7 +366,6 @@
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .play-run-sheet,
-     .bgg-sync-sheet,
      .ach-sheet,
      .exp-picker,
      .import-exp-modal,
@@ -411,7 +410,6 @@
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .play-run-sheet,
-     .bgg-sync-sheet,
      .ach-sheet,
      .exp-picker,
      .import-exp-modal,
@@ -3223,16 +3221,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgg-log--card { margin: 0 0.9rem 0.9rem; }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   BGG comparison + the two sync buttons (Settings > Connections)
+   BGG comparison + the two sync buttons
 
-   Both surfaces this lands on — the Settings card and .bgg-sync-sheet — are in
-   the polaroid re-point list above, so every colour here reads a --polaroid-*
-   token and inverts with the theme for free. Never oklch(var(--b1)) and never
+   Both surfaces this lands on — the Settings card and the sync flow's own
+   spoke screen — are .set-card / .bgb-spoke-screen, which are in the polaroid
+   re-point list above, so every colour here reads a --polaroid-* token and
+   inverts with the theme for free. Never oklch(var(--b1)) and never
    --accent-hover as ink (.claude/rules/theming.md §6).
    ──────────────────────────────────────────────────────────────────────────── */
 
-/* Check status sits alone: it is the button you press first, and its result is
-   what the two below act on. */
+/* Check status sits alone: it is the button you press, and everything it leads
+   to happens on the flow's own screen. */
 .set-card__bgg-actions { padding: 0 0.9rem 0.9rem; }
 .set-card__bgg-actions .btn { width: 100%; min-height: 44px; }
 
@@ -3473,11 +3472,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .bgg-cmp__legend-item b { color: var(--polaroid-ink, #1D1812); font-weight: 700; white-space: nowrap; }
 
-/* ── The review sheet ──────────────────────────────────────────────────────── */
-.bgg-sync-sheet__list { padding-top: 0.2rem; }
-.bgg-sync-sheet__foot { display: flex; flex-direction: column; gap: 0.45rem; }
-.bgg-sync-sheet__go { min-height: 52px; }
-
 /* ── The push log's own bits (the step rows are shared with the import log) ── */
 .bgg-log__bar {
   height: 6px;
@@ -3541,6 +3535,182 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-spoke-screen .bgg-log__sublist-error {
   color: color-mix(in srgb, var(--rust) 72%, var(--paper-ink));
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The BGG sync flow (views/bgg-sync-view.js) — four screens on one spoke.
+
+   The screen is .bgb-spoke-screen, which is already in the re-point lists at
+   the top of this file, so everything here reads --polaroid-* / --sheet-* and
+   inverts with the theme for free. Do NOT add .bgg-flow to those lists: it
+   lives INSIDE a re-pointed screen, and a second entry would re-point twice.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Clears the docked footer plus the bottom nav, so the last row of a 500-row
+   table is reachable rather than parked under the commit button. Mirrors
+   .imp-body's reasoning and its arithmetic. */
+.bgg-flow__body { padding-bottom: calc(var(--bgb-nav-height) + 104px); }
+
+.bgg-flow__step { display: flex; flex-direction: column; gap: 0.85rem; }
+.bgg-flow__step--center { align-items: center; text-align: center; padding-top: 2rem; }
+
+.bgg-flow__head { display: flex; flex-direction: column; gap: 0.2rem; }
+.bgg-flow__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--polaroid-ink, #1D1812);
+  margin: 0;
+}
+.bgg-flow__lede {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--polaroid-muted, #8B7E68);
+  margin: 0;
+}
+
+/* The three figures above the table. Deliberately quiet: they are context for
+   the comparison, not the point of the screen — the table is. */
+.bgg-flow__stats {
+  display: flex;
+  gap: 0.5rem;
+}
+.bgg-flow__stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--r-md, 10px);
+  background: var(--well, var(--bg-0));
+  border: 1px solid var(--polaroid-line, #DAC9A4);
+  min-width: 0;
+}
+.bgg-flow__stat-n {
+  font-family: var(--font-score);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--polaroid-ink, #1D1812);
+  font-variant-numeric: tabular-nums;
+}
+.bgg-flow__stat-l {
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: var(--polaroid-muted, #8B7E68);
+}
+
+/* The two directions, side by side. Each holds two 26px marks, an arrow and a
+   caption — the caption is what makes the pair legible without the marks. */
+.bgg-flow__dirs { display: flex; gap: 0.5rem; }
+.bgg-flow__dir {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.6rem;
+  height: auto;
+}
+.bgg-flow__dir:disabled { opacity: 0.45; }
+
+.bgg-flow__note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.bgg-flow__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent-ink);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ── The docked footer ────────────────────────────────────────────────────────
+   Second occurrence of this shape: the play importer's .imp-nav is the first.
+   .claude/rules/ui-object-design.md §4 says extract at instance #2, so the
+   rules live once and both families name them. The markup stays each screen's
+   own — only the presentation is shared. */
+.bgg-flow__nav,
+.imp-nav {
+  position: fixed;
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;
+  padding: 12px 16px 28px;
+  z-index: 35;
+  display: flex;
+  gap: 0.5rem;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, var(--bg-0) 46%);
+  pointer-events: none;
+}
+.bgg-flow__nav > *,
+.imp-nav > * { pointer-events: auto; }
+.bgg-flow__nav-back,
+.bgg-flow__nav-next,
+.imp-nav__back,
+.imp-nav__next {
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--rounded-btn, 0.6rem);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.bgg-flow__nav-back,
+.imp-nav__back {
+  flex: 0 0 auto;
+  padding: 0 1.1rem;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+}
+.bgg-flow__nav-next,
+.imp-nav__next {
+  flex: 1;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.bgg-flow__nav-next:disabled,
+.imp-nav__next:disabled { opacity: 0.5; }
+
+/* ── The comparison checklist (ui/bgg-check-log.js) ──────────────────────────
+   Extends the shared .bgg-log family rather than forking it: the step rows,
+   the icons and the bar are the same primitives the import and push logs use.
+   Only the full-screen layout and the warm-up line are new. */
+.bgg-log--screen { margin: 0; font-size: 0.86rem; }
+.bgg-log--screen .bgg-log__steps { gap: 0.7rem; }
+
+.bgg-check__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.bgg-check__label { min-width: 0; }
+/* A phase that was not needed. Reads as done-and-quiet, never as skipped-over:
+   "we did not have to" is a fine outcome, and a struck-through row would look
+   like something went wrong. */
+.bgg-log__body--skipped .bgg-check__label { color: var(--polaroid-muted, #8B7E68); }
+
+/* The warm-up backoff — the single most common reason a check feels hung, so
+   it gets the warning ink rather than the muted one. */
+.bgg-log__retry {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--warn);
+}
+.bgg-log--screen .bgg-log__bar { margin-top: 0.4rem; }
 .profile-panel { display: flex; flex-direction: column; gap: 0.55rem; }
 .profile-panel__controls {
   display: flex; align-items: center; gap: 0.4rem;
@@ -10989,6 +11159,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    the app *ground*, which rendered as a near-black strip across the cream card
    in dark mode. */
 .set-card__row--static { cursor: default; }
+
+/* The BGG flow's progress strip: the same row, plus a bar, plus room for it.
+   Aligns its icon to the top because the body is three lines here, not two. */
+.set-card__row--progress .set-card__row-icon { align-self: flex-start; margin-top: 0.15rem; }
+.set-card__row-bar { margin-top: 0.4rem; }
 .theme-seg {
   display: flex;
   gap: 4px;

@@ -135,7 +135,7 @@
     // caches stale.
     static invalidateDeps() { _invalidatePlayDeps(); }
 
-    // ── Imported plays (migrations 005/006) ─────────────────────────────────
+    // ── Imported plays (migrations 005/007) ─────────────────────────────────
     // Two units, because they answer two different regrets: one run of
     // identical plays read wrong, versus a whole paste that should never have
     // happened. Both are owner-scoped server-side and report what they removed.

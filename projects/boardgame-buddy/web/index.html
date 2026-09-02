@@ -139,6 +139,7 @@
     <main data-view="achievements" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="settings" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="import-plays" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
+    <main data-view="bgg-sync" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="admin" class="hidden flex-1 px-4 py-4"></main>
 
     <!-- Toast -->
@@ -242,6 +243,7 @@
   <script src="domain/feed.js"></script>
   <script src="domain/stats.js"></script>
   <script src="domain/bgg.js"></script>
+  <script src="domain/bgg-sync-flow.js"></script>
   <script src="domain/chapter.js"></script>
   <script src="domain/achievements.js"></script>
   <script src="domain/profile.js"></script>
@@ -273,6 +275,7 @@
   <script src="ui/bgg-import-log.js"></script>
   <script src="ui/bgg-diff-list.js"></script>
   <script src="ui/bgg-push-log.js"></script>
+  <script src="ui/bgg-check-log.js"></script>
   <!-- Vendored QR codecs — see each file's header for provenance. Same-origin
        on purpose: sw.js derives its precache list from the src= attributes in
        this file, so a CDN copy would be the one thing missing offline. -->
@@ -290,7 +293,7 @@
   <script src="widgets/game-picker-sheet.js"></script>
   <script src="widgets/shelf-picker-sheet.js"></script>
   <script src="widgets/shelf-of-shame-sheet.js"></script>
-  <script src="widgets/bgg-sync-sheet.js"></script>
+  <script src="widgets/bgg-sync-screens.js"></script>
   <script src="widgets/player-picker-sheet.js"></script>
   <script src="widgets/game-search-sheet.js"></script>
   <script src="widgets/country-picker-sheet.js"></script>
@@ -329,6 +332,7 @@
   <script src="views/achievements-view.js"></script>
   <script src="views/settings-view.js"></script>
   <script src="views/import-plays-view.js"></script>
+  <script src="views/bgg-sync-view.js"></script>
   <script src="views/admin-view.js"></script>
 
   <script src="init.js"></script>

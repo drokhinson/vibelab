@@ -1,4 +1,4 @@
--- 006_play_import_batches.sql — undo an import, at either level.
+-- 007_play_import_batches.sql — undo an import, at either level.
 --
 -- Migration 005 gave a RUN of identical imported plays a shared
 -- import_group_id so the feed could show it as one card. This adds the second
@@ -64,7 +64,7 @@ BEGIN
   -- a row multiplier.
   v_group := NULLIF(p_payload->>'import_group_id', '')::UUID;
 
-  -- Migration 006. One id per IMPORT, where the group above is one per RUN.
+  -- Migration 007. One id per IMPORT, where the group above is one per RUN.
   -- Both are set only by the importer; a live log has neither, and neither is
   -- read by anything that counts plays.
   v_batch := NULLIF(p_payload->>'import_batch_id', '')::UUID;

@@ -519,7 +519,7 @@
         // indistinguishable ones; the feed and the plays log then show the
         // whole run as a single card.
         import_group_id: (groups && groups.get(play.id)) || null,
-        // Migration 006. Every play in THIS import shares one, so the whole
+        // Migration 007. Every play in THIS import shares one, so the whole
         // paste can be undone from Settings later — including the one-offs,
         // which carry no group id and could never be found any other way.
         import_batch_id: batchId || null,

@@ -78,6 +78,20 @@
     }
 
     /**
+     * What POST /bgg/check is doing right now — the checklist's data source.
+     *
+     * Polled ALONGSIDE the in-flight check, not after it: the handler spends
+     * most of its time in asyncio.sleep between throttled BGG calls, so the
+     * event loop is free to answer this. Reads an in-process cache, so it is
+     * the cheapest endpoint in the app.
+     *
+     * `state: "unknown"` means the server has no record — a restart, or a
+     * worker that never ran this check. Callers must render that as STILL
+     * WORKING; completion comes from check()'s own promise, never from here.
+     */
+    static checkProgress() { return window.api.get("/bgg/check/progress"); }
+
+    /**
      * Push the shelf up to BoardGameGeek.
      *
      * NOT chained through _dropAchievements, and the caller must NOT call
@@ -94,6 +108,23 @@
     }
 
     static pushStatus() { return window.api.get("/bgg/push/status"); }
+
+    /**
+     * True once the catalog fill a comparison kicked off has landed.
+     *
+     * Reads the CATALOG session counters, not the import ones: a check queues
+     * kind='catalog' rows into the same table an import uses, and before
+     * migration 006 they shared a window — which made a finished import read
+     * as unfinished and made this exit instantly for anyone who had never run
+     * an import. Same session-counter argument as importDrained otherwise.
+     *
+     * @param {{catalog_session_total?:number, catalog_session_done?:number, catalog_session_errored?:number}|null} status
+     */
+    static catalogFillDrained(status) {
+      if (!status || !status.catalog_session_total) return true;
+      return ((status.catalog_session_done || 0) + (status.catalog_session_errored || 0))
+        >= status.catalog_session_total;
+    }
 
     /**
      * True once every queued change has been sent or has failed — the exit

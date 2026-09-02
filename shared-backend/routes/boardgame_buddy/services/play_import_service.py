@@ -9,7 +9,7 @@ and the plays table:
     per row after it paints.
   • import_plays — one chunk of the wizard's write, as a single RPC.
   • list_imports / delete_import_group / delete_import_batch — the undo side
-    (migration 006). A run is deletable from its own feed card; a whole import
+    (migration 007). A run is deletable from its own feed card; a whole import
     from Settings. Both RPCs are owner-scoped in their WHERE clause, so an id
     belonging to somebody else deletes nothing and reports zero.
 """
