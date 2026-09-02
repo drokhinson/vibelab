@@ -12,6 +12,7 @@
       this._loading = false;
       this._error = null;
       this._guide = null;  // ReferenceGuideScroll widget; instantiated on first render
+      this._descExpanded = false;  // also reset per-game in _load()
     }
 
     async onMount() {
@@ -58,6 +59,9 @@
       this._plays = [];
       this._expansions = [];
       this._guide = null;
+      // Singleton view: without this reset an expanded description leaks
+      // across games (expansion → base game, search hit while one is open).
+      this._descExpanded = false;
       this._error = null;
       this._loading = true;
       this.render();
@@ -156,7 +160,7 @@
               </button>`}
               ${this._renderRulebookButton(g)}
             </div>
-            ${g.description ? `<div class="game-detail__desc">${stripHtml(g.description)}</div>` : ""}
+            ${this._renderDescription(g)}
             <div id="game-detail-expansions">${this._renderExpansions()}</div>
             ${this._renderReferenceGuide()}
             ${this._renderRecentPlays()}
@@ -164,7 +168,53 @@
         </article>
       `;
       this.refreshIcons();
+      this._mountDescription();
       this._mountGuide();
+    }
+
+    _renderDescription(g) {
+      const body = descriptionParagraphs(g.description);
+      if (!body) return "";
+      const expanded = !!this._descExpanded;
+      return `
+        <section class="game-detail__desc${expanded ? " is-expanded" : ""}" id="game-detail-desc">
+          <div class="game-detail__desc-body">${body}</div>
+          <button class="game-detail__desc-more" hidden
+                  aria-expanded="${expanded}" aria-controls="game-detail-desc"
+                  onclick="window.gameDetailView._toggleDescription()">
+            <span>${expanded ? "Show less" : "Read more"}</span>
+            <i data-icon="chevron-down" class="w-3.5 h-3.5"></i>
+          </button>
+        </section>
+      `;
+    }
+
+    // Reveal the toggle only when the text actually overflows the clamp — a
+    // two-line description with a "Read more" that does nothing is worse than
+    // no affordance at all. Measured after paint, since the clamp is CSS.
+    _mountDescription() {
+      const section = this.container.querySelector("#game-detail-desc");
+      if (!section) return;
+      const body = section.querySelector(".game-detail__desc-body");
+      const btn = section.querySelector(".game-detail__desc-more");
+      if (!body || !btn) return;
+      btn.hidden = !this._descExpanded && body.scrollHeight <= body.clientHeight + 1;
+    }
+
+    // Toggle in place. A full render() would rebuild the whole article,
+    // re-run the icon pass and remount the reference-guide widget — the
+    // wholesale teardown that reads as "the page reloaded". The flag lives on
+    // the instance so a later full render() still paints the right state.
+    _toggleDescription() {
+      this._descExpanded = !this._descExpanded;
+      const section = this.container.querySelector("#game-detail-desc");
+      if (!section) return;
+      section.classList.toggle("is-expanded", this._descExpanded);
+      const btn = section.querySelector(".game-detail__desc-more");
+      if (!btn) return;
+      btn.setAttribute("aria-expanded", String(this._descExpanded));
+      const label = btn.querySelector("span");
+      if (label) label.textContent = this._descExpanded ? "Show less" : "Read more";
     }
 
     _renderRecentPlays() {
@@ -549,10 +599,20 @@
     if (!iso) return "";
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
-  function stripHtml(s) {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = s || "";
-    return tmp.textContent || "";
+  // Render a stored description as escaped paragraphs.
+  //
+  // The column holds plain text (bgg_client.bgg_description_text strips tags
+  // at import), but this is a free-text column, so escape rather than trust it.
+  // The old stripHtml() read textContent off a temp div and interpolated the
+  // result straight back into innerHTML — a second parse that turned any
+  // stored "&lt;img onerror=…&gt;" into a live tag. Escape once, don't decode.
+  function descriptionParagraphs(s) {
+    return String(s || "")
+      .split(/\n\s*\n/)
+      .map((para) => para.trim())
+      .filter(Boolean)
+      .map((para) => `<p class="game-detail__desc-p">${escapeHtml(para).replace(/\n/g, "<br>")}</p>`)
+      .join("");
   }
 
   window.GameDetailView = GameDetailView;

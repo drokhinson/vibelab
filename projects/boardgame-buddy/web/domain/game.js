@@ -181,15 +181,51 @@
       return window.api.get("/games/admin/missing-images");
     }
 
-    /** Re-fetch box art + thumbnail from BGG for a single game. */
+    /** Re-fetch box art + thumbnail from BGG for a single game.
+     *  Busts the bundle cache so the admin sees the new art immediately rather
+     *  than waiting out detailBundle's 30-minute fresh window. */
     static adminRefreshOneImage(gameId) {
-      return window.api.post(`/games/admin/${gameId}/refresh-images`);
+      return window.api.post(`/games/admin/${gameId}/refresh-images`)
+        .then((r) => { Game.invalidateBundle(gameId); return r; });
     }
 
     /** Bulk-rehost images for every catalog game with a missing or BGG-hosted URL.
      *  Throttled server-side; can take a while if many games need work. */
     static adminRefreshAllImages() {
-      return window.api.post("/games/refresh-images");
+      return window.api.post("/games/refresh-images")
+        .then((r) => { Game.invalidateBundle(); return r; });
+    }
+
+    // ── Admin: description backfill ──────────────────────────────────────────
+    // Descriptions were added to the BGG import after the catalog was seeded,
+    // so every game imported before that has description NULL.
+
+    /** List catalog games that have no description. */
+    static adminMissingDescriptions() {
+      return window.api.get("/games/admin/missing-descriptions");
+    }
+
+    /** Re-fetch one game's description from BGG. */
+    static adminRefreshOneDescription(gameId) {
+      return window.api.post(`/games/admin/${gameId}/refresh-description`)
+        .then((r) => { Game.invalidateBundle(gameId); return r; });
+    }
+
+    /** Backfill descriptions for games that have none, in one bounded pass.
+     *
+     *  The server batches 20 games per BGG call and caps the pass at `limit`,
+     *  so a cold catalog needs several calls — the response's `remaining` says
+     *  how many are left and the admin panel loops until it reads 0.
+     *
+     *  Invalidating the bundle cache only helps the admin's own device; other
+     *  users' cached bundles age out on their own 30-minute TTL. That lag is
+     *  acceptable for a one-off catalog fill, and the cache.js SCHEMA_VERSION
+     *  bump covers the rollout case where every client holds pre-description
+     *  bundles. */
+    static adminBackfillDescriptions(limit) {
+      const q = limit ? `?limit=${encodeURIComponent(limit)}` : "";
+      return window.api.post(`/games/admin/backfill-descriptions${q}`)
+        .then((r) => { Game.invalidateBundle(); return r; });
     }
 
     /** Admin: set or clear a game's rulebook URL. Pass null/"" to clear. */

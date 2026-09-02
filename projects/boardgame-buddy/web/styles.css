@@ -6321,7 +6321,55 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   opacity: 0.7;
   pointer-events: none;
 }
-.game-detail__desc { font-size: 0.9rem; line-height: 1.55; opacity: 0.9; margin-bottom: 1rem; }
+/* BGG descriptions run 1000-2500 chars — uncapped they push Expansions, the
+   reference guide and Recent plays entirely below the fold, so the body clamps
+   and game-detail-view reveals the toggle only when it actually overflows.
+   `opacity` was the old ink treatment; it is ground-relative and reads
+   differently on cream than on espresso, so this uses --ink-muted, which each
+   theme block declares for itself. */
+.game-detail__desc { margin-bottom: 1rem; }
+.game-detail__desc-body {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  overflow: hidden;
+}
+.game-detail__desc.is-expanded .game-detail__desc-body {
+  display: block;
+  overflow: visible;
+}
+/* -webkit-box measures block children, so the paragraphs must be real <p>. */
+.game-detail__desc-p { margin: 0 0 0.6rem; }
+.game-detail__desc-p:last-child { margin-bottom: 0; }
+.game-detail__desc-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 44px;              /* mobile-web.md §5 tap-target floor */
+  padding: 0;
+  margin-top: 0.15rem;
+  background: none;
+  border: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--game-accent, var(--accent-ink));
+  cursor: pointer;
+}
+/* This block sets `display`, which beats the UA stylesheet's
+   `[hidden] { display: none }` — so the attribute alone would NOT hide the
+   toggle, and a two-line description would offer a "Read more" that does
+   nothing. Restate it here. */
+.game-detail__desc-more[hidden] { display: none; }
+.game-detail__desc-more:active { opacity: 0.65; }
+.game-detail__desc-more i { transition: transform 160ms var(--ease); }
+.game-detail__desc.is-expanded .game-detail__desc-more i { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .game-detail__desc-more i { transition: none; }
+}
 /* Unified section header for both Expansions and Recent plays so the
    two blocks read as siblings — same font size, same gap above/below. */
 .game-detail__section {

@@ -22,7 +22,11 @@
   //    expansion lists (migration 055). Entries cached at v1 hold thumbnail-only
   //    games, so returning users would keep painting the low-res art from
   //    localStorage until natural expiry.
-  const SCHEMA_VERSION = 2;
+  // 3: game bundles carry `description` (BGG descriptions are now captured on
+  //    import and backfilled for the existing catalog). Entries cached at v2
+  //    hold description-less games, so returning users would keep painting a
+  //    blank blurb from localStorage until natural expiry.
+  const SCHEMA_VERSION = 3;
   const STORAGE_PREFIX = "bgb_cache:";
   const META_SUFFIX = "__meta";
   const SIZE_BUDGET_BYTES = 3 * 1024 * 1024; // ~3 MB localStorage budget
