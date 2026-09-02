@@ -7,6 +7,12 @@
   // six rows is what fits above the fold beside the section that follows.
   const PER_PAGE = 6;
 
+  // Closest matches shown above the full list when linking a ghost. Same
+  // number as the importer's Players step, for the same reason: enough to hold
+  // the real answer when a nickname is ambiguous, short enough that the rest
+  // of the buddy list is still visible underneath without a scroll.
+  const LINK_SUGGEST_MAX = 5;
+
   class BuddiesView extends window.View {
     constructor() {
       super("buddies");
@@ -25,15 +31,9 @@
       this._playedWith = [];   // PlayedWithUser[]
       this._ghosts = [];       // GhostPlayer[]
 
-      // Ghost-linking state: which display_name is currently being linked,
-      // plus the live profile-search results for that picker.
-      this._linkingGhost = null;
-      this._linkQuery = "";
-      this._linkResults = [];
-      // Debounce timer + monotonic token for the link-panel profile search
-      // — see _linkSearchInput.
-      this._linkSearchTimer = null;
-      this._linkSearchSeq = 0;
+      // Ghost linking has no state here any more: it is one bottom sheet
+      // (widgets/player-picker-sheet.js), which owns its own query, its own
+      // results and its own lifecycle. See _openLinkSheet.
 
       // Bumped by every optimistic friend-graph edit. _load() captures it
       // before its awaits and drops its own results if it changed meanwhile,
@@ -558,11 +558,6 @@
       const next = clampPage(n, this._playedWithRows().length);
       if (next === this._playedWithPage) return;
       this._playedWithPage = next;
-      // The open ghost-link panel belongs to a row that is about to scroll
-      // off the page — close it rather than leave invisible state behind.
-      this._linkingGhost = null;
-      this._linkQuery = "";
-      this._linkResults = [];
       this.render();
     }
 
@@ -584,9 +579,8 @@
     }
 
     _renderGhostRow(g) {
-      const isOpen = this._linkingGhost === g.display_name;
       return `
-        <li class="buddies-row buddies-row--ghost ${isOpen ? "is-expanded" : ""}">
+        <li class="buddies-row buddies-row--ghost">
           ${window.BgbBadge.render({ avatar: null, displayName: g.display_name, size: "sm", isGhost: true, extraClass: "buddies-row__avatar buddies-row__avatar--ghost" })}
           <div class="buddies-row__body">
             <div class="buddies-row__name">
@@ -595,59 +589,10 @@
             </div>
             <div class="buddies-row__when">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}${g.last_played_at ? " · last " + formatDate(g.last_played_at) : ""}</div>
           </div>
-          <button class="btn btn-ghost btn-xs" onclick="${escapeAttr(`window.buddiesView._toggleLinkPanel('${jsStr(g.display_name)}')`)}">
-            ${isOpen ? "Cancel" : "Link"}
+          <button class="btn btn-ghost btn-xs" onclick="${escapeAttr(`window.buddiesView._openLinkSheet('${jsStr(g.display_name)}')`)}">
+            Link
           </button>
-          ${isOpen ? this._renderLinkPanel(g.display_name) : ""}
         </li>
-      `;
-    }
-
-    _renderLinkPanel(displayName) {
-      const q = (this._linkQuery || "").trim().toLowerCase();
-      // Ghosts the viewer has logged that match the query, excluding the
-      // ghost currently being linked. Rendered after accounts so real
-      // buddies take priority in the picker.
-      const ghostMatches = q
-        ? (this._ghosts || []).filter((g) => {
-            const name = (g.display_name || "").toLowerCase();
-            if (name === displayName.toLowerCase()) return false;
-            return name.includes(q);
-          })
-        : [];
-      const hasAccounts = this._linkResults.length > 0;
-      const hasGhosts = ghostMatches.length > 0;
-      return `
-        <div class="buddies-link-panel" onclick="event.stopPropagation()">
-          ${window.BgbSearchField.render({
-            id: "ghost-link-input",
-            value: this._linkQuery,
-            placeholder: `Search buddies or ghosts to link “${displayName}”`,
-            inputCls: "input-sm",
-            oninput: "window.buddiesView._linkSearchInput(this.value)",
-          })}
-          ${this._linkQuery && (hasAccounts || hasGhosts) ? `
-            <ul class="buddies-link-results">
-              ${this._linkResults.map((u) => `
-                <li onclick="${escapeAttr(`window.buddiesView._confirmLink('${jsStr(displayName)}', '${u.id}')`)}">
-                  ${window.BgbBadge.render({ avatar: u.avatar, displayName: u.display_name, size: "xs" })}
-                  <span class="buddies-link-results__name">${escapeHtml(u.display_name)}</span>
-                  <span class="buddies-link-results__chip">Account</span>
-                </li>
-              `).join("")}
-              ${ghostMatches.map((g) => `
-                <li onclick="${escapeAttr(`window.buddiesView._confirmMerge('${jsStr(displayName)}', '${jsStr(g.display_name)}')`)}">
-                  ${window.BgbBadge.render({ avatar: null, displayName: g.display_name, size: "xs", isGhost: true })}
-                  <span class="buddies-link-results__name">${escapeHtml(g.display_name)}</span>
-                  <span class="buddies-link-results__email">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}</span>
-                  <span class="buddies-link-results__chip buddies-link-results__chip--ghost">Ghost</span>
-                </li>
-              `).join("")}
-            </ul>
-          ` : (this._linkQuery
-              ? `<div class="buddies-link-results__empty">No matching buddies or ghosts.</div>`
-              : "")}
-        </div>
       `;
     }
 
@@ -1482,65 +1427,134 @@
     }
 
     // ── Ghost → account linking ─────────────────────────────────────────────
-    _toggleLinkPanel(displayName) {
-      if (this._linkingGhost === displayName) {
-        this._closeLinkPanel();
-      } else {
-        this._linkingGhost = displayName;
-        this._linkQuery = "";
-        this._linkResults = [];
-        this.render();
-        // Focus the link search input once the row is expanded.
-        const el = document.getElementById("ghost-link-input");
-        if (el) el.focus();
-      }
+    //
+    // The same sheet the play importer's Players step opens, asking the same
+    // question of the same list. It used to be an inline panel that expanded
+    // inside the row: a search field that fired /profiles/search on a 300ms
+    // debounce per keystroke, and showed NOTHING until something was typed —
+    // so the buddy this ghost obviously is sat one tap away behind a search
+    // for a name the user had to remember first.
+    //
+    // The sheet answers all of that with machinery that already exists: the
+    // viewer's buddies and their other ghosts filter instantly off the cached
+    // partner bundle, the closest matches to the ghost's own name lead the
+    // list (domain/name-match.js — "Ted" finds Tedra Okonjo without a
+    // keystroke), and reaching past the buddy list to every account on
+    // BoardgameBuddy is one deliberate button rather than a request per key.
+
+    /** @param {string} displayName The ghost being linked. */
+    _openLinkSheet(displayName) {
+      const candidates = this._linkCandidates(displayName);
+      const ghost = (this._ghosts || []).find((g) => g.display_name === displayName);
+      const plays = (ghost && ghost.play_count) || 0;
+      window.PlayerPickerSheet.open({
+        candidates,
+        suggestions: window.BgbNameMatch
+          .rank(displayName, candidates, (c) => [c.name, c.username])
+          .slice(0, LINK_SUGGEST_MAX)
+          .map((hit) => hit.row),
+        suggestionsLabel: `Closest to “${displayName}”`,
+        restLabel: "Everyone you play with",
+        singleSelect: true,
+        title: `Who is “${displayName}”?`,
+        sub: plays
+          ? `${plays} ${plays === 1 ? "play" : "plays"} move to whoever you pick.`
+          : "Their plays move to whoever you pick.",
+        // "None of these" is the Cancel button here. Unlike the importer,
+        // where keeping the name as a ghost is a real answer that has to be
+        // expressible, this sheet is only ever a choice among people who
+        // already exist — a typed name matching nobody is not an act.
+        allowGuest: false,
+        searchAll: (q) => this._searchEveryone(q),
+        searchAllLabel: "Search all of BoardgameBuddy",
+        returnFocus: document.activeElement,
+        onConfirm: (picks) => {
+          const pick = picks && picks[0];
+          if (!pick) return;
+          if (pick.user_id) this._confirmLink(displayName, pick.user_id, pick.name, plays);
+          else this._confirmMerge(displayName, pick.name, plays);
+        },
+      });
     }
 
-    _closeLinkPanel() {
-      this._linkingGhost = null;
-      this._linkQuery = "";
-      this._linkResults = [];
-      this.render();
+    /**
+     * Everyone this ghost could turn out to be: the viewer's buddies, the
+     * accounts they have shared a table with, and their OTHER ghosts (picking
+     * one of those merges the two names into a single player).
+     *
+     * Three exclusions, each for its own reason. The ghost being linked, or
+     * the sheet would offer to merge it with itself. The viewer, because
+     * /ghost-players/link rejects that outright — your own ghost is a play you
+     * logged yourself out of, and the fix for it lives on the play. And any
+     * ghost sharing the viewer's display name, which is the same case wearing
+     * a nickname, and which this screen has always filtered out of the list.
+     * @param {string} displayName
+     */
+    _linkCandidates(displayName) {
+      const me = window.store.get("user");
+      const mine = String((me && me.display_name) || "").toLowerCase();
+      const self = String(displayName || "").toLowerCase();
+      return window.Buddy.toPlayerCandidates({
+        accounts: this._buddies,
+        ghosts: this._ghosts,
+        recent: this._playedWith,
+      }).filter((c) => {
+        if (c.user_id) return !me || c.user_id !== me.id;
+        const name = String(c.name || "").toLowerCase();
+        return name !== self && !(mine && name === mine);
+      });
     }
 
-    async _linkSearchInput(q) {
-      this._linkQuery = q;
-      clearTimeout(this._linkSearchTimer);
-      if (!q) {
-        this._linkResults = [];
-        this.render();
-        return;
-      }
-      // Debounce keystrokes (mirrors collection-view's search input) and
-      // stamp each request with a monotonic token captured before the await
-      // so an out-of-order response can't clobber newer results.
-      this._linkSearchTimer = setTimeout(async () => {
-        const seq = ++this._linkSearchSeq;
-        let results;
-        try {
-          results = await window.Buddy.searchProfiles(q);
-        } catch (_) {
-          results = [];
-        }
-        if (seq !== this._linkSearchSeq) return; // stale — a newer search owns state
-        this._linkResults = results || [];
-        this.render();
-      }, 300);
+    /**
+     * The whole app, for a ghost who has an account the viewer has never
+     * played with or added. Same call the importer's sheet makes, behind the
+     * same button — and the same reason it is a button: the list above costs
+     * no round trip, so spending one per keystroke would be spending exactly
+     * what makes it feel instant.
+     * @param {string} q
+     */
+    async _searchEveryone(q) {
+      const hits = await window.Buddy.searchProfiles(q);
+      const me = window.store.get("user");
+      return (hits || [])
+        .filter((h) => h && h.id && (!me || h.id !== me.id))
+        .map((h) => ({
+          source: "account",
+          user_id: h.id,
+          name: h.display_name || h.username || "",
+          username: h.username || null,
+          avatar: h.avatar || null,
+        }))
+        .filter((c) => c.name);
     }
 
-    async _confirmLink(displayName, targetUserId) {
+    /**
+     * Stamp every play this ghost appears in with a real account.
+     *
+     * Confirmed first, and that is new. The old panel showed nothing until
+     * the user typed a name, so a result was always something they had gone
+     * looking for; the sheet puts the whole buddy list a tap away, which makes
+     * a stray thumb able to hand somebody else's history to the wrong person.
+     * Hard to undo, too: the plays keep the account until each of those people
+     * removes themselves from them one by one.
+     * @param {string} displayName @param {string} targetUserId
+     * @param {string} targetName @param {number} plays
+     */
+    async _confirmLink(displayName, targetUserId, targetName, plays) {
+      const ok = await window.PolaroidPopup.confirm({
+        title: `“${displayName}” is ${targetName}?`,
+        body: `${plays ? `Their ${plays} ${plays === 1 ? "play" : "plays"} move` : "Their plays move"} onto ${targetName}'s account, and ${targetName} appears in them from now on. Undoing it means removing them from each play by hand.`,
+        confirmLabel: "Link them",
+        cancelLabel: "Not them",
+      });
+      if (!ok) return;
       try {
         const res = await window.Buddy.linkGhost(displayName, targetUserId);
         const n = (res && res.rows_updated) || 0;
-        // Don't block on a toast — close the panel and refresh.
-        if (n === 0) {
-          console.warn("No matching ghost rows found to link.");
-        }
+        if (n === 0) console.warn("No matching ghost rows found to link.");
       } catch (e) {
-        alert(e.message || "Failed to link");
+        if (typeof showToast === "function") showToast(e.message || "Couldn't link that player", "error");
         return;
-      } finally {
-        this._closeLinkPanel();
       }
       // Reload so the ghost disappears and the played-with people list
       // picks the linked account up. The bundle cache still holds the old
@@ -1549,18 +1563,28 @@
       await this._load();
     }
 
-    async _confirmMerge(sourceDisplayName, targetDisplayName) {
+    /**
+     * Two spellings of one person who has no account: rename this ghost to
+     * the other, so their plays add up as one player. Confirmed for the same
+     * reason as the link above.
+     * @param {string} sourceDisplayName @param {string} targetDisplayName
+     * @param {number} plays
+     */
+    async _confirmMerge(sourceDisplayName, targetDisplayName, plays) {
+      const ok = await window.PolaroidPopup.confirm({
+        title: `“${sourceDisplayName}” is “${targetDisplayName}”?`,
+        body: `${plays ? `Their ${plays} ${plays === 1 ? "play" : "plays"} join` : "Their plays join"} “${targetDisplayName}”, and “${sourceDisplayName}” stops being a separate player. They're still a ghost — nobody's account is involved.`,
+        confirmLabel: "Merge them",
+        cancelLabel: "Keep both",
+      });
+      if (!ok) return;
       try {
         const res = await window.Buddy.mergeGhosts(sourceDisplayName, targetDisplayName);
         const n = (res && res.rows_updated) || 0;
-        if (n === 0) {
-          console.warn("No matching ghost rows found to merge.");
-        }
+        if (n === 0) console.warn("No matching ghost rows found to merge.");
       } catch (e) {
-        alert(e.message || "Failed to merge");
+        if (typeof showToast === "function") showToast(e.message || "Couldn't merge those players", "error");
         return;
-      } finally {
-        this._closeLinkPanel();
       }
       // Buddy.allBuddies() caches the ghost list for the play-flow picker
       // — invalidate so the renamed/merged ghost shows up there too.

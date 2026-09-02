@@ -6187,8 +6187,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* That rust is 6.2:1 on paper and ~1.4:1 on a chrome card. Both chips sit on an
    18% amber wash, which eats ~1.8:1 of whatever ink they are given, so they take
    the lamp gold rather than --accent-ink. */
-:root[data-bgb="dark"] :is(.player-type-chip--account,
-                           .buddies-link-results__chip) { color: var(--accent); }
+:root[data-bgb="dark"] .player-type-chip--account { color: var(--accent); }
 .player-type-chip--custom {
   background: color-mix(in srgb, var(--polaroid-ink) 8%, transparent);
   color: var(--polaroid-muted, #8B7E68);
@@ -6243,67 +6242,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--accent-ink);
 }
 
-.buddies-row--ghost { flex-wrap: wrap; }
-.buddies-row--ghost.is-expanded {
-  background: oklch(var(--b3));
-  border-color: var(--accent);
-}
-/* This row used to paint its own fill + dashed border, which is why the buddies
+/* Ghost rows once expanded in place to hold a link panel — the ghost-linking
+   flow is widgets/player-picker-sheet.js now, so the row is an ordinary row
+   and .buddies-link-* went with the panel (.claude/rules/ui-object-design.md
+   §5: dead component, dead CSS family, same commit).
+   This row used to paint its own fill + dashed border, which is why the buddies
    screen was the one place a ghost badge didn't look like the others; the
    silhouette is now the whole mark, so both are gone.
    The dark-theme --ghost-ink flip that used to live here (the buddies row was
    then the one surface where a ghost sat on a dark fill rather than on paper)
    now covers every spoke at once — see "The spokes in DARK" below. */
-.buddies-link-panel {
-  flex-basis: 100%;
-  margin-top: 0.55rem;
-  padding-top: 0.55rem;
-  border-top: 1px dashed color-mix(in srgb, var(--polaroid-ink) 22%, transparent);
-  display: flex; flex-direction: column; gap: 0.4rem;
-  cursor: default;
-}
-.buddies-link-results {
-  list-style: none; padding: 0; margin: 0;
-  background: var(--polaroid-bg, #FFFBF1);
-  color: var(--polaroid-ink, #1D1812);
-  border: 1px solid var(--polaroid-line, #DAC9A4);
-  border-radius: 0.4rem;
-  max-height: 220px; overflow-y: auto;
-}
-.buddies-link-results li {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.55rem 0.6rem;
-  border-bottom: 1px solid var(--polaroid-line, #DAC9A4);
-  cursor: pointer;
-  font-size: 0.88rem;
-  color: var(--polaroid-ink, #1D1812);
-}
-.buddies-link-results li:last-child { border-bottom: none; }
-.buddies-link-results li:hover { background: var(--polaroid-bg-soft, #F5EEDC); }
-.buddies-link-results__name { font-weight: 600; flex: 1; }
-.buddies-link-results__email { font-size: 0.72rem; color: var(--polaroid-muted, #8B7E68); }
-.buddies-link-results__chip {
-  display: inline-block;
-  padding: 0.05rem 0.4rem;
-  border-radius: 999px;
-  font-size: 0.62rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  background: oklch(0.55 0.15 60 / 0.18);
-  color: oklch(0.45 0.15 60);
-}
-.buddies-link-results__chip--ghost {
-  background: rgba(139, 126, 104, 0.15);
-  color: var(--polaroid-muted, #8B7E68);
-  border: 1px dashed rgba(139, 126, 104, 0.45);
-}
-.buddies-link-results__empty {
-  padding: 0.6rem;
-  font-size: 0.78rem;
-  color: var(--polaroid-muted, #8B7E68);
-  text-align: center;
-}
 .game-detail__back {
   position: absolute; top: 0.6rem; left: 0.6rem; z-index: 2;
   background: oklch(var(--b1) / 0.5); backdrop-filter: blur(8px);
