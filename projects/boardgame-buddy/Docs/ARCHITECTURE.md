@@ -418,6 +418,14 @@ one mapping from the `/play-partners` bundle to picker rows — `accounts` there
 are buddy EDGES (`other_user_id`, `other_display_name`), and reading them as
 profiles is what made that sheet show nothing but ghost players.
 
+The note itself need not be typed: the source step takes photographs of the
+page, up to four, inline as base64 on the parse request. They are read once and
+dropped — never stored, and never written to the saved draft, which is the one
+piece of the wizard's state too large for the localStorage quota. A photographed
+note goes to `GEMINI_MODEL_STRONG` rather than Flash-Lite, because it is OCR and
+arithmetic rather than restructuring, and a miscounted tally is invisible to the
+reviewer unless the model says which row it was unsure of.
+
 Those answers then decide the review list. `PlayImport#rowKeyFor` keys a review
 row on what a play RESOLVED to — the catalog game, the day, the note, and the
 seats by account id — never on how the note wrote them, so two spellings of one

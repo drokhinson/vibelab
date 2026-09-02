@@ -54,6 +54,9 @@
      */
     _resetFormState() {
       this._parsing = false;
+      // Compressing and encoding a few phone photos takes a visible moment, so
+      // Continue is blocked and the strip shows a placeholder while it runs.
+      this._preparingPhotos = false;
       this._importing = false;
       this._error = null;
       this._partners = null;
@@ -150,7 +153,11 @@
                   onclick="window.importPlaysView._back()">Back</button>` : ""}
           <button class="imp-nav__next" type="button" ${busy || blocked ? "disabled" : ""}
                   onclick="window.importPlaysView._next()">
-            ${busy ? "Reading your notes…" : (i === 1 ? "Read my notes" : "Continue")}
+            ${busy
+              ? "Reading your notes…"
+              : (i === 1
+                  ? (this._draft.photos.length && !this._draft.text.trim() ? "Read my photos" : "Read my notes")
+                  : "Continue")}
           </button>
         </div>
       `;
@@ -161,7 +168,9 @@
       const d = this._draft;
       switch (d.stepName) {
         case "source":
-          return d.text.trim().length && d.text.length <= window.PlayImport.maxChars ? null : "text";
+          if (this._preparingPhotos) return "photos";
+          if (d.text.length > window.PlayImport.maxChars) return "text";
+          return (d.text.trim().length || d.photos.length) ? null : "text";
         case "plays":
           return d.liveCount ? null : "empty";
         default:
@@ -177,9 +186,12 @@
         return;
       }
       if (this._parsing) {
+        const label = d.photos.length
+          ? (d.photos.length === 1 ? "Reading your photo…" : "Reading your photos…")
+          : "Reading your notes…";
         this.container.innerHTML = this._chrome(`
           <div class="imp-step">
-            ${buddyLoader({ size: 120, label: "Reading your notes…" })}
+            ${buddyLoader({ size: 120, label })}
             <p class="imp-step__lede imp-step__lede--center">
               This takes a few seconds. Nothing is saved yet.
             </p>
@@ -189,6 +201,7 @@
         return;
       }
       const body = window.ImportPlaysSteps[d.stepName](d, {
+        preparingPhotos: this._preparingPhotos,
         loadingPartners: this._loadingPartners,
         expanded: this._expanded,
         shownGroups: this._shownGroups,
@@ -277,6 +290,76 @@
      * Read a .txt/.md/.csv into the textarea. Nothing is uploaded — the same
      * client-side read the chapter editor's "Import .md" does.
      */
+    /**
+     * Photograph the note instead of typing it. Each file is downscaled and
+     * re-encoded in the browser before it becomes base64: a 12MP phone shot is
+     * 6-10 MB, and four of those inline in one JSON body is a request no
+     * amount of patience gets through.
+     *
+     * Prepared one at a time rather than in parallel. Each one decodes a full-
+     * size bitmap and paints it into a canvas, and four of those at once on a
+     * phone is where the tab gets killed for memory — a couple of seconds
+     * against a progress line is the better trade.
+     */
+    async _onPhotoPick(event) {
+      const input = event && event.target;
+      const files = Array.from((input && input.files) || []);
+      // Reset first, so picking the same photo twice fires onchange again —
+      // and so an early return below can't leave the input holding a file.
+      if (input) input.value = "";
+      if (!files.length || this._preparingPhotos) return;
+
+      const room = this._draft.photoRoom;
+      if (!room) {
+        showToast(`That's the most photos one import can take (${window.PlayImport.maxPhotos}).`, "info");
+        return;
+      }
+      if (files.length > room) {
+        showToast(`Taking the first ${room} — ${window.PlayImport.maxPhotos} photos is the most one import can read.`, "info");
+      }
+
+      this._preparingPhotos = true;
+      this.render();
+      let failed = 0;
+      for (const file of files.slice(0, room)) {
+        let prepared;
+        try {
+          prepared = await window.preparePhotoForUpload(file, window.IMPORT_PHOTO_OPTS);
+        } catch (_) {
+          prepared = { ok: false, error: "Couldn't read that photo." };
+        }
+        if (!prepared.ok) { failed++; showToast(prepared.error, "error"); continue; }
+        let data;
+        try {
+          data = await window.fileToBase64(prepared.file);
+        } catch (err) {
+          failed++;
+          showToast((err && err.message) || "Couldn't read that photo.", "error");
+          continue;
+        }
+        // The draft is a singleton and the user can close the importer
+        // mid-encode; adding to a draft they have already discarded would
+        // resurrect it on the next open.
+        if (this._draft.stepName !== "source") break;
+        this._draft.addPhoto({
+          id: `ph-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          mime: prepared.file.type,
+          data,
+          url: URL.createObjectURL(prepared.file),
+          bytes: prepared.file.size,
+        });
+      }
+      this._preparingPhotos = false;
+      if (!failed) this._draft.save();
+      this.render();
+    }
+
+    /** @param {string} id */
+    _removePhoto(id) {
+      this._draft.removePhoto(id);
+      this.render();
+    }
+
     _onFilePick(event) {
       const input = event && event.target;
       const file = input && input.files && input.files[0];

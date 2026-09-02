@@ -236,6 +236,22 @@ const _PHOTO_JPEG_QUALITY = 0.85;
 const _PHOTO_FAST_PATH_BYTES = 1024 * 1024; // 1 MiB
 
 /**
+ * The second caller's budget: a photographed NOTE, read by the model and then
+ * thrown away, rather than a play photo kept forever. Different numbers for
+ * different reasons — a bigger edge because the thing being preserved is
+ * legible handwriting rather than a nice picture, a tighter byte cap because
+ * four of these ride inline in one JSON request as base64 (which inflates them
+ * by a third), and no GIF because the parse endpoint's own MIME list has none.
+ * Mirrors MAX_IMPORT_IMAGE_BYTES in the backend's constants.py.
+ */
+window.IMPORT_PHOTO_OPTS = {
+  maxEdge: 2000,
+  quality: 0.8,
+  maxBytes: 4 * 1024 * 1024,
+  allowedTypes: ["image/jpeg", "image/png", "image/webp"],
+};
+
+/**
  * @typedef {{ ok: true, file: File, originalSize: number, compressedSize: number, compressed: boolean }
  *        | { ok: false, error: string }} PreparedPhoto
  */
@@ -252,15 +268,26 @@ function _loadImageViaTag(file) {
 
 /**
  * Prepare a user-picked photo for upload. Small allowed formats pass through
- * untouched; everything else is decoded, downscaled to a 1920px max edge, and
+ * untouched; everything else is decoded, downscaled to a max edge, and
  * re-encoded as JPEG so the upload stays under the backend cap.
+ *
+ * `opts` exists because the two callers are photographing different things for
+ * different lifetimes — see IMPORT_PHOTO_OPTS. Omitted, the defaults are the
+ * play-photo ones this function was written for, so its original call site
+ * reads exactly as it did.
  * @param {File} file
+ * @param {{maxEdge?: number, quality?: number, maxBytes?: number, allowedTypes?: string[]}} [opts]
  * @returns {Promise<PreparedPhoto>}
  */
-async function preparePhotoForUpload(file) {
+async function preparePhotoForUpload(file, opts) {
   if (!file) return { ok: false, error: "No file selected." };
+  const o = opts || {};
+  const maxEdge = o.maxEdge || _PHOTO_MAX_EDGE;
+  const quality = o.quality || _PHOTO_JPEG_QUALITY;
+  const maxBytes = o.maxBytes || window.MAX_PHOTO_BYTES;
+  const allowed = o.allowedTypes ? new Set(o.allowedTypes) : _ALLOWED_PHOTO_MIME;
 
-  if (file.size < _PHOTO_FAST_PATH_BYTES && _ALLOWED_PHOTO_MIME.has(file.type)) {
+  if (file.size < _PHOTO_FAST_PATH_BYTES && allowed.has(file.type)) {
     return { ok: true, file, originalSize: file.size, compressedSize: file.size, compressed: false };
   }
 
@@ -271,7 +298,7 @@ async function preparePhotoForUpload(file) {
 
   const srcW = source.width || source.naturalWidth;
   const srcH = source.height || source.naturalHeight;
-  const scale = Math.min(1, _PHOTO_MAX_EDGE / Math.max(srcW, srcH));
+  const scale = Math.min(1, maxEdge / Math.max(srcW, srcH));
   const w = Math.max(1, Math.round(srcW * scale));
   const h = Math.max(1, Math.round(srcH * scale));
 
@@ -282,11 +309,12 @@ async function preparePhotoForUpload(file) {
   if (!ctx) return { ok: false, error: "Couldn't compress that photo — try a different one." };
   ctx.drawImage(source, 0, 0, w, h);
 
-  const blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", _PHOTO_JPEG_QUALITY));
+  const blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
   if (!blob) return { ok: false, error: "Couldn't compress that photo — try a different one." };
-  if (blob.size > window.MAX_PHOTO_BYTES) {
+  if (blob.size > maxBytes) {
     const mb = (blob.size / 1048576).toFixed(1);
-    return { ok: false, error: `Photo is ${mb} MB after compression — max is 5 MB.` };
+    const cap = Math.round(maxBytes / 1048576);
+    return { ok: false, error: `Photo is ${mb} MB after compression — max is ${cap} MB.` };
   }
 
   const baseName = (file.name || "photo").replace(/\.[^.]+$/, "");
@@ -294,3 +322,27 @@ async function preparePhotoForUpload(file) {
   return { ok: true, file: out, originalSize: file.size, compressedSize: out.size, compressed: true };
 }
 window.preparePhotoForUpload = preparePhotoForUpload;
+
+/**
+ * A prepared file as bare base64 — no `data:` prefix, which is what an API
+ * body wants and what the play importer's parse endpoint validates. Rejects
+ * rather than resolving empty, so a caller cannot post an empty image and get
+ * a model error back instead of a read error.
+ * @param {File|Blob} file
+ * @returns {Promise<string>}
+ */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || "");
+      const comma = text.indexOf(",");
+      const data = comma === -1 ? "" : text.slice(comma + 1);
+      if (data) resolve(data);
+      else reject(new Error("Couldn't read that photo."));
+    };
+    reader.onerror = () => reject(new Error("Couldn't read that photo."));
+    reader.readAsDataURL(file);
+  });
+}
+window.fileToBase64 = fileToBase64;

@@ -316,6 +316,25 @@ MAX_IMPORT_CHARS = 20_000
 # short enough that it can't smuggle a second note past MAX_IMPORT_CHARS.
 MAX_IMPORT_HINT_CHARS = 1_000
 
+# Photographs of a note, instead of (or beside) pasted text. Four because a
+# notebook page photographs as one image and a spread as two — four covers a
+# double spread or a long list shot in sections, and past that the model is
+# being asked to hold more page than it reads reliably in one pass.
+MAX_IMPORT_IMAGES = 4
+
+# Decoded bytes per image. The client re-encodes to a 2000px-edge JPEG before
+# upload, which lands a page of handwriting around 400 KB; 4 MiB is the ceiling
+# for a photo that arrives some other way, and it is the number the client's
+# own compressor is told to respect. Base64 inflates the wire size by a third,
+# so four at the cap is ~21 MB of request — hence the total below, which is the
+# limit that actually protects the endpoint.
+MAX_IMPORT_IMAGE_BYTES = 4 * 1024 * 1024
+
+# Decoded bytes across every image in one parse. Four compressed pages come in
+# far under this; it exists so a caller cannot send four maximum-size images
+# and make one request weigh twenty megabytes.
+MAX_IMPORT_IMAGES_TOTAL_BYTES = 8 * 1024 * 1024
+
 # Ceiling on plays after `count` expansion. The reference note is 106 plays;
 # 500 leaves headroom for a multi-game note without letting one paste write an
 # unbounded number of rows.
