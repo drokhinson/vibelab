@@ -41,8 +41,11 @@
   function buildProfile(deck) {
     const me = deck.me || {};
     // The auto-created display name is the email local-part — usable but not
-    // personal. Seed the field with it so the user can keep it or rewrite.
-    const seeded = String(me.display_name || "");
+    // personal. Seed the field with it so the user can keep it or rewrite,
+    // clipped to the ceiling the field enforces so the deck never opens on a
+    // value it would then refuse.
+    const nameMax = window.User.DISPLAY_NAME_MAX;
+    const seeded = String(me.display_name || "").slice(0, nameMax);
     const el = slideEl("ob-slide--profile", `
       <div class="ob-slide__scroll">
         <div class="ob-slide__eyebrow">Your table name</div>
@@ -51,9 +54,10 @@
           on a scorecard.</p>
         <div class="polaroid-field ob-field">
           <label class="polaroid-field__label" for="ob-name">Display name</label>
-          <input id="ob-name" type="text" maxlength="40" autocomplete="off"
+          <input id="ob-name" type="text" maxlength="${nameMax}" autocomplete="off"
                  class="input input-bordered input-sm polaroid-field__input"
                  placeholder="Your name" value="${esc(seeded)}" />
+          <div class="polaroid-field__count ob-field__count"></div>
           <div class="polaroid-field__error ob-field__error text-error text-xs" hidden></div>
         </div>
         <div class="ob-paper"><div class="ob-avatar-picker"></div></div>
@@ -65,12 +69,28 @@
 
     const nameInput = el.querySelector("#ob-name");
     const errorEl = el.querySelector(".ob-field__error");
+    const countEl = el.querySelector(".ob-field__count");
     const picker = window.BgbAvatarPicker.mount(
       el.querySelector(".ob-avatar-picker"),
       { current: me.avatar || null, displayName: seeded },
     );
+
+    function paintCount() {
+      const len = nameInput.value.trim().length;
+      countEl.textContent = `${len}/${nameMax}`;
+      countEl.classList.toggle("polaroid-field__count--over", len > nameMax);
+    }
+
+    function refuse(message) {
+      errorEl.hidden = false;
+      errorEl.textContent = message;
+      nameInput.focus();
+    }
+
+    paintCount();
     nameInput.addEventListener("input", () => {
       picker.setDisplayName(nameInput.value);
+      paintCount();
       if (!errorEl.hidden) { errorEl.hidden = true; errorEl.textContent = ""; }
     });
 
@@ -81,9 +101,14 @@
       // asked about, and every OTHER screen in the app would then show a
       // person with no name.
       if (!displayName) {
-        errorEl.hidden = false;
-        errorEl.textContent = "Pick a name your buddies will recognise.";
-        nameInput.focus();
+        refuse("Pick a name your buddies will recognise.");
+        return;
+      }
+      // maxlength already caps typing and pasting; this catches the paths that
+      // slip past it (a dragged-in selection) so the deck cannot be the one
+      // surface that writes a name over the ceiling.
+      if (displayName.length > nameMax) {
+        refuse(`Keep it to ${nameMax} characters or less.`);
         return;
       }
       const avatar = picker.value();
