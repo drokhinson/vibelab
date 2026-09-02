@@ -94,10 +94,12 @@
     // its own (.claude/rules/ui-object-design.md §2): still a Play, still in
     // the session rail beside the ordinary cards. Two things differ.
     //
-    // IT DOES NOT FLIP, and so has no back face at all. A flip promises a
-    // scorecard, and a run has none to show — its whole claim is that its
-    // plays are indistinguishable. Tapping opens the run sheet instead, which
-    // is where the one thing you can actually do with a run lives: delete it.
+    // IT DOES NOT FLIP, and so has no back face at all. Tapping opens the run
+    // sheet instead, which is the run's back face as well as the one place a
+    // run can be acted on: it carries the delete, the note every play in the
+    // run shares, and their shared scoreline where there is one. A flip would
+    // promise a scorecard belonging to ONE play, and a run has no single play
+    // to show one for — its whole claim is that its plays are interchangeable.
     //
     // Losing the flip also fixes the stack art. The edges behind the card
     // could not sit behind it while .play-card__inner was `preserve-3d`,
