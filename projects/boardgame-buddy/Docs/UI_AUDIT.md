@@ -6,8 +6,8 @@ A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code a
 > since; read the **Cleanup log** at the bottom, newest first:
 > Pass 1 + 2 (dead code) 2026-05-23, Pass 2 2026-08-20 (§9),
 > Pass 3 (feed-card rework) 2026-08-29, Pass 4 (theme system + sheet system)
-> 2026-08-30, Pass 5 (Wishlist → a shelf) 2026-09-01, **Pass 6 (first-run deck)
-> 2026-09-01**.
+> 2026-08-30, Pass 5 (Wishlist → a shelf) 2026-09-01, Pass 6 (first-run deck)
+> 2026-09-01, **Pass 7 (one picker for "who is this person?") 2026-09-02**.
 >
 > ⚠️ Every `file:line` citation in §§2-8 dates from 2026-05-23 and has drifted.
 > Treat the *claims* as current only where a later pass confirms them; re-grep
@@ -426,6 +426,28 @@ To reproduce or extend: re-run those greps after any refactor and update the cou
 ---
 
 ## Cleanup log
+
+### Pass 7 (one picker for "who is this person?") — 2026-09-02
+
+Two screens asked the same question of the same list in two different shapes.
+The play importer's Players step opened `widgets/player-picker-sheet.js`; the
+Buddies screen's ghost-link control expanded a panel inside the row. Same
+question, same candidates, opposite affordances — `ui-object-design.md` §3b.
+
+**Deleted:** `views/buddies-view.js`'s `_renderLinkPanel`, `_toggleLinkPanel`,
+`_closeLinkPanel` and `_linkSearchInput`, the five instance fields behind them
+(`_linkingGhost`, `_linkQuery`, `_linkResults`, `_linkSearchTimer`,
+`_linkSearchSeq`), and the `.buddies-link-*` CSS family (≈50 lines) plus
+`.buddies-row--ghost.is-expanded`. The panel was also an absolute-ish list
+hung inside a list row, which `overlays.md` says should be a sheet.
+
+**Gained by sharing rather than by writing:** closest-match ranking off
+`domain/name-match.js` (a ghost called "Ted" now leads with Tedra Okonjo
+without a keystroke), instant local filtering of buddies AND the viewer's other
+ghosts off the cached partner bundle, and one deliberate "search all of
+BoardgameBuddy" button in place of a `/profiles/search` call per keystroke on a
+300ms debounce. The sheet grew one option to get here — `allowGuest: false`,
+since "add a name that matches nobody" is an act the link flow has no write for.
 
 ### Pass 6 (first-run deck) — 2026-09-01
 

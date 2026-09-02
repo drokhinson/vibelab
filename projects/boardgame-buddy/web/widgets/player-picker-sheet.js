@@ -94,6 +94,11 @@
    *   `candidates` is cached and filters instantly, and quietly turning every
    *   keystroke into a request would spend that.
    * @property {string} [searchAllLabel]       The button's title.
+   * @property {boolean} [allowGuest]          Default true. False when a name
+   *   that matches nobody is not an answer the caller can take — linking a
+   *   ghost player to an account is a choice among people who already exist,
+   *   and "add “xyz” as a guest" there would offer an act with nothing behind
+   *   it. Suppresses the row entirely, typed query or not.
    */
 
   const LIST_SEL = "[data-picker-list]";
@@ -118,6 +123,7 @@
       this._guestName = "";
       this._guestTitle = "";
       this._guestHint = "";
+      this._allowGuest = true;
       /** @type {PlayerCandidate[]} */
       this._suggestions = [];
       this._suggestionsLabel = "";
@@ -217,6 +223,7 @@
      * offered, falling back to `guestName` before anybody types.
      */
     _guestRow() {
+      if (!this._allowGuest) return "";
       // The typed name wins; falling back to guestName is what keeps the
       // "keep them as they are" answer on screen before anybody types.
       const q = this._query.trim() || this._guestName.trim();
@@ -357,7 +364,10 @@
         // Until then the guest row IS the answer: lead with it, let the note
         // underneath explain the absence, and offer the search below both.
         if (!guest) {
-          return tail || `<p class="bgb-sheet__empty">No buddies yet — type a name to add a guest.</p>`;
+          if (tail) return note + tail;
+          return `<p class="bgb-sheet__empty">${this._allowGuest
+            ? "No buddies yet — type a name to add a guest."
+            : escapeHtml(q ? `Nobody matches “${q}”.` : "Nobody to pick yet.")}</p>`;
         }
         return guest + note + tail;
       }
@@ -431,6 +441,7 @@
       this._guestName = opts.guestName || "";
       this._guestTitle = opts.guestTitle || "";
       this._guestHint = opts.guestHint || "";
+      this._allowGuest = opts.allowGuest !== false;
       this._suggestions = Array.isArray(opts.suggestions) ? opts.suggestions : [];
       this._suggestionsLabel = opts.suggestionsLabel || "";
       this._restLabel = opts.restLabel || "";
@@ -494,6 +505,7 @@
           this._guestName = "";
           this._guestTitle = "";
           this._guestHint = "";
+          this._allowGuest = true;
           this._suggestions = [];
           this._suggestionsLabel = "";
           this._restLabel = "";

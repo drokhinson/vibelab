@@ -409,6 +409,13 @@ a match at all, and only a PREFIX rung can tell those apart. Both the display
 name and the username are matched, display name first — a tie goes to the name
 people actually see.
 
+That picker is now the app's single answer to "which person is this?", shared
+by the importer's Players step and the Buddies screen's ghost-link control —
+same sheet, same ranking, same candidates (the viewer's buddies, everyone they
+have shared a table with, and their own ghosts). The Buddies screen passes
+`allowGuest: false`, because a typed name matching nobody is an answer the
+importer can take (keep them as a ghost) and the link flow cannot.
+
 The importer's picker also reaches past the buddy list: the local rows filter
 in memory off `Buddy.allBuddies()`'s day-long cache and so feel instant, and
 `PlayerPickerSheet`'s `searchAll` opt puts everyone else on BoardgameBuddy
