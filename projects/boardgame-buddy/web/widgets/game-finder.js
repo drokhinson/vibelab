@@ -15,10 +15,16 @@
 // Expansions never appear here: /search excludes them from every source
 // (library, DB, BGG). They're added through a base game's expansion
 // section — see widgets/import-expansions-modal.js.
-// Used by:
-//   - play-flow-view.js, via widgets/game-picker-sheet.js (Gather: pick the
-//     game for a session — mounted inlineDropdown inside the sheet)
-//   - widgets/add-game-modal.js (Add to collection / wishlist from spokes)
+// Used by widgets/game-search-sheet.js, which mounts it `inlineDropdown`
+// inside a bottom sheet — reached from views/play-flow-view.js (Gather: pick
+// the game for a session) and views/import-plays-view.js (name an imported
+// play's game).
+//
+// NOT used by widgets/bgg-import-sheet.js, which is the BoardGameGeek import.
+// That sheet searches BGG on an explicit Search rather than on every keystroke
+// (so the field can be blurred and the keyboard dropped before results land),
+// and it separates importing from shelving — neither of which is a shape this
+// widget has.
 //
 // Each instance owns a unique input + dropdown DOM id so two finders can
 // coexist on the same page if needed.

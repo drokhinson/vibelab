@@ -804,6 +804,12 @@
     // Same again: the saved comparison is this account's shelf against this
     // account's BGG handle, and it lives in localStorage outside bgbCache.
     if (window.BggSyncFlow) window.BggSyncFlow.reset();
+    // The import queue's own Map, and any completion card still on screen.
+    // store.reset() empties the published slot but not the module state behind
+    // it, and a card left up would offer the next account an "Add to
+    // collection" button for somebody else's import.
+    if (window.BggImport) window.BggImport.reset();
+    if (window.BggImportToast) window.BggImportToast.clear();
     if (window.bgbCache) window.bgbCache.unbindUser();
     window.store.reset();
     window.router.go("auth");

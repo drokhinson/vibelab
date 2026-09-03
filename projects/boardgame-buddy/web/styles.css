@@ -317,9 +317,10 @@
    on the backdrop element, so the panels inherit.
 
    .import-exp-modal is the one entry here that is not a screen OR a sheet: it
-   is a .polaroid-popup__card, and popups are otherwise deliberate paper (see
-   .add-game-modal). It joins on what it CONTAINS, which is the rule the whole
-   list actually follows — a searchable list of catalog rows, the same object
+   is a .polaroid-popup__card, and popups are otherwise deliberate paper (an
+   achievement, a play's wrap-up — the photograph cases). It joins on what it
+   CONTAINS, which is the rule the whole list actually follows — a searchable
+   list of catalog rows, the same object
    the expansion picker sheet holds, reached from the same two places and often
    one tap apart from it. A cream popup thrown up over the espresso sheet that
    opened it was the visible tell. Its class sits on the card rather than the
@@ -366,6 +367,7 @@
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .chapter-import-sheet,
+     .bgg-import-sheet,
      .play-run-sheet,
      .ach-sheet,
      .exp-picker,
@@ -411,6 +413,7 @@
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .chapter-import-sheet,
+     .bgg-import-sheet,
      .play-run-sheet,
      .ach-sheet,
      .exp-picker,
@@ -5577,6 +5580,394 @@ html.bgb-ptr-armed body {
   color: var(--polaroid-muted);
 }
 
+/* ── BoardGameGeek import sheet ───────────────────────────────────────────
+   widgets/bgg-import-sheet.js — the escape hatch above the Add Games catalog.
+   Panel, grip, title, sub, list and cancel are the shared .bgb-sheet__*
+   family; what is ours is the search row, the result rows, and the two
+   animations that say "this one is on the wire" and "this one has landed".
+
+   Named in BOTH re-point lists at the top of this file: it is a body-level
+   sheet, so it lands outside the spoke screen that opened it and would
+   otherwise keep the root paper aliases (.claude/rules/theming.md §8). */
+
+/* Before a search this is an ordinary short sheet: a title, a hint, a box.
+   Committing the search blurs the field, the software keyboard collapses,
+   --bgb-vv-h grows back to the whole screen, and --tall raises the ceiling to
+   claim it — so a full page of results lands in a list with room to be read.
+
+   Both rules restate the ceiling because the shared .bgb-sheet panel rule
+   caps it at min(80%, 660px), which is the whole thing being widened here.
+   Percentages, never vh: the backdrop is sized to the VISIBLE viewport and vh
+   is not (.claude/rules/overlays.md §4).
+
+   A ceiling rather than a fixed height, so a two-result search still hugs its
+   content instead of holding open 400px of empty panel. What makes that safe
+   is that the rows do not change height as they import — .bgg-import-row__meta
+   reserves its line whether or not it has anything to say, so the panel cannot
+   walk up the screen under the user's thumb. */
+.bgg-import-sheet .bgg-import-sheet__panel { max-height: min(84%, 700px); }
+.bgg-import-sheet .bgg-import-sheet__panel--tall { max-height: min(92%, 900px); }
+/* Keyboard back up, because the user tapped into the box again: take the
+   whole visible box. The 8% held back so the page peeks through is a luxury
+   there is no room for with a keyboard on screen. */
+:root.bgb-kb-open .bgg-import-sheet .bgg-import-sheet__panel--tall {
+  max-height: 100%;
+}
+
+.bgg-import-sheet__search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 2px 8px;
+}
+.bgg-import-sheet__field { flex: 1 1 auto; min-width: 0; }
+.bgg-import-sheet__field .search-field__input {
+  min-height: 46px;
+  border-radius: 12px;
+  /* Sunk into the panel: --polaroid-bg is the panel's OWN colour, so a field
+     filled with it reads as an invisible box on the espresso chrome. Same
+     move as .bgb-sheet .game-finder__input above. */
+  background: var(--well, var(--polaroid-bg));
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-ink);
+}
+/* The search is an explicit act here rather than a keystroke — that is what
+   lets the field be blurred on commit and the panel go tall. So it gets a
+   real filled button, not a ghost. */
+.bgg-import-sheet__go {
+  flex: none;
+  min-height: 46px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bgg-import-sheet__go:active { transform: translateY(1px); }
+.bgg-import-sheet__go:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+
+.bgg-import-sheet__list { gap: 4px; }
+.bgg-import-sheet__prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 26px 12px;
+  color: var(--polaroid-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+.bgg-import-sheet__prompt > i,
+.bgg-import-sheet__prompt > svg { flex: none; margin-top: 2px; }
+.bgg-import-sheet__loading { display: grid; place-items: center; padding: 18px 0; }
+.bgg-import-sheet__retry {
+  display: block;
+  margin: 12px auto 0;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 10px;
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ── A result row ─────────────────────────────────────────────────────────
+   position: relative + overflow: hidden so the progress sweep below can be
+   absolutely placed inside it and clipped to its radius. */
+.bgg-import-row {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* 56px, as every other sheet row in the app: rows sit flush, so a
+     slightly-off thumb lands on the neighbour (.claude/rules/mobile-web.md §5). */
+  min-height: 56px;
+  padding: 6px 10px;
+  flex: none;
+  border-radius: 12px;
+  color: var(--polaroid-ink);
+}
+.bgg-import-row__mark {
+  flex: none;
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-muted);
+}
+.bgg-import-row[data-state="library"] .bgg-import-row__mark {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+.bgg-import-row[data-state="failed"] .bgg-import-row__mark {
+  background: color-mix(in srgb, var(--rust) 16%, transparent);
+  color: var(--rust);
+}
+.bgg-import-row__body { flex: 1 1 auto; min-width: 0; }
+.bgg-import-row__name,
+.bgg-import-row__meta {
+  display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bgg-import-row__name { font-size: 0.97rem; font-weight: 600; line-height: 1.2; }
+/* The line is reserved whether or not it carries anything, so a row that gains
+   an "Importing…" it did not have (a BGG hit with no year) does not grow and
+   push the panel up the screen — the same reasoning as the reserved tick
+   column in .claude/rules/overlays.md §6. */
+.bgg-import-row__meta {
+  margin-top: 3px;
+  min-height: 0.9rem;
+  font-size: 0.74rem;
+  color: var(--polaroid-muted);
+}
+/* Covers the failed import AND a failed shelf write — the second leaves the
+   row in its library state, so the modifier is on the line, not the row. */
+.bgg-import-row__meta--bad { color: var(--rust); }
+
+/* The row's one action, and the whole two-step contract in one control: it
+   says "Import" until the game is in the library and "Add to collection"
+   afterwards. It is never both at once, and importing never performs the
+   second one on the user's behalf (domain/bgg-import.js). */
+.bgg-import-row__btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 10px;
+  background: var(--polaroid-bg-soft);
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* Import is the row's action, so it carries the accent — but as a tint, not a
+   slab. A screenful of results means a screenful of these, and eight solid
+   gold blocks down the trailing edge out-shout the game names they belong to.
+   The one solid accent on this sheet is Search, which there is exactly one of. */
+.bgg-import-row__btn--primary {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-quiet);
+  color: var(--accent-ink);
+}
+/* Not buttons — a state readout wearing the button's metrics so the row does
+   not reflow when the action becomes a receipt. */
+.bgg-import-row__btn--busy,
+.bgg-import-row__btn--done {
+  border-color: transparent;
+  background: transparent;
+  color: var(--polaroid-muted);
+  cursor: default;
+}
+.bgg-import-row__btn--done { color: var(--ok); }
+button.bgg-import-row__btn:disabled { opacity: 0.6; cursor: not-allowed; }
+button.bgg-import-row__btn:active { transform: translateY(1px); }
+button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -3px; }
+@media (hover: hover) {
+  button.bgg-import-row__btn:not(.bgg-import-row__btn--primary):hover {
+    background: var(--polaroid-line);
+  }
+}
+
+/* ── The import animation ─────────────────────────────────────────────────
+   An import is a BGG /thing fetch behind BGG's own throttling: seconds, not
+   milliseconds, and a static "Importing…" for that long reads as a hang. So
+   the row gets an indeterminate sweep along its bottom edge, a faint accent
+   wash, and a slow breath on its mark — three signals that all stop the
+   moment the job settles, which is the point.
+
+   Row-local rather than a sheet-wide bar: two rows can be importing at once,
+   and each one owns its own answer. */
+.bgg-import-row__bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  overflow: hidden;
+  opacity: 0;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.bgg-import-row__bar::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform: translateX(-110%);
+}
+.bgg-import-row[data-state="importing"] { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.bgg-import-row[data-state="importing"] .bgg-import-row__bar { opacity: 1; }
+.bgg-import-row[data-state="importing"] .bgg-import-row__bar::after {
+  animation: bggImportSweep 1150ms linear infinite;
+}
+.bgg-import-row[data-state="importing"] .bgg-import-row__mark {
+  animation: bggImportBreath 1600ms ease-in-out infinite;
+}
+/* The landing. The row repaints when the job settles, so this one-shot runs
+   exactly once per import without any JS to arm or clear it. */
+.bgg-import-row[data-state="library"] .bgg-import-row__mark {
+  animation: bggImportPop 340ms var(--ease) both;
+}
+/* translateX percentages resolve against the ELEMENT's own width, and the
+   sweep is 40% of the row — so it clears the right-hand edge at 250% and
+   280% carries it fully out. */
+@keyframes bggImportSweep {
+  from { transform: translateX(-110%); }
+  to   { transform: translateX(280%); }
+}
+@keyframes bggImportBreath {
+  0%, 100% { opacity: 1;    transform: scale(1); }
+  50%      { opacity: 0.62; transform: scale(0.94); }
+}
+@keyframes bggImportPop {
+  0%   { transform: scale(0.6);  opacity: 0; }
+  60%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bgg-import-row[data-state="importing"] .bgg-import-row__bar::after,
+  .bgg-import-row[data-state="importing"] .bgg-import-row__mark,
+  .bgg-import-row[data-state="library"] .bgg-import-row__mark { animation: none; }
+  /* The bar stays, filled and still: reduced motion means no movement, not no
+     feedback, and this is the row's only non-text signal that it is working. */
+  .bgg-import-row[data-state="importing"] .bgg-import-row__bar::after {
+    transform: none;
+    width: 100%;
+  }
+}
+
+/* ── Import completion notification ───────────────────────────────────────
+   ui/bgg-import-toast.js. An import outlives the sheet that started it, so
+   this is what tells the user it landed — and carries step two, the add to a
+   shelf that importing deliberately does not do.
+
+   z-index 111: one rung ABOVE the modal/sheet rung at 100, which is the only
+   deliberate exception in the ladder. It has to be readable over the very
+   sheet that started the import, and that is safe precisely because it is
+   TOP-anchored while every sheet is bottom-anchored — the two never contend
+   for the same pixels.
+
+   Ground tokens, not the --polaroid-* aliases: this floats over whatever
+   screen the user is on rather than living inside a card, so it is chrome in
+   dark and paper-white in light like the app ground itself. It is deliberately
+   NOT in the re-point lists at the top of this file for the same reason. */
+.bgb-import-toasts {
+  position: fixed;
+  top: calc(var(--bgb-vv-top, 0px) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 111;
+  width: min(calc(100vw - 20px), 460px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* The stack is a pass-through; only the cards take taps, so the strip of
+     screen beside a short card still belongs to whatever is underneath. */
+  pointer-events: none;
+}
+.bgb-import-toast {
+  pointer-events: auto;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  /* --line-strong rather than --card-border: this card floats over whatever
+     ground the user is on, so it cannot lean on a drop shadow the way a card
+     in the page flow does — the shadow does no work on the espresso ground.
+     --card-border is transparent in dark for exactly that reason and would
+     leave this edgeless there; --line-strong is a hairline in both themes. */
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--bg-1);
+  color: var(--ink);
+  box-shadow: var(--sh-3);
+  animation: bggToastIn 260ms var(--ease) both;
+}
+.bgb-import-toast--out { animation: bggToastOut 220ms ease-in both; }
+.bgb-import-toast__mark {
+  flex: none;
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+.bgb-import-toast__mark--bad {
+  background: color-mix(in srgb, var(--rust) 16%, transparent);
+  color: var(--rust);
+}
+.bgb-import-toast__body { flex: 1 1 auto; min-width: 0; }
+.bgb-import-toast__name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bgb-import-toast__line {
+  margin-top: 2px;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+.bgb-import-toast__action {
+  flex: none;
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bgb-import-toast__action:disabled { opacity: 0.6; cursor: not-allowed; }
+.bgb-import-toast__action:active { transform: translateY(1px); }
+.bgb-import-toast__close {
+  flex: none;
+  position: relative;
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+/* 44x44 hit area without inflating the glyph (.claude/rules/mobile-web.md §5). */
+.bgb-import-toast__close::before { content: ""; position: absolute; inset: -8px; }
+.bgb-import-toast__action:focus-visible,
+.bgb-import-toast__close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@keyframes bggToastIn {
+  from { opacity: 0; transform: translateY(-14px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)     scale(1); }
+}
+@keyframes bggToastOut {
+  from { opacity: 1; transform: translateY(0)     scale(1); }
+  to   { opacity: 0; transform: translateY(-10px) scale(0.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bgb-import-toast,
+  .bgb-import-toast--out { animation-duration: 1ms; }
+}
+
 /* ── Ghost claim sheet ("is this you?") ───────────────────────────────────
    One person, one question, two ways forward. Panel, grip, title and Cancel
    come from .bgb-sheet__*; only the head, the copy and the action pair are
@@ -8483,42 +8874,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .game-finder-bgg-btn:hover { background: var(--polaroid-bg-soft); }
 .game-finder-bgg-btn:active { transform: translateY(1px); }
 
-/* ── Add-game modal (collection/wishlist header CTA) ────────────────────── */
-.add-game-modal {
-  width: min(92vw, 420px);
-  text-align: left;
-  padding-bottom: 18px;
-}
-.add-game-modal:focus { outline: none; }   /* programmatic focus only */
-.add-game-modal .polaroid-popup__title { text-align: left; }
-.add-game-modal__hint {
-  margin: 4px 0 12px;
-  text-align: left;
-}
-.add-game-modal__body {
-  /* Let the GameFinder own its own spacing — the dropdown sits
-     position:absolute under the input. */
-  position: relative;
-}
-.add-game-modal__note {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--polaroid-muted);
-}
-.add-game-modal__note--error {
-  color: #b3492f;
-}
-/* The modal is vertically centred on a non-scrolling backdrop, so the finder
-   inside it has roughly half a screen to work with — less than the Gather
-   screen's ceiling. ui/dropdown-fit.js only ever tightens below the ceiling it
-   reads here, so this rule is what governs the modal. */
-.add-game-modal .game-finder-dropdown { max-height: min(38vh, 300px); }
-
 /* ── Import-expansions modal ────────────────────────────────────────────────
    Opened from the expansion section on the game-detail page and the host's
    Gather card. Lists the base game's not-yet-imported BGG expansions; one +
-   per row pulls it into the catalog. Shares the polaroid card chrome with
-   .add-game-modal and the spinner with .game-finder-spinner. */
+   per row pulls it into the catalog. Shares the polaroid card chrome with the
+   rest of the popup family and the spinner with .game-finder-spinner. */
 .import-exp-modal {
   width: min(92vw, 420px);
   text-align: left;

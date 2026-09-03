@@ -2,15 +2,17 @@
 // with a single tap per row to put a game on your shelf or take it off again.
 //
 // This replaced a search modal. The old "+ Add" on the Collection and Wishlist
-// spokes opened AddGameModal, which meant the only way to reach a game was to
+// spokes opened a search popup, which meant the only way to reach a game was to
 // already know its name and type it — fine for "I just bought Ark Nova",
 // useless for "what does BgB even have?". The catalog is browsable, so it is
 // browsed: every base game, alphabetical, revealed a batch at a time by the
 // same scroll sentinel the two spokes use (ui/infinite-scroll.js).
 //
-// The modal survives as this page's escape hatch, opened from the control just
-// above the list, because the one thing a catalog scroll cannot do is reach a
-// game BoardGameGeek has and BgB has not imported yet.
+// The escape hatch is the control just above the list, because the one thing a
+// catalog scroll cannot do is reach a game BoardGameGeek has and BgB has not
+// imported yet. It opens widgets/bgg-import-sheet.js — a bottom sheet, and one
+// that imports into the shared catalog WITHOUT shelving anything here; putting
+// an imported game on this screen's shelf is a second tap inside the sheet.
 //
 // Everything you steer the screen with is pinned: the back row, "Add to:" with
 // its two pills, and the search box. On a list this long the shelf the + fills
@@ -142,6 +144,15 @@
         this._statusMap = m;
         this._mapPending = false;
         this._scheduleSync();
+      });
+      // An import grew the catalog, and no collection mutation invalidates
+      // those pages. The event is dispatched by domain/bgg-import.js when the
+      // import lands, which may well be after the sheet that started it was
+      // closed — so this listens rather than taking a callback.
+      this.listenDom("bgg-imported", () => {
+        if (!this._mounted) return;
+        if (window.bgbCache) window.bgbCache.clear(CATALOG_NS);
+        this._load({ reset: true });
       });
       this.listenDom("status-changed", (e) => {
         const { gameId, status } = (e && e.detail) || {};
@@ -456,7 +467,7 @@
           })}
         </div>
 
-        <button type="button" class="catalog-import" onclick="window.addGamesView._openBggImport()">
+        <button type="button" class="catalog-import" onclick="window.addGamesView._openBggImport(this)">
           <i data-icon="download" class="w-4 h-4"></i>
           <span>Not here? Import from BoardGameGeek</span>
         </button>
@@ -748,22 +759,22 @@
 
     /**
      * The escape hatch: a game BgB has never imported cannot appear in a
-     * catalog scroll by definition. AddGameModal's finder already carries the
-     * BGG search and import, and adds the result to the shelf on pick — so an
-     * import lands the same way a row tap does, and the catalog it just grew
-     * is re-read.
+     * catalog scroll by definition. The sheet searches BoardGameGeek and
+     * imports into the shared catalog; it does NOT put anything on this
+     * screen's shelf, which is a second, separate tap inside it
+     * (widgets/bgg-import-sheet.js). `shelf` only tells it which shelf that
+     * second tap should offer.
+     *
+     * Nothing is passed for the result: an import outlives the sheet, so the
+     * catalog refresh hangs off the `bgg-imported` event in onMount rather
+     * than a callback that would die with whatever opened it.
+     *
+     * @param {Element|null} [trigger]
      */
-    _openBggImport() {
-      window.AddGameModal.open({
-        status: this._shelf,
-        title: "Import from BoardGameGeek",
-        hint: "Search BoardGameGeek for a game BoardgameBuddy doesn't have yet — importing it adds it here too.",
-        onAdded: () => {
-          // The import changed the catalog, which no collection mutation
-          // invalidates. Drop every cached page and re-read from the top.
-          if (window.bgbCache) window.bgbCache.clear(CATALOG_NS);
-          this._load({ reset: true });
-        },
+    _openBggImport(trigger) {
+      window.BggImportSheet.open({
+        shelf: this._shelf,
+        returnFocus: trigger || null,
       });
     }
   }

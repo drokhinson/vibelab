@@ -1024,3 +1024,57 @@ var(--bgb-spoke-head-height))`, z 15) that `#add-games-pinned` and
 **Not done:** the four bespoke modals `overlays.md` §7 names as consolidation
 debt are untouched again. This pass calls `PolaroidPopup.confirm()` and
 `PolaroidPopup.alert()`, which is use, not a substantive touch.
+
+---
+
+## Cleanup log — Pass 10 (the BGG import stops being a modal, and stops shelving), 2026-09-03
+
+**Deleted:** `widgets/add-game-modal.js` and the whole `.add-game-modal*` CSS
+family, including the `max-height: min(38vh, 300px)` rule that existed only to
+stop its finder's dropdown running off a centred card. It was the third of the
+four bespoke modals `overlays.md` §7 names as consolidation debt; this pass
+removes it rather than extracting a shell for it, because its content was a
+list of search results and a list belongs in a sheet
+(`.claude/rules/overlays.md` §1).
+
+**Replaced by `widgets/bgg-import-sheet.js`**, the ninth `BgbBottomSheet`
+consumer. Three things changed with the surface:
+
+- **The results got the screen.** On the card the finder was capped at
+  min(38vh, 300px) — half a phone, most of it card chrome, for the one popup
+  whose entire content is a result list. The sheet is bottom-anchored and sized
+  off `--bgb-vv-h`, so there is no fit pass and no flip.
+- **Searching drops the keyboard.** The card searched as you typed, so the
+  keyboard never left and results arrived into the 40% of the screen it was not
+  covering. Search is now an explicit act (a Search button, or Enter), and
+  committing it blurs the field: the keyboard collapses, `.bgb-kb-open` drops,
+  and `--tall` takes the panel to 92% of the visible box. The panel takes a
+  `height` there rather than a `max-height`, so the geometry holds still while
+  rows import and change size under the thumb.
+- **Importing no longer shelves.** `AddGameModal`'s `onPick` ran
+  `Collection.add()` the instant an import returned, so *looking up* whether BgB
+  had a game put it in your collection. `domain/bgg-import.js` holds the two
+  apart: the row's button says Import until the game is in the library and Add
+  to collection afterwards, and it is never both.
+
+**Extracted, not copied:** the import itself moved out of the widget into
+`domain/bgg-import.js` because it outlives the widget — a BGG `/thing` fetch
+takes seconds of BGG's own throttling, which is long enough for the user to
+close the sheet. `ui/bgg-import-toast.js` is the completion notification that
+follows from that, and it carries the shelve step so step two is still reachable
+once the sheet is gone. It is a new surface rather than `showToast()` for two
+reasons: the global toast lives inside `#app` at z-index 100 and so paints
+*under* the sheet backdrop appended after it, and it has nowhere to put an
+action. z-index 111 is the ladder's one deliberate exception, and it is safe
+because the card is top-anchored while every sheet is bottom-anchored.
+
+**Also gone cold:** `ui/dropdown-fit.js` now has no live caller — the only
+`GameFinder` left (`widgets/game-search-sheet.js`) mounts `inlineDropdown`. It
+stays for now because the non-inline mode is still a supported `GameFinder`
+option; when that option goes, the file goes with it. Its header says so.
+
+**Not done:** the remaining three bespoke modals (`play-detail-popup`,
+`outbox-modal`, `import-expansions-modal`) still re-implement `_previousFocus` /
+`_escHandler` / singleton-by-id. `import-expansions-modal.js` was touched here
+for a stale comment only, which is not the substantive touch that rule says
+should trigger the extraction.

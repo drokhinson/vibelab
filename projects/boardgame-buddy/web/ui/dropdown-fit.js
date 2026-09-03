@@ -10,13 +10,16 @@
 //
 // The Gather screen's two combos, which is what this was written for, are both
 // bottom sheets now: a sheet is position:fixed and sized off --bgb-vv-h, so
-// there is no fold to measure against. What is left is the finder in
-// .add-game-modal, and the finder mounted WITHOUT `inlineDropdown`.
+// there is no fold to measure against. So is the last centred host it served,
+// the BGG import popup, now widgets/bgg-import-sheet.js. What is left is the
+// fallback path itself: any finder mounted WITHOUT `inlineDropdown`. Nothing
+// in the app takes it today, and the day nothing can, this file goes with it
+// (.claude/rules/ui-object-design.md §5).
 //
 // CSS keeps the ceiling. This only ever shrinks a dropdown below its own
 // max-height or flips it to the other side of the input, so a context that
-// wants a tighter list (e.g. .add-game-modal, centred on a backdrop that
-// doesn't scroll) says so in the stylesheet and nothing here needs to know.
+// wants a tighter list says so in the stylesheet and nothing here needs to
+// know.
 //
 // The visible box comes from window.visualViewport (see ui/viewport-lock.js
 // for why: iOS Safari overlays the keyboard without shrinking the layout

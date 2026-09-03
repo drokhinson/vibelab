@@ -26,7 +26,7 @@
 //
 // Reuses the polaroid-popup backdrop + card chrome for visual consistency
 // (per .claude/rules/ui-object-design.md §3c) but owns its own
-// .import-exp-modal* body classes, mirroring widgets/add-game-modal.js.
+// .import-exp-modal* body classes.
 
 // @ts-check
 
@@ -365,7 +365,7 @@
 
     _escHandler = (e) => {
       if (e.key !== "Escape") return;
-      // Layered, mirroring the GameFinder/add-game-modal pairing: the first
+      // Layered, mirroring the GameFinder/sheet pairing: the first
       // Escape backs out of the filter, the next closes the popup.
       const el = _searchInput();
       if (el && el.value) {

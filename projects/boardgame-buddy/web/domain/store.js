@@ -26,6 +26,12 @@
         // Lives here rather than on either surface because the flow's screen
         // and the Settings progress strip are never mounted at the same time.
         bggSync: null,
+        // Catalog imports pulled from BoardGameGeek this session, published by
+        // domain/bgg-import.js as an ImportJob[]. Here rather than on the
+        // import sheet because an import OUTLIVES it — the sheet is one
+        // subscriber, the completion notification is another, and neither is
+        // guaranteed to be on screen when a job settles.
+        bggImport: [],
         // Pending INCOMING buddy requests. The app's one notification signal:
         // the Profile nav tab paints a dot from it, the hub's Buddies card
         // paints the number. Lives here rather than on either surface because
@@ -153,6 +159,10 @@
         // handle, and the next person signing in on this device shares
         // neither. BggSyncFlow.reset() drops the saved draft to match.
         bggSync: null,
+        // Emptied for a milder reason: what an import created is a CATALOG
+        // row, which is shared and survives. These jobs are only the record of
+        // who asked for it, and the next account did not.
+        bggImport: [],
       };
       for (const subs of this._subs.values()) {
         for (const fn of subs) {
