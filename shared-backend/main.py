@@ -140,7 +140,12 @@ async def attach_api_logger_user_context(request: Request, call_next):
         authz = request.headers.get("authorization")
         if authz:
             try:
-                su_user = await get_current_supabase_user(authorization=authz)
+                # `request` is passed so the verified user lands on
+                # request.state, where the route's own Depends(get_current_user)
+                # picks it up instead of verifying the same token a second time.
+                # Two verifications per request bought nothing but a second
+                # chance to hit the blocking JWKS fetch.
+                su_user = await get_current_supabase_user(request, authorization=authz)
                 await set_request_user(
                     user_id=su_user.sub,
                     user_label=su_user.email or su_user.sub,
@@ -148,7 +153,9 @@ async def attach_api_logger_user_context(request: Request, call_next):
                 )
             except Exception:
                 # Invalid / expired token, JWKS hiccup, etc — log row will fall
-                # back to anonymous. Never let this fail the request.
+                # back to anonymous. Never let this fail the request. Nothing is
+                # stashed on failure either, so the route's own dependency still
+                # verifies for itself and returns the right status.
                 pass
     return await call_next(request)
 
