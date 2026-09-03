@@ -1,7 +1,7 @@
 // views/profile-self-view.js — Profile Hub.
 //
 // Account card → a tappable "Your stats" block → warm-cream preview cards
-// (Achievements / Collection / Recent plays / Buddies). Each
+// (Collection / Achievements / Recent plays / Buddies). Each
 // preview's "See all →" routes to a dedicated full-screen spoke, and the stats
 // block routes to /profile/stats. Settings is reachable via the avatar in the
 // global header. Every card but Achievements seeds from a single
@@ -95,8 +95,8 @@
         ${this._renderAccountCard(me)}
         ${this._renderStats(b)}
         ${this._error ? `<div class="alert alert-error text-sm mt-3">${escapeHtml(this._error)}</div>` : ""}
-        ${this._renderAchievementsPreview()}
         ${this._renderCollectionPreview(b)}
+        ${this._renderAchievementsPreview()}
         ${this._renderPlaysPreview(b)}
         ${this._renderBuddiesPreview(b)}
         <div style="height: 1rem"></div>
