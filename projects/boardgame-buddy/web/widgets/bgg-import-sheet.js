@@ -30,6 +30,13 @@
 //      catalog, and only then does a second, differently-labelled button offer
 //      your shelf. domain/bgg-import.js holds that line.
 //
+// The box takes a title, a BGG id, or a pasted boardgamegeek.com link. The id
+// path is the backend's (services/search_service.py#_bgg_hits): BGG's own
+// search matches names, so a number is a guaranteed miss there and goes to
+// /thing instead. What this file does about it is print each row's #id beside
+// its year, which is what makes a numeric search legible — search "1830" and
+// the game with that id comes back next to the game with that name.
+//
 // The import itself is NOT this file's — it lives in domain/bgg-import.js and
 // keeps running when the sheet closes, announcing itself through
 // ui/bgg-import-toast.js. What this file owns is the search, the rows, and the
@@ -139,7 +146,11 @@
             ${window.BgbSearchField.render({
               id: INPUT_ID,
               value: this._query,
-              placeholder: "Search BoardGameGeek",
+              // Names the third input this box takes. An id or a pasted link
+              // resolves to the one game it names (see the backend's
+              // _parse_bgg_id) — worth saying, because nothing else on screen
+              // suggests a number would work.
+              placeholder: "Name, BGG ID, or link",
               icon: true,
               cls: "bgg-import-sheet__field",
             })}
@@ -160,7 +171,8 @@
         case "idle":
           return `<li class="bgg-import-sheet__prompt">
               <i data-icon="search" class="w-5 h-5" aria-hidden="true"></i>
-              <span>Type a title and hit Search. Results come straight from
+              <span>Type a title and hit Search — or paste a BoardGameGeek ID
+                    or link to go straight to one game. Results come from
                     BoardGameGeek.</span>
             </li>`;
         case "searching":
@@ -201,7 +213,15 @@
     }
 
     /**
-     * The row's second line: the year, plus wherever the game has got to.
+     * The row's second line: the year, the BGG id, and wherever the game has
+     * got to.
+     *
+     * The id is on every row, not only the ones a numeric query matched. It is
+     * this row's identity on BoardGameGeek, it is what somebody looking a game
+     * up by id is holding, and printing it is what makes a search for "1830"
+     * legible — the id hit and the same-named title come back together, and
+     * the number beside each is the only thing that says which is which.
+     *
      * `bad` covers a failed import AND a failed shelf write — the second one
      * leaves the row in the `library` state with an error on the job, so
      * keying the colour off data-state alone would swallow it.
@@ -218,7 +238,8 @@
           : state === "library" ? "In the library"
           : null;
       return {
-        text: [hit.year_published || null, status].filter(Boolean).join(" · "),
+        text: [hit.year_published || null, `#${hit.bgg_id}`, status]
+          .filter(Boolean).join(" · "),
         bad,
       };
     }
