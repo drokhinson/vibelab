@@ -97,10 +97,18 @@
         // Same rule as the 401 self-heal in domain/api.js — a blip is not a
         // state change (.claude/rules/web-frontend.md).
         if (_offlineWithKnownUser()) return;
+        const wasBooting = window.store.get("currentView") === "splash";
         _bootRouted = false;
         _profileLoaded = false;
         window.store.set("user", null);
         window.router.go("auth");
+        // A signed-out cold open is a boot too, and it reaches neither
+        // routeAfterBoot nor the watchdog — the watchdog bails once the view is
+        // no longer the splash. Without this the numbers would silently cover
+        // only sessions that had a token, which is a biased sample of exactly
+        // the thing being measured. Gated on wasBooting so a mid-session
+        // sign-out is not counted as a boot.
+        if (wasBooting) reportBootTiming("auth");
         return;
       }
 
@@ -117,6 +125,7 @@
       const cachedMe = (supaUid && window.bgbCache) ? window.bgbCache.get("me", supaUid) : null;
       if (!_bootRouted && cachedMe && window.User) {
         window.store.set("user", new window.User(cachedMe));
+        _bootedFromCache = true;
         routeAfterBoot();
       }
 
@@ -229,6 +238,10 @@
     }
     console.warn("Boot watchdog: auth never resolved — falling back to /auth.");
     window.router.go("auth");
+    // The one boot outcome nobody sees in a bug report: the app gave up and
+    // showed a login screen to someone who may well be signed in. Without this
+    // it is invisible in the numbers, because routeAfterBoot never ran.
+    reportBootTiming("watchdog-auth");
   }
 
   // How long first-run setup waits for an add-by-QR flow to finish.
@@ -290,16 +303,70 @@
     _bootRouted = true;
     const pending = window.store.get("pendingRoute");
     window.store.set("pendingRoute", null);
+    let landedOn;
     if (pending && pending.name && pending.name !== "auth" && pending.name !== "splash") {
+      landedOn = pending.name;
       window.router.go(pending.name, pending.params || {});
     } else {
+      landedOn = "feed";
       window.router.go("feed");
     }
+    reportBootTiming(landedOn);
     warmGameBundlesWhenIdle();
     warmOwnedShelfWhenIdle();
     warmGhostSuggestionsWhenIdle();
     warmAdminReviewWhenIdle();
   }
+
+  // How long the user actually stared at the splash, and which leg was to
+  // blame. Fired once per boot, from wherever the splash was left.
+  //
+  // This exists because "the app takes about a minute to open" is a report,
+  // not a measurement, and two very different failures produce it: the shell
+  // taking 45s to download (nothing has run yet) versus /bootstrap hanging
+  // after the app is up. They need opposite fixes, and from a bug report they
+  // are indistinguishable. `dcl_ms` vs `bootstrap_ms` tells them apart.
+  //
+  // Rides trackEvent, so it lands in analytics_events alongside every other
+  // ping and shows up on the admin dashboard with no new endpoint. Metadata
+  // only — nothing here identifies a person beyond the account the request is
+  // already authenticated as.
+  let _bootTimingSent = false;
+  function reportBootTiming(landedOn) {
+    if (_bootTimingSent || !window.api) return;
+    _bootTimingSent = true;
+    try {
+      const nav = performance.getEntriesByType("navigation")[0];
+      const js = performance.getEntriesByType("resource")
+        .filter((r) => r.name.endsWith(".js"));
+      const round = (n) => (typeof n === "number" && isFinite(n) ? Math.round(n) : null);
+      window.api.trackEvent("boot_timing", {
+        // Navigation -> the app is on a screen with a nav bar. The number the
+        // complaint is actually about.
+        total_ms: round(performance.now()),
+        // Navigation -> DOMContentLoaded. The shell's share of it: everything
+        // before a single line of app code could run.
+        dcl_ms: nav ? round(nav.domContentLoadedEventEnd) : null,
+        // The blocking API leg, and whether it ever answered.
+        bootstrap_ms: _bootstrapMs,
+        bootstrap_ok: _profileLoaded,
+        // True when the optimistic cache path put the user on a screen with no
+        // network at all — a warm boot's timings are a different population and
+        // must not be averaged with a cold one's.
+        warm: _bootedFromCache,
+        landed_on: landedOn,
+        js_requests: js.length,
+        js_bytes: round(js.reduce((a, r) => a + (r.transferSize || 0), 0)),
+        sw: navigator.serviceWorker && navigator.serviceWorker.controller ? "controlled" : "none",
+        net: (navigator.connection && navigator.connection.effectiveType) || null,
+        standalone: window.matchMedia("(display-mode: standalone)").matches,
+      });
+    } catch (_) {
+      // Never let instrumentation break a boot it is only supposed to describe.
+    }
+  }
+  let _bootstrapMs = null;
+  let _bootedFromCache = false;
 
   // The per-owned-game detail bundles are no longer part of /bootstrap (they're
   // an N+1 in SQL and nothing on the first screen reads them). Pull them once
@@ -419,10 +486,14 @@
   // we have a valid session but couldn't reach the server yet.
   async function loadProfileResilient() {
     const delays = [400, 1200];
+    const startedAt = performance.now();
     for (let attempt = 0; ; attempt++) {
       try {
         if (window.Bootstrap) {
           const payload = await window.Bootstrap.load();
+          // Measured across the retry ladder, not per attempt: what matters for
+          // the boot report is how long the user waited for an answer.
+          _bootstrapMs = Math.round(performance.now() - startedAt);
           // Bootstrap._seedStore set window.store('user') to a User instance.
           let me = window.store.get("user");
           if (!me && payload && payload.current_user) {
