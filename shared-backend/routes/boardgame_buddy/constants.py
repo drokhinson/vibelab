@@ -151,6 +151,36 @@ class FeedCardKind(StrEnum):
     SUGGESTED_BUDDIES = "suggested_buddies"
 
 
+class NotificationKind(StrEnum):
+    """What one row on the notifications feed is about.
+
+    The feed is a UNION of three derived sources rather than a table — see
+    bgb_notifications, migration 009 — and each member names both its source
+    and the timestamp it is ordered by: PLAY_LINK from play_players.linked_at,
+    BUDDY_REQUEST from buddy_edges.created_at, BUDDY_ACCEPTED from
+    buddy_edges.accepted_at. The kind also says which block of optional fields
+    on the Notification model is populated.
+    """
+
+    PLAY_LINK = "play_link"
+    BUDDY_REQUEST = "buddy_request"
+    BUDDY_ACCEPTED = "buddy_accepted"
+
+
+class PlayLinkGroup(StrEnum):
+    """How a play_link row's member plays were collapsed into one entry.
+
+    One act of linking, not one play: BATCH is a single paste of an imported
+    note, RUN a run of identical plays inside a pre-batch import, and ACT
+    everything else keyed on (owner, linked_at) — which is what makes a
+    retroactive ghost link across forty old plays read as the one thing it was.
+    """
+
+    BATCH = "batch"
+    RUN = "run"
+    ACT = "act"
+
+
 
 
 class CollectionSort(StrEnum):

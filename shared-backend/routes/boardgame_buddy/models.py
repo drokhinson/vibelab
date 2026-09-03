@@ -27,6 +27,8 @@ from .constants import (
     BuddySuggestionSource,
     CollectionStatus,
     FeedCardKind,
+    NotificationKind,
+    PlayLinkGroup,
     PlayMode,
     PlaySessionStatus,
     SessionPhase,
@@ -1158,69 +1160,94 @@ class PlayLeaveResponse(BaseModel):
     rows_updated: int
 
 
-# ── Link notifications: "someone put me in a play" ────────────────────────────
+# ── Notifications: things that happened TO you ────────────────────────────────
 
-class LinkNotification(BaseModel):
-    """One entry on the notifications screen.
+class Notification(BaseModel):
+    """One row on the unified notifications feed.
 
-    An entry is not a play — it is one act of linking. `kind` says which of the
-    three groupings produced it (see bgb_link_notifications): `batch` is one
-    paste of an imported note, `run` a run of identical plays inside a pre-batch
-    import, `act` everything else keyed on (owner, linked_at) so a retroactive
-    ghost link across forty old plays reads as the one thing it was.
+    Three kinds share one row shape, one cursor and one read watermark, which is
+    the whole point: a feed assembled client-side from three endpoints cannot
+    page, and would need three unread counts to add up to one dot.
 
-    `play_id` is the entry's representative — the most recent play in it, which
-    is what the card names and opens. `play_ids` holds the whole set, but the
-    unlink does NOT send it back for a batch: `import_batch_id` does that job in
-    one field, so a 214-play import is one tick and one short request.
+    `kind` says which block below is populated. `actor_*` is the only group
+    present on every kind, because "who did this" is the one question all three
+    answer — a play_link's actor logged the play, a buddy_request's sent it, a
+    buddy_accepted's said yes.
+
+    On a play_link row, an entry is not a play but one act of linking, and
+    `play_group` says which grouping produced it. `play_id` is the entry's
+    representative — the most recent play in it, which is what the card names
+    and opens — while `play_ids` holds the whole set. The unlink does NOT send
+    that set back for a batch: `import_batch_id` does the job in one field, so
+    a 214-play import is one tick and one short request.
     """
 
     entry_key: str
-    kind: Literal["batch", "run", "act"]
-    play_id: str
-    play_ids: list[str]
-    group_count: int
-    game_count: int
+    kind: NotificationKind
+    occurred_at: datetime
+    is_unread: bool = False
+
+    actor_id: str | None = None
+    actor_display_name: str | None = None
+    actor_username: str | None = None
+    actor_avatar: dict[str, Any] | None = None
+
+    # PLAY_LINK only. Every field in this block is None on a buddy row —
+    # play_ids included, rather than an empty list: one rule with no exception
+    # is what lets a reader check `kind` and stop thinking about it.
+    play_group: PlayLinkGroup | None = None
+    play_id: str | None = None
+    play_ids: list[str] | None = None
+    group_count: int | None = None
+    game_count: int | None = None
     played_from: date | None = None
     played_to: date | None = None
-    linked_at: datetime
     game_id: str | None = None
     game_name: str | None = None
     game_thumbnail_url: str | None = None
-    owner_id: str | None = None
-    owner_display_name: str | None = None
-    owner_username: str | None = None
-    owner_avatar: dict[str, Any] | None = None
     import_batch_id: str | None = None
-    is_unread: bool = False
+
+    # BUDDY_REQUEST / BUDDY_ACCEPTED only. The edge id POST /buddies/{id}/accept
+    # and /reject take, so a request can be answered where it is read. Those
+    # routes 409 an edge that is no longer pending, which is the correct answer
+    # for a derived feed — somebody may have accepted from the Buddies screen
+    # while this list was open — and the client treats it as "already handled,
+    # drop the row" rather than as an error.
+    edge_id: str | None = None
 
 
-class LinkNotificationsResponse(BaseModel):
+class NotificationsResponse(BaseModel):
     """A page of notifications plus the unread total.
 
-    `unread` counts every unread entry the account has, not just this page — it
+    `unread` counts every unread row the account has, not just this page — it
     feeds the header bell's dot, which has to be right before anything is
-    scrolled. `next_cursor` is the oldest `linked_at` on this page, or None at
-    the end of the list.
+    scrolled.
+
+    The cursor is a PAIR. Three sources feeding one ordering makes ties on
+    `occurred_at` ordinary rather than rare, and a cursor that is not total
+    skips rows at every tie, so `next_cursor_key` carries the last row's
+    `entry_key` as the tiebreak. Both are None at the end of the list.
     """
 
-    items: list[LinkNotification]
+    items: list[Notification]
     next_cursor: datetime | None = None
+    next_cursor_key: str | None = None
     unread: int = 0
 
 
-class LinkNotificationsSeenRequest(BaseModel):
+class NotificationsSeenRequest(BaseModel):
     """How far the client actually read.
 
-    Sending the newest `linked_at` the client was shown, rather than letting the
-    server use now(), is what stops a link that arrives between the list request
-    and this call from being marked seen without ever having been displayed.
+    Sending the newest `occurred_at` the client was shown, rather than letting
+    the server use now(), is what stops a notification that arrives between the
+    list request and this call from being marked seen without ever having been
+    displayed.
     """
 
     through: datetime | None = None
 
 
-class LinkNotificationsSeenResponse(BaseModel):
+class NotificationsSeenResponse(BaseModel):
     """The watermark that now stands, after the monotonic merge."""
 
     seen_at: datetime
