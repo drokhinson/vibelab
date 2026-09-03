@@ -118,14 +118,7 @@
             <i data-icon="x" class="w-4 h-4"></i>
           </button>
         </header>
-        <div class="imp-chrome">
-          <div class="imp-chrome__count" aria-live="polite">
-            Step <b>${i + 1}</b> of ${steps.length}
-          </div>
-          <div class="imp-chrome__bar">
-            ${steps.map((_, n) => `<div class="imp-chrome__seg${n <= i ? " is-done" : ""}"></div>`).join("")}
-          </div>
-        </div>
+        ${window.BgbWizardProgress.render({ step: i, total: steps.length })}
         <div class="imp-body" data-imp-body>${body}</div>
         ${o.hideNav ? "" : this._renderNav()}
       `;

@@ -2,10 +2,25 @@
 // reference guide. Three tabs/modes share one surface:
 //   - "browse" : parchment scroll of community chapters; rows expand inline
 //                to preview content + Add/Added toggle + Report.
-//   - "create" : full Option C editor (Write/Preview toggle, format toolbar,
-//                table picker, color swatches) for authoring a new chapter.
-//   - "edit"   : same Option C editor, prefilled from a stashed chapter; Save
-//                calls PATCH /chapters/{id} instead of POST.
+//   - "create" : a three-step wizard (see _step below) ending in the full
+//                Option C editor, then POST /games/{id}/chapters.
+//   - "edit"   : the same Option C editor on its own, prefilled from a stashed
+//                chapter; Save calls PATCH /chapters/{id} instead of POST.
+//
+// The create wizard's steps, all inside the same fixed keyboard-safe shell:
+//   0 "type"  — pick one of the six chapter types (+ the expansion target
+//               selector, when expansions are in scope).
+//   1 "draft" — optional head start: an optional focus prompt + Generate with
+//               AI, an Import .md, or skip and write it yourself.
+//   2 "edit"  — the editor: title, Write/Preview toggle, format toolbar.
+// Steps 0 and 1 are pure-function bodies in widgets/chapter-wizard-steps.js.
+// Step 2 stays here because it is not a pure function of state — the toolbar
+// reads and writes the live textarea's selection.
+//
+// Editing an existing chapter does NOT enter the wizard: it opens straight on
+// step 2 with no step bar and keeps the type pill scroller, because the
+// chapter already has a type and a body and re-drafting over it is not what
+// Edit is for.
 
 (function () {
   // Inline color swatches — hex values map straight into the existing
@@ -137,11 +152,20 @@ components above.
       // Tab + mode
       this._tab = "browse";          // "browse" | "create" | "edit"
       this._externalEdit = false;    // true only when arrived via mode=edit route
+      // Create-wizard position: 0 type → 1 draft → 2 edit. Meaningless in
+      // "browse" and "edit" (edit IS the editor and shows no step bar), but
+      // reset here with everything else so a create abandoned on step 1 can't
+      // leave the next one opening there.
+      this._step = 0;
       // Editor form fields
       this._editingChapterId = null; // set when _tab === "edit"
       this._formTitle = "";
       this._formContent = "";
       this._formType = "";
+      // The wizard's optional focus prompt for the AI draft. Survives Back
+      // from step 2 so tweak-and-regenerate is two taps, and dies with the
+      // rest of the form buffer here.
+      this._genPrompt = "";
       this._editorView = "write";    // "write" | "preview"
       this._error = null;
       this._saving = false;
@@ -156,6 +180,12 @@ components above.
       // user walked away has a back guard to hand back (ui/back-guard.js).
       if (window.BgbBackGuard) window.BgbBackGuard.release(this._guideBack || 0);
       this._guideBack = 0;
+      // Same for the create wizard's own guard, which claims the device back
+      // press so it walks the steps instead of popping the whole view (see
+      // _armWizardGuard). Released here too so an abandoned create can't leave
+      // a live guard behind.
+      if (window.BgbBackGuard) window.BgbBackGuard.release(this._wizBackTok || 0);
+      this._wizBackTok = 0;
       // Caret captured when a popover opens — the re-render that shows the
       // popover recreates the textarea and resets its caret to 0, so inserts
       // fired from a popover (table / colour) must restore it.
@@ -326,6 +356,11 @@ components above.
       // mount. Also drop any open toolbar popover.
       this._prefillChapter = null;
       this._activePop = null;
+      // Hand back the wizard's back guard. Without this, routing away mid-create
+      // leaves a layer armed on a hidden view, and the next back press anywhere
+      // in the app is spent stepping a wizard nobody can see. _resetFormState
+      // does the same on re-entry, but a guard must not survive even that long.
+      this._releaseWizardGuard();
       this._teardownEditorChrome();
     }
 
@@ -560,12 +595,81 @@ components above.
       `;
     }
 
-    // FAB → create. Clears any leftover form buffer so the editor always
+    // FAB → create. Clears any leftover form buffer so the wizard always
     // opens clean (the prior flow let create-tab state persist across
     // browse/create toggles, which made entering Create feel stale).
     _enterCreate() {
       this._resetFormState();
       this._tab = "create";
+      this._step = 0;
+      this._armWizardGuard();
+      this.render();
+    }
+
+    // ── Create-wizard navigation ──────────────────────────────────────────────
+
+    // Claim the device back press for the wizard. Without this the press
+    // reaches the router and pops the whole view — and since create/edit runs
+    // in a fixed shell with the global header and nav hidden
+    // (.chapter-edit-locked), back is the natural "go up one" gesture and
+    // losing three steps of work to it is the bug .claude/rules/overlays.md
+    // §8b describes. One guard for the whole wizard, re-armed from inside its
+    // own close while steps remain (which arm() explicitly supports).
+    _armWizardGuard() {
+      if (!window.BgbBackGuard) return;
+      // Idempotent: entering create twice without leaving must not stack two
+      // guards, or back would need two presses to move one step.
+      if (this._wizBackTok) return;
+      this._wizBackTok = window.BgbBackGuard.arm({
+        root: this.container,
+        // Reached only from a device back press, which has ALREADY popped the
+        // layer and spent its entry — so drop the token before stepping (a
+        // release() on it would be a no-op anyway) and take a fresh entry
+        // afterwards if the wizard is still up. That is the deck's re-arm
+        // path: back-guard.js#restoreScreen sees a freshly-armed entry as the
+        // current one and leaves the url alone.
+        close: () => {
+          this._wizBackTok = 0;
+          this._wizBack();
+          if (this._tab === "create") this._armWizardGuard();
+        },
+      });
+    }
+
+    _releaseWizardGuard() {
+      if (window.BgbBackGuard) window.BgbBackGuard.release(this._wizBackTok || 0);
+      this._wizBackTok = 0;
+    }
+
+    // Step forward. Only reachable from the footer, which already gates on
+    // whatever the current step requires (a chapter type on step 0).
+    _wizNext() {
+      if (this._tab !== "create") return;
+      this._step = Math.min(2, this._step + 1);
+      this._error = null;
+      this.render();
+    }
+
+    // Step back, and off the front of the wizard back to browse. Shared by the
+    // footer's Back button and the device back press, so the two mean the same
+    // thing.
+    //
+    // Deliberately does NOT touch the guard: one entry covers the whole wizard,
+    // and moving between steps from the footer must not churn the history stack
+    // (a release + re-arm in the same task leaves the release's deferred unwind
+    // looking at the new token, so it silently declines and the old entry
+    // leaks). The guard is armed on entry, re-armed by its own close after a
+    // press consumes it, and released by _resetFormState on the way out.
+    _wizBack() {
+      if (this._tab !== "create") return;
+      if (this._step <= 0) {
+        // Leaving the wizard entirely — _backToBrowse releases the guard via
+        // _resetFormState, so nothing to re-arm.
+        this._backToBrowse().then(() => this.render());
+        return;
+      }
+      this._step -= 1;
+      this._error = null;
       this.render();
     }
 
@@ -827,23 +931,167 @@ components above.
       }
     }
 
-    // ── Create / Edit (shared editor surface) ─────────────────────────────────
+    // ── Create wizard / Edit (shared shell) ───────────────────────────────────
+    //
+    // One shell for both: game chip, an optional step bar, one scroller, and a
+    // flex:none footer that the software keyboard can never cover (see
+    // .chapter-edit-locked in styles.css). What changes between them is the
+    // body in the scroller and the pair of buttons in the footer.
     _renderEditor(isEditing) {
-      const typeBtns = this._types.map((t) => `
-        <button type="button"
-                class="chapter-edit__tpill ${t.id === this._formType ? "chapter-edit__tpill--on" : ""}"
-                onclick="window.referenceGuideAddView._pickType('${t.id}')">
-          <i data-icon="${t.icon || "book"}" class="w-4 h-4"></i>
-          <span>${escapeHtml(t.label)}</span>
-        </button>
-      `).join("");
+      // Edit is not a wizard — no step bar, and the editor is the only body.
+      const step = isEditing ? 2 : this._step;
+      const bar = isEditing
+        ? ""
+        : window.BgbWizardProgress.render({ step, total: 3 });
 
-      // Target-game selector only renders in Create mode + when expansions
-      // are in scope. Edit hides it — the chapter's game is fixed, the
-      // backend update path can't move a chapter between pools.
-      const targetSelector = (!isEditing && this._expansionIds.length)
-        ? this._renderCreateTargetSelector()
-        : "";
+      let body;
+      if (step === 0) {
+        body = window.ChapterWizardSteps.type({
+          types: this._types,
+          formType: this._formType,
+          // Create-only, and only when expansions are in scope: the chapter's
+          // pool is chosen here alongside its type, and the backend's PATCH
+          // can't move a chapter between pools afterwards.
+          targetSelector: this._expansionIds.length ? this._renderCreateTargetSelector() : "",
+        });
+      } else if (step === 1) {
+        const t = this._activeType();
+        body = window.ChapterWizardSteps.draft({
+          typeLabel: t.label,
+          typeIcon: t.icon,
+          genPrompt: this._genPrompt,
+          generating: this._generating,
+          saving: this._saving,
+          error: this._error,
+        });
+      } else {
+        body = this._renderEditStep(isEditing);
+      }
+
+      return `
+        ${this._renderGameChip()}
+        <form class="chapter-edit__form" onsubmit="window.referenceGuideAddView._submitForm(event)">
+          <div class="chapter-edit__scroll">
+            ${bar}
+            ${body}
+          </div>
+          ${this._renderWizardFooter(isEditing, step)}
+        </form>
+        ${this._renderGuideModal()}
+      `;
+    }
+
+    /** The picked chapter type's row, or a neutral stand-in before one is picked. */
+    _activeType() {
+      const t = this._types.find((x) => x.id === this._formType);
+      return t || { id: "", label: "chapter", icon: "book" };
+    }
+
+    // Footer pairs, one per step. Every step has an exit on the left and the
+    // step's own forward action on the right, so no step is a dead end — step 0's
+    // Back leaves the wizard for browse rather than doing nothing.
+    _renderWizardFooter(isEditing, step) {
+      if (isEditing) {
+        const label = this._saving ? "Saving…" : "Save changes";
+        return `
+          <div class="chapter-edit__footer">
+            <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
+                    onclick="window.referenceGuideAddView._cancelForm()">Cancel</button>
+            <button type="submit" class="chapter-edit__fbtn chapter-edit__fbtn--save"
+                    ${this._saving || !this._formType ? "disabled" : ""}>
+              ${escapeHtml(label)}
+            </button>
+          </div>
+        `;
+      }
+
+      // Step 0 — Continue is blocked on a chapter type, and says so rather than
+      // sitting greyed out with no explanation.
+      if (step === 0) {
+        const noType = !this._formType;
+        return `
+          <div class="chapter-edit__footer">
+            <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
+                    onclick="window.referenceGuideAddView._cancelForm()">Cancel</button>
+            <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--save"
+                    ${noType ? "disabled" : ""}
+                    onclick="window.referenceGuideAddView._wizNext()">
+              ${noType ? "Pick a type" : "Continue"}
+            </button>
+          </div>
+        `;
+      }
+
+      // Step 1 — the head start is optional, so the forward button is the skip.
+      // Generate and Import both live in the step body and jump to step 2
+      // themselves.
+      //
+      // The skip takes the ghost treatment, not the gold: Generate is this
+      // step's primary and the screen gets one gold weight. --alt marks it as
+      // the forward one of the two ghosts so Back and it don't read the same.
+      if (step === 1) {
+        const busy = this._generating;
+        return `
+          <div class="chapter-edit__footer">
+            <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
+                    ${busy ? "disabled" : ""}
+                    onclick="window.referenceGuideAddView._wizBack()">Back</button>
+            <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel chapter-wiz__fbtn--alt"
+                    ${busy ? "disabled" : ""}
+                    onclick="window.referenceGuideAddView._wizNext()">
+              I'll write it
+            </button>
+          </div>
+        `;
+      }
+
+      // Step 2 — the editor. Save is blocked until there is something to save;
+      // the type can no longer be missing (step 0 gated on it).
+      const label = this._saving ? "Saving…" : "Save chapter";
+      return `
+        <div class="chapter-edit__footer">
+          <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
+                  ${this._saving ? "disabled" : ""}
+                  onclick="window.referenceGuideAddView._wizBack()">Back</button>
+          <button type="submit" class="chapter-edit__fbtn chapter-edit__fbtn--save"
+                  ${this._saving ? "disabled" : ""}>
+            ${escapeHtml(label)}
+          </button>
+        </div>
+      `;
+    }
+
+    // Step 2 body — the markdown editor. Stays in the view rather than joining
+    // the other two in widgets/chapter-wizard-steps.js because it is not a pure
+    // function of state: the toolbar reads and writes the live textarea's
+    // selection, and the popovers restore a caret the re-render destroyed.
+    _renderEditStep(isEditing) {
+      // Edit keeps the pill scroller: the chapter already has a type and
+      // changing it is a normal edit. Create picked one on step 0, so here it
+      // is a read-only chip — Back is how you change it, which keeps one
+      // control per decision instead of two that can disagree.
+      const typeRow = isEditing
+        ? `<div class="chapter-edit__typescroll">${this._types.map((t) => `
+             <button type="button"
+                     class="chapter-edit__tpill ${t.id === this._formType ? "chapter-edit__tpill--on" : ""}"
+                     onclick="window.referenceGuideAddView._pickType('${t.id}')">
+               <i data-icon="${t.icon || "book"}" class="w-4 h-4"></i>
+               <span>${escapeHtml(t.label)}</span>
+             </button>
+           `).join("")}</div>`
+        : (() => {
+            const t = this._activeType();
+            return `
+              <div class="chapter-wiz__picked">
+                <span class="chapter-wiz__typechip">
+                  <i data-icon="${escapeAttr(t.icon || "book")}" class="w-3 h-3"></i>
+                  ${escapeHtml(t.label)}
+                </span>
+                <button type="button" class="chapter-wiz__change"
+                        onclick="window.referenceGuideAddView._goToStep(0)">Change</button>
+              </div>
+            `;
+          })();
 
       const isPreview = this._editorView === "preview";
 
@@ -894,98 +1142,31 @@ components above.
              ${this._renderPopovers()}
            </div>`;
 
-      // Draft-source row: import a file, or have the AI write a first draft.
-      // Create-only — an existing chapter already has a body, and replacing it
-      // wholesale isn't what the Edit screen is for.
-      // Generate needs a chapter type to know what to write, so it stays
-      // disabled until a type pill is tapped (which is why the type scroller
-      // sits above this row). A disabled button gives no other feedback, so
-      // the tooltip carries the reason.
-      const genDisabled = !this._formType || this._generating || this._saving;
-      const genTitle = this._generating
-        ? "Drafting a chapter…"
-        : this._formType
-          ? "Draft this chapter with AI — you review and edit before saving"
-          : "Pick a chapter type first";
-      const draftRow = isEditing ? "" : `
-        <div class="chapter-edit__genrow">
-          <label class="chapter-edit__import" title="Import a .md file as this chapter">
-            <input type="file" accept=".md,text/markdown,text/plain"
-                   onchange="window.referenceGuideAddView._onImportMd(event)" />
-            <i data-icon="upload" class="w-4 h-4"></i>
-            <span>Import .md</span>
-          </label>
-          <button type="button"
-                  class="chapter-edit__genbtn ${this._generating ? "chapter-edit__genbtn--busy" : ""}"
-                  title="${escapeAttr(genTitle)}"
-                  ${genDisabled ? "disabled" : ""}
-                  onclick="window.referenceGuideAddView._onGenerateAi()">
-            <i data-icon="sparkles" class="w-4 h-4"></i>
-            <span>${this._generating ? "Generating…" : "Generate with AI"}</span>
+      return `
+        ${typeRow}
+
+        <div class="chapter-edit__titlerow">
+          <input id="chapter-form-title" class="chapter-edit__titlefield"
+                 maxlength="200" required
+                 value="${escapeAttr(this._formTitle)}"
+                 oninput="window.referenceGuideAddView._formTitle = this.value"
+                 placeholder="Chapter title…" />
+        </div>
+
+        <div class="chapter-edit__seg">
+          <button type="button" class="${!isPreview ? "on" : ""}"
+                  onclick="window.referenceGuideAddView._setEditorView('write')">
+            <i data-icon="pencil" class="w-4 h-4"></i> Write
+          </button>
+          <button type="button" class="${isPreview ? "on" : ""}"
+                  onclick="window.referenceGuideAddView._setEditorView('preview')">
+            <i data-icon="eye" class="w-4 h-4"></i> Preview
           </button>
         </div>
-      `;
 
-      // No chapter type picked yet → Save reads "Select chapter type" and
-      // is disabled. Once the user taps a type pill the label flips to the
-      // mode-specific verb and the button becomes active.
-      const noType = !this._formType;
-      const submitLabel = this._saving
-        ? "Saving…"
-        : noType
-          ? "Select chapter type"
-          : (isEditing ? "Save changes" : "Save chapter");
-      const submitDisabled = this._saving || noType;
+        ${editorPanel}
 
-      // Shell layout (see .chapter-edit-locked in styles.css): the game chip
-      // and the footer are flex:none siblings of one scroller, so the
-      // Save/Cancel row can never be scrolled — or typed — off the bottom.
-      // The guide modal stays OUTSIDE the form (and is position:fixed), so it
-      // escapes the scroller and paints over the whole shell.
-      return `
-        ${this._renderGameChip()}
-        <form class="chapter-edit__form" onsubmit="window.referenceGuideAddView._submitForm(event)">
-          <div class="chapter-edit__scroll">
-            ${targetSelector}
-
-            <div class="chapter-edit__typescroll">${typeBtns}</div>
-
-            ${draftRow}
-
-            <div class="chapter-edit__titlerow">
-              <input id="chapter-form-title" class="chapter-edit__titlefield"
-                     maxlength="200" required
-                     value="${escapeAttr(this._formTitle)}"
-                     oninput="window.referenceGuideAddView._formTitle = this.value"
-                     placeholder="Chapter title…" />
-            </div>
-
-            <div class="chapter-edit__seg">
-              <button type="button" class="${!isPreview ? "on" : ""}"
-                      onclick="window.referenceGuideAddView._setEditorView('write')">
-                <i data-icon="pencil" class="w-4 h-4"></i> Write
-              </button>
-              <button type="button" class="${isPreview ? "on" : ""}"
-                      onclick="window.referenceGuideAddView._setEditorView('preview')">
-                <i data-icon="eye" class="w-4 h-4"></i> Preview
-              </button>
-            </div>
-
-            ${editorPanel}
-
-            ${this._error ? `<div class="text-error text-sm chapter-edit__error">${escapeHtml(this._error)}</div>` : ""}
-          </div>
-
-          <div class="chapter-edit__footer">
-            <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
-                    onclick="window.referenceGuideAddView._cancelForm()">Cancel</button>
-            <button type="submit" class="chapter-edit__fbtn chapter-edit__fbtn--save"
-                    ${submitDisabled ? "disabled" : ""}>
-              ${escapeHtml(submitLabel)}
-            </button>
-          </div>
-        </form>
-        ${this._renderGuideModal()}
+        ${this._error ? `<div class="text-error text-sm chapter-edit__error">${escapeHtml(this._error)}</div>` : ""}
       `;
     }
 
@@ -1083,6 +1264,15 @@ components above.
 
     _pickType(id) {
       this._formType = id;
+      this.render();
+    }
+
+    // Jump straight to a step — the "Change" affordance on step 2's type chip.
+    // Only backwards: forward moves go through _wizNext so their gates run.
+    _goToStep(n) {
+      if (this._tab !== "create") return;
+      this._step = Math.max(0, Math.min(this._step, n));
+      this._error = null;
       this.render();
     }
 
@@ -1290,6 +1480,10 @@ components above.
         } else {
           this._formContent = text;
         }
+        // An import IS the head start, so it advances the same way a generate
+        // does — the user's next question is "did that land right?", which
+        // only the editor answers.
+        if (this._tab === "create") this._step = 2;
         this.render();
       };
       reader.onerror = () => showToast("Failed to read file", "error");
@@ -1298,16 +1492,18 @@ components above.
       event.target.value = "";
     }
 
-    // AI-draft the chapter for the picked type, then load it into the form for
-    // the user to review. Deliberately NOT a save — the draft is a starting
-    // point, and the user still has to hit Save chapter.
+    // AI-draft the chapter for the picked type — optionally steered by the
+    // focus prompt from the wizard's head-start step — then load it into the
+    // form for the user to review. Deliberately NOT a save: the draft is a
+    // starting point, and the user still has to hit Save chapter on step 3.
     async _onGenerateAi() {
       if (!this._formType || this._generating || this._saving) return;
 
       // Generating replaces whatever is in the form, so anything already typed
       // would be lost — that needs a secondary confirm through the project's
       // one confirm surface. An untouched form has nothing to lose, so it goes
-      // straight through.
+      // straight through. Still reachable in the wizard: Back from step 3 to
+      // step 2 with a body already in the form is exactly this case.
       const hasDraft = !!(this._formTitle.trim() || this._formContent.trim());
       if (hasDraft) {
         const ok = await window.PolaroidPopup.confirm({
@@ -1331,19 +1527,27 @@ components above.
       const seq = ++this._genSeq;
       const targetGameId = this._createTargetGameId || this._gameId;
       const chapterType = this._formType;
+      const focus = this._genPrompt;
       this._error = null;
       this._generating = true;
       this.render();
       try {
-        const draft = await window.Chapter.generate(targetGameId, chapterType);
+        const draft = await window.Chapter.generate(targetGameId, chapterType, focus);
         if (seq !== this._genSeq) return;
         this._formTitle = (draft.title || "").slice(0, 200);
         this._formContent = draft.content || "";
         this._generating = false;
+        // Straight to the editor: the whole point of the draft is to be read
+        // and edited, and leaving it on the head-start step would hide the
+        // result behind another tap. Back returns here with _genPrompt intact,
+        // so tweak-and-regenerate is two taps.
+        if (this._tab === "create") this._step = 2;
         this.render();
         showToast("Draft ready — review and edit before saving", "success");
       } catch (e) {
         if (seq !== this._genSeq) return;
+        // Stays on whatever step asked, so the error lands next to the button
+        // that produced it and the prompt is still there to adjust.
         this._error = e.message || "Couldn't draft a chapter";
         this._generating = false;
         this.render();
@@ -1365,6 +1569,10 @@ components above.
 
     async _submitForm(event) {
       event.preventDefault();
+      // Only the editor step saves. The earlier steps live inside the same
+      // <form> (one shell, one scroller), so an implicit submission from a
+      // field on them must not try to post a chapter that isn't written yet.
+      if (this._tab === "create" && this._step !== 2) return;
       // Drop the software keyboard, so the saving state is what's on screen
       // rather than a keyboard over a frozen form. render() destroys the
       // textarea anyway, but on iOS the keyboard can linger through that.

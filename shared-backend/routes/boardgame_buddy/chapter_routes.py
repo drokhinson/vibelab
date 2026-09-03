@@ -342,7 +342,7 @@ async def generate_chapter(
     game_id: str = Path(..., description="Game UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ChapterGenerateResponse:
-    """Draft a chapter of the given type for the given game — returned for the user to review, not saved."""
+    """Draft a chapter of the given type (optionally steered by a focus prompt) — returned for the user to review, not saved."""
     sb = get_supabase()
 
     game = (
@@ -364,6 +364,7 @@ async def generate_chapter(
             game_description=row.get("description"),
             chapter_type_id=body.chapter_type,
             chapter_type_label=label,
+            focus=body.prompt,
         )
     except GeminiError as exc:
         # The underlying reason (missing key, safety block, model drift) is in
