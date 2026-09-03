@@ -4,6 +4,10 @@ The redesign replaces the previous separate /games?search=... + /games/search-bg
 pair with a single ranked /search endpoint that puts collection hits first,
 then DB matches; BGG hits are fetched only when the caller passes
 include_bgg=true (used when the user taps "Search BoardGameGeek for more").
+
+Under include_bgg, a query that is a BGG id or a boardgamegeek.com link is
+resolved through /thing as well as (or instead of) the name search, so a game
+can be reached by the number on its shelf label. See search_service._bgg_hits.
 """
 
 from fastapi import Depends, Query
@@ -23,7 +27,15 @@ from .services import search_service
     summary="Unified game search (collection → DB → optional BGG)",
 )
 async def unified_search(
-    q: str = Query(..., min_length=1, description="Search query"),
+    q: str = Query(
+        ...,
+        min_length=1,
+        description=(
+            "Search query. Matched against names; under include_bgg a bare "
+            "BGG id or a boardgamegeek.com/boardgame/<id> link additionally "
+            "resolves that one game."
+        ),
+    ),
     limit: int = Query(20, ge=1, le=50, description="Max hits per source"),
     include_bgg: bool = Query(
         False,

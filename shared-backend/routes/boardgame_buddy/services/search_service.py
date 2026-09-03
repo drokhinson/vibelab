@@ -1,7 +1,8 @@
 """Unified game search — collection-first, then DB, optionally BGG."""
 
 import logging
-from typing import Any
+import re
+from typing import Any, Optional
 
 from ..models import (
     BggSearchResult,
@@ -12,6 +13,91 @@ from ..bgg_client import fetch_bgg, parse_bgg_xml
 from ._helpers import game_summary_from_row, game_select_clause
 
 logger = logging.getLogger(__name__)
+
+# A BGG id, typed bare or pasted as a link. BGG's own /search endpoint matches
+# NAMES only, so "342942" there is a miss — yet an id (or the url you copied out
+# of the address bar) is often exactly what you have in hand: off a shelf label,
+# a forum post, a rulebook QR. Resolving it costs one /thing call, which is the
+# same call the import itself makes and lands in the same 24h in-process cache.
+#
+# The url form also accepts /boardgameexpansion/ and BGG's occasional
+# /boardgame/<id> with no slug. The trailing (?!\d) stops a 9-digit paste from
+# being silently truncated to the first eight.
+_BGG_URL_RE = re.compile(
+    r"^https?://(?:www\.)?boardgamegeek\.com/boardgame(?:expansion)?/(\d{1,8})(?:[/?#]|$)",
+    re.IGNORECASE,
+)
+_BGG_BARE_ID_RE = re.compile(r"^(\d{1,8})(?!\d)$")
+
+
+def _parse_bgg_id(query: str) -> tuple[Optional[int], bool]:
+    """(bgg_id, came_from_a_url) for a query that names one game outright.
+
+    The url flag is what decides whether the name search still runs alongside
+    it: a pasted link is unambiguous, but a bare number is NOT — "1830",
+    "1960" and "18xx" are titles as well as plausible ids — so a typed number
+    gets the id hit AND the name search, and the user picks.
+    """
+    q = (query or "").strip()
+    m = _BGG_URL_RE.match(q)
+    if m:
+        return int(m.group(1)), True
+    m = _BGG_BARE_ID_RE.match(q)
+    if m:
+        bgg_id = int(m.group(1))
+        return (bgg_id, False) if bgg_id else (None, False)
+    return None, False
+
+
+async def _bgg_thing_row(bgg_id: int, *, include_expansions: bool) -> Optional[dict[str, Any]]:
+    """One /thing lookup, in the same raw shape _bgg_hits builds from /search.
+
+    Returns None rather than raising for every "that is not a game you can
+    import" case — an unknown id, an accessory or an RPG item, an expansion
+    where the caller does not want one, a flaky BGG. The id search degrades to
+    the name search either way, which is the right answer when the number the
+    user typed turns out to be a title.
+    """
+    try:
+        body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
+        root = parse_bgg_xml(body, context=f"thing id={bgg_id}")
+    except Exception as exc:
+        logger.warning("BGG /thing lookup failed for id=%s: %s", bgg_id, exc)
+        return None
+
+    item = root.find("item")
+    if item is None:
+        return None
+    item_type = item.get("type") or ""
+    if item_type not in ("boardgame", "boardgameexpansion"):
+        return None
+    is_expansion = item_type == "boardgameexpansion"
+    if is_expansion and not include_expansions:
+        return None
+
+    # The primary name, not the first one: /thing lists every localized title,
+    # and for a widely translated game the first is often not English.
+    name_el = item.find("name[@type='primary']")
+    if name_el is None:
+        name_el = item.find("name")
+    name = name_el.get("value", "") if name_el is not None else ""
+    if not name:
+        return None
+
+    year = None
+    year_el = item.find("yearpublished")
+    if year_el is not None:
+        try:
+            year = int(year_el.get("value", "0")) or None
+        except (TypeError, ValueError):
+            year = None
+
+    return {
+        "bgg_id": bgg_id,
+        "name": name,
+        "year_published": year,
+        "is_expansion": is_expansion,
+    }
 
 
 def _collection_hits(
@@ -138,7 +224,29 @@ async def _bgg_hits(
     include_expansions: bool,
 ) -> list[BggSearchResult]:
     """Proxy the existing /games/search-bgg behavior. Swallows network errors
-    so a flaky BGG never breaks the main search."""
+    so a flaky BGG never breaks the main search.
+
+    Two lookups, not one. BGG's /search matches names, so a query that IS an
+    id — or the url you copied out of the address bar — finds nothing there;
+    that one goes to /thing instead and lands at the top of the list. See
+    _parse_bgg_id for why a bare number still runs both.
+    """
+    raw: list[dict[str, Any]] = []
+    seen: set[int] = set()
+
+    direct_id, from_url = _parse_bgg_id(query)
+    if direct_id:
+        row = await _bgg_thing_row(direct_id, include_expansions=include_expansions)
+        if row:
+            raw.append(row)
+            seen.add(direct_id)
+    if from_url:
+        # A url names one game and nothing else, and the name search below
+        # cannot add to that — /search matches titles, and a url string is not
+        # one. So this is the whole answer, including when the link resolved to
+        # nothing importable and the answer is an empty list.
+        return _as_results(sb, raw)
+
     type_param = "boardgame,boardgameexpansion" if include_expansions else "boardgame"
     try:
         body = await fetch_bgg(
@@ -148,15 +256,14 @@ async def _bgg_hits(
         )
     except Exception as exc:
         logger.warning("BGG search failed for %r: %s", query, exc)
-        return []
+        return _as_results(sb, raw)
 
     try:
         root = parse_bgg_xml(body, context=f"unified search query={query!r}")
     except Exception as exc:
         logger.warning("BGG XML parse failed for %r: %s", query, exc)
-        return []
+        return _as_results(sb, raw)
 
-    raw: list[dict[str, Any]] = []
     for item in root.findall("item")[:limit]:
         is_expansion = item.get("type") == "boardgameexpansion"
         # BGG's type= filter isn't reliably exclusive, so drop expansion rows
@@ -167,7 +274,7 @@ async def _bgg_hits(
             bgg_id = int(item.get("id", "0"))
         except (TypeError, ValueError):
             continue
-        if not bgg_id:
+        if not bgg_id or bgg_id in seen:
             continue
         name_el = item.find("name")
         year_el = item.find("yearpublished")
@@ -184,15 +291,24 @@ async def _bgg_hits(
             "year_published": year,
             "is_expansion": is_expansion,
         })
+        seen.add(bgg_id)
 
+    return _as_results(sb, raw)
+
+
+def _as_results(sb, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
+    """Stamp already_in_db across the whole batch in one query.
+
+    Its own function because the id lookup can return before the name search
+    runs (or instead of it), and every one of those exits still owes the rows
+    their "already in the library" flag.
+    """
     if not raw:
         return []
-
-    bgg_ids = [r["bgg_id"] for r in raw]
     existing = (
         sb.table("boardgamebuddy_games")
         .select("bgg_id")
-        .in_("bgg_id", bgg_ids)
+        .in_("bgg_id", [r["bgg_id"] for r in raw])
         .execute()
         .data
         or []

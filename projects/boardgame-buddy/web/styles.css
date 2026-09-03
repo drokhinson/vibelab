@@ -5713,12 +5713,25 @@ html.bgb-ptr-armed body {
   color: var(--rust);
 }
 .bgg-import-row__body { flex: 1 1 auto; min-width: 0; }
-.bgg-import-row__name,
+/* The NAME WRAPS, unlike every other row name in the app. A BGG search returns
+   the whole family of a title — "The Good, the Bad, and the Munchkin" three
+   times over, in three editions — and ellipsising all three at the same column
+   leaves the user three identical rows and no way to tell which is which. The
+   name is the only thing distinguishing one row from the next here, so it is
+   the one thing that must not be cut.
+   `anywhere` so a single long unbroken token (a URL-ish title, a run-on
+   German compound) breaks rather than pushing the button off the row. */
+.bgg-import-row__name {
+  display: block;
+  font-size: 0.97rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
 .bgg-import-row__meta {
   display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.bgg-import-row__name { font-size: 0.97rem; font-weight: 600; line-height: 1.2; }
 /* The line is reserved whether or not it carries anything, so a row that gains
    an "Importing…" it did not have (a BGG hit with no year) does not grow and
    push the panel up the screen — the same reasoning as the reserved tick
@@ -5911,11 +5924,18 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: var(--rust);
 }
 .bgb-import-toast__body { flex: 1 1 auto; min-width: 0; }
+/* Two lines, then ellipsis: same argument as the sheet row above (a long BGG
+   title is unreadable cut at one line), but bounded — a transient card that
+   grows to five lines is a banner. */
 .bgb-import-toast__name {
   font-size: 0.92rem;
   font-weight: 700;
-  line-height: 1.2;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .bgb-import-toast__line {
   margin-top: 2px;

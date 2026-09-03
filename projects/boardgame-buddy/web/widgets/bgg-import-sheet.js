@@ -30,6 +30,13 @@
 //      catalog, and only then does a second, differently-labelled button offer
 //      your shelf. domain/bgg-import.js holds that line.
 //
+// The box takes a title, a BGG id, or a pasted boardgamegeek.com link. The id
+// path is the backend's (services/search_service.py#_bgg_hits): BGG's own
+// search matches names, so a number is a guaranteed miss there and goes to
+// /thing instead. What this file does about it is print each row's #id beside
+// its year, which is what makes a numeric search legible — search "1830" and
+// the game with that id comes back next to the game with that name.
+//
 // The import itself is NOT this file's — it lives in domain/bgg-import.js and
 // keeps running when the sheet closes, announcing itself through
 // ui/bgg-import-toast.js. What this file owns is the search, the rows, and the
@@ -88,11 +95,36 @@
      * this sheet, so anything that wants to know listens for the queue's
      * `bgg-imported` event instead (views/add-games-view.js does).
      *
-     * @param {{ shelf?: "owned"|"wishlist", returnFocus?: Element|null }} [opts]
+     * `query` is the search the opening screen already has in hand. Reaching
+     * this sheet means the catalog came up empty on it, so it is prefilled AND
+     * run: the user typed "munchkin", was told it is not here, and pressed a
+     * button that says "Not here? Import from BoardGameGeek" — landing them on
+     * an empty box to type it a second time is the app forgetting what they
+     * just did. It is a search they were about to run anyway, so it costs no
+     * call they were not going to make.
+     *
+     * @param {{ shelf?: "owned"|"wishlist", query?: string,
+     *           returnFocus?: Element|null }} [opts]
      */
     open(opts) {
       const o = opts || {};
       this._shelf = o.shelf === "wishlist" ? "wishlist" : "owned";
+
+      // Not re-run when it is the search this sheet is already showing results
+      // for — reopening on an unchanged query keeps what is on screen rather
+      // than spending a BGG round trip to redraw it. A previous `empty` or
+      // `error` DOES re-run: that one is a retry.
+      const seed = typeof o.query === "string" ? o.query.trim() : "";
+      const rerun = !!seed && !(seed === this._query && this._phase === "results");
+      if (rerun) {
+        // Set before the panel is built, so it opens already tall and already
+        // showing the loader — no flash of the "type a title" prompt in front
+        // of a search that is on its way.
+        this._query = seed;
+        this._hits = [];
+        this._phase = "searching";
+        this._rowSig.clear();
+      }
 
       this._sheet.open({
         label: "Import from BoardGameGeek",
@@ -110,7 +142,12 @@
           this._clearQuery();
           return true;
         },
-        onOpen: (root) => this._onOpen(root),
+        onOpen: (root) => {
+          this._onOpen(root);
+          // After onOpen, so the form and the queue subscription are wired
+          // before anything can resolve against them.
+          if (rerun) this._runSearch();
+        },
         onClose: () => {
           if (this._unsub) { this._unsub(); this._unsub = null; }
           // Nothing is aborted here on purpose: an import in flight is the
@@ -139,7 +176,11 @@
             ${window.BgbSearchField.render({
               id: INPUT_ID,
               value: this._query,
-              placeholder: "Search BoardGameGeek",
+              // Names the third input this box takes. An id or a pasted link
+              // resolves to the one game it names (see the backend's
+              // _parse_bgg_id) — worth saying, because nothing else on screen
+              // suggests a number would work.
+              placeholder: "Name, BGG ID, or link",
               icon: true,
               cls: "bgg-import-sheet__field",
             })}
@@ -160,7 +201,8 @@
         case "idle":
           return `<li class="bgg-import-sheet__prompt">
               <i data-icon="search" class="w-5 h-5" aria-hidden="true"></i>
-              <span>Type a title and hit Search. Results come straight from
+              <span>Type a title and hit Search — or paste a BoardGameGeek ID
+                    or link to go straight to one game. Results come from
                     BoardGameGeek.</span>
             </li>`;
         case "searching":
@@ -201,7 +243,15 @@
     }
 
     /**
-     * The row's second line: the year, plus wherever the game has got to.
+     * The row's second line: the year, the BGG id, and wherever the game has
+     * got to.
+     *
+     * The id is on every row, not only the ones a numeric query matched. It is
+     * this row's identity on BoardGameGeek, it is what somebody looking a game
+     * up by id is holding, and printing it is what makes a search for "1830"
+     * legible — the id hit and the same-named title come back together, and
+     * the number beside each is the only thing that says which is which.
+     *
      * `bad` covers a failed import AND a failed shelf write — the second one
      * leaves the row in the `library` state with an error on the job, so
      * keying the colour off data-state alone would swallow it.
@@ -218,7 +268,8 @@
           : state === "library" ? "In the library"
           : null;
       return {
-        text: [hit.year_published || null, status].filter(Boolean).join(" · "),
+        text: [hit.year_published || null, `#${hit.bgg_id}`, status]
+          .filter(Boolean).join(" · "),
         bad,
       };
     }

@@ -769,11 +769,17 @@
      * catalog refresh hangs off the `bgg-imported` event in onMount rather
      * than a callback that would die with whatever opened it.
      *
+     * The search box's current query goes with it. Reaching this button means
+     * the catalog came up empty on that query — the button says so — so the
+     * sheet opens with it already entered and already running, rather than
+     * making the user type it a second time.
+     *
      * @param {Element|null} [trigger]
      */
     _openBggImport(trigger) {
       window.BggImportSheet.open({
         shelf: this._shelf,
+        query: this._query,
         returnFocus: trigger || null,
       });
     }
