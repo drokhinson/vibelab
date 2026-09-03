@@ -200,6 +200,24 @@
   // seconds is the honest wait.
   const BOOT_WATCHDOG_MIN_MS = 3000;
 
+  // The key index.html's boot backstop counts its reloads in. Named here as
+   // well as there because the two have to agree and neither can import.
+  const BOOT_RETRY_KEY = "bgb.bootRetry";
+
+  /**
+   * Stand index.html's boot backstop down, and forget its attempt count.
+   *
+   * That backstop reloads the page when no app code arrives at all. Reaching
+   * this proves it did, so the timer must not fire — and the ladder must be
+   * reset, or the next genuine failure would start partway up it and give the
+   * user one reload instead of three.
+   */
+  function clearBootBackstop() {
+    clearTimeout(window.__bgbBootRetry);
+    document.documentElement.removeAttribute("data-bgb-boot-failed");
+    try { sessionStorage.removeItem(BOOT_RETRY_KEY); } catch (_) {}
+  }
+
   /**
    * How long to wait before falling forward off the splash.
    *
@@ -526,6 +544,14 @@
   // _profileLoaded, not store.get('user'): the optimistic boot
   // fills the store from cache, so a user being present proves nothing about
   // whether we've reached the server.
+  //
+  // The ladder is a fallback, not the primary signal. The common cause of a
+  // deferred load is a link that was down, and the moment it comes back is
+  // knowable rather than worth sleeping through — so connectivity returning
+  // retries immediately (see the store.subscribe below). Without that, a boot
+  // that failed offline stayed failed for up to 25s after the network was
+  // fine, and then gave up entirely, waiting on a tab-switch the user has no
+  // reason to make.
   let _profileRecovering = false;
   async function retryProfileInBackground() {
     if (_profileRecovering) return;
@@ -546,6 +572,27 @@
     } finally {
       _profileRecovering = false;
     }
+  }
+
+  /**
+   * Retry a failed boot the instant the link returns.
+   *
+   * The pattern .claude/rules/web-frontend.md mandates for a failed first load,
+   * and the same one views/feed-view.js uses for its own — here through
+   * store.subscribe rather than View.listen, since these are plain functions.
+   * BgbNet publishes the slot from the browser's online/offline events and its
+   * own consecutive-failure count (domain/net.js).
+   *
+   * Guarded on _profileLoaded so a mid-session blip, where the profile is
+   * already in hand, costs nothing; retryProfileInBackground's own
+   * _profileRecovering latch stops this from stacking a second ladder on one
+   * that is already running.
+   */
+  function retryProfileWhenOnline() {
+    window.store.subscribe("offline", (offline) => {
+      if (offline || _profileLoaded || !window.session) return;
+      retryProfileInBackground();
+    });
   }
 
   // First-run setup: one deck, three counted slides and an uncounted finale
@@ -710,6 +757,7 @@
     window.BgbIcons.render(el);
   }
   window.store.subscribe("offline", syncOfflineBanner);
+  retryProfileWhenOnline();
 
   /**
    * The banner's "Try again". Everything else about offline detection is
@@ -865,6 +913,13 @@
     window.BgbIcons.render();
     initSupabase();
     setTimeout(bootWatchdog, bootWatchdogDelay());
+    // Hand off from index.html's boot backstop, which reloads the page when no
+    // app code arrives at all. Cancelled HERE rather than at the top of this
+    // file, so the handoff is atomic: merely executing init.js proves the
+    // bundle landed, but standing the backstop down before its replacement is
+    // installed would mean an exception in between leaves the app with neither
+    // — the stuck-forever state both mechanisms exist to prevent.
+    clearBootBackstop();
 
     // Register the app-shell worker. Wrapped defensively (same idiom as
     // travel-scrapbook): unsupported browsers, private modes and insecure

@@ -68,18 +68,66 @@
     })();
   </script>
 
-  <!-- Slow-boot escape hatch. Deliberately here rather than in init.js: the
-       failure this covers is init.js never arriving. Every script below is
-       parser-blocking, so a stalled bundle, a 404 after a bad deploy, or a
-       connection that dies mid-download leaves the splash spinning forever with
-       nothing to tap — the app's own 12s watchdog is part of the code that never
-       ran. This is HTML and CSS only, so it works when nothing else does.
-       The reveal is styles.css's [data-bgb-slow-boot] rule, scoped to the splash,
-       which router.go() hides the moment the app does boot. -->
+  <!-- Boot backstop. Deliberately here rather than in init.js: the failure this
+       covers is init.js NEVER ARRIVING — a stalled bundle, a 404 after a bad
+       deploy, a connection that dies mid-download. Every script below is
+       parser-blocking, so in that case the splash spins forever and the app's
+       own watchdog is part of the code that never ran. HTML + CSS + this one
+       script, so it works when nothing else does.
+
+       WHY 15s, AND WHY IT IS NOT "the app is being slow"
+       --------------------------------------------------
+       init.js cancels this the moment it arms its watchdog, and that watchdog
+       GUARANTEES the app leaves the splash. So reaching this timer means no app
+       code ran at all — never that a working boot is taking its time. That
+       distinction is the whole point: the previous version fired at 8s, i.e.
+       ~4s BEFORE the 12s watchdog could rescue the boot, so every slow-but-fine
+       launch was offered a reload button that would have thrown away work about
+       to finish. 15s clears the watchdog's own worst case.
+
+       Since we know no code is alive, a reload is the only possible recovery —
+       so retry by ourselves rather than asking. Capped and backing off, because
+       an uncapped loop hammers a server that may be down and never tells the
+       user anything. -->
   <script>
-    setTimeout(function () {
-      document.documentElement.setAttribute("data-bgb-slow-boot", "");
-    }, 8000);
+    (function () {
+      // Wait before each attempt. First rung must clear init.js's watchdog.
+      var RETRY_DELAYS_MS = [15000, 25000, 45000];
+      var KEY = "bgb.bootRetry";
+
+      // sessionStorage, not a variable: this survives the reloads it causes,
+      // and dies with the tab, so a fresh tab starts at rung one.
+      function attempts() {
+        try { return parseInt(sessionStorage.getItem(KEY), 10) || 0; } catch (e) { return 0; }
+      }
+      function remember(n) {
+        try { sessionStorage.setItem(KEY, String(n)); } catch (e) {}
+      }
+
+      var n = attempts();
+      if (n >= RETRY_DELAYS_MS.length) {
+        // Ladder spent. Stop reloading and say so — the loader alone would be a
+        // lie at this point.
+        document.documentElement.setAttribute("data-bgb-boot-failed", "");
+        return;
+      }
+
+      function retry() {
+        remember(n + 1);
+        location.reload();
+      }
+
+      window.__bgbBootRetry = setTimeout(function () {
+        // Offline is not a failed attempt. Reloading with no link only reaches
+        // the browser's error page, so it would burn a rung and learn nothing.
+        // Waiting costs nothing and `online` is the fastest retry available.
+        if (navigator.onLine === false) {
+          window.addEventListener("online", retry, { once: true });
+          return;
+        }
+        retry();
+      }, RETRY_DELAYS_MS[n]);
+    })();
   </script>
 
   <link rel="stylesheet" href="styles.css" />
@@ -142,12 +190,19 @@
     <main data-view="splash" class="flex-1 px-4 py-4 flex flex-col items-center justify-center min-h-[60vh]">
       <img src="assets/illustrations/bgb-loading.svg" alt="Loading"
            style="width:176px;height:176px;" class="rounded-2xl" />
-      <!-- Hidden until <html data-bgb-slow-boot> (8s, set by the inline script in
-           <head>). location.reload() rather than an href so a deep link like
+      <!-- Hidden until <html data-bgb-boot-failed>, which the <head> script sets
+           only after its three automatic reloads have all failed. Nothing here
+           appears on a boot that is merely slow — the app's watchdog handles
+           those, and offering a reload mid-boot only invites throwing away work
+           that was about to finish.
+           location.reload() rather than an href so a deep link like
            /play/{code} reloads itself rather than bouncing to the root. -->
-      <button type="button" class="bgb-slow-boot" onclick="location.reload()">
-        Still loading — tap to try again
-      </button>
+      <div class="bgb-boot-failed" role="alert">
+        <p class="bgb-boot-failed__msg">Couldn't load Boardgame Buddy.<br />Check your connection.</p>
+        <button type="button" class="bgb-boot-failed__btn" onclick="location.reload()">
+          Try again
+        </button>
+      </div>
     </main>
     <main data-view="auth" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="feed" class="hidden flex-1 px-4 py-4"></main>

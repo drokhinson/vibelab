@@ -14,9 +14,12 @@
       el.innerHTML = `
         <img src="assets/illustrations/bgb-loading.svg" alt="Loading"
              style="width:176px;height:176px;" class="rounded-2xl" />
-        <button type="button" class="bgb-slow-boot" onclick="location.reload()">
-          Still loading — tap to try again
-        </button>
+        <div class="bgb-boot-failed" role="alert">
+          <p class="bgb-boot-failed__msg">Couldn't load Boardgame Buddy.<br />Check your connection.</p>
+          <button type="button" class="bgb-boot-failed__btn" onclick="location.reload()">
+            Try again
+          </button>
+        </div>
       `;
     }
   }
