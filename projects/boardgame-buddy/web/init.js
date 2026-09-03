@@ -177,7 +177,38 @@
   // stall there leaves the user with a loader and nothing to tap. api.js now
   // puts a deadline on our own calls; this covers the leg we don't own
   // (supabase-js does its own fetching) and any future one.
+  //
+  // Measured from NAVIGATION, not from DOMContentLoaded — see bootWatchdogDelay.
   const BOOT_WATCHDOG_MS = 12000;
+
+  // The grace the auth leg gets no matter how late the scripts landed.
+  //
+  // Without a floor, a boot whose assets already blew the budget would arm the
+  // watchdog at 0ms and fire it before supabase-js has read localStorage — and
+  // a watchdog with no `window.session` in hand goes to /auth, i.e. it would
+  // show a login screen to somebody who is signed in. Reading a stored session
+  // is local and fast; it is the token REFRESH that needs the network, so a few
+  // seconds is the honest wait.
+  const BOOT_WATCHDOG_MIN_MS = 3000;
+
+  /**
+   * How long to wait before falling forward off the splash.
+   *
+   * The budget is spent from navigation, not from when this code got to run.
+   * `performance.now()` is milliseconds since `timeOrigin`, which for a document
+   * is navigation start — so it already IS the elapsed time, with nothing to
+   * stash in a global.
+   *
+   * This is the whole fix for the reported "loading screen sits for close to a
+   * minute". The timer used to be armed inside the DOMContentLoaded handler,
+   * which does not run until all ~120 parser-blocking scripts have downloaded
+   * and executed. On a congested cell that is 45s of splash, and the 12s
+   * watchdog then added its 12 on top rather than covering any of it.
+   */
+  function bootWatchdogDelay() {
+    const sinceNav = performance.now();
+    return Math.max(BOOT_WATCHDOG_MIN_MS, BOOT_WATCHDOG_MS - sinceNav);
+  }
 
   // Fall forward off the splash rather than sit on it.
   //
@@ -762,7 +793,7 @@
     // Views refresh their own subtree via View.refreshIcons() from here on.
     window.BgbIcons.render();
     initSupabase();
-    setTimeout(bootWatchdog, BOOT_WATCHDOG_MS);
+    setTimeout(bootWatchdog, bootWatchdogDelay());
 
     // Register the app-shell worker. Wrapped defensively (same idiom as
     // travel-scrapbook): unsupported browsers, private modes and insecure

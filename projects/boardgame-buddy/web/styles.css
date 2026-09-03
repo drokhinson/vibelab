@@ -11915,6 +11915,35 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border-top: 1px solid var(--polaroid-line);
 }
 
+/* ── Slow-boot escape hatch ───────────────────────────────────────────────────
+   The splash is the one view with no bottom nav, so a boot that stalls leaves
+   the user with a loader and nothing to tap. init.js's watchdog covers the case
+   where the app RAN and its network legs hung; this covers the case where the
+   app never ran at all — a stalled or 404ing script, a connection that died
+   mid-download. index.html's inline <head> script sets the attribute at 8s
+   without depending on a single byte of the bundle, and this reveals the
+   control. Scoped inside the splash on purpose: router.go() hides that <main>
+   the moment the app does boot, so a late attribute cannot leave a stale
+   "still loading" sitting under a screen that has loaded. */
+.bgb-slow-boot {
+  display: none;
+  margin-top: var(--s-4);
+  min-height: 44px;
+  padding: 10px var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--bg-1);
+  color: var(--ink-muted);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.bgb-slow-boot:active { background: var(--bg-2); }
+:root[data-bgb-slow-boot] [data-view="splash"]:not(.hidden) .bgb-slow-boot {
+  display: block;
+}
+.bgb-slow-boot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ── iOS focus-zoom floor ─────────────────────────────────────────────────────
    iOS Safari zooms the whole page whenever a focused form control computes
    under 16px. That drags the sticky .bgb-global-header and the fixed .bgb-nav
