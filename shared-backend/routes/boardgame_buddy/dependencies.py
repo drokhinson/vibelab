@@ -1,5 +1,6 @@
 """FastAPI dependencies for BoardgameBuddy."""
 
+import asyncio
 import re
 from typing import Optional
 
@@ -77,6 +78,52 @@ class CurrentUser(BaseModel):
     is_admin: bool = False
 
 
+def _load_or_create_profile(su_user: SupabaseUser) -> tuple[CurrentUser, bool]:
+    """Read this account's profile, creating it on first login.
+
+    Returns (user, existed). `existed` is False for the auto-create branch,
+    which the caller must not cache — the row it just wrote is what the next
+    request needs to read back.
+
+    Synchronous by design: every call in here is a blocking Supabase round
+    trip, and get_current_user runs the whole thing in one worker thread rather
+    than blocking the event loop three separate times.
+    """
+    sb = get_supabase()
+    result = (
+        sb.table("boardgamebuddy_profiles")
+        .select("id, display_name, username, is_admin")
+        .eq("id", su_user.sub)
+        .execute()
+    )
+
+    if result.data:
+        row = result.data[0]
+        return CurrentUser(
+            user_id=row["id"],
+            display_name=row["display_name"],
+            username=row["username"],
+            is_admin=bool(row.get("is_admin", False)),
+        ), True
+
+    # Auto-create profile on first auth. display_name starts at the
+    # email local-part (matches old behaviour); username is the
+    # stable handle, picked once and never reassigned.
+    display_name = su_user.email.split("@")[0] if su_user.email else "user"
+    username = _derive_username(sb, su_user.email, su_user.sub)
+    sb.table("boardgamebuddy_profiles").insert({
+        "id": su_user.sub,
+        "display_name": display_name,
+        "username": username,
+    }).execute()
+    return CurrentUser(
+        user_id=su_user.sub,
+        display_name=display_name,
+        username=username,
+        is_admin=False,
+    ), False
+
+
 async def get_current_user(
     su_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> CurrentUser:
@@ -95,43 +142,19 @@ async def get_current_user(
         )
         return cached
 
-    sb = get_supabase()
-    result = (
-        sb.table("boardgamebuddy_profiles")
-        .select("id, display_name, username, is_admin")
-        .eq("id", su_user.sub)
-        .execute()
-    )
-
-    if result.data:
-        row = result.data[0]
-        user = CurrentUser(
-            user_id=row["id"],
-            display_name=row["display_name"],
-            username=row["username"],
-            is_admin=bool(row.get("is_admin", False)),
-        )
-    else:
-        # Auto-create profile on first auth. display_name starts at the
-        # email local-part (matches old behaviour); username is the
-        # stable handle, picked once and never reassigned.
-        display_name = su_user.email.split("@")[0] if su_user.email else "user"
-        username = _derive_username(sb, su_user.email, su_user.sub)
-        sb.table("boardgamebuddy_profiles").insert({
-            "id": su_user.sub,
-            "display_name": display_name,
-            "username": username,
-        }).execute()
-        user = CurrentUser(
-            user_id=su_user.sub,
-            display_name=display_name,
-            username=username,
-            is_admin=False,
-        )
+    # The Supabase client is synchronous, so this goes to a worker thread. On
+    # the loop it blocked every other in-flight request in the service — all ten
+    # apps — for a full round trip, and it runs on the first request of every
+    # minute per user (the cache above is a 60s TTL) and on every cold worker.
+    #
+    # set_request_user stays out here on purpose: it writes contextvars, and a
+    # contextvar set inside a to_thread worker does not propagate back to the
+    # request's context, so the api_logs row would lose its user.
+    user, existed = await asyncio.to_thread(_load_or_create_profile, su_user)
 
     # Only the found branch is cached. A miss is what auto-creates the profile,
     # and caching that would hide the row the next request needs to read back.
-    if result.data:
+    if existed:
         cache.set(_PROFILE_NS, user.user_id, user, _PROFILE_TTL_SECONDS)
 
     await set_request_user(

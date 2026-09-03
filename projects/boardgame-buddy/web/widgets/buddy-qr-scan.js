@@ -92,6 +92,10 @@
     no_camera: "This device doesn't have a camera you can scan with.",
     in_use: "Another app is using the camera right now.",
     camera_unavailable: "Scanning needs a secure (https) connection.",
+    // The decoder is loaded on demand (ui/lazy-script.js), so a dead connection
+    // can leave the camera perfectly available and the scanner still unusable.
+    // Say that, rather than blaming the camera.
+    decoder_unavailable: "Couldn't load the scanner. Check your connection and try again.",
   };
 
   class BuddyQrScan {

@@ -14,6 +14,9 @@
       el.innerHTML = `
         <img src="assets/illustrations/bgb-loading.svg" alt="Loading"
              style="width:176px;height:176px;" class="rounded-2xl" />
+        <button type="button" class="bgb-slow-boot" onclick="location.reload()">
+          Still loading — tap to try again
+        </button>
       `;
     }
   }

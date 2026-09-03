@@ -275,13 +275,23 @@
     // routed through _fetch: a stalled analytics ping must not count toward
     // offline detection, but it still gets a deadline so it can't sit on a
     // connection the app needs for real work.
-    trackEvent(event) {
+    /**
+     * @param {string} event
+     * @param {Object} [metadata] Arbitrary JSON, stored on the row. The
+     *   backend's TrackBody has always accepted this; nothing sent it, so
+     *   every event was reduced to its name. init.js#reportBootTiming is the
+     *   first caller — it is how a "the app took a minute to open" report
+     *   becomes a number somebody can read off the admin dashboard.
+     */
+    trackEvent(event, metadata) {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
+      const body = { app: "boardgame-buddy", event };
+      if (metadata) body.metadata = metadata;
       fetch(this.base + "/api/v1/analytics/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ app: "boardgame-buddy", event }),
+        body: JSON.stringify(body),
         signal: ctl.signal,
       }).catch(() => {}).finally(() => clearTimeout(timer));
     }

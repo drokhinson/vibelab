@@ -38,7 +38,11 @@ async def get_feed(
     user: CurrentUser = Depends(get_current_user),
 ) -> FeedPageResponse:
     """Return a page of mixed feed cards visible to the current user."""
-    return feed_service.build_feed_page(
+    # build_feed_page is async and does its own to_thread + gather. Before that
+    # it was called straight from this async handler, so its five or six
+    # synchronous PostgREST round trips ran on the event loop — blocking every
+    # other request in the service, all ten apps, for the whole of a feed read.
+    return await feed_service.build_feed_page(
         get_supabase(),
         user.user_id,
         cursor=cursor,

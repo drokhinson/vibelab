@@ -28,6 +28,18 @@
   const escapeHtml = window.escapeHtml;
   const escapeAttr = window.escapeAttr;
 
+  // ui/qr-encode.js is 58 KB and this sheet is its only reader, so index.html
+  // carries it as rel=prefetch rather than a <script> tag. See ui/lazy-script.js.
+  const ENCODER_SRC = "ui/qr-encode.js";
+
+  /** @returns {Promise<void>} */
+  function loadEncoder() {
+    // Already global — the prefetch landed and ran, or a previous open pulled
+    // it in. Either way there is nothing to wait for.
+    if (typeof window.qrcode === "function") return Promise.resolve();
+    return window.BgbLazyScript.load(ENCODER_SRC);
+  }
+
   /**
    * @typedef {Object} BuddyQrOpenOpts
    * @property {'show'|'scan'} [tab]        Which tab to open on. Default 'show'.
@@ -228,7 +240,11 @@
       this._paint(`<div class="buddy-qr-sheet__state">Making your code…</div>`);
       let res;
       try {
-        res = await window.Buddy.qrToken();
+        // The encoder is loaded on demand (ui/lazy-script.js) and the token is a
+        // network round trip, so run them together — the load rides inside the
+        // mint's wall time and costs this screen nothing. Both must land before
+        // _paintCode(), which is synchronous and reads window.qrcode directly.
+        [res] = await Promise.all([window.Buddy.qrToken(), loadEncoder()]);
       } catch (err) {
         if (seq !== this._seq || !this._showing()) return;
         const offline = err && (err.offline || err.status === 0);

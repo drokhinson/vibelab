@@ -171,6 +171,46 @@ def _schedule_insert(row: dict[str, Any]) -> None:
         _insert_row(row)
 
 
+def log_self_call(
+    *,
+    app: str,
+    method: str,
+    path: str,
+    response_time_ms: int,
+    status_code: int,
+    response_size_bytes: Optional[int] = None,
+    user_id: Optional[str] = None,
+    user_label: Optional[str] = None,
+) -> None:
+    """Record one row for a request THIS service served, rather than one it made.
+
+    Everything else in this module logs outbound third-party calls, so until now
+    the table said a great deal about BoardGameGeek's latency and nothing about
+    our own. "Is /bootstrap slow, and did compressing it help?" had no answer
+    short of guessing.
+
+    `api_name="self"` keeps these distinguishable from real external calls in
+    the admin dashboard's grouping, which already renders this table with
+    per-group latency stats — so these appear there with no new endpoint.
+
+    Fire-and-forget on the same scheduler as the rest; a logging failure must
+    never affect the request it describes. Callers are expected to allowlist
+    which paths get a row: this table is unbounded, and one row per request
+    across ten apps would bury what it exists for.
+    """
+    _schedule_insert({
+        "app": app,
+        "api_name": "self",
+        "method": method,
+        "url": _truncate_url(path),
+        "response_time_ms": response_time_ms,
+        "status_code": status_code,
+        "response_size_bytes": response_size_bytes,
+        "user_id": user_id if user_id is not None else _current_user.get(),
+        "user_label": user_label if user_label is not None else _current_user_label.get(),
+    })
+
+
 @asynccontextmanager
 async def log_external_call(
     *,

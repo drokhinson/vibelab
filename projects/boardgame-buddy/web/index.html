@@ -68,6 +68,20 @@
     })();
   </script>
 
+  <!-- Slow-boot escape hatch. Deliberately here rather than in init.js: the
+       failure this covers is init.js never arriving. Every script below is
+       parser-blocking, so a stalled bundle, a 404 after a bad deploy, or a
+       connection that dies mid-download leaves the splash spinning forever with
+       nothing to tap — the app's own 12s watchdog is part of the code that never
+       ran. This is HTML and CSS only, so it works when nothing else does.
+       The reveal is styles.css's [data-bgb-slow-boot] rule, scoped to the splash,
+       which router.go() hides the moment the app does boot. -->
+  <script>
+    setTimeout(function () {
+      document.documentElement.setAttribute("data-bgb-slow-boot", "");
+    }, 8000);
+  </script>
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -128,6 +142,12 @@
     <main data-view="splash" class="flex-1 px-4 py-4 flex flex-col items-center justify-center min-h-[60vh]">
       <img src="assets/illustrations/bgb-loading.svg" alt="Loading"
            style="width:176px;height:176px;" class="rounded-2xl" />
+      <!-- Hidden until <html data-bgb-slow-boot> (8s, set by the inline script in
+           <head>). location.reload() rather than an href so a deep link like
+           /play/{code} reloads itself rather than bouncing to the root. -->
+      <button type="button" class="bgb-slow-boot" onclick="location.reload()">
+        Still loading — tap to try again
+      </button>
     </main>
     <main data-view="auth" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="feed" class="hidden flex-1 px-4 py-4"></main>
@@ -298,10 +318,20 @@
   <script src="ui/bgg-push-log.js"></script>
   <script src="ui/bgg-check-log.js"></script>
   <!-- Vendored QR codecs — see each file's header for provenance. Same-origin
-       on purpose: sw.js derives its precache list from the src= attributes in
-       this file, so a CDN copy would be the one thing missing offline. -->
-  <script src="ui/qr-encode.js"></script>
-  <script src="ui/qr-decode.js"></script>
+       on purpose: sw.js derives its precache list from the src= and href=
+       attributes in this file, so a CDN copy would be the one thing missing
+       offline.
+       rel=prefetch, NOT <script src>: qr-decode.js alone is 258 KB (~9% of the
+       app's whole JS budget) and both files serve one flow — the buddy-QR sheet
+       — that most sessions never open. ui/lazy-script.js pulls them in on first
+       use. They stay listed here because sw.js's precache sweep matches href=
+       too, so the codecs still ride the shell into the offline cache; what
+       changes is that the parser no longer blocks on them. Chrome fetches a
+       prefetch at Lowest priority and Safari ignores the hint outright, so
+       neither can compete with /bootstrap on a cold boot. -->
+  <link rel="prefetch" href="ui/qr-encode.js" as="script" />
+  <link rel="prefetch" href="ui/qr-decode.js" as="script" />
+  <script src="ui/lazy-script.js"></script>
   <script src="ui/qr-camera.js"></script>
 
   <!-- Widgets -->

@@ -94,12 +94,12 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin === self.location.origin) {
-    event.respondWith(cacheFirst(req));
+    event.respondWith(cacheFirst(req, false));
     return;
   }
 
   if (RUNTIME_ORIGINS.indexOf(url.origin) !== -1) {
-    event.respondWith(cacheFirst(req));
+    event.respondWith(cacheFirst(req, true));
   }
 });
 
@@ -136,17 +136,32 @@ async function navigationResponse(req) {
   return fetch(req);
 }
 
-/** Serve from cache, refresh in the background, fall back to the network. */
-async function cacheFirst(req) {
+/**
+ * Serve from cache, fall back to the network, and revalidate behind the
+ * response only where revalidating can actually change the answer.
+ *
+ * `revalidate` is false for same-origin and true for the CDN entries, and the
+ * asymmetry is the point. CACHE carries the deploy's build id, so a same-origin
+ * hit is BY CONSTRUCTION the byte-for-byte file this build shipped — a deploy
+ * lands in a fresh cache and activate() deletes the old one. Re-fetching it can
+ * only ever return what we already hold.
+ *
+ * That made it free to skip and expensive to keep: the shell is ~120 files, so
+ * every warm load fired ~120 background requests that could not change
+ * anything, over the same radio the boot's own /bootstrap was waiting on. The
+ * CDN entries are the genuinely different case — cached opportunistically on a
+ * first online load, possibly from an error response, and not versioned by
+ * anything we control.
+ */
+async function cacheFirst(req, revalidate) {
   const cache = await caches.open(CACHE);
   const cached = await cache.match(req);
   if (cached) {
-    // Revalidate behind the response. Within a build the shell is immutable,
-    // so this only matters for the CDN entries, which were cached
-    // opportunistically and may have been an error response.
-    fetch(req)
-      .then((res) => { if (isCacheable(res)) cache.put(req, res.clone()); })
-      .catch(() => {});
+    if (revalidate) {
+      fetch(req)
+        .then((res) => { if (isCacheable(res)) cache.put(req, res.clone()); })
+        .catch(() => {});
+    }
     return cached;
   }
   const res = await fetch(req);
@@ -188,10 +203,17 @@ async function precache() {
   const urls = new Set();
   for (const ref of extractHtmlRefs(shellHtml)) urls.add(ref);
 
-  // styles.css names its own assets (illustrations, the loader mark) via
+  // The stylesheet names its own assets (illustrations, the loader mark) via
   // url(...), and nothing in index.html mentions them.
-  const cssRefs = await extractCssRefs("/styles.css");
-  for (const ref of cssRefs) urls.add(ref);
+  //
+  // Its path is read out of the shell rather than hardcoded, because the deploy
+  // bundler renames it to a content-hashed /bgb-<sha>.css. A literal
+  // "/styles.css" would 404 there — silently, since extractCssRefs swallows the
+  // error and returns [] — and the first thing anyone would notice is missing
+  // illustrations offline, long after the deploy that caused it.
+  for (const href of extractStylesheetHrefs(shellHtml)) {
+    for (const ref of await extractCssRefs(href)) urls.add(ref);
+  }
 
   // Referenced only from manifest.json, which the browser reads itself.
   urls.add("/assets/brand/bgb-icon-192.png");
@@ -245,7 +267,20 @@ async function pooled(items, fn, limit = 6) {
  * and surfaces the problem immediately.
  */
 async function precacheOne(cache, url) {
-  const res = await fetch(url, { cache: "reload" });
+  // NOT `cache: "reload"`, unlike the shell fetch above. The shell needs it
+  // because a stale copy would seed this build's cache with the PREVIOUS
+  // build's script list — one file whose staleness cascades into every other.
+  // Nothing else here has that property, and forcing a full network fetch for
+  // all of them re-downloaded the whole shell after every deploy.
+  //
+  // A plain fetch is still correct. The bundle and the stylesheet are
+  // content-hashed by the deploy bundler, so their URL either holds exactly the
+  // right bytes or has never been seen — vercel.json marks those two immutable
+  // for a year on that basis. For everything else (the vendored QR codecs,
+  // manifest.json, the icons) a normal fetch goes through the browser's own
+  // freshness rules, which is at worst the same request `reload` would have
+  // made and at best a 304 with no body.
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`sw: precache ${url} failed (${res.status})`);
   const type = res.headers.get("content-type") || "";
   if (type.includes("text/html") && !/\.html$/.test(new URL(url, self.location.origin).pathname)) {
@@ -264,6 +299,25 @@ function extractHtmlRefs(html) {
     // manifest.json is fetched by the browser, not the page, and is tiny —
     // but an installed PWA that can't read it loses its identity, so it rides
     // along with the rest.
+    if (resolved) out.push(resolved);
+  }
+  return out;
+}
+
+/**
+ * Same-origin <link rel="stylesheet"> hrefs in the shell, as root-relative
+ * paths. The DaisyUI/Tailwind CDN sheet is cross-origin and drops out via
+ * sameOriginPath; the precompiled assets/bgb-tw.css that replaces it at deploy
+ * time has no url() of its own, so scanning it costs one cache-warm fetch and
+ * finds nothing.
+ */
+function extractStylesheetHrefs(html) {
+  const out = [];
+  const re = /<link\b[^>]*\brel\s*=\s*["']stylesheet["'][^>]*>/gi;
+  let tag;
+  while ((tag = re.exec(html))) {
+    const href = /\bhref\s*=\s*["']([^"']+)["']/i.exec(tag[0]);
+    const resolved = href && sameOriginPath(href[1]);
     if (resolved) out.push(resolved);
   }
   return out;
