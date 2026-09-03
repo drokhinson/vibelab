@@ -10,6 +10,7 @@ truststore.inject_into_ssl()  # use OS certificate store instead of certifi bund
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
 from dotenv import load_dotenv
@@ -67,6 +68,26 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# ── Response compression ──────────────────────────────────────────────────────
+# Every JSON response this service produced went over the wire uncompressed.
+# That is worst on the read that gates a boot: boardgame-buddy's /bootstrap is a
+# profile bundle, a 20-card feed page, the play partners and a status map over
+# every owned game — highly repetitive JSON, which is exactly what deflate is
+# good at. Applies to all ten apps, not just that one.
+#
+# minimum_size skips the small stuff, where the ~20-byte gzip header and the CPU
+# are not worth it: a health check, a {"status": "ok"}, a CORS preflight's empty
+# body.
+#
+# Ordering: add_middleware PREPENDS, so with CORS added above and the
+# @app.middleware("http") decorator below added after, the stack runs
+# outer-to-inner as api-logger-context -> GZip -> CORS -> routes. CORS headers
+# are therefore set inside the compressor and survive it, and Starlette's GZip
+# APPENDS to Vary rather than replacing it, so a compressed response carries
+# `Vary: Origin, Accept-Encoding` and stays correctly cacheable per-origin.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 # ── Supabase/PostgREST error handler ──────────────────────────────────────────
