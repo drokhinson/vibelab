@@ -21,6 +21,49 @@
   const step = window.bggLogStep;
 
   /**
+   * Failures by cause, not by game.
+   *
+   * The push aborts the whole run on a failure every remaining row would hit
+   * — a dead session, BGG's bot protection — by stamping the same sentence on
+   * every pending row. Printed one per game that read as eighteen separate
+   * problems, eighteen screens tall, when it was one problem eighteen times.
+   *
+   * @param {{game_name:string, message:string}[]|null|undefined} rows
+   * @returns {{message:string, names:string[]}[]}
+   */
+  function groupErrors(rows) {
+    const byMessage = new Map();
+    for (const row of rows || []) {
+      const message = row.message || "It didn't say why.";
+      if (!byMessage.has(message)) byMessage.set(message, []);
+      byMessage.get(message).push(row.game_name);
+    }
+    return [...byMessage].map(([message, names]) => ({ message, names }));
+  }
+
+  /**
+   * The cause on top, the games it hit underneath.
+   *
+   * Deliberately claims no count of its own: `session_errors` is capped at 20
+   * server-side, so "18 games — …" would be a lie the moment a bigger push
+   * fails. The heading above already carries the true total, and the shortfall
+   * is spelled out once below the list.
+   *
+   * @param {{message:string, names:string[]}} group
+   */
+  function renderErrorGroup(group) {
+    // One game keeps the original shape — "Hive — <why>" reads better than a
+    // cause with a list of one under it.
+    if (group.names.length === 1) {
+      return `<li><strong>${escapeHtml(group.names[0])}</strong> — ${escapeHtml(group.message)}</li>`;
+    }
+    return `<li>
+      <strong>${escapeHtml(group.message)}</strong>
+      <span class="bgg-log__errors-names">${group.names.map(escapeHtml).join(", ")}</span>
+    </li>`;
+  }
+
+  /**
    * @param {BggPushLogState} state
    * @returns {string} HTML, or "" when there is nothing to say yet.
    */
@@ -45,8 +88,14 @@
 
     const steps = [];
 
+    // The server commits the comparison the user reviewed when it still holds
+    // it, and only sweeps BGG again when it does not. Two different things
+    // happened, so this says two different things — claiming a re-check that
+    // nobody ran is the same species of lie as a full bar over zero writes.
     steps.push(step("done", summary
-      ? `Re-checked your BoardGameGeek collection`
+      ? (summary.reused_comparison
+        ? `Used the comparison you just reviewed`
+        : `Re-checked your BoardGameGeek collection`)
       : `Re-checking your BoardGameGeek collection`));
 
     if (summary) {
@@ -62,28 +111,42 @@
     }
 
     if (queued) {
-      const pct = total ? Math.round((settled / total) * 100) : 0;
+      // The bar and the count track what LANDED, not what settled. Counting
+      // errors as progress is how a push where every single write was refused
+      // rendered a full bar reading "18 of 18 sent".
+      const pct = total ? Math.round((done / total) * 100) : 0;
       const names = (s.session_game_names || []).slice(0, MAX_NAMES);
       const detail = `
         <div class="bgg-log__bar"><div class="bgg-log__bar-fill" style="width:${pct}%"></div></div>
-        <div class="bgg-log__meta"><span>${settled} of ${total} sent</span></div>
+        <div class="bgg-log__meta"><span>${done} of ${total} sent${
+          errored ? ` · ${errored} failed` : ""}</span></div>
         ${names.length ? `<ul class="bgg-log__names">${
           names.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>` : ""}`;
-      steps.push(step(finished ? "done" : "active",
-        (finished
-          ? `Sent every change to BoardGameGeek`
-          : `Sending change ${Math.min(settled + 1, total)} of ${total}`) + detail));
+      let headline;
+      if (!finished) {
+        headline = `Sending change ${Math.min(settled + 1, total)} of ${total}`;
+      } else if (!errored) {
+        headline = "Sent every change to BoardGameGeek";
+      } else if (done) {
+        headline = `Sent ${done} of ${total} ${total === 1 ? "change" : "changes"}`;
+      } else {
+        headline = "Couldn't send anything to BoardGameGeek";
+      }
+      steps.push(step(finished && !done ? "error" : (finished ? "done" : "active"),
+        headline + detail));
     }
 
     // A half-failed push has left flags on a third-party account in an unknown
     // state, so the games are named rather than counted.
     let tail = "";
     if (errored) {
-      const rows = (s.session_errors || []).slice(0, MAX_NAMES);
+      const groups = groupErrors(s.session_errors);
+      // The RPC caps session_errors at 20 rows; `errored` is the real count.
+      const unlisted = errored - groups.reduce((n, g) => n + g.names.length, 0);
       tail = `<div class="bgg-log__errors">
         <p class="bgg-log__errors-hd">${errored} ${errored === 1 ? "game" : "games"} didn't go through</p>
-        <ul>${rows.map((e) =>
-          `<li><strong>${escapeHtml(e.game_name)}</strong> — ${escapeHtml(e.message)}</li>`).join("")}</ul>
+        <ul>${groups.map(renderErrorGroup).join("")}</ul>
+        ${unlisted > 0 ? `<p class="bgg-log__errors-names">…and ${unlisted} more.</p>` : ""}
         <p class="bgg-log__errors-ft">Their BoardGameGeek status may be unchanged. Check status again to see where things stand.</p>
       </div>`;
     } else if (finished && queued) {

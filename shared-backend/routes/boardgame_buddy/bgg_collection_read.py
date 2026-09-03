@@ -337,6 +337,23 @@ def _parse_collection(body: str, *, username: str) -> list[tuple[int, str, Optio
     ]
 
 
+def collection_rows_from_items(
+    items: list[BggCollectionItem],
+) -> list[tuple[int, str, Optional[dict]]]:
+    """Reduce full-fidelity items to the (bgg_id, status, private) import rows.
+
+    Named and exported because the import no longer always does its own sweep:
+    a comparison from the last few minutes already holds the items, and
+    bgg_link_routes reduces those through here rather than re-implementing the
+    filter. See services/bgg_check_cache.py.
+    """
+    return [
+        (it.bgg_id, it.status, it.private)
+        for it in items
+        if it.status is not None
+    ]
+
+
 async def _fetch_collection_batched(
     user_id: str, username: str,
 ) -> tuple[list[tuple[int, str, Optional[dict]]], bool]:
@@ -346,9 +363,4 @@ async def _fetch_collection_batched(
     reduced to the (bgg_id, status, private) rows _run_sync consumes.
     """
     items, warm_up_failed = await _fetch_collection_items(user_id, username)
-    rows = [
-        (it.bgg_id, it.status, it.private)
-        for it in items
-        if it.status is not None
-    ]
-    return rows, warm_up_failed
+    return collection_rows_from_items(items), warm_up_failed

@@ -7,16 +7,22 @@
 
 (function () {
   /**
-   * @param {"done"|"active"|"idle"} state
+   * `error` exists because a step that finished and achieved nothing is not a
+   * done step. A push where every write was refused used to draw a checkmark
+   * beside "Sent every change to BoardGameGeek".
+   *
+   * @param {"done"|"active"|"idle"|"error"} state
    * @param {string} body  already-escaped HTML for the step's text
    * @returns {string}
    */
   function bggLogStep(state, body) {
     const icon = state === "done"
       ? `<i data-icon="check" class="bgg-log__icon"></i>`
-      : state === "active"
-        ? `<i data-icon="loader-2" class="bgg-log__icon bgg-log__icon--spin"></i>`
-        : `<span class="bgg-log__icon bgg-log__icon--idle"></span>`;
+      : state === "error"
+        ? `<i data-icon="alert-triangle" class="bgg-log__icon bgg-log__icon--error"></i>`
+        : state === "active"
+          ? `<i data-icon="loader-2" class="bgg-log__icon bgg-log__icon--spin"></i>`
+          : `<span class="bgg-log__icon bgg-log__icon--idle"></span>`;
     return `<li class="bgg-log__step bgg-log__step--${state}">${icon}<span class="bgg-log__body">${body}</span></li>`;
   }
 

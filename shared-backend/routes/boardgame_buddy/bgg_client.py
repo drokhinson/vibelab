@@ -44,6 +44,23 @@ logger = logging.getLogger(__name__)
 
 BGG_API_BASE = "https://boardgamegeek.com/xmlapi2"
 BGG_USER_AGENT = "vibelab-boardgame-buddy/1.0"
+# The web app is a different animal from xmlapi2. xmlapi2 is a published API
+# that accounts for us by the BGG_API_TOKEN bearer and does not care what we
+# call ourselves; boardgamegeek.com's own .php endpoints sit behind Cloudflare,
+# which screens POSTs on how browser-shaped the request looks and answers a
+# request that fails that screen with a 403 the app never sees. So the two
+# surfaces get two identities: xmlapi2 keeps the honest one above, and the web
+# form endpoints send a browser's. Env-overridable because the UA that gets
+# through is a moving target and re-deploying to change a string is absurd.
+#
+# See BGG's own Geek Tools threads on POSTs to geekplay.php being answered by a
+# Cloudflare challenge — same edge, same shape of failure as the collection
+# write.
+BGG_WEB_USER_AGENT = os.getenv(
+    "BGG_WEB_USER_AGENT",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+)
 BGG_API_TOKEN = os.getenv("BGG_API_TOKEN")
 # Re-login this far ahead of the cookie's actual expiry so a long-running
 # sync doesn't tip over mid-request.
@@ -71,6 +88,68 @@ class BggWarmUpError(HTTPException):
             status_code=503,
             detail="BoardGameGeek is still preparing this collection. Try again in ~30 seconds.",
         )
+
+
+class BggRefusedError(HTTPException):
+    """BGG refused a request that was carrying a session it had just minted.
+
+    THE POINT OF THIS CLASS IS WHAT IT IS NOT. `_run_as_user` answers a 401/403
+    by logging in again and retrying once. `login_to_bgg` only returns when BGG
+    hands back a SessionID — a wrong password is a 400 raised in there, never
+    here — so by the time the retry also comes back 401/403, the stored
+    password has just been PROVEN correct. This used to raise "BoardGameGeek
+    rejected the stored password" at that exact point and send the user off to
+    re-link credentials that were never the problem.
+
+    What is actually happening is the layer in front of the app: BGG's web
+    endpoints are behind Cloudflare, which screens POSTs and answers a request
+    it does not like with a 403 the application never sees. A session cannot
+    fix that, which is why this aborts the run instead of burning three
+    attempts per row against it.
+
+    Carries `ray_id` when Cloudflare identified itself, because that is the one
+    piece of evidence BGG staff ask for.
+    """
+
+    def __init__(self, detail: str, *, ray_id: Optional[str] = None) -> None:
+        super().__init__(status_code=502, detail=detail)
+        self.ray_id = ray_id
+
+
+# Cloudflare's block and challenge pages. Matched loosely on purpose — the
+# exact wording changes with their product names, and the cost of a false
+# positive is one honest error message instead of another.
+_CF_BODY_MARKERS = (
+    "attention required",
+    "just a moment",
+    "cf-error-details",
+    "cf_chl_opt",
+    "cf-browser-verification",
+    "enable javascript and cookies to continue",
+)
+
+
+def _cloudflare_block(resp: httpx.Response) -> Optional[str]:
+    """The Cloudflare ray id if this response is an edge block, else None.
+
+    Returns "" rather than None for a block with no ray id, so callers can tell
+    "not Cloudflare" from "Cloudflare, unidentified" — `is not None`, not truthiness.
+    """
+    if resp.status_code not in (403, 503, 429):
+        return None
+    ray = resp.headers.get("cf-ray") or ""
+    if resp.headers.get("cf-mitigated"):
+        return ray
+    try:
+        body = (resp.text or "")[:4000].lower()
+    except (UnicodeDecodeError, httpx.ResponseNotRead):
+        body = ""
+    if any(marker in body for marker in _CF_BODY_MARKERS):
+        return ray
+    # A cloudflare-served error page always names them somewhere near the ray.
+    if "cloudflare" in body and ("ray id" in body or "blocked" in body):
+        return ray
+    return None
 
 
 def _is_warm_up_response(body: str) -> bool:
@@ -447,14 +526,20 @@ async def _run_as_user(
     *,
     attempt: Callable[[dict[str, str]], Awaitable[httpx.Response]],
     context: str,
+    signed_out: Optional[Callable[[httpx.Response], bool]] = None,
 ) -> httpx.Response:
     """Run `attempt` with the user's BGG cookies, refreshing the session as needed.
 
     Owns IDENTITY only — loading the stored session, refreshing it before it
     expires, and re-logging in once when BGG rejects it mid-flight. The caller
-    owns PROTOCOL: this never inspects the response beyond 401/403, so a GET
-    against xmlapi2 and a form POST against the web app can share it while each
-    keeps its own status mapping.
+    owns PROTOCOL: this never inspects the response beyond 401/403 and whatever
+    `signed_out` tells it, so a GET against xmlapi2 and a form POST against the
+    web app can share it while each keeps its own status mapping.
+
+    `signed_out` is how a caller says "this 200 is a logged-out response".
+    xmlapi2 answers a dead session with a 401; the web app answers one with a
+    200 carrying its login form, and without this hook that reached the user as
+    a re-link prompt for a password that only needed re-using.
 
     Only httpx.HTTPError is caught. BggWarmUpError is an HTTPException and must
     keep escaping to _fetch_collection_batched, which handles it per batch.
@@ -465,6 +550,9 @@ async def _run_as_user(
     profile_row = _load_profile_session(sb, user_id)
     profile_row = await _ensure_session(sb, user_id, profile_row)
 
+    def _rejected(resp: httpx.Response) -> bool:
+        return resp.status_code in (401, 403) or bool(signed_out and signed_out(resp))
+
     try:
         resp = await attempt(_session_cookies(profile_row))
     except httpx.HTTPError as exc:
@@ -474,11 +562,19 @@ async def _run_as_user(
             detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
         )
 
-    if resp.status_code not in (401, 403):
+    if not _rejected(resp):
         return resp
 
+    # Cloudflare, not BGG. Their edge answers a request it does not like with a
+    # 403 the application never sees, so no session can satisfy it — and a
+    # re-login here would be one more POST at the login endpoint for nothing,
+    # once per failing row, on an account we would rather not get locked.
+    ray = _cloudflare_block(resp)
+    if ray is not None:
+        raise _refused(resp, context=context, ray_id=ray, relogged_in=False)
+
     # Server-side session was already invalidated. Force one fresh login and
-    # retry. If it 401s again, surface a re-link.
+    # retry.
     logger.info("BGG %s on %s for user=%s; re-logging in", resp.status_code, context, user_id)
     password = decrypt_password(profile_row["bgg_password_enc"])
     session = await login_to_bgg(profile_row["bgg_username"], password)
@@ -498,12 +594,44 @@ async def _run_as_user(
             status_code=503,
             detail="BoardGameGeek is temporarily unreachable. Try again in a moment.",
         )
-    if resp.status_code in (401, 403):
-        raise HTTPException(
-            status_code=409,
-            detail="BGG re-link required: BoardGameGeek rejected the stored password.",
+    if _rejected(resp):
+        # NOT a credential problem, and saying it was is how eighteen games got
+        # told to re-link a password that had just worked. `login_to_bgg`
+        # returns only when BGG issues a SessionID; a wrong password raises a
+        # 400 in there and never reaches this line. Getting here means the
+        # password authenticated and the request was refused anyway.
+        raise _refused(
+            resp, context=context,
+            ray_id=_cloudflare_block(resp), relogged_in=True,
         )
     return resp
+
+
+def _refused(
+    resp: httpx.Response, *, context: str, ray_id: Optional[str], relogged_in: bool,
+) -> BggRefusedError:
+    """Build the honest error for a 401/403 no valid session can fix."""
+    logger.warning(
+        "BGG refused %s with HTTP %s (cloudflare=%s ray=%s relogged_in=%s)",
+        context, resp.status_code, ray_id is not None, ray_id or "-", relogged_in,
+    )
+    if ray_id is not None:
+        detail = (
+            "BoardGameGeek's bot protection blocked this — your login is fine, "
+            "their front door turned us away."
+        )
+        if ray_id:
+            detail += f" (Cloudflare ray {ray_id})"
+        return BggRefusedError(detail, ray_id=ray_id or None)
+    if resp.status_code in (401, 403):
+        return BggRefusedError(
+            f"BoardGameGeek refused this with HTTP {resp.status_code}, even "
+            "though your account signed in successfully.",
+        )
+    return BggRefusedError(
+        "BoardGameGeek answered as though we were signed out, even though your "
+        "account signed in successfully.",
+    )
 
 
 async def fetch_bgg_as_user(
@@ -565,13 +693,33 @@ async def fetch_bgg_as_user(
 
 
 def _web_headers(username: str) -> dict[str, str]:
-    """Headers BGG's ajax form handlers expect. No Authorization — cookies only."""
+    """Headers BGG's ajax form handlers expect. No Authorization — cookies only.
+
+    TWO AUDIENCES, and the second one is why this is longer than it looks like
+    it needs to be. BGG's app wants the ajax markers (X-Requested-With, the
+    Referer naming the page the form lives on). Cloudflare, sitting in front of
+    it, wants the request to look like it came out of a browser — a POST from
+    something calling itself "vibelab-boardgame-buddy/1.0", with no Origin and
+    no fetch metadata, is the exact shape their POST screening answers with a
+    403 the app never sees. That 403 is indistinguishable from a dead session
+    at the HTTP layer, which is what used to get reported as a rejected
+    password.
+
+    Nothing here is a claim about who the user is — the cookies do that, and
+    they are the user's own, minted from credentials they linked. This is only
+    about looking like the browser the endpoint was written for.
+    """
     return {
-        "User-Agent": BGG_USER_AGENT,
+        "User-Agent": BGG_WEB_USER_AGENT,
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         "X-Requested-With": "XMLHttpRequest",
         "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Origin": "https://boardgamegeek.com",
         "Referer": f"https://boardgamegeek.com/collection/user/{username}",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
     }
 
 
@@ -608,12 +756,18 @@ async def post_bgg_form_as_user(
     form: dict[str, str],
     *,
     timeout: float,
+    signed_out: Optional[Callable[[httpx.Response], bool]] = None,
 ) -> httpx.Response:
     """POST a form-encoded body to a BGG web endpoint AS the linked user.
 
     Takes a FULL url, not a path — the write endpoint is not under
     BGG_API_BASE. Returns the raw response rather than a parsed body, because
     what counts as success is the caller's call.
+
+    `signed_out` is that same division applied to auth: the web app answers a
+    dead session with a 200 and its login form, and only the caller knows what
+    a logged-out body looks like for its endpoint. Passing it buys the one free
+    re-login the GET path has always had.
 
     Logged under api_name="bgg-write", distinct from "bgg" and "bgg-login", so
     writes are isolable in api_logs. The form carries only ids and status
@@ -632,7 +786,9 @@ async def post_bgg_form_as_user(
                 record.attach_response(resp)
                 return resp
 
-    resp = await _run_as_user(user_id, attempt=_attempt, context=f"POST {url}")
+    resp = await _run_as_user(
+        user_id, attempt=_attempt, context=f"POST {url}", signed_out=signed_out,
+    )
     _map_bgg_write_status(resp, url=url, form=form)
     return resp
 

@@ -1,19 +1,21 @@
 // domain/bgg.js — BoardGameGeek account linking + sync.
 
 (function () {
-  // POST /bgg/sync is not a normal request. The handler fetches the whole
-  // collection AND the whole play history from BGG's xmlapi2 — several
-  // throttled calls, plus BGG's own "still preparing your collection"
-  // back-off — before it can answer. The client's 15s default aborts a
-  // mid-size account routinely, and that abort is a lie: the server finishes
-  // the sync and queues the background worker either way, so the user is told
-  // "sync failed" about an import that is running. Give the call a deadline
-  // that matches the work it is waiting on; it still has one, so a stalled
-  // socket can't hang the screen forever.
+  // POST /bgg/sync is not a normal request. The handler fetches the whole play
+  // history from BGG's xmlapi2 — several throttled calls, plus BGG's own
+  // "still preparing your collection" back-off — before it can answer, and the
+  // whole collection too whenever there is no comparison to reuse. The client's
+  // 15s default aborts a mid-size account routinely, and that abort is a lie:
+  // the server finishes the sync and queues the background worker either way,
+  // so the user is told "sync failed" about an import that is running. Give the
+  // call a deadline that matches the work it is waiting on; it still has one,
+  // so a stalled socket can't hang the screen forever.
   const SYNC_TIMEOUT_MS = 120000;
 
-  // POST /bgg/check and POST /bgg/push both run the same eight-request sweep
-  // inside the handler before they can answer, for the same reason as above.
+  // POST /bgg/check always runs the eight-request sweep inside the handler,
+  // for the same reason as above. POST /bgg/push answers in milliseconds when
+  // the server still holds the comparison it is committing — but it falls back
+  // to the same sweep when it does not, so it keeps the same deadline.
   const CHECK_TIMEOUT_MS = 120000;
   const PUSH_TIMEOUT_MS = 120000;
 

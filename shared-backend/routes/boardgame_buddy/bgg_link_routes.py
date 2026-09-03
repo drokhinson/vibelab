@@ -50,7 +50,9 @@ from .bgg_client import (
 # fuller one rather than a widened tuple.
 from .bgg_collection_read import (
     BGG_THROTTLE_SECONDS as _WORKER_THROTTLE_SECONDS,
+    BggCollectionItem,
     _fetch_collection_batched,
+    collection_rows_from_items,
 )
 from .bgg_credentials import login_to_bgg
 from .constants import BggAuthState
@@ -62,6 +64,7 @@ from .models import (
     BggSyncStatus,
     BggSyncSummary,
 )
+from .services import bgg_check_cache
 
 logger = logging.getLogger(__name__)
 
@@ -630,8 +633,20 @@ async def _fetch_all_plays(user_id: str, username: str) -> list[dict]:
             return out
 
 
-async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
-    """Pull collection + plays from BGG, materialize knowns, queue unknowns."""
+async def _run_sync(
+    user_id: str,
+    username: str,
+    *,
+    swept_items: Optional[list[BggCollectionItem]] = None,
+) -> BggSyncSummary:
+    """Pull collection + plays from BGG, materialize knowns, queue unknowns.
+
+    `swept_items` is a collection read a comparison already made, handed over so
+    the import does not spend eight throttled requests re-reading what it was
+    just shown (services/bgg_check_cache.py). Only the collection half is ever
+    reusable — a check never touches /plays, and quietly skipping those would
+    turn "Import from BoardGameGeek" into "import some of it".
+    """
     sb = get_supabase()
 
     # Stamp the start of this sync on the profile BEFORE we fetch anything.
@@ -648,7 +663,17 @@ async def _run_sync(user_id: str, username: str) -> BggSyncSummary:
         ).eq("id", user_id).execute()
     )
 
-    collection_rows, coll_warm_up = await _fetch_collection_batched(user_id, username)
+    if swept_items is not None:
+        # A sweep is only ever handed over whole and clean — bgg_check_cache
+        # refuses to pass on one that exhausted its warm-up retries — so there
+        # is no partial read to flag here.
+        collection_rows, coll_warm_up = collection_rows_from_items(swept_items), False
+        logger.info(
+            "BGG import: reusing a comparison's sweep of %d games for user=%s",
+            len(collection_rows), user_id,
+        )
+    else:
+        collection_rows, coll_warm_up = await _fetch_collection_batched(user_id, username)
 
     plays_warm_up = False
     try:
@@ -828,7 +853,14 @@ async def sync_bgg(
             detail="A BoardGameGeek push is still running. Wait for it to finish, then try again.",
         )
 
-    summary = await _run_sync(user.user_id, username)
+    # The comparison the user just reviewed read this exact collection, at most
+    # five minutes ago. Taking that read rather than repeating it is the whole
+    # difference between pressing Import and watching the same forty-second
+    # sweep a second time.
+    summary = await _run_sync(
+        user.user_id, username,
+        swept_items=bgg_check_cache.pop_sweep(user.user_id),
+    )
 
     # Schedule the worker to drain any missing-game queue we just created
     # plus any leftovers from a previous sync.

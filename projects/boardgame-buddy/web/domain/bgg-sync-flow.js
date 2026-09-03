@@ -202,9 +202,11 @@
       this._publish();
       this.save();
 
-      // A push re-plans server-side before it queues anything — the same
-      // 10-40 second sweep as a check. Narrate it with the same checklist
-      // rather than leaving the screen blank until the queue count lands.
+      // A push normally commits the comparison the server still holds and
+      // answers immediately; only when that has aged out does it re-sweep, and
+      // then it is the same 10-40 seconds as a check. Arm the checklist either
+      // way — it costs one poll on the fast path, and it is the difference
+      // between a narrated wait and a blank screen on the slow one.
       if (direction === "push") {
         this._startPoll(CHECK_POLL_MS, () => this._tickCheck());
       }

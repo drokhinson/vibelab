@@ -24,6 +24,17 @@ Two rules the whole feature rests on:
      drains green while nothing changed is the worst outcome available here,
      because the user believes it worked.
 
+THERE IS A THIRD PARTY IN THIS CONVERSATION. boardgamegeek.com's `.php`
+endpoints sit behind Cloudflare, which screens POSTs on how browser-shaped they
+look and answers one it does not like with a 403 that BGG's application never
+sees — the same block their own Geek Tools forum has threads about for
+geekplay.php. That 403 is indistinguishable at the HTTP layer from a dead
+session, which is how a run of eighteen games came back saying BoardGameGeek
+had rejected a password that had just logged in successfully. Two things follow:
+`bgg_client._web_headers` sends a browser's headers so the request gets past the
+edge at all, and `bgg_client.BggRefusedError` exists so that when it does not,
+the user is told what actually happened.
+
 TODO once verified against a real account: paste the confirmed request here.
 """
 
@@ -114,6 +125,23 @@ def build_status_form(
     return form
 
 
+def looks_signed_out(resp: httpx.Response) -> bool:
+    """True when a 200 is really BGG's login form — a dead session, not a save.
+
+    Handed to `post_bgg_form_as_user` so the identity layer can spend its one
+    free re-login on it. It used to be read here instead and raised as "re-link
+    required", which asked the user to re-enter a password that was stored,
+    correct, and one login away from working.
+    """
+    if resp.status_code != 200:
+        return False
+    try:
+        lowered = (resp.text or "")[:2000].lower()
+    except (UnicodeDecodeError, httpx.ResponseNotRead):
+        return False
+    return "login" in lowered and ("password" in lowered or "signin" in lowered)
+
+
 def interpret_save_response(resp: httpx.Response) -> None:
     """Raise unless the save demonstrably landed. HTTP 200 is not enough.
 
@@ -121,12 +149,13 @@ def interpret_save_response(resp: httpx.Response) -> None:
     """
     body = (resp.text or "").strip()
 
-    # A stale session gets bounced to the login form, with a 200.
-    lowered = body[:2000].lower()
-    if "login" in lowered and ("password" in lowered or "signin" in lowered):
+    # Only reachable when the re-login in _run_as_user did not clear it — that
+    # path raises BggRefusedError first — or when this is called directly, as
+    # the tests do.
+    if looks_signed_out(resp):
         raise HTTPException(
-            status_code=409,
-            detail="BGG re-link required: BoardGameGeek asked us to log in again.",
+            status_code=502,
+            detail="BoardGameGeek answered a signed-in write with its login page.",
         )
 
     try:
@@ -183,6 +212,7 @@ async def push_collection_status(
         return
 
     resp = await post_bgg_form_as_user(
-        user_id, username, BGG_COLLECTION_SAVE_URL, form, timeout=_WRITE_TIMEOUT,
+        user_id, username, BGG_COLLECTION_SAVE_URL, form,
+        timeout=_WRITE_TIMEOUT, signed_out=looks_signed_out,
     )
     interpret_save_response(resp)
