@@ -92,10 +92,16 @@
     // its form. Saves nothing; the user reviews and hits Save themselves.
     // Slower than every other call here (a live LLM round-trip), so callers
     // must show a pending state.
-    generate(gameId, chapterType) {
-      return window.api.post(`/games/${gameId}/chapters/generate`, {
-        chapter_type: chapterType,
-      });
+    //
+    // `prompt` is the optional free-text steer from the wizard's head-start
+    // step ("just the endgame trigger"). Sent only when it has content — the
+    // backend caps it at 500 chars and 422s past that, and an empty string
+    // would be indistinguishable from "no steer" on the wire.
+    generate(gameId, chapterType, prompt) {
+      const body = { chapter_type: chapterType };
+      const focus = (prompt || "").trim();
+      if (focus) body.prompt = focus;
+      return window.api.post(`/games/${gameId}/chapters/generate`, body);
     },
     add(gameId, chapterId) {
       return window.api.post(`/games/${gameId}/my-chapters`, { chapter_id: chapterId });

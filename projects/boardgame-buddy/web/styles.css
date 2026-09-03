@@ -1332,79 +1332,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: oklch(var(--b1));
 }
 
-/* Draft-source row (create mode only): Import .md | Generate with AI.
-   Sits below the type pills because Generate needs a chapter type before it
-   can do anything. Equal halves, mirroring the Write/Preview segmented
-   control below it. */
-.chapter-edit__genrow {
-  display: flex;
-  gap: 0.5rem;
-  align-items: stretch;
-}
-.chapter-edit__genrow > * { flex: 1; }
-
-.chapter-edit__import {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  /* min-height, not a fixed height: this used to inherit its size from the
-     title row's align-items:stretch, and now has to hold a 44px tap target
-     on its own. */
-  min-height: 44px;
-  padding: 0 12px;
-  background: transparent;
-  border: 1.5px dashed rgba(201, 146, 42, 0.55);
-  border-radius: 11px;
-  color: var(--accent);
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
-  white-space: nowrap;
-}
-.chapter-edit__import:hover { background: rgba(201, 146, 42, 0.1); }
-.chapter-edit__import:active { transform: scale(0.97); }
-.chapter-edit__import input[type="file"] { display: none; }
-
-/* The AI draft button reads as the more prominent of the two — solid gold
-   wash against Import's dashed outline. */
-.chapter-edit__genbtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  min-height: 44px;
-  padding: 0 12px;
-  background: rgba(201, 146, 42, 0.16);
-  border: 1.5px solid var(--accent);
-  border-radius: 11px;
-  color: var(--accent);
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
-  white-space: nowrap;
-}
-.chapter-edit__genbtn:hover:not(:disabled) {
-  background: rgba(201, 146, 42, 0.28);
-  border-color: var(--accent-hover);
-}
-.chapter-edit__genbtn:active:not(:disabled) { transform: scale(0.97); }
-/* Greyed out until a chapter type is picked — matches the disabled Save
-   button, which is blocked on the same condition. */
-.chapter-edit__genbtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-/* Pending state: the label already reads "Generating…", so the pulse just
-   signals liveness without needing a spinner element. */
-.chapter-edit__genbtn--busy { animation: chapterGenPulse 1.4s ease-in-out infinite; }
-@keyframes chapterGenPulse {
-  0%, 100% { opacity: 0.5; }
-  50%      { opacity: 0.85; }
-}
-
 /* The scroller's fixed-height rows must hold their natural height and let the
    scroller scroll — otherwise flexbox shrinks them to fit and their contents
    spill out under the next row.
@@ -1412,10 +1339,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    container, and a scroll container's automatic minimum size is 0 rather than
    min-content. Every other row refuses to shrink past its text, so the pill row
    is the one child flexbox *can* shrink — it absorbed the entire overflow
-   (30px of pills squeezed into 10px) and the Import/Generate row painted over
-   the remains. */
+   (30px of pills squeezed into 10px) and the row below painted over the
+   remains. */
 .chapter-edit__typescroll,
-.chapter-edit__genrow,
 .chapter-edit__titlerow,
 .chapter-edit__seg,
 .chapter-edit__write {
@@ -1671,6 +1597,287 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ── Chapter creation wizard, steps 1 and 2 ────────────────────────────────
+   widgets/chapter-wizard-steps.js. Steps 1 (pick a type) and 2 (the optional
+   head start) live inside the same .chapter-edit__scroll as the editor, so
+   these rules only have to describe the two step bodies — the shell, the game
+   chip and the footer are the .chapter-edit__* family above.
+
+   Every colour is a token. The screen paints straight onto the app ground
+   (main[data-view="reference-guide-add"] is NOT in the --polaroid-* re-point
+   at the top of this file), so the ground vocabulary is the right one here and
+   both themes flow through it. The old draft row this replaces hardcoded
+   rgba(201,146,42,…) at six sites, which is the same gold as --accent in dark
+   and the wrong one in light. */
+.chapter-wiz__step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 0.15rem;
+}
+.chapter-wiz__title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: oklch(var(--bc));
+}
+.chapter-wiz__lede {
+  margin: -0.4rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: oklch(var(--bc) / 0.68);
+}
+
+/* The picked type, inline in a sentence (step 2's lede) and as the read-only
+   marker at the top of the editor step. */
+.chapter-wiz__typechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-quiet);
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ── Step 1: the type list ───────────────────────────────────────────────── */
+.chapter-wiz__types {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.chapter-wiz__type {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  /* 56px, not 44: these rows sit flush against each other, so a slightly-off
+     thumb lands on the neighbour (.claude/rules/mobile-web.md §5). */
+  min-height: 56px;
+  padding: 0 14px;
+  width: 100%;
+  text-align: left;
+  background: oklch(var(--b2));
+  border: 1.5px solid oklch(var(--b3));
+  border-radius: 14px;
+  color: oklch(var(--bc) / 0.85);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.chapter-wiz__type-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: oklch(var(--b3));
+  color: oklch(var(--bc) / 0.7);
+  transition: background 120ms ease, color 120ms ease;
+}
+.chapter-wiz__type-label { flex: 1; min-width: 0; }
+/* Reserved whether or not the row is ticked, so ticking doesn't reflow the
+   label beside it (.claude/rules/overlays.md §6). */
+.chapter-wiz__type-tick {
+  flex: none;
+  width: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+@media (hover: hover) {
+  .chapter-wiz__type:hover {
+    background: oklch(var(--b3));
+    color: oklch(var(--bc));
+  }
+}
+.chapter-wiz__type:active { transform: scale(0.99); }
+.chapter-wiz__type--on {
+  border-color: var(--accent);
+  background: var(--accent-quiet);
+  color: oklch(var(--bc));
+}
+.chapter-wiz__type--on .chapter-wiz__type-mark {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.chapter-wiz__type:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Step 2: the head start ──────────────────────────────────────────────── */
+.chapter-wiz__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.chapter-wiz__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: oklch(var(--bc) / 0.8);
+}
+.chapter-wiz__label em {
+  font-style: normal;
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.5);
+}
+.chapter-wiz__prompt {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  background: oklch(var(--b2));
+  border: 1.5px solid oklch(var(--b3));
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: oklch(var(--bc));
+  font-family: var(--font-sans);
+  line-height: 1.45;
+}
+.chapter-wiz__prompt::placeholder { color: oklch(var(--bc) / 0.4); }
+.chapter-wiz__prompt:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: oklch(var(--b1));
+}
+.chapter-wiz__prompt:disabled { opacity: 0.55; }
+.chapter-wiz__hint {
+  font-size: 0.75rem;
+  color: oklch(var(--bc) / 0.55);
+}
+
+/* The AI draft button is the step's primary action, so it fills the width
+   rather than sharing a row with Import the way the old draft row did. */
+.chapter-wiz__genbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 52px;              /* a commit button, per mobile-web.md §5 */
+  padding: 0 14px;
+  background: var(--accent-fill);
+  border: 1.5px solid transparent;
+  border-radius: 14px;
+  color: var(--on-accent);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 120ms ease, opacity 120ms ease;
+}
+.chapter-wiz__genbtn:hover:not(:disabled) { filter: brightness(1.06); }
+.chapter-wiz__genbtn:active:not(:disabled) { transform: scale(0.98); }
+.chapter-wiz__genbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Pending state: the label already reads "Drafting your chapter…", so the
+   pulse only has to signal liveness — no spinner element needed. */
+.chapter-wiz__genbtn--busy { animation: chapterGenPulse 1.4s ease-in-out infinite; }
+@keyframes chapterGenPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.9; }
+}
+
+.chapter-wiz__or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0.1rem 0;
+  color: oklch(var(--bc) / 0.45);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.chapter-wiz__or::before,
+.chapter-wiz__or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid oklch(var(--b3));
+}
+
+/* Import is the quieter sibling — a dashed outline against the solid button
+   above, so the hierarchy reads without a second accent weight. */
+.chapter-wiz__import {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 14px;
+  color: oklch(var(--bc) / 0.8);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+@media (hover: hover) {
+  .chapter-wiz__import:hover {
+    background: oklch(var(--b2));
+    border-color: var(--accent);
+    color: oklch(var(--bc));
+  }
+}
+.chapter-wiz__import:active { transform: scale(0.98); }
+.chapter-wiz__import input[type="file"] { display: none; }
+.chapter-wiz__import--off { opacity: 0.5; cursor: not-allowed; }
+
+.chapter-wiz__error {
+  color: var(--rust);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* ── Step 3: the read-only type marker ───────────────────────────────────── */
+/* Create picked the type on step 1, so the editor shows it rather than
+   offering the pill scroller a second time. Edit still gets the scroller. */
+.chapter-wiz__picked {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+.chapter-wiz__change {
+  margin-left: auto;
+  position: relative;
+  padding: 4px 6px;
+  background: none;
+  border: 0;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+}
+/* 44×44 hit area without inflating the visible link (mobile-web.md §5). */
+.chapter-wiz__change::before { content: ""; position: absolute; inset: -12px -8px; }
+.chapter-wiz__change:active { opacity: 0.7; }
+
+/* The skip on step 2 ("I'll write it"). A ghost like Cancel, because Generate
+   above it is that screen's one gold weight — but accent ink so the two ghosts
+   in the row don't read as the same button. Doubled class to out-specify the
+   base --cancel rule it would otherwise tie with and lose to on source order. */
+.chapter-edit__fbtn.chapter-wiz__fbtn--alt {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.chapter-edit__fbtn.chapter-wiz__fbtn--alt:hover:not(:disabled) {
+  background: var(--accent-quiet);
+}
+.chapter-edit__fbtn.chapter-wiz__fbtn--alt:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chapter-wiz__genbtn--busy { animation: none; }
 }
 
 /* Toolbar popovers — table dimension picker + colour swatches. */
@@ -11656,6 +11863,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .imp-date,
 .imp-count-input,
 .cascade-exp-filter__input,
+/* The chapter wizard's AI focus prompt. Its own rule sets no size, so without
+   this it inherits the page's ~14px and every tap into it zooms — on the one
+   step of the wizard whose whole purpose is typing. */
+.chapter-wiz__prompt,
 /* Every labelled field on a polaroid card — the avatar customizer's display
    name and the first-run BGG credentials — in one selector. */
 .polaroid-field__input {

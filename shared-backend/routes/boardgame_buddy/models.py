@@ -751,6 +751,11 @@ class ChapterGenerateRequest(BaseModel):
     """Ask the AI to draft a chapter of this type for the game in the path."""
 
     chapter_type: str
+    # Optional free-text steer from the wizard's "head start" step ("just the
+    # endgame trigger and final scoring"). Absent or blank means a general
+    # chapter for the type. Capped in the model so an oversized body is a 422
+    # rather than a token bill — the service truncates again defensively.
+    prompt: Optional[str] = Field(None, max_length=500)
 
 
 class ChapterGenerateResponse(BaseModel):
