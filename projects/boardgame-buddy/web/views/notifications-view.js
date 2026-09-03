@@ -52,6 +52,11 @@
     // sitting under the next mount — attached, here, to a destructive button.
     _resetState() {
       this._items = [];
+      // How many of _items came from page one. _loadMore() appends strictly
+      // behind this boundary, so it is what lets a pull-to-refresh replace page
+      // one in place without discarding the pages the user scrolled down to —
+      // the same bookkeeping views/feed-view.js keeps for the same reason.
+      this._firstPageLen = 0;
       this._cursor = null;        // {before, beforeKey} — the tuple keyset
       this._hasMore = false;
       this._loading = false;
@@ -73,14 +78,45 @@
       this.listen("offline", (off) => {
         if (!off && this._error && !this._items.length) this._load({ initial: true });
       });
+
+      // THE WHOLE POINT OF THE PREFETCH, and it has to happen before the first
+      // await or it buys nothing: everything below this line runs in the mount
+      // frame, so a page /bootstrap already fetched paints in the same frame the
+      // bell was tapped in, with no skeleton between.
+      //
+      // peekConfirmed() answers only while that fetch is recent enough to still
+      // be the truth (see CONFIRMED_MS in domain/notification-feed.js) — past
+      // that it returns null and this falls through to the network exactly as
+      // it always did. A list of Accept and Remove-me buttons is not a place to
+      // paint something old.
+      const warm = window.NotificationFeed.peekConfirmed();
+      if (warm) this._takePage(warm, { initial: true });
       this.render();
-      await this._load({ initial: true });
+
+      if (warm) {
+        // _load's own finally clause normally does this; the warm path skips
+        // _load entirely, and the watermark still has to move.
+        if (this._items.length) this._markSeen();
+      } else {
+        await this._load({ initial: true });
+      }
+      this._attachPull();
     }
 
     async onUnmount() {
       // A hidden view keeps its markup, so an unparked sentinel would keep
       // pulling pages nobody is looking at.
       if (this._io) this._io.disconnect();
+      if (this._ptr) this._ptr.detach();
+    }
+
+    _attachPull() {
+      if (!window.PullToRefresh || !window.PullToRefresh.supported) return;
+      this._ptr = this._ptr || new window.PullToRefresh({
+        host: this.container,
+        onRefresh: () => this._refresh(),
+      });
+      this._ptr.attach();
     }
 
     renderLoading() {
@@ -98,11 +134,7 @@
       try {
         const data = await window.NotificationFeed.list({ limit: PAGE });
         if (seq !== this._seq) return;          // a newer load owns the screen
-        this._items = data.items || [];
-        this._takeCursor(data);
-        this._loaded = true;
-        this._error = null;
-        window.NotificationFeed.setUnread(data.unread || 0);
+        this._takePage(data, { initial: true });
       } catch (e) {
         if (seq !== this._seq) return;
         // Its own branch, not an empty state: "nothing has happened" next to a
@@ -140,6 +172,76 @@
       } finally {
         if (seq === this._seq) { this._loading = false; this.render(); }
       }
+    }
+
+    /**
+     * Adopt a first page — from the network, from the warm prefetch, or from a
+     * pull-to-refresh. One writer for the four fields that have to move
+     * together, because three callers each setting three of them is how
+     * _firstPageLen drifts out of step with _items.
+     *
+     * @param {Object} data
+     * @param {{initial?: boolean}} [opts]
+     */
+    _takePage(data, opts) {
+      this._items = data.items || [];
+      this._firstPageLen = this._items.length;
+      this._takeCursor(data);
+      this._loaded = true;
+      window.NotificationFeed.setUnread(data.unread || 0);
+      if (opts && opts.initial) this._error = null;
+    }
+
+    /**
+     * Pull-to-refresh: re-pull page one and splice it over the page-one slice,
+     * KEEPING the cursor pages below it. A user four pages deep who pulls to
+     * see what's new must not be dropped back to a single page.
+     *
+     * Rows are reconciled by entry_key: anything the fresh page carries is
+     * dropped from the tail, so a notification that moved (a play entry whose
+     * batch grew, and whose occurred_at therefore advanced) appears once, at its
+     * new position, rather than twice.
+     *
+     * The seam is the same one feed-view documents for its upload path: rows
+     * pushed past the old page-one boundary fall into the gap between the new
+     * first page and a tail fetched from the old one, so they drop out of the
+     * running list until the next mount. That is the cost of not re-fetching
+     * every cursor page, and it is bounded by how much arrived since.
+     */
+    async _refresh() {
+      const seq = this._seq;
+      let data;
+      try {
+        data = await window.NotificationFeed.refreshFirstPage({ limit: PAGE });
+      } catch (_) {
+        // A refresh that fails leaves the list exactly as it was, which is the
+        // honest outcome — the rows on screen are still the rows the server
+        // last gave us. The error branch is for a list that has nothing.
+        if (!this._items.length) { this._error = "Couldn't load notifications."; this.render(); }
+        return;
+      }
+      if (seq !== this._seq) return;   // a load or a re-mount owns the screen now
+
+      const fresh = data.items || [];
+      const freshKeys = new Set(fresh.map((it) => it.entry_key));
+      const tail = this._items
+        .slice(this._firstPageLen)
+        .filter((it) => !freshKeys.has(it.entry_key));
+
+      this._items = fresh.concat(tail);
+      this._firstPageLen = fresh.length;
+      // With a tail, the running cursor belongs to the LAST page fetched, not to
+      // the first page we just re-pulled. Without one, the fresh cursor is both
+      // correct and newer.
+      if (!tail.length) this._takeCursor(data);
+      this._loaded = true;
+      this._error = null;
+      window.NotificationFeed.setUnread(data.unread || 0);
+      this.render();
+      // Whatever arrived is now on screen, so it counts as read — same rule as
+      // the initial load, and the same reason the stamp is the newest
+      // occurred_at SHOWN rather than now().
+      if (this._items.length) this._markSeen();
     }
 
     // The cursor is a PAIR, and both halves have to travel. Three sources feed
@@ -544,8 +646,19 @@
      * worst a drift can do is under-count a dot until then.
      */
     _dropRow(key) {
+      // Where it sat decides whether the page-one boundary moves: a row from a
+      // cursor page leaves it alone. A boundary that drifts would make the next
+      // pull-to-refresh splice the fresh page over a row belonging to a page
+      // below it.
+      const i = this._items.findIndex((x) => x.entry_key === key);
       this._items = this._items.filter((x) => x.entry_key !== key);
+      if (i > -1 && i < this._firstPageLen) this._firstPageLen--;
       this._selected.delete(key);
+      // The prefetched page still carries this row, and re-opening the bell
+      // inside its confirmed window would offer Accept for a request that is
+      // already answered. Patched, not dropped — the rest of the page is still
+      // good, and it is the whole reason the screen opens instantly.
+      window.NotificationFeed.dropFromPage(key);
       if (window.Buddy && window.Buddy.setPendingCount) {
         window.Buddy.setPendingCount(window.Buddy.pendingCount() - 1);
       }

@@ -38,6 +38,10 @@
       // User ids with a send/cancel in flight. A second tap on the same tile
       // is dropped rather than opening a second edge.
       this._busy = new Set();
+      // The pull-to-refresh controller, built on first mount and re-attached on
+      // every later one. Held rather than rebuilt because it binds to
+      // `this.container`, which the router keeps across mounts.
+      this._ptr = null;
     }
 
     async onMount() {
@@ -77,6 +81,16 @@
       this._refreshCollectionData();
       await this._load({ initial: true });
       this._installScrollObserver();
+      this._attachPull();
+    }
+
+    _attachPull() {
+      if (!window.PullToRefresh || !window.PullToRefresh.supported) return;
+      this._ptr = this._ptr || new window.PullToRefresh({
+        host: this.container,
+        onRefresh: () => this._refresh(),
+      });
+      this._ptr.attach();
     }
 
     async _refreshCollectionData() {
@@ -189,14 +203,55 @@
       // refreshFirstPage only fails when the network went away again mid-flush.
       // Nothing fresh to paint; the next mount re-fetches anyway.
       if (!page || !Array.isArray(page.cards)) return;
+      this._spliceFirstPage(page);
+    }
+
+    /**
+     * Pull-to-refresh: re-pull page one and splice it in.
+     *
+     * Goes through the same splice the outbox flush uses, for the same reason —
+     * the user may be four cursor pages deep, and a refresh that replaced
+     * `_page` wholesale would yank those away to show them what's new at the
+     * top. Appending is the whole point of the gesture.
+     *
+     * With nothing painted yet (an empty first load, or one that failed) there
+     * is no page-one slice to splice over, so this is just the first load again
+     * — which is also what makes pull-to-refresh the natural retry on the error
+     * state.
+     */
+    async _refresh() {
+      if (!this._page || !Array.isArray(this._page.cards)) {
+        await this._load({ initial: true });
+        return;
+      }
+      let page;
+      try {
+        page = await window.Feed.refreshFirstPage();
+      } catch (_) {
+        // The cards on screen are still the cards the server last gave us.
+        // Leaving them is more honest than clearing them for an error.
+        return;
+      }
+      if (!this._mounted || !page || !Array.isArray(page.cards)) return;
+      this._spliceFirstPage(page);
+    }
+
+    /**
+     * Splice a freshly-fetched first page over the slice it replaces, keeping
+     * the cursor pages below it.
+     *
+     * @param {{cards: Array, next_cursor: string|null}} page
+     */
+    _spliceFirstPage(page) {
       // Still on the skeleton (or a failed first load) — _load owns the first
       // paint and racing it would only get overwritten.
       if (!this._page || !Array.isArray(this._page.cards)) return;
 
       const tail = this._page.cards.slice(this._firstPageLen);
       // The refreshed page-one window can now extend over rows the tail already
-      // holds (it grew by the plays that just uploaded), and groupCards() would
-      // emit the same play twice inside one session card.
+      // holds — it grew by whatever landed since (uploaded plays, a buddy's
+      // night) — and groupCards() would emit the same play twice inside one
+      // session card.
       const freshIds = new Set(
         page.cards.filter((c) => c.kind === "play" && c.play_id).map((c) => c.play_id),
       );
@@ -204,9 +259,10 @@
         ...page.cards,
         ...tail.filter((c) => !(c.kind === "play" && c.play_id && freshIds.has(c.play_id))),
       ];
-      // Nothing visibly moved: the flush's refresh can land right after a mount
-      // that already fetched the same page, and a needless repaint would cost
-      // the user their scroll position for no new content.
+      // Nothing visibly moved: a refresh can land right after a mount that
+      // already fetched the same page, and a needless repaint would cost the
+      // user their scroll position for no new content. This is also what makes
+      // a pull that finds nothing new a no-op rather than a jump to the top.
       if (cardsSig(nextCards) === cardsSig(this._page.cards)) return;
 
       this._page = {
@@ -233,6 +289,7 @@
 
     async onUnmount() {
       this._uninstallScrollObserver();
+      if (this._ptr) this._ptr.detach();
     }
 
     _installScrollObserver() {

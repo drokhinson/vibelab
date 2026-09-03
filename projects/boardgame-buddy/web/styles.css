@@ -4706,6 +4706,92 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 @media (prefers-reduced-motion: reduce) {
   .shelf-more__spinner { animation-duration: 2400ms; }
 }
+
+/* ── Pull to refresh ──────────────────────────────────────────────────────── */
+/* The gesture the browser owns by default, taken over on the two screens that
+   have a list worth refreshing. See ui/pull-to-refresh.js for the JS half.
+
+   TAKING IT OVER IS TWO HALVES: this contains the overscroll so the browser's
+   own "drag down to reload" never arms, and the module preventDefault()s the
+   downward move so the page does not rubber-band while it draws. The class is
+   put on <html> by attach() and taken off by detach(), so every screen that has
+   NOT opted in keeps the native gesture — which on a plain page is still the
+   right thing. */
+html.bgb-ptr-armed,
+html.bgb-ptr-armed body {
+  overscroll-behavior-y: contain;
+}
+
+/* z-index 25 is deliberate: below the global header's 30, so the disc slides
+   out from BEHIND the header the way a native refresh control does, rather
+   than over the top of it. Anchored at the header's own height token so it
+   cannot drift from the bar it emerges from. */
+.bgb-ptr {
+  position: fixed;
+  top: var(--bgb-header-height);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms var(--ease);
+}
+.bgb-ptr.is-pulling,
+.bgb-ptr.is-refreshing { opacity: 1; }
+
+.bgb-ptr__disc {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-1);
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  box-shadow: var(--sh-2);
+  /* Parked 46px up — behind the header — and pulled down by exactly what the
+     finger gave it, so the disc tracks the thumb rather than easing after it. */
+  transform: translateY(calc(var(--ptr-pull, 0px) - 46px));
+  transition: transform 240ms var(--ease), color 160ms var(--ease),
+              border-color 160ms var(--ease);
+}
+/* No transition WHILE the finger is down: an eased transform lags the thumb,
+   which reads as the gesture not being registered. The snap back gets the
+   transition because by then the class is gone. */
+.bgb-ptr.is-pulling .bgb-ptr__disc { transition: none; }
+
+/* Armed — releasing now will refresh. The arrow has swept round to point back
+   up by this point, which is the actual signal; the accent just confirms it. */
+.bgb-ptr.is-armed .bgb-ptr__disc {
+  color: var(--accent);
+  border-color: var(--accent-quiet);
+}
+
+/* The arrow sweeps with the pull and then spins while the request is out. Both
+   live on the svg rather than the disc so the disc's own translate is
+   untouched — a transform on the parent would compose with it. */
+.bgb-ptr__disc svg {
+  transform: rotate(calc(var(--ptr-progress, 0) * 270deg));
+}
+.bgb-ptr.is-refreshing .bgb-ptr__disc {
+  color: var(--accent);
+  border-color: var(--accent-quiet);
+}
+.bgb-ptr.is-refreshing .bgb-ptr__disc svg {
+  animation: bgb-ptr-spin 720ms linear infinite;
+}
+@keyframes bgb-ptr-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The spin is the only signal that a request is out, so it slows rather than
+     stops — the disc itself carries no other "working" state. */
+  .bgb-ptr.is-refreshing .bgb-ptr__disc svg { animation-duration: 2400ms; }
+  .bgb-ptr__disc { transition-duration: 1ms; }
+}
+
 /* ── Unified status tag (every game tile) ─────────────────────────────────── */
 .status-tag {
   display: inline-flex; align-items: center; gap: 0.25rem;

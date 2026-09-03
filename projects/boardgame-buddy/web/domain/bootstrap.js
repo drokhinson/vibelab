@@ -15,6 +15,8 @@
 //     feed_cursor:          string|null,
 //     recently_played_games: GameSummary[],  // host flow game-picker seed
 //     play_partners:        { accounts, ghosts, recent },  // host player-picker seed
+//     notifications_first_page: NotificationsResponse,  // the bell's prefetch
+//     notifications_unread: int,                        // the bell's dot
 //   }
 //
 // The heavy per-owned-game detail bundles are NOT in here — building them is
@@ -121,6 +123,13 @@
       const me = window.store.get("user");
       const ps = [];
       if (window.Feed && window.Feed.refreshFirstPage) ps.push(window.Feed.refreshFirstPage());
+      // The bell's first page. warm() is a no-op inside its confirmed window,
+      // so a focus that comes back quickly costs nothing; past it, this is what
+      // renews the prefetch so the next tap on the bell still paints instantly
+      // instead of falling back to a cold fetch.
+      if (window.NotificationFeed && window.NotificationFeed.warm) {
+        ps.push(window.NotificationFeed.warm());
+      }
       // The profile bundle is what refreshes the last-play seed behind the
       // Play tab's "Another Round" card. It's a swr(), so this no-ops inside
       // the fresh window and only costs a request when it's actually stale.
@@ -164,11 +173,16 @@
       if (window.GhostClaim && window.GhostClaim.publishPendingFromBundle) {
         window.GhostClaim.publishPendingFromBundle(payload.profile_bundle);
       }
-      // And the bell: plays other people have seated this account in. Read off
-      // the payload's own top-level key rather than out of profile_bundle,
-      // because that is where the backend puts it — bgb_profile_bundle is 542
-      // lines and adding one integer to it would have meant re-emitting all of
-      // them, so /bootstrap gathers the count in parallel instead.
+      // And the bell: its dot AND the first page of the screen behind it. Read
+      // off the payload's own top-level keys rather than out of profile_bundle,
+      // because that is where the backend puts them — bgb_profile_bundle is 542
+      // lines and adding to it would have meant re-emitting all of them, so
+      // /bootstrap gathers both in parallel instead.
+      //
+      // The page is what makes the bell open instantly: it is a fetch that has
+      // already completed, so the screen paints from it rather than starting
+      // its own round trip on the one surface the dot just advertised. It ages
+      // out on a short window of its own — NotificationFeed owns that policy.
       if (window.NotificationFeed && window.NotificationFeed.publishUnreadFromBoot) {
         window.NotificationFeed.publishUnreadFromBoot(payload);
       }

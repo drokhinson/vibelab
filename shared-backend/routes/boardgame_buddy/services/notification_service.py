@@ -23,6 +23,7 @@ named for plays but covering all three kinds since migration 009), and
 underivable).
 """
 
+import asyncio
 from datetime import datetime
 
 from ..models import (
@@ -32,7 +33,7 @@ from ..models import (
 )
 
 
-def list_notifications(
+async def list_notifications(
     sb,
     viewer_id: str,
     limit: int = 20,
@@ -42,23 +43,21 @@ def list_notifications(
     """One page of the merged feed, newest first, plus the account-wide unread
     total.
 
-    Two round trips rather than one: the page and the unread count. The count is
-    not derivable from the page — it spans everything the account has, and it
-    feeds the header bell, which must be right before anything is scrolled.
+    Two round trips, but they cost one. The count is not derivable from the page
+    — it spans everything the account has, and it feeds the header bell, which
+    must be right before anything is scrolled — so both have to happen; what
+    they do not have to do is queue behind each other. The supabase client is
+    synchronous, so each goes to its own thread and the wall time is the slower
+    of the two rather than their sum.
+
+    That threading is also what keeps this endpoint off the event loop.
+    Called inline from an `async def` route, a synchronous PostgREST call blocks
+    every other in-flight request in the worker for its whole duration — the
+    same reasoning bootstrap_routes.py spells out for its own gather.
     """
-    rows = (
-        sb.rpc(
-            "bgb_notifications",
-            {
-                "p_viewer": viewer_id,
-                "p_limit": limit,
-                "p_before": before.isoformat() if before else None,
-                "p_before_key": before_key,
-            },
-        )
-        .execute()
-        .data
-        or []
+    rows, unread = await asyncio.gather(
+        asyncio.to_thread(fetch_page, sb, viewer_id, limit, before, before_key),
+        asyncio.to_thread(unread_count, sb, viewer_id),
     )
 
     items = [Notification.model_validate(r) for r in rows]
@@ -74,7 +73,31 @@ def list_notifications(
         items=items,
         next_cursor=items[-1].occurred_at if full else None,
         next_cursor_key=items[-1].entry_key if full else None,
-        unread=unread_count(sb, viewer_id),
+        unread=unread,
+    )
+
+
+def fetch_page(
+    sb,
+    viewer_id: str,
+    limit: int = 20,
+    before: datetime | None = None,
+    before_key: str | None = None,
+) -> list[dict]:
+    """The raw page rows. Split out so it can be handed to a worker thread."""
+    return (
+        sb.rpc(
+            "bgb_notifications",
+            {
+                "p_viewer": viewer_id,
+                "p_limit": limit,
+                "p_before": before.isoformat() if before else None,
+                "p_before_key": before_key,
+            },
+        )
+        .execute()
+        .data
+        or []
     )
 
 

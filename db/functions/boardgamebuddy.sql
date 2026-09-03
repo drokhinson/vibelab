@@ -1,7 +1,15 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 009_unified_notifications.sql (bgb_notifications and
---               bgb_notifications_unread replace the play-only pair 008
+-- Last updated: 010_notifications_perf.sql (bgb_notifications and
+--               bgb_notifications_unread are rewritten in place — same
+--               signatures, same output, both proved equivalent to their 009
+--               bodies; only how much of the account they read changes.
+--               bgb_notifications_unread also moves from LANGUAGE sql to
+--               plpgsql so the watermark can be a variable rather than a
+--               sub-select, which is what lets the planner use it as an index
+--               condition).
+--               Before that: 009_unified_notifications.sql (bgb_notifications
+--               and bgb_notifications_unread replace the play-only pair 008
 --               shipped, which is dropped there; bgb_mark_link_notifications_seen
 --               survives unchanged). 008 added the notification block below and
 --               never updated this header — hence the jump from 007.
@@ -1100,9 +1108,15 @@
 --            play_group, play_id, play_ids UUID[], group_count, game_count,
 --            played_from, played_to, game_id, game_name, game_thumbnail_url,
 --            import_batch_id, edge_id)
---   Defined in: db/migrations/boardgamebuddy/009_unified_notifications.sql
+--   Defined in: db/migrations/boardgamebuddy/010_notifications_perf.sql
+--               (introduced in 009_unified_notifications.sql; 010 rewrites the
+--                body as narrow-scan → top-N keys → aggregate-the-page, so the
+--                array_aggs, the COUNT(DISTINCT) and the catalog join run over
+--                the ~20 entries on the page instead of over every entry the
+--                account has ever had. Output is unchanged.)
 --   Called by:  services/notification_service.list_notifications
---               (GET /notifications)
+--               (GET /notifications, and the /bootstrap gather, which prefetches
+--               page one so the bell opens without a round trip)
 --   Purpose:    The notifications screen, as one merged feed. `kind` is
 --               play_link | buddy_request | buddy_accepted and says which
 --               field block is populated; actor_* is the only group present on
@@ -1119,9 +1133,16 @@
 
 -- bgb_notifications_unread(p_viewer UUID)
 --   → INT
---   Defined in: db/migrations/boardgamebuddy/009_unified_notifications.sql
+--   Defined in: db/migrations/boardgamebuddy/010_notifications_perf.sql
+--               (introduced in 009_unified_notifications.sql; 010 moves the
+--                watermark from HAVING MAX(linked_at) > seen to a WHERE on
+--                linked_at, which is the same set of entries — "some member is
+--                newer" and "the newest member is newer" say the same thing —
+--                but is an index condition rather than a filter on an
+--                aggregate. An account that has read everything now scans no
+--                rows instead of all of them.)
 --   Called by:  services/notification_service.unread_count
---               (GET /notifications, and the /bootstrap gather)
+--               (GET /notifications, and — via list_notifications — /bootstrap)
 --   Purpose:    The header bell's dot: the same three sources against the same
 --               watermark, summed. The play term counts ENTRIES on the key the
 --               list groups by, so a badge of 214 can never sit over a list of

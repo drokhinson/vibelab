@@ -44,14 +44,42 @@
  */
 
 (function () {
+  const NS = "notif";
+  const FIRST_KEY = "first";
+
+  // How long a fetched first page still counts as the truth.
+  //
+  // This is NOT the app's usual stale-while-revalidate window, and the entry is
+  // deliberately written with freshTtl === staleTtl so bgbCache can never serve
+  // it past this line. Every other cached namespace happily paints something
+  // old while it refreshes; this one must not. Its rows carry Accept, Decline
+  // and Remove-me — offering an action for a request answered on another device
+  // is worse than a spinner, which is the reasoning this module used to give for
+  // not caching at all.
+  //
+  // What changed is not the tolerance, it is WHEN the fetch happens. The page
+  // is now prefetched — /bootstrap carries it, a focus re-warm renews it, and
+  // touching the bell starts one — so in the ordinary "open the app, see the
+  // dot, tap it" path the request has already landed and the screen paints in
+  // one frame. Past this window the view goes back to waiting on the network,
+  // which is exactly what it did before.
+  //
+  // 20s is short on purpose. Raising it buys instant paints further from a
+  // fetch and pays for them in freshness; this is the one number to change.
+  const CONFIRMED_MS = 20 * 1000;
+
   const NotificationFeed = {
     /**
      * One page of the merged feed, newest first.
      *
-     * Not cached through bgbCache: the whole value of this screen is that it is
-     * current, and it is opened rarely and deliberately. A stale page here
-     * would offer Remove me for a seat that is already gone, or Accept for a
-     * request already answered somewhere else.
+     * The first page is served from the last fetch when that fetch is younger
+     * than CONFIRMED_MS, and re-fetched otherwise — see the constant. Cursor
+     * pages are never cached: each one is a one-shot window keyed by a cursor
+     * nothing else will ever ask for again.
+     *
+     * bgbCache also single-flights per key, which is what makes prefetching
+     * worth anything: a warm() started on the bell's pointerdown and the view's
+     * own read a moment later join ONE request rather than opening two.
      *
      * The cursor is a PAIR. Three sources feeding one ordering makes ties on
      * `occurred_at` ordinary rather than rare, and a cursor on the timestamp
@@ -63,10 +91,84 @@
      */
     list(opts) {
       const o = opts || {};
-      return window.api.get("/notifications", {
-        limit: o.limit || 20,
-        before: o.before || undefined,
-        before_key: o.beforeKey || undefined,
+      const limit = o.limit || 20;
+      if (o.before) {
+        return window.api.get("/notifications", {
+          limit,
+          before: o.before,
+          before_key: o.beforeKey || undefined,
+        });
+      }
+      return window.bgbCache.swr(
+        NS,
+        FIRST_KEY,
+        () => window.api.get("/notifications", { limit }),
+        { freshTtl: CONFIRMED_MS, staleTtl: CONFIRMED_MS },
+      );
+    },
+
+    /**
+     * The warm first page, or null — synchronous, never touches the network.
+     *
+     * Read through bgbCache.get() rather than peek() precisely because get()
+     * stops at the fresh window while peek() serves the stale one. There is no
+     * stale window here (freshTtl === staleTtl), so the two would agree today;
+     * using get() is what keeps them agreeing if anyone ever widens the pair.
+     *
+     * The view calls this before its first await so a confirmed page paints in
+     * the mount frame instead of after a skeleton.
+     *
+     * @returns {{items: Notification[], next_cursor: string|null, next_cursor_key: string|null, unread: number}|null}
+     */
+    peekConfirmed() {
+      return window.bgbCache.get(NS, FIRST_KEY);
+    },
+
+    /**
+     * Start (or join) a first-page fetch nobody is waiting on yet.
+     *
+     * Fire-and-forget by design: every caller is speculating that the user is
+     * about to open the bell, and a speculation that fails must not surface an
+     * error. Inside the confirmed window this is a no-op, so calling it on
+     * every focus and every bell touch costs nothing.
+     *
+     * @returns {Promise<void>}
+     */
+    warm() {
+      return NotificationFeed.list({}).then(() => {}, () => {});
+    },
+
+    /** Drop the warm page. Any mutation that changes what page one contains. */
+    invalidate() {
+      window.bgbCache.delete(NS, FIRST_KEY);
+    },
+
+    /**
+     * Drop the warm page and fetch a new one. Pull-to-refresh's entry point,
+     * and the only read that deliberately ignores the confirmed window.
+     *
+     * @param {{limit?: number}} [opts]
+     */
+    refreshFirstPage(opts) {
+      NotificationFeed.invalidate();
+      return NotificationFeed.list({ limit: (opts && opts.limit) || 20 });
+    },
+
+    /**
+     * Seed the warm page from the boot payload.
+     *
+     * The page inside /bootstrap was built by the same service call this
+     * module's own fetch makes, at the moment the app booted — so it enters the
+     * cache as what it is, a fetch that just completed, and ages out of the
+     * confirmed window on the same clock as any other.
+     *
+     * @param {Object|null} page
+     */
+    seedFirstPage(page) {
+      if (!page || !Array.isArray(page.items)) return;
+      window.bgbCache.setWithTtls(NS, FIRST_KEY, page, {
+        freshTtl: CONFIRMED_MS,
+        staleTtl: CONFIRMED_MS,
       });
     },
 
@@ -86,8 +188,67 @@
       return window.api.post("/notifications/seen", { through: through || null })
         .then((r) => {
           NotificationFeed.setUnread((r && r.unread) || 0);
+          // The warm page still says these rows are unread, and the next open
+          // inside the confirmed window would paint that: a list of rows lit up
+          // as new, under a bell with no dot. Patch the flags rather than
+          // dropping the entry — the rows themselves are still correct, and
+          // discarding them would throw away the prefetch this whole path
+          // exists to deliver.
+          NotificationFeed._markPageSeen(through);
           return r;
         });
+    },
+
+    /**
+     * Clear is_unread through `stamp` on the warm page, in place.
+     *
+     * Mirrors the server's watermark exactly: bgb_notifications computes
+     * is_unread as occurred_at > watermark, and the watermark just advanced to
+     * `stamp`. A null stamp means the server defaulted to now(), which covers
+     * everything the page holds.
+     *
+     * @param {string|null} [stamp]
+     */
+    _markPageSeen(stamp) {
+      const page = window.bgbCache.get(NS, FIRST_KEY);
+      if (!page || !Array.isArray(page.items)) return;
+      const items = page.items.map((it) =>
+        (it.is_unread && (!stamp || it.occurred_at <= stamp))
+          ? { ...it, is_unread: false }
+          : it);
+      window.bgbCache.setWithTtls(
+        NS, FIRST_KEY, { ...page, items, unread: 0 },
+        { freshTtl: CONFIRMED_MS, staleTtl: CONFIRMED_MS },
+      );
+    },
+
+    /**
+     * Drop one row from the warm page, in place.
+     *
+     * An answered buddy request is gone from the server's derived feed the
+     * instant the edge flips or is deleted — so leaving it on the prefetched
+     * page would put Accept and Decline back in front of the user next time
+     * they open the bell inside the confirmed window, for a request they have
+     * already answered. That is precisely the staleness this module refuses to
+     * serve.
+     *
+     * Patched rather than invalidated so the prefetch survives the action: the
+     * remaining rows are still exactly what the server would send, and
+     * next_cursor is keyed on the last row, which this cannot be — the view
+     * only ever drops a row it is looking at, and the cursor row is the one it
+     * pages FROM.
+     *
+     * @param {string} entryKey
+     */
+    dropFromPage(entryKey) {
+      const page = window.bgbCache.get(NS, FIRST_KEY);
+      if (!page || !Array.isArray(page.items)) return;
+      const items = page.items.filter((it) => it.entry_key !== entryKey);
+      if (items.length === page.items.length) return;
+      window.bgbCache.setWithTtls(
+        NS, FIRST_KEY, { ...page, items },
+        { freshTtl: CONFIRMED_MS, staleTtl: CONFIRMED_MS },
+      );
     },
 
     /**
@@ -107,6 +268,9 @@
         import_group_ids: s.groupIds || [],
         import_batch_ids: s.batchIds || [],
       }).then((r) => {
+        // The rows just removed are ON the warm page — serving it again would
+        // re-offer Remove me for seats that are already gone.
+        NotificationFeed.invalidate();
         // Same busting any other play mutation does. ONE call for the whole
         // batch, not one per id — _invalidatePlayDeps() drops whole cache
         // namespaces, so repeating it per play would be the same work sixty
@@ -134,17 +298,24 @@
     },
 
     /**
-     * Seed the bell from the boot payload.
+     * Seed the bell AND the screen behind it from the boot payload.
      *
-     * Reads the payload's own top-level key, not `profile_bundle` — the
-     * backend gathers this count beside the bundle rather than inside it.
-     * A missing key means an older backend, and no-ops to leave the dot dark
-     * rather than claiming zero, exactly as GhostClaim's equivalent does.
+     * Reads the payload's own top-level keys, not `profile_bundle` — the
+     * backend gathers both beside the bundle rather than inside it. Missing
+     * keys mean an older backend: the count no-ops to leave the dot dark rather
+     * than claiming zero (exactly as GhostClaim's equivalent does), and the
+     * page no-ops to leave the screen fetching for itself, which is what it did
+     * before this existed.
+     *
+     * The count is read from its own key rather than from the page's `unread`
+     * so an older backend that sends one and not the other still lights the dot
+     * correctly.
      *
      * @param {Object|null} payload
      */
     publishUnreadFromBoot(payload) {
       if (!payload) return;
+      NotificationFeed.seedFirstPage(payload.notifications_first_page);
       const n = payload.notifications_unread;
       if (n == null) return;
       NotificationFeed.setUnread(n);
