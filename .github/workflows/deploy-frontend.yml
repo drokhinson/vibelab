@@ -110,6 +110,20 @@ jobs:
           console.log("index.html now uses precompiled assets/bgb-tw.css");
           SWAP
 
+      # Deploy-artifact-only JS/CSS bundle for boardgame-buddy. Same posture as
+      # the Tailwind step above: the repo keeps its ~120 <script src> tags (the
+      # authoring model in .claude/rules/web-frontend.md) and local dev is
+      # untouched; this rewrites only the checkout `vercel deploy` uploads, and
+      # nothing is committed back. Runs AFTER Tailwind so it sees the
+      # CDN-swapped index.html, and BEFORE the sw.js stamp so the worker's
+      # precache sweep reads the final shell.
+      # The script is shared with deploy-frontend-all.yml rather than duplicated
+      # as a heredoc — see .github/scripts/bgb-bundle.mjs for what it does and,
+      # more importantly, what it deliberately does not do.
+      - name: Bundle + minify JS/CSS (boardgame-buddy only)
+        if: matrix.project == 'boardgame-buddy'
+        run: node .github/scripts/bgb-bundle.mjs projects/${{ matrix.project }}/web
+
       # Stamp the service worker's cache version. sw.js keys its cache on this,
       # so a fresh SHA per deploy means the new build lands in a new cache and
       # activate() deletes the old one — the answer to the stale-bundle risk
