@@ -13,7 +13,8 @@ Idea → STRUCTURE.md → web/ prototype → shared-backend/ API → native app
 ```
 
 Each project lives in `projects/[name]/` and has three tiers:
-- `web/` — Static HTML/CSS/JS (deployed to Vercel, no build step)
+- `web/` — Static HTML/CSS/JS (deployed to Vercel; no build step in the tree — a
+  deploy job may bundle/minify the uploaded artifact, see `.claude/rules/web-frontend.md`)
 - `shared-backend/routes/[name]/` — Python FastAPI route package (one shared Railway service)
 - `app/` — React Native / Expo (distributed via Expo Go / EAS)
 

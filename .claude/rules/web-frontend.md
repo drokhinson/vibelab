@@ -5,9 +5,39 @@ paths:
 
 # Web Prototype Conventions (`projects/[name]/web/`)
 
-- No npm, no bundler. Vanilla HTML + vanilla JS. No build step.
+- **No build step in the source tree.** No npm, no bundler, no transpiler under
+  `projects/*/web/`. Vanilla HTML + vanilla JS, `index.html` lists plain
+  `<script src>` tags, and opening that file in a browser runs the app. This is
+  the authoring model and it does not change.
+- **Deploy-time transforms are allowed, and must be deploy-artifact-only.** A
+  step in `.github/workflows/deploy-frontend*.yml` may rewrite the checkout that
+  `vercel deploy` uploads — precompile a CDN dependency, concatenate, minify,
+  content-hash — provided it **commits nothing back**. The repo keeps its script
+  tags, local dev keeps working with no toolchain, and the thing on the wire is
+  not the thing in git. Existing precedents: `web/build.sh`, which every project
+  has and which generates `config.js` from env vars; plus, boardgame-buddy-only
+  so far, the Tailwind + DaisyUI precompile step and
+  `.github/scripts/bgb-bundle.mjs`.
+  - **Do not "clean up" these steps on the strength of the buildless rule above.**
+    The rule is about the source tree; these are the deploy artifact. Removing
+    the bundler puts ~120 parser-blocking requests back on the boot path.
+- **When to add the bundle step to a project:** past roughly **40 local script
+  tags or ~500 KB of JS**, point its deploy job at `bgb-bundle.mjs` (it takes the
+  web dir as its one argument and reads `index.html` as the manifest, so it is
+  not boardgame-buddy-specific). Below that the step is ceremony — the request
+  count is not what is costing the page. Today only boardgame-buddy is over the
+  line; travel-scrapbook (53 tags, ~350 KB) is the next candidate.
+  - The bundler concatenates classic scripts sharing one global scope — it does
+    **not** run `esbuild --bundle` (which would wrap each file in a module scope
+    and change every top-level `let`/`const`/`class`) and does **not** mangle
+    identifiers (inline `onclick="window.router.go('feed')"` handlers and
+    `window[host]._method(...)` lookups resolve names at runtime). Keep both
+    constraints if you touch it.
+  - It enforces a gzip budget (450 KB, `BGB_JS_GZIP_BUDGET`) and `node --check`s
+    its output, so a deploy fails loudly rather than shipping a blank shell.
+    Raise the budget deliberately, with a reason, rather than to get green.
 - **Standard CDN stack** for new projects:
-  - **DaisyUI v4** (Tailwind component library — cards, badges, bottom-nav, toasts, no build step)
+  - **DaisyUI v4** (Tailwind component library — cards, badges, bottom-nav, toasts; usable straight from the CDN with no toolchain)
   - **An SVG icon set** vendored into the project, not loaded from a CDN — see Icons below
   - **Google Fonts: Inter** (body) + optional display font per project
 - Existing projects on Pico.css are migrated to DaisyUI incrementally via `/ui-polish`.

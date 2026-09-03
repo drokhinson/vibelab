@@ -17,7 +17,7 @@ See [registry.json](landing/registry.json) for the machine-readable list, or vis
 
 ## Stack
 
-- **Frontend**: Vanilla HTML/CSS/JS + [DaisyUI v4](https://daisyui.com) (no build step; older projects on Pico.css)
+- **Frontend**: Vanilla HTML/CSS/JS + [DaisyUI v4](https://daisyui.com) (no build step to work on it; older projects on Pico.css)
 - **Backend**: Python FastAPI (single shared service on Railway)
 - **Database**: Supabase (PostgreSQL, one shared project)
 - **Frontend hosting**: Vercel
@@ -47,7 +47,7 @@ pip install -r requirements.txt
 cp .env.example .env   # fill in Supabase credentials
 uvicorn main:app --reload --port 8000
 
-# Web prototype (no build step)
+# Web prototype (nothing to install)
 # Open projects/[name]/web/index.html in browser, or:
 npx serve projects/[name]/web
 
