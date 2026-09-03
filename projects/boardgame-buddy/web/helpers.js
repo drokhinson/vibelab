@@ -139,6 +139,25 @@ function formatDate(dateStr) {
   });
 }
 
+// "Today" / "Yesterday" / "Aug 12, 2019" — the header a list of events reads
+// under, where a date on every row reads as data rather than as position.
+//
+// Compares LOCAL CALENDAR DAYS, not elapsed hours: something logged at 11pm is
+// "Yesterday" at 1am, not "two hours ago", because that is what the person
+// looking at it would call it. Rounding the midnight-to-midnight difference
+// rather than flooring it is what keeps the 23- and 25-hour days either side of
+// a DST change from shifting every label by one.
+function formatRelativeDay(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  const midnight = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((midnight(new Date()) - midnight(d)) / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return formatDate(dateStr);
+}
+
 // HTML-escape for any untrusted text interpolated into a template literal.
 // Every module used to carry its own copy of this; they all delegate here now
 // so the escaping rules live in exactly one place.

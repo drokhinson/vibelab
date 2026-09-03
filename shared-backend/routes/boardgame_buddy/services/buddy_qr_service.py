@@ -165,6 +165,12 @@ def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResp
                 "status": BuddyEdgeStatus.ACCEPTED.value,
                 "requested_by": viewer_id,
                 "accepted_at": now,
+                # The scanner is the one who acted, so the notification goes to
+                # the person whose code was scanned — the only one who has yet
+                # to learn anything. requested_by is the scanner too on this
+                # path (nobody asked), which is exactly why bgb_notifications
+                # reads accepted_by and not requested_by.
+                "accepted_by": viewer_id,
             })
             .execute()
         )
@@ -207,7 +213,11 @@ def _resolve_existing(
     # "add instantly" work even when one side had already sent a request.
     updated = (
         sb.table("boardgamebuddy_buddy_edges")
-        .update({"status": BuddyEdgeStatus.ACCEPTED.value, "accepted_at": now})
+        .update({
+            "status": BuddyEdgeStatus.ACCEPTED.value,
+            "accepted_at": now,
+            "accepted_by": viewer_id,   # the scan IS the acceptance
+        })
         .eq("id", edge["id"])
         .execute()
     )

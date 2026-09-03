@@ -169,8 +169,8 @@
       // because that is where the backend puts it — bgb_profile_bundle is 542
       // lines and adding one integer to it would have meant re-emitting all of
       // them, so /bootstrap gathers the count in parallel instead.
-      if (window.LinkNotifications && window.LinkNotifications.publishUnreadFromBoot) {
-        window.LinkNotifications.publishUnreadFromBoot(payload);
+      if (window.NotificationFeed && window.NotificationFeed.publishUnreadFromBoot) {
+        window.NotificationFeed.publishUnreadFromBoot(payload);
       }
 
       // Identity seed. This is the one entry init.js reads synchronously right

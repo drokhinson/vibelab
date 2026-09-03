@@ -542,6 +542,25 @@
     btn.setAttribute("title", label);
   }
 
+  /**
+   * The bell opens the notifications screen, and closes it again.
+   *
+   * The screen used to carry a close x. It was a third control for an exit the
+   * user already had two of — the device back button, and the very button they
+   * opened it with — and the bell is the one they can see from the screen
+   * itself. router.back() returns them wherever they opened it from, which is
+   * the point: the bell is in the global header, so that could be any screen.
+   * `feed` is only the cold-deep-link fallback, for a session whose first URL
+   * was /notifications and which therefore has nothing behind it.
+   */
+  window.toggleNotifications = function toggleNotifications() {
+    if (window.store.get("currentView") === "notifications") {
+      window.router.back("feed");
+    } else {
+      window.router.go("notifications");
+    }
+  };
+
   function syncHeaderDots() {
     if (!window.BgbNotifications) return;
     syncHeaderDot(".bgb-global-header__bell",

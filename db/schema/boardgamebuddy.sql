@@ -77,6 +77,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   app_installed_at TIMESTAMPTZ,
   bgg_last_push_started_at TIMESTAMPTZ,
   bgg_last_check_started_at TIMESTAMPTZ,
+  -- Read watermark for the WHOLE notification bell — plays you were seated in,
+  -- buddy requests received, and requests of yours that were accepted — not
+  -- just link notifications, despite the name (migration 009 widened what it
+  -- covers and kept the name; see the COMMENT ON COLUMN there).
   link_notifications_seen_at TIMESTAMPTZ,
   CONSTRAINT boardgamebuddy_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -296,6 +300,11 @@ GRANT SELECT ON public.boardgamebuddy_buddies TO boardgamebuddy_role;
 -- Directed rows; a mutual friendship is two of them. status carries the
 -- request lifecycle, and a request you have merely SENT already counts as a
 -- first-hop link for the suggestion RPCs (archive/072).
+--
+-- This table is also a NOTIFICATION SOURCE (migration 009): created_at dates an
+-- incoming request on the bell and accepted_at dates an acceptance, both read
+-- by bgb_notifications without any events table in between. Answering a request
+-- flips or deletes the row, which is what empties the feed by construction.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_edges (
   id UUID DEFAULT gen_random_uuid() NOT NULL,
   user_a UUID NOT NULL,
@@ -304,7 +313,14 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_edges (
   requested_by UUID NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   accepted_at TIMESTAMPTZ,
+  -- WHO said yes, which is not derivable as "whichever party is not
+  -- requested_by". A QR scan writes an edge that is born accepted with
+  -- requested_by = the scanner and nobody having sent a request, so the derived
+  -- answer names the wrong person on that path. Added by migration 009; NULL on
+  -- rows accepted before it, which simply produce no notification.
+  accepted_by UUID,
   CONSTRAINT boardgamebuddy_buddy_edges_pkey PRIMARY KEY (id),
+  CONSTRAINT boardgamebuddy_buddy_edges_accepted_by_fkey FOREIGN KEY (accepted_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_buddy_edges_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_buddy_edges_user_a_fkey FOREIGN KEY (user_a) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_buddy_edges_user_b_fkey FOREIGN KEY (user_b) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -397,6 +413,11 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   player_user_id UUID,
   player_display_name TEXT,
   round_scores JSONB,
+  -- When this seat happened, NOT the play's created_at: bgb_link_ghost stamps
+  -- player_user_id onto rows of plays that already exist, often years old, and
+  -- a created_at watermark would never ring for exactly the case the
+  -- notifications bell most exists for. Added by migration 008.
+  linked_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   CONSTRAINT boardgamebuddy_play_players_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_play_players_play_id_fkey FOREIGN KEY (play_id) REFERENCES boardgamebuddy_plays(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_play_players_player_user_id_fkey FOREIGN KEY (player_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
@@ -406,6 +427,11 @@ ALTER TABLE public.boardgamebuddy_play_players ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_display_name_trgm ON public.boardgamebuddy_play_players USING gin (player_display_name extensions.gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_play ON public.boardgamebuddy_play_players USING btree (play_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user_play ON public.boardgamebuddy_play_players USING btree (player_user_id, play_id) WHERE (player_user_id IS NOT NULL);
+-- The driving index for the notifications feed: the viewer's own seats, newest
+-- first. Partial on the same predicate as idx_bgb_play_players_user_play, which
+-- stays — that one serves point lookups by (user, play), this one the ordered
+-- scan. Added by migration 008.
+CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user_linked ON public.boardgamebuddy_play_players USING btree (player_user_id, linked_at DESC) WHERE (player_user_id IS NOT NULL);
 GRANT SELECT ON public.boardgamebuddy_play_players TO boardgamebuddy_role;
 
 

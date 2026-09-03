@@ -1,14 +1,14 @@
-"""Link notification endpoints — "somebody put me in a play".
+"""Notification endpoints — the things that happened TO you.
 
 Its own module rather than three more routes on play_routes.py, which is
 already well past the ~300-line ceiling: this is its own object with its own
 lifecycle (a list, a watermark, a bulk write), and it happens to read plays the
-way the feed does.
+way the feed does and buddy edges the way the Buddies screen does.
 
 Route ORDER matters here for the same reason it does in ghost_claim_routes.py:
-/link-notifications/seen and /unlink are declared as literal paths and nothing
-in this module matches /link-notifications/{something}, so they cannot be
-shadowed — keep it that way if a parameterised route is ever added.
+/notifications/seen and /unlink are declared as literal paths and nothing in
+this module matches /notifications/{something}, so they cannot be shadowed —
+keep it that way if a parameterised route is ever added.
 
 The unlink lives here rather than beside POST /plays/{id}/leave because it is
 this screen's action, keyed by a set of play ids rather than by one play in a
@@ -18,6 +18,11 @@ you logged yourself, because the play-detail popup shows those to the user. A
 batch cannot do that — a set of sixty ids can legitimately contain a few that
 are already unlinked — so it reports a count instead and lets the client
 reconcile.
+
+The feed's OTHER two kinds have no write of their own here on purpose. A buddy
+request is answered through POST /buddies/{id}/accept and /reject, which the
+Buddies screen already calls; a notification row simply carries `edge_id` so it
+can call the same two. One destination, one pair of routes.
 """
 
 from datetime import datetime
@@ -29,52 +34,60 @@ from db import get_supabase
 from . import router
 from .dependencies import CurrentUser, get_current_user
 from .models import (
-    LinkNotificationsResponse,
-    LinkNotificationsSeenRequest,
-    LinkNotificationsSeenResponse,
     LinkUnlinkRequest,
+    NotificationsResponse,
+    NotificationsSeenRequest,
+    NotificationsSeenResponse,
     PlayLeaveResponse,
 )
-from .services import link_notification_service, played_with_service
+from .services import notification_service, played_with_service
 
 
 @router.get(
-    "/link-notifications",
-    response_model=LinkNotificationsResponse,
+    "/notifications",
+    response_model=NotificationsResponse,
     status_code=200,
-    summary="Plays other people have added you to",
+    summary="Plays you were added to, buddy requests, and requests accepted",
 )
-async def list_link_notifications(
+async def list_notifications(
     limit: int = Query(20, ge=1, le=100, description="Max entries to return"),
     before: datetime | None = Query(
-        None, description="Keyset cursor: return entries older than this created_at"
+        None, description="Keyset cursor: return entries older than this occurred_at"
+    ),
+    before_key: str | None = Query(
+        None,
+        description=(
+            "Keyset tiebreak: the entry_key of the last row on the previous "
+            "page. Required alongside `before` to page correctly when several "
+            "notifications share a timestamp."
+        ),
     ),
     user: CurrentUser = Depends(get_current_user),
-) -> LinkNotificationsResponse:
-    """One page of entries plus the account's unread total. Empty is normal."""
-    return link_notification_service.list_notifications(
-        get_supabase(), user.user_id, limit=limit, before=before
+) -> NotificationsResponse:
+    """One page of the merged feed plus the account's unread total. Empty is normal."""
+    return notification_service.list_notifications(
+        get_supabase(), user.user_id, limit=limit, before=before, before_key=before_key
     )
 
 
 @router.post(
-    "/link-notifications/seen",
-    response_model=LinkNotificationsSeenResponse,
+    "/notifications/seen",
+    response_model=NotificationsSeenResponse,
     status_code=200,
-    summary="Mark every link notification as seen",
+    summary="Mark every notification as seen",
 )
-async def mark_link_notifications_seen(
-    payload: LinkNotificationsSeenRequest | None = None,
+async def mark_notifications_seen(
+    payload: NotificationsSeenRequest | None = None,
     user: CurrentUser = Depends(get_current_user),
-) -> LinkNotificationsSeenResponse:
+) -> NotificationsSeenResponse:
     """Advance the read watermark, clearing the header bell's dot."""
-    return link_notification_service.mark_seen(
+    return notification_service.mark_seen(
         get_supabase(), user.user_id, through=payload.through if payload else None
     )
 
 
 @router.post(
-    "/link-notifications/unlink",
+    "/notifications/unlink",
     response_model=PlayLeaveResponse,
     status_code=200,
     summary="Remove yourself from several plays at once",

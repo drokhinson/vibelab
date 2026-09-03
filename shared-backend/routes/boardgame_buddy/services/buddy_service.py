@@ -166,6 +166,11 @@ def _accept_edge(sb, edge: dict[str, Any], viewer_id: str) -> BuddyRequestRespon
         .update({
             "status": BuddyEdgeStatus.ACCEPTED.value,
             "accepted_at": now,
+            # Who said yes. Not derivable from requested_by — see the column's
+            # note in migration 009 — and it is what tells the REQUESTER their
+            # request landed, on the notifications feed, without telling the
+            # acceptor about their own tap.
+            "accepted_by": viewer_id,
         })
         .eq("id", edge["id"])
         .execute()
