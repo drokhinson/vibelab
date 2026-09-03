@@ -1,8 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 007_play_import_batches.sql (import batches and the two
---               delete RPCs; bgb_feed_plays also returns import_group_id
---               now, and bgb_log_play persists the batch). The other 48
+-- Last updated: 009_unified_notifications.sql (bgb_notifications and
+--               bgb_notifications_unread replace the play-only pair 008
+--               shipped, which is dropped there; bgb_mark_link_notifications_seen
+--               survives unchanged). 008 added the notification block below and
+--               never updated this header — hence the jump from 007.
+--               The other 48
 --               functions come from the 2026-09-01 collapse and live
 --               in db/migrations/boardgamebuddy/003_rpcs.sql; each entry below
 --               also names the archived migration its surviving definition
@@ -1071,56 +1074,84 @@
 --               beside it stays exact.
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Link notifications (migration 008)
+-- Notifications (migrations 008, 009)
 --
--- "Someone put me in a play." The list is DERIVED — plays where the viewer is
--- a player and somebody else is the logger — rather than stored as events, so
--- there is no second source of truth for four write paths to keep honest, and
--- unlinking empties it by construction. The only stored fact is the watermark,
--- boardgamebuddy_profiles.link_notifications_seen_at, because "have you seen
--- this" is the one thing the plays cannot say.
+-- Everything that happens TO an account rather than BY it: someone seats you in
+-- a play they logged, someone asks to be your buddy, someone accepts the
+-- request you sent. All three are DERIVED — from play_players + plays, and from
+-- boardgamebuddy_buddy_edges — rather than stored as events, so there is no
+-- second source of truth for the write paths to keep honest, and answering one
+-- empties it by construction: unlinking drops a play row, accepting or
+-- declining drops a request row.
+--
+-- Two stored facts the sources cannot supply: the watermark
+-- boardgamebuddy_profiles.link_notifications_seen_at ("have you seen this",
+-- named for plays but covering all three since 009), and
+-- boardgamebuddy_buddy_edges.accepted_by ("who said yes", which is not
+-- derivable because a QR scan writes an edge that is born accepted with nobody
+-- having asked).
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- bgb_link_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
---                        p_before TIMESTAMPTZ DEFAULT NULL)
---   → TABLE (play_id, play_ids UUID[], group_count, played_at, created_at,
---            game_id, game_name, game_thumbnail_url, owner_id,
---            owner_display_name, owner_avatar_url, import_batch_id, is_unread)
---   Defined in: db/migrations/boardgamebuddy/008_link_notifications.sql
---   Called by:  services/link_notification_service.list_notifications
---               (GET /link-notifications)
---   Purpose:    The notifications screen. One row per ENTRY, not per play: a
---               run of identical imported plays collapses on
---               COALESCE(import_group_id, id), the same identity
---               bgb_feed_plays and bgb_plays_page use, so a 58-play import is
---               one row rather than 58. play_ids carries the run's members for
---               the bulk unlink, and holds ONLY the plays the viewer is seated
---               in — a run is identical plays, not identical rosters, and the
---               button's count must match what it can move. Keyset-paged on
---               created_at because rows vanish as the user unlinks.
+-- bgb_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
+--                   p_before TIMESTAMPTZ DEFAULT NULL,
+--                   p_before_key TEXT DEFAULT NULL)
+--   → TABLE (entry_key, kind, occurred_at, is_unread,
+--            actor_id, actor_display_name, actor_username, actor_avatar,
+--            play_group, play_id, play_ids UUID[], group_count, game_count,
+--            played_from, played_to, game_id, game_name, game_thumbnail_url,
+--            import_batch_id, edge_id)
+--   Defined in: db/migrations/boardgamebuddy/009_unified_notifications.sql
+--   Called by:  services/notification_service.list_notifications
+--               (GET /notifications)
+--   Purpose:    The notifications screen, as one merged feed. `kind` is
+--               play_link | buddy_request | buddy_accepted and says which
+--               field block is populated; actor_* is the only group present on
+--               all three, which is what lets one LEFT JOIN after the union
+--               serve every kind. A play_link row is one ENTRY, not one play:
+--               a batch, a run of identical imported plays, or one retroactive
+--               ghost-link collapses to a single row, so a 214-play import is
+--               one line with one tick box. play_ids holds ONLY the plays the
+--               viewer is seated in, because the unlink button's count has to
+--               match what it can actually move. Keyset-paged on the TUPLE
+--               (occurred_at, entry_key) — three sources feeding one ordering
+--               makes ties ordinary, and 008's timestamp-only cursor silently
+--               dropped every row sharing a boundary timestamp.
 
--- bgb_link_notifications_unread(p_viewer UUID)
+-- bgb_notifications_unread(p_viewer UUID)
 --   → INT
---   Defined in: db/migrations/boardgamebuddy/008_link_notifications.sql
---   Called by:  services/link_notification_service.unread_count
---               (GET /link-notifications, and the /bootstrap gather)
---   Purpose:    The header bell's dot. Counts DISTINCT
---               COALESCE(import_group_id, id) — the same collapse the list
---               does, so a badge of 58 can never sit over a list of one.
+--   Defined in: db/migrations/boardgamebuddy/009_unified_notifications.sql
+--   Called by:  services/notification_service.unread_count
+--               (GET /notifications, and the /bootstrap gather)
+--   Purpose:    The header bell's dot: the same three sources against the same
+--               watermark, summed. The play term counts ENTRIES on the key the
+--               list groups by, so a badge of 214 can never sit over a list of
+--               one, and it derives unread from MAX(linked_at) per entry —
+--               the identical expression the list's is_unread uses — so the
+--               badge and the rail cannot drift apart under a later edit.
 
--- bgb_mark_link_notifications_seen(p_viewer UUID)
---   → TIMESTAMPTZ (the stamp written)
+-- bgb_mark_link_notifications_seen(p_viewer UUID,
+--                                  p_through TIMESTAMPTZ DEFAULT NULL)
+--   → TIMESTAMPTZ (the stamp that now stands)
 --   Defined in: db/migrations/boardgamebuddy/008_link_notifications.sql
---   Called by:  services/link_notification_service.mark_seen
---               (POST /link-notifications/seen)
---   Purpose:    Move the watermark to now(). Returns it so the client
---               reconciles without a second read.
+--   Called by:  services/notification_service.mark_seen
+--               (POST /notifications/seen)
+--   Purpose:    Advance the watermark to p_through, defaulting to now(), under
+--               a GREATEST so it is monotonic and a stale retry cannot walk it
+--               backwards. p_through is the newest occurred_at the client
+--               actually DISPLAYED, not now(): a notification landing between
+--               the list request and this call must not be marked seen without
+--               ever having been on screen. Returns the stamp so the client
+--               reconciles without a second read. Kept its 008 name in 009 —
+--               it writes the watermark and never knew which kinds it covered,
+--               so covering three needed no change.
 
--- bgb_ghost_out_of_plays(p_viewer UUID, p_play_ids UUID[])
+-- bgb_ghost_out_of_plays(p_viewer UUID, p_play_ids UUID[] DEFAULT '{}',
+--                        p_group_ids UUID[] DEFAULT '{}',
+--                        p_batch_ids UUID[] DEFAULT '{}')
 --   → INT (rows moved)
 --   Defined in: db/migrations/boardgamebuddy/008_link_notifications.sql
 --   Called by:  services/played_with_service.ghost_out_of_plays
---               (POST /link-notifications/unlink, and POST /plays/{id}/leave
+--               (POST /notifications/unlink, and POST /plays/{id}/leave
 --               via the single-play wrapper)
 --   Purpose:    THE ghost-out write, and the inverse of bgb_link_ghost_rows —
 --               the caller's seat becomes a ghost carrying their name, owned
