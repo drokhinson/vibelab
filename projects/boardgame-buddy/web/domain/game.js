@@ -31,7 +31,9 @@
       else window.bgbCache.delete("game.bundle", id);
     }
 
-    // Cache key for a library search — normalized query + limit.
+    // Cache key for a library search — normalized query + limit. Expansion
+    // inclusion is NOT in the key and does not need to be: only include_bgg=false
+    // calls are cached (see search()), and every one of those passes the default.
     static _searchKey(q, limit) {
       return `${(q || "").trim().toLowerCase()}|${limit}`;
     }
@@ -99,9 +101,14 @@
     //
     // `signal` aborts the in-flight request; the finder passes one so a
     // superseded keystroke stops competing for the connection.
-    static async search(q, { includeBgg = false, limit = 20, signal = null } = {}) {
+    static async search(q, { includeBgg = false, includeExpansions = false, limit = 20, signal = null } = {}) {
       const query = (q || "").trim();
-      const params = { q: query, limit, include_bgg: includeBgg ? "true" : "false" };
+      const params = {
+        q: query,
+        limit,
+        include_bgg: includeBgg ? "true" : "false",
+        include_expansions: includeExpansions ? "true" : "false",
+      };
       const opts = signal ? { signal } : undefined;
       if (includeBgg || !window.bgbCache) {
         return window.api.get("/search", params, opts);

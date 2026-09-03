@@ -48,8 +48,20 @@
 (function () {
   const LIST_ID = "bgg-import-results";
   const INPUT_ID = "bgg-import-query";
+  const COUNT_ID = "bgg-import-count";
 
   const SHELF_LABEL = { owned: "collection", wishlist: "wishlist" };
+
+  // Rows revealed at a time. /search hands back BoardGameGeek's whole ranked
+  // match set — hundreds of rows for a franchise name — and painting all of
+  // them costs a phone an SVG parse per row for results nobody scrolls to.
+  // Everything is already in memory, so a reveal is a synchronous append with
+  // no request behind it (.claude/rules/ui-object-design.md §3d: a list that
+  // grows without bound is windowed).
+  const PAGE = 25;
+
+  // How close to the end of the scroller counts as "reveal the next batch".
+  const REVEAL_SLACK_PX = 420;
 
   /** Row state → the glyph in its leading mark. `importing` is deliberately
    *  not a tick: the row is breathing this icon while the request is out, and
@@ -76,6 +88,8 @@
       this._phase = /** @type {"idle"|"searching"|"results"|"empty"|"error"} */ ("idle");
       this._error = "";
       this._shelf = /** @type {"owned"|"wishlist"} */ ("owned");
+      // How many of _hits are actually in the DOM — see PAGE.
+      this._shown = 0;
       // Monotonic: a slow search resolving after a newer one must not paint.
       this._seq = 0;
       this._unsub = /** @type {null | (() => void)} */ (null);
@@ -122,6 +136,7 @@
         // of a search that is on its way.
         this._query = seed;
         this._hits = [];
+        this._shown = 0;
         this._phase = "searching";
         this._rowSig.clear();
       }
@@ -191,6 +206,8 @@
             ${this._renderBody()}
           </ul>
 
+          <div class="bgb-sheet__foot bgg-import-sheet__count" id="${COUNT_ID}"
+               aria-live="polite">${this._countLabel()}</div>
           <button class="bgb-sheet__cancel" type="button" data-action="close">Close</button>
         </div>
       `;
@@ -221,8 +238,22 @@
               No BoardGameGeek matches for “${escapeHtml(this._query)}”.
             </li>`;
         default:
-          return this._hits.map((hit) => this._renderRow(hit)).join("");
+          return this._hits.slice(0, this._shown).map((hit) => this._renderRow(hit)).join("");
       }
+    }
+
+    /** "Showing 25 of 412" — only once there is more than one screenful, so a
+     *  four-result search does not get a counter explaining itself. */
+    _countLabel() {
+      if (this._phase !== "results") return "";
+      const total = this._hits.length;
+      if (total <= PAGE) return "";
+      return `Showing ${Math.min(this._shown, total)} of ${total}`;
+    }
+
+    _paintCount() {
+      const el = document.getElementById(COUNT_ID);
+      if (el) el.textContent = this._countLabel();
     }
 
     /**
@@ -261,15 +292,23 @@
       const shelf = (job && job.shelf) || null;
       const err = (job && job.error) || "";
       const bad = state === "failed" || (!!err && state !== "importing");
+      // Only what the row's own action does NOT already say. The button reads
+      // "Importing" / "Retry" / "Add to collection" and the mark is a tick or
+      // a warning, so repeating any of that here just crowds out the id — and
+      // the meta is one ellipsised line, so something has to give. What is
+      // left is the two things nothing else carries: WHY an import failed, and
+      // WHICH shelf a game landed on.
       const status =
-        state === "importing" ? "Importing…"
-          : bad ? (err || "Import failed")
+        bad ? (err || "Import failed")
           : shelf ? `In your ${SHELF_LABEL[shelf]}`
-          : state === "library" ? "In the library"
           : null;
       return {
-        text: [hit.year_published || null, `#${hit.bgg_id}`, status]
-          .filter(Boolean).join(" · "),
+        text: [
+          hit.year_published || null,
+          `#${hit.bgg_id}`,
+          hit.is_expansion ? "Expansion" : null,
+          status,
+        ].filter(Boolean).join(" · "),
         bad,
       };
     }
@@ -310,6 +349,17 @@
                   <i data-icon="download" class="w-4 h-4" aria-hidden="true"></i>
                   <span>Import</span>
                 </button>`;
+      }
+      // An expansion has no step two. Expansions are not top-level shelf
+      // entries anywhere in this app — they attach through their base game's
+      // expansion section, and the import already recorded which base game
+      // that is (base_game_bgg_id, set by the same call). So the row stops at
+      // "it is in the library", which is the whole truth about it.
+      if (hit.is_expansion) {
+        return `<span class="bgg-import-row__btn bgg-import-row__btn--done">
+                  <i data-icon="check-circle" class="w-4 h-4" aria-hidden="true"></i>
+                  <span>In library</span>
+                </span>`;
       }
       // In the library, one way or another — step two. A game already on the
       // user's shelf still reads as "Add to …" until they press it: BGG's row
@@ -374,6 +424,18 @@
           this._runSearch();
         });
       }
+      // Reveal the next batch as the list runs out. A plain scroll listener
+      // rather than ui/infinite-scroll.js: that one observes against the
+      // VIEWPORT, and this list scrolls inside a fixed panel — and there is no
+      // request behind a batch here, so there is nothing to prefetch ahead of.
+      const list = root.querySelector(`#${LIST_ID}`);
+      if (list) {
+        list.addEventListener("scroll", () => {
+          if (list.scrollTop + list.clientHeight >= list.scrollHeight - REVEAL_SLACK_PX) {
+            this._revealMore();
+          }
+        }, { passive: true });
+      }
       // Live rows follow the queue, so an import finishing while the sheet is
       // open lands on its row the same way it lands in the notification.
       this._unsub = window.BggImport.subscribe(() => this._syncRows());
@@ -437,11 +499,20 @@
       const seq = ++this._seq;
       this._phase = "searching";
       this._hits = [];
+      this._shown = 0;
       this._paintList();
 
       let data;
       try {
-        data = await window.Game.search(this._query, { includeBgg: true });
+        // Expansions included, and ranked below base games by the backend
+        // rather than dropped: this is the one screen whose job is "reach the
+        // thing BgB does not have", and an expansion is one of those things.
+        // It lands under its base game rather than on a shelf — see
+        // _renderRowAction.
+        data = await window.Game.search(this._query, {
+          includeBgg: true,
+          includeExpansions: true,
+        });
       } catch (err) {
         if (seq !== this._seq || !this._sheet.isOpen) return;
         this._phase = "error";
@@ -452,6 +523,7 @@
       if (seq !== this._seq || !this._sheet.isOpen) return;
 
       this._hits = (data && data.bgg_results) || [];
+      this._shown = Math.min(PAGE, this._hits.length);
       this._phase = this._hits.length ? "results" : "empty";
       this._paintList();
       // A fresh list starts at its head — a scroll position kept from the
@@ -475,11 +547,36 @@
       list.innerHTML = this._renderBody();
       window.BgbIcons.render(list);
       this._seedSigs();
+      this._paintCount();
     }
 
+    /**
+     * Append the next batch. An APPEND, not a repaint: rebuilding the list
+     * would restart the sweep animation on every row still importing and drop
+     * the scroll position the user is holding.
+     */
+    _revealMore() {
+      if (this._phase !== "results" || this._shown >= this._hits.length) return;
+      const list = document.getElementById(LIST_ID);
+      if (!list) return;
+      const next = this._hits.slice(this._shown, this._shown + PAGE);
+      this._shown += next.length;
+      list.insertAdjacentHTML("beforeend", next.map((hit) => this._renderRow(hit)).join(""));
+      // Cheap over the rows already painted: their <i> placeholders are <svg>
+      // by now and no longer match, so this only hydrates what was just added.
+      window.BgbIcons.render(list);
+      for (const hit of next) this._rowSig.set(Number(hit.bgg_id), this._sigFor(hit));
+      this._paintCount();
+    }
+
+    /** Signatures for the rendered window only. Recording one for a row that
+     *  is not in the DOM would let its state move unseen and then read as
+     *  unchanged on the tick after it is finally revealed. */
     _seedSigs() {
       this._rowSig.clear();
-      for (const hit of this._hits) this._rowSig.set(Number(hit.bgg_id), this._sigFor(hit));
+      for (const hit of this._hits.slice(0, this._shown)) {
+        this._rowSig.set(Number(hit.bgg_id), this._sigFor(hit));
+      }
     }
 
     /** A queue tick: repaint only the rows whose state actually moved. */
@@ -487,7 +584,7 @@
       if (!this._sheet.isOpen || this._phase !== "results") return;
       const list = document.getElementById(LIST_ID);
       if (!list) return;
-      for (const hit of this._hits) {
+      for (const hit of this._hits.slice(0, this._shown)) {
         const id = Number(hit.bgg_id);
         const sig = this._sigFor(hit);
         if (this._rowSig.get(id) === sig) continue;
