@@ -47,6 +47,8 @@ Set in Repo → Settings → Secrets and variables → Actions.
 
 `RAILWAY_TOKEN` is referenced (commented out) in `deploy-backend.yml`. Backend deploys currently use Railway's native GitHub auto-deploy, so this secret is not required.
 
+**Not a secret, and not normally set:** `BGB_JS_GZIP_BUDGET` overrides the gzipped-size ceiling `.github/scripts/bgb-bundle.mjs` enforces on boardgame-buddy's deploy bundle (default 460800, i.e. 450 KB). It exists so the gate is raised deliberately and visibly, in a commit with a reason, rather than by someone editing the script. Set it as a workflow-level `env:` if that day comes; there is nothing to configure otherwise.
+
 ---
 
 ## 3. Vercel — Project Settings → Environment Variables
