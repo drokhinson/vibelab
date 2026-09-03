@@ -7,7 +7,7 @@ paths:
 
 # Type Contracts for Vanilla JS
 
-The vibelab web prototypes ship as vanilla JS — no npm, no bundler, no build step (see `web-frontend.md`). That rules out TypeScript proper, Zod, and io-ts. The pragmatic substitute is **JSDoc `@typedef` + `// @ts-check`**: comment-only annotations that VS Code, Cursor, and Claude all honor as a free editor-side type checker. Zero runtime cost, nothing to install, nothing to ship.
+The vibelab web prototypes are authored as vanilla JS — no npm, no bundler, no build step in the source tree (see `web-frontend.md`; the deploy-time bundle is a minify-and-concat pass over the same files, not a compiler). That rules out TypeScript proper, Zod, and io-ts. The pragmatic substitute is **JSDoc `@typedef` + `// @ts-check`**: comment-only annotations that VS Code, Cursor, and Claude all honor as a free editor-side type checker. Zero runtime cost, nothing to install, nothing to ship.
 
 This rule exists because of a real bug class: the shared API client at `projects/<app>/shared/api.js` reshapes some backend responses (e.g. arrays → dicts) before handing them to consumers. When a consumer was written against the array shape and the client switched to dict, neither side complained — the bug surfaced as silent fallback behavior in the UI ("everything is uncategorized").
 
