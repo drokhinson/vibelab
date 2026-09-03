@@ -318,10 +318,20 @@
   <script src="ui/bgg-push-log.js"></script>
   <script src="ui/bgg-check-log.js"></script>
   <!-- Vendored QR codecs — see each file's header for provenance. Same-origin
-       on purpose: sw.js derives its precache list from the src= attributes in
-       this file, so a CDN copy would be the one thing missing offline. -->
-  <script src="ui/qr-encode.js"></script>
-  <script src="ui/qr-decode.js"></script>
+       on purpose: sw.js derives its precache list from the src= and href=
+       attributes in this file, so a CDN copy would be the one thing missing
+       offline.
+       rel=prefetch, NOT <script src>: qr-decode.js alone is 258 KB (~9% of the
+       app's whole JS budget) and both files serve one flow — the buddy-QR sheet
+       — that most sessions never open. ui/lazy-script.js pulls them in on first
+       use. They stay listed here because sw.js's precache sweep matches href=
+       too, so the codecs still ride the shell into the offline cache; what
+       changes is that the parser no longer blocks on them. Chrome fetches a
+       prefetch at Lowest priority and Safari ignores the hint outright, so
+       neither can compete with /bootstrap on a cold boot. -->
+  <link rel="prefetch" href="ui/qr-encode.js" as="script" />
+  <link rel="prefetch" href="ui/qr-decode.js" as="script" />
+  <script src="ui/lazy-script.js"></script>
   <script src="ui/qr-camera.js"></script>
 
   <!-- Widgets -->

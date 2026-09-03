@@ -49,6 +49,19 @@
     TrackStartError: "in_use",
   };
 
+  // ui/qr-decode.js is 258 KB and only this module reads it, so index.html
+  // carries it as rel=prefetch rather than a <script> tag and it arrives here
+  // on demand. See ui/lazy-script.js for why the tag still exists at all.
+  const DECODER_SRC = "ui/qr-decode.js";
+
+  /** @returns {Promise<void>} */
+  function loadDecoder() {
+    // Already global — the prefetch landed and ran, or a previous scan pulled
+    // it in. Either way there is nothing to wait for.
+    if (typeof window.jsQR === "function") return Promise.resolve();
+    return window.BgbLazyScript.load(DECODER_SRC);
+  }
+
   class QrCamera {
     constructor() {
       /** @type {MediaStream|null} */ this._stream = null;
@@ -83,6 +96,18 @@
         opts.onError("camera_unavailable");
         return;
       }
+
+      // Pull the decoder in before opening the camera, not after: a preview
+      // running against a missing window.jsQR would look like a scanner that
+      // simply never recognises anything, which is the worst way to fail.
+      try {
+        await loadDecoder();
+      } catch (err) {
+        opts.onError("decoder_unavailable", err);
+        return;
+      }
+      // The sheet may have closed while the decoder was in flight.
+      if (this._video !== video) return;
 
       let stream;
       try {
@@ -193,6 +218,14 @@
      * @returns {Promise<string|null>} The decoded text, or null if none found.
      */
     async decodeFile(file) {
+      // Upload-a-screenshot is reachable without ever starting the camera, so
+      // this path pulls the decoder in for itself. A failure reads as "no code
+      // found", which is what the caller already handles.
+      try {
+        await loadDecoder();
+      } catch (_) {
+        return null;
+      }
       const bitmap = await this._toBitmap(file);
       // Screenshots are larger than camera frames and a QR in one can be small,
       // so allow more detail here than the live loop — there is no frame budget.
