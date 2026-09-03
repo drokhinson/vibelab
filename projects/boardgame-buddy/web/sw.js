@@ -94,12 +94,12 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin === self.location.origin) {
-    event.respondWith(cacheFirst(req));
+    event.respondWith(cacheFirst(req, false));
     return;
   }
 
   if (RUNTIME_ORIGINS.indexOf(url.origin) !== -1) {
-    event.respondWith(cacheFirst(req));
+    event.respondWith(cacheFirst(req, true));
   }
 });
 
@@ -136,17 +136,32 @@ async function navigationResponse(req) {
   return fetch(req);
 }
 
-/** Serve from cache, refresh in the background, fall back to the network. */
-async function cacheFirst(req) {
+/**
+ * Serve from cache, fall back to the network, and revalidate behind the
+ * response only where revalidating can actually change the answer.
+ *
+ * `revalidate` is false for same-origin and true for the CDN entries, and the
+ * asymmetry is the point. CACHE carries the deploy's build id, so a same-origin
+ * hit is BY CONSTRUCTION the byte-for-byte file this build shipped — a deploy
+ * lands in a fresh cache and activate() deletes the old one. Re-fetching it can
+ * only ever return what we already hold.
+ *
+ * That made it free to skip and expensive to keep: the shell is ~120 files, so
+ * every warm load fired ~120 background requests that could not change
+ * anything, over the same radio the boot's own /bootstrap was waiting on. The
+ * CDN entries are the genuinely different case — cached opportunistically on a
+ * first online load, possibly from an error response, and not versioned by
+ * anything we control.
+ */
+async function cacheFirst(req, revalidate) {
   const cache = await caches.open(CACHE);
   const cached = await cache.match(req);
   if (cached) {
-    // Revalidate behind the response. Within a build the shell is immutable,
-    // so this only matters for the CDN entries, which were cached
-    // opportunistically and may have been an error response.
-    fetch(req)
-      .then((res) => { if (isCacheable(res)) cache.put(req, res.clone()); })
-      .catch(() => {});
+    if (revalidate) {
+      fetch(req)
+        .then((res) => { if (isCacheable(res)) cache.put(req, res.clone()); })
+        .catch(() => {});
+    }
     return cached;
   }
   const res = await fetch(req);
