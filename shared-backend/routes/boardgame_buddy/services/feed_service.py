@@ -1,6 +1,7 @@
 """Feed assembly — composes play cards + hot games + suggested buddies.
 Hits the RPCs added in migration 012."""
 
+import asyncio
 from datetime import date, datetime
 from typing import Any, Optional, Tuple
 
@@ -261,35 +262,31 @@ def fetch_onboarding_buddy_suggestions(
     return OnboardingSuggestionsResponse(suggestions=suggestions, network=network)
 
 
-def build_feed_page(
-    sb,
-    viewer_id: str,
-    *,
-    cursor: Optional[str] = None,
-    limit: int = 20,
+def _compose_page(
+    play_cards: list[FeedPlayCard],
+    next_cursor: Optional[str],
+    hot: Optional[HotGamesResponse],
+    sug: Optional[SuggestedBuddiesResponse],
 ) -> FeedPageResponse:
-    """Assemble a single page of mixed feed cards.
+    """Interleave the three already-fetched blocks into one page.
 
-    Composition rule (v1): plays form the spine; on the first page (cursor is
-    None), prepend a Hot Games card and intersperse a Suggested Buddies card
-    after the first play. Subsequent pages return plays only.
+    Composition rule (v1): plays form the spine; on the first page, prepend a
+    Hot Games card and intersperse a Suggested Buddies card after the first
+    play. Subsequent pages return plays only, and pass None for both.
+
+    Pure — no I/O — so the async assembler below can fetch the blocks however it
+    likes without this ordering having to be written twice.
     """
-    play_cards, next_cursor = fetch_feed_plays(sb, viewer_id, cursor=cursor, limit=limit)
     cards: list[FeedCard] = []
-    first_page = cursor is None
-    if first_page:
-        hot = fetch_hot_games(sb)
-        if hot.games:
-            cards.append(FeedHotGamesCard(window_days=hot.window_days, games=hot.games))
+    if hot and hot.games:
+        cards.append(FeedHotGamesCard(window_days=hot.window_days, games=hot.games))
 
     # Interleave suggestions roughly through the page so the feed never feels
     # like a wall of identical units — the order is:
     #   play 1 → suggested-buddies → play 2 → ...
     suggestions_card: Optional[FeedSuggestedBuddiesCard] = None
-    if first_page:
-        sug = fetch_suggested_buddies(sb, viewer_id)
-        if sug.suggestions:
-            suggestions_card = FeedSuggestedBuddiesCard(suggestions=sug.suggestions)
+    if sug and sug.suggestions:
+        suggestions_card = FeedSuggestedBuddiesCard(suggestions=sug.suggestions)
 
     insert_sug_after = 1
     for i, card in enumerate(play_cards):
@@ -302,3 +299,43 @@ def build_feed_page(
         cards.append(suggestions_card)
 
     return FeedPageResponse(cards=cards, next_cursor=next_cursor)
+
+
+async def build_feed_page(
+    sb,
+    viewer_id: str,
+    *,
+    cursor: Optional[str] = None,
+    limit: int = 20,
+) -> FeedPageResponse:
+    """Assemble a single page of mixed feed cards.
+
+    The three blocks are independent, and used to run one after another on
+    whatever thread called this — five or six serialized PostgREST round trips,
+    because fetch_hot_games and fetch_suggested_buddies are each an RPC plus a
+    hydration read. /bootstrap gathers five branches and this was the slowest of
+    them, so those round trips set the whole endpoint's floor, and therefore the
+    floor on a cold boot's first paint.
+
+    Now the wall time is the slowest block rather than their sum. The Supabase
+    client is synchronous, so each block goes to a worker thread — the same
+    to_thread + gather shape bootstrap_routes.py already uses, moved down here
+    where it can cover the blocks individually.
+
+    A cursored page fetches plays alone, exactly as before: hot games and
+    suggestions only ever appear on the first page.
+    """
+    first_page = cursor is None
+    plays_task = asyncio.to_thread(
+        fetch_feed_plays, sb, viewer_id, cursor=cursor, limit=limit
+    )
+    if not first_page:
+        play_cards, next_cursor = await plays_task
+        return _compose_page(play_cards, next_cursor, None, None)
+
+    (play_cards, next_cursor), hot, sug = await asyncio.gather(
+        plays_task,
+        asyncio.to_thread(fetch_hot_games, sb),
+        asyncio.to_thread(fetch_suggested_buddies, sb, viewer_id),
+    )
+    return _compose_page(play_cards, next_cursor, hot, sug)

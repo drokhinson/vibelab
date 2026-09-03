@@ -102,7 +102,12 @@ async def get_bootstrap(
                 "bgb_bootstrap", {"viewer": viewer, "max_game_bundles": 0}
             ).execute()
         ),
-        asyncio.to_thread(feed_service.build_feed_page, sb, viewer, cursor=None, limit=20),
+        # Already a coroutine that gathers its own three blocks in worker
+        # threads, so it joins this gather directly rather than being wrapped —
+        # same shape as list_notifications below. It was the slowest member here
+        # precisely because those blocks used to run one after another inside
+        # this single to_thread.
+        feed_service.build_feed_page(sb, viewer, cursor=None, limit=20),
         asyncio.to_thread(game_service.recently_played, sb, viewer, limit=6),
         asyncio.to_thread(played_with_service.fetch_play_partners, sb, viewer),
         notification_service.list_notifications(sb, viewer, limit=_NOTIFICATIONS_PAGE),
