@@ -252,7 +252,7 @@ through a widget module.
 
 They replaced dropdowns because the dropdown geometry was unwinnable: `ui/dropdown-fit.js` existed only to measure a dropdown against the visible viewport and shrink or flip it, `.cascade-buddy-dropdown` carried an explicit z-index to paint over the docked Continue CTA, and its max-height had already been raised once. Measured: a four-player roster clamped the buddy list to 168px — one and a half rows of seven — sitting on the Continue button and running off the bottom edge, before the keyboard was even up. A sheet is `position: fixed` at z-index 100, sized off `--bgb-vv-h`, so none of that is expressible.
 
-`ui/dropdown-fit.js` survives for the two finders still mounted as dropdowns (inside `.add-game-modal`, and any finder without `inlineDropdown`).
+`ui/dropdown-fit.js` survives only for a finder mounted without `inlineDropdown`. The last centred host it actually served — the BGG import popup — is a sheet now (`widgets/bgg-import-sheet.js`), so nothing in the app takes that path today; the file goes when the option does.
 
 The repo-wide statement is `.claude/rules/overlays.md`.
 
@@ -658,6 +658,8 @@ projects/boardgame-buddy/web/
 │   ├── theme.js            ← light/dark controller (see §4.2a)
 │   ├── net.js, cache.js, outbox.js, bootstrap.js          ← Offline + caching
 │   ├── game.js, play.js, buddy.js, user.js, collection.js, profile.js, stats.js, achievements.js, …
+│   ├── bgg-import.js       ← the BGG catalog-import queue: outlives the sheet that
+│   │                          started a job, and keeps importing apart from shelving
 │   ├── shelf-controller.js, shelf-filter.js               ← Client-side shelf paging
 │   └── play-session.js, session-phase.js, live-scores.js, score-write-queue.js  ← Session state
 │
@@ -675,10 +677,12 @@ projects/boardgame-buddy/web/
 │   ├── bottom-sheet.js      → BgbBottomSheet — the shell every sheet shares (§4.3)
 │   ├── search-field.js      → BgbSearchField — the × every search box clears with
 │   ├── bgg-import-log.js    → renderBggImportLog — the BGG import readout (§4.3b)
+│   ├── bgg-import-toast.js  → the "it landed" notification a finished catalog import
+│   │     pops wherever the user is, carrying the add-to-a-shelf step with it
 │   ├── icons.js             → BgbIcons — the vendored Phosphor set + render pass
 │   ├── viewport-lock.js     → publishes the visible viewport as CSS properties
 │   ├── zoom-lock.js         → holds the page at 1x on iOS Safari
-│   ├── dropdown-fit.js      → the residual fit pass for the two remaining dropdowns
+│   ├── dropdown-fit.js      → the residual fit pass, for a finder mounted as a dropdown
 │   ├── install-prompt.js    → the PWA install bar
 │   ├── achievement-popup.js → queues the "Achievement unlocked!" polaroid
 │   └── outbox-indicator.js  → the queued-writes badge in the header
@@ -690,9 +694,12 @@ projects/boardgame-buddy/web/
 │   ├── game-finder.js               → the network game search, dropdown or inline
 │   ├── player-reorder.js            → drag-to-reorder the Gather roster
 │   ├── game-picker-sheet.js, game-search-sheet.js, player-picker-sheet.js  ← sheets (§4.3)
-│   ├── add-game-modal.js, import-expansions-modal.js, outbox-modal.js      ← modals
-│   │     add-game-modal is no longer the way in to a shelf — views/add-games-view.js
-│   │     is. It survives as that page's BGG-import escape hatch.
+│   ├── bgg-import-sheet.js          → search BoardGameGeek, import into the catalog
+│   │     Opened from views/add-games-view.js, which is the way in to a shelf.
+│   │     Importing does NOT shelve: domain/bgg-import.js keeps the two steps
+│   │     apart and outlives the sheet, and ui/bgg-import-toast.js announces the
+│   │     finish wherever the user has got to.
+│   ├── import-expansions-modal.js, outbox-modal.js      ← modals
 
 │   ├── join-panel.js
 │   ├── onboarding-deck.js    → first-run setup: the shell, the write queue, the ledger

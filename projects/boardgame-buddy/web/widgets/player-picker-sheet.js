@@ -460,7 +460,7 @@
           const row = e.target.closest("[data-picker-name]");
           if (row) this._toggle(row.dataset.pickerName);
         },
-        // Layered, as add-game-modal / import-expansions-modal: the first
+        // Layered, as import-expansions-modal: the first
         // Escape backs out of the search, the next closes the sheet. Ticks are
         // deliberately NOT unwound by Escape — that is what Cancel is for.
         onEscape: () => {

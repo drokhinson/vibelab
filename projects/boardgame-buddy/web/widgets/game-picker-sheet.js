@@ -144,7 +144,7 @@
           const row = e.target.closest("[data-picker-game-id]");
           if (row) this._pick(row.dataset.pickerGameId);
         },
-        // Layered, mirroring add-game-modal / import-expansions-modal: the
+        // Layered, mirroring import-expansions-modal: the
         // first Escape backs out of the search, the next closes the sheet.
         onEscape: () => {
           if (!this._query) return false;

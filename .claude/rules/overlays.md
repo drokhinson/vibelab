@@ -11,9 +11,10 @@ dropdown hung off an input.
 
 The canonical implementation is `projects/boardgame-buddy/web/ui/bottom-sheet.js`
 (the shell) plus the `.bgb-sheet__*` family in that project's `styles.css` (the
-chrome), with eight consumers: `ui/status-tag.js`, `widgets/game-picker-sheet.js`,
+chrome), with nine consumers: `ui/status-tag.js`, `widgets/game-picker-sheet.js`,
 `widgets/player-picker-sheet.js`, `widgets/game-search-sheet.js`,
-`widgets/country-picker-sheet.js`, `widgets/expansion-picker-sheet.js`,
+`widgets/bgg-import-sheet.js`, `widgets/country-picker-sheet.js`,
+`widgets/expansion-picker-sheet.js`,
 `widgets/shelf-of-shame-sheet.js`, `widgets/buddy-qr-sheet.js`, plus
 `views/achievements-view.js` opening one inline. Grep `BgbBottomSheet` rather
 than trusting this list — it has drifted before.
@@ -219,10 +220,10 @@ behind it:
   user hears their current state before the alternatives
   (`ui/status-tag.js`).
 - With no meaningful row to land on, the panel or card itself takes focus via
-  `tabindex="-1"` (`widgets/add-game-modal.js`, `widgets/add-buddies-modal.js`,
-  `widgets/game-search-sheet.js`). Never a disabled button — a disabled button
-  cannot take focus, so focus would silently stay on whatever opened the
-  overlay.
+  `tabindex="-1"` (`widgets/add-buddies-modal.js`,
+  `widgets/game-search-sheet.js`, `widgets/bgg-import-sheet.js`). Never a
+  disabled button — a disabled button cannot take focus, so focus would
+  silently stay on whatever opened the overlay.
 
 A search-backed overlay that wants to land showing results seeds the **list**
 without touching the field — `GameFinder.showList()` opens the dropdown on the
@@ -262,11 +263,13 @@ for visual consistency; they do not share the shell.
   `.claude/rules/ui-object-design.md` §3c. A bottom sheet is a legitimate choice
   of that surface, as long as it is the only one.
 - **Known consolidation debt in boardgame-buddy:** `widgets/play-detail-popup.js`,
-  `widgets/outbox-modal.js`, `widgets/add-game-modal.js` and
-  `widgets/import-expansions-modal.js` each re-implement `_previousFocus`,
-  `_escHandler` and singleton-by-id. That is instance #4 of a lifecycle the
-  sheet shell already solves. Extract a modal shell the next time one of them is
-  touched substantively.
+  `widgets/outbox-modal.js` and `widgets/import-expansions-modal.js` each
+  re-implement `_previousFocus`, `_escHandler` and singleton-by-id. That is a
+  lifecycle the sheet shell already solves. `widgets/add-game-modal.js` was the
+  fourth and is gone — the BoardGameGeek import it hosted is a real sheet now
+  (`widgets/bgg-import-sheet.js`), which is the other way out of this debt:
+  where the popup's content is a list, it was never a modal. Extract a modal
+  shell the next time one of the remaining three is touched substantively.
 
 ## 8. Dismissal — four ways out, one meaning
 
@@ -358,7 +361,7 @@ in is worse than the bug this fixes.
 
 Consumers: the sheet shell (`ui/bottom-sheet.js`, so every sheet), the whole
 `ui/polaroid-popup.js` family (splash, achievement, confirm, alert, avatar
-customizer), `widgets/add-buddies-modal.js`, `widgets/add-game-modal.js`,
+customizer), `widgets/add-buddies-modal.js`,
 `widgets/import-expansions-modal.js`, `widgets/outbox-modal.js`,
 `widgets/play-detail-popup.js`, `widgets/onboarding-deck.js`, and the authoring
 guide in `views/reference-guide-add-view.js`. Grep `BgbBackGuard` rather than
