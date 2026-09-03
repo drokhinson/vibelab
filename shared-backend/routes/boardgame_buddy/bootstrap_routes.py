@@ -33,7 +33,12 @@ from db import get_supabase
 from . import router
 from .dependencies import CurrentUser, get_current_user
 from .models import GameBundlesResponse
-from .services import feed_service, game_service, played_with_service
+from .services import (
+    feed_service,
+    game_service,
+    link_notification_service,
+    played_with_service,
+)
 
 # Cap on how many owned games get a prebuilt detail bundle. Mirrors the RPC's
 # own default; the overflow is marked `truncated` and lazily fetched instead.
@@ -63,11 +68,18 @@ async def get_bootstrap(
     #
     # max_game_bundles=0 tells bgb_bootstrap to skip the per-owned-game N+1;
     # /bootstrap/game-bundles below serves that separately.
+    # link_notifications_unread rides this gather rather than bgb_profile_bundle
+    # (where ghost_claims_incoming lives) for one reason: that function is 542
+    # lines, and adding an integer to it means re-emitting all 542 in a
+    # migration and keeping a second copy of the body from drifting. Here it
+    # costs one more parallel call, and the gather's wall time is its slowest
+    # member, not the sum.
     (
         rpc_result,
         feed_page,
         recent_games,
         partners,
+        link_unread,
     ) = await asyncio.gather(
         asyncio.to_thread(
             lambda: sb.rpc(
@@ -77,6 +89,7 @@ async def get_bootstrap(
         asyncio.to_thread(feed_service.build_feed_page, sb, viewer, cursor=None, limit=20),
         asyncio.to_thread(game_service.recently_played, sb, viewer, limit=6),
         asyncio.to_thread(played_with_service.fetch_play_partners, sb, viewer),
+        asyncio.to_thread(link_notification_service.unread_count, sb, viewer),
     )
 
     payload: dict[str, Any] = dict(rpc_result.data or {})
@@ -84,6 +97,7 @@ async def get_bootstrap(
     payload["feed_cursor"] = feed_page.next_cursor
     payload["recently_played_games"] = [g.model_dump(mode="json") for g in recent_games]
     payload["play_partners"] = partners.model_dump(mode="json")
+    payload["link_notifications_unread"] = link_unread
     return payload
 
 

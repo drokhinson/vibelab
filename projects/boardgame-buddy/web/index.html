@@ -84,13 +84,16 @@
              stays a clean logo + wordmark lockup. -->
         <span class="bgb-global-header__title font-display">Boardgame Buddy</span>
       </a>
-      <!-- Pending uploads. Its own control, sitting to the left of the gear. -->
-      <button id="bgb-outbox-indicator" class="bgb-outbox is-zero"
-              title="Uploads" aria-label="Uploads"
-              onclick="window.BgbOutboxIndicator.open()">
-        <span class="bgb-outbox__ring" aria-hidden="true"></span>
-        <i data-icon="cloud-upload" class="w-4 h-4"></i>
-        <span class="bgb-outbox__badge" hidden></span>
+      <!-- Plays other people have seated you in. Sits where the pending-upload
+           control used to: uploads are a thing the app is doing FOR you and
+           belong in Settings with the rest of the plumbing, whereas being put
+           in someone else's game is a thing done TO you and needs answering.
+           Its dot is the same .bgb-global-header__dot the gear wears, driven by
+           init.js#syncHeaderDot off BgbNotifications.forBell(). -->
+      <button class="bgb-global-header__bell" title="Notifications" aria-label="Notifications"
+              onclick="window.router.go('notifications')">
+        <i data-icon="bell" class="w-5 h-5"></i>
+        <span class="bgb-global-header__dot" aria-hidden="true" hidden></span>
       </button>
       <!-- Gear, not the user's badge. The button has always routed to Settings,
            but an avatar reads as "my profile" — and Profile already has its own
@@ -141,6 +144,7 @@
     <main data-view="buddies" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="stats" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="achievements" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
+    <main data-view="notifications" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="settings" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="import-plays" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="bgg-sync" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
@@ -239,6 +243,7 @@
   <script src="domain/geo-data.js"></script>
   <script src="domain/geo.js"></script>
   <script src="domain/play.js"></script>
+  <script src="domain/link-notification.js"></script>
   <script src="domain/name-match.js"></script>
   <script src="domain/play-import.js"></script>
   <script src="domain/play-session.js"></script>
@@ -274,7 +279,6 @@
   <script src="ui/search-field.js"></script>
   <script src="ui/bottom-sheet.js"></script>
   <script src="ui/status-tag.js"></script>
-  <script src="ui/outbox-indicator.js"></script>
   <script src="ui/markdown.js"></script>
   <script src="ui/polaroid-popup.js"></script>
   <script src="ui/install-prompt.js"></script>
@@ -340,6 +344,7 @@
   <script src="views/buddies-view.js"></script>
   <script src="views/stats-view.js"></script>
   <script src="views/achievements-view.js"></script>
+  <script src="views/notifications-view.js"></script>
   <script src="views/settings-view.js"></script>
   <script src="views/import-plays-view.js"></script>
   <script src="views/bgg-sync-view.js"></script>

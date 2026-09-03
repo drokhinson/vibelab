@@ -154,6 +154,7 @@
           build: () => "/settings/import-plays" },
         { name: "bgg-sync",            pattern: /^\/settings\/bgg\/?$/,
           build: () => "/settings/bgg" },
+        { name: "notifications",       pattern: /^\/notifications\/?$/,           build: () => "/notifications" },
         { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
         { name: "admin-reports",       pattern: /^\/admin\/reports\/?$/,          build: () => "/admin/reports" },
         { name: "admin-images",        pattern: /^\/admin\/images\/?$/,           build: () => "/admin/images" },

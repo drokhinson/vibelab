@@ -184,18 +184,54 @@ def load_play_response(sb, play_id: str, viewer_id: str) -> PlayResponse:
     )
 
 
-def _write_play_players(sb, play_id: str, players: list) -> list[PlayPlayerResponse]:
+def _read_linked_at(sb, play_id: str) -> dict[str, str]:
+    """Existing `linked_at` per seated account, for the edit path to carry over.
+
+    PUT /plays/{id} full-replaces the nested lists — it deletes every
+    play_players row and re-inserts them — so without this every edit stamps a
+    fresh `linked_at` (migration 008's DEFAULT now()) on everyone at the table.
+    A typo fix in the notes would then notify all five players that they had
+    just been added to a play they have been in for two years.
+
+    Only account seats are keyed: a ghost has no id to carry a timestamp for,
+    and nothing notifies about one.
+    """
+    res = (
+        sb.table("boardgamebuddy_play_players")
+        .select("player_user_id, linked_at")
+        .eq("play_id", play_id)
+        .execute()
+    )
+    return {
+        r["player_user_id"]: r["linked_at"]
+        for r in (res.data or [])
+        if r.get("player_user_id") and r.get("linked_at")
+    }
+
+
+def _write_play_players(
+    sb,
+    play_id: str,
+    players: list,
+    linked_at_by_user: dict[str, str] | None = None,
+) -> list[PlayPlayerResponse]:
     """Insert the play_players rows for a play in ONE bulk statement.
 
     Writes go through the new (post-migration-009) columns directly:
     player_user_id for real-account players, player_display_name as the
     free-text label. This was previously one round trip PER PLAYER (a
     5-player log = 10 round trips, paid again by every session finalize).
+
+    `linked_at_by_user` is the edit path's carry-over (see _read_linked_at). A
+    player already on the play keeps the timestamp they were first seated at;
+    one who is genuinely new to it falls through to the column default and is
+    notified, which is the whole point.
     """
     out: list[PlayPlayerResponse] = []
     if not players:
         return out
 
+    carried = linked_at_by_user or {}
     rows: list[dict] = []
     for p in players:
         round_scores = getattr(p, "round_scores", None)
@@ -209,6 +245,8 @@ def _write_play_players(sb, play_id: str, players: list) -> list[PlayPlayerRespo
         player_uid = getattr(p, "user_id", None)
         if player_uid:
             row["player_user_id"] = player_uid
+            if player_uid in carried:
+                row["linked_at"] = carried[player_uid]
         rows.append(row)
         out.append(PlayPlayerResponse(
             user_id=player_uid,
@@ -399,10 +437,13 @@ async def update_play(
         update_payload["country_code"] = body.country_code
     sb.table("boardgamebuddy_plays").update(update_payload).eq("id", play_id).execute()
 
-    # Full-replace the nested lists.
+    # Full-replace the nested lists. Read the seats' linked_at BEFORE the
+    # delete: the re-insert would otherwise re-stamp everyone and notify the
+    # whole table about an edit (see _read_linked_at).
+    carried = _read_linked_at(sb, play_id)
     sb.table("boardgamebuddy_play_players").delete().eq("play_id", play_id).execute()
     sb.table("boardgamebuddy_play_expansions").delete().eq("play_id", play_id).execute()
-    _write_play_players(sb, play_id, body.players)
+    _write_play_players(sb, play_id, body.players, linked_at_by_user=carried)
     _write_play_expansions(sb, play_id, body.expansion_ids)
 
     res = (
@@ -561,9 +602,7 @@ async def leave_play(
             detail="You logged this play — edit or delete it instead.",
         )
 
-    n = played_with_service.ghost_out_of_play(
-        sb, user.user_id, play_id, user.display_name
-    )
+    n = played_with_service.ghost_out_of_play(sb, user.user_id, play_id)
     if n == 0:
         raise HTTPException(status_code=404, detail="You are not a player in this play")
     return PlayLeaveResponse(rows_updated=n)

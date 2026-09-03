@@ -7,9 +7,11 @@
 // classes, because PolaroidPopup.show() is a fixed-shape wrap-up card with no
 // children slot or scroller and extending it would bloat it.
 //
-// Opened from two places — the global header indicator and Settings — which is
-// the point: before this, the Play tab and Settings each had their own
-// rendering of the same queue.
+// Opened from Settings — its one door now that the global header's upload
+// indicator is gone. Still the point: before this widget existed, the Play tab
+// and Settings each carried their own rendering of the same queue. The header
+// control's other job, saying "something is waiting" from anywhere, is now the
+// gear's dot (the `outboxCount` row in domain/notifications.js).
 
 (function () {
   const BACKDROP_ID = "bgb-outbox-modal";

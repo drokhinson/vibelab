@@ -1069,3 +1069,66 @@
 --               game_names is capped at four — a batch spanning fifteen games
 --               would push a paragraph into a settings row — while game_count
 --               beside it stays exact.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Link notifications (migration 008)
+--
+-- "Someone put me in a play." The list is DERIVED — plays where the viewer is
+-- a player and somebody else is the logger — rather than stored as events, so
+-- there is no second source of truth for four write paths to keep honest, and
+-- unlinking empties it by construction. The only stored fact is the watermark,
+-- boardgamebuddy_profiles.link_notifications_seen_at, because "have you seen
+-- this" is the one thing the plays cannot say.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- bgb_link_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
+--                        p_before TIMESTAMPTZ DEFAULT NULL)
+--   → TABLE (play_id, play_ids UUID[], group_count, played_at, created_at,
+--            game_id, game_name, game_thumbnail_url, owner_id,
+--            owner_display_name, owner_avatar_url, import_batch_id, is_unread)
+--   Defined in: db/migrations/boardgamebuddy/008_link_notifications.sql
+--   Called by:  services/link_notification_service.list_notifications
+--               (GET /link-notifications)
+--   Purpose:    The notifications screen. One row per ENTRY, not per play: a
+--               run of identical imported plays collapses on
+--               COALESCE(import_group_id, id), the same identity
+--               bgb_feed_plays and bgb_plays_page use, so a 58-play import is
+--               one row rather than 58. play_ids carries the run's members for
+--               the bulk unlink, and holds ONLY the plays the viewer is seated
+--               in — a run is identical plays, not identical rosters, and the
+--               button's count must match what it can move. Keyset-paged on
+--               created_at because rows vanish as the user unlinks.
+
+-- bgb_link_notifications_unread(p_viewer UUID)
+--   → INT
+--   Defined in: db/migrations/boardgamebuddy/008_link_notifications.sql
+--   Called by:  services/link_notification_service.unread_count
+--               (GET /link-notifications, and the /bootstrap gather)
+--   Purpose:    The header bell's dot. Counts DISTINCT
+--               COALESCE(import_group_id, id) — the same collapse the list
+--               does, so a badge of 58 can never sit over a list of one.
+
+-- bgb_mark_link_notifications_seen(p_viewer UUID)
+--   → TIMESTAMPTZ (the stamp written)
+--   Defined in: db/migrations/boardgamebuddy/008_link_notifications.sql
+--   Called by:  services/link_notification_service.mark_seen
+--               (POST /link-notifications/seen)
+--   Purpose:    Move the watermark to now(). Returns it so the client
+--               reconciles without a second read.
+
+-- bgb_ghost_out_of_plays(p_viewer UUID, p_play_ids UUID[])
+--   → INT (rows moved)
+--   Defined in: db/migrations/boardgamebuddy/008_link_notifications.sql
+--   Called by:  services/played_with_service.ghost_out_of_plays
+--               (POST /link-notifications/unlink, and POST /plays/{id}/leave
+--               via the single-play wrapper)
+--   Purpose:    THE ghost-out write, and the inverse of bgb_link_ghost_rows —
+--               the caller's seat becomes a ghost carrying their name, owned
+--               implicitly by whoever logged the play. Replaces the two-step
+--               PostgREST pair played_with_service used to run: one statement,
+--               so the identity-check backfill and the null-out cannot be
+--               interleaved, and the fallback name is read from the profile
+--               rather than trusted from the client. Scoped twice —
+--               player_user_id = p_viewer (only your own seat) and
+--               p.user_id <> p_viewer (never a play you logged) — and skips a
+--               failing id silently so one bad id cannot sink a batch of 60.
