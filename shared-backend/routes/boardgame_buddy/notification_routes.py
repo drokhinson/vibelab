@@ -25,6 +25,7 @@ Buddies screen already calls; a notification row simply carries `edge_id` so it
 can call the same two. One destination, one pair of routes.
 """
 
+import asyncio
 from datetime import datetime
 
 from fastapi import Depends, Query
@@ -65,7 +66,7 @@ async def list_notifications(
     user: CurrentUser = Depends(get_current_user),
 ) -> NotificationsResponse:
     """One page of the merged feed plus the account's unread total. Empty is normal."""
-    return notification_service.list_notifications(
+    return await notification_service.list_notifications(
         get_supabase(), user.user_id, limit=limit, before=before, before_key=before_key
     )
 
@@ -81,8 +82,14 @@ async def mark_notifications_seen(
     user: CurrentUser = Depends(get_current_user),
 ) -> NotificationsSeenResponse:
     """Advance the read watermark, clearing the header bell's dot."""
-    return notification_service.mark_seen(
-        get_supabase(), user.user_id, through=payload.through if payload else None
+    # One thread for the pair, not two: the recount has to see the watermark
+    # this call just wrote, so unlike the GET's two reads these cannot overlap.
+    # Off the event loop all the same — see list_notifications' docstring.
+    return await asyncio.to_thread(
+        notification_service.mark_seen,
+        get_supabase(),
+        user.user_id,
+        payload.through if payload else None,
     )
 
 
@@ -97,11 +104,13 @@ async def unlink_from_plays(
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayLeaveResponse:
     """Turn your seat on each named play, run or import into a named ghost."""
-    n = played_with_service.ghost_out_of_plays(
-        get_supabase(),
-        user.user_id,
-        play_ids=payload.play_ids,
-        group_ids=payload.import_group_ids,
-        batch_ids=payload.import_batch_ids,
+    n = await asyncio.to_thread(
+        lambda: played_with_service.ghost_out_of_plays(
+            get_supabase(),
+            user.user_id,
+            play_ids=payload.play_ids,
+            group_ids=payload.import_group_ids,
+            batch_ids=payload.import_batch_ids,
+        )
     )
     return PlayLeaveResponse(rows_updated=n)

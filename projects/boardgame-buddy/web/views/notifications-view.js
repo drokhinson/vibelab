@@ -73,8 +73,28 @@
       this.listen("offline", (off) => {
         if (!off && this._error && !this._items.length) this._load({ initial: true });
       });
+
+      // THE WHOLE POINT OF THE PREFETCH, and it has to happen before the first
+      // await or it buys nothing: everything below this line runs in the mount
+      // frame, so a page /bootstrap already fetched paints in the same frame the
+      // bell was tapped in, with no skeleton between.
+      //
+      // peekConfirmed() answers only while that fetch is recent enough to still
+      // be the truth (see CONFIRMED_MS in domain/notification-feed.js) — past
+      // that it returns null and this falls through to the network exactly as
+      // it always did. A list of Accept and Remove-me buttons is not a place to
+      // paint something old.
+      const warm = window.NotificationFeed.peekConfirmed();
+      if (warm) this._takePage(warm, { initial: true });
       this.render();
-      await this._load({ initial: true });
+
+      if (warm) {
+        // _load's own finally clause normally does this; the warm path skips
+        // _load entirely, and the watermark still has to move.
+        if (this._items.length) this._markSeen();
+      } else {
+        await this._load({ initial: true });
+      }
     }
 
     async onUnmount() {
@@ -98,11 +118,7 @@
       try {
         const data = await window.NotificationFeed.list({ limit: PAGE });
         if (seq !== this._seq) return;          // a newer load owns the screen
-        this._items = data.items || [];
-        this._takeCursor(data);
-        this._loaded = true;
-        this._error = null;
-        window.NotificationFeed.setUnread(data.unread || 0);
+        this._takePage(data, { initial: true });
       } catch (e) {
         if (seq !== this._seq) return;
         // Its own branch, not an empty state: "nothing has happened" next to a
@@ -140,6 +156,22 @@
       } finally {
         if (seq === this._seq) { this._loading = false; this.render(); }
       }
+    }
+
+    /**
+     * Adopt a first page — from the network, or from the warm prefetch. One
+     * writer for the fields that have to move together, rather than two callers
+     * each setting their own subset of them.
+     *
+     * @param {Object} data
+     * @param {{initial?: boolean}} [opts]
+     */
+    _takePage(data, opts) {
+      this._items = data.items || [];
+      this._takeCursor(data);
+      this._loaded = true;
+      window.NotificationFeed.setUnread(data.unread || 0);
+      if (opts && opts.initial) this._error = null;
     }
 
     // The cursor is a PAIR, and both halves have to travel. Three sources feed
@@ -546,6 +578,11 @@
     _dropRow(key) {
       this._items = this._items.filter((x) => x.entry_key !== key);
       this._selected.delete(key);
+      // The prefetched page still carries this row, and re-opening the bell
+      // inside its confirmed window would offer Accept for a request that is
+      // already answered. Patched, not dropped — the rest of the page is still
+      // good, and it is the whole reason the screen opens instantly.
+      window.NotificationFeed.dropFromPage(key);
       if (window.Buddy && window.Buddy.setPendingCount) {
         window.Buddy.setPendingCount(window.Buddy.pendingCount() - 1);
       }

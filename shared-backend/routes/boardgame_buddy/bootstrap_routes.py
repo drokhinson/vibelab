@@ -11,6 +11,8 @@ cached identity to boot from. It returns:
   - recently_played_games (host flow game-picker seed)
   - play_partners (host flow player-picker seed: accounts + ghosts + recent,
     from one bgb_play_partners RPC)
+  - notifications_first_page (the bell's first page AND its unread count, from
+    one notification_service.list_notifications call)
   - bootstrap_version (int; FE wipes cache when this changes)
 
 GET /bootstrap/game-bundles is the deferred one — one bgb_game_detail_bundle
@@ -44,6 +46,12 @@ from .services import (
 # own default; the overflow is marked `truncated` and lazily fetched instead.
 _MAX_GAME_BUNDLES = 250
 
+# Notifications warmed into the first page. Must match the PAGE constant in
+# views/notifications-view.js: the frontend keys this entry as page one and
+# pages on from its cursor, so a different size here would make the first scroll
+# either re-fetch rows it already has or skip past them.
+_NOTIFICATIONS_PAGE = 20
+
 
 @router.get(
     "/bootstrap",
@@ -68,18 +76,26 @@ async def get_bootstrap(
     #
     # max_game_bundles=0 tells bgb_bootstrap to skip the per-owned-game N+1;
     # /bootstrap/game-bundles below serves that separately.
-    # notifications_unread rides this gather rather than bgb_profile_bundle
+    # The notifications block rides this gather rather than bgb_profile_bundle
     # (where ghost_claims_incoming lives) for one reason: that function is 542
-    # lines, and adding an integer to it means re-emitting all 542 in a
-    # migration and keeping a second copy of the body from drifting. Here it
-    # costs one more parallel call, and the gather's wall time is its slowest
-    # member, not the sum.
+    # lines, and adding to it means re-emitting all 542 in a migration and
+    # keeping a second copy of the body from drifting. Here it costs one more
+    # parallel call, and the gather's wall time is its slowest member.
+    #
+    # It fetches the whole first PAGE, not just the unread integer it used to.
+    # The count alone lit the bell's dot and then left the screen behind the dot
+    # to fetch itself from scratch on first open — a cold round trip on the one
+    # screen the user was just told had something waiting. The page costs
+    # nothing extra here: list_notifications runs its two reads concurrently and
+    # the unread count is one of them, so this member's wall time is what the
+    # count alone already cost. `notifications_unread` is still emitted below,
+    # unchanged, because an older frontend reads that key and nothing else.
     (
         rpc_result,
         feed_page,
         recent_games,
         partners,
-        notif_unread,
+        notifs,
     ) = await asyncio.gather(
         asyncio.to_thread(
             lambda: sb.rpc(
@@ -89,7 +105,7 @@ async def get_bootstrap(
         asyncio.to_thread(feed_service.build_feed_page, sb, viewer, cursor=None, limit=20),
         asyncio.to_thread(game_service.recently_played, sb, viewer, limit=6),
         asyncio.to_thread(played_with_service.fetch_play_partners, sb, viewer),
-        asyncio.to_thread(notification_service.unread_count, sb, viewer),
+        notification_service.list_notifications(sb, viewer, limit=_NOTIFICATIONS_PAGE),
     )
 
     payload: dict[str, Any] = dict(rpc_result.data or {})
@@ -97,7 +113,8 @@ async def get_bootstrap(
     payload["feed_cursor"] = feed_page.next_cursor
     payload["recently_played_games"] = [g.model_dump(mode="json") for g in recent_games]
     payload["play_partners"] = partners.model_dump(mode="json")
-    payload["notifications_unread"] = notif_unread
+    payload["notifications_first_page"] = notifs.model_dump(mode="json")
+    payload["notifications_unread"] = notifs.unread
     return payload
 
 
