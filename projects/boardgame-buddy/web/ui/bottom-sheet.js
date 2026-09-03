@@ -17,7 +17,7 @@
 //
 // Used by: ui/status-tag.js, widgets/game-picker-sheet.js,
 // widgets/player-picker-sheet.js, widgets/game-search-sheet.js,
-// widgets/country-picker-sheet.js.
+// widgets/country-picker-sheet.js, widgets/chapter-import-sheet.js.
 //
 // A new sheet also needs its class added by name to the theme re-point list in
 // styles.css — a body-level sheet lands outside the screen that opened it and

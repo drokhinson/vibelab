@@ -347,7 +347,7 @@ async def generate_chapter(
 
     game = (
         sb.table("boardgamebuddy_games")
-        .select("id, name, year_published, description")
+        .select("id, name, year_published")
         .eq("id", game_id)
         .execute()
     )
@@ -361,7 +361,6 @@ async def generate_chapter(
         title, content = await chapter_ai.generate_chapter(
             game_name=row.get("name") or "",
             game_year=row.get("year_published"),
-            game_description=row.get("description"),
             chapter_type_id=body.chapter_type,
             chapter_type_label=label,
             focus=body.prompt,
