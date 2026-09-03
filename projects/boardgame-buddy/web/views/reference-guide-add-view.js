@@ -569,6 +569,11 @@ components above.
       // longer reads it.
       clearTimeout(this._vvSettle);
       this._vvSettle = null;
+      // The import sheet is body-level, so it outlives the container swap and
+      // would sit over the destination screen with its back guard still armed.
+      if (window.ChapterImportSheet && window.ChapterImportSheet.isOpen) {
+        window.ChapterImportSheet.close();
+      }
     }
 
     // Game chip — cream pill with cover + name. Especially important in
@@ -1065,24 +1070,29 @@ components above.
         `;
       }
 
-      // Step 1 — the head start is optional, so the forward button is the skip.
-      // Generate and Import both live in the step body and jump to step 2
-      // themselves.
+      // Step 1 — the head start is optional, so the step's two exits are its
+      // footer: Skip goes on to the editor empty-handed, Generate drafts first
+      // and lands on the editor too (_onGenerateAi advances the step itself).
       //
-      // The skip takes the ghost treatment, not the gold: Generate is this
-      // step's primary and the screen gets one gold weight. --alt marks it as
-      // the forward one of the two ghosts so Back and it don't read the same.
+      // No Back here, unlike the other steps: this pair is the whole decision
+      // and a third button crowds it on a phone. Back to the type picker is the
+      // Change link beside the type chip in the step body, plus the device back
+      // gesture, which still runs _wizBack.
       if (step === 1) {
-        const busy = this._generating;
+        const busy = this._generating || this._saving;
         return `
           <div class="chapter-edit__footer">
-            <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
-                    ${busy ? "disabled" : ""}
-                    onclick="window.referenceGuideAddView._wizBack()">Back</button>
             <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel chapter-wiz__fbtn--alt"
                     ${busy ? "disabled" : ""}
                     onclick="window.referenceGuideAddView._wizNext()">
-              I'll write it
+              Skip
+            </button>
+            <button type="button"
+                    class="chapter-edit__fbtn chapter-edit__fbtn--save ${this._generating ? "chapter-wiz__fbtn--busy" : ""}"
+                    ${busy ? "disabled" : ""}
+                    onclick="window.referenceGuideAddView._onGenerateAi()">
+              <i data-icon="sparkles" class="w-4 h-4"></i>
+              <span>${this._generating ? "Drafting…" : "Generate"}</span>
             </button>
           </div>
         `;
@@ -1171,6 +1181,10 @@ components above.
                  <i data-icon="palette" class="w-4 h-4"></i>
                </button>
                <span class="chapter-edit__tdiv"></span>
+               <button type="button" class="chapter-edit__tbtn" title="Import a file"
+                       onclick="window.referenceGuideAddView._openImportSheet(event)">
+                 <i data-icon="upload" class="w-4 h-4"></i>
+               </button>
                <button type="button" class="chapter-edit__tbtn" title="Authoring guide"
                        onclick="window.referenceGuideAddView._toggleGuide()">
                  <i data-icon="info" class="w-4 h-4"></i>
@@ -1501,14 +1515,43 @@ components above.
       });
     }
 
-    _onImportMd(event) {
-      const file = event.target && event.target.files && event.target.files[0];
+    // Open the import sheet from the editor toolbar. The overwrite confirm runs
+    // BEFORE the sheet, not after the pick: asking someone to choose a file and
+    // only then telling them it would discard their draft wastes the trip.
+    async _openImportSheet(event) {
+      if (this._saving || this._generating) return;
+      const trigger = (event && event.currentTarget) || null;
+
+      const hasDraft = !!(this._formTitle.trim() || this._formContent.trim());
+      if (hasDraft) {
+        const ok = await window.PolaroidPopup.confirm({
+          title: "Replace what you've written?",
+          body: "Importing a file overwrites the title and body currently in the form. This can't be undone.",
+          confirmLabel: "Replace",
+          cancelLabel: "Keep mine",
+        });
+        if (!ok) return;
+        // The confirm stole focus and the user may have carried on typing while
+        // it was open — re-check before committing to the overwrite.
+        if (this._saving || this._generating) return;
+      }
+
+      window.ChapterImportSheet.open({
+        returnFocus: trigger,
+        onFile: (file) => this._importFile(file),
+      });
+    }
+
+    // Read a picked .md / .txt file into the form. Takes a File rather than a
+    // change event: the sheet already pulled it off its own input, which is
+    // destroyed on close, so there is nothing here to reset afterwards.
+    _importFile(file) {
       if (!file) return;
       const reader = new FileReader();
       reader.onload = () => {
         const text = String(reader.result || "");
         // Strip BOM, normalize newlines.
-        const lines = text.replace(/^﻿/, "").split(/\r?\n/);
+        const lines = text.replace(/^\ufeff/, "").split(/\r?\n/);
         // Find first H1 — promote it to the title, drop the rest into content.
         let titleLine = -1;
         for (let i = 0; i < lines.length; i++) {
@@ -1523,16 +1566,20 @@ components above.
         } else {
           this._formContent = text;
         }
-        // An import IS the head start, so it advances the same way a generate
-        // does — the user's next question is "did that land right?", which
-        // only the editor answers.
-        if (this._tab === "create") this._step = 2;
+        // Imports land in Write, not Preview: the next question is "did that
+        // parse right?", and the raw markdown is what answers it. Set directly
+        // rather than through _setEditorView, which early-returns when the view
+        // is already "write" and so would skip the render.
+        this._editorView = "write";
+        // A toolbar popover open behind the sheet points at a caret in a
+        // textarea this render is about to replace.
+        this._activePop = null;
+        this._error = null;
         this.render();
+        showToast("File imported — review and edit before saving", "success");
       };
       reader.onerror = () => showToast("Failed to read file", "error");
       reader.readAsText(file);
-      // Reset the input so the same file can be re-imported next time.
-      event.target.value = "";
     }
 
     // AI-draft the chapter for the picked type — optionally steered by the

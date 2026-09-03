@@ -72,67 +72,55 @@
 
   // ── Step 2: the optional head start ────────────────────────────────────────
   //
-  // Three ways forward and all of them are optional: draft with AI, import a
-  // .md file, or skip straight to writing (the footer's own button, so it
-  // reads as "carry on" rather than a fourth choice competing here).
+  // One idea per step: this one is a prompt box and a decision. Both ways
+  // forward live in the footer (Skip / Generate, see _renderWizardFooter) —
+  // nothing here is a button, so the step reads as "say what you want, or
+  // don't". Importing a file used to live here too; it fills the editor rather
+  // than steering the AI, so it moved to the editor's own toolbar on step 3.
+  //
+  // The picked-type row carries a Change link because the footer no longer has
+  // a Back: it is the same markup step 3 renders, so changing your mind about
+  // the type is one tap from either step. (The device back gesture still steps
+  // back too — _wizBack is unchanged.)
   //
   // @param {{typeLabel: string, typeIcon: string, genPrompt: string,
   //          generating: boolean, saving: boolean, error: ?string}} s
   function renderDraftStep(s) {
     const busy = s.generating || s.saving;
-    // The prompt is genuinely optional, and the placeholder is the only place
-    // that can say what a good one looks like without a paragraph of copy.
-    const promptField = `
-      <label class="chapter-wiz__field">
-        <span class="chapter-wiz__label">What should it focus on? <em>(optional)</em></span>
-        <textarea id="chapter-gen-prompt"
-                  class="chapter-wiz__prompt"
-                  rows="3" maxlength="500"
-                  ${busy ? "disabled" : ""}
-                  spellcheck="true"
-                  oninput="${V}._genPrompt = this.value"
-                  placeholder="e.g. just the endgame trigger and how final scoring works">${escapeHtml(s.genPrompt)}</textarea>
-        <span class="chapter-wiz__hint">
-          Leave it blank for a general ${escapeHtml(s.typeLabel.toLowerCase())} chapter.
-        </span>
-      </label>
-    `;
 
     return `
       <div class="chapter-wiz__step">
         <h3 class="chapter-wiz__title font-display">Want a head start?</h3>
         <p class="chapter-wiz__lede">
-          Have the AI draft your
+          Have the AI draft this chapter for you, or skip and write it yourself.
+          Nothing is saved until you hit Save on the next step.
+        </p>
+
+        <div class="chapter-wiz__picked">
           <span class="chapter-wiz__typechip">
             <i data-icon="${escapeAttr(s.typeIcon || "book")}" class="w-3 h-3"></i>
             ${escapeHtml(s.typeLabel)}
           </span>
-          chapter, bring your own file, or skip and write it yourself.
-          Nothing is saved until you hit Save on the next step.
-        </p>
+          <button type="button" class="chapter-wiz__change"
+                  ${busy ? "disabled" : ""}
+                  onclick="${V}._goToStep(0)">Change</button>
+        </div>
 
-        ${promptField}
-
-        <button type="button"
-                class="chapter-wiz__genbtn ${s.generating ? "chapter-wiz__genbtn--busy" : ""}"
-                ${busy ? "disabled" : ""}
-                onclick="${V}._onGenerateAi()">
-          <i data-icon="sparkles" class="w-4 h-4"></i>
-          <span>${s.generating ? "Drafting your chapter…" : "Generate with AI"}</span>
-        </button>
+        <label class="chapter-wiz__field">
+          <span class="chapter-wiz__label">What should it focus on? <em>(optional)</em></span>
+          <textarea id="chapter-gen-prompt"
+                    class="chapter-wiz__prompt"
+                    rows="3" maxlength="500"
+                    ${busy ? "disabled" : ""}
+                    spellcheck="true"
+                    oninput="${V}._genPrompt = this.value"
+                    placeholder="e.g. just the endgame trigger and how final scoring works">${escapeHtml(s.genPrompt)}</textarea>
+          <span class="chapter-wiz__hint">
+            Leave it blank for a general ${escapeHtml(s.typeLabel.toLowerCase())} chapter.
+          </span>
+        </label>
 
         ${s.error ? `<div class="chapter-wiz__error">${escapeHtml(s.error)}</div>` : ""}
-
-        <div class="chapter-wiz__or"><span>or</span></div>
-
-        <label class="chapter-wiz__import ${busy ? "chapter-wiz__import--off" : ""}"
-               title="Import a .md file as this chapter">
-          <input type="file" accept=".md,text/markdown,text/plain"
-                 ${busy ? "disabled" : ""}
-                 onchange="${V}._onImportMd(event)" />
-          <i data-icon="upload" class="w-4 h-4"></i>
-          <span>Import a .md file</span>
-        </label>
       </div>
     `;
   }
