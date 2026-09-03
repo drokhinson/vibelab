@@ -5,6 +5,9 @@ Routes are namespaced: /api/v1/{project}/...
 """
 import logging
 import os
+import time
+from typing import Optional
+
 import truststore
 truststore.inject_into_ssl()  # use OS certificate store instead of certifi bundle
 
@@ -15,7 +18,7 @@ from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
 from dotenv import load_dotenv
 
-from api_logger import set_request_user
+from api_logger import log_self_call, set_request_user
 from jwt_auth import get_current_supabase_user
 from routes.sauceboss.modifiers import load_modifier_registry
 from routes.sauceboss.units import load_unit_registry
@@ -158,6 +161,67 @@ async def attach_api_logger_user_context(request: Request, call_next):
                 # verifies for itself and returns the right status.
                 pass
     return await call_next(request)
+
+
+# ── Self-timing for the boot-critical reads ───────────────────────────────────
+# These three are what a cold boot waits on, and nothing measured them: api_logs
+# recorded only outbound third-party calls, so "how long does /bootstrap take,
+# and how big is it?" could only be guessed at. That is the wrong footing from
+# which to claim a load-time fix worked.
+#
+# An allowlist rather than every request, because api_logs is unbounded and a
+# row per request across ten apps would bury the third-party rows it exists for.
+#
+# Registered LAST and therefore OUTERMOST (add_middleware prepends), which is
+# deliberate: outside GZip, so response_size_bytes is the compressed body
+# actually put on the wire — the number that says whether the compression was
+# worth adding. It also means this wraps the auth middleware, so the user is
+# read off request.state (an object mutation, which propagates out of an inner
+# BaseHTTPMiddleware) rather than from a contextvar (which does not).
+_SELF_TIMED_SUFFIXES = ("/bootstrap", "/bootstrap/game-bundles", "/feed")
+
+
+def _content_length(response) -> Optional[int]:
+    try:
+        return int(response.headers.get("content-length"))
+    except (TypeError, ValueError):
+        return None
+
+
+@app.middleware("http")
+async def time_boot_critical_requests(request: Request, call_next):
+    """Record one api_logs row per request to a boot-critical endpoint."""
+    path = request.url.path
+    app_name = next((name for prefix, name in _APP_PREFIX_MAP if path.startswith(prefix)), None)
+    if not app_name or not path.endswith(_SELF_TIMED_SUFFIXES):
+        return await call_next(request)
+
+    start = time.monotonic()
+    try:
+        response = await call_next(request)
+    except Exception:
+        _log_self(request, app_name, path, start, 500, None)
+        raise
+    _log_self(request, app_name, path, start, response.status_code, _content_length(response))
+    return response
+
+
+def _log_self(request, app_name, path, start, status, size) -> None:
+    """Write the row, never letting instrumentation break the request."""
+    try:
+        su_user = getattr(request.state, "supabase_user", None)
+        log_self_call(
+            app=app_name,
+            method=request.method,
+            path=path,
+            response_time_ms=int((time.monotonic() - start) * 1000),
+            status_code=status,
+            response_size_bytes=size,
+            user_id=su_user.sub if su_user else None,
+            user_label=(su_user.email or su_user.sub) if su_user else None,
+        )
+    except Exception:
+        _log.warning("self-timing log failed for %s", path, exc_info=True)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
