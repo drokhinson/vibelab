@@ -317,6 +317,21 @@
 --                  064's argument, verbatim. Its body is 069's verbatim: this
 --                  function is replaced wholesale, so a migration that adds a
 --                  key MUST be rebased onto whichever one defined it last.)
+--               db/migrations/boardgamebuddy/011_profile_bundle_visibility_union.sql
+--                 (PERFORMANCE ONLY — output byte-identical to 071, verified
+--                  across 80 viewer/target/page-size combinations at 1k and
+--                  201k plays. Five blocks expressed the visibility rule as
+--                  `user_id = target OR EXISTS (…play_players…)`, which no
+--                  index can serve, so each was a full scan of the SHARED
+--                  boardgamebuddy_plays table — one account's first paint
+--                  scaling with every other account's history. Now the
+--                  my_plays UNION form bgb_user_stats has always used: one arm
+--                  per index, dedup on p.id. ~800ms → ~275ms at 201k plays.
+--                  The two owned/wishlist LATERALs keep their OR EXISTS on
+--                  purpose — they also filter p.game_id, which
+--                  idx_bgb_plays_game_played serves, and converting them
+--                  measured 0.5ms → 98ms. bootstrap_version NOT bumped: shape
+--                  unchanged, and a bump wipes every client's cache.)
 
 --   Called by:  shared-backend/routes/boardgame_buddy/profile_routes.py
 --               (GET /profile/bundle)
