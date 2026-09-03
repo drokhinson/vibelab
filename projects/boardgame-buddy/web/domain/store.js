@@ -58,12 +58,14 @@
         adminChapterReportCount: 0,
         adminMissingImageCount: 0,
         adminMissingDescriptionCount: 0,
-        // Plays somebody else has seated this account in and it hasn't looked
-        // at yet. Published by domain/link-notification.js — from the boot
-        // payload on launch, and from the list itself once the screen is open.
-        // Counts ACTS, not plays: one imported batch of 214 is 1 here, which
-        // is what the notifications screen shows as one row.
-        linkNotifCount: 0,
+        // Everything that has happened TO this account and it hasn't looked at
+        // yet: plays somebody seated it in, buddy requests received, requests
+        // of its own that were accepted. Published by
+        // domain/notification-feed.js — from the boot payload on launch, and
+        // from the list itself once the screen is open. The play part counts
+        // ACTS, not plays: one imported batch of 214 is 1 here, which is what
+        // the notifications screen shows as one row.
+        notifCount: 0,
       };
       // Which slot feeds which nav tab and which hub card is domain/
       // notifications.js's table, not this file's business — store is a signal
@@ -143,10 +145,10 @@
         adminChapterReportCount: 0,
         adminMissingImageCount: 0,
         adminMissingDescriptionCount: 0,
-        // Zeroed too, and for the plainest reason of the lot: these are plays
-        // somebody put THIS account in. LinkNotifications re-seeds it from the
+        // Zeroed too, and for the plainest reason of the lot: these are things
+        // that happened TO this account. NotificationFeed re-seeds it from the
         // next boot's bundle.
-        linkNotifCount: 0,
+        notifCount: 0,
         // Zeroed too: a comparison is one account's shelf against one BGG
         // handle, and the next person signing in on this device shares
         // neither. BggSyncFlow.reset() drops the saved draft to match.

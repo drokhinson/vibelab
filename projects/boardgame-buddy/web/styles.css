@@ -3718,7 +3718,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    own — only the presentation is shared. */
 .bgg-flow__nav,
 .imp-nav,
-.linknotif-bar {
+.bgbnotif-bar {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
   left: 50%;
@@ -3735,7 +3735,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .bgg-flow__nav > *,
 .imp-nav > *,
-.linknotif-bar > * { pointer-events: auto; }
+.bgbnotif-bar > * { pointer-events: auto; }
 .bgg-flow__nav-back,
 .bgg-flow__nav-next,
 .imp-nav__back,
@@ -13634,39 +13634,54 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Notifications — "somebody put me in a play" (views/notifications-view.js)
+   Notifications — plays you were seated in, buddy requests, and requests of
+   yours that were accepted (views/notifications-view.js)
 
    A bgb-spoke-screen, so the chrome re-point near the top of this file has
    already pointed --polaroid-* at the ground tokens: these rows are UI cards,
    not photographs, and every colour below reads from the chrome column
    (--polaroid-bg / --polaroid-ink / --polaroid-muted / --card-border /
    --accent-ink) rather than oklch(var(--b*)), which would invert on paper.
-   .linknotif-bar's geometry lives with the other docked footers above.
+   .bgbnotif-bar's geometry lives with the other docked footers above.
    ══════════════════════════════════════════════════════════════════════════ */
-.linknotif-select {
-  margin-left: auto;
-  min-height: 44px;
-  padding: 0 12px;
-  border: none;
-  background: none;
-  color: var(--accent-ink);
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  border-radius: 0.6rem;
-}
-.linknotif-select:hover { background: oklch(var(--bc) / 0.07); }
-.linknotif-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-.linknotif-list {
+.bgbnotif-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* Clear the docked bar when select mode is open; harmless otherwise. */
+  /* Clear the docked bar while something is ticked; harmless otherwise. */
   padding-bottom: 8px;
 }
 
-.linknotif-row {
+/* The day header. Same pinned-sub-header recipe as #add-games-pinned: parked
+   under the spoke's own back row, one step down the z ladder (15) so it slides
+   UNDER it rather than over, with a negative inline margin plus matching
+   padding so the band reaches the column edges — without that, rows slide past
+   it through the gutters. Headers are direct children of the list rather than
+   each wrapping its group, because a sticky element resolves against the
+   scrollport and a per-group wrapper would release it where the group ends. */
+.bgbnotif-day {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + var(--bgb-spoke-head-height));
+  z-index: 15;
+  margin: 4px -1rem 0;
+  padding: 0.4rem 1rem 0.45rem;
+  background: oklch(var(--b1) / 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  /* oklch(var(--b3)), matching .spoke-head's own rule rather than this
+     section's chrome column: the two bands are one stack of pinned chrome and
+     have to draw the same hairline. */
+  border-bottom: 1px solid oklch(var(--b3));
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.bgbnotif-day:first-child { margin-top: 0; }
+
+.bgbnotif-row {
   display: flex;
   align-items: stretch;
   gap: 4px;
@@ -13681,13 +13696,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* The unread mark is a rail rather than a dot: the row already carries an
    avatar and a thumbnail, and a third small circle in that cluster reads as
    another piece of data instead of as state. */
-.linknotif-row.is-unread { border-left: 3px solid var(--alert-fill); }
-.linknotif-row.is-selected {
+.bgbnotif-row.is-unread { border-left: 3px solid var(--alert-fill); }
+.bgbnotif-row.is-selected {
   border-color: var(--accent);
   background: var(--accent-quiet);
 }
 
-.linknotif-row__main {
+.bgbnotif-row__main {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -13696,7 +13711,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   /* 56px, not 44: rows sit flush against each other, so a slightly-off thumb
      lands on the neighbour. */
   min-height: 56px;
-  padding: 10px 8px 10px 12px;
+  /* The circle owns the leading gutter on a play row, so the body starts
+     tight against it; .bgbnotif-row--buddy pays the 12px back. */
+  padding: 10px 8px 10px 4px;
   background: none;
   border: none;
   text-align: left;
@@ -13704,24 +13721,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: inherit;
   font: inherit;
 }
-.linknotif-row__main:active { background: oklch(var(--bc) / 0.05); }
-.linknotif-row__main:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.bgbnotif-row__main:active { background: oklch(var(--bc) / 0.05); }
+.bgbnotif-row__main:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 
-/* Reserved whether or not the row is ticked, so entering select mode and
-   ticking a row don't shove the name sideways under the thumb. */
-.linknotif-row__tick {
-  flex: none;
-  width: 0;
-  display: grid;
-  place-items: center;
-  color: var(--accent-ink);
-  transition: width 140ms var(--ease);
-}
-.linknotif-list[role="group"] .linknotif-row__tick { width: 20px; }
+.bgbnotif-row__who { flex: none; }
 
-.linknotif-row__who { flex: none; }
-
-.linknotif-row__art {
+.bgbnotif-row__art {
   flex: none;
   width: 40px;
   height: 40px;
@@ -13729,14 +13734,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   object-fit: cover;
   background: var(--well);
 }
-.linknotif-row__art--none {
+.bgbnotif-row__art--none {
   display: grid;
   place-items: center;
   color: var(--polaroid-muted);
 }
 
-.linknotif-row__body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.linknotif-row__title {
+.bgbnotif-row__body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bgbnotif-row__title {
   color: var(--polaroid-ink);
   font-size: 0.92rem;
   line-height: 1.25;
@@ -13747,15 +13752,15 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.linknotif-row__title strong { font-weight: 700; }
-.linknotif-row__sub {
+.bgbnotif-row__title strong { font-weight: 700; }
+.bgbnotif-row__sub {
   color: var(--polaroid-muted);
   font-size: 0.78rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.linknotif-row__count {
+.bgbnotif-row__count {
   flex: none;
   min-width: 28px;
   height: 22px;
@@ -13770,27 +13775,79 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   place-items: center;
 }
 
-.linknotif-row__unlink {
+/* The select circle. Its own button beside .bgbnotif-row__main rather than
+   nested inside it, so selecting and opening cannot fight over one target.
+   36px visible for a calm row, padded to a 44px hit area by the ::before —
+   .claude/rules/mobile-web.md §5 — which also puts ~8px of clear space between
+   its zone and the row body's. */
+.bgbnotif-row__pick {
+  position: relative;
   flex: none;
-  width: 48px;
+  width: 36px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0 0 8px;
   border: none;
-  border-left: 1px solid var(--card-border);
   background: none;
   color: var(--polaroid-muted);
   cursor: pointer;
-  display: grid;
-  place-items: center;
 }
-.linknotif-row__unlink:hover:not(:disabled) { color: var(--rust); background: oklch(var(--bc) / 0.05); }
-.linknotif-row__unlink:active:not(:disabled) { background: oklch(var(--bc) / 0.1); }
-.linknotif-row__unlink:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
-.linknotif-row__unlink:disabled { opacity: 0.45; cursor: not-allowed; }
+.bgbnotif-row__pick::before { content: ""; position: absolute; inset: -4px; }
+.bgbnotif-row__pick[aria-checked="true"] { color: var(--accent-ink); }
+.bgbnotif-row__pick:active:not(:disabled) { background: oklch(var(--bc) / 0.1); }
+.bgbnotif-row__pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.bgbnotif-row__pick:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.linknotif-bar {
+/* Answering a buddy request where it is read. Stacked rather than inline so
+   both controls clear 44px on a narrow phone without squeezing the name beside
+   them; neither is --rust-ink, because declining a request loses none of the
+   user's own data — it is the polite half of a choice, not a destruction. */
+.bgbnotif-row__actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 10px 8px 0;
+}
+.bgbnotif-row__accept,
+.bgbnotif-row__decline {
+  min-height: 32px;
+  min-width: 84px;
+  padding: 0 10px;
+  border-radius: var(--rounded-btn, 0.6rem);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bgbnotif-row__accept {
+  border: 0;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.bgbnotif-row__decline {
+  border: 1px solid var(--polaroid-line);
+  background: none;
+  color: var(--polaroid-muted);
+}
+.bgbnotif-row__accept:active:not(:disabled),
+.bgbnotif-row__decline:active:not(:disabled) { transform: scale(0.97); }
+.bgbnotif-row__accept:disabled,
+.bgbnotif-row__decline:disabled { opacity: 0.55; cursor: not-allowed; }
+.bgbnotif-row__accept:focus-visible,
+.bgbnotif-row__decline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* A buddy row has no thumbnail to lead with, so its mark sits in the art slot
+   and the row keeps the same rhythm as a play row beside it. */
+.bgbnotif-row--buddy .bgbnotif-row__main { padding-left: 12px; }
+
+.bgbnotif-bar {
   align-items: center;
   justify-content: space-between;
 }
-.linknotif-bar__all {
+.bgbnotif-bar__clear {
   min-height: 52px;
   padding: 0 14px;
   border: 1px solid var(--line);
@@ -13801,7 +13858,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-size: 0.9rem;
   cursor: pointer;
 }
-.linknotif-bar__go {
+.bgbnotif-bar__clear:disabled { opacity: 0.5; cursor: not-allowed; }
+.bgbnotif-bar__go {
   flex: 1 1 auto;
   min-height: 52px;
   border: 0;
@@ -13814,19 +13872,19 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-size: 0.95rem;
   cursor: pointer;
 }
-.linknotif-bar__go:disabled { opacity: 0.5; cursor: not-allowed; }
-.linknotif-bar__all:focus-visible,
-.linknotif-bar__go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bgbnotif-bar__go:disabled { opacity: 0.5; cursor: not-allowed; }
+.bgbnotif-bar__clear:focus-visible,
+.bgbnotif-bar__go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.linknotif-state { padding: 40px 24px; text-align: center; }
-.linknotif-state__art { width: 120px; height: 120px; margin: 0 auto 12px; opacity: 0.55; }
-.linknotif-state__title {
+.bgbnotif-state { padding: 40px 24px; text-align: center; }
+.bgbnotif-state__art { width: 120px; height: 120px; margin: 0 auto 12px; opacity: 0.55; }
+.bgbnotif-state__title {
   font-family: var(--font-display);
   font-size: 1.05rem;
   color: var(--ink);
   margin-bottom: 6px;
 }
-.linknotif-state__sub {
+.bgbnotif-state__sub {
   color: var(--ink-muted);
   font-size: 0.88rem;
   line-height: 1.45;
@@ -13834,5 +13892,5 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 @media (hover: hover) {
-  .linknotif-row__main:hover { background: oklch(var(--bc) / 0.04); }
+  .bgbnotif-row__main:hover { background: oklch(var(--bc) / 0.04); }
 }

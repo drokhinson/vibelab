@@ -84,14 +84,18 @@
              stays a clean logo + wordmark lockup. -->
         <span class="bgb-global-header__title font-display">Boardgame Buddy</span>
       </a>
-      <!-- Plays other people have seated you in. Sits where the pending-upload
+      <!-- Everything done TO you: plays somebody seated you in, buddy requests,
+           requests of yours that were accepted. Sits where the pending-upload
            control used to: uploads are a thing the app is doing FOR you and
            belong in Settings with the rest of the plumbing, whereas being put
            in someone else's game is a thing done TO you and needs answering.
            Its dot is the same .bgb-global-header__dot the gear wears, driven by
-           init.js#syncHeaderDot off BgbNotifications.forBell(). -->
+           init.js#syncHeaderDot off BgbNotifications.forBell().
+
+           It TOGGLES. The screen has no close x — this button is its only
+           opener, so it is also its closer, and back means the same thing. -->
       <button class="bgb-global-header__bell" title="Notifications" aria-label="Notifications"
-              onclick="window.router.go('notifications')">
+              onclick="window.toggleNotifications()">
         <i data-icon="bell" class="w-5 h-5"></i>
         <span class="bgb-global-header__dot" aria-hidden="true" hidden></span>
       </button>
@@ -243,7 +247,7 @@
   <script src="domain/geo-data.js"></script>
   <script src="domain/geo.js"></script>
   <script src="domain/play.js"></script>
-  <script src="domain/link-notification.js"></script>
+  <script src="domain/notification-feed.js"></script>
   <script src="domain/name-match.js"></script>
   <script src="domain/play-import.js"></script>
   <script src="domain/play-session.js"></script>

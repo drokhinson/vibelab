@@ -134,7 +134,7 @@
       // plays across pages this view is not holding, and a batch selection
       // doesn't even send its play ids — so there is nothing to splice by id.
       // Drop what we have and re-pull the first page, which is cheap because
-      // LinkNotifications.unlink() already busted the cache this reads.
+      // NotificationFeed.unlink() already busted the cache this reads.
       if (kind === "leave-bulk") {
         // `initial` is the reset: it nulls _page before the fetch and _load
         // re-sets _firstPageLen from the page that comes back.

@@ -90,14 +90,20 @@
       gear: true,
       label: (n) => `${n} play${n === 1 ? "" : "s"} to upload`,
     },
-    // Plays somebody else seated you in. Its own surface — the bell — because
-    // it resolves on the notifications screen, not in Settings, and because it
-    // is the one signal here about something done TO the user rather than
-    // something they or the app has left undone.
+    // Everything done TO the user: plays somebody seated them in, buddy
+    // requests received, requests of theirs that were accepted. Its own
+    // surface — the bell — because it resolves on the notifications screen,
+    // not in Settings, and because it is the one signal here about something
+    // done to the user rather than something they or the app has left undone.
+    //
+    // The label stays generic on purpose. The count is a sum across three
+    // kinds, so naming any one of them would be a guess that reads as a fact
+    // to a screen reader — and the row cannot split, because the bell has one
+    // number and clearing it clears all three at once.
     {
-      slot: "linkNotifCount",
+      slot: "notifCount",
       bell: true,
-      label: (n) => `${n} play${n === 1 ? "" : "s"} you were added to`,
+      label: (n) => `${n} new notification${n === 1 ? "" : "s"}`,
     },
   ];
 
