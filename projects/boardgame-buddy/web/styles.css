@@ -5679,6 +5679,17 @@ html.bgb-ptr-armed body {
   cursor: pointer;
 }
 
+/* "Showing 25 of 412" under the list. Empty (and so zero-height, since it has
+   no padding of its own) until there is more than one batch — a four-result
+   search does not need a counter explaining itself. */
+.bgg-import-sheet__count {
+  padding: 0 10px;
+  font-size: 0.72rem;
+  color: var(--polaroid-muted);
+  text-align: center;
+}
+.bgg-import-sheet__count:not(:empty) { padding-top: 8px; }
+
 /* ── A result row ─────────────────────────────────────────────────────────
    position: relative + overflow: hidden so the progress sweep below can be
    absolutely placed inside it and clipped to its radius. */

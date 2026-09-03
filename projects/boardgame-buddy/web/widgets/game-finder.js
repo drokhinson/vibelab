@@ -40,6 +40,9 @@
   // _paintProvisional) — so this budget only delays the refinement.
   const SEARCH_DEBOUNCE_MS = 180;
 
+  // How many BGG hits this dropdown will show. See _runBgg.
+  const BGG_DROPDOWN_MAX = 25;
+
   // Below this, /search is not called at all.
   //
   // The catalog ILIKE '%q%' is served by a pg_trgm GIN index, and pg_trgm has
@@ -700,9 +703,14 @@
         dd.innerHTML = `<li class="game-finder-dropdown__hint">No BoardGameGeek matches.</li>`;
         return;
       }
+      // Capped for the dropdown only. /search now returns BGG's whole ranked
+      // match set — hundreds of rows for a franchise name — which the import
+      // sheet windows and scrolls. This is an escalation inside a picker: a
+      // host is reaching for one specific game, and the answer is at the top
+      // or it is not here.
       dd.innerHTML =
         `<li class="game-finder-dropdown__header">From BoardGameGeek</li>` +
-        bgg.map((hit) => `
+        bgg.slice(0, BGG_DROPDOWN_MAX).map((hit) => `
           <li class="game-finder-dropdown-item game-finder-dropdown-item--bgg"
               data-finder-action="import-bgg"
               data-finder-bgg-id="${hit.bgg_id}"
