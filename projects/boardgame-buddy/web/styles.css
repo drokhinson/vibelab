@@ -12821,27 +12821,32 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Play importer — Settings → Import plays (views/import-plays-view.js)
+   Wizard step counter + segment bar (ui/wizard-progress.js)
    ══════════════════════════════════════════════════════════════════════════
-   A .bgb-spoke-screen, and additionally named in the --polaroid-* re-point at
-   the top of this file: every surface here is a UI card, not a photograph, so
-   the ground tokens have to invert with the theme. Nothing below states a
-   colour — they all come through those aliases.
+   Two consumers: the play importer below, and the chapter creation wizard
+   (.chapter-wiz__*). Both host it as an ordinary block at the top of a screen,
+   which is what makes one family serve them — this is the "extract at instance
+   #2" from .claude/rules/ui-object-design.md §4, arriving one instance late.
 
-   The step counter and segment bar are the onboarding deck's chrome
-   (.ob-deck__count / .ob-deck__seg) rebuilt under this family rather than
-   shared: the deck's live inside a body-level overlay that owns its own
-   layout, and the two would have had to grow a shared host to travel
-   together. What is shared is the shape, deliberately — a wizard should count
-   its steps the same way twice.
+   The onboarding deck keeps drawing the same shape under its own
+   .ob-deck__count / .ob-deck__seg and is deliberately NOT migrated: it lives
+   inside a body-level overlay that owns its own layout, so the two would have
+   had to grow a shared host to travel together. What is shared with the deck
+   is the shape, deliberately — a wizard should count its steps the same way
+   every time.
+
+   Every colour is a root ground token, so it works on any screen that has not
+   re-pointed them: the importer is a .bgb-spoke-screen and the chapter wizard
+   paints straight onto the app ground. A future consumer on a paper surface
+   would need --accent-ink here instead of --accent (theming.md §6).
    ────────────────────────────────────────────────────────────────────────── */
-.imp-chrome {
+.bgb-wizsteps {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin: 0 0 1rem;
 }
-.imp-chrome__count {
+.bgb-wizsteps__count {
   text-align: center;
   font-family: var(--font-score);
   font-size: 11px;
@@ -12851,9 +12856,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
-.imp-chrome__count b { color: var(--accent); font-weight: 700; }
-.imp-chrome__bar { display: flex; gap: 5px; }
-.imp-chrome__seg {
+.bgb-wizsteps__count b { color: var(--accent); font-weight: 700; }
+.bgb-wizsteps__bar { display: flex; gap: 5px; }
+.bgb-wizsteps__seg {
   flex: 1;
   height: 4px;
   border-radius: var(--r-pill);
@@ -12861,7 +12866,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   overflow: hidden;
   position: relative;
 }
-.imp-chrome__seg::after {
+.bgb-wizsteps__seg::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -12871,7 +12876,19 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   transform-origin: left;
   transition: transform 260ms var(--ease);
 }
-.imp-chrome__seg.is-done::after { transform: scaleX(1); }
+.bgb-wizsteps__seg.is-done::after { transform: scaleX(1); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Play importer — Settings → Import plays (views/import-plays-view.js)
+   ══════════════════════════════════════════════════════════════════════════
+   A .bgb-spoke-screen, and additionally named in the --polaroid-* re-point at
+   the top of this file: every surface here is a UI card, not a photograph, so
+   the ground tokens have to invert with the theme. Nothing below states a
+   colour — they all come through those aliases.
+
+   The step counter and segment bar used to be this family's own .imp-chrome__*
+   rules; they now come from the shared .bgb-wizsteps block above.
+   ────────────────────────────────────────────────────────────────────────── */
 
 /* Clears the docked nav bar below, which is fixed and so contributes no
    height of its own: 52px button + 12px/28px padding + the app's own nav. */
@@ -13413,7 +13430,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .imp-nav__back:active:not(:disabled) { background: var(--accent-quiet); }
 
 @media (prefers-reduced-motion: reduce) {
-  .imp-chrome__seg::after, .imp-progress__fill { transition: none; }
+  .bgb-wizsteps__seg::after, .imp-progress__fill { transition: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
