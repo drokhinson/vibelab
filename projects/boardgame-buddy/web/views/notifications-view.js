@@ -39,6 +39,7 @@
 (function () {
   const PAGE = 20;
   const SENTINEL_ID = "bgbnotif-sentinel";
+  const BAR_ID = "bgbnotif-bar-host";
 
   class NotificationsView extends window.View {
     constructor() {
@@ -274,8 +275,12 @@
       else if (!n)                                body = this._renderEmpty();
       else                                        body = this._renderList();
 
+      // The bar lives in a host of its own — an empty, unstyled div while
+      // nothing is ticked — so raising, relabelling and dropping it patches one
+      // node instead of rewriting the screen. See _paintBar().
       this.container.innerHTML =
-        `${this._renderHead()}${body}${this._renderBar()}`;
+        `${this._renderHead()}${body}<div id="${BAR_ID}"></div>`;
+      this._paintBar();
       this.refreshIcons();
 
       // Re-point every paint: the host's contents are replaced each time, so a
@@ -420,13 +425,14 @@
 
       return `
         <div class="bgbnotif-row ${it.is_unread ? "is-unread" : ""} ${picked ? "is-selected" : ""}"
-             style="--i:${i}">
+             data-key="${escapeAttr(it.entry_key)}" style="--i:${i}">
           <button class="bgbnotif-row__pick" type="button"
                   role="checkbox" aria-checked="${picked}"
                   ${this._busy ? "disabled" : ""}
+                  data-what="${escapeAttr(what)}"
                   aria-label="${picked ? "Deselect" : "Select"} ${escapeAttr(what)}"
                   onclick="window.notificationsView._toggle('${jsStr(it.entry_key)}')">
-            <i data-icon="${picked ? "check-circle" : "circle"}" class="w-5 h-5"></i>
+            ${this._pickIcon(picked)}
           </button>
           <button class="bgbnotif-row__main" type="button"
                   onclick="window.notificationsView._open('${jsStr(it.play_id)}')">
@@ -451,10 +457,9 @@
      */
     _renderRequestRow(it, i) {
       const who = it.actor_display_name || "Someone";
-      const working = this._answering.has(it.edge_id);
       return `
         <div class="bgbnotif-row bgbnotif-row--buddy ${it.is_unread ? "is-unread" : ""}"
-             style="--i:${i}">
+             data-key="${escapeAttr(it.entry_key)}" style="--i:${i}">
           <button class="bgbnotif-row__main" type="button"
                   onclick="window.notificationsView._openProfile('${jsStr(it.actor_id)}')">
             ${this._badge(it)}
@@ -468,23 +473,35 @@
               <span class="bgbnotif-row__sub">${this._handle(it)}</span>
             </span>
           </button>
-          <span class="bgbnotif-row__actions">
-            ${working ? `
-              <button class="bgbnotif-row__accept" type="button" disabled>Working…</button>
-            ` : `
-              <button class="bgbnotif-row__accept" type="button"
-                      aria-label="Accept ${escapeAttr(who)}'s buddy request"
-                      onclick="window.notificationsView._answer('${jsStr(it.entry_key)}','${jsStr(it.edge_id)}',true)">
-                Accept
-              </button>
-              <button class="bgbnotif-row__decline" type="button"
-                      aria-label="Decline ${escapeAttr(who)}'s buddy request"
-                      onclick="window.notificationsView._answer('${jsStr(it.entry_key)}','${jsStr(it.edge_id)}',false)">
-                Decline
-              </button>
-            `}
-          </span>
+          <span class="bgbnotif-row__actions">${this._renderAnswer(it)}</span>
         </div>
+      `;
+    }
+
+    /**
+     * The Accept/Decline pair, or the disabled stub that replaces it while one
+     * of them is in flight.
+     *
+     * Its own renderer because _paintAnswer() re-paints exactly this cluster:
+     * the two states have to be produced by one function or the in-place swap
+     * drifts from the first paint.
+     */
+    _renderAnswer(it) {
+      const who = it.actor_display_name || "Someone";
+      if (this._answering.has(it.edge_id)) {
+        return `<button class="bgbnotif-row__accept" type="button" disabled>Working…</button>`;
+      }
+      return `
+        <button class="bgbnotif-row__accept" type="button"
+                aria-label="Accept ${escapeAttr(who)}'s buddy request"
+                onclick="window.notificationsView._answer('${jsStr(it.entry_key)}','${jsStr(it.edge_id)}',true)">
+          Accept
+        </button>
+        <button class="bgbnotif-row__decline" type="button"
+                aria-label="Decline ${escapeAttr(who)}'s buddy request"
+                onclick="window.notificationsView._answer('${jsStr(it.entry_key)}','${jsStr(it.edge_id)}',false)">
+          Decline
+        </button>
       `;
     }
 
@@ -493,7 +510,7 @@
       const who = it.actor_display_name || "Someone";
       return `
         <div class="bgbnotif-row bgbnotif-row--buddy ${it.is_unread ? "is-unread" : ""}"
-             style="--i:${i}">
+             data-key="${escapeAttr(it.entry_key)}" style="--i:${i}">
           <button class="bgbnotif-row__main" type="button"
                   onclick="window.notificationsView._openProfile('${jsStr(it.actor_id)}')">
             ${this._badge(it)}
@@ -566,6 +583,87 @@
       `;
     }
 
+    _pickIcon(picked) {
+      return `<i data-icon="${picked ? "check-circle" : "circle"}" class="w-5 h-5"></i>`;
+    }
+
+    // ── Surgical paints ─────────────────────────────────────────────────────
+    //
+    // Ticking a row is a FIELD change, not a structural one: the same rows in
+    // the same order, one of them wearing a tick. Sending it through render()
+    // rewrites the container, which re-runs the staggered `fadeUp` on all
+    // twenty rows (styles.css .bgbnotif-row), re-hydrates every icon, re-decodes
+    // every thumbnail and destroys the very button the finger is on before
+    // :active can apply — the whole screen visibly reloading between two taps
+    // that changed nothing but a circle. So the three field-only changes on
+    // this screen — the tick, the bar, the in-flight buddy answer — patch their
+    // own node. render() stays for structural changes: a page arriving, a row
+    // leaving, a load failing. See .claude/rules/web-frontend.md
+    // ("Re-render surgically, not the whole screen") and
+    // .claude/rules/overlays.md §6.
+
+    /** The row element carrying `key`, or null if it isn't painted. */
+    _rowEl(key) {
+      const host = this.container;
+      if (!host) return null;
+      // Walked rather than selected: an entry_key is server-supplied and goes
+      // into an attribute selector unescaped otherwise.
+      for (const el of host.querySelectorAll(".bgbnotif-row[data-key]")) {
+        if (el.getAttribute("data-key") === key) return el;
+      }
+      return null;
+    }
+
+    /** One row's tick: the ring, the circle, and what a screen reader hears. */
+    _paintPick(key) {
+      const row = this._rowEl(key);
+      if (!row) return;
+      const picked = this._selected.has(key);
+      row.classList.toggle("is-selected", picked);
+      const btn = row.querySelector(".bgbnotif-row__pick");
+      if (!btn) return;
+      btn.setAttribute("aria-checked", String(picked));
+      btn.setAttribute("aria-label",
+        `${picked ? "Deselect" : "Select"} ${btn.getAttribute("data-what") || ""}`.trim());
+      btn.innerHTML = this._pickIcon(picked);
+      this.refreshIcons(btn);
+    }
+
+    /** The action bar, raised, relabelled or dropped, in its own host. */
+    _paintBar() {
+      const host = document.getElementById(BAR_ID);
+      if (!host) return;
+      host.innerHTML = this._renderBar();
+      this.refreshIcons(host);
+    }
+
+    /** The Accept/Decline pair on one buddy row, in flight or back again. */
+    _paintAnswer(key) {
+      const row = this._rowEl(key);
+      const host = row && row.querySelector(".bgbnotif-row__actions");
+      const it = this._items.find((x) => x.entry_key === key);
+      if (!host || !it) return;
+      host.innerHTML = this._renderAnswer(it);
+      this.refreshIcons(host);
+    }
+
+    /**
+     * The disabled sweep an in-flight unlink puts over its own controls.
+     *
+     * Same reasoning as the tick: the rows do not change, so the list does not
+     * repaint — and this one runs immediately after a destructive confirm, where
+     * a full reload of the screen reads as the action having already happened.
+     */
+    _paintBusy() {
+      const host = this.container;
+      if (host) {
+        for (const btn of host.querySelectorAll(".bgbnotif-row__pick")) {
+          btn.disabled = this._busy;
+        }
+      }
+      this._paintBar();
+    }
+
     /** Plays, not rows: one ticked import is 214 plays and must say so. */
     _playCount() {
       const n = this._items
@@ -588,13 +686,16 @@
       if (this._busy) return;
       if (this._selected.has(key)) this._selected.delete(key);
       else this._selected.add(key);
-      this.render();
+      this._paintPick(key);
+      this._paintBar();
     }
 
     _clearSelection() {
       if (this._busy) return;
+      const was = Array.from(this._selected);
       this._selected.clear();
-      this.render();
+      for (const key of was) this._paintPick(key);
+      this._paintBar();
     }
 
     /**
@@ -613,11 +714,16 @@
     async _answer(key, edgeId, accept) {
       if (!edgeId || this._answering.has(edgeId)) return;
       this._answering.add(edgeId);
-      this.render();
+      // Only this row's two buttons become "Working…" — the list around it is
+      // unchanged, and a user answering three requests in a row should not
+      // watch the screen rebuild between each one.
+      this._paintAnswer(key);
+      let dropped = false;
       try {
         if (accept) await window.Buddy.accept(edgeId);
         else await window.Buddy.reject(edgeId);
         this._dropRow(key);
+        dropped = true;
         showToast(accept ? "You're buddies now" : "Request declined",
                   accept ? "success" : "info");
       } catch (e) {
@@ -628,11 +734,15 @@
         // STAYS: dropping it would hide a request the user still owes a reply
         // to, and would walk the Profile dot down for a change that never
         // landed.
-        if (e && (e.status === 409 || e.status === 404)) this._dropRow(key);
+        if (e && (e.status === 409 || e.status === 404)) { this._dropRow(key); dropped = true; }
         else showToast((e && e.message) || "Couldn't answer that request", "error");
       } finally {
         this._answering.delete(edgeId);
-        this.render();
+        // A dropped row is a structural change — the list is shorter and the
+        // rows below it moved — so that one repaints. A row that stayed only
+        // needs its two buttons back.
+        if (dropped) this.render();
+        else this._paintAnswer(key);
       }
     }
 
@@ -695,7 +805,7 @@
       if (!ok) return;
 
       this._busy = true;
-      this.render();
+      this._paintBusy();
 
       const sel = { playIds: [], groupIds: [], batchIds: [] };
       for (const it of entries) {
@@ -722,7 +832,9 @@
         });
       } finally {
         this._busy = false;
-        this.render();
+        // The success path already reloaded the list; the failure path left it
+        // exactly as it was, still ticked, and only needs its controls back.
+        this._paintBusy();
       }
     }
   }
