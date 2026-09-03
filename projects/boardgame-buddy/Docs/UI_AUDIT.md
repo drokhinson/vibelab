@@ -978,3 +978,49 @@ debt (`play-detail-popup`, `outbox-modal`, `add-game-modal`,
 `_escHandler` / singleton-by-id. This pass touched `outbox-modal.js`'s header
 comment only, which is not the "substantive touch" that rule says should
 trigger the extraction.
+
+---
+
+## Cleanup log — Pass 9 (the notifications screen loses its second destructive path), 2026-09-03
+
+The screen carried **two affordances for one destructive destination** — the
+anti-pattern §3b of `ui-object-design.md` names. A per-row ghost button unlinked
+you from a play on the spot, and a header Select/Cancel toggle revealed tick
+boxes for exactly the same action via a docked bar. Two doors, and the one a
+thumb finds first was the one-tap.
+
+**Removed:** `.bgbnotif-row__unlink` (the ghost button and its four states),
+`.bgbnotif-select` (the header toggle, ~15 lines), and
+`.bgbnotif-row__tick` plus its `.bgbnotif-list[role="group"]` companion — the
+reserved-width placeholder that only existed because ticks appeared and
+disappeared with a mode. In the view: `_toggleSelectMode()`, `_selectAll()`,
+`_unlinkOne()`, and the `_selectMode` field they hung off.
+
+**Replaced by one control.** Every play row wears an empty circle at all times;
+ticking any of them raises the bar. The bar is now two buttons — Clear selection
+and Remove me from N plays — and has no Select all: on a list whose only action
+is destructive, that button's entire job is to arm the worst version of it.
+
+**The close × went too.** `.spoke-head__close` is not rendered here any more.
+The bell in the global header is this screen's only opener, so it is also its
+closer (`init.js#toggleNotifications`), and the device back button already meant
+the same thing. Three controls for one exit is chrome the user has to learn
+instead of chrome that gets out of the way. `.spoke-head__close` itself stays —
+Settings and the other globally-reachable spokes still use it.
+
+**Family renamed:** `.linknotif-*` → `.bgbnotif-*`, 39 selectors, because the
+rows are no longer all link notifications — buddy requests and acceptances share
+the family now. Pass 8 above refers to `.linknotif-bar`; that is the same rule,
+under its current name, still riding the shared `.bgg-flow__nav, .imp-nav`
+docked-footer geometry.
+
+**Added, not removed, and worth naming here:** `check-circle` is vendored into
+`ui/icons.js` (Phosphor, like the rest of the set) rather than improvised from
+`check` inside a CSS circle, and `.bgbnotif-day` is the fourth consumer of the
+pinned-sub-header recipe (`top: calc(var(--bgb-header-height) +
+var(--bgb-spoke-head-height))`, z 15) that `#add-games-pinned` and
+`#collection-tree-controls-host` already share.
+
+**Not done:** the four bespoke modals `overlays.md` §7 names as consolidation
+debt are untouched again. This pass calls `PolaroidPopup.confirm()` and
+`PolaroidPopup.alert()`, which is use, not a substantive touch.
