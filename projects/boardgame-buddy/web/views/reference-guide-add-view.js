@@ -809,6 +809,10 @@ components above.
       const me = window.store && window.store.get("user");
       const isAuthed = !!me;
       const isOwner = !!(me && c.created_by && me.id === c.created_by);
+      // The backend's DELETE /chapters/{id} is creator-or-admin, so the button
+      // mirrors exactly that — an admin browsing the pool can clear a bad
+      // chapter without going through the reports queue.
+      const canDelete = isOwner || !!(me && me.is_admin);
       const dot = (this._expansionIds.length && c.source_color)
         ? `<span class="scroll-chapter__source-dot" style="--exp-color:${escapeAttr(c.source_color)}"
                  title="${escapeAttr(c.source_game_name || "")}"></span>`
@@ -851,6 +855,12 @@ components above.
                   <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit
                 </button>
               ` : ""}
+              ${canDelete ? `
+                <button class="btn btn-ghost btn-xs bgb-destructive-icon-btn"
+                        onclick="event.preventDefault();window.referenceGuideAddView._deleteFromPool('${c.id}')">
+                  <i data-icon="trash-2" class="w-3.5 h-3.5"></i> Delete
+                </button>
+              ` : ""}
               ${isAuthed && !isOwner ? `
                 <button class="btn btn-ghost btn-xs"
                         onclick="event.preventDefault();window.referenceGuideAddView._reportChapter('${c.id}')">
@@ -880,6 +890,39 @@ components above.
       this._externalEdit = false;
       this._centerTypeScrollOnNext = true;
       this.render();
+    }
+
+    // Permanent removal from the pool — not the same thing as the Add/Added
+    // toggle, which only touches the caller's own guide. Destructive confirm
+    // (.claude/rules/ui-object-design.md §3c) because it takes the chapter out
+    // of every user's guide, and the backend has no undo.
+    async _deleteFromPool(chapterId) {
+      const c = this._allPool.find((x) => x.id === chapterId);
+      if (!c) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Delete this chapter?",
+        body: `"${c.title}" is removed from the pool and from every guide that has it. This can't be undone.`,
+        confirmLabel: "Delete",
+        cancelLabel: "Keep it",
+        destructive: true,
+      });
+      if (!ok) return;
+      const targetGameId = c.source_game_id || c.game_id || this._gameId;
+      try {
+        await window.Chapter.delete(chapterId);
+        // Drop it locally rather than refetching the whole pool: the row is
+        // gone for certain, and a re-render is instant where a round-trip
+        // would blank the list behind a loader.
+        this._allPool = this._allPool.filter((x) => x.id !== chapterId);
+        window.Chapter.invalidateChaptersCache();
+        document.dispatchEvent(new CustomEvent("chapters-changed", {
+          detail: { gameId: targetGameId },
+        }));
+        showToast("Chapter deleted", "success");
+        this.render();
+      } catch (e) {
+        showToast(e.message || "Failed to delete chapter", "error");
+      }
     }
 
     _onSearchInput(v) {

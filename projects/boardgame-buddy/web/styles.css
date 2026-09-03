@@ -895,6 +895,25 @@ body {
   gap: 0.4rem;
   padding: 0 12px 10px;
 }
+
+/* Delete, in the pool row's action strip. Two panel-scoped rules paint every
+   control in the scroll with its parchment ink — `.scroll-panel .btn-ghost`
+   for the label, `.scroll-panel .scroll-chapter [data-icon-name]` for the
+   glyph — and both out-specify the bare .bgb-destructive-icon-btn pair, so the
+   destructive tint has to be restated at the panel's own weight.
+   Hard-coded rather than var(--rust) for the same reason the Added toggle's
+   green is: the scroll is parchment in BOTH themes, while --rust re-points to
+   a light terracotta drawn for an espresso ground. #8F3320 on the cream is
+   5.4:1, in line with the #2F6033 the toggle already uses. */
+.scroll-panel .scroll-chapter .btn-ghost.bgb-destructive-icon-btn { color: #8F3320; }
+.scroll-panel .scroll-chapter .bgb-destructive-icon-btn [data-icon-name],
+.scroll-panel .scroll-chapter .bgb-destructive-icon-btn i { color: #8F3320; }
+.scroll-panel .scroll-chapter .btn-ghost.bgb-destructive-icon-btn:hover {
+  background: rgba(143, 51, 32, 0.14);
+  color: #74280F;
+}
+.scroll-panel .scroll-chapter .bgb-destructive-icon-btn:hover [data-icon-name],
+.scroll-panel .scroll-chapter .bgb-destructive-icon-btn:hover i { color: #74280F; }
 .scroll-panel__empty {
   text-align: center;
   padding: 1rem 0.6rem;
