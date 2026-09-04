@@ -6,9 +6,10 @@
 // and hands the ticked set to GET /export, which answers with a zip of CSVs.
 //
 // The counts are the reason this is a sheet rather than a single Export
-// button. "Achievements" is an abstract noun; "Achievements · 0" is an answer,
-// and it saves somebody downloading an archive to find out there is nothing in
-// it. They are also why the sheet fetches before it can be committed — the
+// button. "Reference guides" is an abstract noun; "Reference guides · 0" is an
+// answer, and it saves somebody downloading an archive to find out there is
+// nothing in it. They are also why the sheet fetches before it can be
+// committed — the
 // panel opens immediately with a loading list, per the loading/empty/error
 // rule in .claude/rules/web-frontend.md.
 //
@@ -22,13 +23,9 @@
   // the neutral glyph rather than an empty box, which is the same rule
   // .claude/rules/web-frontend.md states for db-sourced icon names.
   const ICONS = {
-    profile: "user",
     collection: "library-big",
-    expansions: "puzzle",
     plays: "dices",
     plays_detail: "layers",
-    buddies: "users",
-    achievements: "trophy",
     guides: "book-open",
   };
   const FALLBACK_ICON = "table";
@@ -99,7 +96,7 @@
         this._error = null;
         // Everything you actually have, pre-ticked. The common case is "give
         // me all of it", and a sheet that opens with nothing selected makes
-        // that seven taps; an empty dataset stays unticked so the default
+        // that four taps; an empty dataset stays unticked so the default
         // never produces a file that is only a header row.
         this._picked = new Set(
           this._datasets.filter((d) => (d.row_count || 0) > 0).map((d) => d.id),

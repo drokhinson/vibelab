@@ -5146,6 +5146,15 @@ html.bgb-ptr-armed body {
    neighbour (.claude/rules/mobile-web.md §5). */
 .bgb-sheet__opt {
   display: flex; align-items: center; gap: 12px;
+  /* flex: none, as every other child of the panel and the list — .game-picker__row
+     carries it for this reason too. .bgb-sheet__list is a flex COLUMN, so an
+     overflowing list does not simply scroll: flexbox first distributes the
+     negative free space by shrinking whatever can shrink, and a row left at the
+     default flex-shrink: 1 is squashed down to its min-height. On single-line
+     rows that is invisible, because their content is shorter than the 56px
+     floor anyway. On the export sheet, where every row carries a wrapping
+     sentence, it clipped the third line off the taller blurbs. */
+  flex: none;
   width: 100%; min-height: 56px; padding: 0 10px;
   background: transparent; border: none; border-radius: 12px;
   font-size: 0.97rem; font-weight: 500; line-height: 1.2;
