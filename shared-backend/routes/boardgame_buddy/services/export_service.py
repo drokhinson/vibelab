@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 from supabase import Client
 
@@ -23,7 +23,7 @@ from ..constants import ExportDataset
 from ..models import ExportDatasetInfo
 from . import export_reads
 from .export_csv import CsvFile, build_zip
-from .export_plays import build_plays, count_plays
+from .export_plays import build_play_details, build_plays, count_plays
 
 
 def _count(sb: Client, table: str, column: str, value: str) -> int:
@@ -72,11 +72,18 @@ def _count_guides(sb: Client, user_id: str) -> int:
 
 @dataclass(frozen=True)
 class _Spec:
+    """One checkbox on the export sheet.
+
+    `build` takes the shared build context as its third argument. Most datasets
+    ignore it; the two play datasets read the same plays, seats and expansions
+    two different ways and use it to load them once (see export_plays._bundle).
+    """
+
     label: str
     blurb: str
     files: tuple[str, ...]
     count: Callable[[Client, str], int]
-    build: Callable[[Client, str], list[CsvFile]]
+    build: Callable[[Client, str, dict[str, Any]], list[CsvFile]]
 
 
 # Order is the order the sheet lists them and the order they are built, so the
@@ -107,11 +114,19 @@ SPECS: dict[ExportDataset, _Spec] = {
     ),
     ExportDataset.PLAYS: _Spec(
         label="Plays",
-        blurb="Plays you logged and plays you were seated in, with the full "
-              "roster, scores and any expansions used.",
-        files=("plays.csv", "play_players.csv", "play_expansions.csv"),
+        blurb="One row per play — date, game, and who scored what, as a single "
+              "readable line. Plays you logged and plays you were seated in.",
+        files=("plays.csv",),
         count=count_plays,
         build=build_plays,
+    ),
+    ExportDataset.PLAYS_DETAIL: _Spec(
+        label="Play details",
+        blurb="The same plays split out one row per player and per expansion "
+              "used, for pivoting. Joins back to plays.csv on play_id.",
+        files=("play_players.csv", "play_expansions.csv"),
+        count=count_plays,
+        build=build_play_details,
     ),
     ExportDataset.BUDDIES: _Spec(
         label="Buddies",
@@ -167,13 +182,29 @@ Notes
 -----
 * Every file is UTF-8 CSV with a byte-order mark, so a double-click opens it in
   Excel with accented game names intact. Fields are comma-separated and quoted
-  per RFC 4180; a value that itself contains a list (a play's roster, a game's
-  round scores) uses semicolons or JSON inside the one cell.
+  per RFC 4180.
 * plays.csv holds both the plays you logged and the plays somebody else logged
   you into — the same history the Plays screen shows. `logged_by_you` tells the
   two apart.
-* play_players.csv is one row per seat, joined back to plays.csv on `play_id`.
-  Scores and winners live there, not on the play.
+* plays.csv is one row per play, and three of its columns pack a list into a
+  single cell, separated by a vertical bar:
+
+      roster       Alice:84|Bob:71    a name, then ":" and the score
+      winners      Alice|Bob
+      expansions   Wingspan: Europe
+
+  A player with no score (a co-op, a plain win/lose game) appears as the bare
+  name. A person's name containing a bar or a colon has it replaced with a
+  space in `roster` and `winners`, so the pairs stay readable; `expansions`
+  keeps its colons, since half the catalog is named "<Base game>: <Something>"
+  and nothing there is a pair. That flattening is confined to these three
+  columns.
+* play_players.csv, if you exported it, is the lossless form of the same thing:
+  one row per seat, names verbatim, plus the per-round scores, joined back to
+  plays.csv on `play_id`. play_expansions.csv is one row per expansion used.
+  Both carry the play's date and game name so they read on their own.
+* A JSON value in a cell (a seat's round_scores) is JSON, not a bar-separated
+  list — it has structure a flat list cannot carry.
 * A handful of cells begin with a tab character. That is deliberate: a value
   starting with =, + or @ is treated as a formula by spreadsheet apps, and the
   tab makes them read it as the text it is.
@@ -226,9 +257,12 @@ def build_export(
     generated_at = datetime.now(timezone.utc)
     ordered = [d for d in SPECS if d in set(datasets)]
 
+    # One dict threaded through every builder, so datasets reading the same
+    # rows (Plays and Play details) load them once rather than once each.
+    ctx: dict[str, Any] = {}
     files: list[CsvFile] = []
     for dataset in ordered:
-        files.extend(SPECS[dataset].build(sb, user_id))
+        files.extend(SPECS[dataset].build(sb, user_id, ctx))
 
     readme = _readme(
         ordered, files,

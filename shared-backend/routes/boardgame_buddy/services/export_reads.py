@@ -106,7 +106,7 @@ def profile_names(sb: Client, user_ids: Iterable[str]) -> dict[str, dict[str, An
 
 # ── Profile ───────────────────────────────────────────────────────────────────
 
-def build_profile(sb: Client, user_id: str) -> list[CsvFile]:
+def build_profile(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile]:
     """The account row itself — one line, and deliberately not all of it.
 
     The BGG columns beside `bgg_username` on this table are an encrypted
@@ -146,7 +146,7 @@ _COLLECTION_SELECT = (
 )
 
 
-def build_collection(sb: Client, user_id: str) -> list[CsvFile]:
+def build_collection(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile]:
     """Every shelf row: owned, previously owned and wishlist in one file.
 
     Reads the denormalized `game_*` columns rather than joining the catalog —
@@ -182,7 +182,7 @@ def build_collection(sb: Client, user_id: str) -> list[CsvFile]:
 
 # ── Owned expansions ──────────────────────────────────────────────────────────
 
-def build_expansions(sb: Client, user_id: str) -> list[CsvFile]:
+def build_expansions(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile]:
     """Expansions the user owns, which live apart from the shelf by design."""
     rows = page_all(
         lambda: sb.table("boardgamebuddy_user_expansions")
@@ -206,7 +206,7 @@ def build_expansions(sb: Client, user_id: str) -> list[CsvFile]:
 
 # ── Buddies ───────────────────────────────────────────────────────────────────
 
-def build_buddies(sb: Client, user_id: str) -> list[CsvFile]:
+def build_buddies(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile]:
     """Two files, because the app has two unrelated kinds of "buddy".
 
     `buddies.csv` is the mutual graph — real accounts, with the request still
@@ -263,7 +263,7 @@ def build_buddies(sb: Client, user_id: str) -> list[CsvFile]:
 
 # ── Achievements ──────────────────────────────────────────────────────────────
 
-def build_achievements(sb: Client, user_id: str) -> list[CsvFile]:
+def build_achievements(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile]:
     """Unlocked badges, with the catalog text joined so the file reads alone.
 
     An export of `("century-club", "2026-02-11")` is a row nobody can use two
@@ -294,7 +294,7 @@ def build_achievements(sb: Client, user_id: str) -> list[CsvFile]:
 _CHAPTER_FIELDS = "title, chapter_type, content, created_by, created_at, updated_at, game_id"
 
 
-def build_guides(sb: Client, user_id: str) -> list[CsvFile]:
+def build_guides(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile]:
     """Rules chapters, as both halves of what "yours" means here.
 
     A chapter can be in your guide because you wrote it or because you took

@@ -26,6 +26,7 @@
     collection: "library-big",
     expansions: "puzzle",
     plays: "dices",
+    plays_detail: "layers",
     buddies: "users",
     achievements: "trophy",
     guides: "book-open",

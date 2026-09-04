@@ -409,6 +409,7 @@ class ExportDataset(StrEnum):
     COLLECTION = "collection"
     EXPANSIONS = "expansions"
     PLAYS = "plays"
+    PLAYS_DETAIL = "plays_detail"
     BUDDIES = "buddies"
     ACHIEVEMENTS = "achievements"
     GUIDES = "guides"

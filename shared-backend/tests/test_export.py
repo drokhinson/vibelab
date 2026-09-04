@@ -116,6 +116,18 @@ class _SB:
         return _Q(name, self.store)
 
 
+class _CountingSB(_SB):
+    """_SB that tallies how many queries each table saw, for the cache test."""
+
+    def __init__(self, store):
+        super().__init__(store)
+        self.reads = {}
+
+    def table(self, name):
+        self.reads[name] = self.reads.get(name, 0) + 1
+        return super().table(name)
+
+
 def _store(**overrides):
     """A small but complete account: two plays, one of them somebody else's."""
     store = {
@@ -243,26 +255,82 @@ def test_a_play_someone_else_logged_is_still_in_your_export():
     assert plays["p2"]["logged_by"] == "Them"
 
 
-def test_plays_are_newest_first_and_carry_a_readable_roster():
+def test_plays_are_newest_first_and_fold_the_roster_into_one_cell():
+    """plays.csv has to be readable on its own — one row per play, whatever the
+    player count, with the roster packed into a cell rather than into columns
+    that would grow at the next six-player game."""
     zf, _ = _export(_store(), [ExportDataset.PLAYS])
     plays = _rows(zf, "plays.csv")
     assert [p["played_at"] for p in plays] == ["2026-04-01", "2026-03-01"]
     p1 = next(p for p in plays if p["play_id"] == "p1")
     assert p1["player_count"] == "2"
     assert p1["winners"] == "Me"
-    assert set(p1["players"].split("; ")) == {"Me", "Ghost Pat"}
+    assert set(p1["roster"].split("|")) == {"Me:84", "Ghost Pat:71"}
+    # The expansions column has no name:value pairing, so a colon in a name is
+    # left alone — half the catalog is "<Base game>: <Something>".
+    assert p1["expansions"] == "Wingspan: Europe"
+
+
+def test_the_plays_summary_does_not_drag_the_detail_files_along():
+    """Two ticks, two answers. Somebody who wants a spreadsheet to read should
+    not have to take three files to get it."""
+    zf, _ = _export(_store(), [ExportDataset.PLAYS])
+    assert sorted(zf.namelist()) == ["README.txt", "plays.csv"]
+    zf, _ = _export(_store(), [ExportDataset.PLAYS_DETAIL])
+    # And the detail tick never re-emits plays.csv — one filename, one shape.
+    assert sorted(zf.namelist()) == [
+        "README.txt", "play_expansions.csv", "play_players.csv",
+    ]
+
+
+def test_a_seat_with_no_score_is_a_bare_name():
+    """`Alice:|Bob:` on a co-op is punctuation pretending to be data."""
+    store = _store()
+    for seat in store["boardgamebuddy_play_players"]:
+        seat["score"] = None
+    zf, _ = _export(store, [ExportDataset.PLAYS])
+    p1 = next(p for p in _rows(zf, "plays.csv") if p["play_id"] == "p1")
+    assert set(p1["roster"].split("|")) == {"Me", "Ghost Pat"}
+
+
+def test_a_name_carrying_a_delimiter_cannot_break_the_roster_cell():
+    """A display name is free text. The summary flattens both separators out of
+    it; play_players.csv is where the verbatim name lives."""
+    store = _store()
+    store["boardgamebuddy_play_players"][1]["player_display_name"] = "Pat|Ric:key"
+    zf, _ = _export(store, [ExportDataset.PLAYS, ExportDataset.PLAYS_DETAIL])
+    p1 = next(p for p in _rows(zf, "plays.csv") if p["play_id"] == "p1")
+    assert len(p1["roster"].split("|")) == 2
+    assert "Pat Ric key:71" in p1["roster"]
+    verbatim = [s["player_name"] for s in _rows(zf, "play_players.csv")]
+    assert "Pat|Ric:key" in verbatim
 
 
 def test_a_seat_uses_the_accounts_current_name_not_the_frozen_one():
     """player_display_name is a snapshot from when the seat was filled. A buddy
     who has since renamed must not export under a name nobody recognises."""
-    zf, _ = _export(_store(), [ExportDataset.PLAYS])
+    zf, _ = _export(_store(), [ExportDataset.PLAYS_DETAIL])
     seats = _rows(zf, "play_players.csv")
     mine = [s for s in seats if s["player_user_id"] == ME]
     assert {s["player_name"] for s in mine} == {"Me"}
     ghost = next(s for s in seats if not s["player_user_id"])
     assert ghost["player_name"] == "Ghost Pat"
     assert ghost["is_you"] == "false"
+
+
+def test_both_play_datasets_share_one_read_of_the_history():
+    """Ticking both is the sheet's default. Reading the whole history twice for
+    it is dozens of wasted round trips on a heavy account."""
+    store = _store()
+    sb = _CountingSB(store)
+    S.build_export(sb, ME, [ExportDataset.PLAYS, ExportDataset.PLAYS_DETAIL],
+                   display_name="Me", username="me")
+    both = sb.reads["boardgamebuddy_plays"]
+    S.build_export(_CountingSB(store), ME, [ExportDataset.PLAYS],
+                   display_name="Me", username="me")
+    solo = _CountingSB(store)
+    S.build_export(solo, ME, [ExportDataset.PLAYS], display_name="Me", username="me")
+    assert both == solo.reads["boardgamebuddy_plays"]
 
 
 def test_buddies_and_ghosts_stay_in_separate_files():
@@ -342,13 +410,14 @@ def test_paging_stops_on_a_short_page():
 
 # ── The manifest ─────────────────────────────────────────────────────────────
 
-# What the sheet's number counts, per dataset: TOP-LEVEL records, not every
-# row the tick writes. A play's seats are children of the play, so "Plays · 2"
-# has to mean two plays; buddies and ghost players are siblings, so
-# "Buddies · 2" means two people across the two files.
+# What the sheet's number counts, per dataset: the records a tick COVERS, not
+# every row it writes. Buddies and ghost players are siblings, so "Buddies · 2"
+# means two people across the two files — that is the default, summing the
+# dataset's own files. Play details is the one exception: its rows are seats
+# and expansions, and "1,847 seats" is not a quantity anybody has an intuition
+# for, so it reports the number of plays it details.
 _COUNTED_FILES = {
-    ExportDataset.PLAYS: ("plays.csv",),
-    ExportDataset.BUDDIES: ("buddies.csv", "ghost_players.csv"),
+    ExportDataset.PLAYS_DETAIL: ("plays.csv",),
 }
 
 
@@ -361,6 +430,11 @@ def test_the_manifest_counts_match_what_the_export_writes():
     for dataset, spec in S.SPECS.items():
         names = _COUNTED_FILES.get(dataset, spec.files)
         assert counts[dataset] == sum(len(_rows(zf, n)) for n in names), dataset
+
+
+def test_play_details_reports_the_plays_it_covers_not_its_row_count():
+    counts = {d.id: d.row_count for d in S.manifest(_SB(_store()), ME)}
+    assert counts[ExportDataset.PLAYS_DETAIL] == counts[ExportDataset.PLAYS]
 
 
 def test_the_manifest_offers_every_dataset_in_registry_order():
@@ -436,7 +510,8 @@ def test_the_manifest_route_answers_with_every_dataset(client):
 def test_the_export_route_returns_a_zip_the_browser_can_save(client):
     res = client.get(
         "/api/v1/boardgame_buddy/export",
-        params=[("dataset", "plays"), ("dataset", "buddies")],
+        params=[("dataset", "plays"), ("dataset", "plays_detail"),
+                ("dataset", "buddies")],
     )
     assert res.status_code == 200
     assert res.headers["content-type"] == "application/zip"
