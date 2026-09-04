@@ -13,6 +13,7 @@ from . import router
 from .constants import QR_TOKEN_TTL_SECONDS
 from .dependencies import CurrentUser, get_current_user
 from .models import (
+    BuddyAliasUpdate,
     BuddyEdgeResponse,
     BuddyQrAddRequest,
     BuddyQrAddResponse,
@@ -245,6 +246,27 @@ async def cancel_buddy_request(
     the recipient declines instead."""
     buddy_service.cancel_request(get_supabase(), user.user_id, request_id)
     return MessageResponse(message="Request cancelled")
+
+
+@router.post(
+    "/buddies/{edge_id}/alias",
+    response_model=BuddyEdgeResponse,
+    status_code=200,
+    summary="Set or clear a private alias for a buddy",
+)
+async def set_buddy_alias(
+    body: BuddyAliasUpdate,
+    edge_id: str = Path(..., description="Edge UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> BuddyEdgeResponse:
+    """Rename a buddy for your own eyes only. Null or blank clears the alias.
+
+    The alias is stored on the caller's side of the edge and is never returned
+    to the person it names — see boardgamebuddy_buddy_edges.alias_by_a/b.
+    """
+    return buddy_service.set_alias(
+        get_supabase(), user.user_id, edge_id, body.alias
+    )
 
 
 @router.delete(

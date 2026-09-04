@@ -366,6 +366,7 @@
      .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
+     .alias-sheet,
      .chapter-import-sheet,
      .bgg-import-sheet,
      .export-sheet,
@@ -413,6 +414,7 @@
      .shelf-picker-sheet,
      .buddy-qr-sheet,
      .ghost-claim-sheet,
+     .alias-sheet,
      .chapter-import-sheet,
      .bgg-import-sheet,
      .export-sheet,
@@ -5498,6 +5500,111 @@ html.bgb-ptr-armed body {
 .export-sheet__error { color: var(--rust); }
 .export-sheet__retry { display: block; margin: 0 auto; }
 
+/* ── Buddy alias sheet ────────────────────────────────────────────────────
+   One text field and two commits, over the shared .bgb-sheet__* chrome. It has
+   no __list, so nothing in the panel grows — the shared
+   `max-height: min(80%, 660px)` plus the .bgb-kb-open override is all the
+   geometry it needs, and with a keyboard up the panel is the only thing on
+   screen anyway.
+
+   Everything here paints from the surface family (--polaroid-*), not the ground
+   tokens: the sheet is body-level and is named in the re-point list above, so
+   these resolve to chrome in both themes (.claude/rules/theming.md §6). */
+.alias-sheet__panel { gap: 0; }
+.alias-sheet__field { flex: none; margin: 0.75rem 0 0.2rem; }
+.alias-sheet__input {
+  width: 100%;
+  min-height: 52px;
+  box-sizing: border-box;
+  background: var(--well);
+  border: 1px solid var(--polaroid-line);
+  border-radius: 12px;
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+}
+.alias-sheet__input::placeholder { color: var(--polaroid-muted); opacity: 0.8; }
+.alias-sheet__input:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+}
+.alias-sheet__hint {
+  margin: 0.5rem 0.15rem 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--polaroid-muted);
+}
+/* Below Save, above Cancel. Rust so "this removes something" reads at a glance
+   in both themes — but a plain text button, not a filled block: clearing a
+   private label you set yourself is reversible in one tap, so it must not
+   compete with Save for the eye. */
+.alias-sheet__remove {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  border: none;
+  background: transparent;
+  color: var(--rust);
+  font-family: var(--font-polaroid);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.alias-sheet__remove:active { transform: scale(0.99); }
+
+/* ── The alias pencil ─────────────────────────────────────────────────────
+   One control, three surfaces (the Buddies row, a Gather seat, a play-detail
+   player row), so it reads as the same affordance everywhere
+   (.claude/rules/ui-object-design.md §3b).
+
+   currentColor rather than a token: it lands on a spoke screen, on Gather's
+   paper scorepad and inside a popup, and inheriting the ink of whatever it
+   sits on is the only thing that reads on all three (.claude/rules/assets.md).
+   The visible glyph stays small; ::before carries the 44x44 hit area without
+   inflating it (.claude/rules/mobile-web.md §5). */
+.bgb-alias-btn {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: currentColor;
+  opacity: 0.55;
+  cursor: pointer;
+}
+.bgb-alias-btn::before { content: ""; position: absolute; inset: -8px; }
+.bgb-alias-btn:active { transform: scale(0.92); opacity: 1; }
+@media (hover: hover) {
+  .bgb-alias-btn:hover { opacity: 1; background: var(--accent-quiet); }
+}
+.bgb-alias-btn:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: -2px;
+  opacity: 1;
+}
+/* Clearance from the control that follows. The pencil's 44x44 hit area is
+   8px wider than the glyph on every side, so without this it reaches to within
+   ~2px of the neighbouring button's own box — under the 8px the tap-target rule
+   asks for between adjacent hit zones (.claude/rules/mobile-web.md §5). The two
+   rows that park another control beside it each buy that room back. */
+.buddies-row .bgb-alias-btn { margin-right: 8px; }
+.cascade-player__name-cell .bgb-alias-btn { margin-right: 10px; }
+
+/* The real name under an aliased buddy, so the row still answers "who actually
+   is this". Same muted ramp as .buddies-row__when, which it sits beside. */
+.buddies-row__aka {
+  font-size: 0.74rem;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Shelf of shame sheet ─────────────────────────────────────────────────
    The list behind the Stats spoke's Shelf of shame card. Multi-select in
    spirit — every row is an independent toggle that writes immediately, so
@@ -8023,6 +8130,16 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   gap: 8px;
 }
 .cascade-player--read .cascade-player__name { flex: 1; min-width: 0; }
+/* The name plus its alias pencil, in the row's single 1fr column — see the
+   comment in _renderPlayerRow for why they share one cell rather than taking
+   a column each. min-width:0 is what lets the name still ellipsise inside it. */
+.cascade-player__name-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.cascade-player__name-cell .cascade-player__name { min-width: 0; }
 .cascade-player__name {
   font-weight: 600;
   font-size: 13px;
@@ -11072,6 +11189,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .bgb-spoke-screen .buddies-row__avatar { background: var(--polaroid-line, #DAC9A4); color: var(--polaroid-ink); }
 .bgb-spoke-screen .buddies-row__name { color: var(--polaroid-ink, #1D1812); }
 .bgb-spoke-screen .buddies-row__when { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
+/* The "aka <real name>" line under an aliased buddy — same muted ramp as
+   __when beside it, and it needs naming here for the same reason __when does:
+   a bare opacity on the ground tokens washes out on the light card. */
+.bgb-spoke-screen .buddies-row__aka { color: var(--polaroid-muted, #8B7E68); opacity: 1; }
 .bgb-spoke-screen .buddies-section { border-top-color: var(--sheet-line); }
 .bgb-spoke-screen .buddies-section h3 { color: var(--accent-ink); }
 
@@ -12444,7 +12565,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .chapter-wiz__prompt,
 /* Every labelled field on a polaroid card — the avatar customizer's display
    name and the first-run BGG credentials — in one selector. */
-.polaroid-field__input {
+.polaroid-field__input,
+/* The buddy alias field. It is the entire content of its sheet, so a focus
+   zoom here would scale the one thing the user opened the sheet to type into. */
+.alias-sheet__input {
   font-size: 16px;
 }
 

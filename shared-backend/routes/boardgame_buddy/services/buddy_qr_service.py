@@ -148,7 +148,10 @@ def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResp
 
     existing = (
         sb.table("boardgamebuddy_buddy_edges")
-        .select("id, user_a, user_b, status, requested_by, created_at, accepted_at")
+        .select(
+            "id, user_a, user_b, status, requested_by, created_at, accepted_at, "
+            "alias_by_a, alias_by_b"
+        )
         .eq("user_a", user_a)
         .eq("user_b", user_b)
         .execute()
@@ -184,7 +187,10 @@ def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResp
         # added, and would leave a pending edge unpromoted.
         raced = (
             sb.table("boardgamebuddy_buddy_edges")
-            .select("id, user_a, user_b, status, requested_by, created_at, accepted_at")
+            .select(
+                "id, user_a, user_b, status, requested_by, created_at, accepted_at, "
+                "alias_by_a, alias_by_b"
+            )
             .eq("user_a", user_a)
             .eq("user_b", user_b)
             .execute()

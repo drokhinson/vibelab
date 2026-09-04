@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 010_notifications_perf.sql (bgb_notifications and
+-- Last updated: 012_buddy_aliases.sql (bgb_play_partners re-emitted so each
+--               `accounts` entry carries other_alias — the viewer's private
+--               nickname for that buddy, read off whichever side of the
+--               canonical edge the viewer sits on. Body otherwise unchanged).
+--               Before that: 010_notifications_perf.sql (bgb_notifications and
 --               bgb_notifications_unread are rewritten in place — same
 --               signatures, same output, both proved equivalent to their 009
 --               bodies; only how much of the account they read changes.
@@ -778,7 +782,16 @@
 --             "recent": [PlayedWithUser…] }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/047_play_partners_rpc.sql)
---   Last updated in: db/migrations/boardgamebuddy/061_play_partners_pending_request_id.sql
+--   Last updated in: db/migrations/boardgamebuddy/012_buddy_aliases.sql
+--               (`accounts` rows gained other_alias: the viewer's OWN private
+--                nickname for that buddy, projected off alias_by_a/alias_by_b
+--                by which side of the canonical edge the viewer is. Per-viewer
+--                by construction — the other party's call to this RPC gets
+--                their own column, never this one. Deliberately absent from
+--                `recent`: every accepted buddy is already in `accounts`, and
+--                the client dedupes accounts before recents, so a `recent` row
+--                that reaches the picker is by definition not a buddy.)
+--               Before that: db/migrations/boardgamebuddy/061_play_partners_pending_request_id.sql
 --               (`recent` rows gained pending_request_id — the pending edge's
 --                own id, so the Buddies screen's played-with row can cancel an
 --                outgoing request or accept an incoming one without a second

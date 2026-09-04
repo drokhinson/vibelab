@@ -969,6 +969,63 @@
       }
     }
 
+    /**
+     * Rename a seated buddy, from the roster, mid-session. This is where two
+     * long or similar names actually cost the host something — they are side by
+     * side and about to be scored — so the fix is offered here rather than only
+     * on the Buddies screen.
+     *
+     * The alias lives in the Buddy module's map, NOT in this._ps.players, which
+     * is why this needs no _phaseSeq guard and why the lobby poller cannot
+     * clobber it: the roster rows it overwrites carry real names either way,
+     * and every paint resolves the alias again.
+     * @param {string} edgeId
+     */
+    _openAlias(edgeId) {
+      const seat = (this._ps.players || []).find(
+        (p) => p.user_id && window.Buddy.edgeIdFor(p.user_id) === edgeId);
+      if (!seat) return;
+      window.BuddyAliasSheet.open({
+        edgeId,
+        displayName: seat.name,
+        alias: window.Buddy.aliasFor(seat.user_id),
+        returnFocus: document.activeElement,
+        onSave: (alias) => this._saveAlias(edgeId, seat.user_id, alias),
+      });
+    }
+
+    /**
+     * Write the alias, painting it first. Repaints the players list ALONE
+     * rather than the screen: the host may be part-way through typing an
+     * initials or team value, and a full render() would take the field out from
+     * under them for a change that touched neither.
+     * @param {string} edgeId
+     * @param {string} userId
+     * @param {string|null} alias
+     */
+    async _saveAlias(edgeId, userId, alias) {
+      const before = window.Buddy.aliasFor(userId);
+      const next = (alias || "").trim() || null;
+      if (before === next) return;
+      // Paint from the map optimistically, so the row renames in the same frame
+      // as the tap; setAlias() below writes the same value again on success.
+      window.Buddy.rememberAliases([
+        { other_user_id: userId, other_alias: next, id: edgeId },
+      ]);
+      this._refreshPlayersList();
+      try {
+        await window.Buddy.setAlias(edgeId, next);
+      } catch (e) {
+        window.Buddy.rememberAliases([
+          { other_user_id: userId, other_alias: before, id: edgeId },
+        ]);
+        this._refreshPlayersList();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't save that alias", "error");
+        }
+      }
+    }
+
     _refreshPlayersList() {
       const ul = this.container.querySelector(".cascade-players");
       if (!ul) return;
@@ -1472,11 +1529,21 @@
 
     _renderPlayerRow(p, i) {
       const isTeamGame = this._isTeamGame();
-      const initials = p.initials != null ? p.initials : computeInitials(p.name);
       const me = window.store.get("user");
+      // Seats render under the viewer's private alias when they set one. `p.name`
+      // stays the REAL name throughout — it is what _addPlayers seated and what
+      // the save writes to play_players.player_display_name, a row everyone at
+      // the table can read.
+      const shown = window.Buddy.nameFor(p.user_id, p.name);
+      // Initials follow the shown name for the same reason the badge does: an
+      // alias that renames the row but not its avatar reads as two people.
+      const initials = p.initials != null ? p.initials : computeInitials(shown);
+      // Only an accepted buddy has an edge to hold an alias, so a ghost seat or
+      // a played-with stranger gets no pencil rather than one that would 404.
+      const aliasEdgeId = window.Buddy.edgeIdFor(p.user_id);
       const badge = window.BgbBadge.render({
         avatar: p.avatar,
-        displayName: p.name,
+        displayName: shown,
         size: "sm",
         isGhost: !p.user_id,
         isMe: !!(me && p.user_id === me.id),
@@ -1484,15 +1551,30 @@
       return `
         <li class="cascade-player">
           <button class="cascade-player__grip" type="button" tabindex="-1"
-                  aria-label="Reorder ${escapeAttr(p.name)}"
+                  aria-label="Reorder ${escapeAttr(shown)}"
                   title="Hold and drag to reorder">
             <i data-icon="grip-vertical" class="w-4 h-4"></i>
           </button>
           ${badge}
-          <span class="cascade-player__name">${escapeHtml(p.name)}</span>
+          <!-- Name and pencil share ONE grid cell. .cascade-player is a grid
+               with a fixed column template (and a second one for team mode), so
+               a sixth child would land in the initials column and shift every
+               control right — and the pencil is conditional, so the two row
+               shapes would disagree about which column held what. -->
+          <span class="cascade-player__name-cell">
+            <span class="cascade-player__name">${escapeHtml(shown)}</span>
+            ${aliasEdgeId ? `
+              <button class="bgb-alias-btn" type="button"
+                      aria-label="${escapeAttr("Rename " + p.name + " for yourself")}"
+                      title="Rename just for you"
+                      onclick="window.playFlowView._openAlias('${aliasEdgeId}')">
+                <i data-icon="pencil" class="w-3.5 h-3.5"></i>
+              </button>
+            ` : ""}
+          </span>
           <input class="cascade-player__init" type="text" maxlength="3"
                  aria-label="Initials"
-                 placeholder="${escapeAttr(computeInitials(p.name))}"
+                 placeholder="${escapeAttr(computeInitials(shown))}"
                  value="${escapeAttr(initials)}"
                  oninput="window.playFlowView._setInitials(${i}, this.value)" />
           ${isTeamGame ? `
@@ -2935,17 +3017,27 @@
     // the play importer's picker show nothing but ghosts.
     _buddyCandidates() {
       const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
+      // Accounts are deduped BY USER ID, not by name. Two buddies really can
+      // share a display name — that is precisely the case private aliases exist
+      // for — and a name-keyed Set silently dropped the second of them, so the
+      // picker could not offer the person the alias was set to distinguish.
+      const seenIds = new Set();
       const seen = new Set();
       const out = [];
       for (const b of (this._buddies || [])) {
         const name = b.other_display_name || "";
-        const key = name.toLowerCase();
-        if (!name || already.has(key) || seen.has(key)) continue;
-        seen.add(key);
+        const userId = b.other_user_id;
+        if (!name || !userId || seenIds.has(userId)) continue;
+        // A seated player still suppresses their own row, and that test stays
+        // name-based because a seat may be a ghost with no id to match on.
+        if (already.has(name.toLowerCase())) continue;
+        seenIds.add(userId);
+        seen.add(name.toLowerCase());
         out.push({
           source: "account",
-          user_id: b.other_user_id,
+          user_id: userId,
           name,
+          alias: window.Buddy.aliasFor(userId),
           username: b.other_username || null,
           avatar: b.other_avatar || null,
         });

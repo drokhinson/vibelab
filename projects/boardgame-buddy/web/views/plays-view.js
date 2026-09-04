@@ -309,7 +309,11 @@
     _renderRow(p) {
       const me = window.store.get("user");
       const winners = (p.players || []).filter((pl) => pl.is_winner);
-      const winnerLabel = winners.map((w) => escapeHtml(w.name)).join(", ");
+      // Aliased for display only. The youWon test below stays on the raw
+      // identity (user_id, or the viewer's own display name) — an alias is a
+      // label the viewer chose, never a thing to match identity on.
+      const winnerLabel = winners
+        .map((w) => escapeHtml(window.Buddy.nameFor(w.user_id, w.name))).join(", ");
       const playerCount = (p.players || []).length;
       // Shared mode counts too: every row there is a play you sat in, so your
       // own result is news. On someone else's unfiltered log it is not.

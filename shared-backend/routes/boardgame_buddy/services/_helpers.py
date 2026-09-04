@@ -135,12 +135,21 @@ def edge_response(
     """
     other_id = edge["user_b"] if edge["user_a"] == viewer_id else edge["user_a"]
     other = profiles.get(other_id) or {}
+    # The private alias comes off the viewer's OWN side of the canonical row.
+    # Reading the other column here would hand each party the nickname the other
+    # one gave them, which is the single thing this feature must never do.
+    # `.get` rather than `[...]`: a caller that selects a narrower column list
+    # legitimately does not ask for these, and None is the right answer there.
+    alias = (
+        edge.get("alias_by_a") if edge["user_a"] == viewer_id else edge.get("alias_by_b")
+    )
     return BuddyEdgeResponse(
         id=edge["id"],
         other_user_id=other_id,
         other_display_name=other.get("display_name") or "Unknown",
         other_username=other.get("username"),
         other_avatar=other.get("avatar"),
+        other_alias=alias or None,
         accepted_at=edge.get("accepted_at"),
         created_at=edge["created_at"],
     )

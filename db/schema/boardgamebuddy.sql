@@ -297,9 +297,11 @@ GRANT SELECT ON public.boardgamebuddy_buddies TO boardgamebuddy_role;
 
 
 -- ── Buddy edges ───────────────────────────────────────────────────────────────
--- Directed rows; a mutual friendship is two of them. status carries the
--- request lifecycle, and a request you have merely SENT already counts as a
--- first-hop link for the suggestion RPCs (archive/072).
+-- ONE canonical row per pair, not two: bgb_buddy_edges_canonical below forces
+-- user_a < user_b, so the row itself is undirected and every read decides which
+-- side the viewer is on. status carries the request lifecycle, and a request you
+-- have merely SENT already counts as a first-hop link for the suggestion RPCs
+-- (archive/072).
 --
 -- This table is also a NOTIFICATION SOURCE (migration 009): created_at dates an
 -- incoming request on the bell and accepted_at dates an acceptance, both read
@@ -319,6 +321,12 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_edges (
   -- answer names the wrong person on that path. Added by migration 009; NULL on
   -- rows accepted before it, which simply produce no notification.
   accepted_by UUID,
+  -- Private per-viewer nicknames (migration 012). TWO columns because the row
+  -- is canonical: "the alias I set" is a property of which SIDE of the pair you
+  -- are on, not of the row. alias_by_a is what user_a calls user_b and is never
+  -- returned to user_b; alias_by_b is the mirror. NULL = none.
+  alias_by_a TEXT,
+  alias_by_b TEXT,
   CONSTRAINT boardgamebuddy_buddy_edges_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_buddy_edges_accepted_by_fkey FOREIGN KEY (accepted_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_buddy_edges_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,

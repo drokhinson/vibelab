@@ -14,6 +14,7 @@ from pydantic import (
 
 from .constants import (
     IMPORT_CHUNK_MAX,
+    MAX_BUDDY_ALIAS_CHARS,
     MAX_IMPORT_CHARS,
     MAX_IMPORT_HINT_CHARS,
     MAX_IMPORT_IMAGES,
@@ -895,8 +896,24 @@ class BuddyEdgeResponse(BaseModel):
     other_display_name: str
     other_username: Optional[str] = None
     other_avatar: Optional[Avatar] = None
+    # The CURRENT USER's private nickname for this buddy, or None. Never
+    # populated for the other party: it is read off whichever of
+    # boardgamebuddy_buddy_edges.alias_by_a / alias_by_b belongs to the viewer,
+    # so each side of an edge sees only the alias it set itself.
+    other_alias: Optional[str] = None
     accepted_at: Optional[datetime] = None
     created_at: datetime
+
+
+class BuddyAliasUpdate(BaseModel):
+    """Set or clear the viewer's private alias for one buddy.
+
+    None and a whitespace-only string both mean CLEAR — the client's "Remove
+    alias" button and an emptied text field are the same act, and making the
+    caller distinguish them would be a second way to say one thing.
+    """
+
+    alias: Optional[str] = Field(None, max_length=MAX_BUDDY_ALIAS_CHARS)
 
 
 class BuddyRequestResponse(BaseModel):

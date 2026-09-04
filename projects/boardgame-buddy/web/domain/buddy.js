@@ -14,6 +14,28 @@
   // The one-shot first-run suggestion prefetch — see prefetchOnboarding below.
   let _onboardingPrefetch = null;
 
+  // Private aliases this SESSION has set, userId → alias|null. Written
+  // synchronously by setAlias() before the refetch it triggers has landed, and
+  // it deliberately outlives invalidate(): allBuddies() is SWR'd 24h/7d, so
+  // between "the user renamed Dave" and "a fresh bundle arrives" there is a
+  // window where the cache still says the old thing — and on a flaky
+  // connection that window is the whole session. A map of what we ourselves
+  // just wrote is the only thing that closes it.
+  //
+  // Not a store slot: nothing subscribes to it, every consumer reads it inside
+  // its own render pass, and a slot would be a second thing to keep in step
+  // with the cache.
+  /** @type {Map<string, string|null>} */
+  const _aliasEdits = new Map();
+
+  // userId → edge id, for the surfaces that hold a user id and nothing else.
+  // Seeded from the same payloads as the aliases; its ABSENCE is the test for
+  // "this person can't be aliased" (a ghost seat, or an account the viewer
+  // isn't buddies with), which is what keeps the pencil off rows whose save
+  // would 404.
+  /** @type {Map<string, string>} */
+  const _edgeIds = new Map();
+
   class Buddy {
     constructor(raw) { Object.assign(this, raw || {}); }
 
@@ -118,13 +140,128 @@
       });
     }
 
+    // ── Private aliases ─────────────────────────────────────────────────────
+    // A private alias is a name the VIEWER gave one of their buddies, stored on
+    // their own side of the buddy edge and never shown to the person it names.
+    //
+    // It rides the payload on the two calls that already join the edge
+    // (/buddies and /play-partners → accounts[]); everywhere else it is applied
+    // at render time through nameFor() below. That split is deliberate: the
+    // plays and feed RPCs are keyed by the person whose log is being read, not
+    // by the viewer, so an alias joined server-side there would be the wrong
+    // person's — and baking a private string into shared, localStorage-backed
+    // cache entries gives it an invalidation story nobody is maintaining.
+
+    /**
+     * Fold the aliases (and edge ids) off a /buddies or /play-partners payload
+     * into the session maps. Any surface that fetches edges directly calls
+     * this, so a screen that never touched the partner bundle still renders
+     * aliases.
+     * @param {any[]} edges Buddy edge rows (other_user_id / other_alias / id).
+     */
+    static rememberAliases(edges) {
+      for (const e of (edges || [])) {
+        if (!e || !e.other_user_id) continue;
+        _aliasEdits.set(e.other_user_id, e.other_alias || null);
+        if (e.id) _edgeIds.set(e.other_user_id, e.id);
+      }
+    }
+
+    /**
+     * The viewer's private alias for one user, or null. The ONE reader of the
+     * alias sources — no view builds its own map.
+     *
+     * Session edits win over the cached bundle, which is read through peek()
+     * so it serves out to staleTtl like every other "paint from what bootstrap
+     * warmed" read in the views.
+     * @param {string|null|undefined} userId
+     * @returns {string|null}
+     */
+    static aliasFor(userId) {
+      if (!userId) return null;
+      if (_aliasEdits.has(userId)) return _aliasEdits.get(userId) || null;
+      const hit = Buddy._accountFor(userId);
+      return (hit && hit.other_alias) || null;
+    }
+
+    /**
+     * The buddy edge id for a user, or null when they are not an accepted
+     * buddy. Callers use the null to decide whether to offer the alias control
+     * at all — a ghost player and a played-with stranger both land here.
+     * @param {string|null|undefined} userId
+     * @returns {string|null}
+     */
+    static edgeIdFor(userId) {
+      if (!userId) return null;
+      if (_edgeIds.has(userId)) return _edgeIds.get(userId) || null;
+      const hit = Buddy._accountFor(userId);
+      return (hit && hit.id) || null;
+    }
+
+    /**
+     * What a person should READ AS wherever one name is shown: the alias when
+     * there is one, otherwise whatever the payload called them. Every surface
+     * outside the Buddies list goes through this and nothing else, so "where
+     * can an alias appear" has exactly one answer.
+     *
+     * A null userId returns realName verbatim — a ghost has no account to
+     * alias. It never returns the alias in place of a name that will be
+     * WRITTEN: see the player picker and the play-detail popup, both of which
+     * keep the real name as the value and use this only to paint.
+     * @param {string|null|undefined} userId
+     * @param {string|null|undefined} realName
+     * @returns {string}
+     */
+    static nameFor(userId, realName) {
+      return Buddy.aliasFor(userId) || realName || "";
+    }
+
+    /** The cached partner bundle's account row for a user, or null. */
+    static _accountFor(userId) {
+      const bundle = window.bgbCache && window.bgbCache.peek(CACHE_NS, ALL_KEY);
+      return ((bundle && bundle.accounts) || [])
+        .find((b) => b && b.other_user_id === userId) || null;
+    }
+
+    /**
+     * Set or clear the alias, then make the answer true everywhere at once: the
+     * session map first (synchronous, so the very next paint is right) and the
+     * SWR bundle dropped second, so the next allBuddies() refetches instead of
+     * serving a still-fresh copy that names them the old way.
+     * @param {string} edgeId
+     * @param {string|null} alias Blank or null clears it.
+     * @returns {Promise<any>} the updated buddy edge
+     */
+    static async setAlias(edgeId, alias) {
+      const edge = await window.api.post(`/buddies/${edgeId}/alias`, {
+        alias: (alias || "").trim() || null,
+      });
+      if (edge && edge.other_user_id) {
+        _aliasEdits.set(edge.other_user_id, edge.other_alias || null);
+        _edgeIds.set(edge.other_user_id, edge.id || edgeId);
+      }
+      Buddy.invalidate();
+      return edge;
+    }
+
+    /**
+     * Drop every remembered alias. Called on sign-out: the maps are keyed by
+     * user id, so without this the next account to sign in on this device would
+     * paint the previous one's private names over their own buddies.
+     */
+    static forgetAliases() {
+      _aliasEdits.clear();
+      _edgeIds.clear();
+    }
+
     // Combined preload for the gather-player picker. Accounts (accepted buddy
     // edges), ghosts (free-text players the user has logged before), and
     // recent played-with (real accounts ordered by shared-play count) in one
     // call — GET /play-partners is a single bgb_play_partners RPC. This used
     // to be three parallel requests, each paying its own auth lookup and its
-    // own query fan-out. SWR-cached: 5min fresh, 30min stale, so the picker
-    // dropdown opens with zero round-trips after the first hit.
+    // own query fan-out. SWR-cached at FRESH_TTL_MS / STALE_TTL_MS above
+    // (24h / 7d), so the picker dropdown opens with zero round-trips after the
+    // first hit.
     static allBuddies() {
       return window.bgbCache.swr(
         CACHE_NS,
@@ -136,8 +273,12 @@
           } catch (_) {
             data = null;
           }
+          const accounts = (data && data.accounts) || [];
+          // Seed the alias / edge-id maps off the same payload the picker
+          // paints from, so every surface agrees without a second request.
+          Buddy.rememberAliases(accounts);
           return {
-            accounts: (data && data.accounts) || [],
+            accounts,
             ghosts: (data && data.ghosts) || [],
             recent: (data && data.recent) || [],
           };
@@ -165,7 +306,8 @@
      *
      * @param {{accounts?: any[], ghosts?: any[], recent?: any[]}|null} partners
      * @returns {Array<{source: "account"|"ghost", user_id: string|null,
-     *   name: string, username: string|null, avatar: any, plays?: number}>}
+     *   name: string, alias?: string|null, username: string|null, avatar: any,
+     *   plays?: number}>}
      */
     static toPlayerCandidates(partners) {
       const p = partners || {};
@@ -190,7 +332,14 @@
         out.push({
           source: "account",
           user_id: userId,
+          // `name` is the REAL display name, always. It is what the picker
+          // hands back and what play_players.player_display_name ends up
+          // storing (play-flow-view#_addPlayers → play_routes), a row every
+          // participant can read — a private alias must never land there.
+          // `alias` is the render-time overlay; the picker paints it and
+          // searches both.
           name,
+          alias: Buddy.aliasFor(userId),
           username: b.other_username || b.username || null,
           avatar: b.other_avatar || b.avatar || null,
           plays: together[userId] || 0,
@@ -209,6 +358,11 @@
           source: "account",
           user_id: r.user_id,
           name: r.display_name,
+          // A `recent` row that survives the dedupe above is by definition NOT
+          // a buddy (every accepted edge is in `accounts`), so there is no edge
+          // to hold an alias — but ask anyway rather than hard-coding null, so
+          // this stays right if the dedupe order ever changes.
+          alias: Buddy.aliasFor(r.user_id),
           username: r.username || null,
           avatar: r.avatar || null,
           plays: r.play_count || 0,

@@ -357,13 +357,31 @@
                   plays ? `${plays} ${plays === 1 ? "play" : "plays"} together` : null,
                   b.accepted_at ? "buddies since " + formatDate(b.accepted_at) : null,
                 ].filter(Boolean).join(" · ");
+                // An alias is the NAME here, not a decoration on it — that is
+                // the whole point of setting one. The real name drops to its
+                // own muted line so the row still answers "who actually is
+                // this", which is what the @username does on every other
+                // surface.
+                const alias = b.other_alias || null;
+                const shown = alias || b.other_display_name;
+                const aka = [
+                  b.other_username ? "@" + b.other_username : null,
+                  alias ? "aka " + b.other_display_name : null,
+                ].filter(Boolean).join(" · ");
                 return `
                 <li class="buddies-row" onclick="window.router.go('profile-other',{userId:'${b.other_user_id}'})">
-                  ${window.BgbBadge.render({ avatar: b.other_avatar, displayName: b.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
+                  ${window.BgbBadge.render({ avatar: b.other_avatar, displayName: shown, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
-                    <div class="buddies-row__name">${escapeHtml(b.other_display_name)}</div>
+                    <div class="buddies-row__name">${escapeHtml(shown)}</div>
+                    ${aka ? `<div class="buddies-row__aka">${escapeHtml(aka)}</div>` : ""}
                     <div class="buddies-row__when">${sub}</div>
                   </div>
+                  <button class="bgb-alias-btn"
+                          aria-label="${escapeAttr((alias ? "Change" : "Set") + " a private alias for " + b.other_display_name)}"
+                          title="${alias ? "Change alias" : "Set a private alias"}"
+                          onclick="event.stopPropagation();window.buddiesView._openAlias('${b.id}')">
+                    <i data-icon="pencil" class="w-3.5 h-3.5"></i>
+                  </button>
                   <button class="btn btn-ghost btn-xs bgb-destructive-icon-btn"
                           aria-label="Remove buddy"
                           title="Remove buddy"
@@ -900,10 +918,15 @@
       return this._cancel(requestId);
     }
 
+    // Sorted by what the row READS AS — an alias is the main name on it, so
+    // ordering by the real display name would file "Tuesday Dave" under D and
+    // leave the list looking unsorted to the only person who can see it. Same
+    // key the server sorts by (buddy_service.list_accepted_buddies), so a
+    // locally-renamed row and a freshly-loaded one land in the same place.
     _sortBuddies(list) {
       return list.slice().sort((a, b) =>
-        (a.other_display_name || "").toLowerCase()
-          .localeCompare((b.other_display_name || "").toLowerCase()));
+        (a.other_alias || a.other_display_name || "").toLowerCase()
+          .localeCompare((b.other_alias || b.other_display_name || "").toLowerCase()));
     }
 
     async _request(userId) {
@@ -1424,6 +1447,64 @@
         this._busy.delete(key);
       }
       window.Buddy.invalidate();
+    }
+
+    // ── Private aliases ─────────────────────────────────────────────────────
+
+    /**
+     * Open the rename sheet for one buddy edge. The row is the source of truth
+     * for the current alias, so a sheet opened twice in a row can't show a
+     * stale value after the first save.
+     * @param {string} edgeId
+     */
+    _openAlias(edgeId) {
+      const b = this._buddies.find((x) => x.id === edgeId);
+      if (!b) return;
+      window.BuddyAliasSheet.open({
+        edgeId,
+        displayName: b.other_display_name,
+        alias: b.other_alias || null,
+        returnFocus: document.activeElement,
+        onSave: (alias) => this._saveAlias(edgeId, alias),
+      });
+    }
+
+    /**
+     * Write the alias, painting it first. Same shape as _unfriend above:
+     * optimistic, sequence-bumped, and rolled back onto the row it came from.
+     * @param {string} edgeId
+     * @param {string|null} alias
+     */
+    async _saveAlias(edgeId, alias) {
+      const key = "alias:" + edgeId;
+      if (this._busy.has(key)) return;
+      const at = this._buddies.findIndex((b) => b.id === edgeId);
+      if (at < 0) return;
+      const before = this._buddies[at].other_alias || null;
+      const next = (alias || "").trim() || null;
+      if (before === next) return;
+
+      this._busy.add(key);
+      this._mutationSeq++;
+      this._buddies[at].other_alias = next;
+      // Re-sort by what the rows now READ AS, matching the server's own order
+      // (buddy_service.list_accepted_buddies) — otherwise the renamed row sits
+      // under its old letter until the next load and looks like a bug.
+      this._buddies = this._sortBuddies(this._buddies);
+      this.render();
+      try {
+        await window.Buddy.setAlias(edgeId, next);
+      } catch (e) {
+        const back = this._buddies.findIndex((b) => b.id === edgeId);
+        if (back >= 0) this._buddies[back].other_alias = before;
+        this._buddies = this._sortBuddies(this._buddies);
+        this.render();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't save that alias", "error");
+        }
+      } finally {
+        this._busy.delete(key);
+      }
     }
 
     // ── Ghost → account linking ─────────────────────────────────────────────
