@@ -2354,8 +2354,20 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* ── Toast positioning ───────────────────────────────────────────────────────── */
+/* Above the overlay family, not level with it. .polaroid-popup__backdrop — every
+   sheet, modal and popup in the app — is also z-index: 100, and a tie is settled
+   by DOM order: overlays are appended to <body> at open time and #toast is
+   markup in index.html, so the overlay always won. The toast then painted BEHIND
+   a backdrop that blurs what is behind it, which is where the export sheet's
+   "couldn't build your export" went — legible only as a smudge, on the one
+   surface whose errors the user most needs to read.
+
+   120 rather than 101 to sit above .bgb-import-toasts (111), the other surface
+   that has to clear overlays. A toast is the app's last word on what just
+   happened and outranks anything it is reporting on; nothing above it but the
+   drag clone (1000), which only exists mid-gesture. */
 .toast {
-  z-index: 100;
+  z-index: 120;
   max-width: calc(100vw - 1rem);
   white-space: normal;
 }
@@ -5530,6 +5542,50 @@ html.bgb-ptr-armed body {
 /* Disabled while the archive is building — ticking mid-build would show a set
    the request in flight does not have. */
 .export-sheet__row:disabled { opacity: 0.5; cursor: default; }
+/* ── Select all / Clear all ───────────────────────────────────────────────
+   One tap for the whole list, on its own line above it and trailing-aligned so
+   it reads as acting ON the list rather than as another row IN it — it is not
+   a .bgb-sheet__opt and must not look like one, or it becomes a fifth thing to
+   export.
+
+   flex: none for the reason the rows carry it (see .bgb-sheet__opt): this bar
+   is a child of the panel's flex column, and a shrinkable one gets squeezed
+   before the list scrolls. */
+.export-sheet__bar {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  min-height: 36px;
+  margin: 0 2px 2px;
+}
+.export-sheet__bar:empty { display: none; }
+.export-sheet__all {
+  display: inline-flex; align-items: center; gap: 6px;
+  /* 36px visible, 44px of hit area via the inset below — the trailing edge is
+     a thumb-awkward corner already (.claude/rules/mobile-web.md §5). */
+  position: relative;
+  min-height: 36px; padding: 0 10px;
+  background: transparent; border: none; border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem; font-weight: 700; letter-spacing: 0.01em;
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+.export-sheet__all::before { content: ""; position: absolute; inset: -4px -2px; }
+.export-sheet__all > i,
+.export-sheet__all > svg { flex: 0 0 auto; }
+.export-sheet__all:hover { background: var(--polaroid-bg-soft); }
+.export-sheet__all:active { background: var(--polaroid-line); }
+.export-sheet__all:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: -2px;
+}
+/* Nothing to select (every dataset empty), or a build in flight. */
+.export-sheet__all:disabled {
+  color: var(--polaroid-muted);
+  opacity: 0.5;
+  cursor: default;
+}
 .export-sheet__error { color: var(--rust); }
 .export-sheet__retry { display: block; margin: 0 auto; }
 
@@ -12027,7 +12083,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    .chapter-add__fab, and pinned to the app's 480px
    column the way .btm-nav is so it never spans a desktop viewport. Warm
    polaroid surface so it reads as part of the app, not browser chrome.
-   z-index 35: above content, below .bgb-nav (40), toasts (45) and modals (90+).
+   z-index 35: above content, below .bgb-nav (40), modals (90-100) and toasts (120).
    ───────────────────────────────────────────────────────────────────────────── */
 .bgb-install {
   position: fixed;

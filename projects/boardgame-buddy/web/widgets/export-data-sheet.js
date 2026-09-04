@@ -32,6 +32,7 @@
 
   const LIST_ID = "bgb-export-list";
   const FOOT_ID = "bgb-export-foot";
+  const ALL_ID = "bgb-export-all";
 
   class ExportDataSheet {
     constructor() {
@@ -108,6 +109,7 @@
       }
       this._loading = false;
       this._repaintList();
+      this._repaintToggleAll();
       this._repaintFoot();
     }
 
@@ -121,6 +123,7 @@
           <p class="bgb-sheet__sub">
             Tick what to include. You'll get a .zip with one CSV per thing.
           </p>
+          <div class="export-sheet__bar" id="${ALL_ID}">${this._renderToggleAll()}</div>
           <div class="bgb-sheet__list" role="group" aria-label="What to export"
                id="${LIST_ID}">${this._renderList()}</div>
           <div class="bgb-sheet__foot" id="${FOOT_ID}">${this._renderFoot()}</div>
@@ -143,6 +146,41 @@
       const rows = this._datasets || [];
       if (!rows.length) return `<p class="bgb-sheet__empty">Nothing to export yet.</p>`;
       return rows.map((d) => this._renderRow(d)).join("");
+    }
+
+    /**
+     * What "all" means here: every dataset that actually holds something.
+     *
+     * An empty dataset stays out of it for the same reason the pre-tick skips
+     * one — ticking it adds a CSV that is a header row and nothing else, which
+     * is not what anybody means by "give me everything". On an account where
+     * every dataset is empty this is empty too, and the control renders
+     * disabled rather than offering a no-op.
+     *
+     * @returns {Array<string>}
+     */
+    _selectable() {
+      return (this._datasets || [])
+        .filter((d) => (d.row_count || 0) > 0)
+        .map((d) => d.id);
+    }
+
+    /** True once every dataset worth ticking is ticked. */
+    _allPicked() {
+      const all = this._selectable();
+      return all.length > 0 && all.every((id) => this._picked.has(id));
+    }
+
+    _renderToggleAll() {
+      if (this._loading || this._error || !this._datasets) return "";
+      const all = this._selectable();
+      const on = this._allPicked();
+      return `
+        <button class="export-sheet__all" type="button" data-export-action="all"
+                ${!all.length || this._busy ? "disabled" : ""}>
+          <i data-icon="${on ? "x" : "check"}" class="w-4 h-4"></i>
+          ${on ? "Clear all" : "Select all"}
+        </button>`;
     }
 
     _renderRow(d) {
@@ -207,6 +245,20 @@
       }
     }
 
+    /**
+     * The toggle-all control only. Its own host for the same reason the confirm
+     * button has one: its label flips on every tick, and repainting the list to
+     * say so would scroll it out from under the thumb.
+     */
+    _repaintToggleAll() {
+      const root = this._sheet.el;
+      if (!root) return;
+      const host = root.querySelector(`#${ALL_ID}`);
+      if (!host) return;
+      host.innerHTML = this._renderToggleAll();
+      window.BgbIcons.render(/** @type {HTMLElement} */ (host));
+    }
+
     /** The confirm button only — its count must not repaint the list. */
     _repaintFoot() {
       const root = this._sheet.el;
@@ -225,7 +277,13 @@
       if (action) {
         const kind = action.getAttribute("data-export-action");
         if (kind === "go") this._export();
-        if (kind === "retry") { this._loading = true; this._repaintList(); this._load(); }
+        if (kind === "all") this._toggleAll();
+        if (kind === "retry") {
+          this._loading = true;
+          this._repaintList();
+          this._repaintToggleAll();
+          this._load();
+        }
         return;
       }
       const row = e.target.closest("[data-export-pick]");
@@ -236,6 +294,25 @@
       // The row and the count, not the list: patching in place keeps focus on
       // the row that was just ticked, which a full list repaint would drop.
       row.setAttribute("aria-checked", this._picked.has(id) ? "true" : "false");
+      this._repaintFoot();
+      // Ticking the last unticked row makes this "Clear all", and unticking any
+      // row makes it "Select all" again.
+      this._repaintToggleAll();
+    }
+
+    /**
+     * All or nothing, from one tap.
+     *
+     * Clearing empties the whole set rather than only the selectable part, so
+     * "Clear all" leaves nothing ticked whatever the sheet arrived holding.
+     */
+    _toggleAll() {
+      if (this._busy || !this._datasets) return;
+      this._picked = this._allPicked() ? new Set() : new Set(this._selectable());
+      // A full repaint here, unlike a single tick: every row's state changed,
+      // and there is no one row to patch. Scroll is preserved by _repaintList.
+      this._repaintList();
+      this._repaintToggleAll();
       this._repaintFoot();
     }
 
@@ -280,23 +357,36 @@
         this._repaintFoot();
         this._setRowsDisabled(false);
         if (typeof showToast === "function") {
-          showToast(
-            e && e.offline
-              ? "You're offline — the export is built on the server."
-              : (e && e.message) || "Couldn't build your export.",
-            "error",
-          );
+          // Order matters: a deadline abort sets BOTH `timeout` and `offline`
+          // (domain/api.js#_fetch — a link on which nothing completes IS
+          // offline as far as the write path is concerned). Testing `offline`
+          // first told somebody whose export ran long that they were offline,
+          // which is both wrong and unactionable — the request reached the
+          // server, which is still building. Timeout gets its own branch and
+          // its own advice.
+          let message;
+          if (e && e.timeout) {
+            message = "That took too long to build. Try fewer things at once.";
+          } else if (e && e.offline) {
+            message = "You're offline — the export is built on the server.";
+          } else {
+            message = (e && e.message) || "Couldn't build your export.";
+          }
+          showToast(message, "error");
         }
       }
     }
 
-    /** Ticking during a build would export a set the request no longer has. */
+    /**
+     * Ticking during a build would export a set the request no longer has —
+     * true of the rows and of Select all alike, so both are locked here rather
+     * than the control that came second being forgotten.
+     */
     _setRowsDisabled(disabled) {
       const root = this._sheet.el;
       if (!root) return;
-      root.querySelectorAll("[data-export-pick]").forEach((el) => {
-        /** @type {any} */ (el).disabled = disabled;
-      });
+      root.querySelectorAll('[data-export-pick], [data-export-action="all"]')
+        .forEach((el) => { /** @type {any} */ (el).disabled = disabled; });
     }
   }
 

@@ -27,9 +27,15 @@
   const REQUEST_TIMEOUT_MS = 15000;
   const UPLOAD_TIMEOUT_MS = 60000;
   // The data export builds the whole archive inside the handler — dozens of
-  // paged reads for an account with a decade of plays — so it gets the upload
-  // budget rather than a JSON one, for the same reason POST /bgg/sync does.
-  const DOWNLOAD_TIMEOUT_MS = 60000;
+  // paged reads for an account with a decade of plays — so it gets a budget of
+  // its own rather than a JSON one, for the same reason POST /bgg/sync does.
+  // Twice the upload budget, because this is the only endpoint in the app whose
+  // cost scales with how much history the caller has rather than with what they
+  // just sent: the plays build alone is a paged read of every play they logged,
+  // another of every play they were seated in, then chunked reads for the
+  // seats, the expansions and the profiles behind them. Waiting is not a hang
+  // here — the sheet stays open with a spinner and says what it is doing.
+  const DOWNLOAD_TIMEOUT_MS = 120000;
 
   /**
    * The filename out of a Content-Disposition header, or "" when there isn't
