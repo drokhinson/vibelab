@@ -101,6 +101,10 @@
     [".bgb-global-header__bell", "notifications"],
     [".bgb-global-header__settings", "settings"],
   ];
+  // The screens half of that table, for init.js#toggleScreen — it has to know
+  // that the OTHER header screen is currently open, and reading it from here
+  // is what keeps the pair one list rather than two that can disagree.
+  window.BgbHeaderScreens = HEADER_TOGGLES.map(([, view]) => view);
 
   class Router {
     constructor() {
@@ -410,6 +414,24 @@
       }
       if (target) {
         try { history.replaceState({ name, params: params || {} }, "", target); } catch (_) {}
+      }
+      return this.go(name, params || {}, { skipPush: true });
+    }
+
+    // Swap the current screen for a sibling that occupies the same layer,
+    // spending the current history entry instead of stacking a new one on top
+    // of it. go() would deepen history, and the sibling's own close (a back())
+    // would then land on the screen it replaced rather than on the screen the
+    // pair was opened from — which is how the header's bell and gear ended up
+    // handing the user to each other instead of closing.
+    //
+    // Nothing is pushed onto _stack either: the entry we replace was never on
+    // it (the screen under the pair is), so back and peekBack keep pointing at
+    // wherever the first of the two was opened from.
+    async swap(name, params) {
+      const url = this.pathFor(name, params || {});
+      if (url) {
+        try { history.replaceState({ name, params: params || {} }, "", url); } catch (_) {}
       }
       return this.go(name, params || {}, { skipPush: true });
     }

@@ -707,9 +707,19 @@
    * The fallbacks differ because the screens do: notifications is nobody's
    * home, so a cold one lands on the feed, while settings sits behind the
    * Profile tab the bottom nav is already highlighting.
+   *
+   * The two of them are ONE layer over whatever the user was on, which is why
+   * the hop between them is a swap() and not a go(). Going from the bell to the
+   * gear used to stack settings ON notifications, so the gear's next press —
+   * its close — walked back into notifications instead of dismissing the pair,
+   * and the two screens handed the user to each other. Replacing the entry
+   * keeps the screen underneath exactly one press away from either button, in
+   * either order, however many times the user hops between them.
    */
   function toggleScreen(name, coldFallback) {
-    if (window.store.get("currentView") === name) window.router.back(coldFallback);
+    const current = window.store.get("currentView");
+    if (current === name) window.router.back(coldFallback);
+    else if ((window.BgbHeaderScreens || []).includes(current)) window.router.swap(name);
     else window.router.go(name);
   }
   window.toggleNotifications = () => toggleScreen("notifications", "feed");
