@@ -27,6 +27,7 @@ from .constants import (
     BggUnpushableReason,
     BuddySuggestionSource,
     CollectionStatus,
+    ExportDataset,
     FeedCardKind,
     NotificationKind,
     PlayLinkGroup,
@@ -1817,3 +1818,33 @@ class PlayImportSummary(BaseModel):
 
 class PlayImportListResponse(BaseModel):
     imports: list[PlayImportSummary] = []
+
+
+# ── Data export ───────────────────────────────────────────────────────────────
+
+class ExportDatasetInfo(BaseModel):
+    """One tickable row on the export sheet.
+
+    `row_count` is what makes the sheet worth reading rather than a list of
+    abstract nouns — "Plays · 214" tells someone whether the tick is worth
+    making, and a zero tells them there is nothing there without downloading a
+    zip to find out. It counts TOP-LEVEL records, not every row the tick
+    writes: a play's seats are children of the play, so Plays reports plays and
+    not seats, while buddies and ghost players are siblings and are summed.
+
+    `files` names what the tick actually puts in the archive, so the relational
+    fan-out (a play plus its roster) is stated up front rather than being a
+    surprise inside the zip.
+    """
+
+    id: ExportDataset
+    label: str
+    blurb: str
+    row_count: int = 0
+    files: list[str] = []
+
+
+class ExportManifestResponse(BaseModel):
+    """Everything the export sheet needs to paint itself, in one call."""
+
+    datasets: list[ExportDatasetInfo] = []

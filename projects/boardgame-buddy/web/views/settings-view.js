@@ -1,8 +1,8 @@
 // views/settings-view.js — account settings & integrations.
 //
-// Admin tools, Appearance, Connections, Pending uploads, Local cache, Logout
-// and BGG attribution, in the warm-cream card aesthetic. Admin tools surfaces
-// a live "open chapter reports" badge count.
+// Admin tools, Appearance, Connections, Pending uploads, Data management,
+// Logout and BGG attribution, in the warm-cream card aesthetic. Admin tools
+// surfaces a live "open chapter reports" badge count.
 //
 // The identity/"Edit profile" account card moved to the Profile hub
 // (views/profile-self-view.js). What is left under "Account" here is the
@@ -127,7 +127,8 @@
         ${this._renderImportCard()}
         ${this._renderPastImportsSection()}
         ${this._renderPendingUploadsSection()}
-        <div class="set-card-label">Local cache</div>
+        <div class="set-card-label">Data management</div>
+        ${this._renderExportCard()}
         ${this._renderCacheCard()}
         ${this._renderAccountActions()}
         ${this._renderBggAttribution()}
@@ -393,7 +394,7 @@
       `;
     }
 
-    // ── Local cache card ──────────────────────────────────────────────────────
+    // ── Local cache buckets ───────────────────────────────────────────────────
     // Maps each cache namespace to a human-readable bucket. Anything not
     // listed here falls into "Other" so the total still adds up.
     static _CACHE_BUCKETS = {
@@ -669,6 +670,41 @@
     _startBggCheck() {
       if (window.BggSyncFlow) window.BggSyncFlow.start();
       window.router.go("bgg-sync");
+    }
+
+    // ── Data management ───────────────────────────────────────────────────────
+    // Two cards under one label, and they are opposites on purpose: the export
+    // is about getting data OUT of the account, the cache card below is about
+    // the copy of it this device happens to be holding. The label used to read
+    // "Local cache", which is a heading nobody would think to look under for
+    // "how do I get my plays out of this thing".
+
+    /**
+     * The way out of the app, one tap from a screen anybody can find.
+     *
+     * A row rather than a button with a spinner, because the choosing happens
+     * in widgets/export-data-sheet.js: what to include is a real decision (a
+     * decade of plays is not the same download as a profile row) and the
+     * counts that make it answerable have to be fetched, which is a sheet's
+     * job rather than this screen's.
+     */
+    _renderExportCard() {
+      return `
+        <div class="set-card">
+          <button class="set-card__row"
+                  onclick="window.ExportDataSheet.open({ returnFocus: this })">
+            <span class="set-card__row-icon"><i data-icon="download" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">Export your data</span>
+              <span class="set-card__row-sub">
+                Download your collection, plays, buddies and more as a zip of
+                CSV files.
+              </span>
+            </span>
+            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+          </button>
+        </div>
+      `;
     }
 
     _renderCacheCard() {

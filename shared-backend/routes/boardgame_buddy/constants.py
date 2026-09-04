@@ -392,3 +392,47 @@ MAX_BUDDY_ALIAS_CHARS = 60
 
 # Catalog candidates offered per unmatched game name in the Games step.
 IMPORT_GAME_CANDIDATES = 6
+
+
+# ── Data export ──────────────────────────────────────────────────────────────
+
+class ExportDataset(StrEnum):
+    """The slices of an account a user can tick in Settings → Data management.
+
+    One member per checkbox on the export sheet, NOT one per table: a dataset
+    is a thing a person recognises owning ("my plays"), and several of them
+    fan out to more than one CSV inside the zip because the shape is genuinely
+    relational — a play has a roster and the roster is where the scores are,
+    and flattening that into one file loses either the seats or the play.
+
+    The values are the wire contract (`?dataset=plays&dataset=buddies`) and
+    they name the CSVs inside the zip, so renaming one is a breaking change to
+    a file somebody has already downloaded.
+    """
+
+    PROFILE = "profile"
+    COLLECTION = "collection"
+    EXPANSIONS = "expansions"
+    PLAYS = "plays"
+    PLAYS_DETAIL = "plays_detail"
+    BUDDIES = "buddies"
+    ACHIEVEMENTS = "achievements"
+    GUIDES = "guides"
+
+
+# Rows per page when the export walks a table. PostgREST caps an unbounded
+# select at 1000, and an export that silently stops at row 1000 is worse than
+# one that fails — the file looks complete. Same reasoning (and the same
+# safety bound below) as services/bgg_compare_service.py._load_local_collection.
+EXPORT_PAGE_SIZE = 1000
+
+# Refuse to page forever if a filter ever stops narrowing. No account is
+# anywhere near this; it exists so a bug cannot turn one download into an
+# unbounded read of the table.
+EXPORT_MAX_ROWS = 200_000
+
+# Ids per `.in_()` filter when the export reads child rows for a set of plays.
+# UUIDs are 36 characters and PostgREST puts the whole list in the query
+# string, so a larger chunk risks a 414 from whatever proxy sits in front of
+# Supabase rather than a clean error.
+EXPORT_IN_CHUNK = 100

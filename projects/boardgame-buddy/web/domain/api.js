@@ -26,6 +26,27 @@
   // sized to the work rather than to a JSON round trip.
   const REQUEST_TIMEOUT_MS = 15000;
   const UPLOAD_TIMEOUT_MS = 60000;
+  // The data export builds the whole archive inside the handler — dozens of
+  // paged reads for an account with a decade of plays — so it gets the upload
+  // budget rather than a JSON one, for the same reason POST /bgg/sync does.
+  const DOWNLOAD_TIMEOUT_MS = 60000;
+
+  /**
+   * The filename out of a Content-Disposition header, or "" when there isn't
+   * one. Handles the RFC 5987 `filename*=UTF-8''…` form first, since that is
+   * the one carrying anything non-ASCII.
+   * @param {string|null} header
+   * @returns {string}
+   */
+  function parseFilename(header) {
+    if (!header) return "";
+    const extended = /filename\*=\s*UTF-8''([^;]+)/i.exec(header);
+    if (extended) {
+      try { return decodeURIComponent(extended[1].trim()); } catch (_) {}
+    }
+    const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+    return plain ? plain[1].trim() : "";
+  }
 
   class Api {
     constructor() {
@@ -245,6 +266,64 @@
     put(path, body)          { return this._request("PUT",    path, { body }); }
     patch(path, body)        { return this._request("PATCH",  path, { body }); }
     del(path)                { return this._request("DELETE", path); }
+
+    /**
+     * A binary GET, kept whole as a Blob. Used by the Settings data export.
+     *
+     * Not `get()` with a flag: _request decides between .json() and .text() off
+     * the content type, and a zip read as text is a corrupted zip that only
+     * fails when somebody tries to open it days later. The error envelope, the
+     * deadline and the one-shot 401 refresh are all still here — a token that
+     * expired while the phone was asleep must not turn "Export" into a silent
+     * failure — but the success path never touches the bytes.
+     *
+     * The server's filename rides on Content-Disposition, which is only
+     * readable because the route sends Access-Control-Expose-Headers: the API
+     * is on Railway and the app on Vercel, so every response here is
+     * cross-origin and the browser hides unlisted headers. `fallbackName` is
+     * what a missing header lands on rather than the browser's "download".
+     *
+     * @param {string} path
+     * @param {Object} [query]
+     * @param {{timeoutMs?: number, fallbackName?: string, _retried?: boolean}} [opts]
+     * @returns {Promise<{blob: Blob, filename: string}>}
+     */
+    async download(path, query, opts = {}) {
+      const url = new URL(this.base + this.prefix + path);
+      for (const [k, v] of Object.entries(query || {})) {
+        // Arrays repeat the parameter (?dataset=plays&dataset=buddies) rather
+        // than joining — that is what FastAPI parses into a list.
+        const values = Array.isArray(v) ? v : [v];
+        for (const one of values) {
+          if (one === undefined || one === null || one === "") continue;
+          url.searchParams.append(k, one);
+        }
+      }
+      const [res, release] = await this._send(
+        url.toString(),
+        { method: "GET", headers: { ...this._authHeader() } },
+        opts.timeoutMs || DOWNLOAD_TIMEOUT_MS,
+      );
+      try {
+        if (!res.ok) {
+          if (res.status === 401 && !opts._retried && await this._refreshSession()) {
+            return this.download(path, query, { ...opts, _retried: true });
+          }
+          let detail = res.statusText;
+          try { detail = (await res.json()).detail || detail; } catch (_) {}
+          const err = new Error(detail);
+          err.status = res.status;
+          throw err;
+        }
+        return {
+          blob: await res.blob(),
+          filename: parseFilename(res.headers.get("content-disposition"))
+            || opts.fallbackName || "download",
+        };
+      } finally {
+        release();
+      }
+    }
 
     // For multipart bodies (play photo upload). Caller passes a FormData.
     async upload(path, formData, _retried) {

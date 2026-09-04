@@ -369,6 +369,7 @@
      .alias-sheet,
      .chapter-import-sheet,
      .bgg-import-sheet,
+     .export-sheet,
      .play-run-sheet,
      .ach-sheet,
      .exp-picker,
@@ -416,6 +417,7 @@
      .alias-sheet,
      .chapter-import-sheet,
      .bgg-import-sheet,
+     .export-sheet,
      .play-run-sheet,
      .ach-sheet,
      .exp-picker,
@@ -5162,6 +5164,32 @@ html.bgb-ptr-armed body {
 .bgb-sheet__opt[aria-selected="true"] .bgb-sheet__radio::after {
   content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--ok);
 }
+/* ── Multi-select tick ────────────────────────────────────────────────────
+   The square counterpart to .bgb-sheet__radio above. Shape carries the
+   meaning: a circle says "one of these", a box says "as many as you like",
+   and a checkbox list wearing radio circles reads as a control that will
+   untick the last thing you picked.
+
+   Reserved at full width whether or not the row is ticked, for the same
+   reason the radio is: ticking must not reflow the label beside it.
+
+   Consolidation note: widgets/player-picker-sheet.js and
+   widgets/shelf-of-shame-sheet.js each predate this and still carry a private
+   tick of their own (.player-picker__tick, .shelf-sheet__check). Both are the
+   same object as this one — fold them in next time either sheet is touched
+   substantively (.claude/rules/ui-object-design.md §4). */
+.bgb-sheet__tick {
+  flex: 0 0 auto;
+  width: 21px; height: 21px; border-radius: 6px;
+  border: 2px solid var(--polaroid-line);
+  display: grid; place-items: center;
+  color: transparent;
+}
+.bgb-sheet__opt[aria-checked="true"] .bgb-sheet__tick {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--polaroid-bg);
+}
 .bgb-sheet__opt--danger { color: var(--rust); }
 .bgb-sheet__opt--danger > i,
 .bgb-sheet__opt--danger > svg { color: var(--rust); }
@@ -5445,6 +5473,32 @@ html.bgb-ptr-armed body {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* ── Export data sheet ────────────────────────────────────────────────────
+   widgets/export-data-sheet.js. Rows are the shared .bgb-sheet__opt with the
+   square tick above; only the rules below are this sheet's own.
+
+   Rows here are taller than the shared 56px and top-aligned, because every one
+   carries a wrapping sentence saying what the tick actually puts in the zip.
+   Every other sheet in the app is a list of names, where one line and centred
+   contents are right; here the sentence IS the reason this is a sheet rather
+   than a single Export button, so the icon, the count and the tick line up with
+   the first line of it instead of floating in the middle of a three-line row. */
+.export-sheet__row {
+  min-height: 64px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  align-items: flex-start;
+}
+.export-sheet__row > i,
+.export-sheet__row > svg,
+.export-sheet__row .bgb-sheet__opt-count,
+.export-sheet__row .bgb-sheet__tick { margin-top: 2px; }
+/* Disabled while the archive is building — ticking mid-build would show a set
+   the request in flight does not have. */
+.export-sheet__row:disabled { opacity: 0.5; cursor: default; }
+.export-sheet__error { color: var(--rust); }
+.export-sheet__retry { display: block; margin: 0 auto; }
 
 /* ── Buddy alias sheet ────────────────────────────────────────────────────
    One text field and two commits, over the shared .bgb-sheet__* chrome. It has
@@ -10815,6 +10869,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   box-shadow: var(--sh-3);
   overflow: hidden;
 }
+/* Cards are normally separated by their .set-card-label, so this only bites
+   where a section stacks two of them under one heading — Import + past imports,
+   and Data management's export + local cache. Without it they butt together and
+   read as one card with a stray rule through it. */
+.set-card + .set-card { margin-top: 0.6rem; }
 .set-card-label {
   font-family: var(--font-display);
   font-weight: 600;
