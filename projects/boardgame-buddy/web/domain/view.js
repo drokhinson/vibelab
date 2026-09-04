@@ -322,6 +322,18 @@
         btn.classList.toggle("active", views.includes(name));
       });
 
+      // The header bell is the notifications screen's only opener AND its only
+      // closer (init.js#toggleNotifications), so it carries that screen's state
+      // the way the nav tabs above carry theirs. aria-pressed rather than a
+      // modifier class: it is a toggle button, so the state a screen reader
+      // announces and the one styles.css draws are the same fact, written once.
+      // Set here rather than in the bell's own click handler because the screen
+      // closes plenty of ways the bell never hears about — the device back
+      // button, a deep link, a notification tapped through to a play — and every
+      // one of them lands in this function.
+      const bell = document.querySelector(".bgb-global-header__bell");
+      if (bell) bell.setAttribute("aria-pressed", String(name === "notifications"));
+
       this._current = next;
 
       if (prev && prev !== next) {
