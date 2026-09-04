@@ -165,11 +165,13 @@
         <i data-icon="bell" class="w-5 h-5"></i>
         <span class="bgb-global-header__dot" aria-hidden="true" hidden></span>
       </button>
-      <!-- Gear, not the user's badge. The button has always routed to Settings,
-           but an avatar reads as "my profile" — and Profile already has its own
-           bottom-nav tab, so the badge here was both redundant and misleading. -->
+      <!-- Gear, not the user's badge. The button has always led to Settings, but
+           an avatar reads as "my profile" — and Profile already has its own
+           bottom-nav tab, so the badge here was both redundant and misleading.
+           Toggles, and wears its screen's state, exactly like the bell above. -->
       <button class="bgb-global-header__settings" title="Settings" aria-label="Settings"
-              onclick="window.router.go('settings')">
+              aria-pressed="false"
+              onclick="window.toggleSettings()">
         <i data-icon="gear" class="w-5 h-5"></i>
         <!-- Admin review dot. Same contract as .bgb-nav__dot: aria-hidden, so
              the button's own aria-label is what changes when work is waiting.

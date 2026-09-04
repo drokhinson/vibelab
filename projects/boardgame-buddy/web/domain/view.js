@@ -91,6 +91,17 @@
   // route name + params. Params not consumed by a path template become
   // querystring so deep-link entries still hydrate the destination view
   // with extras like gameName, expansionIds, mode, etc.
+
+  // The global header's two toggle buttons and the screen each one opens and
+  // closes. go() below keeps their aria-pressed in step with the current view;
+  // init.js#toggleScreen is the other half. One list so the pair can never
+  // drift into "the bell knows and the gear doesn't", which is exactly how the
+  // gear's box ended up never lighting on the screen it opens.
+  const HEADER_TOGGLES = [
+    [".bgb-global-header__bell", "notifications"],
+    [".bgb-global-header__settings", "settings"],
+  ];
+
   class Router {
     constructor() {
       this._views = new Map();
@@ -322,17 +333,19 @@
         btn.classList.toggle("active", views.includes(name));
       });
 
-      // The header bell is the notifications screen's only opener AND its only
-      // closer (init.js#toggleNotifications), so it carries that screen's state
-      // the way the nav tabs above carry theirs. aria-pressed rather than a
-      // modifier class: it is a toggle button, so the state a screen reader
-      // announces and the one styles.css draws are the same fact, written once.
-      // Set here rather than in the bell's own click handler because the screen
-      // closes plenty of ways the bell never hears about — the device back
-      // button, a deep link, a notification tapped through to a play — and every
-      // one of them lands in this function.
-      const bell = document.querySelector(".bgb-global-header__bell");
-      if (bell) bell.setAttribute("aria-pressed", String(name === "notifications"));
+      // Each global-header button is its screen's only opener AND its only
+      // closer (init.js#toggleScreen), so it carries that screen's state the way
+      // the nav tabs above carry theirs. aria-pressed rather than a modifier
+      // class: they are toggle buttons, so the state a screen reader announces
+      // and the one styles.css draws are the same fact, written once. Set here
+      // rather than in the buttons' own click handlers because the screens close
+      // plenty of ways those handlers never hear about — the device back button,
+      // a deep link, a notification tapped through to a play — and every one of
+      // them lands in this function.
+      HEADER_TOGGLES.forEach(([selector, view]) => {
+        const btn = document.querySelector(selector);
+        if (btn) btn.setAttribute("aria-pressed", String(name === view));
+      });
 
       this._current = next;
 
