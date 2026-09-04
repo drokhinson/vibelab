@@ -2434,8 +2434,26 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   position: absolute;
   inset: -4px;
 }
-.bgb-global-header__bell:hover,
-.bgb-global-header__settings:hover {
+/* Hover-capable pointers only. A tap on a touchscreen leaves :hover latched on
+   the control until something else is tapped, so without this guard the bell
+   stayed lit and tilted long after the screen it opened was closed again —
+   a stuck state pretending to be a live one. Touch gets its feedback from the
+   pressed state below instead, which tracks the actual screen. */
+@media (hover: hover) {
+  .bgb-global-header__bell:hover,
+  .bgb-global-header__settings:hover {
+    border-color: var(--accent);
+    transform: rotate(30deg);
+  }
+}
+/* The bell is a toggle, so its box doubles as the state of the thing it
+   toggles: lit and turned while the notifications screen is open, at rest the
+   moment it closes. domain/view.js sets aria-pressed on every navigation, so
+   the look and what a screen reader announces are the same fact — and closing
+   the screen from anywhere (the bell, the device back button, a link out) puts
+   the box back. The gear has no pressed state to carry: it opens Settings, it
+   doesn't toggle it. */
+.bgb-global-header__bell[aria-pressed="true"] {
   border-color: var(--accent);
   transform: rotate(30deg);
 }
@@ -2457,7 +2475,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   .bgb-global-header__bell,
   .bgb-global-header__settings { transition: color 160ms var(--ease), border-color 160ms var(--ease); }
   .bgb-global-header__bell:hover,
-  .bgb-global-header__settings:hover { transform: none; }
+  .bgb-global-header__settings:hover,
+  .bgb-global-header__bell[aria-pressed="true"] { transform: none; }
 }
 
 /* DaisyUI's .btm-nav is position:fixed left:0 right:0 — fine on a phone but

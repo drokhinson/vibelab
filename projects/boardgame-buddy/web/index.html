@@ -155,8 +155,11 @@
            init.js#syncHeaderDot off BgbNotifications.forBell().
 
            It TOGGLES. The screen has no close x — this button is its only
-           opener, so it is also its closer, and back means the same thing. -->
+           opener, so it is also its closer, and back means the same thing. Its
+           box shows that: aria-pressed, set on every navigation by
+           domain/view.js#go, lights and turns it while the screen is open. -->
       <button class="bgb-global-header__bell" title="Notifications" aria-label="Notifications"
+              aria-pressed="false"
               onpointerdown="window.NotificationFeed && window.NotificationFeed.warm()"
               onclick="window.toggleNotifications()">
         <i data-icon="bell" class="w-5 h-5"></i>
