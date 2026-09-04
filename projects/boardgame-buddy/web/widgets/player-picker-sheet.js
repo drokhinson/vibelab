@@ -45,7 +45,11 @@
    * @typedef {Object} PlayerCandidate
    * @property {"account"|"ghost"} source
    * @property {string|null} user_id   null ⇒ a name-only guest.
-   * @property {string} name
+   * @property {string} name         Their REAL display name. It is what this
+   *   sheet hands back and what the caller persists as
+   *   play_players.player_display_name, so it must never be an alias.
+   * @property {string|null} [alias]  The viewer's PRIVATE nickname for them.
+   *   Painted in place of `name`, matched alongside it — never returned as it.
    * @property {string|null} [username]
    * @property {string|null} [avatar]
    * @property {number} [plays]        Plays together, when known.
@@ -169,8 +173,17 @@
       if (!q) return base;
       return this._candidates.filter((c) => {
         const name = (c.name || "").toLowerCase();
+        const alias = (c.alias || "").toLowerCase();
         const username = (c.username || "").toLowerCase();
-        return name.includes(q) || (username && username.includes(q));
+        // BOTH names match. A private alias is a second handle on a person, not
+        // a replacement for the one their account carries: someone who types
+        // the real name is looking for the person they renamed, and a picker
+        // that cannot find them is worse than one that never offered the
+        // rename. It also keeps the guest-row collision test below honest —
+        // typing the real name of a listed buddy must not offer to add them as
+        // a same-named ghost.
+        return name.includes(q) || (alias && alias.includes(q))
+            || (username && username.includes(q));
       });
     }
 
@@ -183,15 +196,21 @@
     _row(c) {
       const ghost = !c.user_id;
       const on = this._single ? key(c.name) === key(this._selected) : this._isPicked(c.name);
+      // The alias is painted; `name` still keys the row (data-picker-name below)
+      // and is still what _find/_toggle resolve and the caller writes. Two
+      // people can share a display name — that is what an alias is FOR — so the
+      // real name joins the meta line rather than replacing the alias.
+      const shown = c.alias || c.name;
       const badge = window.BgbBadge.render({
         avatar: c.avatar,
-        displayName: c.name,
+        displayName: shown,
         size: "sm",
         isGhost: ghost,
         extraClass: "player-picker__avatar",
       });
       const bits = [];
       if (c.isViewer) bits.push("You");
+      if (c.alias) bits.push(c.name);
       if (c.username) bits.push("@" + c.username);
       if (c.plays) bits.push(`${c.plays} play${c.plays === 1 ? "" : "s"} together`);
       const meta = bits.length
@@ -203,7 +222,7 @@
                 aria-checked="${on}" data-picker-name="${escapeAttr(c.name)}">
           ${badge}
           <span class="player-picker__body">
-            <span class="player-picker__name">${escapeHtml(c.name)}</span>
+            <span class="player-picker__name">${escapeHtml(shown)}</span>
             ${meta}
           </span>
           ${c.isViewer ? `<span class="player-picker__pill player-picker__pill--you">You</span>`
@@ -233,7 +252,9 @@
       // it: "keep this name as a ghost" stays a legitimate answer even when a
       // buddy of the same name exists, and it is often the RIGHT one.
       if (!this._single
-          && (this._candidates.some((c) => key(c.name) === key(q)) || this._isPicked(q))) {
+          && (this._candidates.some(
+                (c) => key(c.name) === key(q) || (c.alias && key(c.alias) === key(q)))
+              || this._isPicked(q))) {
         return "";
       }
       const title = this._guestTitle
@@ -643,7 +664,14 @@
      * @param {string} name
      */
     _find(name) {
-      const hit = (list) => (list || []).find((x) => key(x.name) === key(name));
+      // Matches the alias as well as the real name. A row hands back its real
+      // name via data-picker-name, so that path is unaffected — but _submitTyped
+      // passes whatever was TYPED, and someone who types the alias they set
+      // must land on the account. Without this they fall through to
+      // _pickGuest() and seat a ghost named after their own private alias,
+      // which then persists into play_players for everyone in the play to see.
+      const hit = (list) => (list || []).find(
+        (x) => key(x.name) === key(name) || (x.alias && key(x.alias) === key(name)));
       return hit(this._candidates) || hit(this._suggestions)
         || hit(this._recent) || hit(this._globalRows) || null;
     }

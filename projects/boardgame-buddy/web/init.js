@@ -810,6 +810,10 @@
     // collection" button for somebody else's import.
     if (window.BggImport) window.BggImport.reset();
     if (window.BggImportToast) window.BggImportToast.clear();
+    // Same again: the private-alias maps are keyed by the OTHER user's id, so
+    // without this the next account on this phone would see the previous one's
+    // private names painted over their own buddies.
+    if (window.Buddy) window.Buddy.forgetAliases();
     if (window.bgbCache) window.bgbCache.unbindUser();
     window.store.reset();
     window.router.go("auth");

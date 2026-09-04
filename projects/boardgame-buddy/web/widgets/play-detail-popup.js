@@ -55,6 +55,9 @@
         // Buddy list powers the add-player datalist in edit mode. Free
         // lookup — list is small and cached server-side.
         state.buddies = await window.Buddy.list().catch(() => []);
+        // Seed the session alias map off our own read, so a popup opened on a
+        // cold boot renders aliases without waiting for the partner bundle.
+        window.Buddy.rememberAliases(state.buddies);
       }
     } catch (e) {
       state.error = (e && e.message) || "Failed to load play";
@@ -318,6 +321,10 @@
                   // dismisses first. A ghost the viewer cannot be stays inert.
                   const act = playerAction(pl, p, me);
                   const nav = act ? act.handler : "";
+                  // Only an accepted buddy has an edge to hold an alias, so a
+                  // ghost or a stranger gets no pencil rather than one whose
+                  // save would 404.
+                  const aliasEdgeId = window.Buddy.edgeIdFor(pl.user_id);
                   return `
                   <li class="play-detail__player ${pl.is_winner ? "is-winner" : ""}${act ? " is-link" : ""}${act && act.kind === "claim" ? " play-detail__player--claim" : ""}"
                       ${act ? `role="button" tabindex="0"
@@ -327,14 +334,27 @@
                     <span class="play-detail__player-name">
                       ${window.BgbBadge ? window.BgbBadge.render({
                         avatar: pl.avatar || null,
-                        displayName: pl.name,
+                        displayName: window.Buddy.nameFor(pl.user_id, pl.name),
                         size: "xs",
                         isGhost: !pl.user_id,
                         isMe: !!(me && pl.user_id === me.id),
                         extraClass: "play-detail__player-badge",
                       }) : ""}
-                      <span class="play-detail__player-text">${escapeHtml(pl.name)}</span>
+                      <span class="play-detail__player-text">${escapeHtml(window.Buddy.nameFor(pl.user_id, pl.name))}</span>
                       ${pl.is_winner ? `<i data-icon="crown" class="w-3.5 h-3.5 play-detail__player-crown"></i>` : ""}
+                      <!-- Inside the name span, not a sibling of it: the row is
+                           flex with justify-content:space-between, so a third
+                           top-level child would float in the gap between the
+                           name and the score instead of sitting with the name
+                           it belongs to. -->
+                      ${aliasEdgeId ? `
+                        <button class="bgb-alias-btn" type="button"
+                                aria-label="${escapeAttr("Rename " + pl.name + " for yourself")}"
+                                title="Rename just for you"
+                                onclick="event.stopPropagation();window.PlayDetailPopup._openAlias('${aliasEdgeId}','${pl.user_id}')">
+                          <i data-icon="pencil" class="w-3.5 h-3.5"></i>
+                        </button>
+                      ` : ""}
                     </span>
                     <span class="play-detail__player-score">${pl.score != null ? pl.score : ""}</span>
                     ${act ? `<i data-icon="${escapeAttr(act.icon)}" class="w-3.5 h-3.5 play-detail__player-go"></i>` : ""}
@@ -476,7 +496,7 @@
           <ul class="play-detail__edit-players">
             ${d.players.map((pl, i) => `
               <li class="play-detail__edit-player">
-                <span class="play-detail__edit-player-name">${escapeHtml(pl.name)}</span>
+                <span class="play-detail__edit-player-name">${escapeHtml(window.Buddy.nameFor(pl.user_id, pl.name))}</span>
                 ${hasRoundGrid(d.players, "roundScores")
                   ? `<span class="play-detail__edit-score-readout">${escapeHtml(playerTotal(pl, d.players))}</span>`
                   : `<input type="number" class="input input-bordered input-sm play-detail__edit-score"
@@ -501,8 +521,15 @@
                    list="play-popup-buddy-list"
                    placeholder="Add player (buddy or free-text)"
                    onkeydown="if(event.key==='Enter'){event.preventDefault();window.PlayDetailPopup._addPlayer();}" />
+            <!-- Both spellings, deliberately: a datalist option value is
+                 literally what lands in the input, and someone who set an alias
+                 may type either it or the real name. addPlayer() below resolves
+                 both to the same account and stores the REAL name. -->
             <datalist id="play-popup-buddy-list">
-              ${state.buddies.map((b) => `<option value="${escapeAttr(b.other_display_name)}">`).join("")}
+              ${state.buddies.flatMap((b) => [
+                `<option value="${escapeAttr(b.other_display_name)}">`,
+                b.other_alias ? `<option value="${escapeAttr(b.other_alias)}">` : "",
+              ]).join("")}
             </datalist>
             <button class="btn btn-primary btn-sm" type="button"
                     onclick="window.PlayDetailPopup._addPlayer()">Add</button>
@@ -746,18 +773,28 @@
     const input = document.getElementById("play-popup-add-name");
     const name = (input && input.value || "").trim();
     if (!name || !state.draft) return;
+    // Match either spelling — the datalist offers both, and someone who set an
+    // alias will reach for it before the real name.
+    const lower = name.toLowerCase();
     const buddy = (state.buddies || []).find(
-      (b) => (b.other_display_name || "").toLowerCase() === name.toLowerCase()
+      (b) => (b.other_display_name || "").toLowerCase() === lower
+          || (b.other_alias || "").toLowerCase() === lower
     );
+    // THE name that gets stored. Always the real one: this string becomes
+    // play_players.player_display_name (play_routes.py), a row every
+    // participant in the play can read, so a private alias must never reach it
+    // — and a typed alias that fell through as free text would create a GHOST
+    // player named after it, detached from the account it actually meant.
+    const storedName = buddy ? buddy.other_display_name : name;
     const dupe = state.draft.players.some(
-      (p) => (p.name || "").toLowerCase() === name.toLowerCase()
+      (p) => (p.name || "").toLowerCase() === storedName.toLowerCase()
     );
     if (!dupe) {
       // Match the existing rounds shape so the new row aligns with the
       // grid (nulls fill the columns that other players already have).
       const existingRounds = window.roundGridRoundCount(state.draft.players);
       state.draft.players.push({
-        name,
+        name: storedName,
         is_winner: false,
         score: "",
         user_id: buddy ? buddy.other_user_id : null,
@@ -942,6 +979,50 @@
     return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
 
+  /**
+   * Rename a buddy from a player row, without leaving the play.
+   *
+   * The alias lives in the Buddy module's map rather than in this play, so the
+   * write touches nothing about the play itself and a re-render is enough to
+   * show it. state.buddies is refreshed alongside it when we have one, so
+   * reopening the sheet shows the value that was just saved.
+   * @param {string} edgeId
+   * @param {string} userId
+   */
+  async function openAlias(edgeId, userId) {
+    const seat = ((state.play && state.play.players) || [])
+      .find((pl) => pl.user_id === userId);
+    const real = (seat && seat.name) || "this buddy";
+    window.BuddyAliasSheet.open({
+      edgeId,
+      displayName: real,
+      alias: window.Buddy.aliasFor(userId),
+      returnFocus: document.activeElement,
+      onSave: async (alias) => {
+        const before = window.Buddy.aliasFor(userId);
+        const next = (alias || "").trim() || null;
+        if (before === next) return;
+        const patch = (v) => {
+          window.Buddy.rememberAliases([
+            { other_user_id: userId, other_alias: v, id: edgeId },
+          ]);
+          const b = (state.buddies || []).find((x) => x.other_user_id === userId);
+          if (b) b.other_alias = v;
+          render();
+        };
+        patch(next);
+        try {
+          await window.Buddy.setAlias(edgeId, next);
+        } catch (e) {
+          patch(before);
+          if (typeof showToast === "function") {
+            showToast((e && e.message) || "Couldn't save that alias", "error");
+          }
+        }
+      },
+    });
+  }
+
   window.PlayDetailPopup = {
     show,
     dismiss,
@@ -954,6 +1035,7 @@
     _setPlayerScore: setPlayerScore,
     _removePlayer: removePlayer,
     _addPlayer: addPlayer,
+    _openAlias: openAlias,
     // Round-grid handlers (signatures match play-flow-view so the
     // shared round-score-grid widget can target either host).
     _setRoundScore: setRoundScore,

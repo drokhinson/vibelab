@@ -452,10 +452,14 @@
   // row is one target (the 24px badge alone was a hard tap on a touch-first
   // surface) and keyboard / aria flow stays on a single element.
   function renderPlayerRow(pl, me) {
-    const nameHtml = `<span class="play-card__back-player-name">${escapeHtml(pl.name)}</span>`;
+    // Under the viewer's private alias when they set one. Read-only: nothing on
+    // a card writes a name, so this is purely what the row SAYS — pl.name is
+    // untouched and is still what any edit path would persist.
+    const shown = window.Buddy.nameFor(pl.user_id, pl.name);
+    const nameHtml = `<span class="play-card__back-player-name">${escapeHtml(shown)}</span>`;
     const badge = window.BgbBadge.render({
       avatar: pl.user_id ? (pl.avatar || null) : null,
-      displayName: pl.name,
+      displayName: shown,
       size: "sm",
       isMe: !!(me && pl.user_id && me.id === pl.user_id),
       isGhost: !pl.user_id,
