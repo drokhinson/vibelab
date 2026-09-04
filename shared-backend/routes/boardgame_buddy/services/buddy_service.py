@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException
 
-from ..constants import BuddyEdgeStatus
+from ..constants import MAX_BUDDY_ALIAS_CHARS, BuddyEdgeStatus
 from ..models import (
     BuddyEdgeResponse,
     BuddyRequestResponse,
@@ -43,7 +43,10 @@ def list_accepted_buddies(sb, viewer_id: str) -> list[BuddyEdgeResponse]:
     """All accepted mutual edges for the viewer."""
     rows = (
         sb.table("boardgamebuddy_buddy_edges")
-        .select("id, user_a, user_b, status, requested_by, created_at, accepted_at")
+        .select(
+            "id, user_a, user_b, status, requested_by, created_at, accepted_at, "
+            "alias_by_a, alias_by_b"
+        )
         .eq("status", BuddyEdgeStatus.ACCEPTED.value)
         .or_(f"user_a.eq.{viewer_id},user_b.eq.{viewer_id}")
         .execute()
@@ -52,7 +55,10 @@ def list_accepted_buddies(sb, viewer_id: str) -> list[BuddyEdgeResponse]:
     other_ids = [e["user_b"] if e["user_a"] == viewer_id else e["user_a"] for e in edges]
     profiles = fetch_profiles_by_ids(sb, other_ids)
     out = [edge_response(e, viewer_id, profiles) for e in edges]
-    out.sort(key=lambda b: b.other_display_name.lower())
+    # Sort by what the row READS AS. An alias is the main name on the Buddies
+    # row, so ordering by the real display name would file "Tuesday Dave"
+    # under D and leave the list looking unsorted to the only person who sees it.
+    out.sort(key=lambda b: (b.other_alias or b.other_display_name).lower())
     return out
 
 
@@ -185,7 +191,10 @@ def accept_request(sb, viewer_id: str, request_id: str) -> BuddyEdgeResponse:
     """Accept an incoming buddy request. 403 if the viewer isn't the recipient."""
     rows = (
         sb.table("boardgamebuddy_buddy_edges")
-        .select("id, user_a, user_b, status, requested_by, created_at, accepted_at")
+        .select(
+            "id, user_a, user_b, status, requested_by, created_at, accepted_at, "
+            "alias_by_a, alias_by_b"
+        )
         .eq("id", request_id)
         .execute()
     )
@@ -204,7 +213,10 @@ def accept_request(sb, viewer_id: str, request_id: str) -> BuddyEdgeResponse:
     profiles = fetch_profiles_by_ids(sb, [other_id])
     refreshed = (
         sb.table("boardgamebuddy_buddy_edges")
-        .select("id, user_a, user_b, status, requested_by, created_at, accepted_at")
+        .select(
+            "id, user_a, user_b, status, requested_by, created_at, accepted_at, "
+            "alias_by_a, alias_by_b"
+        )
         .eq("id", request_id)
         .execute()
     )
@@ -272,6 +284,60 @@ def unfriend(sb, viewer_id: str, edge_id: str) -> None:
     sb.table("boardgamebuddy_buddy_edges").delete().eq("id", edge_id).execute()
 
 
+
+
+def set_alias(
+    sb, viewer_id: str, edge_id: str, alias: Optional[str]
+) -> BuddyEdgeResponse:
+    """Set or clear the viewer's private alias for the buddy on this edge.
+
+    Writes alias_by_a or alias_by_b depending on which side of the canonical row
+    the viewer is on; the other column is never touched, so the two parties'
+    aliases are independent and neither can read the other's.
+    """
+    rows = (
+        sb.table("boardgamebuddy_buddy_edges")
+        .select(
+            "id, user_a, user_b, status, requested_by, created_at, accepted_at, "
+            "alias_by_a, alias_by_b"
+        )
+        .eq("id", edge_id)
+        .execute()
+    )
+    if not rows.data:
+        raise HTTPException(status_code=404, detail="Buddy not found")
+    edge = rows.data[0]
+    # 404 rather than 403 for a non-party, matching unfriend() above: "you are
+    # not on this edge" and "there is no such edge" have to be indistinguishable,
+    # or the id becomes an existence oracle for other people's friendships.
+    if viewer_id not in (edge["user_a"], edge["user_b"]):
+        raise HTTPException(status_code=404, detail="Buddy not found")
+    if edge["status"] != BuddyEdgeStatus.ACCEPTED.value:
+        raise HTTPException(
+            status_code=409, detail="You can only rename an accepted buddy"
+        )
+
+    trimmed = (alias or "").strip()
+    if len(trimmed) > MAX_BUDDY_ALIAS_CHARS:
+        raise HTTPException(status_code=400, detail="That alias is too long")
+    column = "alias_by_a" if edge["user_a"] == viewer_id else "alias_by_b"
+    # Whitespace-only clears. The row stores NULL rather than "" so "has an
+    # alias" is one test everywhere instead of two.
+    value = trimmed or None
+
+    updated = (
+        sb.table("boardgamebuddy_buddy_edges")
+        .update({column: value})
+        .eq("id", edge_id)
+        .execute()
+    )
+    other_id = edge["user_b"] if edge["user_a"] == viewer_id else edge["user_a"]
+    profiles = fetch_profiles_by_ids(sb, [other_id])
+    # Fall back to the row we already read with the new value patched in: the
+    # write succeeded either way, and a client that got no echo would paint the
+    # old name over a change that landed.
+    row = (updated.data or [{**edge, column: value}])[0]
+    return edge_response(row, viewer_id, profiles)
 
 
 def relation_to(sb, viewer_id: str, other_id: str) -> dict[str, Any]:

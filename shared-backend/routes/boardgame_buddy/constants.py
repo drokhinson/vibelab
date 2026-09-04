@@ -385,5 +385,10 @@ MAX_IMPORT_PLAYERS_PER_PLAY = 12
 # Longest player / game name kept from the model's reply.
 MAX_IMPORT_NAME_CHARS = 80
 
+# Longest private buddy alias. A label, not a bio: long enough for "Dave from
+# the Tuesday group", short enough that it cannot smuggle a paragraph into a row
+# the person it names can never see. Mirrors MAX_IMPORT_NAME_CHARS' reasoning.
+MAX_BUDDY_ALIAS_CHARS = 60
+
 # Catalog candidates offered per unmatched game name in the Games step.
 IMPORT_GAME_CANDIDATES = 6
