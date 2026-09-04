@@ -9,6 +9,12 @@ Two things are worth pinning here and nothing else really is:
      PostgREST caps an unbounded select at 1000 rows and a truncated read does
      not fail. An export that stops at row 1000 looks complete.
 
+There used to be a third: that the profile CSV never carried the encrypted BGG
+password or the session cookies sitting beside `bgg_username` on that row. The
+Profile tick is gone and no builder reads boardgamebuddy_profiles for its own
+sake any more, which is the stronger form of that guarantee — a test asserting
+a string is absent from a file that is not written would only be theatre.
+
 The fake below is just enough PostgREST to serve those reads. Embedded rows are
 pre-baked onto the stored dicts — the joins themselves are PostgREST's job, not
 this module's.
@@ -226,6 +232,13 @@ def _rows(zf, name):
     return list(csv.DictReader(io.StringIO(text)))
 
 
+def _shelf_rows(zf):
+    """The shelf block of collection.csv, without the owned expansions that
+    now share the file. The paging tests below are about the collections read
+    specifically, so they must not move when the fixture grows an expansion."""
+    return [r for r in _rows(zf, "collection.csv") if r["row_type"] == "shelf"]
+
+
 # ── The archive's shape ──────────────────────────────────────────────────────
 
 def test_every_dataset_builds_and_names_the_files_it_promised():
@@ -242,6 +255,35 @@ def test_every_dataset_builds_and_names_the_files_it_promised():
 def test_only_ticked_datasets_are_written():
     zf, _ = _export(_store(), [ExportDataset.COLLECTION])
     assert sorted(zf.namelist()) == ["README.txt", "collection.csv"]
+
+
+def test_owned_expansions_ride_in_the_collection_file():
+    """Expansions were their own tick and their own CSV. Nobody thinks of the
+    shelf and the expansions on it as two things to ask for separately, so the
+    one tick writes both — under a `row_type` column, because they are still
+    two shapes and a reader has to be able to tell them apart."""
+    zf, _ = _export(_store(), [ExportDataset.COLLECTION])
+    assert sorted(zf.namelist()) == ["README.txt", "collection.csv"]
+    rows = _rows(zf, "collection.csv")
+    assert [(r["row_type"], r["game_name"]) for r in rows] == [
+        ("shelf", "Wingspan"),
+        ("expansion", "Wingspan: Europe"),
+    ]
+    shelf, expansion = rows
+    assert shelf["status"] == "owned"
+    # An expansion has no shelf status, and inventing one would put a value in
+    # a column somebody filters on that the app's own shelf never writes.
+    assert expansion["status"] == ""
+    assert expansion["is_expansion"] == "true"
+    assert expansion["base_game_bgg_id"] == str(shelf["bgg_id"])
+    assert expansion["game_id"] == "g2"
+
+
+def test_the_collection_count_covers_the_expansions_it_ships():
+    """The number on the row is the reason the sheet exists. Counting the shelf
+    alone would promise 1 and hand over a file with 2 rows in it."""
+    counts = {d.id: d.row_count for d in S.manifest(_SB(_store()), ME)}
+    assert counts[ExportDataset.COLLECTION] == 2
 
 
 def test_a_play_someone_else_logged_is_still_in_your_export():
@@ -333,15 +375,6 @@ def test_both_play_datasets_share_one_read_of_the_history():
     assert both == solo.reads["boardgamebuddy_plays"]
 
 
-def test_buddies_and_ghosts_stay_in_separate_files():
-    """Merging them would invent an account for every table nickname."""
-    zf, _ = _export(_store(), [ExportDataset.BUDDIES])
-    buddies = _rows(zf, "buddies.csv")
-    assert [b["display_name"] for b in buddies] == ["Them"]
-    assert buddies[0]["requested_by_you"] == "true"
-    assert [g["name"] for g in _rows(zf, "ghost_players.csv")] == ["Ghost Pat"]
-
-
 def test_a_chapter_is_exported_once_whether_written_or_borrowed():
     """The builder unions the user's selections with what they authored, so a
     chapter that is both must not appear twice."""
@@ -354,25 +387,11 @@ def test_a_chapter_is_exported_once_whether_written_or_borrowed():
     assert chapters[0]["content"] == "Deal 8 cards."
 
 
-def test_the_profile_export_never_carries_bgg_credentials():
-    """The row this reads also holds an encrypted password and live session
-    cookies. A zip that leaves the app must not contain them."""
-    store = _store()
-    store["boardgamebuddy_profiles"][0].update({
-        "bgg_password_enc": "SHOULD-NEVER-SHIP",
-        "bgg_session_id": "SHOULD-NEVER-SHIP",
-    })
-    zf, _ = _export(store, [ExportDataset.PROFILE])
-    blob = zf.read("profile.csv").decode("utf-8-sig")
-    assert "SHOULD-NEVER-SHIP" not in blob
-    assert "mygeek" in blob
-
-
 def test_the_readme_counts_the_rows_it_shipped():
-    zf, _ = _export(_store(), [ExportDataset.PLAYS, ExportDataset.BUDDIES])
+    zf, _ = _export(_store(), [ExportDataset.PLAYS, ExportDataset.GUIDES])
     readme = zf.read("README.txt").decode("utf-8")
     assert "plays.csv (2 rows)" in readme
-    assert "ghost_players.csv (1 row)" in readme
+    assert "guide_chapters.csv (1 row)" in readme
 
 
 def test_an_empty_account_still_produces_every_ticked_file():
@@ -395,7 +414,7 @@ def test_a_collection_larger_than_one_page_is_read_in_full():
         for i in range(EXPORT_PAGE_SIZE + 200)
     ])
     zf, _ = _export(store, [ExportDataset.COLLECTION])
-    assert len(_rows(zf, "collection.csv")) == EXPORT_PAGE_SIZE + 200
+    assert len(_shelf_rows(zf)) == EXPORT_PAGE_SIZE + 200
 
 
 def test_paging_stops_on_a_short_page():
@@ -405,17 +424,17 @@ def test_paging_stops_on_a_short_page():
         for i in range(EXPORT_PAGE_SIZE)
     ])
     zf, _ = _export(store, [ExportDataset.COLLECTION])
-    assert len(_rows(zf, "collection.csv")) == EXPORT_PAGE_SIZE
+    assert len(_shelf_rows(zf)) == EXPORT_PAGE_SIZE
 
 
 # ── The manifest ─────────────────────────────────────────────────────────────
 
 # What the sheet's number counts, per dataset: the records a tick COVERS, not
-# every row it writes. Buddies and ghost players are siblings, so "Buddies · 2"
-# means two people across the two files — that is the default, summing the
-# dataset's own files. Play details is the one exception: its rows are seats
-# and expansions, and "1,847 seats" is not a quantity anybody has an intuition
-# for, so it reports the number of plays it details.
+# every row it writes. That is the default, summing the dataset's own files —
+# and it is what keeps Collection honest now that shelf rows and owned
+# expansions share one CSV. Plays - detailed is the one exception: its rows are
+# seats and expansions, and "1,847 seats" is not a quantity anybody has an
+# intuition for, so it reports the number of plays it details.
 _COUNTED_FILES = {
     ExportDataset.PLAYS_DETAIL: ("plays.csv",),
 }
@@ -511,7 +530,7 @@ def test_the_export_route_returns_a_zip_the_browser_can_save(client):
     res = client.get(
         "/api/v1/boardgame_buddy/export",
         params=[("dataset", "plays"), ("dataset", "plays_detail"),
-                ("dataset", "buddies")],
+                ("dataset", "guides")],
     )
     assert res.status_code == 200
     assert res.headers["content-type"] == "application/zip"
@@ -522,7 +541,7 @@ def test_the_export_route_returns_a_zip_the_browser_can_save(client):
     assert res.headers["access-control-expose-headers"] == "Content-Disposition"
     assert set(zipfile.ZipFile(io.BytesIO(res.content)).namelist()) == {
         "README.txt", "plays.csv", "play_players.csv", "play_expansions.csv",
-        "buddies.csv", "ghost_players.csv",
+        "guide_chapters.csv",
     }
 
 
@@ -536,6 +555,17 @@ def test_a_repeated_dataset_is_not_exported_twice(client):
     assert len(names) == len(set(names))
 
 
-@pytest.mark.parametrize("params", [[], [("dataset", "not-a-dataset")]])
+@pytest.mark.parametrize("params", [
+    [],
+    [("dataset", "not-a-dataset")],
+    # The four retired ticks. An old tab, or a bookmarked export URL, still
+    # sends these — and they must bounce off the enum in validation rather than
+    # reach the route body and KeyError on a registry that no longer has them.
+    # Re-adding one as a no-op member to "be nice" is what this pins shut.
+    [("dataset", "profile")],
+    [("dataset", "expansions")],
+    [("dataset", "buddies")],
+    [("dataset", "achievements")],
+])
 def test_the_export_route_refuses_a_request_that_names_nothing_real(client, params):
     assert client.get("/api/v1/boardgame_buddy/export", params=params).status_code == 422

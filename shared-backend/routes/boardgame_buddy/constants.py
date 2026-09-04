@@ -405,18 +405,23 @@ class ExportDataset(StrEnum):
     relational — a play has a roster and the roster is where the scores are,
     and flattening that into one file loses either the seats or the play.
 
-    The values are the wire contract (`?dataset=plays&dataset=buddies`) and
+    The values are the wire contract (`?dataset=plays&dataset=guides`) and
     they name the CSVs inside the zip, so renaming one is a breaking change to
     a file somebody has already downloaded.
+
+    `profile`, `expansions`, `buddies` and `achievements` were members and are
+    deliberately gone: the profile row is one line the README's own header
+    already states, owned expansions now ride in `collection.csv`, and the
+    other two were checkboxes nobody opens this sheet for. Removing the members
+    rather than leaving them as no-ops is the point — FastAPI validates the
+    query against this enum before the route body reaches the registry, so a
+    stale `?dataset=profile` from an old tab answers 422 instead of blowing up
+    on a missing key. Do not re-add one without a builder behind it.
     """
 
-    PROFILE = "profile"
     COLLECTION = "collection"
-    EXPANSIONS = "expansions"
     PLAYS = "plays"
     PLAYS_DETAIL = "plays_detail"
-    BUDDIES = "buddies"
-    ACHIEVEMENTS = "achievements"
     GUIDES = "guides"
 
 
