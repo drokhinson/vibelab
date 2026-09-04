@@ -2446,14 +2446,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
     transform: rotate(30deg);
   }
 }
-/* The bell is a toggle, so its box doubles as the state of the thing it
-   toggles: lit and turned while the notifications screen is open, at rest the
-   moment it closes. domain/view.js sets aria-pressed on every navigation, so
-   the look and what a screen reader announces are the same fact — and closing
-   the screen from anywhere (the bell, the device back button, a link out) puts
-   the box back. The gear has no pressed state to carry: it opens Settings, it
-   doesn't toggle it. */
-.bgb-global-header__bell[aria-pressed="true"] {
+/* Both are toggles, so each box doubles as the state of the thing it toggles:
+   lit and turned while its screen is open, at rest the moment it closes.
+   domain/view.js sets aria-pressed on every navigation, so the look and what a
+   screen reader announces are the same fact — and closing the screen from
+   anywhere (the button, the device back button, a link out) puts the box back.
+   This is the whole exit affordance now: neither screen carries a close ×. */
+.bgb-global-header__bell[aria-pressed="true"],
+.bgb-global-header__settings[aria-pressed="true"] {
   border-color: var(--accent);
   transform: rotate(30deg);
 }
@@ -2476,7 +2476,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   .bgb-global-header__settings { transition: color 160ms var(--ease), border-color 160ms var(--ease); }
   .bgb-global-header__bell:hover,
   .bgb-global-header__settings:hover,
-  .bgb-global-header__bell[aria-pressed="true"] { transform: none; }
+  .bgb-global-header__bell[aria-pressed="true"],
+  .bgb-global-header__settings[aria-pressed="true"] { transform: none; }
 }
 
 /* DaisyUI's .btm-nav is position:fixed left:0 right:0 — fine on a phone but

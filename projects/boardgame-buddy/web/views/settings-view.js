@@ -147,20 +147,21 @@
       }
     }
 
-    // Settings is reachable from the gear in the global header, i.e. from any
-    // screen — so it dismisses rather than navigating. A close button calling
-    // router.back() returns the user to wherever they opened it from; the old
-    // back arrow hardcoded profile-self and stranded anyone who arrived from
-    // the feed, a game page or a session. profile-self is only the fallback
-    // for a cold /settings deep link, where there is no previous screen and
-    // the bottom nav already highlights the Profile tab.
+    // No close ×, same as the notifications screen. Settings is reachable from
+    // the gear in the global header, i.e. from any screen, so it dismisses
+    // rather than navigating — and the gear is the dismissal: it toggles
+    // (init.js#toggleScreen) and stays lit and turned while this screen is up,
+    // so the control that opened it is visibly the one that closes it. The
+    // device back button already meant the same thing. That is two exits the
+    // user has without learning anything; a third one in the corner was chrome
+    // for its own sake. router.back() returns them wherever they opened it
+    // from — profile-self is only the cold /settings deep-link fallback, where
+    // there is no previous screen and the bottom nav already highlights the
+    // Profile tab.
     _renderHead() {
       return `
         <header class="spoke-head">
           <h2 class="spoke-head__title font-display">Settings</h2>
-          <button class="spoke-head__close" onclick="window.router.back('profile-self')" aria-label="Close settings">
-            <i data-icon="x" class="w-4 h-4"></i>
-          </button>
         </header>
       `;
     }

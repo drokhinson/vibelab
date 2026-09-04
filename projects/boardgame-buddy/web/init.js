@@ -692,23 +692,28 @@
   }
 
   /**
-   * The bell opens the notifications screen, and closes it again.
+   * Both header buttons open their screen, and close it again.
    *
-   * The screen used to carry a close x. It was a third control for an exit the
-   * user already had two of — the device back button, and the very button they
-   * opened it with — and the bell is the one they can see from the screen
-   * itself. router.back() returns them wherever they opened it from, which is
-   * the point: the bell is in the global header, so that could be any screen.
-   * `feed` is only the cold-deep-link fallback, for a session whose first URL
-   * was /notifications and which therefore has nothing behind it.
+   * Neither screen carries a close x any more. It was a third control for an
+   * exit the user already had two of — the device back button, and the very
+   * button they opened it with — and the header button is the one they can see
+   * from the screen itself, lit and turned for as long as it is open
+   * (styles.css, `[aria-pressed="true"]`). router.back() returns them wherever
+   * they opened it from, which is the point: both buttons live in the global
+   * header, so that could be any screen. The fallback is only for a cold deep
+   * link, a session whose first URL was the screen itself and which therefore
+   * has nothing behind it.
+   *
+   * The fallbacks differ because the screens do: notifications is nobody's
+   * home, so a cold one lands on the feed, while settings sits behind the
+   * Profile tab the bottom nav is already highlighting.
    */
-  window.toggleNotifications = function toggleNotifications() {
-    if (window.store.get("currentView") === "notifications") {
-      window.router.back("feed");
-    } else {
-      window.router.go("notifications");
-    }
-  };
+  function toggleScreen(name, coldFallback) {
+    if (window.store.get("currentView") === name) window.router.back(coldFallback);
+    else window.router.go(name);
+  }
+  window.toggleNotifications = () => toggleScreen("notifications", "feed");
+  window.toggleSettings = () => toggleScreen("settings", "profile-self");
 
   function syncHeaderDots() {
     if (!window.BgbNotifications) return;
