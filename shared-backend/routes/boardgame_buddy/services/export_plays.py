@@ -39,10 +39,17 @@ from .export_csv import CsvFile
 from .export_reads import chunks, embedded, page_all, profile_names
 
 
+# The games embed MUST name its FK. boardgamebuddy_play_expansions is a
+# junction between plays and games, so PostgREST sees two relationships from
+# plays to games — the direct game_id FK and the one through that junction —
+# and refuses to auto-pick, answering PGRST201 rather than rows. That is a 500
+# on both play ticks and nothing else, since every other dataset's embed is
+# unambiguous. play_routes._SELECT_PLAY names the same FK for the same reason.
 _PLAY_SELECT = (
     "id, user_id, played_at, created_at, game_id, game_name, play_mode, "
     "notes, photo_url, country_code, bgg_play_id, import_batch_id, "
-    "import_group_id, imported_at, boardgamebuddy_games(bgg_id)"
+    "import_group_id, imported_at, "
+    "boardgamebuddy_games!boardgamebuddy_plays_game_id_fkey(bgg_id)"
 )
 
 # The roster column's two delimiters. `|` separates seats, `:` separates a name

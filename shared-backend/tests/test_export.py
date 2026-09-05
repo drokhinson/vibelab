@@ -44,6 +44,17 @@ THEM = "user-them"
 
 # ── Fakes ────────────────────────────────────────────────────────────────────
 
+# Embeds PostgREST cannot resolve on its own, as {parent: {embedded table}}.
+# boardgamebuddy_play_expansions is a junction between plays and games, so a
+# select from plays that asks for `boardgamebuddy_games(...)` matches two
+# relationships — the direct game_id FK and the one through that junction — and
+# the real PostgREST answers PGRST201 instead of rows. The fake serves embedded
+# rows pre-baked onto the store and would happily ignore the hint, so it
+# enforces the requirement here: without this, a select that 500s in production
+# passes every test in this file.
+_AMBIGUOUS_EMBEDS = {"boardgamebuddy_plays": {"boardgamebuddy_games"}}
+
+
 class _Q:
     """Just enough of the PostgREST builder for the export's reads."""
 
@@ -53,10 +64,22 @@ class _Q:
         self.lo, self.hi = 0, None
         self.head, self.counting = False, False
 
-    def select(self, *_cols, count=None, head=None):
+    def select(self, *cols, count=None, head=None):
+        self._reject_ambiguous_embeds(" ".join(str(c) for c in cols))
         self.counting = count is not None
         self.head = bool(head)
         return self
+
+    def _reject_ambiguous_embeds(self, clause):
+        """Raise on an embed the real PostgREST would refuse to auto-pick."""
+        for embed in _AMBIGUOUS_EMBEDS.get(self.table, ()):
+            for match in re.finditer(rf"{embed}(!?)", clause):
+                if not match.group(1):
+                    raise RuntimeError(
+                        f"PGRST201: more than one relationship between "
+                        f"{self.table!r} and {embed!r} — name the FK, e.g. "
+                        f"{embed}!boardgamebuddy_plays_game_id_fkey(...)"
+                    )
 
     def eq(self, col, val):
         self.eqs.append((col, val))
