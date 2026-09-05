@@ -698,7 +698,7 @@
             <span class="set-card__row-body">
               <span class="set-card__row-title">Export your data</span>
               <span class="set-card__row-sub">
-                Download your collection, plays, buddies and more as a zip of
+                Download your collection, plays and guides as a zip of
                 CSV files.
               </span>
             </span>

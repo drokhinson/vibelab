@@ -34,20 +34,17 @@ def _count(sb: Client, table: str, column: str, value: str) -> int:
     return int(res.count or 0)
 
 
-def _count_buddies(sb: Client, user_id: str) -> int:
-    """Mutual edges in either direction, plus ghost nicknames.
+def _count_collection(sb: Client, user_id: str) -> int:
+    """Shelf rows plus owned expansions — both live in `collection.csv`.
 
-    Summed rather than reported for the primary file alone because the two are
-    siblings, not parent and child: an account with no accepted buddies and
-    twelve named ghosts would otherwise read "Buddies · 0" and get skipped.
+    Summed rather than reported for the shelf alone because the tick covers
+    both: an account with forty games and eleven expansions must not read
+    "Collection · 40" and then hand over a file with fifty-one rows in it.
     """
-    edges = (
-        sb.table("boardgamebuddy_buddy_edges")
-        .select("id", count="exact", head=True)
-        .or_(f"user_a.eq.{user_id},user_b.eq.{user_id}")
-        .execute()
-    ).count or 0
-    return int(edges) + _count(sb, "boardgamebuddy_buddies", "owner_id", user_id)
+    return (
+        _count(sb, "boardgamebuddy_collections", "user_id", user_id)
+        + _count(sb, "boardgamebuddy_user_expansions", "user_id", user_id)
+    )
 
 
 def _count_guides(sb: Client, user_id: str) -> int:
@@ -87,30 +84,17 @@ class _Spec:
 
 
 # Order is the order the sheet lists them and the order they are built, so the
-# two read the same way: the account, then what is on the shelf, then what was
-# played with it, then the people and the writing around that.
+# two read the same way: what is on the shelf, then what was played with it in
+# both of its forms, then the writing around that.
 SPECS: dict[ExportDataset, _Spec] = {
-    ExportDataset.PROFILE: _Spec(
-        label="Profile",
-        blurb="Your display name, handle, join date and linked BGG username.",
-        files=("profile.csv",),
-        count=lambda sb, uid: 1,
-        build=export_reads.build_profile,
-    ),
     ExportDataset.COLLECTION: _Spec(
         label="Collection",
-        blurb="Every shelf row — owned, previously owned and wishlist — with "
-              "the BGG purchase details where you have them.",
+        blurb="Every shelf row — owned, previously owned and wishlist — plus "
+              "the expansions you own, with the BGG purchase details where you "
+              "have them.",
         files=("collection.csv",),
-        count=lambda sb, uid: _count(sb, "boardgamebuddy_collections", "user_id", uid),
+        count=_count_collection,
         build=export_reads.build_collection,
-    ),
-    ExportDataset.EXPANSIONS: _Spec(
-        label="Owned expansions",
-        blurb="Expansions you own, which the app keeps apart from the shelf.",
-        files=("expansions.csv",),
-        count=lambda sb, uid: _count(sb, "boardgamebuddy_user_expansions", "user_id", uid),
-        build=export_reads.build_expansions,
     ),
     ExportDataset.PLAYS: _Spec(
         label="Plays",
@@ -121,27 +105,12 @@ SPECS: dict[ExportDataset, _Spec] = {
         build=build_plays,
     ),
     ExportDataset.PLAYS_DETAIL: _Spec(
-        label="Play details",
+        label="Plays - detailed",
         blurb="The same plays split out one row per player and per expansion "
               "used, for pivoting. Joins back to plays.csv on play_id.",
         files=("play_players.csv", "play_expansions.csv"),
         count=count_plays,
         build=build_play_details,
-    ),
-    ExportDataset.BUDDIES: _Spec(
-        label="Buddies",
-        blurb="Your buddy list and pending requests, plus the ghost players "
-              "you've named at the table.",
-        files=("buddies.csv", "ghost_players.csv"),
-        count=_count_buddies,
-        build=export_reads.build_buddies,
-    ),
-    ExportDataset.ACHIEVEMENTS: _Spec(
-        label="Achievements",
-        blurb="Badges you've unlocked and when.",
-        files=("achievements.csv",),
-        count=lambda sb, uid: _count(sb, "boardgamebuddy_user_achievements", "user_id", uid),
-        build=export_reads.build_achievements,
     ),
     ExportDataset.GUIDES: _Spec(
         label="Reference guides",
@@ -183,6 +152,11 @@ Notes
 * Every file is UTF-8 CSV with a byte-order mark, so a double-click opens it in
   Excel with accented game names intact. Fields are comma-separated and quoted
   per RFC 4180.
+* collection.csv is one file holding two kinds of row, told apart by its first
+  column: `row_type = shelf` is a game on your shelf — owned, previously owned
+  or wishlist, per the `status` column — and `row_type = expansion` is an
+  expansion you own. An expansion has no shelf status, so `status` is blank on
+  those rows and the purchase columns are empty.
 * plays.csv holds both the plays you logged and the plays somebody else logged
   you into — the same history the Plays screen shows. `logged_by_you` tells the
   two apart.
@@ -208,8 +182,10 @@ Notes
 * A handful of cells begin with a tab character. That is deliberate: a value
   starting with =, + or @ is treated as a formula by spreadsheet apps, and the
   tab makes them read it as the text it is.
-* Your BoardGameGeek password and session cookies are NOT in this export, by
-  design. Only the linked username is.
+* Nothing off your account row is in this export — not your linked
+  BoardGameGeek username, and emphatically not the encrypted BGG password and
+  session cookies stored beside it. The account line at the top of this file is
+  the whole of it.
 
 This file was generated by BoardgameBuddy. Nothing here is sent anywhere — the
 archive was built for this download and not stored.
