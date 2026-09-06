@@ -581,6 +581,7 @@
       return window.renderSuggestedBuddiesRail(card.suggestions, {
         addHandler: "window.feedView._addBuddy",
         cancelHandler: "window.feedView._cancelBuddy",
+        dismissHandler: "window.feedView._dismissBuddy",
         stateFor: (userId) => (this._buddyState.get(userId) || {}),
       });
     }
@@ -617,6 +618,7 @@
         mode: "add",
         addHandler: "window.feedView._addBuddy",
         cancelHandler: "window.feedView._cancelBuddy",
+        dismissHandler: "window.feedView._dismissBuddy",
         state: next.state,
         requestId: next.requestId,
       });
@@ -645,6 +647,95 @@
       } finally {
         this._busy.delete(userId);
       }
+    }
+
+    // "Stop suggesting this person". The tile goes for good — which is the
+    // whole request, unlike a send, where leaving would be a side effect
+    // nobody asked for (see the note on _patchTile).
+    //
+    // Optimistic, and deliberately not behind a confirm: nothing is destroyed
+    // here — the person keeps every ability they had, is never told, and
+    // /profiles/search still finds them — so this follows the "Not me" on the
+    // ghost-claim list rather than the project's destructive-confirm rule.
+    //
+    // The collapse and the request run together rather than one after the
+    // other: the animation is ~220ms, which is about a round trip, so waiting
+    // on the server first would cost the whole "the tap registered" feel for
+    // nothing.
+    async _dismissBuddy(userId) {
+      if (this._busy.has(userId)) return;
+      this._busy.add(userId);
+      const removed = window.removeBuddySuggestionTile(this.container, userId);
+      this._buddyState.delete(userId);
+      const undo = this._dropSuggestion(userId);
+      try {
+        await window.Buddy.dismissSuggestion(userId);
+        await removed;
+        // Re-warm the cached first page off a server that now filters this
+        // person out. Fire-and-forget, as _onPlayChanged does.
+        window.Feed.refreshFirstPage().catch(() => {});
+      } catch (e) {
+        undo();
+        await removed;
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't remove that suggestion", "error");
+        }
+        // The one place this view repaints wholesale on a single-tile action,
+        // and the only way to get the tile back — it has already collapsed out
+        // of the row, and the rail may have gone with it. Allowed because
+        // continuity is already broken by that collapse, and because this is
+        // the error path. NOT a _load(): _dropSuggestion mutates the page the
+        // SWR cache is holding, so a re-read would serve back the copy the
+        // undo above has just repaired, and the network round trip would buy
+        // nothing.
+        this.render();
+      } finally {
+        this._busy.delete(userId);
+      }
+    }
+
+    /**
+     * Forget a dismissed person in the page the backend sent, so a later
+     * repaint does not put the tile back.
+     *
+     * Mutated in place on purpose — this object IS the SWR cache entry, so the
+     * edit reaches the copy the next mount paints from; and the DOM is already
+     * correct, so going through store.set would repaint the whole feed to
+     * achieve what has just been done surgically.
+     *
+     * A card left with no suggestions is dropped whole rather than painting an
+     * empty rail, and _firstPageLen moves with it for the reason _onPlayChanged
+     * spells out — _onUploadsLanded slices on that boundary.
+     *
+     * @returns {() => void} puts every card back exactly as it was. Undoing in
+     *   push order re-inserts the higher index first, so each later insert
+     *   shifts the earlier one to where it belongs.
+     */
+    _dropSuggestion(userId) {
+      if (!this._page || !Array.isArray(this._page.cards)) return () => {};
+      const cards = this._page.cards;
+      const undos = [];
+      for (let i = cards.length - 1; i >= 0; i--) {
+        const card = cards[i];
+        if (!card || card.kind !== "suggested_buddies") continue;
+        const before = card.suggestions || [];
+        const after = before.filter((x) => x.user_id !== userId);
+        if (after.length === before.length) continue;
+        card.suggestions = after;
+        if (after.length > 0) {
+          undos.push(() => { card.suggestions = before; });
+          continue;
+        }
+        const wasInFirstPage = i < this._firstPageLen;
+        cards.splice(i, 1);
+        if (wasInFirstPage) this._firstPageLen--;
+        undos.push(() => {
+          card.suggestions = before;
+          cards.splice(i, 0, card);
+          if (wasInFirstPage) this._firstPageLen++;
+        });
+      }
+      return () => undos.forEach((fn) => fn());
     }
 
     async _cancelBuddy(requestId, userId) {

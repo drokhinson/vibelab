@@ -342,6 +342,26 @@ CREATE INDEX IF NOT EXISTS idx_bgb_buddy_edges_user_b ON public.boardgamebuddy_b
 GRANT SELECT ON public.boardgamebuddy_buddy_edges TO boardgamebuddy_role;
 
 
+-- ── Suggestion dismissals ─────────────────────────────────────────────────────
+-- "Stop suggesting this person" (migration 013). Per-viewer and one-directional:
+-- it removes dismissed_user_id from the three suggestion RPCs for user_id only,
+-- is never shown to the person dismissed, and blocks nothing — they can still
+-- find the viewer, send them a request, and turn up in /profiles/search.
+-- No surrogate id: the pair IS the identity, and the primary key serves both
+-- query shapes (everyone one viewer dismissed; one exact pair).
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_buddy_suggestion_dismissals (
+  user_id UUID NOT NULL,
+  dismissed_user_id UUID NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT boardgamebuddy_buddy_suggestion_dismissals_pkey PRIMARY KEY (user_id, dismissed_user_id),
+  CONSTRAINT bgb_suggestion_dismissals_user_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT bgb_suggestion_dismissals_dismissed_fkey FOREIGN KEY (dismissed_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT bgb_suggestion_dismissals_not_self CHECK ((user_id <> dismissed_user_id))
+);
+ALTER TABLE public.boardgamebuddy_buddy_suggestion_dismissals ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_buddy_suggestion_dismissals TO boardgamebuddy_role;
+
+
 -- ── Ghost claims ──────────────────────────────────────────────────────────────
 -- "That ghost player is me" — a claimant asking the ghost's owner to merge
 -- those rows onto their account.

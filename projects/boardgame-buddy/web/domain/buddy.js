@@ -82,6 +82,19 @@
     // button for a request that's already sent.
     static suggested() { return window.api.get("/buddies/suggested"); }
 
+    // "Stop suggesting this person" (migration
+    // `013_buddy_suggestion_dismissals`). Per-viewer and silent —
+    // it is not a block, the person is never told, and /profiles/search still
+    // finds them, which is what makes a mis-tapped × recoverable. Sending them
+    // a request later clears the dismissal server-side.
+    //
+    // Idempotent, so the retry behind a dropped response is not an error on a
+    // screen whose tile has already gone. Nothing to invalidate: the
+    // suggestion lists are uncached for the reason above suggested().
+    static dismissSuggestion(userId) {
+      return window.api.del(`/buddies/suggested/${encodeURIComponent(userId)}`);
+    }
+
     // The onboarding "Add buddies" step's list. A separate endpoint, not
     // suggested() with a bigger limit: that one only returns people the
     // viewer already shares a play or a buddy with, which is empty for the

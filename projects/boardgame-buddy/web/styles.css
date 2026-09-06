@@ -3339,12 +3339,67 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 .buddy-tile {
+  position: relative;
   flex: 0 0 130px;
   background: var(--polaroid-bg-soft);
   border: 1px solid var(--polaroid-line);
   border-radius: 0.55rem;
   padding: 0.6rem; text-align: center;
   color: var(--polaroid-ink);
+}
+
+/* "Stop suggesting this person" — the × in an add tile's corner.
+   Quiet on purpose: it sits on every tile in the rail and the tile's job is
+   still to offer the person, so it reads as an escape hatch rather than as a
+   second call to action. --polaroid-muted, not --rust: this destroys nothing
+   (the person keeps every ability they had, and search still finds them), so
+   dressing it as danger would misdescribe it. */
+.buddy-tile__dismiss {
+  position: absolute;
+  top: 0.2rem; inset-inline-end: 0.2rem;
+  display: grid; place-items: center;
+  width: 20px; height: 20px;
+  border: 0; border-radius: 999px;
+  background: transparent;
+  color: var(--polaroid-muted);
+  cursor: pointer; padding: 0; line-height: 0;
+  opacity: 0.55;
+  transition: opacity 120ms var(--ease), background 120ms var(--ease);
+}
+/* 44×44 hit area without inflating the 20px control
+   (.claude/rules/mobile-web.md §5). It overlaps the avatar's own tap zone at
+   the tile's top-right corner; the × wins there because it is on top, which is
+   the right precedence — the avatar is 56px of target and loses one corner. */
+.buddy-tile__dismiss::before { content: ""; position: absolute; inset: -12px; }
+.buddy-tile__dismiss:active { opacity: 1; background: var(--polaroid-line); }
+@media (hover: hover) {
+  .buddy-tile__dismiss:hover { opacity: 1; background: var(--polaroid-line); }
+}
+.buddy-tile__dismiss:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--polaroid-accent);
+  outline-offset: 1px;
+}
+
+/* Leaving. The tile collapses along the rail's own axis rather than vanishing
+   between two frames — see removeBuddySuggestionTile in
+   ui/buddy-suggestion-rail.js for why a suggestion that is being REMOVED gets
+   an exit where one that has merely been added does not.
+   The negative inline-end margin eats .feed-rail__scroll's 0.6rem gap, which
+   would otherwise be left behind as a hole in the row. */
+.buddy-tile--leaving {
+  min-width: 0;
+  padding-left: 0; padding-right: 0;
+  margin-inline-end: -0.6rem;
+  border-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: flex-basis 220ms var(--ease), opacity 140ms var(--ease),
+              padding 220ms var(--ease), margin-inline-end 220ms var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .buddy-tile--leaving { transition: none; }
 }
 .buddy-tile__avatar-wrap {
   margin: 0 auto 0.35rem; cursor: pointer;

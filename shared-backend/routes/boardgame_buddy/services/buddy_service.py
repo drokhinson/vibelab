@@ -19,6 +19,7 @@ from ..models import (
     BulkBuddyRequestResponse,
 )
 from ._helpers import canonical_edge_pair, edge_response, fetch_profiles_by_ids
+from . import buddy_suggestion_service
 
 
 def _request_response(
@@ -95,6 +96,15 @@ def send_request(sb, viewer_id: str, target_user_id: str) -> BuddyRequestRespons
     )
     if not target.data:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Asking to be somebody's buddy contradicts having said "stop suggesting
+    # them", so the older signal goes. Once, here, rather than on each of the
+    # success branches below: a fresh request, an idempotent repeat and the
+    # auto-accept are all the viewer reaching for this person, and on the two
+    # branches that raise there is no dismissal left to matter anyway (an edge
+    # already excludes them from every suggestion list). It is also what makes
+    # a mis-tapped X recoverable — find them in search, add them, row gone.
+    buddy_suggestion_service.clear(sb, viewer_id, target_user_id)
 
     user_a, user_b = canonical_edge_pair(viewer_id, target_user_id)
     existing = (
