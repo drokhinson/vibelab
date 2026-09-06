@@ -106,7 +106,6 @@ DECLARE
   v_proxy     BOOLEAN := COALESCE(p_claimant, p_requester) <> p_requester;
   v_sum       JSONB;
   v_sum_cl    JSONB;
-  v_collides  BOOLEAN;
   v_claim     RECORD;
   v_has_claim BOOLEAN := false;
   v_id        UUID;
@@ -198,14 +197,21 @@ BEGIN
     RETURN jsonb_build_object('error', 'not_visible');
   END IF;
 
+  -- Two codes, not one widened code: already_seated reads "You're already a
+  -- player on one of those plays" and is still exactly right for a self-claim,
+  -- while target_seated is the same fact about somebody else. One message
+  -- covering both would be wrong on whichever path it was not written for —
+  -- the same argument RPC_ERROR_STATUS already makes for keeping `host_only`
+  -- separate from `forbidden`.
   IF v_proxy THEN
     v_sum_cl := bgb_ghost_summary(v_claimant, p_owner, v_key);
-    v_collides := (v_sum_cl->>'collides')::BOOLEAN;
+    IF (v_sum_cl->>'collides')::BOOLEAN THEN
+      RETURN jsonb_build_object('error', 'target_seated');
+    END IF;
   ELSE
-    v_collides := (v_sum->>'collides')::BOOLEAN;
-  END IF;
-  IF v_collides THEN
-    RETURN jsonb_build_object('error', 'already_seated');
+    IF (v_sum->>'collides')::BOOLEAN THEN
+      RETURN jsonb_build_object('error', 'already_seated');
+    END IF;
   END IF;
 
   IF v_has_claim THEN

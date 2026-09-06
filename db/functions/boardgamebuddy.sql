@@ -1072,7 +1072,7 @@
 --                        p_play_id UUID DEFAULT NULL)
 --   → JSONB (the outgoing claim) | { "error": "own_roster" | "ghost_gone" |
 --     "not_visible" | "already_seated" | "already_linked" | "declined_twice" |
---     "not_buddies" | "play_required" | "target_declined" |
+--     "not_buddies" | "play_required" | "target_declined" | "target_seated" |
 --     "display_name_required" | "claim_not_found" }
 --   Defined in: db/migrations/boardgamebuddy/014_ghost_claim_proxy.sql
 --               (was 003_rpcs.sql — 014 DROPped the 3-arg form. Position 1 used

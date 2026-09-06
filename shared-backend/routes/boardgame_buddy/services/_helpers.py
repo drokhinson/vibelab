@@ -38,6 +38,14 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "declined_twice": (409, "They've already declined that link"),
     "ghost_gone": (410, "That ghost is no longer on their plays"),
     "not_visible": (403, "You can't see that play"),
+    # Proxy claims (migration 014). `already_seated` above stays first-person
+    # ("You're already a player") because it is still what a SELF claim gets;
+    # target_seated is the same fact about somebody else, and one widened
+    # message would be wrong on whichever path it was not written for.
+    "not_buddies": (403, "You can only claim a ghost for one of your buddies"),
+    "play_required": (400, "Pick the play you're claiming from"),
+    "target_declined": (409, "They've already said that isn't them"),
+    "target_seated": (409, "They're already a player on one of those plays"),
     # `invalid_transition` is deliberately absent: its detail is dynamic
     # (from/to), so update_phase composes and raises that one itself.
 }
