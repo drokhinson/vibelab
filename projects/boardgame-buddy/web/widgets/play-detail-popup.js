@@ -32,6 +32,14 @@
   // Device-back guard token — see ui/back-guard.js.
   let _back = 0;
 
+  // The card markup currently painted into the backdrop. render() compares
+  // against it and returns without touching the DOM when the new markup is
+  // byte-identical, which is the common case for a background revalidation:
+  // replacing innerHTML with the same string still tears down and rebuilds
+  // every node, and the photo <img> visibly blinks as it does. Cleared
+  // wherever the backdrop itself is created or destroyed.
+  let _lastHtml = null;
+
   async function show(playId) {
     if (!playId) return;
     dismiss();
@@ -41,6 +49,10 @@
     // seed is a projection of a feed page that may have been served stale (the
     // feed's own cache holds a long stale window on purpose), and this is an
     // EDIT surface. What the seed buys is the first frame, not the fetch.
+    //
+    // What the revalidation no longer buys is a repaint: render() drops the
+    // one it would have done when the fetch confirms what is already on
+    // screen, which is the common case and was the visible flicker.
     //
     // There is no `loading` flag any more: it existed only to drive the
     // spinner, the spinner is now gated on having nothing to show, and a flag
@@ -86,6 +98,7 @@
   function dismiss() {
     if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
     _back = 0;
+    _lastHtml = null;
     const existing = document.getElementById(BACKDROP_ID);
     if (existing && existing.parentNode) {
       existing.parentNode.removeChild(existing);
@@ -104,6 +117,7 @@
   }
 
   function mountBackdrop() {
+    _lastHtml = null;
     const root = document.createElement("div");
     root.id = BACKDROP_ID;
     root.className = "polaroid-popup__backdrop play-detail-popup__backdrop";
@@ -125,6 +139,14 @@
   function render() {
     const root = document.getElementById(BACKDROP_ID);
     if (!root) return;
+    const html = renderCard();
+    // Nothing about the card changed — leave the DOM alone. This is what a
+    // revalidation that confirms what the popup already showed now costs:
+    // zero repaints, so no image blink, no lost scroll position, no reset
+    // <details>. It also makes an edit-mode keystroke that doesn't move the
+    // draft a no-op instead of a full rebuild.
+    if (html === _lastHtml) return;
+
     const active = document.activeElement;
     const activeId = active && active.id;
     // Reads as null on <input type=number> (the flat Score field) — that type
@@ -133,7 +155,8 @@
     // wrapped.
     const caret = active && active.selectionStart;
 
-    root.innerHTML = renderCard();
+    root.innerHTML = html;
+    _lastHtml = html;
     window.BgbIcons.render(root);
 
     const closeBtn = root.querySelector(".play-detail-popup__close");
