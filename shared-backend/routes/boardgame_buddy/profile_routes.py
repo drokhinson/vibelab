@@ -59,23 +59,36 @@ async def update_profile(
     body: ProfileCreate,
     user: CurrentUser = Depends(get_current_user),
 ) -> ProfileResponse:
-    """Patch the current user's display_name and/or avatar config.
+    """Patch the current user's display_name, avatar and/or notification tier.
 
-    Either field is independently optional — the settings page saves name
-    and avatar separately. Username is locked in at signup and can't be
-    changed here. Passing avatar=null clears the customization and reverts
-    to the BGB default rendered client-side.
+    Every field is independently optional — the settings page saves name,
+    avatar and notification tier separately. Username is locked in at signup
+    and can't be changed here. Passing avatar=null clears the customization and
+    reverts to the BGB default rendered client-side.
+
+    push_tier (migration 018) rides this endpoint rather than a /push route of
+    its own because it is an account preference like the other two, and this is
+    already the one path the FE knows how to save a profile through and
+    reconcile from — window.store.user updates and every subscriber re-renders,
+    for free.
     """
     patch: dict[str, Any] = {}
     if body.display_name is not None:
         patch["display_name"] = body.display_name
     if "avatar" in body.model_fields_set:
         patch["avatar"] = body.avatar.model_dump() if body.avatar is not None else None
+    # Identity edits retire the first-time onboarding modal — the user has
+    # demonstrably interacted with their profile. Tracked separately from the
+    # patch's emptiness because the notification tier below is NOT such an
+    # edit: it is reachable from Settings without ever meeting that modal, and
+    # turning notifications on must not silently dismiss it.
+    identity_touched = bool(patch)
+    if body.push_tier is not None:
+        patch["push_tier"] = str(body.push_tier)
     if not patch:
         raise HTTPException(status_code=400, detail="Nothing to update")
-    # Any successful save retires the first-time onboarding modal — the
-    # user has demonstrably interacted with their profile.
-    patch["needs_setup"] = False
+    if identity_touched:
+        patch["needs_setup"] = False
     sb = get_supabase()
     result = (
         sb.table("boardgamebuddy_profiles")
