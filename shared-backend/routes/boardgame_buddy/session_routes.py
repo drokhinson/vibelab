@@ -11,8 +11,20 @@ wrote during the Play phase.
 
 Route order note: /sessions/joinable is declared before /sessions/{code} so
 the literal path wins over the slug.
+
+Threading note: GET /sessions/{code} and GET /sessions/joinable are the two
+POLL targets in the app, and both run their Supabase read through
+`asyncio.to_thread`. During Gather the host polls /sessions/{code} every 2s
+(views/play-flow-view.js) and so does every joiner already in the session
+(views/session-viewer-view.js — its 10s Realtime-fallback cadence applies to
+play/settle only), while any buddy idling with the Join panel open polls
+/sessions/joinable every 10s. The Supabase client blocks, so left on the event
+loop a six-person lobby spends a few requests per second holding the ONE
+uvicorn worker — and the host's own /search keystrokes queue behind them.
 """
 
+
+import asyncio
 
 from fastapi import Depends, Path
 
@@ -66,7 +78,9 @@ async def list_joinable_sessions(
 ) -> JoinableSessionsResponse:
     """Drives the Join chooser screen — sessions in phase=gather where the
     caller is a participant, the host, or a buddy of the host."""
-    sessions = session_service.list_joinable(get_supabase(), user.user_id)
+    sessions = await asyncio.to_thread(
+        session_service.list_joinable, get_supabase(), user.user_id
+    )
     return JoinableSessionsResponse(sessions=sessions)
 
 
@@ -81,7 +95,7 @@ async def get_session(
 ) -> SessionResponse:
     """Read endpoint. Open to any caller — knowing the code is the access
     token for the lobby."""
-    return session_service.get_session(get_supabase(), code)
+    return await asyncio.to_thread(session_service.get_session, get_supabase(), code)
 
 
 @router.post(
