@@ -19,6 +19,11 @@
   // all, so every Plays mount, every debounced search keystroke and every
   // return visit re-fetched pages the client had already seen — backspacing
   // through a search re-issued queries that were already answered.
+  // play_id -> a PlayResponse-shaped object projected from a feed card. Module
+  // scope, not bgbCache: it holds no TTL, is never persisted, and never answers
+  // a fetch — see the note on the seed methods below.
+  const _seeds = new Map();
+
   const LIST_NS = "play.list";
   const LIST_FRESH_TTL_MS = 60 * 1000;
   const LIST_STALE_TTL_MS = 5 * 60 * 1000;
@@ -63,6 +68,74 @@
     }
 
     static get(id) { return window.api.get(`/plays/${id}`); }
+
+    // ── Seeds from the feed (migration 013) ────────────────────────────────
+    //
+    // The feed card now carries the whole play — the full roster with scores
+    // and round_scores, the expansions, the country. That is everything the
+    // card's BACK and the detail popup render, so both can paint from a card
+    // the client already has instead of each calling GET /plays/{id} on open.
+    // Before this, flipping a card showed "Loading play…" for a network hop,
+    // and flipping then maximising fetched the same row twice, because the
+    // card and the popup keep separate state and Play.get is the one domain
+    // read with no cache wrapper.
+    //
+    // A seed is deliberately NOT a cache with a TTL. It is a projection of a
+    // feed page the user is looking at right now, it never satisfies a fetch
+    // on its own, and the surfaces that read it are all re-rendered from the
+    // feed whenever the feed refreshes. Anything that could make it wrong —
+    // an edit, a delete, a leave — drops it explicitly below.
+
+    /**
+     * A feed card, reshaped into the PlayResponse the back face and the popup
+     * expect. Only the names differ between the two shapes; nothing is derived
+     * except `is_own`, which the card implies via its logger rather than
+     * carrying as a field of its own.
+     * @param {any} card a feed play card
+     * @returns {any} PlayResponse-shaped
+     */
+    static fromFeedCard(card) {
+      const g = card.game || {};
+      const me = window.store && window.store.get && window.store.get("user");
+      const logger = card.user || null;
+      return {
+        id: card.play_id,
+        game_id: g.id || null,
+        game_name: g.name || "",
+        game_thumbnail: g.thumbnail_url || g.image_url || null,
+        played_at: card.played_at,
+        created_at: card.created_at,
+        notes: card.notes == null ? null : card.notes,
+        photo_url: card.photo_url == null ? null : card.photo_url,
+        play_mode: card.play_mode || "competitive",
+        country_code: card.country_code == null ? null : card.country_code,
+        players: card.players || [],
+        expansions: card.expansions || [],
+        logged_by_id: logger ? logger.id : null,
+        logged_by_name: logger ? logger.display_name : null,
+        is_own: !!(me && me.id && logger && logger.id === me.id),
+        group_count: card.group_count || 1,
+      };
+    }
+
+    /**
+     * Remember a card's play, if the card is carrying one. Called from the
+     * canonical play-card render, so every surface that draws a card seeds by
+     * construction and no view has to remember to.
+     *
+     * An empty `players` means the RPC predates 013 — the seed is skipped and
+     * every consumer falls back to fetching, exactly as before.
+     */
+    static seedFromFeedCard(card) {
+      if (!card || !card.play_id) return null;
+      if (!Array.isArray(card.players) || card.players.length === 0) return null;
+      const play = Play.fromFeedCard(card);
+      _seeds.set(card.play_id, play);
+      return play;
+    }
+
+    /** The remembered play, or null. Synchronous — this is its whole point. */
+    static seeded(id) { return _seeds.get(id) || null; }
 
     // Any play mutation can shift Profile stats, recent_plays, and the
     // played-not-owned shelf; it can also change Game Detail's recent_plays
@@ -165,6 +238,12 @@
   // mutations that can genuinely destroy or reshape the top play (update,
   // remove, leave) clear it themselves.
   function _invalidatePlayDeps() {
+    // Every seed, not the one that changed: this also fires for the bulk
+    // import-group and import-batch deletes, which drop many plays at once and
+    // whose ids the caller never enumerates. Clearing wholesale is free — the
+    // feed cache is dropped a few lines below, so the next feed paint reseeds
+    // from fresh rows anyway — and it cannot miss a mutation path.
+    _seeds.clear();
     if (window.Profile && window.Profile.invalidate) window.Profile.invalidate();
     if (window.Game && window.Game.invalidateBundle) window.Game.invalidateBundle();
     // Four badges move on a play: plays logged, wins, the biggest table you

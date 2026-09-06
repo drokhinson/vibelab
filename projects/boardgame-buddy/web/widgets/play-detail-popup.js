@@ -21,7 +21,6 @@
   const state = {
     playId: null,
     play: null,
-    loading: false,
     error: null,
     editing: false,
     saving: false,
@@ -36,10 +35,20 @@
   async function show(playId) {
     if (!playId) return;
     dismiss();
+    // Since migration 013 the feed card carries the whole play, so a popup
+    // opened from a card the feed drew has its content before it is mounted
+    // and never shows a loading state. It still revalidates underneath: the
+    // seed is a projection of a feed page that may have been served stale (the
+    // feed's own cache holds a long stale window on purpose), and this is an
+    // EDIT surface. What the seed buys is the first frame, not the fetch.
+    //
+    // There is no `loading` flag any more: it existed only to drive the
+    // spinner, the spinner is now gated on having nothing to show, and a flag
+    // set in three places and read in none is a trap for the next reader.
+    const seed = window.Play.seeded ? window.Play.seeded(playId) : null;
     Object.assign(state, {
       playId,
-      play: null,
-      loading: true,
+      play: seed,
       error: null,
       editing: false,
       saving: false,
@@ -50,7 +59,12 @@
     mountBackdrop();
     render();
     try {
-      state.play = await window.Play.get(playId);
+      const fresh = await window.Play.get(playId);
+      // Never clobber an edit in progress. The user can be typing by the time
+      // this lands — the popup painted from the seed and opened for business
+      // several hundred milliseconds ago — and replacing `play` under an open
+      // draft would reset the form to the server's copy mid-keystroke.
+      if (!state.editing) state.play = fresh;
       if (state.play && state.play.is_own) {
         // Buddy list powers the add-player datalist in edit mode. Free
         // lookup — list is small and cached server-side.
@@ -60,9 +74,11 @@
         window.Buddy.rememberAliases(state.buddies);
       }
     } catch (e) {
-      state.error = (e && e.message) || "Failed to load play";
+      // A failed revalidation over a seed is not an error the user can act on
+      // — the play is on screen. Only a cold open with nothing to show gets
+      // the error state.
+      if (!state.play) state.error = (e && e.message) || "Failed to load play";
     } finally {
-      state.loading = false;
       render();
     }
   }
@@ -78,7 +94,6 @@
     Object.assign(state, {
       playId: null,
       play: null,
-      loading: false,
       error: null,
       editing: false,
       saving: false,
@@ -136,7 +151,12 @@
   }
 
   function renderCard() {
-    if (state.loading || (!state.play && !state.error)) {
+    // Gated on having nothing to show, NOT on `loading`. Since 013 a popup
+    // opened from a feed card starts with a seeded play and a request still in
+    // flight to revalidate it — the old `state.loading ||` test would have put
+    // the spinner over content that was already on screen, which is the exact
+    // thing the seed exists to prevent.
+    if (!state.play && !state.error) {
       return `
         <div class="play-detail-popup__card" role="dialog" aria-modal="true" aria-busy="true">
           <button class="play-detail-popup__close" aria-label="Close">
