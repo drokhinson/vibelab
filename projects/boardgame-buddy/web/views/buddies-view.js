@@ -63,6 +63,13 @@
       // ui/ghost-claim-suggestions.js; only the state and the writes are here.
       this._claimSuggestions = [];
       this._claimRequests = { incoming: [], outgoing: [] };
+      // True while the accept confirm is on screen. Not a _busy key: nothing
+      // is in flight yet, and the row underneath must keep its own buttons
+      // rather than reading "Working…" at a question nobody has answered.
+      // One at a time all the same — PolaroidPopup owns a single backdrop
+      // slot, so a second confirm() would dismiss the first and leave its
+      // promise pending for ever, stranding that row mid-tap.
+      this._claimConfirming = false;
       // True while /buddies/suggested and /ghost-claims/suggestions are in the
       // air. Neither list arrives with the bundle, so this is the only thing
       // that distinguishes "nothing to suggest" from "we have not asked yet" —
@@ -1206,25 +1213,54 @@
      * rows on our plays become the claimant's, so every cache that reads a
      * play has to go — hence Play.invalidateDeps() and not just
      * Buddy.invalidate().
+     *
+     * Confirmed first, for the reason _confirmLink is: this runs the SAME
+     * merge (both go through bgb_link_ghost_rows), and it is irreversible from
+     * this side — once the rows move, only the claimant can step back out of
+     * them, one play at a time. Here the tap is even cheaper than it is there:
+     * Accept sits inside a list the user is skimming for something else,
+     * a thumb's width from Decline. So the dialog leads with the FIGURE, which
+     * is the part they have to weigh — handing over three plays and handing
+     * over three hundred are not the same decision.
      */
     async _acceptClaim(claimId) {
       const busyKey = "claim:" + claimId;
       if (this._busy.has(busyKey)) return;
+      if (this._claimConfirming) return;
       const incoming = this._claimRequests.incoming || [];
       const idx = incoming.findIndex((r) => r.id === claimId);
       if (idx < 0) return;
+
+      this._claimConfirming = true;
+      let ok = false;
+      try {
+        ok = await this._confirmClaimMerge(claimId, incoming[idx]);
+      } finally {
+        this._claimConfirming = false;
+      }
+      if (!ok) return;
+
+      // Nothing measured before the dialog survives it: a _load() can land
+      // while it is up, and the row can be answered on another device. Re-read
+      // the list and the index, and take the busy key only now — holding it
+      // across the dialog would have painted "Working…" under an unanswered
+      // question, and dropped a legitimate second attempt after a Cancel.
+      const list = this._claimRequests.incoming || [];
+      const at = list.findIndex((r) => r.id === claimId);
+      if (at < 0) return;
+      if (this._busy.has(busyKey)) return;
       this._busy.add(busyKey);
       this._mutationSeq++;
-      const req = incoming[idx];
+      const req = list[at];
       window.patchGhostClaimRow(claimId, "busy");
-      incoming.splice(idx, 1);
+      list.splice(at, 1);
       this._publishClaimCount();
 
       let result;
       try {
         result = await window.GhostClaim.accept(claimId);
       } catch (e) {
-        incoming.splice(idx, 0, req);
+        list.splice(at, 0, req);
         this._publishClaimCount();
         window.patchGhostClaimRow(claimId, null, req, "request");
         if (typeof showToast === "function") {
@@ -1247,6 +1283,81 @@
           "success",
         );
       }
+    }
+
+    /**
+     * The dialog in front of _acceptClaim. Resolves true to go ahead.
+     *
+     * PolaroidPopup.confirm is the project's ONE confirm surface
+     * (.claude/rules/web-frontend.md, ui-object-design.md §3c), and the copy
+     * deliberately reads as the mirror of _confirmLink's: it is the same merge
+     * seen from the same side, and two wordings for one act would leave the
+     * user guessing whether they do different things.
+     *
+     * @param {string} claimId
+     * @param {any} req the row as the list holds it
+     * @returns {Promise<boolean>}
+     */
+    async _confirmClaimMerge(claimId, req) {
+      const row = await this._withClaimCount(claimId, req);
+      const who = row.other_display_name || "They";
+      const n = Number(row.play_count);
+      // A count of 0 is a real answer (the nickname is gone from every play),
+      // not a missing one — and it is worth showing rather than papering over:
+      // "no plays move" is exactly what the owner should read before agreeing.
+      const known = row.play_count != null && Number.isFinite(n);
+      const plays = known ? `${n} ${n === 1 ? "play" : "plays"}` : "plays";
+      return window.PolaroidPopup.confirm({
+        title: known
+          ? `Move ${plays} to ${who}?`
+          : `“${row.ghost_display_name}” is ${who}?`,
+        body: `${known ? `Your ${plays}` : "Your plays"} with “${row.ghost_display_name}”`
+          + ` move onto ${who}'s account, and ${who} appears in them from now on.`
+          + ` Undoing it means ${who} removing themselves from each play by hand.`,
+        confirmLabel: known ? `Move ${plays}` : "Link them",
+        // Not "Not them" — that is what Decline says, and this is the way out
+        // that answers nothing. The claim stays waiting either way.
+        cancelLabel: "Not now",
+      });
+    }
+
+    /**
+     * The row, with play_count filled in if it can be.
+     *
+     * A row seeded from the profile bundle carries no play_count: that block
+     * does not join the plays (see _seedRequestsFromBundle), which is why its
+     * sub-line paints a skeleton. A dialog whose whole job is to name the
+     * number must not open saying "plays" while the figure is one request
+     * away — so fetch it, and paint the row busy for that round trip, because
+     * a tap with no feedback on a slow network reads as a dead button.
+     *
+     * Never mutates the row in place: a bundle-seeded object IS the cached
+     * bundle's own (only the array was sliced), and writing through to the
+     * cache is the trap _seedRequestsFromBundle already documents. The list
+     * gets a merged copy instead, so the sub-line's skeleton also resolves at
+     * the next render. Falls back to the row as-is if the fetch fails — a
+     * confirm without a figure still beats an accept without a confirm.
+     */
+    async _withClaimCount(claimId, req) {
+      if (req.play_count != null) return req;
+      window.patchGhostClaimRow(claimId, "busy");
+      const claims = await window.GhostClaim.list().catch(() => null);
+      const fresh = claims
+        && (claims.incoming || []).find((r) => r.id === claimId);
+      let row = req;
+      if (fresh) {
+        row = Object.assign({}, req, {
+          play_count: fresh.play_count,
+          last_played_at: fresh.last_played_at,
+        });
+        const list = this._claimRequests.incoming || [];
+        const at = list.findIndex((r) => r.id === claimId);
+        if (at >= 0) list[at] = row;
+      }
+      // Buttons back before the dialog opens: however it is answered, the row
+      // under it is idle until the accept itself starts.
+      window.patchGhostClaimRow(claimId, null, row, "request");
+      return row;
     }
 
     /** Decline a claim on one of our ghosts. They may ask once more. */
