@@ -13,6 +13,7 @@ from ..models import (
     FeedPlayCard,
     FeedPlayParticipant,
     FeedPlayUser,
+    FeedReactor,
     FeedSuggestedBuddiesCard,
     FeedSuggestedBuddy,
     GameSummary,
@@ -70,6 +71,12 @@ def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
         players=[PlayPlayerResponse(**p) for p in (row.get("players") or [])],
         expansions=[PlayExpansionRef(**e) for e in (row.get("expansions") or [])],
         country_code=row.get("country_code"),
+        # Migration 016. Same unmigrated-RPC tolerance as everything above: an
+        # older function returns none of these keys, the defaults hold, and the
+        # session footer simply does not render.
+        reaction_count=int(row.get("reaction_count") or 0),
+        viewer_reacted=bool(row.get("viewer_reacted") or False),
+        reactors=[FeedReactor(**r) for r in (row.get("reactors") or [])],
     )
 
 

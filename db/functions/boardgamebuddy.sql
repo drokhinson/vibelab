@@ -105,11 +105,21 @@
 --            play_mode TEXT, winner_display_name TEXT,
 --            participant_count INT, participants JSONB, group_count INT,
 --            import_group_id UUID, players JSONB, expansions JSONB,
---            country_code TEXT)
+--            country_code TEXT, reaction_count INT, viewer_reacted BOOLEAN,
+--            reactors JSONB)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/014_feed_order_by_played_at.sql)
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/015_feed_full_roster.sql
+--   Last updated in: db/migrations/boardgamebuddy/016_play_reactions.sql
+--               (adds reaction_count, viewer_reacted and reactors — the "Good
+--               game" reaction, drawn on the SESSION footer but stored per
+--               play, because a feed session is grouped client-side off a
+--               viewer-filtered participant list and so has no key worth
+--               storing. A third LATERAL of the same bounded-by-`lim` shape;
+--               `reactors` is capped at 8 for the avatar stack while
+--               reaction_count carries the exact total, and viewer_reacted is
+--               a bool_or over the full set rather than a scan of the cap.)
+--   Previously updated in: db/migrations/boardgamebuddy/015_feed_full_roster.sql
 --               (adds players, expansions and country_code, so the play card's
 --               back face and the detail popup paint from the feed payload
 --               instead of each calling GET /plays/{id} on open. `players` is

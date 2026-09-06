@@ -476,6 +476,27 @@ ALTER TABLE public.boardgamebuddy_play_expansions ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_play_expansions TO boardgamebuddy_role;
 
 
+-- One "good game" from one person to one play (migration 016). The feed shows
+-- it per SESSION, but the row is keyed on the play: a feed session is grouped
+-- client-side off `played_at | participants`, and `participants` is filtered per
+-- viewer, so two people looking at the same night compute different keys. There
+-- is no session identity to store. A footer tap therefore fans out to every play
+-- in the night, sharing one reaction_group_id so the write reads back as one act.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_reactions (
+  play_id UUID NOT NULL,
+  user_id UUID NOT NULL,
+  reaction_group_id UUID DEFAULT gen_random_uuid() NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT boardgamebuddy_play_reactions_pkey PRIMARY KEY (play_id, user_id),
+  CONSTRAINT boardgamebuddy_play_reactions_play_id_fkey FOREIGN KEY (play_id) REFERENCES boardgamebuddy_plays(id) ON DELETE CASCADE,
+  CONSTRAINT boardgamebuddy_play_reactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE
+);
+ALTER TABLE public.boardgamebuddy_play_reactions ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_play_reactions TO boardgamebuddy_role;
+CREATE INDEX IF NOT EXISTS idx_bgb_play_reactions_group ON public.boardgamebuddy_play_reactions USING btree (reaction_group_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_play_reactions_user ON public.boardgamebuddy_play_reactions USING btree (user_id);
+
+
 -- ── Live sessions ─────────────────────────────────────────────────────────────
 -- An at-the-table session in progress. phase walks gather → play → score;
 -- play_id is set once the session finalizes into a logged play. Published to

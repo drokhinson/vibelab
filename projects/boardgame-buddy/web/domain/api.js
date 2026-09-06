@@ -271,7 +271,11 @@
     post(path, body, opts)   { return this._request("POST",   path, { ...(opts || {}), body }); }
     put(path, body)          { return this._request("PUT",    path, { body }); }
     patch(path, body)        { return this._request("PATCH",  path, { body }); }
-    del(path)                { return this._request("DELETE", path); }
+    // An optional body, like put/patch: DELETE /plays/reactions takes the
+    // list of plays a session footer covers. Every existing caller passes a
+    // path alone and is unaffected — _request only attaches a body when one
+    // is actually given.
+    del(path, body)          { return this._request("DELETE", path, { body }); }
 
     /**
      * A binary GET, kept whole as a Blob. Used by the Settings data export.
