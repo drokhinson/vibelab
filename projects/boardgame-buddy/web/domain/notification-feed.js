@@ -1,10 +1,11 @@
 // @ts-check
 // domain/notification-feed.js — the things that happened TO you.
 //
-// Three signals share one feed, one cursor and one read watermark: somebody
+// Five signals share one feed, one cursor and one read watermark: somebody
 // seated you in a play they logged, somebody asked to be your buddy, somebody
-// accepted the request you sent. This is the data layer behind the header bell
-// and views/notifications-view.js.
+// accepted the request you sent, somebody wants one of your ghosts linked to an
+// account, or somebody asked for one to be linked to YOURS. This is the data
+// layer behind the header bell and views/notifications-view.js.
 //
 // NOT A CORE OBJECT, deliberately (.claude/rules/ui-object-design.md §1). A
 // notification shows on exactly one surface and routes to no detail screen of
@@ -17,12 +18,13 @@
 // The server derives the list rather than storing events; see
 // services/notification_service.py for why. Two consequences here: unlinking
 // needs no list bookkeeping beyond dropping the row locally, and neither does
-// answering a buddy request — the next fetch simply will not contain it.
+// answering a buddy request or a ghost claim — the next fetch simply will not
+// contain it, from either party's side.
 
 /**
  * @typedef {Object} Notification
  * @property {string} entry_key   Stable id for the ENTRY, and the cursor tiebreak
- * @property {"play_link"|"buddy_request"|"buddy_accepted"} kind
+ * @property {"play_link"|"buddy_request"|"buddy_accepted"|"ghost_claim"|"ghost_claim_proxy"} kind
  * @property {string} occurred_at
  * @property {boolean} is_unread
  * @property {string|null} actor_id            Whoever did this
@@ -31,7 +33,8 @@
  * @property {Object|null} actor_avatar
  * @property {"batch"|"run"|"act"|null} [play_group]  play_link only, below here
  * @property {string|null} [play_id]           Representative — what the row opens
- * @property {string[]|null} [play_ids]        Every play in the entry
+ * @property {string[]|null} [play_ids]        Every play in the entry. NULL on
+ *   every non-play kind, and that is what keeps the unlink tick box off them.
  * @property {number|null} [group_count]
  * @property {number|null} [game_count]
  * @property {string|null} [played_from]
@@ -41,6 +44,17 @@
  * @property {string|null} [game_thumbnail_url]
  * @property {string|null} [import_batch_id]
  * @property {string|null} [edge_id]           buddy_request / buddy_accepted only
+ * @property {string|null} [claim_id]          ghost_claim / ghost_claim_proxy only,
+ *   below here. edge_id's counterpart: what accept / reject / cancel post to.
+ * @property {string|null} [ghost_display_name] Free text somebody else typed.
+ * @property {string|null} [subject_display_name] The OTHER person the row names
+ *   — the claimant on ghost_claim, the host on ghost_claim_proxy. NULL on a
+ *   self-claim, so its presence is also how the renderer tells the two apart.
+ *
+ * A ghost_claim_proxy row also reuses play_id / game_name / game_thumbnail_url
+ * for the play its claim was raised from, and group_count for the ghost's play
+ * count. It does NOT open that play: the person being claimed for usually
+ * cannot see it, which is the whole reason somebody had to ask on their behalf.
  */
 
 (function () {

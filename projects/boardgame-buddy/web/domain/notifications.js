@@ -30,6 +30,13 @@
       section: "buddies",
       label: (n) => `${n} buddy request${n === 1 ? "" : "s"}`,
     },
+    // Since migration 014 a pending claim ALSO raises the bell's own notifCount
+    // below, so one claim lights two surfaces. That is deliberate and matches
+    // buddyRequestCount, which has always done the same: this slot answers
+    // "there is something waiting on the Buddies screen", notifCount answers
+    // "there is something on the bell", and the claim is genuinely on both.
+    // Do not "fix" it by dropping one — they are different questions, and the
+    // bell's count comes from the server, not from here.
     {
       slot: "ghostClaimRequestCount",
       tab: "profile-self",

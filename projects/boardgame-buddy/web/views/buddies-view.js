@@ -1166,6 +1166,15 @@
       const busyKey = "claim:" + claimId;
       if (this._busy.has(busyKey)) return;
       const incoming = this._claimRequests.incoming || [];
+      // The confirm runs FIRST, before the busy lock and before the optimistic
+      // splice below: cancelling has to leave the row exactly where it was, and
+      // the only path that puts a spliced row back is the error branch.
+      const pre = incoming.findIndex((r) => r.id === claimId);
+      if (pre < 0) return;
+      if (!(await window.GhostClaim.confirmAccept(incoming[pre]))) return;
+      // Re-find after the await: _load() can re-form the list while the dialog
+      // is up, so an index taken before it may now point at a different row.
+      if (this._busy.has(busyKey)) return;
       const idx = incoming.findIndex((r) => r.id === claimId);
       if (idx < 0) return;
       this._busy.add(busyKey);
