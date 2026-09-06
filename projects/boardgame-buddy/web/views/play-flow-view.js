@@ -2726,6 +2726,7 @@
       return `
         <section class="cascade-card cascade-card--expansions">
           <button class="collapsible-header" aria-expanded="${open}"
+                  aria-label="${escapeAttr(this._expansionsHeaderAria())}"
                   onclick="window.playFlowView._toggleExpansionsPicker()">
             <span class="collapsible-header__title">
               <i data-icon="puzzle" class="w-4 h-4"></i>
@@ -2907,14 +2908,39 @@
     // .collapsible-header__title is an inline-flex with a gap — splitting the
     // text in two would make the count its own flex item and widen the space
     // before it.
+    //
+    // Selected-over-available, so a collapsed card says both how many the host
+    // ticked and how many there are left to tick. The denominator only exists
+    // once the list has been answered for this game: while it's still in
+    // flight (or the fetch failed and the cache seeded nothing) "0/0" would
+    // assert this game has no expansions, which is the one thing an
+    // unanswered list can't say — so fall back to the bare count until there
+    // is something real to divide it by.
     _expansionsHeaderLabel() {
       const n = (this._ps.expansionIds || []).length;
-      return `Expansions${n ? ` (${n} selected)` : ""}`;
+      const total = (this._expansions || []).length;
+      if (!total) return n ? `Expansions (${n})` : "Expansions";
+      return `Expansions (${n}/${total})`;
+    }
+
+    /** The same thing spelled out, so a screen reader doesn't read the header
+     *  as "expansions three slash five". */
+    _expansionsHeaderAria() {
+      const n = (this._ps.expansionIds || []).length;
+      const total = (this._expansions || []).length;
+      if (!total) return n ? `Expansions, ${n} selected` : "Expansions";
+      return `Expansions, ${n} of ${total} selected`;
     }
 
     _refreshExpansionCount() {
       const el = this.container.querySelector(".cascade-exp-title");
       if (el) el.textContent = this._expansionsHeaderLabel();
+      // aria-label overrides the button's text content, so it has to move in
+      // step with the visible label or the two drift apart after a toggle.
+      const btn = this.container.querySelector(
+        ".cascade-card--expansions .collapsible-header",
+      );
+      if (btn) btn.setAttribute("aria-label", this._expansionsHeaderAria());
     }
 
     // ── Reference guide ─────────────────────────────────────────────────────
