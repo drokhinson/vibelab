@@ -115,6 +115,15 @@ def fetch_feed_plays(
 
 
 def fetch_hot_games(sb, *, window_days: int = 7, limit: int = 10) -> HotGamesResponse:
+    """Top-N games by plays in the window, for the Feed's "Hot this week" rail.
+
+    play_count counts LIVE-LOGGED plays only: bgb_hot_games (migration 013)
+    drops every row the Settings importer wrote — anything carrying an
+    import_batch_id or import_group_id — so one pasted notebook of 106 games
+    can't take the rail. BGG-synced plays still count. This is the one read of
+    boardgamebuddy_plays that deliberately does not see the imported rows;
+    every other counter in the app does.
+    """
     rows = sb.rpc(
         "bgb_hot_games",
         {"window_days": window_days, "lim": limit},

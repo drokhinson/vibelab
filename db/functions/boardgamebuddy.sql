@@ -1,9 +1,14 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 012_buddy_aliases.sql (bgb_play_partners re-emitted so each
---               `accounts` entry carries other_alias — the viewer's private
---               nickname for that buddy, read off whichever side of the
---               canonical edge the viewer sits on. Body otherwise unchanged).
+-- Last updated: 013_hot_games_exclude_imports.sql (bgb_hot_games re-emitted so
+--               the Feed's "Hot this week" rail counts live plays only —
+--               rows carrying import_batch_id or import_group_id are filtered
+--               out before the GROUP BY. Signature and ordering unchanged).
+--               Before that: 012_buddy_aliases.sql (bgb_play_partners
+--               re-emitted so each `accounts` entry carries other_alias — the
+--               viewer's private nickname for that buddy, read off whichever
+--               side of the canonical edge the viewer sits on. Body otherwise
+--               unchanged).
 --               Before that: 010_notifications_perf.sql (bgb_notifications and
 --               bgb_notifications_unread are rewritten in place — same
 --               signatures, same output, both proved equivalent to their 009
@@ -32,9 +37,16 @@
 --   → TABLE (game_id UUID, play_count BIGINT)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/012_rpcs_feed_and_stats.sql)
+--   Last updated in: db/migrations/boardgamebuddy/013_hot_games_exclude_imports.sql
+--               (imported plays no longer count: rows with a non-NULL
+--                import_batch_id (one per paste, 007) or import_group_id (a
+--                run of identical plays inside a paste, 005) are dropped
+--                before the GROUP BY. The rail is a "what is everybody
+--                playing right now" signal and a backfilled notebook is not
+--                that. BGG-synced plays still count — see the migration.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Top-N most-played games in the last N days for the Feed's
---               "Hot Games" card.
+--               "Hot Games" card, counting live-logged plays only.
 
 -- bgb_user_stats(uid UUID)
 --   → TABLE (total_plays BIGINT, unique_games BIGINT, win_count BIGINT,
