@@ -2974,14 +2974,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   letter-spacing: -0.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.play-card__back-meta {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--polaroid-muted);
-  font-weight: 700;
-  flex-shrink: 0;
-}
 /* The scoreboard is the back's only growable child, and it scrolls. It used to
    have all the room it needed because a solo play rendered full-width and grew
    to whatever its photo demanded; now every card is a fixed 230px photo plus a
@@ -2998,8 +2990,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
-.play-card__back-head,
-.play-card__back-footer { flex: none; }
+.play-card__back-head { flex: none; }
 .play-card__back-player {
   display: flex;
   align-items: center;
@@ -3118,17 +3109,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   padding-top: 12px;
   margin-top: 12px;
   border-top: 1px dashed var(--polaroid-line);
-}
-.play-card__back-footer {
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px dashed var(--polaroid-line);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--polaroid-muted);
-  font-weight: 700;
-  text-align: center;
 }
 .play-card__back-loading,
 .play-card__back-error {

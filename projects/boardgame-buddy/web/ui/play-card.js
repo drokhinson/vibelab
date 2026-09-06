@@ -21,10 +21,9 @@
 //            plate across the bottom of the photo. It sits INSIDE the fixed
 //            photo frame, so it costs the card no height; the badge lifts
 //            above it (.has-note) on the one card that carries both.
-//   Back   → game title + duration, ranked scoreboard with the winner row
-//            tinted — a registered player's row opens their profile —
-//            optional notes, the same maximize button (top-right), and a
-//            "Tap to flip back" footer.
+//   Back   → game title, ranked scoreboard with the winner row tinted — a
+//            registered player's row opens their profile — optional notes,
+//            and the same maximize button (top-right).
 //
 // Clicking the game-name text, the open button, either maximize button, or a
 // scoreboard row for a registered player acts on its own (data-no-flip).
@@ -424,9 +423,6 @@
     // retired). Staying on the current view preserves scroll position and
     // keeps the game-tab layout intact.
     const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
-    const durationMeta = p.duration_minutes
-      ? `${p.duration_minutes} min`
-      : (p.played_at ? "" : "");
 
     // Rank by score descending; players without a score keep their order
     // after the scored rows.
@@ -449,7 +445,6 @@
       </button>
       <header class="play-card__back-head">
         <span class="play-card__back-title">${escapeHtml(p.game_name || (card.game && card.game.name) || "")}</span>
-        ${durationMeta ? `<span class="play-card__back-meta">${escapeHtml(durationMeta)}</span>` : ""}
       </header>
 
       <ul class="play-card__back-players${ranked.some((pl) => playerAction(pl, p, me)) ? " has-links" : ""}">
@@ -477,8 +472,6 @@
       </ul>
 
       ${notesBlock}
-
-      <div class="play-card__back-footer">Tap to flip back</div>
     `;
   }
 
