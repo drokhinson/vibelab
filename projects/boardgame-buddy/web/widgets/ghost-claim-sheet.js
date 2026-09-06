@@ -28,11 +28,27 @@
     declined_twice: "They've said this isn't you.",
   };
 
+  // The blocked reasons where "not you, but you might know who" is the natural
+  // next question. already_seated is the load-bearing one: it means the viewer
+  // was AT that table, which makes them the best placed person alive to say who
+  // the other name belongs to. own_roster is absent on purpose — the owner's
+  // tool is the Buddies Link panel, which needs nobody's approval.
+  const PROXY_INVITE = {
+    already_seated: "You were at this table — do you know who this is?",
+    already_linked: "Was this someone else at the table?",
+    pending: "Was this someone else at the table?",
+    declined_twice: "Was this someone else at the table?",
+  };
+
   /**
    * @typedef {Object} GhostClaimOpenOpts
    * @property {string} playId
    * @property {string} displayName        the ghost's name, as typed
    * @property {(() => void)} [onClaimed]  fires once, after a successful ask
+   * @property {boolean} [selfBlocked]     the caller already knows the viewer
+   *   sits on this play, so the ghost cannot be them. A HINT for the opening
+   *   title only — the lookup is what actually decides, and it arrives a moment
+   *   later. Getting it wrong costs a heading, never an outcome.
    */
 
   class GhostClaimSheet {
@@ -58,6 +74,24 @@
 
     get isOpen() { return this._sheet.isOpen; }
 
+    /**
+     * The sheet's heading. A viewer who is already seated on this play cannot
+     * be this ghost, so leading them with "Is this you?" asks a question whose
+     * answer they can see is no — and buries the one they can actually answer.
+     */
+    _title() {
+      const d = this._detail;
+      // Only already_seated, not every blocked reason. Sitting at the table is
+      // the one state where the viewer CANNOT be this ghost, so the question
+      // genuinely changes. "You've already asked" is still the same question,
+      // just already answered — re-titling that one would read as a different
+      // sheet arriving after a tap that did nothing.
+      const cannotBeMe = d
+        ? d.blocked_reason === "already_seated"
+        : !!(this._opts && this._opts.selfBlocked);
+      return cannotBeMe ? "Who is this?" : "Is this you?";
+    }
+
     /** @param {GhostClaimOpenOpts} opts */
     open(opts) {
       this._reset();
@@ -65,7 +99,7 @@
       const seq = ++this._seq;
       this._sheet.open({
         html: this._panel(),
-        label: "Is this you?",
+        label: this._title(),
         // Deliberately null, NOT the row that was tapped. playCardFlip
         // .rerenderCard replaces the whole <article> via replaceWith, so on a
         // polaroid back the <li> that opened this sheet is already detached by
@@ -106,6 +140,10 @@
       // The buttons live outside the scroller (see _foot), so they need their
       // own patch — this is what carries "Looking this up…" to the real
       // answer, and the claim button to "Asking…".
+      // The heading is chosen from the lookup too, and the first paint happens
+      // before it arrives — so it gets patched alongside the body.
+      const title = root.querySelector("[data-claim-title]");
+      if (title) title.textContent = this._title();
       const foot = root.querySelector("[data-claim-foot]");
       if (foot) {
         foot.innerHTML = this._foot();
@@ -118,7 +156,7 @@
       return `
         <div class="bgb-sheet__panel">
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
-          <h2 class="bgb-sheet__title">Is this you?</h2>
+          <h2 class="bgb-sheet__title" data-claim-title>${escapeHtml(this._title())}</h2>
           <div class="ghost-claim-sheet__head">
             ${window.BgbBadge.render({
               avatar: null,
@@ -160,7 +198,8 @@
       if (!d.can_claim) {
         const why = BLOCKED_COPY[d.blocked_reason]
           || "This can't be linked to your account.";
-        return `${summary}<p class="ghost-claim-sheet__note">${escapeHtml(why)}</p>`;
+        return `${summary}<p class="ghost-claim-sheet__note">${escapeHtml(why)}</p>`
+             + this._proxyInvite();
       }
 
       return `
@@ -168,6 +207,37 @@
         <p class="ghost-claim-sheet__note">
           Claiming asks ${escapeHtml(owner)} to link these plays to your account.
           Nothing changes until they say yes.
+        </p>`
+        + this._proxyInvite();
+    }
+
+    /**
+     * "Not you? Say who this is."
+     *
+     * Prose with an inline control rather than a third button in the footer.
+     * _foot's comment argues that the sheet asks ONE yes/no question and must
+     * offer exactly the two answers to it; a third peer button there made all
+     * three look interchangeable, and this is a different question, not a third
+     * answer. It is delegated through data-claim-action like the other two, so
+     * no free-text name is ever interpolated into an inline handler.
+     *
+     * It appears on the blocked states too — that is where it earns its keep,
+     * since a viewer who is already seated is precisely the one who knows who
+     * the other name is.
+     */
+    _proxyInvite() {
+      const d = this._detail;
+      if (!d || !d.can_claim_for_buddy) return "";
+      const lead = d.can_claim
+        ? "Not you?"
+        : (PROXY_INVITE[d.blocked_reason] || "Was this someone else at the table?");
+      return `
+        <p class="ghost-claim-sheet__note ghost-claim-sheet__proxy">
+          ${escapeHtml(lead)}
+          <button type="button" class="ghost-claim-sheet__link"
+                  data-claim-action="proxy" ${this._sending ? "disabled" : ""}>
+            Say who this is
+          </button>
         </p>`;
     }
 
@@ -215,6 +285,30 @@
       const action = btn.getAttribute("data-claim-action");
       if (action === "claim") this._claim();
       else if (action === "dismiss") this._dismiss();
+      else if (action === "proxy") this._proxy();
+    }
+
+    /**
+     * Hand off to the buddy picker.
+     *
+     * Closes first rather than stacking a sheet on a sheet. Stacking would
+     * work — BgbBackGuard keeps a layer stack, and the shell's scroll lock is
+     * LIFO-safe — but this sheet has nothing left to say once the picker is up,
+     * and closing means the picker cannot be repainted over by a _load() that
+     * is still in flight behind it. `_detail` goes by value for the same
+     * reason: the picker outlives the sheet's `_seq`.
+     */
+    _proxy() {
+      const d = this._detail;
+      if (!d || this._sending) return;
+      const playId = (this._opts && this._opts.playId) || null;
+      const onClaimed = (this._opts && this._opts.onClaimed) || null;
+      this.close();
+      window.GhostClaimProxy.pick({
+        detail: d,
+        playId,
+        onDone: onClaimed || undefined,
+      });
     }
 
     async _claim() {

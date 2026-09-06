@@ -54,29 +54,39 @@
       };
     }
 
-    // A ghost. Offer the claim when it could possibly be the viewer.
+    // A ghost. Offer the claim when it could possibly be the viewer — or when
+    // the viewer might know who it is.
     if (!me || !me.id) return null;
     if (!play) return null;
     // Their own roster — Buddies has the owner-side Link panel for that, and
-    // asking yourself for permission is nonsense.
+    // asking yourself for permission is nonsense. Still the one hard withhold.
     if (play.logged_by_id === me.id) return null;
-    // They already sit at this table under their own account, so this ghost is
-    // somebody else. Merging would put one person in two seats of one game —
-    // the server refuses it too (bgb_ghost_summary's `collides`), but there is
-    // no reason to offer a button whose only outcome is a 409.
-    if ((play.players || []).some((p) => p.user_id === me.id)) return null;
+
+    // Sitting at this table under your own account means the ghost is somebody
+    // ELSE, so the self-claim is off: merging would put one person in two seats
+    // of one game, and the server refuses it (bgb_ghost_summary's `collides`).
+    //
+    // It used to end the row here. That was wrong once proxy claiming existed —
+    // and wrong in the worst direction, because a viewer who was AT the table is
+    // the single best placed person to say who the other name belongs to. The
+    // row stays; `selfBlocked` only picks the sheet's opening question.
+    const seated = (play.players || []).some((p) => p.user_id === me.id);
 
     // NOTE: no name-similarity check, deliberately. The "Is this you?" list on
     // the Buddies screen is a suggestion and stays conservative; this is a
     // deliberate tap on a specific row, and the matcher does not get a veto
     // over it — nicknames are exactly the case it misses. Everything that
-    // would actually block the claim (an existing request, a decline, a
-    // visibility problem) is resolved authoritatively by the sheet's lookup.
-    const args = `{playId:'${jsStr(play.id)}',displayName:'${jsStr(pl.name)}'}`;
+    // would actually block either claim (an existing request, a decline, a
+    // visibility problem) is resolved authoritatively by the sheet's lookup —
+    // `selfBlocked` is a hint for the first paint, never the gate.
+    const args = `{playId:'${jsStr(play.id)}',displayName:'${jsStr(pl.name)}'`
+      + `,selfBlocked:${seated ? "true" : "false"}}`;
     return {
       kind: "claim",
       handler: `event.stopPropagation();${before}window.GhostClaimSheet.open(${args})`,
-      ariaLabel: `${pl.name} has no account — is this you?`,
+      ariaLabel: seated
+        ? `${pl.name} has no account — do you know who this is?`
+        : `${pl.name} has no account — is this you?`,
       // NOT chevron-right. Same-affordance-for-same-destination
       // (ui-object-design.md §3b) cuts both ways: this row goes somewhere
       // different from every other row in the list and must not look identical
