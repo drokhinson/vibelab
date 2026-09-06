@@ -1275,6 +1275,21 @@
 --               resolves to — so the badge and the rail cannot drift apart
 --               under a later edit.
 
+-- bgb_push_note_failure(p_id UUID)
+--   → void
+--   Defined in: db/migrations/boardgamebuddy/018_push_notifications.sql
+--   Called by:  services/push_service._bump_failure (every push send that fails
+--               for a reason other than a 404/410, which deletes the row instead)
+--   Purpose:    Increment one push subscription's failure_count. An RPC for a
+--               one-line UPDATE because PostgREST can only set literals — it
+--               cannot express `failure_count = failure_count + 1` — so the
+--               backend would otherwise read, add one and write back: two round
+--               trips and a lost update whenever two notifications fail against
+--               the same dead device at once, which is exactly when this runs.
+--               Silently does nothing for an unknown id; the ordinary way to
+--               get there is a send failing against a subscription another
+--               notification's 410 handler has already deleted.
+
 -- bgb_mark_link_notifications_seen(p_viewer UUID,
 --                                  p_through TIMESTAMPTZ DEFAULT NULL)
 --   → TIMESTAMPTZ (the stamp that now stands)
