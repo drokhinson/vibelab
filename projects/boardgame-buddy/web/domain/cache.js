@@ -393,6 +393,27 @@
       return _startFetch(ns, key, fetcher, freshTtl, staleTtl);
     },
 
+    /**
+     * Re-serialise an entry whose value was mutated in place.
+     *
+     * get(), peek() and swr() all hand back `entry.value` BY REFERENCE, so a
+     * caller that patches the object it was given has already changed what
+     * every later reader in this page session sees — but not what the next
+     * LAUNCH sees, because localStorage holds a copy taken at set() time. This
+     * writes that copy again.
+     *
+     * storedAt and both TTLs are deliberately left alone: the entry is no
+     * fresher than it was, only more accurate, and re-stamping it would push
+     * back the revalidation the patch does not substitute for.
+     */
+    persist(ns, key) {
+      const b = _store.get(ns);
+      const entry = b && b.get(key);
+      if (!entry) return;
+      entry.bytes = _bytesOf(entry);
+      _persistEntry(ns, key, entry);
+    },
+
     /** Drop a single key. Silent no-op when missing. */
     delete(ns, key) {
       const b = _store.get(ns);

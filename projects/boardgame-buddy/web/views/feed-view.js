@@ -634,9 +634,12 @@
      * behind it, because a reaction that waits for a round trip reads as a tap
      * that did not register.
      *
-     * Nothing here touches the feed cache. Play.react/unreact deliberately skip
+     * No READ here either: Play.react/unreact deliberately skip
      * _invalidatePlayDeps(), so a tap costs one write and zero reads — the whole
-     * point of putting the counts on the feed payload in the first place.
+     * point of putting the counts on the feed payload in the first place. They
+     * do fold the accepted write into the cached first page (Feed.applyReaction),
+     * which is what makes a taken-back "Good game" survive a reload instead of
+     * coming back out of the stale window.
      */
     async _toggleReaction(key) {
       if (this._ggBusy.has(key)) return;
