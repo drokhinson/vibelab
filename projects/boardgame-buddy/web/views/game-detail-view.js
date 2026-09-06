@@ -239,7 +239,7 @@
     }
 
     // Adapter: bundle's recent_plays row → feed card shape consumed by
-    // window.renderPlayCard. duration_minutes / full notes live on the BACK
+    // window.renderPlayCard. The full note and the scoreboard live on the BACK
     // of the card, which hydrates via window.Play.get(play_id) on first flip,
     // so missing back-face fields self-heal.
     _toFeedPlayCard(p) {

@@ -104,11 +104,25 @@
 --            created_at TIMESTAMPTZ, notes TEXT, photo_url TEXT,
 --            play_mode TEXT, winner_display_name TEXT,
 --            participant_count INT, participants JSONB, group_count INT,
---            import_group_id UUID)
+--            import_group_id UUID, players JSONB, expansions JSONB,
+--            country_code TEXT)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/014_feed_order_by_played_at.sql)
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/007_play_import_batches.sql
+--   Last updated in: db/migrations/boardgamebuddy/015_feed_full_roster.sql
+--               (adds players, expansions and country_code, so the play card's
+--               back face and the detail popup paint from the feed payload
+--               instead of each calling GET /plays/{id} on open. `players` is
+--               the UNFILTERED scorecard — every seat, ghosts included, with
+--               score and round_scores — built by the roster LATERAL that
+--               already reads those rows for winner_display_name and
+--               participant_count, so it costs serialisation and no I/O.
+--               `participants` is unchanged and stays filtered to viewer +
+--               accepted buddies: it is the session GROUPING KEY on the FE,
+--               not a scorecard. `expansions` is the one new read, a second
+--               LATERAL on the (play_id, expansion_game_id) PK. DROP + CREATE,
+--               since three more OUT columns is a new return type.)
+--   Previously updated in: db/migrations/boardgamebuddy/007_play_import_batches.sql
 --               (also returns import_group_id — 005 returned the COUNT without
 --               the id, so the feed could say "58 plays" and had no way to act
 --               on them; the run sheet deletes by it. Another OUT column, so

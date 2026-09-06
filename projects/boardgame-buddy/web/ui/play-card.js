@@ -21,10 +21,9 @@
 //            plate across the bottom of the photo. It sits INSIDE the fixed
 //            photo frame, so it costs the card no height; the badge lifts
 //            above it (.has-note) on the one card that carries both.
-//   Back   → game title + duration, ranked scoreboard with the winner row
-//            tinted — a registered player's row opens their profile —
-//            optional notes, the same maximize button (top-right), and a
-//            "Tap to flip back" footer.
+//   Back   → game title, ranked scoreboard with the winner row tinted — a
+//            registered player's row opens their profile — optional notes,
+//            and the same maximize button (top-right).
 //
 // Clicking the game-name text, the open button, either maximize button, or a
 // scoreboard row for a registered player acts on its own (data-no-flip).
@@ -108,6 +107,12 @@
     // don't write to window.store.feed (e.g. game-detail's recent_plays
     // reel) silently fail to flip — state toggles but the DOM never paints.
     if (card && card.play_id) cardRegistry.set(card.play_id, card);
+    // Migration 015: the card carries the whole play, so hand it to the domain
+    // layer. This is the one place every card on every surface passes through,
+    // which is why the seeding lives here rather than in each view — and it is
+    // a no-op against an RPC that predates the roster, so the fetch-on-flip
+    // path below stays correct on an unmigrated database.
+    if (window.Play && window.Play.seedFromFeedCard) window.Play.seedFromFeedCard(card);
     const accent = (card.game && card.game.theme_color) || "var(--polaroid-accent)";
 
     // Pick photo source — user-uploaded snapshot wins, otherwise the game's
@@ -405,18 +410,25 @@
   }
 
   function renderBack(card, s) {
-    if (s.hydrating) {
-      return `<div class="play-card__back-loading">Loading play…</div>`;
-    }
-    if (s.error && !s.hydrated) {
-      return `<div class="play-card__back-error">${escapeHtml(s.error)}</div>`;
-    }
-    const p = s.hydrated;
+    // The seed comes first, and it is why there is usually nothing to load.
+    // Since migration 015 the feed card carries the full roster with scores
+    // and round_scores, so Play.seeded() answers synchronously for any card the
+    // feed drew — the back paints in the same frame as the flip. A fetched
+    // copy, once it lands, outranks the seed: it is the newer of the two.
+    const p = s.hydrated || (window.Play && window.Play.seeded && window.Play.seeded(card.play_id));
     if (!p) {
-      // Not hydrated yet (e.g. card rendered while flipped=false). Show a
-      // shell so the back has something behind the front during the rotation.
+      // No seed: either an RPC that predates 015, or a surface whose card was
+      // built without a roster. Fall back to the fetch and say so.
+      if (s.hydrating) return `<div class="play-card__back-loading">Loading play…</div>`;
+      if (s.error) return `<div class="play-card__back-error">${escapeHtml(s.error)}</div>`;
+      // Rendered while flipped=false and never fetched. A shell, so the back
+      // has something behind the front during the rotation.
       return `<div class="play-card__back-loading">…</div>`;
     }
+    // A seed that is being refreshed shows the seed, not a spinner — the
+    // scoreboard is already on screen and replacing it with "Loading play…"
+    // would be a step backwards. An error over a seed is likewise swallowed:
+    // there is nothing to tell the user, because they can see the play.
     const players = p.players || [];
     const me = window.store && window.store.get && window.store.get("user");
     // Maximize opens the play-detail popup in-place — the popup is the
@@ -424,9 +436,6 @@
     // retired). Staying on the current view preserves scroll position and
     // keeps the game-tab layout intact.
     const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
-    const durationMeta = p.duration_minutes
-      ? `${p.duration_minutes} min`
-      : (p.played_at ? "" : "");
 
     // Rank by score descending; players without a score keep their order
     // after the scored rows.
@@ -449,7 +458,6 @@
       </button>
       <header class="play-card__back-head">
         <span class="play-card__back-title">${escapeHtml(p.game_name || (card.game && card.game.name) || "")}</span>
-        ${durationMeta ? `<span class="play-card__back-meta">${escapeHtml(durationMeta)}</span>` : ""}
       </header>
 
       <ul class="play-card__back-players${ranked.some((pl) => playerAction(pl, p, me)) ? " has-links" : ""}">
@@ -477,8 +485,6 @@
       </ul>
 
       ${notesBlock}
-
-      <div class="play-card__back-footer">Tap to flip back</div>
     `;
   }
 
@@ -615,7 +621,13 @@
       const s = getState(playId);
       const next = !s.flipped;
       s.flipped = next;
-      if (next && !s.hydrated && !s.hydrating) {
+      // A seeded play needs no fetch at all: the feed already sent the roster,
+      // the scores and the rounds (migration 015), so the flip is pure paint.
+      // This is the round trip the "Loading play…" panel used to cover, and
+      // the second, duplicate one that fired when a user flipped a card and
+      // then opened its details.
+      const seeded = window.Play && window.Play.seeded && window.Play.seeded(playId);
+      if (next && !s.hydrated && !s.hydrating && !seeded) {
         s.hydrating = true;
         s.error = null;
         rerenderCard(playId);
