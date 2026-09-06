@@ -5186,7 +5186,7 @@ html.bgb-ptr-armed body {
 .bgb-sheet .bgb-sheet__panel {
   width: 100%;
   max-width: 520px;
-  /* Explicit, as .cascade-cta-wrap and .bgb-install — "don't lean on
+  /* Explicit, as .cascade-cta-wrap — "don't lean on
      preflight". Without it the max-height below caps the CONTENT box and the
      panel's 24px of vertical padding plus its 1px top border land outside the
      cap, so a sheet sized to exactly the visible viewport still overhangs it
@@ -7968,19 +7968,17 @@ main[data-view="session-viewer"].hidden {
    scroll sit below the section — scrolling into them lifted the button
    64px clear of the line it was meant to hold (measured: 27px above the
    nav at rest, 91px at the end of every screen). Fixed positioning has
-   no release point to keep in sync, and matches how .bgb-install already
-   docks to this nav. */
+   no release point to keep in sync. */
 .cascade-cta-wrap {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
-  /* Pin to #app's 480px column rather than the viewport, the way
-     .bgb-install does — .bgb-nav itself is deliberately edge-to-edge,
-     but the CTA belongs to the content column. */
+  /* Pin to #app's 480px column rather than the viewport — .bgb-nav itself
+     is deliberately edge-to-edge, but the CTA belongs to the content column. */
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
   max-width: 480px;
-  box-sizing: border-box;    /* as .bgb-install — don't lean on preflight */
+  box-sizing: border-box;    /* don't lean on preflight */
   padding: 12px 16px 28px;   /* sums to --cascade-cta-bar */
   z-index: 35;
   /* Content passes under the bar, so fade the ground in behind it
@@ -11304,7 +11302,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    min-height:0 drops .search-topbar's 52px floor so Buddies' bar matches the
    other five (a 44px control plus this padding). z-index 20 clears view
    content and stays below the global header (30), the docked footers such as
-   .bgb-install (35) and the nav (40). */
+   .cascade-cta-wrap and .imp-nav (35) and the nav (40). */
 .bgb-spoke-screen > .spoke-head,
 .bgb-spoke-screen > .search-topbar {
   position: sticky;
@@ -12178,158 +12176,136 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* ─────────────────────────────────────────────────────────────────────────────
    PWA install prompt (ui/install-prompt.js)
 
-   Docked flush above the bottom tab nav using the same anchor as
-   .chapter-add__fab, and pinned to the app's 480px
-   column the way .btm-nav is so it never spans a desktop viewport. Warm
-   polaroid surface so it reads as part of the app, not browser chrome.
-   z-index 35: above content, below .bgb-nav (40), modals (90-100) and toasts (120).
+   A centred modal on the shared .polaroid-popup__backdrop + __card chrome, not
+   its own surface: it was a strip docked above the tab bar, which sat in the
+   feed's own column on the feed's own paper and was read as one more row of it.
+   Riding the modal chrome is the fix and also the point — the dim and the blur
+   are what say "this is not the page".
+
+   So there is deliberately no z-index, no dock offset and no width here: the
+   backdrop rule (z-index 100, the overlay rung) owns all three. What is left is
+   the card's own contents.
    ───────────────────────────────────────────────────────────────────────────── */
-.bgb-install {
-  position: fixed;
-  bottom: calc(var(--bgb-nav-height, 64px) + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  z-index: 35;
-  box-sizing: border-box;
-  padding: 0.6rem 0.85rem;
-  background: var(--polaroid-bg, #FFFBF1);
-  border-top: 1px solid var(--polaroid-line, #DAC9A4);
-  box-shadow:
-    0 -6px 18px rgba(58, 42, 8, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65);
-  animation: bgbInstallUp 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.bgb-install__card {
+  /* A shade wider than the 320px wrap-up card: this one carries a paragraph
+     and, on iOS, two instruction rows rather than a photo and a name. */
+  width: min(88vw, 348px);
+  padding: 20px 18px 18px;
 }
 
-@keyframes bgbInstallUp {
-  from { opacity: 0; transform: translate(-50%, 14px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
-}
+.polaroid-popup__backdrop.bgb-install.is-closing { animation: fadeOut 200ms ease-out both; }
 
-.bgb-install--leaving {
-  animation: bgbInstallDown 200ms ease-in both;
-  pointer-events: none;
-}
-@keyframes bgbInstallDown {
-  from { opacity: 1; transform: translate(-50%, 0); }
-  to   { opacity: 0; transform: translate(-50%, 14px); }
-}
-
-/* Both rows reserve the right gutter the absolutely-positioned close sits in. */
-.bgb-install__row {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  padding-right: 40px;
-}
+.bgb-install__card:focus { outline: none; }
 
 .bgb-install__logo {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(58, 42, 8, 0.28);
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  margin: 2px auto 12px;
+  display: block;
+  box-shadow: 0 6px 16px rgba(58, 42, 8, 0.3);
 }
 
-.bgb-install__share {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  margin: 0 9px;
-  color: var(--polaroid-ink-soft, #4A3F2F);
+/* .polaroid-popup__body is centred muted 13px on the card already; this only
+   widens the measure, since the blurb is two sentences rather than a label. */
+.bgb-install__blurb {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  line-height: 1.45;
 }
 
-/* min-width:0 lets the ellipsis actually kick in inside the flex row. */
-.bgb-install__body { flex: 1; min-width: 0; }
-
-/* Wraps rather than ellipsising: at 320px (iPhone SE) the logo, CTA and close
-   leave the text ~115px, and "Take Buddy w…" loses the sentence. Two lines
-   there, one line from 360px up. */
-.bgb-install__title {
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.92rem;
-  line-height: 1.25;
-  color: var(--polaroid-ink, #1D1812);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
+/* ── iOS: the Add-to-Home-Screen recipe ──────────────────────────────────────
+   Shown outright rather than behind an Install button that cannot install —
+   inside a modal there is room, and the button would have charged a tap for
+   instructions. Left-aligned against the card's centred text on purpose: these
+   are steps to follow in order, and a centred ragged list reads as decoration. */
+.bgb-install__steps {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-
-/* Wraps to at most two lines so the copy degrades gracefully on a 320px
-   iPhone SE instead of being cut mid-word by an ellipsis. */
-.bgb-install__sub {
-  font-family: var(--font-sans);
-  font-weight: 400;
-  font-size: 0.74rem;
-  line-height: 1.3;
-  color: var(--polaroid-muted, #8B7E68);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-}
-.bgb-install__sub b { font-weight: 700; color: var(--polaroid-ink-soft, #4A3F2F); }
-
-/* Gold CTA — same radial treatment as .chapter-add__fab. */
-.bgb-install__cta {
-  flex: none;
-  min-height: 40px;
-  padding: 9px 16px;
-  border: 0;
-  border-radius: 999px;
-  background: radial-gradient(120% 140% at 30% 20%, #F0C662, var(--accent) 55%, var(--accent-hover));
-  color: #3a2a08;
-  font-family: var(--font-sans);
-  font-weight: 800;
-  font-size: 0.86rem;
-  cursor: pointer;
-  box-shadow: 0 6px 16px rgba(201, 146, 42, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  transition: transform 120ms ease, filter 140ms ease;
-}
-.bgb-install__cta:hover { filter: brightness(1.06); }
-.bgb-install__cta:active { transform: scale(0.97); }
-
-/* 44x44 hit area per the tap-target rule, even though the glyph is 16px. */
-.bgb-install__close {
-  position: absolute;
-  top: 50%;
-  right: 2px;
-  transform: translateY(-50%);
-  width: 44px;
-  height: 44px;
+.bgb-install__steps li {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--polaroid-muted, #8B7E68);
-  cursor: pointer;
-  border-radius: 50%;
-  transition: color 140ms ease, background 140ms ease;
+  gap: 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--polaroid-ink-soft);
 }
-.bgb-install__close:hover {
-  color: var(--polaroid-ink, #1D1812);
-  background: rgba(58, 42, 8, 0.07);
+.bgb-install__steps b { font-weight: 700; color: var(--polaroid-ink); }
+
+.bgb-install__step-n {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--polaroid-bg-soft);
+  border: 1px solid var(--polaroid-line);
+  color: var(--polaroid-ink);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 11px;
 }
 
-/* Sub-360px: the title has usually taken a second line by here, so hold the
-   sub to one and keep the strip from eating a quarter of a short screen. */
+/* Sits inline in the sentence, so it is sized to the text rather than to the
+   26px it was as the banner's leading mark. display:inline-block is the load-
+   bearing line: Tailwind's preflight sets `svg { display: block }`, which broke
+   "Tap [glyph] Share in Safari's toolbar" across three lines. */
+.bgb-install__share {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  vertical-align: -2px;
+  color: var(--polaroid-ink);
+}
+
+/* The card's actions are centred and full-height rather than the confirm
+   family's right-aligned pair: this is an offer, not a decision about data, so
+   neither button wants to hug a corner. 52px is the commit-button floor
+   (.claude/rules/mobile-web.md §5). */
+.polaroid-popup__actions.bgb-install__actions {
+  justify-content: center;
+  gap: 10px;
+}
+.bgb-install__actions .btn {
+  min-height: 52px;
+  flex: 1 1 0;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+/* One button has no partner to balance against, so it takes the card's width
+   rather than stretching a lone pill edge to edge. */
+.bgb-install__actions--one .btn { flex: 0 1 60%; }
+
+.bgb-install__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 800;
+}
+
+/* Sub-360px (iPhone SE): the pair no longer fits side by side at 52px with
+   readable labels, so stack them — primary on top, where the thumb is. */
 @media (max-width: 359px) {
-  .bgb-install__sub { -webkit-line-clamp: 1; line-clamp: 1; }
-  .bgb-install__cta { padding: 9px 13px; font-size: 0.82rem; }
-  .bgb-install__row { gap: 0.55rem; }
+  .bgb-install__card { padding: 18px 14px 16px; }
+  .polaroid-popup__actions.bgb-install__actions { flex-direction: column-reverse; }
+  .bgb-install__actions .btn { width: 100%; flex: none; }
+  .bgb-install__actions--one .btn { flex: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bgb-install,
-  .bgb-install--leaving { animation: none; }
-  .bgb-install__cta { transition: none; }
+  .polaroid-popup__backdrop.bgb-install,
+  .polaroid-popup__backdrop.bgb-install.is-closing,
+  .bgb-install .polaroid-popup__card { animation: none; }
 }
 
 /* ── Theme segmented control (Settings → Appearance) ─────────────────────────
@@ -14484,7 +14460,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* ── The docked step nav ──────────────────────────────────────────────────── */
 /* Fixed, not sticky, and pinned to the content column — the same recipe as
-   .cascade-cta-wrap and .bgb-install, for the same reason: a sticky bar's
+   .cascade-cta-wrap, for the same reason: a sticky bar's
    release point has to stay in sync with every other bottom offset in the app,
    and it drifts. z-index 35 is the docked-footer rung of the ladder. */
 .imp-nav {
