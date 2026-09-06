@@ -1,44 +1,91 @@
-// ui/install-prompt.js — dismissable "add Buddy to your home screen" banner.
+// ui/install-prompt.js — the "add Buddy to your home screen" modal.
 //
-// Docked just above the bottom tab bar on phone-sized viewports. The point
-// isn't the home-screen icon: per STRUCTURE.md the Gather → Play → Settle host
-// cascade runs with no connectivity at all off the sw.js app-shell cache, and
-// installing is what makes that reachable. The browser's own mini-infobar is
-// easy to miss (and suppressed outright on iOS), so we surface it ourselves.
+// A centred card over the app's shared modal chrome, shown once a phone-browser
+// session has settled onto the feed. It used to be a strip docked above the tab
+// bar, which read as one more row of the feed and was missed accordingly — the
+// whole point is that it is NOT part of the page behind it.
+//
+// The point isn't the home-screen icon: per STRUCTURE.md the Gather → Play →
+// Settle host cascade runs with no connectivity at all off the sw.js app-shell
+// cache, and installing is what makes that reachable. The browser's own
+// mini-infobar is easy to miss (and suppressed outright on iOS), so we surface
+// it ourselves.
 //
 // Two paths, because the platforms differ:
 //   • Chrome / Edge / Samsung fire `beforeinstallprompt`. We preventDefault()
 //     it (killing the mini-infobar), stash the event, and replay it on tap.
-//   • iOS Safari has no programmatic install API at all. There, the CTA
-//     expands an inline "Share → Add to Home Screen" hint instead.
+//   • iOS Safari has no programmatic install API at all. There the card shows
+//     the "Share → Add to Home Screen" steps outright — inside a modal there is
+//     room for them, and hiding them behind a fake Install button would have
+//     charged a tap for instructions.
 //
-// Dismissal is deliberately session-scoped (sessionStorage): it comes back on
-// the next browser session rather than being gone forever.
+// Overlay contract (.claude/rules/overlays.md §7, §8): centred modal on the
+// shared `.polaroid-popup__backdrop` + `.polaroid-popup__card` chrome, four
+// exits (X, outside tap, Escape, device back) all meaning "not now", body
+// scroll locked while up, and it waits for a clear screen rather than landing
+// on top of a sheet or a wrap-up card.
+//
+// Asking is capped two ways: dismissal is session-scoped (sessionStorage), so
+// the card comes back next browser session rather than being gone forever — but
+// a running count in localStorage retires it for good after MAX_ASKS refusals.
+// A modal that interrupts is worth showing a few times and not more.
+
+// @ts-check
+
 (function () {
   const SS_KEY = "bgb.pwa.installDismissed";
+  const LS_ASKS = "bgb.pwa.installDeclines";
+  const MAX_ASKS = 3;
 
-  // Let first paint, auth and the splash→feed handoff finish before we slide
-  // anything over the UI.
-  const SETTLE_MS = 3000;
+  // Let first paint, auth and the splash→feed handoff finish before we put a
+  // card over the UI. Shorter than the banner's dwell was: a modal that lands
+  // while someone is already reading the feed interrupts, whereas one that
+  // lands as the feed settles reads as part of opening the app.
+  const SETTLE_MS = 1200;
 
-  // The banner lives on the feed and nowhere else — it's the app's browsing
+  // How often to re-test for a clear screen, and how long to keep trying —
+  // same shape as the achievement queue's wait in ui/achievement-popup.js. If a
+  // sheet is open this long, the moment has passed; there is always next
+  // session.
+  const RETRY_MS = 800;
+  const GIVE_UP_MS = 30000;
+
+  // Must match the .is-closing animation duration in styles.css.
+  const CLOSE_MS = 200;
+
+  // Anything of this app's own already covering the screen: a wrap-up polaroid,
+  // a confirm, any bottom sheet (they all ride the polaroid backdrop — see
+  // ui/bottom-sheet.js), or the first-run onboarding deck, which does not.
+  const BUSY_SEL = ".polaroid-popup__backdrop, .ob-deck";
+
+  // The card lives on the feed and nowhere else — it's the app's browsing
   // surface, so a nudge there is least in the way of what someone came to do.
-  // An allowlist also means splash, auth and the play-flow cascade (which has
-  // its own bottom-docked CTAs) are excluded for free. The Feed tab maps to
-  // exactly one route: its nav button carries no data-nav-views, unlike Play
-  // and Profile.
+  // An allowlist also means splash, auth and the play-flow cascade are excluded
+  // for free. The Feed tab maps to exactly one route: its nav button carries no
+  // data-nav-views, unlike Play and Profile.
   const ALLOWED_ROUTES = ["feed"];
 
   // `beforeinstallprompt` is single-use and is NOT replayed, so it has to be
   // captured at file scope — Chrome routinely fires it before auth resolves
   // and init() runs.
+  /** @type {any} */
   let _deferred = null;
+  /** @type {HTMLElement|null} */
   let _el = null;
   let _inited = false;
   let _settled = false;
   let _done = false;          // installed, or dismissed for this session
+  /** @type {Array<() => void>} */
   let _unsub = [];
-  let _leaveTimer = null;
+  /** @type {any} */
+  let _retryTimer = null;
+  /** @type {any} */
+  let _closeTimer = null;
+  let _waitingSince = 0;
+  let _back = 0;
+  let _prevOverflow = "";
+  /** @type {((e: KeyboardEvent) => void)|null} */
+  let _onKeyDown = null;
 
   // sessionStorage throws outright in Safari private mode; matchMedia is
   // missing in old WebViews. Neither should take the app down.
@@ -67,6 +114,11 @@
     return _safe(() => sessionStorage.getItem(SS_KEY) === "1", false);
   }
 
+  /** How many times this browser has said no. Retires the card at MAX_ASKS. */
+  function _declines() {
+    return _safe(() => parseInt(localStorage.getItem(LS_ASKS) || "0", 10) || 0, 0);
+  }
+
   function _authed() {
     return !!(window.store && window.store.get("user"));
   }
@@ -76,14 +128,22 @@
     return !!r && ALLOWED_ROUTES.includes(r.name);
   }
 
-  // Every gate that must hold for the banner to be on screen.
+  function _screenBusy() {
+    return !!document.querySelector(BUSY_SEL);
+  }
+
+  // Every gate that must hold before the card goes up. Deliberately does NOT
+  // gate the card once it IS up: a modal that vanished because the phone was
+  // rotated past the 767px breakpoint would look like a crash.
   function _shouldShow() {
     return _inited
       && _settled
       && !_done
+      && !_el
       && !_isStandalone()
       && _isPhone()
       && !_dismissed()
+      && _declines() < MAX_ASKS
       && _authed()
       && _routeAllows()
       && (_deferred !== null || _isIOS());
@@ -99,42 +159,100 @@
       <path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
     </svg>`;
 
+  /** The Add-to-Home-Screen recipe, for the platform with no install API. */
+  function _iosBody() {
+    return `
+      <ol class="bgb-install__steps">
+        <li>
+          <span class="bgb-install__step-n">1</span>
+          <span>Tap ${SHARE_SVG} <b>Share</b> in Safari's toolbar</span>
+        </li>
+        <li>
+          <span class="bgb-install__step-n">2</span>
+          <span>Choose <b>Add to Home Screen</b></span>
+        </li>
+      </ol>
+      <div class="polaroid-popup__actions bgb-install__actions bgb-install__actions--one">
+        <button class="btn btn-sm btn-primary" type="button" data-act="dismiss">Got it</button>
+      </div>`;
+  }
+
+  /** Chrome / Edge / Samsung: the real thing, one tap. */
+  function _promptBody() {
+    return `
+      <div class="polaroid-popup__actions bgb-install__actions">
+        <button class="btn btn-ghost btn-sm" type="button" data-act="dismiss">Not now</button>
+        <button class="btn btn-sm btn-primary bgb-install__cta" type="button" data-act="install">
+          <i data-icon="download" class="w-4 h-4"></i> Install
+        </button>
+      </div>`;
+  }
+
   function _render() {
     const root = document.createElement("div");
-    root.className = "bgb-install";
-    root.setAttribute("role", "region");
-    root.setAttribute("aria-label", "Install BoardgameBuddy");
+    // The backdrop class is what dims, blurs and centres — and what every
+    // other overlay in the app tests for when it needs a clear screen.
+    root.className = "polaroid-popup__backdrop bgb-install";
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", "true");
+    root.setAttribute("aria-labelledby", "bgb-install-title");
     root.innerHTML = `
-      <div class="bgb-install__row" data-role="main">
+      <div class="polaroid-popup__card bgb-install__card" tabindex="-1">
+        <button class="polaroid-popup__close" type="button"
+                aria-label="Not now" data-act="dismiss">
+          <i data-icon="x" class="w-5 h-5"></i>
+        </button>
         <img class="bgb-install__logo" src="assets/brand/bgb-logo.svg"
-             alt="" width="44" height="44" />
-        <div class="bgb-install__body">
-          <div class="bgb-install__title">Take Buddy with you</div>
-          <div class="bgb-install__sub">Works offline once installed</div>
-        </div>
-        <button class="bgb-install__cta" type="button" data-act="install">Install</button>
-      </div>
-      <div class="bgb-install__row bgb-install__row--hint hidden" data-role="hint">
-        ${SHARE_SVG}
-        <div class="bgb-install__body">
-          <div class="bgb-install__title">Add to Home Screen</div>
-          <div class="bgb-install__sub">Tap Share in Safari, then <b>Add to Home Screen</b></div>
-        </div>
-      </div>
-      <button class="bgb-install__close" type="button"
-              aria-label="Not now" data-act="dismiss">
-        <i data-icon="x" class="w-4 h-4"></i>
-      </button>`;
+             alt="" width="72" height="72" />
+        <div class="polaroid-popup__title" id="bgb-install-title">Take Buddy with you</div>
+        <p class="polaroid-popup__body bgb-install__blurb">
+          Add BoardgameBuddy to your home screen. Install the PWA to access
+          offline game recording!
+        </p>
+        ${_deferred ? _promptBody() : _iosBody()}
+      </div>`;
 
+    // Outside the card is outside, whatever it landed on (overlays.md §8a).
     root.addEventListener("click", (ev) => {
-      const act = ev.target.closest("[data-act]");
-      if (!act) return;
-      if (act.dataset.act === "dismiss") BgbInstallPrompt.dismiss();
-      else BgbInstallPrompt._install();
+      const t = /** @type {any} */ (ev.target);
+      const act = t && t.closest && t.closest("[data-act]");
+      if (act) {
+        if (act.dataset.act === "install") BgbInstallPrompt._install();
+        else BgbInstallPrompt.dismiss();
+        return;
+      }
+      if (!(t && t.closest && t.closest(".polaroid-popup__card"))) {
+        BgbInstallPrompt.dismiss();
+      }
     });
 
     document.body.appendChild(root);
     window.BgbIcons.render(root);
+
+    // Escape is the keyboard's version of the same one exit. Nothing here owns
+    // a query to clear first, so there is no layered refusal (overlays.md §5).
+    _onKeyDown = (e) => {
+      if (e.key !== "Escape" || !_el) return;
+      e.preventDefault();
+      BgbInstallPrompt.dismiss();
+    };
+    document.addEventListener("keydown", _onKeyDown, true);
+
+    // The device back gesture closes the card, not the feed behind it
+    // (overlays.md §8b) — the same exit as the X and the backdrop.
+    _back = window.BgbBackGuard
+      ? window.BgbBackGuard.arm({ root: root, close: () => BgbInstallPrompt.dismiss() })
+      : 0;
+
+    _prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    // No row worth landing on and no text field to raise a keyboard, so the
+    // card itself takes focus: a screen reader reads the dialog's label, and
+    // Tab walks the card rather than the feed underneath.
+    const card = /** @type {HTMLElement|null} */ (root.querySelector(".polaroid-popup__card"));
+    if (card) card.focus();
+
     return root;
   }
 
@@ -152,18 +270,24 @@
     }
   }
 
-  // Show / hide against the current gate state. Cheap and idempotent — safe to
-  // call from every route change and store event.
+  // Test the gates and, if they hold, wait for a clear screen. Cheap and
+  // idempotent — safe to call from every route change and store event.
   function _sync() {
-    const want = _shouldShow();
-    if (want && !_el) {
-      _el = _render();
+    clearTimeout(_retryTimer);
+    _retryTimer = null;
+    if (!_shouldShow()) return;
+
+    if (_screenBusy()) {
+      if (!_waitingSince) _waitingSince = Date.now();
+      if (Date.now() - _waitingSince > GIVE_UP_MS) { _done = true; return; }
+      _retryTimer = setTimeout(_sync, RETRY_MS);
       return;
     }
-    if (!want && _el && !_leaveTimer) {
-      _el.remove();
-      _el = null;
-    }
+
+    // No orphan-teardown dance here, unlike the sheet shell: every close path
+    // sets _done, so the card is asked for at most once per page load and a
+    // second _render() can never race a close that is still animating out.
+    _el = _render();
   }
 
   const BgbInstallPrompt = {
@@ -187,14 +311,7 @@
     },
 
     async _install() {
-      if (_isIOS() && !_deferred) {
-        // No install API on iOS — swap in the manual Add-to-Home-Screen hint.
-        if (!_el) return;
-        _el.querySelector('[data-role="main"]').classList.add("hidden");
-        _el.querySelector('[data-role="hint"]').classList.remove("hidden");
-        return;
-      }
-      if (!_deferred) return;
+      if (!_deferred) return;          // iOS never gets here — its card has no Install
 
       const evt = _deferred;
       _deferred = null;                     // the event is single-use
@@ -208,9 +325,11 @@
       }
     },
 
-    // "Not now" — hide for the rest of this browser session.
+    // "Not now" — hide for the rest of this browser session, and count the
+    // refusal so the card retires itself after MAX_ASKS of them.
     dismiss() {
       _safe(() => sessionStorage.setItem(SS_KEY, "1"));
+      _safe(() => localStorage.setItem(LS_ASKS, String(_declines() + 1)));
       _done = true;
       this._leave();
     },
@@ -221,20 +340,30 @@
       _done = true;
       _unsub.forEach((fn) => _safe(() => fn()));
       _unsub = [];
+      clearTimeout(_retryTimer);
+      _retryTimer = null;
       this._leave();
     },
 
-    // Fade + slide out, then drop the node.
+    // The one close path: unwind everything the card took, then fade it out.
     _leave() {
       if (!_el) return;
       const el = _el;
       _el = null;
-      el.classList.add("bgb-install--leaving");
-      clearTimeout(_leaveTimer);
-      _leaveTimer = setTimeout(() => {
+
+      if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
+      _back = 0;
+      if (_onKeyDown) document.removeEventListener("keydown", _onKeyDown, true);
+      _onKeyDown = null;
+      document.body.style.overflow = _prevOverflow;
+      _prevOverflow = "";
+
+      el.classList.add("is-closing");
+      clearTimeout(_closeTimer);
+      _closeTimer = setTimeout(() => {
         el.remove();
-        _leaveTimer = null;
-      }, 200);
+        _closeTimer = null;
+      }, CLOSE_MS);
     },
 
     _sync,
