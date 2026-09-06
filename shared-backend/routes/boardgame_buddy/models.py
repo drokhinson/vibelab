@@ -1517,6 +1517,24 @@ class FeedPlayCard(BaseModel):
     # the count without it, which let the feed say "58 plays" and do nothing
     # about them.
     import_group_id: Optional[str] = None
+    # ── Migration 013 — the whole play, so the card's other two faces are free.
+    #
+    # The front paints from the fields above; the back and the detail popup each
+    # used to call GET /plays/{id} on open, which cost a spinner on every first
+    # flip and fetched the same row twice when a user flipped and then maximised.
+    #
+    # `players` is the full, UNFILTERED scorecard — every seat including ghosts,
+    # with score and round_scores — and is deliberately NOT a replacement for
+    # `participants` above. The two have different filters because they answer
+    # different questions: `participants` is the session grouping key and the
+    # source of the clickable names in the feed's session header, so it stays
+    # limited to people the viewer can navigate to; `players` is the scoreboard.
+    #
+    # Same shape as PlayResponse's own fields, so the client adapts a feed card
+    # into a play with a rename and no reshaping.
+    players: list[PlayPlayerResponse] = []
+    expansions: list[PlayExpansionRef] = []
+    country_code: Optional[str] = None
 
 
 class FeedHotGamesEntry(BaseModel):
