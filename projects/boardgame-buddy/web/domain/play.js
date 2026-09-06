@@ -149,16 +149,21 @@
     // Deliberately NOT routed through _invalidatePlayDeps(). A reaction changes
     // no play, no stat and no shelf; busting the caches would drop the feed page
     // and make every tap refetch the feed, which is the whole cost this design
-    // was avoiding. The feed cards are patched in place by the view instead.
+    // was avoiding. The feed cards are patched in place by the view instead —
+    // and, once the server has accepted the write, in the cached first page too
+    // via Feed.applyReaction, or the patch would live only as long as the tab
+    // does and a reload would paint the pre-tap state back.
 
     /** @param {string[]} playIds @returns {Promise<any>} */
     static react(playIds) {
-      return window.api.post("/plays/reactions", { play_ids: playIds });
+      return window.api.post("/plays/reactions", { play_ids: playIds })
+        .then((r) => { _patchFeedReactions(r, playIds, true); return r; });
     }
 
     /** @param {string[]} playIds @returns {Promise<any>} */
     static unreact(playIds) {
-      return window.api.del("/plays/reactions", { play_ids: playIds });
+      return window.api.del("/plays/reactions", { play_ids: playIds })
+        .then((r) => { _patchFeedReactions(r, playIds, false); return r; });
     }
 
     // Any play mutation can shift Profile stats, recent_plays, and the
@@ -253,6 +258,23 @@
     static listImports() {
       return window.api.get("/plays/imports").then((r) => (r && r.imports) || []);
     }
+  }
+
+  /**
+   * Fold an accepted reaction write into the cached feed page.
+   *
+   * Keyed off the ids the SERVER echoes rather than the ids that were sent: a
+   * react drops the caller's own plays, so the response is the only honest
+   * account of what changed. Falls back to what was sent for an unreact, where
+   * the echo is the whole list by construction.
+   *
+   * @param {any} res      the PlayReactionResponse
+   * @param {string[]} sent
+   * @param {boolean} reacted
+   */
+  function _patchFeedReactions(res, sent, reacted) {
+    const ids = (res && Array.isArray(res.play_ids) && res.play_ids.length) ? res.play_ids : sent;
+    if (window.Feed && window.Feed.applyReaction) window.Feed.applyReaction(ids, reacted);
   }
 
   // Note: the `play.last` seed is deliberately NOT cleared here. This also runs
