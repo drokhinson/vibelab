@@ -19,17 +19,34 @@ So one tap covers N plays, and the two things that follow live here:
 """
 
 import uuid
-from typing import Any
+from typing import Any, NamedTuple
 
 from supabase import Client
 
 TABLE = "boardgamebuddy_play_reactions"
 
 
-def _reactable_owners(
+class ReactionWrite(NamedTuple):
+    """What one tap did, for the caller AND for the notification arm.
+
+    `play_ids` and `group_id` are the API's answer. `owner_ids` and `game_name`
+    exist only so the route can notify without re-reading plays it has already
+    looked at — a night can span several loggers, so owner_ids can hold more
+    than one person, and game_name is populated only when the tap covered a
+    single play (naming one game out of three would claim the reactor singled
+    it out).
+    """
+
+    play_ids: list[str]
+    group_id: str
+    owner_ids: list[str]
+    game_name: str | None
+
+
+def _reactable(
     sb: Client, viewer_id: str, play_ids: list[str]
-) -> dict[str, str]:
-    """play_id -> owner, for the subset of `play_ids` the viewer may react to.
+) -> dict[str, dict[str, Any]]:
+    """play_id -> {owner, game_name}, for the plays the viewer may react to.
 
     One query, not one per play: the caller hands us a whole night. Unknown ids
     fall out for free — they simply do not come back from the select — so a
@@ -38,25 +55,28 @@ def _reactable_owners(
     Returns the OWNER alongside the id rather than the id alone, because the
     same select already reads `user_id` to drop the viewer's own plays and
     migration 017 needs that value on the row. See `add` for why the column
-    exists at all.
+    exists at all. game_name rides along for the notification copy — it is a
+    denormalized column on the row this query already fetches, so it is free.
     """
     if not play_ids:
         return {}
     rows = (
         sb.table("boardgamebuddy_plays")
-        .select("id, user_id")
+        .select("id, user_id, game_name")
         .in_("id", play_ids)
         .execute()
     ).data or []
     return {
-        r["id"]: r["user_id"] for r in rows if r.get("user_id") != viewer_id
+        r["id"]: {"owner": r["user_id"], "game_name": r.get("game_name")}
+        for r in rows
+        if r.get("user_id") != viewer_id
     }
 
 
-def add(sb: Client, viewer_id: str, play_ids: list[str]) -> tuple[list[str], str]:
+def add(sb: Client, viewer_id: str, play_ids: list[str]) -> ReactionWrite:
     """React to every play in `play_ids` the viewer is allowed to react to.
 
-    Returns (affected_ids, reaction_group_id). Idempotent: the table's
+    Idempotent: the table's
     (play_id, user_id) primary key means a double tap re-writes nothing, so the
     client can fire without checking first.
 
@@ -71,17 +91,17 @@ def add(sb: Client, viewer_id: str, play_ids: list[str]) -> tuple[list[str], str
     and the column is NOT NULL so forgetting it here fails loudly rather than
     silently emptying somebody's bell.
     """
-    owners = _reactable_owners(sb, viewer_id, play_ids)
-    ids = list(owners)
+    plays = _reactable(sb, viewer_id, play_ids)
+    ids = list(plays)
     group_id = str(uuid.uuid4())
     if not ids:
-        return [], group_id
+        return ReactionWrite([], group_id, [], None)
     payload: list[dict[str, Any]] = [
         {
             "play_id": pid,
             "user_id": viewer_id,
             "reaction_group_id": group_id,
-            "play_owner_id": owners[pid],
+            "play_owner_id": plays[pid]["owner"],
         }
         for pid in ids
     ]
@@ -91,13 +111,17 @@ def add(sb: Client, viewer_id: str, play_ids: list[str]) -> tuple[list[str], str
     sb.table(TABLE).upsert(
         payload, on_conflict="play_id,user_id", ignore_duplicates=True
     ).execute()
-    return ids, group_id
+    # Order-preserving unique, so a night logged by two people notifies each of
+    # them once rather than once per play they own.
+    owner_ids = list(dict.fromkeys(p["owner"] for p in plays.values()))
+    game_name = plays[ids[0]]["game_name"] if len(ids) == 1 else None
+    return ReactionWrite(ids, group_id, owner_ids, game_name)
 
 
 def remove(sb: Client, viewer_id: str, play_ids: list[str]) -> list[str]:
     """Drop the viewer's reactions on these plays. Returns the ids touched.
 
-    Deliberately NOT filtered through _reactable_owners: this only ever deletes
+    Deliberately NOT filtered through _reactable: this only ever deletes
     rows whose user_id is the caller, so there is nothing to authorize, and a
     play deleted since the page loaded should still let its stale row go.
     """

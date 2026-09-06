@@ -144,7 +144,7 @@ def send_request(sb, viewer_id: str, target_user_id: str) -> BuddyRequestRespons
 
 def send_requests_bulk(
     sb, viewer_id: str, target_user_ids: list[str]
-) -> BulkBuddyRequestResponse:
+) -> tuple[BulkBuddyRequestResponse, list[BuddyRequestResponse]]:
     """Send requests to several users at once, reporting per-target outcomes.
 
     Each target goes through send_request, so every rule that applies to a
@@ -156,21 +156,31 @@ def send_requests_bulk(
     cost them the other nine.
 
     Duplicates within one payload collapse — send_request is idempotent, but
-    de-duplicating first keeps `sent` an honest count of distinct people."""
+    de-duplicating first keeps `sent` an honest count of distinct people.
+
+    Returns the response AND the individual send_request results, because the
+    two answer different questions. The response is the API contract and says
+    only who it worked for; each result additionally carries `direction`, which
+    is the difference between "they now have a request waiting" and "this
+    auto-accepted the one they had already sent" — and therefore between two
+    different notifications. Handed back rather than pushed from in here so
+    this stays a service with no opinion about delivery.
+    """
     result = BulkBuddyRequestResponse()
+    outcomes: list[BuddyRequestResponse] = []
     seen: set[str] = set()
     for target_id in target_user_ids:
         if target_id in seen:
             continue
         seen.add(target_id)
         try:
-            send_request(sb, viewer_id, target_id)
+            outcomes.append(send_request(sb, viewer_id, target_id))
             result.sent.append(target_id)
         except HTTPException as e:
             result.failed.append(
                 BulkBuddyRequestFailure(user_id=target_id, detail=str(e.detail))
             )
-    return result
+    return result, outcomes
 
 
 def _accept_edge(sb, edge: dict[str, Any], viewer_id: str) -> BuddyRequestResponse:

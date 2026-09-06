@@ -11,14 +11,14 @@ come back on the feed payload (bgb_feed_plays, migration 016), not from here, so
 there is no GET: reacting never costs the client a read.
 """
 
-from fastapi import Depends
+from fastapi import BackgroundTasks, Depends
 
 from db import get_supabase
 
 from . import router
 from .dependencies import CurrentUser, get_current_user
 from .models import PlayReactionRequest, PlayReactionResponse
-from .services import reaction_service
+from .services import push_notify, reaction_service
 
 
 @router.post(
@@ -29,16 +29,29 @@ from .services import reaction_service
 )
 async def add_reactions(
     payload: PlayReactionRequest,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayReactionResponse:
     """React to the given plays; returns the ones actually affected."""
+    sb = get_supabase()
     # 200 rather than 201: the write is idempotent, so a second tap creates
     # nothing and "Created" would be a lie half the time.
-    ids, group_id = reaction_service.add(get_supabase(), user.user_id, payload.play_ids)
-    # `ids` can be shorter than what was sent — the caller's own plays are
+    write = reaction_service.add(sb, user.user_id, payload.play_ids)
+    # One push per owner for the whole tap, matching the single bell row
+    # migration 017 collapses these into. Idempotency is not re-checked here: a
+    # repeat tap over plays already reacted to writes nothing but still
+    # notifies, and the payload's tag makes that a refreshed notification on
+    # the device rather than a second one — the same treatment a repeated buddy
+    # request gets.
+    push_notify.reaction(
+        background_tasks, sb, user, write.owner_ids, len(write.play_ids), write.game_name
+    )
+    # `play_ids` can be shorter than what was sent — the caller's own plays are
     # dropped — so the client reconciles against this rather than assuming its
     # optimistic patch covered everything.
-    return PlayReactionResponse(play_ids=ids, reacted=True, reaction_group_id=group_id)
+    return PlayReactionResponse(
+        play_ids=write.play_ids, reacted=True, reaction_group_id=write.group_id
+    )
 
 
 @router.delete(

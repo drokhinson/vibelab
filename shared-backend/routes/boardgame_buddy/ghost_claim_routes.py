@@ -11,7 +11,7 @@ declared before anything matching /ghost-claims/{claim_id}, or FastAPI would
 match "suggestions" as a claim id.
 """
 
-from fastapi import Depends, Path, Query
+from fastapi import BackgroundTasks, Depends, Path, Query
 
 from db import get_supabase
 
@@ -27,7 +27,7 @@ from .models import (
     GhostClaimSuggestionsResponse,
     MessageResponse,
 )
-from .services import ghost_claim_service
+from .services import ghost_claim_service, push_notify
 
 
 @router.get(
@@ -88,6 +88,7 @@ async def list_ghost_claims(
 )
 async def create_ghost_claim(
     body: GhostClaimCreate,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> GhostClaimResponse:
     """Send a claim.
@@ -97,9 +98,14 @@ async def create_ghost_claim(
     you twice in one game), 409 after a second decline, 410 if the ghost is
     gone.
     """
-    return ghost_claim_service.create_claim(
-        get_supabase(), user.user_id, body.owner_user_id, body.display_name
+    sb = get_supabase()
+    claim = ghost_claim_service.create_claim(
+        sb, user.user_id, body.owner_user_id, body.display_name
     )
+    push_notify.ghost_claim(
+        background_tasks, sb, user, body.owner_user_id, body.display_name
+    )
+    return claim
 
 
 @router.post(

@@ -26,7 +26,7 @@ uvicorn worker — and the host's own /search keystrokes queue behind them.
 
 import asyncio
 
-from fastapi import Depends, Path
+from fastapi import BackgroundTasks, Depends, Path
 
 from db import get_supabase
 
@@ -45,7 +45,7 @@ from .models import (
     SessionResponse,
     SessionUpdateBody,
 )
-from .services import session_service
+from .services import push_notify, session_service
 
 
 @router.post(
@@ -128,19 +128,23 @@ async def join_session(
 )
 async def add_session_participant(
     body: SessionAddParticipantBody,
+    background_tasks: BackgroundTasks,
     code: str = Path(..., description="Session code"),
     user: CurrentUser = Depends(get_current_user),
 ) -> SessionResponse:
     """Host adds a buddy (with user_id) or a ghost (name-only) to the lobby.
     Without this endpoint, players the host types in the picker live only in
     the host's local draft and never appear in joiners' rosters."""
-    return session_service.add_participant(
-        get_supabase(),
+    sb = get_supabase()
+    session = session_service.add_participant(
+        sb,
         viewer_id=user.user_id,
         code=code,
         user_id=body.user_id,
         display_name=body.display_name,
     )
+    push_notify.session_invite(background_tasks, sb, user, session, body.user_id)
+    return session
 
 
 @router.put(
@@ -253,6 +257,7 @@ async def abandon_session(
 )
 async def finalize_session(
     body: PlayCreate,
+    background_tasks: BackgroundTasks,
     code: str = Path(..., description="Session code"),
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayResponse:
@@ -270,9 +275,12 @@ async def finalize_session(
     (migration 042), so this is one round trip rather than the ten it used
     to take.
     """
-    return session_service.finalize_session(
-        get_supabase(),
+    sb = get_supabase()
+    play = session_service.finalize_session(
+        sb,
         host_user_id=user.user_id,
         code=code,
         payload=body.model_dump(mode="json"),
     )
+    push_notify.play_logged(background_tasks, sb, user, play)
+    return play
