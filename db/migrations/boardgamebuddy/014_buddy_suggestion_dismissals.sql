@@ -1,4 +1,4 @@
--- 013_buddy_suggestion_dismissals.sql — "not interested" on a suggested buddy.
+-- 014_buddy_suggestion_dismissals.sql — "not interested" on a suggested buddy.
 --
 -- The three suggestion surfaces (the Feed rail, the Buddies screen's rail, and
 -- the Add-buddies card) all offer people the viewer is not connected to. Until
@@ -163,7 +163,7 @@ AS $function$
    WHERE c.candidate <> uid
      AND pr.needs_setup IS NOT TRUE          -- added in 066
      AND c.candidate NOT IN (SELECT x.other_id FROM connected x)
-     AND c.candidate NOT IN (SELECT x.other_id FROM dismissed x)   -- added in 013 (this file)
+     AND c.candidate NOT IN (SELECT x.other_id FROM dismissed x)   -- added in 014 (this file)
      AND (c.mutuals > 0 OR c.plays > 0 OR c.pending_mutuals > 0)
    -- Earned signals keep their order; the new one sorts below both, because a
    -- request nobody has answered is the weakest thing in the list.
@@ -289,7 +289,7 @@ AS $function$
      WHERE pr.id <> uid
        AND pr.needs_setup IS NOT TRUE
        AND pr.id NOT IN (SELECT c.other_id FROM connected c)
-       AND pr.id NOT IN (SELECT d.other_id FROM dismissed d)   -- added in 013 (this file)
+       AND pr.id NOT IN (SELECT d.other_id FROM dismissed d)   -- added in 014 (this file)
   ),
   tier_graph AS (
     SELECT
@@ -418,7 +418,7 @@ AS $function$
     WHERE h.candidate <> uid
       AND pr.needs_setup IS NOT TRUE
       AND h.candidate NOT IN (SELECT c.other_id FROM connected c)
-      AND h.candidate NOT IN (SELECT d.other_id FROM dismissed d)   -- added in 013 (this file)
+      AND h.candidate NOT IN (SELECT d.other_id FROM dismissed d)   -- added in 014 (this file)
       AND h.candidate NOT IN (SELECT s.seed_id FROM seeds s)
   )
   SELECT r.via, r.candidate, r.n, r.rank_in_seed

@@ -83,7 +83,7 @@
     static suggested() { return window.api.get("/buddies/suggested"); }
 
     // "Stop suggesting this person" (migration
-    // `013_buddy_suggestion_dismissals`). Per-viewer and silent —
+    // `014_buddy_suggestion_dismissals`). Per-viewer and silent —
     // it is not a block, the person is never told, and /profiles/search still
     // finds them, which is what makes a mis-tapped × recoverable. Sending them
     // a request later clears the dismissal server-side.
