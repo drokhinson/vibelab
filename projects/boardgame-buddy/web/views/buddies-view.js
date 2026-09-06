@@ -57,12 +57,14 @@
       // lists actually re-form.
       this._resolved = new Map();
 
-      // Ghost account claims (migration 070). Two lists, opposite ends of the
-      // same conversation: suggestions are ghosts we might claim, requests are
-      // people asking to claim ours. Their markup lives in
-      // ui/ghost-claim-suggestions.js; only the state and the writes are here.
+      // Ghost account claims (migrations 070, 014). Suggestions are ghosts we
+      // might claim; requests come in three directions now — people asking to
+      // claim OURS (incoming), asks WE made (outgoing, keyed on who asked, so
+      // it holds the ones we raised for a buddy too), and asks somebody made
+      // FOR us (for_me), which only the ghost's owner can answer. Their markup
+      // lives in ui/ghost-claim-suggestions.js; only state and writes are here.
       this._claimSuggestions = [];
-      this._claimRequests = { incoming: [], outgoing: [] };
+      this._claimRequests = { incoming: [], outgoing: [], for_me: [] };
       // True while /buddies/suggested and /ghost-claims/suggestions are in the
       // air. Neither list arrives with the bundle, so this is the only thing
       // that distinguishes "nothing to suggest" from "we have not asked yet" —
@@ -221,7 +223,7 @@
       // below is for the request count — and the one that seeds the key set the
       // claim sheet decrements from anywhere else in the app.
       if (claimSuggestions) window.GhostClaim.setSuggestions(claimSuggestions);
-      this._claimRequests = claims || { incoming: [], outgoing: [] };
+      this._claimRequests = claims || { incoming: [], outgoing: [], for_me: [] };
       if (claims) this._publishClaimCount();
       // The lists are re-forming, so this session's past-tense chips retire —
       // the same point in the cycle where _resolved is cleared above.
@@ -344,6 +346,10 @@
         ` : ""}
 
         ${window.renderGhostClaimsSent(this._claimRequests.outgoing, {
+          stateFor: (id) => this._claimStateFor(id),
+        })}
+
+        ${window.renderGhostClaimsForMe(this._claimRequests.for_me, {
           stateFor: (id) => this._claimStateFor(id),
         })}
 
@@ -1275,6 +1281,50 @@
       // its place and drops on the next _load(), like every other verb here.
       this._claimResolved.set(claimId, "cancelled");
       window.patchGhostClaimRow(claimId, "cancelled");
+    }
+
+    /**
+     * "Not me" on a claim a buddy raised FOR us.
+     *
+     * Same endpoint as _cancelClaim and the same optimistic shape, but a
+     * different act: withdrawing your own ask deletes it, while saying a claim
+     * about you is wrong marks it dismissed so the buddy who asked cannot
+     * re-raise it a second later. The server decides which by who is calling —
+     * we are the claimant here, not the requester.
+     *
+     * Not a decline, either: it costs the requester no strike, and we stay free
+     * to claim this ghost ourselves later.
+     */
+    async _declineProxyClaim(claimId) {
+      const busyKey = "claim:" + claimId;
+      if (this._busy.has(busyKey)) return;
+      const forMe = this._claimRequests.for_me || [];
+      const idx = forMe.findIndex((r) => r.id === claimId);
+      if (idx < 0) return;
+      this._busy.add(busyKey);
+      this._mutationSeq++;
+      const req = forMe[idx];
+      window.patchGhostClaimRow(claimId, "busy");
+      forMe.splice(idx, 1);
+      try {
+        await window.GhostClaim.cancel(claimId);
+      } catch (e) {
+        forMe.splice(idx, 0, req);
+        window.patchGhostClaimRow(claimId, null, req, "for-me");
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't send that", "error");
+        }
+        return;
+      } finally {
+        this._busy.delete(busyKey);
+      }
+      // "Not you", the same past tense a "Not me" on the suggestion list leaves
+      // behind — it is the same act on the same row, and the server writes the
+      // same 'dismissed' status for both. "Declined" belongs to the OWNER
+      // turning a claim down, which is a different person saying a different
+      // thing.
+      this._claimResolved.set(claimId, "dismissed");
+      window.patchGhostClaimRow(claimId, "dismissed");
     }
 
     async _accept(requestId, userId) {
