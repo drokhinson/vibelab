@@ -17,6 +17,10 @@
 //            When the user uploaded their own snapshot the game's box art
 //            rides along as a small bottom-right badge at its natural aspect;
 //            with no snapshot the box art IS the photo.
+//            A play with a note also gets a two-line preview of it on a paper
+//            plate across the bottom of the photo. It sits INSIDE the fixed
+//            photo frame, so it costs the card no height; the badge lifts
+//            above it (.has-note) on the one card that carries both.
 //   Back   → game title + duration, ranked scoreboard with the winner row
 //            tinted — a registered player's row opens their profile —
 //            optional notes, the same maximize button (top-right), and a
@@ -64,6 +68,37 @@
     return ratio < 0.95 ? "portrait" : "landscape";
   }
 
+  // How much of a note reaches the DOM. This is a PAYLOAD guard, not the
+  // visible cut: `boardgamebuddy_plays.notes` is bare TEXT with no constraint
+  // and no maxlength on any input, so an AI- or BGG-imported note can run to
+  // any length, and a feed page holds twenty of them in a string the browser
+  // has to parse. The visible truncation is CSS's two-line clamp — every other
+  // clamp in this project is CSS and there is no JS truncator to reuse — and
+  // 200 characters is far more than two lines can show at either card width,
+  // so the ellipsis the user sees always comes from the stylesheet.
+  const NOTE_MAX = 200;
+
+  // The single answer to "does this play have a note", used by BOTH the band
+  // and the .has-note class that lifts the box-art badge out of its way. Two
+  // near-identical truthiness checks would be free to drift, and the failure
+  // would be a badge floating clear of a band that isn't there.
+  /** @param {string|null|undefined} notes @returns {string} the text, or "" */
+  function noteText(notes) {
+    return String(notes == null ? "" : notes).trim().slice(0, NOTE_MAX);
+  }
+
+  /** @param {string|null|undefined} notes @returns {string} band markup, or "" */
+  function notePreview(notes) {
+    const text = noteText(notes);
+    if (!text) return "";
+    // The inner <span> is load-bearing: -webkit-line-clamp caps the visible
+    // lines but does not shrink the box, so a clamp on the padded plate leaves
+    // a gap the height of its own bottom padding — through which the tops of a
+    // third line's glyphs show below the ellipsis. The span has no padding, so
+    // its overflow is clipped exactly on the line boundary.
+    return `<p class="play-card__note"><span>${escapeHtml(text)}</span></p>`;
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   function renderPlayCard(card) {
@@ -88,6 +123,12 @@
 
     const variantClass = orient === "portrait" ? "play-card--tall" : "play-card--wide";
     const flippedAttr = s.flipped ? " is-flipped" : "";
+    // State class in the .has-links mould (see renderBack's scoreboard). It
+    // exists so the box-art badge can lift clear of the note band: the badge
+    // and the band both want the bottom of the photo, and the badge only
+    // renders at all when the user uploaded their own snapshot, so this is the
+    // one case where they actually collide.
+    const notedAttr = noteText(card.notes) ? " has-note" : "";
 
     // A run of identical imported plays (migration 005) is ONE card standing
     // for many. It is a variant of this component rather than a component of
@@ -127,7 +168,7 @@
     }
 
     return `
-      <article class="play-card ${variantClass}${flippedAttr}"
+      <article class="play-card ${variantClass}${flippedAttr}${notedAttr}"
                data-play-id="${escapeAttr(card.play_id)}"
                style="--game-accent:${escapeAttr(accent)}"
                role="button" tabindex="0"
@@ -238,6 +279,13 @@
          </div>`
       : "";
 
+    // The note preview: a strip of paper laid across the bottom of the photo.
+    // It lives INSIDE the frame, which is a fixed --pc-photo-h tall, so an
+    // absolutely-positioned band cannot change the card's height — that is the
+    // whole reason this treatment won over a third caption row, which would
+    // have taxed every card in the app for a field most plays don't have.
+    const noteHtml = notePreview(card.notes);
+
     // The frame is a fixed height in both variants, so the image is CONTAINED
     // in it and never cropped — a landscape shot leaves space above and below,
     // a portrait one leaves space to either side. That space is filled by the
@@ -259,11 +307,14 @@
                 loading="lazy"
                 onload="window.playCardFlip.onPhotoLoad(event, '${escapeAttr(card.play_id)}')" />
            ${badgeHtml}
+           ${noteHtml}
          </div>`
-      : `<div class="play-card__photo"></div>`;
+      : `<div class="play-card__photo">${noteHtml}</div>`;
 
-    // Notes live exclusively on the back of the card — the front stays tight
-    // (photo + caption) so cards in a strip line up cleanly.
+    // The band carries no data-no-flip and is not a button or a link, so
+    // handleClick lets the tap through and the card flips — tapping a truncated
+    // preview to read the rest of it is exactly what it should do, and the
+    // back's .play-card__back-notes carries the note unclamped.
     //
     // The winner used to share a row with the title and needed a post-paint
     // re-measure to decide whether it fit; it has its own row now, so the

@@ -2748,6 +2748,65 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   height: 100%; width: auto; object-fit: contain; display: block;
 }
 
+/* ── Note preview ─────────────────────────────────────────────────────────
+   A strip of paper laid across the bottom of the photo, carrying the first two
+   lines of the play's note. It is absolutely positioned INSIDE the frame,
+   whose height is already pinned to --pc-photo-h, so it cannot change the
+   card's height — which is what let it win over a third caption row that would
+   have made every card in the app taller for a field most plays don't fill.
+
+   It reads --photo-plate / --on-photo, not the --polaroid-* family: the band
+   sits on an uploaded PHOTOGRAPH, which is not a surface the token system owns
+   and is light under either theme, so both the plate and its ink are
+   theme-independent (see their declaration near the top of this file). This is
+   the fourth consumer of that pair, after the front maximize button, the
+   cascade photo's remove button and the detail popup's replace button.
+
+   z-index 3 threads the existing ladder inside .play-card__photo: above the
+   ::after gradient and the box-art badge (both 2), below the maximize
+   button (4). */
+.play-card__note {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  z-index: 3;
+  margin: 0;
+  padding: 5px 7px;
+  border-radius: 4px;
+  background: var(--photo-plate);
+  color: var(--on-photo);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  /* Same face and italic as the back's .play-card__back-notes, a step smaller
+     because this one is a preview and the back carries the whole thing. */
+  font-family: var(--font-polaroid);
+  font-style: italic;
+  font-size: 11px;
+  line-height: 14px;
+  overflow: hidden;
+}
+/* The clamp lives on the inner span, NOT on the padded plate. -webkit-line-clamp
+   caps the visible lines but does not shrink the box, so a clamp on .play-card__note
+   leaves it 5px taller than its two lines — and `overflow: hidden` clips at the
+   padding edge, so that 5px becomes a window showing the tops of a third line's
+   glyphs underneath the ellipsis. The span has no padding, so its own clip lands
+   exactly on the line boundary. */
+.play-card__note span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+/* The badge and the band both want the bottom of the photo. The badge only
+   renders when the user uploaded their own snapshot, so this is the one card
+   that carries both — lift it clear, off the band's own height. */
+.play-card.has-note .play-card__game-overlay {
+  bottom: calc(var(--pc-note-h) + 8px);
+}
+
 /* ── Caption ──────────────────────────────────────────────────────────────
    Two stacked rows. The title row carries the game name and an explicit open
    button; the meta row carries the winner, separated by a hairline.
@@ -2879,6 +2938,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    so the two variants cannot drift apart, and so it is tunable in one place. */
 .play-card {
   --pc-photo-h: 230px;
+  /* What the note band occupies, measured up from the frame's bottom edge: its
+     own 6px offset plus the plate. Lives here beside --pc-photo-h, with the
+     card's other measurements, so the box-art badge's lifted offset can be
+     derived from it rather than restating the number. */
+  --pc-note-h: 44px;
   /* Stated, not inherited from Tailwind's preflight: these widths are the
      card's whole contract, and under content-box the 12px padding and the
      light theme's 1px border would silently add 26px to both of them. */
