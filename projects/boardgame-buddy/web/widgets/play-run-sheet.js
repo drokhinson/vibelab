@@ -13,10 +13,19 @@
 // That second job grew when grouping moved onto the row identity: a run holds
 // plays that are INDISTINGUISHABLE, which is not the same as featureless, so
 // it can carry a note or a scoreline as long as every play in it carries the
-// same one. Those have nowhere else to appear — the stack's front shows no
-// note, exactly as an ordinary card shows one only on its back — so this sheet
-// is where they belong. The note rides on the card; the scoreline needs the
-// representative play, which is one lazy fetch on open.
+// same one. Those have nowhere else to appear — so this sheet is where they
+// belong. The note rides on the card; the scoreline needs the representative
+// play, which is one lazy fetch on open.
+//
+// That used to read "the stack's front shows no note, exactly as an ordinary
+// card shows one only on its back", and the second half of it is no longer
+// true: an ordinary card now previews its note on a paper plate across the
+// bottom of its photo. The run card still doesn't, for its own reason — it has
+// no photograph. Its frame is a big centred count over a dimmed thumbnail on
+// --polaroid-bg-soft, which is a chrome surface, and the band's
+// --photo-plate / --on-photo pair is only correct on top of an actual photo.
+// A note preview on a run card would be a different treatment on a different
+// surface, not this one moved across.
 //
 // Deleting a whole IMPORT (every play one paste wrote, one-offs included) is a
 // different act and lives in Settings; this sheet is only ever the run.
