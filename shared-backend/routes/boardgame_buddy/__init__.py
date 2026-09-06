@@ -14,6 +14,11 @@ router = APIRouter(
 # existing modules are still served while the new frontend cuts over.
 from . import game_routes      # noqa: F401, E402
 from . import collection_routes  # noqa: F401, E402
+# Ahead of play_routes, and this is load-bearing: FastAPI resolves in
+# declaration order, and `DELETE /plays/reactions` would otherwise be
+# swallowed by `DELETE /plays/{play_id}` with play_id="reactions". Same
+# hazard the buddy_suggestion_routes ordering below exists for.
+from . import reaction_routes  # noqa: F401, E402
 from . import play_routes      # noqa: F401, E402
 # Ahead of buddy_routes: literal `/buddies/suggested…` paths before the
 # parameterised `/buddies/{edge_id}` ones, which FastAPI resolves in

@@ -1490,6 +1490,14 @@ class FeedPlayParticipant(BaseModel):
     display_name: str
 
 
+class FeedReactor(BaseModel):
+    """One person who said good game to a play (migration 016)."""
+
+    user_id: str
+    display_name: Optional[str] = None
+    avatar: Optional[Avatar] = None
+
+
 class FeedPlayCard(BaseModel):
     kind: Literal[FeedCardKind.PLAY] = FeedCardKind.PLAY
     play_id: str
@@ -1535,6 +1543,19 @@ class FeedPlayCard(BaseModel):
     players: list[PlayPlayerResponse] = []
     expansions: list[PlayExpansionRef] = []
     country_code: Optional[str] = None
+    # ── Migration 016 — the "Good game" reaction.
+    #
+    # Per PLAY, though the UI draws it per session: a feed session is grouped
+    # client-side off `played_at | participants`, and participants is filtered
+    # per viewer, so no two viewers agree on a session key and there is nothing
+    # stable to store. The footer aggregates these across the night's cards.
+    #
+    # `reactors` is capped at 8 by the RPC because the footer draws three
+    # avatars; `reaction_count` is the exact total and is what the number comes
+    # from, so the cap can never make the count wrong.
+    reaction_count: int = 0
+    viewer_reacted: bool = False
+    reactors: list[FeedReactor] = []
 
 
 class FeedHotGamesEntry(BaseModel):
@@ -1586,6 +1607,31 @@ FeedCard = Union[
     FeedHotGamesCard,
     FeedSuggestedBuddiesCard,
 ]
+
+
+class PlayReactionRequest(BaseModel):
+    """The plays a single tap covers.
+
+    A list rather than one id because the surface is the SESSION footer: one tap
+    reacts to every play of that night at once. One play is just a list of one,
+    which is what a future per-card control would send.
+    """
+
+    play_ids: list[str]
+
+
+class PlayReactionResponse(BaseModel):
+    """What the write actually touched, so the client can reconcile.
+
+    `play_ids` echoes only the plays that were affected — the caller's OWN plays
+    are dropped server-side (you do not congratulate yourself), so this can be
+    shorter than what was sent, and an optimistic client needs to know which.
+    """
+
+    play_ids: list[str]
+    reacted: bool
+    # Null on a delete. One id per tap, shared by every row it wrote.
+    reaction_group_id: Optional[str] = None
 
 
 class FeedPageResponse(BaseModel):

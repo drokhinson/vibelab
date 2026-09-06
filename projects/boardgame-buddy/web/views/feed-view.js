@@ -38,6 +38,11 @@
       // User ids with a send/cancel in flight. A second tap on the same tile
       // is dropped rather than opening a second edge.
       this._busy = new Set();
+      // The same guard as _busy, keyed by session key: a double tap on
+      // "Good game" must not fire a second write while the first is out.
+      this._ggBusy = new Set();
+      // groupCards()' output from the last render — see _sessionByKey.
+      this._grouped = [];
       // The pull-to-refresh controller, built on first mount and re-attached on
       // every later one. Held rather than rebuilt because it binds to
       // `this.container`, which the router keeps across mounts.
@@ -363,6 +368,10 @@
       // Run on every render so cross-page boundaries fold naturally when new
       // pages append.
       const cards = groupCards(rawCards);
+      // Held for _sessionByKey: a footer tap knows only its session key, and
+      // re-running groupCards() there would rebuild the whole page's grouping
+      // to find one card. Rewritten on every render, so it cannot go stale.
+      this._grouped = cards;
       // The date is a heading above each day's group, not an eyebrow on every
       // session — a game night split across two sets of buddies used to print
       // "Today" twice.
@@ -525,13 +534,187 @@
       const isSingle = card.plays.length === 1;
       const cards = card.plays.map((p) => window.renderPlayCard(p)).join("");
       return `
-        <section class="play-session${isSingle ? " play-session--single" : ""}">
+        <section class="play-session${isSingle ? " play-session--single" : ""}"
+                 data-session-key="${escapeAttr(sessionKey(firstPlay))}">
           <header class="play-session__header">
             <span class="play-session__title">${title}</span>
           </header>
           <div class="play-session__scroll">${cards}</div>
+          ${this._renderSessionFoot(card)}
         </section>
       `;
+    }
+
+    // ── "Good game" (migration 016) ──────────────────────────────────────────
+    //
+    // One reaction for the whole night, under the whole rail. The rows behind it
+    // are per PLAY — a feed session is grouped client-side off a viewer-filtered
+    // participant list, so there is no session id to store — which is why this
+    // reads state ACROSS the night's cards rather than off one field.
+    //
+    // Count is the max of the plays' counts and the faces are the union of their
+    // reactors: a tap fans out to every play in the session, so under this
+    // surface all the plays carry the same set and max and union agree. Both
+    // degrade sanely if a per-card control is ever added and writes to one play.
+    _sessionReactions(card) {
+      const plays = card.plays || [];
+      let count = 0;
+      let mine = false;
+      const faces = new Map();
+      for (const p of plays) {
+        count = Math.max(count, p.reaction_count || 0);
+        if (p.viewer_reacted) mine = true;
+        for (const r of (p.reactors || [])) {
+          if (r && r.user_id && !faces.has(r.user_id)) faces.set(r.user_id, r);
+        }
+      }
+      return { count, mine, faces: [...faces.values()] };
+    }
+
+    // The plays of this session the viewer may react to: not their own. The
+    // server enforces this too — this is what keeps the button from appearing
+    // over a night that is entirely the viewer's, where it would do nothing.
+    _reactableIds(card) {
+      const me = window.store && window.store.get && window.store.get("user");
+      const myId = me && me.id;
+      return (card.plays || [])
+        .filter((p) => !(myId && p.user && p.user.id === myId))
+        .map((p) => p.play_id);
+    }
+
+    _renderSessionFoot(card) {
+      const ids = this._reactableIds(card);
+      // Nothing to react to — an all-mine night — so no footer at all rather
+      // than a dead control.
+      if (!ids.length) return "";
+      const { count, mine, faces } = this._sessionReactions(card);
+      const key = sessionKey(card.plays[0]);
+      const nav = `window.feedView._toggleReaction('${escapeAttr(jsStr(key))}')`;
+      // The label is only ever the words on an empty night; once there are any,
+      // it is the mark plus a bare number. That is the whole reason the phrase
+      // is spelled out rather than "GG" — the count never has to pluralise it.
+      const label = count ? String(count) : "Good game";
+      const stack = faces.slice(0, 3).map((f) => window.BgbBadge.render({
+        avatar: f.avatar || null,
+        displayName: f.display_name || "",
+        size: "sm",
+        extraClass: "play-session__face",
+      })).join("");
+      return `
+        <div class="play-session__foot">
+          <button class="play-session__gg${mine ? " is-mine" : ""}" type="button"
+                  aria-pressed="${mine ? "true" : "false"}"
+                  aria-label="${mine ? "Take back your good game" : "Say good game"}"
+                  onclick="${nav}">
+            <i data-icon="handshake" class="w-4 h-4"></i><span>${escapeHtml(label)}</span>
+          </button>
+          ${faces.length ? `<span class="play-session__faces">${stack}</span>` : ""}
+          <span class="play-session__gg-who">${this._reactionSentence(count, mine, faces)}</span>
+        </div>
+      `;
+    }
+
+    // "Be the first to say good game" / "Priya and 2 others said good game".
+    // The viewer, when they are in the set, always leads — you read your own
+    // name first everywhere else in this app.
+    _reactionSentence(count, mine, faces) {
+      if (!count) return "Be the first to say good game";
+      const me = window.store && window.store.get && window.store.get("user");
+      const lead = mine
+        ? "You"
+        : escapeHtml((faces[0] && faces[0].display_name) || "Someone");
+      const others = count - 1;
+      if (others <= 0) return `${lead} said good game`;
+      return `${lead} and ${others} other${others === 1 ? "" : "s"} said good game`;
+    }
+
+    /**
+     * Toggle the viewer's reaction on a whole session. Optimistic: the count and
+     * the fill move in the same frame as the tap and the request goes out
+     * behind it, because a reaction that waits for a round trip reads as a tap
+     * that did not register.
+     *
+     * Nothing here touches the feed cache. Play.react/unreact deliberately skip
+     * _invalidatePlayDeps(), so a tap costs one write and zero reads — the whole
+     * point of putting the counts on the feed payload in the first place.
+     */
+    async _toggleReaction(key) {
+      if (this._ggBusy.has(key)) return;
+      const card = this._sessionByKey(key);
+      if (!card) return;
+      const ids = this._reactableIds(card);
+      if (!ids.length) return;
+
+      const me = window.store && window.store.get && window.store.get("user");
+      const { mine } = this._sessionReactions(card);
+      const next = !mine;
+      this._ggBusy.add(key);
+      this._patchSessionReaction(card, next, me);
+      try {
+        // The optimistic patch already skipped the viewer's own plays, which is
+        // the same set the server drops, so the echoed play_ids agree with what
+        // was painted and there is nothing to reconcile. Awaited rather than
+        // fired and forgotten so a failure reaches the rollback below.
+        if (next) await window.Play.react(ids);
+        else await window.Play.unreact(ids);
+      } catch (e) {
+        // Roll back to exactly where it was. A failed reaction is not worth a
+        // toast — the control snapping back says it, and the user can tap again.
+        this._patchSessionReaction(card, mine, me);
+      } finally {
+        this._ggBusy.delete(key);
+      }
+    }
+
+    /** Apply a reaction state to every play of a session, then repaint the foot. */
+    _patchSessionReaction(card, on, me) {
+      const myId = me && me.id;
+      for (const p of card.plays) {
+        if (myId && p.user && p.user.id === myId) continue;   // never our own
+        const was = !!p.viewer_reacted;
+        if (was === on) continue;
+        p.viewer_reacted = on;
+        p.reaction_count = Math.max(0, (p.reaction_count || 0) + (on ? 1 : -1));
+        const others = (p.reactors || []).filter((r) => r && r.user_id !== myId);
+        p.reactors = on && myId
+          ? [{ user_id: myId, display_name: (me && me.display_name) || "You", avatar: (me && me.avatar) || null }, ...others]
+          : others;
+      }
+      this._repaintSessionFoot(card);
+    }
+
+    /**
+     * Repaint one session's footer and nothing else. A full render() here would
+     * rebuild every card in the feed — tearing down the control under the
+     * user's finger before :active could apply, which is the "laggy" feel the
+     * surgical-repaint rule exists to prevent.
+     */
+    _repaintSessionFoot(card) {
+      const host = this.container || document;
+      const key = sessionKey(card.plays[0]);
+      const esc = (window.CSS && CSS.escape) ? CSS.escape(key) : key;
+      const section = host.querySelector(`.play-session[data-session-key="${esc}"]`);
+      if (!section) return;
+      const foot = section.querySelector(".play-session__foot");
+      const html = this._renderSessionFoot(card);
+      if (!foot) {
+        if (html) section.insertAdjacentHTML("beforeend", html);
+      } else if (!html) {
+        foot.remove();
+        return;
+      } else {
+        foot.outerHTML = html;
+      }
+      // Re-hydrate icons after the innerHTML patch, scoped to the section.
+      window.BgbIcons.render(section);
+    }
+
+    /** Find the rendered session card carrying this key, from the current page. */
+    _sessionByKey(key) {
+      const groups = this._grouped || [];
+      return groups.find(
+        (c) => c.kind === "play_session" && c.plays.length && sessionKey(c.plays[0]) === key,
+      ) || null;
     }
 
     // Shared game-rail component — a heading plus a horizontal strip of game

@@ -137,6 +137,30 @@
     /** The remembered play, or null. Synchronous — this is its whole point. */
     static seeded(id) { return _seeds.get(id) || null; }
 
+    // ── Reactions ("Good game", migration 016) ─────────────────────────────
+    //
+    // Both take the whole night's play ids, because the surface is the session
+    // footer: one tap covers every play in that session. The server drops any
+    // of them the caller logged — you do not congratulate yourself — and echoes
+    // back the ids it actually touched, which is why these return the response
+    // rather than swallowing it: the caller's optimistic patch may have covered
+    // more plays than the write did.
+    //
+    // Deliberately NOT routed through _invalidatePlayDeps(). A reaction changes
+    // no play, no stat and no shelf; busting the caches would drop the feed page
+    // and make every tap refetch the feed, which is the whole cost this design
+    // was avoiding. The feed cards are patched in place by the view instead.
+
+    /** @param {string[]} playIds @returns {Promise<any>} */
+    static react(playIds) {
+      return window.api.post("/plays/reactions", { play_ids: playIds });
+    }
+
+    /** @param {string[]} playIds @returns {Promise<any>} */
+    static unreact(playIds) {
+      return window.api.del("/plays/reactions", { play_ids: playIds });
+    }
+
     // Any play mutation can shift Profile stats, recent_plays, and the
     // played-not-owned shelf; it can also change Game Detail's recent_plays
     // for that game. Bust the bundle caches so the next visit re-hydrates.

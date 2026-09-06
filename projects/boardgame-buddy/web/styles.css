@@ -3202,6 +3202,75 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--ink-muted);
   letter-spacing: -0.005em;
 }
+
+/* ── "Good game" — the session footer ─────────────────────────────────────
+   One reaction for a whole night, sitting under the rail. GROUND tokens, not
+   the --polaroid-* family: this is app chrome beside the cards, not part of
+   the photo-paper surface they are made of, so it follows the theme where the
+   cards deliberately do not (.claude/rules/theming.md §6).
+
+   It lives OUTSIDE .play-card, so it cannot touch the one-height contract the
+   cards hold to. */
+.play-session__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 16px 4px;
+  min-width: 0;
+}
+.play-session__gg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  position: relative;
+  /* 32px of visible pill inside a 44px hit area (the ::before), per the tap
+     target floor. The pill stays small because the footer is a quiet row. */
+  height: 32px;
+  padding: 0 12px 0 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
+}
+.play-session__gg::before { content: ""; position: absolute; inset: -6px; }
+.play-session__gg i,
+.play-session__gg svg { flex: 0 0 auto; }
+/* Touch has no hover, so the press state is the one that is not optional —
+   without it the tap reads as not having registered. */
+.play-session__gg:active { transform: scale(0.96); }
+@media (hover: hover) {
+  .play-session__gg:hover { border-color: var(--accent); color: var(--ink); }
+}
+.play-session__gg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Given. The quiet wash rather than a solid fill: a feed of nights you have
+   all reacted to should not be a row of loud chips. */
+.play-session__gg.is-mine {
+  background: var(--accent-quiet);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.play-session__faces { display: inline-flex; align-items: center; flex: 0 0 auto; }
+/* Overlapped, and ringed in the GROUND so the overlap reads as depth. */
+.user-badge.play-session__face {
+  width: 20px; height: 20px;
+  margin-left: -6px;
+  box-shadow: 0 0 0 2px var(--bg-0);
+}
+.user-badge.play-session__face:first-child { margin-left: 0; }
+.user-badge.play-session__face .user-badge__initials { font-size: 9px; }
+.play-session__gg-who {
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .play-session__name {
   font-weight: 600;
   color: var(--ink);
