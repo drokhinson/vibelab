@@ -343,7 +343,8 @@ GRANT SELECT ON public.boardgamebuddy_buddy_edges TO boardgamebuddy_role;
 
 
 -- ── Suggestion dismissals ─────────────────────────────────────────────────────
--- "Stop suggesting this person" (migration 013). Per-viewer and one-directional:
+-- "Stop suggesting this person" (migration 014_buddy_suggestion_dismissals).
+-- Per-viewer and one-directional:
 -- it removes dismissed_user_id from the three suggestion RPCs for user_id only,
 -- is never shown to the person dismissed, and blocks nothing — they can still
 -- find the viewer, send them a request, and turn up in /profiles/search.

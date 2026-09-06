@@ -18,7 +18,7 @@
 // selection — are `opts` fields on ONE tile, not a second copy of the markup.
 //
 // An "add" tile also carries a dismiss ×: "stop suggesting this person"
-// (migration `013_buddy_suggestion_dismissals`). It is the answer to the one
+// (migration `014_buddy_suggestion_dismissals`). It is the answer to the one
 // thing this rail could not do —
 // a suggestion the viewer had already decided against came back every single
 // visit, which is the failure ui/ghost-claim-suggestions.js argues against and
