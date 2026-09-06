@@ -206,8 +206,8 @@
              alt="" width="72" height="72" />
         <div class="polaroid-popup__title" id="bgb-install-title">Take Buddy with you</div>
         <p class="polaroid-popup__body bgb-install__blurb">
-          Add BoardgameBuddy to your home screen — it opens like an app, and a
-          whole game night runs with no signal at all.
+          Add BoardgameBuddy to your home screen. Install the PWA to access
+          offline game recording!
         </p>
         ${_deferred ? _promptBody() : _iosBody()}
       </div>`;
