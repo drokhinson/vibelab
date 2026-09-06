@@ -203,8 +203,12 @@
               })}
               <div class="buddies-row__body">
                 <div class="buddies-row__name">
-                  ${escapeHtml(r.other_display_name)} asked to link
-                  <strong>${escapeHtml(r.ghost_display_name)}</strong>
+                  ${r.is_proxy && r.requested_by_display_name
+                    ? `${escapeHtml(r.requested_by_display_name)} asked to link
+                       <strong>${escapeHtml(r.ghost_display_name)}</strong>
+                       to ${escapeHtml(r.other_display_name)}`
+                    : `${escapeHtml(r.other_display_name)} asked to link
+                       <strong>${escapeHtml(r.ghost_display_name)}</strong>`}
                 </div>
                 <div class="buddies-row__when">
                   ${r.play_count == null
@@ -255,7 +259,11 @@
                   ${escapeHtml(r.other_display_name)}'s ghost
                   <strong>${escapeHtml(r.ghost_display_name)}</strong>
                 </div>
-                <div class="buddies-row__when">Awaiting reply</div>
+                <div class="buddies-row__when">
+                  ${r.is_proxy && r.claimant_display_name
+                    ? `Awaiting reply · for ${escapeHtml(r.claimant_display_name)}`
+                    : "Awaiting reply"}
+                </div>
               </div>
               <div class="ghost-claim-row__actions" data-claim-actions="${escapeAttr(r.id)}">
                 ${sentActions(r, stateFor(r.id))}
@@ -265,6 +273,72 @@
         </ul>
       </section>
     `;
+  }
+
+  /**
+   * Claims somebody raised FOR the viewer.
+   *
+   * The third list, and the only one whose rows the viewer neither sent nor can
+   * answer: the ghost's owner decides. What the viewer can do is say it isn't
+   * them, which is a Cancel on the wire (no strike) but sticks — the buddy who
+   * asked cannot re-raise it, though the viewer may still claim the ghost
+   * themselves later.
+   *
+   * Sits with the other "waiting on an answer" lists rather than beside "Is
+   * this you?": that list is a suggestion the app is making, this is a request
+   * a person made.
+   *
+   * @param {Array} forMe GhostClaimResponse[] with direction "for_me"
+   * @param {{stateFor: (id: string) => string|null}} opts
+   */
+  function renderGhostClaimsForMe(forMe, opts) {
+    const list = forMe || [];
+    if (!list.length) return "";
+    const stateFor = (opts && opts.stateFor) || (() => null);
+    return `
+      <section class="buddies-section ghost-claim-section">
+        <h3>Requests sent for you</h3>
+        <ul class="buddies-list">
+          ${list.map((r) => `
+            <li class="buddies-row buddies-row--ghost ghost-claim-row" data-claim-id="${escapeAttr(r.id)}">
+              ${window.BgbBadge.render({
+                avatar: null,
+                displayName: r.ghost_display_name,
+                size: "sm",
+                isGhost: true,
+                extraClass: "buddies-row__avatar buddies-row__avatar--ghost",
+              })}
+              <div class="buddies-row__body">
+                <div class="buddies-row__name">
+                  ${escapeHtml(r.requested_by_display_name || "Someone")} asked
+                  ${escapeHtml(r.other_display_name)} to link you to
+                  <strong>${escapeHtml(r.ghost_display_name)}</strong>
+                </div>
+                <div class="buddies-row__when">
+                  ${r.play_count == null
+                    ? `<span class="buddies-skel__bar buddies-skel__bar--sub" aria-hidden="true"></span>`
+                    : escapeHtml(playsLine(r.play_count, r.last_played_at, "of their plays"))}
+                </div>
+              </div>
+              <div class="ghost-claim-row__actions" data-claim-actions="${escapeAttr(r.id)}">
+                ${forMeActions(r, stateFor(r.id))}
+              </div>
+            </li>
+          `).join("")}
+        </ul>
+      </section>
+    `;
+  }
+
+  /** "Not me" — the only answer this side of a proxy claim has. */
+  function forMeActions(r, state) {
+    if (state === "busy") return busyChip();
+    const chip = resolvedChip(state);
+    if (chip) return chip;
+    const not = escapeAttr(
+      `event.stopPropagation();window.buddiesView._declineProxyClaim('${jsStr(r.id)}')`,
+    );
+    return `<button class="btn btn-ghost btn-xs" onclick="${not}">Not me</button>`;
   }
 
   // ── Surgical repaint ──────────────────────────────────────────────────────
@@ -281,7 +355,7 @@
    * @param {string|null} state one of the verbs above, or null to restore
    * @param {object} [row] the suggestion / request the cell is for, needed to
    *   rebuild the live buttons when `state` is null
-   * @param {"suggestion"|"request"|"sent"} [kind]
+   * @param {"suggestion"|"request"|"sent"|"for-me"} [kind]
    */
   function patchGhostClaimRow(key, state, row, kind) {
     const cell = document.querySelector(`[data-claim-actions="${window.CSS && CSS.escape ? CSS.escape(key) : key}"]`);
@@ -293,12 +367,14 @@
     if (!row) return;
     if (kind === "request") cell.innerHTML = requestActions(row, null);
     else if (kind === "sent") cell.innerHTML = sentActions(row, null);
+    else if (kind === "for-me") cell.innerHTML = forMeActions(row, null);
     else cell.innerHTML = suggestionActions(row, null);
   }
 
   window.renderGhostClaimSection = renderGhostClaimSection;
   window.renderGhostClaimRequests = renderGhostClaimRequests;
   window.renderGhostClaimsSent = renderGhostClaimsSent;
+  window.renderGhostClaimsForMe = renderGhostClaimsForMe;
   window.patchGhostClaimRow = patchGhostClaimRow;
   window.ghostClaimSuggestionKey = suggestionKey;
 })();

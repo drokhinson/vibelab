@@ -365,6 +365,21 @@ GRANT SELECT ON public.boardgamebuddy_buddy_suggestion_dismissals TO boardgamebu
 -- ── Ghost claims ──────────────────────────────────────────────────────────────
 -- "That ghost player is me" — a claimant asking the ghost's owner to merge
 -- those rows onto their account.
+--
+-- Since migration 014 it is also "that ghost player is my buddy Dave":
+-- requested_by records WHO ASKED, separately from claimant_id, which is who the
+-- plays would go to. The two are equal on a self-claim. requested_by is
+-- deliberately NOT part of uq_bgb_ghost_claims_triple — two people pointing at
+-- the same person is one fact, and the owner must never be shown two Accept
+-- buttons that run the identical merge. Everything hanging off the triple (the
+-- two-strike reject_count, the supersede cascade, the idempotent re-ask) keeps
+-- working with no special case for proxies.
+--
+-- This table is also a NOTIFICATION SOURCE (migration 014): a row with
+-- status = 'pending' is a bell entry for the owner, and for the claimant too
+-- when somebody else raised it. Answering the claim — accept, reject, or a
+-- cancel that deletes or dismisses the row — empties both feeds by
+-- construction, the same way an answered buddy_edge does.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_ghost_claims (
   id UUID DEFAULT gen_random_uuid() NOT NULL,
   owner_id UUID NOT NULL,
@@ -376,10 +391,26 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_ghost_claims (
   reject_count INTEGER DEFAULT 0 NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   resolved_at TIMESTAMPTZ,
+  -- Who raised the claim. Equals claimant_id on a self-claim. A proxy
+  -- requester must be an accepted buddy of the claimant, enforced in
+  -- bgb_create_ghost_claim rather than here: a later unfriend must not
+  -- retroactively void a claim already raised, or unfriending becomes a way to
+  -- cancel a third party's pending request.
+  requested_by UUID NOT NULL,
+  -- The play the request was raised from, so the claimed-for user's bell row
+  -- can name the game. NULL on self-claims, on every row predating migration
+  -- 014, and on any claim whose play was later deleted — readers must tolerate
+  -- it, and bgb_notifications LEFT JOINs it for exactly that reason.
+  origin_play_id UUID,
   CONSTRAINT boardgamebuddy_ghost_claims_pkey PRIMARY KEY (id),
   CONSTRAINT uq_bgb_ghost_claims_triple UNIQUE (owner_id, ghost_name_key, claimant_id),
   CONSTRAINT boardgamebuddy_ghost_claims_claimant_id_fkey FOREIGN KEY (claimant_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_ghost_claims_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  -- CASCADE, unlike origin_play_id: an ask whose asker no longer exists has no
+  -- story to tell and no row to render.
+  CONSTRAINT boardgamebuddy_ghost_claims_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  -- origin_play_id's FK is added AFTER the plays table below, not here: this
+  -- file has to stay loadable top to bottom, and plays is declared later.
   CONSTRAINT bgb_ghost_claims_key_normalized CHECK (((ghost_name_key = lower(btrim(ghost_name_key))) AND (ghost_name_key <> ''::text))),
   CONSTRAINT bgb_ghost_claims_not_self CHECK ((owner_id <> claimant_id)),
   CONSTRAINT boardgamebuddy_ghost_claims_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'rejected'::text, 'dismissed'::text, 'superseded'::text])))
@@ -387,6 +418,8 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_ghost_claims (
 ALTER TABLE public.boardgamebuddy_ghost_claims ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_ghost_claims_claimant ON public.boardgamebuddy_ghost_claims USING btree (claimant_id, status);
 CREATE INDEX IF NOT EXISTS idx_bgb_ghost_claims_owner_pending ON public.boardgamebuddy_ghost_claims USING btree (owner_id) WHERE (status = 'pending'::text);
+-- "Asks I made" is keyed on requested_by, not claimant_id (migration 014).
+CREATE INDEX IF NOT EXISTS idx_bgb_ghost_claims_requested_by ON public.boardgamebuddy_ghost_claims USING btree (requested_by, status);
 GRANT SELECT ON public.boardgamebuddy_ghost_claims TO boardgamebuddy_role;
 
 
@@ -427,6 +460,20 @@ CREATE INDEX IF NOT EXISTS idx_bgb_plays_played_at ON public.boardgamebuddy_play
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bgg_play ON public.boardgamebuddy_plays USING btree (user_id, bgg_play_id) WHERE (bgg_play_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_user_played ON public.boardgamebuddy_plays USING btree (user_id, played_at DESC, created_at DESC);
 GRANT SELECT ON public.boardgamebuddy_plays TO boardgamebuddy_role;
+
+-- Deferred from the ghost-claims block above, which is declared before this
+-- table exists. ON DELETE SET NULL: deleting a play must not take a pending
+-- claim with it — the claim is keyed by (owner, name), and the play is only
+-- where the request was raised.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                  WHERE conname = 'boardgamebuddy_ghost_claims_origin_play_fkey') THEN
+    ALTER TABLE public.boardgamebuddy_ghost_claims
+      ADD CONSTRAINT boardgamebuddy_ghost_claims_origin_play_fkey
+        FOREIGN KEY (origin_play_id) REFERENCES public.boardgamebuddy_plays(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 
 -- ── Play participants ─────────────────────────────────────────────────────────

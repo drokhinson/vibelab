@@ -1127,15 +1127,25 @@ class GhostClaimDetail(GhostClaimSuggestion):
 
     can_claim: bool = False
     blocked_reason: Optional[str] = None
+    # Whether the sheet may offer "say who this is" — claiming the ghost for a
+    # buddy instead of for yourself. Deliberately independent of can_claim: a
+    # viewer seated at that table can't claim the ghost for themselves (it is
+    # somebody else by definition) but is often the one person who knows WHICH
+    # somebody else. Whether a specific buddy is eligible is a create-time
+    # answer, not something that can be precomputed for all of them.
+    can_claim_for_buddy: bool = False
 
 
 class GhostClaimResponse(BaseModel):
     """One claim, from whichever side is looking at it."""
 
     id: str
-    direction: Literal["incoming", "outgoing"]
-    # The OTHER party: the claimant on an incoming claim, the owner on an
-    # outgoing one. Mirrors BuddyRequestResponse.
+    # "for_me" is a claim somebody raised on the viewer's behalf: they did not
+    # send it and cannot accept it, so it is neither incoming nor outgoing.
+    direction: Literal["incoming", "outgoing", "for_me"]
+    # The OTHER party: the claimant on an incoming claim, and the owner on an
+    # outgoing or for_me one — on those two the owner is who has to answer, and
+    # so the only name worth reading. Mirrors BuddyRequestResponse.
     other_user_id: str
     other_display_name: str
     other_username: Optional[str] = None
@@ -1144,18 +1154,42 @@ class GhostClaimResponse(BaseModel):
     play_count: int = 0
     last_played_at: Optional[date] = None
     created_at: datetime
+    # Who RAISED the claim, which since migration 014 is not necessarily who it
+    # is for. Equal to claimant_user_id on a self-claim, and is_proxy is exactly
+    # that comparison — precomputed so the FE never has to make it.
+    requested_by: Optional[str] = None
+    requested_by_display_name: Optional[str] = None
+    requested_by_avatar: Optional[Avatar] = None
+    claimant_user_id: Optional[str] = None
+    claimant_display_name: Optional[str] = None
+    claimant_avatar: Optional[Avatar] = None
+    is_proxy: bool = False
 
 
 class GhostClaimsResponse(BaseModel):
+    """Three lists, and no claim appears in more than one.
+
+    outgoing is keyed on requested_by (asks I MADE — where the withdraw button
+    belongs), for_me on claimant_id with requested_by differing (asks somebody
+    made FOR me). A self-claim has both equal and lands only in outgoing.
+    """
+
     incoming: list[GhostClaimResponse] = []
     outgoing: list[GhostClaimResponse] = []
+    for_me: list[GhostClaimResponse] = []
 
 
 class GhostClaimCreate(BaseModel):
-    """Ask the ghost's owner to link it to your account."""
+    """Ask the ghost's owner to link it to an account — yours, or a buddy's."""
 
     owner_user_id: str
     display_name: str = Field(..., min_length=1)
+    # Set to claim on somebody else's behalf. They must be an accepted buddy of
+    # the caller, and play_id is then REQUIRED — their notification names that
+    # game, and it is the only thing telling them which of a stranger's plays
+    # this is about. Omit both for an ordinary "that's me" claim.
+    claimant_user_id: Optional[str] = None
+    play_id: Optional[str] = None
 
 
 class GhostClaimDismiss(BaseModel):
@@ -1188,14 +1222,14 @@ class PlayLeaveResponse(BaseModel):
 class Notification(BaseModel):
     """One row on the unified notifications feed.
 
-    Three kinds share one row shape, one cursor and one read watermark, which is
-    the whole point: a feed assembled client-side from three endpoints cannot
-    page, and would need three unread counts to add up to one dot.
+    Five kinds share one row shape, one cursor and one read watermark, which is
+    the whole point: a feed assembled client-side from five endpoints cannot
+    page, and would need five unread counts to add up to one dot.
 
     `kind` says which block below is populated. `actor_*` is the only group
-    present on every kind, because "who did this" is the one question all three
+    present on every kind, because "who did this" is the one question all five
     answer — a play_link's actor logged the play, a buddy_request's sent it, a
-    buddy_accepted's said yes.
+    buddy_accepted's said yes, and both ghost-claim kinds' raised the claim.
 
     On a play_link row, an entry is not a play but one act of linking, and
     `play_group` says which grouping produced it. `play_id` is the entry's
@@ -1215,9 +1249,13 @@ class Notification(BaseModel):
     actor_username: str | None = None
     actor_avatar: dict[str, Any] | None = None
 
-    # PLAY_LINK only. Every field in this block is None on a buddy row —
-    # play_ids included, rather than an empty list: one rule with no exception
-    # is what lets a reader check `kind` and stop thinking about it.
+    # PLAY_LINK only, with ONE documented exception: a GHOST_CLAIM_PROXY row
+    # reuses play_id / game_name / game_thumbnail_url for the play its claim was
+    # raised from, which is what lets it carry the game's art and say which game
+    # — and group_count for the ghost's play count. Everything else in this
+    # block is None on every non-play kind, play_ids included (rather than an
+    # empty list), because play_ids drives the unlink tick box and a claim is
+    # not something you unlink yourself from.
     play_group: PlayLinkGroup | None = None
     play_id: str | None = None
     play_ids: list[str] | None = None
@@ -1237,6 +1275,22 @@ class Notification(BaseModel):
     # while this list was open — and the client treats it as "already handled,
     # drop the row" rather than as an error.
     edge_id: str | None = None
+
+    # GHOST_CLAIM / GHOST_CLAIM_PROXY only. claim_id is edge_id's counterpart —
+    # what POST /ghost-claims/{id}/accept|reject|cancel takes, so a claim can be
+    # answered where it is read, with the same "409 means already handled, drop
+    # the row" contract.
+    claim_id: str | None = None
+    # The ghost's name as somebody else typed it. Free text: escape it.
+    ghost_display_name: str | None = None
+    # The OTHER person the row's sentence names, and which person that is
+    # differs by kind — the claimant on GHOST_CLAIM ("Sam says 'Dave' is Dave
+    # Smith"), the host on GHOST_CLAIM_PROXY ("Sam asked Alice to link you").
+    # None on a self-claim, where the actor and the subject are one person and
+    # naming them twice reads as two; its presence is therefore also how a
+    # renderer tells a proxy claim from a self one, without comparing display
+    # names for equality.
+    subject_display_name: str | None = None
 
 
 class NotificationsResponse(BaseModel):

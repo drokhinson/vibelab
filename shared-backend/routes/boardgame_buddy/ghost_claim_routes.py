@@ -84,21 +84,32 @@ async def list_ghost_claims(
     "/ghost-claims",
     response_model=GhostClaimResponse,
     status_code=201,
-    summary="Ask a buddy to link one of their ghost players to your account",
+    summary="Ask a buddy to link one of their ghost players to an account",
 )
 async def create_ghost_claim(
     body: GhostClaimCreate,
     user: CurrentUser = Depends(get_current_user),
 ) -> GhostClaimResponse:
-    """Send a claim.
+    """Send a claim, for yourself or for one of your buddies.
 
     Idempotent while one is pending. 400 for your own roster, 403 if you can't
-    see the plays, 409 if you already appear on one of them (merging would seat
-    you twice in one game), 409 after a second decline, 410 if the ghost is
-    gone.
+    see the plays, 409 if the account being claimed for already appears on one
+    of them (merging would seat one person twice in one game), 409 after a
+    second decline, 410 if the ghost is gone.
+
+    Set `claimant_user_id` to claim for somebody else. They must be an accepted
+    buddy of yours (403 otherwise) and `play_id` is then required (400) — their
+    notification names that game, and it is the only thing telling them which of
+    a stranger's plays this is about. 409 if they have already said it isn't
+    them.
     """
     return ghost_claim_service.create_claim(
-        get_supabase(), user.user_id, body.owner_user_id, body.display_name
+        get_supabase(),
+        user.user_id,
+        body.owner_user_id,
+        body.display_name,
+        claimant_user_id=body.claimant_user_id,
+        play_id=body.play_id,
     )
 
 
@@ -153,13 +164,25 @@ async def reject_ghost_claim(
     "/ghost-claims/{claim_id}/cancel",
     response_model=MessageResponse,
     status_code=200,
-    summary="Withdraw a claim you sent",
+    summary="Withdraw a claim you sent, or call off one raised for you",
 )
 async def cancel_ghost_claim(
     claim_id: str = Path(..., description="Claim UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Withdraw your own ask. Unlike a decline this leaves no trace and costs
-    no strike against the two-ask limit."""
-    ghost_claim_service.cancel_claim(get_supabase(), user.user_id, claim_id)
-    return MessageResponse(message="Claim withdrawn")
+    """Call off a pending claim, from either end.
+
+    Withdrawing your own ask leaves no trace and costs no strike against the
+    two-ask limit. Saying "that isn't me" about a claim a buddy raised for you
+    does stick — the same buddy can't re-raise it — but you can still claim the
+    ghost yourself later.
+
+    404 for a claim that is neither yours to withdraw nor about you; the ghost's
+    owner is not entitled to either answer here, only to accept and reject.
+    """
+    kind = ghost_claim_service.cancel_claim(get_supabase(), user.user_id, claim_id)
+    return MessageResponse(
+        message="Claim withdrawn"
+        if kind == "withdrawn"
+        else "We've told them that isn't you"
+    )

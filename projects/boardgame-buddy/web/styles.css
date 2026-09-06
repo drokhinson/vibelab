@@ -6351,6 +6351,39 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: var(--polaroid-muted);
 }
 .ghost-claim-sheet__note--loading { opacity: 0.7; }
+/* "Not you? Say who this is." — the proxy hand-off, deliberately in the prose
+   rather than as a third button in __foot: the sheet asks one yes/no question
+   and this is a different question, not a third answer to it. See _foot()'s
+   comment and _proxyInvite(). */
+.ghost-claim-sheet__proxy { margin-bottom: 0.4rem; }
+.ghost-claim-sheet__link {
+  /* A link, not a button: it must not compete with the two real answers. The
+     44px hit area comes from the ::before below rather than from padding, so
+     the text stays inline with the sentence around it
+     (.claude/rules/mobile-web.md §5). */
+  position: relative;
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ghost-claim-sheet__link::before {
+  content: "";
+  position: absolute;
+  inset: -14px -8px;
+}
+.ghost-claim-sheet__link:active { opacity: 0.6; }
+.ghost-claim-sheet__link:disabled {
+  opacity: 0.45;
+  cursor: default;
+  text-decoration: none;
+}
 /* The buttons, outside .ghost-claim-sheet__body so the prose scrolls and they
    do not (overlays.md §3). Holds ONE control set at a time — the claim pair,
    or a lone Cancel while the lookup is in flight / blocked. See _foot(). */

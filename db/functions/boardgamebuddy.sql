@@ -1,6 +1,15 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 013_hot_games_exclude_imports.sql (bgb_hot_games re-emitted so
+-- Last updated: 014_ghost_claim_proxy.sql (ghost claims gain a REQUESTER
+--               distinct from their claimant, so one buddy can claim a ghost
+--               on another's behalf; bgb_notifications grows the two arms that
+--               implies. Changed: bgb_create_ghost_claim — new signature,
+--               DROP+CREATE; bgb_ghost_claims — three lists, `outgoing`
+--               re-keyed to requested_by; bgb_ghost_claim_detail,
+--               bgb_accept_ghost_claim, bgb_dismiss_ghost_claim,
+--               bgb_notifications_unread. New: bgb_cancel_ghost_claim.
+--               bgb_notifications DROP+CREATE — three columns added.)
+--               Before that: 013_hot_games_exclude_imports.sql (bgb_hot_games re-emitted so
 --               the Feed's "Hot this week" rail counts live plays only —
 --               rows carrying import_batch_id or import_group_id are filtered
 --               out before the GROUP BY. Signature and ordering unchanged).
@@ -1011,6 +1020,12 @@
 --               `collides` is the double-seat guard — there is no unique
 --               constraint on (play_id, player_user_id), so this check is the
 --               only thing stopping one person appearing twice in one game.
+--               SINCE 014, a proxy claim calls this TWICE, because its two
+--               answers belong to two different people: `visible` is asked of
+--               the REQUESTER (they are the one looking at the play; the target
+--               often cannot see it at all, which is the whole point of proxy
+--               claiming) and `collides` of the CLAIMANT (they are who would be
+--               seated twice).
 
 -- bgb_ghost_claim_suggestions(p_viewer UUID, p_limit INT DEFAULT 10,
 --                             p_threshold REAL DEFAULT 0.35)
@@ -1034,10 +1049,11 @@
 --               candidate set is narrowed to buddies' rosters first instead.
 
 -- bgb_ghost_claim_detail(p_viewer UUID, p_play_id UUID, p_display_name TEXT)
---   → JSONB { …suggestion fields…, can_claim, blocked_reason }
+--   → JSONB { …suggestion fields…, can_claim, blocked_reason,
+--             can_claim_for_buddy }
 --            | { "error": "not_visible" | "ghost_gone" | ... }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/boardgamebuddy/014_ghost_claim_proxy.sql
+--               (was 003_rpcs.sql; 014 added can_claim_for_buddy)
 --   Called by:  services/ghost_claim_service.fetch_detail (GET /ghost-claims/lookup)
 --   Purpose:    Backs the claim sheet opened from a polaroid back or the
 --               play-detail players list. Takes the PLAY id because that is
@@ -1045,28 +1061,66 @@
 --               user tapped a specific row and the matcher does not get a
 --               veto; blocked_reason lets the sheet paint a truthful disabled
 --               state instead of a button that 409s.
+--               can_claim_for_buddy (014) is deliberately NOT gated on
+--               `collides`: a viewer already seated at that table cannot claim
+--               the ghost for themselves, but they are often the best placed
+--               person alive to say who it IS. Whether a SPECIFIC buddy is
+--               eligible cannot be answered before one is picked, so that stays
+--               a create-time answer.
 
 -- bgb_ghost_claims(p_viewer UUID)
---   → JSONB { incoming: [...], outgoing: [...] }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   → JSONB { incoming: [...], outgoing: [...], for_me: [...] }
+--   Defined in: db/migrations/boardgamebuddy/014_ghost_claim_proxy.sql
+--               (was 003_rpcs.sql)
 --   Called by:  services/ghost_claim_service.list_claims (GET /ghost-claims)
---   Purpose:    Both sides of the request list, mirroring GET /buddies/requests.
+--   Purpose:    Every side of the request list, mirroring GET /buddies/requests.
 --               An RPC because every row needs a live play_count /
 --               last_played_at, and doing that per claim in Python is the same
 --               N+1 that 047 and 050 exist to remove.
+--               014 made it three lists, and RE-KEYED `outgoing` from
+--               claimant_id to requested_by. That re-keying is load-bearing:
+--               "asks I made" is where the Cancel button lives, and under the
+--               old key a proxy claim I raised for Dave would have appeared in
+--               DAVE's sent list — with the withdraw button — and never in
+--               mine. `for_me` (claimant_id = viewer AND requested_by <> viewer)
+--               is the other half, and the two are disjoint by construction.
 
--- bgb_create_ghost_claim(p_claimant UUID, p_owner UUID, p_display_name TEXT)
+-- bgb_create_ghost_claim(p_requester UUID, p_owner UUID, p_display_name TEXT,
+--                        p_claimant UUID DEFAULT NULL,
+--                        p_play_id UUID DEFAULT NULL)
 --   → JSONB (the outgoing claim) | { "error": "own_roster" | "ghost_gone" |
---     "not_visible" | "already_seated" | "already_linked" | "declined_twice" }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--     "not_visible" | "already_seated" | "already_linked" | "declined_twice" |
+--     "not_buddies" | "play_required" | "target_declined" | "target_seated" |
+--     "display_name_required" | "claim_not_found" }
+--   Defined in: db/migrations/boardgamebuddy/014_ghost_claim_proxy.sql
+--               (was 003_rpcs.sql — 014 DROPped the 3-arg form. Position 1 used
+--               to be the claimant and is now the requester, so leaving the old
+--               overload resolvable would let a stale caller silently raise
+--               claims naming the wrong person.)
 --   Called by:  services/ghost_claim_service.create_claim (POST /ghost-claims)
---   Purpose:    Send a claim. Validation and upsert in one call so there is no
---               window between "the ghost exists, is visible, does not collide"
---               and the row asserting it. Idempotent while pending (matching
+--   Purpose:    Send a claim, for yourself (p_claimant NULL) or for a buddy.
+--               Validation and upsert in one call so there is no window between
+--               "the ghost exists, is visible, does not collide" and the row
+--               asserting it. Idempotent while pending (matching
 --               buddy_service.send_request); re-ask allowed after one decline,
 --               refused after two.
+--               Proxy rules, all of them here rather than in constraints:
+--               the target must be an ACCEPTED BUDDY of the requester, checked
+--               at create time only (a later unfriend must not void a claim
+--               already raised, or unfriending becomes a way to cancel a third
+--               party's request); a play is REQUIRED and must be one the owner
+--               logged, because the target's bell row names that game and it is
+--               the only thing telling them which of a stranger's plays this is
+--               about; and a 'dismissed' row cannot be reopened by a proxy
+--               (target_declined) — "that isn't me" is only sayable by the
+--               person it is about and has to stick, while a SELF claim still
+--               reopens their own dismissed row.
+--               A self-claim arriving over a pending PROXY claim takes the row
+--               over (requested_by moves to the claimant) but does NOT re-date
+--               created_at: that column is the feed's occurred_at and the
+--               unread watermark's predicate, so re-dating would re-ring a bell
+--               for a request already on screen. The reverse never happens — a
+--               proxy must not overwrite a target who has spoken for themselves.
 
 -- bgb_accept_ghost_claim(p_owner UUID, p_claim_id UUID)
 --   → JSONB { updated: INT, claim: {...} } | { "error": "claim_not_found" |
@@ -1091,14 +1145,43 @@
 --               (POST /ghost-claims/{id}/reject)
 --   Purpose:    Owner declines, and reject_count is incremented — an RPC
 --               precisely because PostgREST cannot express `col = col + 1`.
---               Contrast cancel (the claimant withdrawing), a plain
---               ownership-checked DELETE that stays in Python: withdrawing your
---               own ask is not a decline and must not burn a strike.
+--               Contrast cancel (bgb_cancel_ghost_claim, below): withdrawing
+--               your own ask is not a decline and must not burn a strike.
+
+-- bgb_cancel_ghost_claim(p_viewer UUID, p_claim_id UUID)
+--   → JSONB { cancelled: true, kind: 'withdrawn' | 'declined' }
+--            | { "error": "claim_not_found" | "not_pending" }
+--   Defined in: db/migrations/boardgamebuddy/014_ghost_claim_proxy.sql (new)
+--   Called by:  services/ghost_claim_service.cancel_claim
+--               (POST /ghost-claims/{id}/cancel)
+--   Purpose:    Call off a pending claim, from either end of it. Until 014 this
+--               was the one ghost-claim write done as a plain PostgREST
+--               read-check-delete in Python, authorized against claimant_id
+--               alone; two actors with two different outcomes is why it moved
+--               here beside accept and reject.
+--                 the ASKER withdraws → DELETE, exactly as before. No strike.
+--                 the TARGET says no  → 'dismissed', NOT a delete: a delete
+--                   would let the same buddy re-raise it a second later.
+--                   requested_by moves to the claimant so the row records who
+--                   settled it, and so the target stays free to change their
+--                   mind — a self-claim reopens their own dismissed row.
+--               The asker is checked FIRST, so a self-claim (where both
+--               branches name the same person) keeps the old delete behaviour
+--               exactly. The OWNER is deliberately not entitled to either: their
+--               answers are accept and reject, and settling it here would lose
+--               the strike. 404 rather than 403 for anyone else — do not confirm
+--               the claim exists.
 
 -- bgb_dismiss_ghost_claim(p_claimant UUID, p_owner UUID, p_display_name TEXT)
 --   → JSONB { "dismissed": true } | { "error": "own_roster" | ... }
---   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
---               (collapsed from archive/070_ghost_claims.sql)
+--   Defined in: db/migrations/boardgamebuddy/014_ghost_claim_proxy.sql
+--               (was 003_rpcs.sql. Re-emitted for ONE reason: it INSERTs a
+--               claim row, and 014 made requested_by NOT NULL, so the old body
+--               would fail on every "Not me" tap. It writes
+--               requested_by = p_claimant — a dismissal is always the claimant
+--               speaking about themselves — which is the same state
+--               bgb_cancel_ghost_claim leaves behind when a target declines a
+--               proxy claim, so the two routes to a dismissed row agree.)
 --   Called by:  services/ghost_claim_service.dismiss_suggestion
 --               (POST /ghost-claims/dismiss)
 --   Purpose:    The claimant's "Not me". Writes the same row a real claim would,
@@ -1140,22 +1223,31 @@
 --               beside it stays exact.
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Notifications (migrations 008, 009)
+-- Notifications (migrations 008, 009, 014)
 --
 -- Everything that happens TO an account rather than BY it: someone seats you in
 -- a play they logged, someone asks to be your buddy, someone accepts the
--- request you sent. All three are DERIVED — from play_players + plays, and from
--- boardgamebuddy_buddy_edges — rather than stored as events, so there is no
+-- request you sent, someone wants one of your ghosts linked to an account, or
+-- someone asks on YOUR behalf. All five are DERIVED — from play_players +
+-- plays, from boardgamebuddy_buddy_edges, and from
+-- boardgamebuddy_ghost_claims — rather than stored as events, so there is no
 -- second source of truth for the write paths to keep honest, and answering one
 -- empties it by construction: unlinking drops a play row, accepting or
--- declining drops a request row.
+-- declining drops a request row, and resolving a claim takes it off both
+-- parties' feeds at once.
 --
 -- Two stored facts the sources cannot supply: the watermark
 -- boardgamebuddy_profiles.link_notifications_seen_at ("have you seen this",
--- named for plays but covering all three since 009), and
+-- named for plays but covering every kind since 009), and
 -- boardgamebuddy_buddy_edges.accepted_by ("who said yes", which is not
 -- derivable because a QR scan writes an edge that is born accepted with nobody
 -- having asked).
+--
+-- Every arm carries a "never announce the viewer's own act" guard. On the
+-- ghost_claim_proxy arm it is load-bearing rather than defensive: that arm
+-- keys on claimant_id = viewer, which matches every self-claim too, and
+-- requested_by <> claimant_id is the whole thing separating "a buddy asked for
+-- you" from "you asked".
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- bgb_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
@@ -1165,21 +1257,48 @@
 --            actor_id, actor_display_name, actor_username, actor_avatar,
 --            play_group, play_id, play_ids UUID[], group_count, game_count,
 --            played_from, played_to, game_id, game_name, game_thumbnail_url,
---            import_batch_id, edge_id)
---   Defined in: db/migrations/boardgamebuddy/010_notifications_perf.sql
+--            import_batch_id, edge_id,
+--            claim_id, ghost_display_name, subject_display_name)
+--   Defined in: db/migrations/boardgamebuddy/014_ghost_claim_proxy.sql
 --               (introduced in 009_unified_notifications.sql; 010 rewrites the
 --                body as narrow-scan → top-N keys → aggregate-the-page, so the
 --                array_aggs, the COUNT(DISTINCT) and the catalog join run over
 --                the ~20 entries on the page instead of over every entry the
---                account has ever had. Output is unchanged.)
+--                account has ever had. 014 DROPs and recreates it — the return
+--                type changed — adding two arms over boardgamebuddy_ghost_claims
+--                and the three columns they need. 010's pipeline, grouping,
+--                cursor and ordering are untouched.)
 --   Called by:  services/notification_service.list_notifications
 --               (GET /notifications, and the /bootstrap gather, which prefetches
 --               page one so the bell opens without a round trip)
 --   Purpose:    The notifications screen, as one merged feed. `kind` is
---               play_link | buddy_request | buddy_accepted and says which
---               field block is populated; actor_* is the only group present on
---               all three, which is what lets one LEFT JOIN after the union
---               serve every kind. A play_link row is one ENTRY, not one play:
+--               play_link | buddy_request | buddy_accepted | ghost_claim |
+--               ghost_claim_proxy and says which field block is populated;
+--               actor_* is the only group present on all five, which is what
+--               lets one LEFT JOIN after the union serve every kind.
+--               The two claim arms (014) read pending rows straight off
+--               boardgamebuddy_ghost_claims, so they self-heal like the buddy
+--               arms: accept, reject, or a cancel that deletes or dismisses the
+--               row takes it off BOTH parties' feeds with no bookkeeping and no
+--               way for the two to disagree. ghost_claim goes to the ghost's
+--               OWNER (the one who can accept); ghost_claim_proxy to the person
+--               somebody claimed FOR, whose only move is to call it off.
+--               subject_display_name is "the other person this row's sentence
+--               names", and WHICH person differs by arm — the claimant on
+--               ghost_claim, the host on ghost_claim_proxy. It is NULL on a
+--               self-claim, where actor and subject are one person and naming
+--               them twice reads as two; its presence is therefore also how the
+--               renderer tells a proxy row from a self one without comparing
+--               display names for equality.
+--               ghost_claim_proxy REUSES play_id / game_name /
+--               game_thumbnail_url for the play the claim was raised from,
+--               rather than adding parallel columns — that is what lets the row
+--               carry the game's art and name the game. The join is a LEFT one
+--               because origin_play_id is NULL on pre-014 rows and on any play
+--               since deleted; the row then reads without a game and is still
+--               correct. play_ids stays NULL on both arms: it drives the unlink
+--               tick box, and a claim is not something you unlink yourself from.
+--               A play_link row is one ENTRY, not one play:
 --               a batch, a run of identical imported plays, or one retroactive
 --               ghost-link collapses to a single row, so a 214-play import is
 --               one line with one tick box. play_ids holds ONLY the plays the
@@ -1191,22 +1310,31 @@
 
 -- bgb_notifications_unread(p_viewer UUID)
 --   → INT
---   Defined in: db/migrations/boardgamebuddy/010_notifications_perf.sql
+--   Defined in: db/migrations/boardgamebuddy/014_ghost_claim_proxy.sql
 --               (introduced in 009_unified_notifications.sql; 010 moves the
 --                watermark from HAVING MAX(linked_at) > seen to a WHERE on
 --                linked_at, which is the same set of entries — "some member is
 --                newer" and "the newest member is newer" say the same thing —
 --                but is an index condition rather than a filter on an
 --                aggregate. An account that has read everything now scans no
---                rows instead of all of them.)
+--                rows instead of all of them. 014 adds the two ghost-claim
+--                terms, matching the two arms it added to the list.)
 --   Called by:  services/notification_service.unread_count
 --               (GET /notifications, and — via list_notifications — /bootstrap)
---   Purpose:    The header bell's dot: the same three sources against the same
+--   Purpose:    The header bell's dot: the same five sources against the same
 --               watermark, summed. The play term counts ENTRIES on the key the
 --               list groups by, so a badge of 214 can never sit over a list of
 --               one, and it derives unread from MAX(linked_at) per entry —
 --               the identical expression the list's is_unread uses — so the
 --               badge and the rail cannot drift apart under a later edit.
+--               The two claim terms are plain row counts (a claim is already one
+--               row per event) and their WHERE clauses must stay
+--               character-for-character identical to the arms' — that equality
+--               is the only thing keeping the dot and the list in step, which is
+--               what 010's header spends its length arguing. Both ride indexes
+--               that already exist (idx_bgb_ghost_claims_owner_pending,
+--               idx_bgb_ghost_claims_claimant), so an account with no claims
+--               pays nothing.
 
 -- bgb_mark_link_notifications_seen(p_viewer UUID,
 --                                  p_through TIMESTAMPTZ DEFAULT NULL)

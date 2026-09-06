@@ -386,8 +386,10 @@
     }
 
     _renderRow(it, i) {
-      if (it.kind === "buddy_request")  return this._renderRequestRow(it, i);
-      if (it.kind === "buddy_accepted") return this._renderAcceptedRow(it, i);
+      if (it.kind === "buddy_request")     return this._renderRequestRow(it, i);
+      if (it.kind === "buddy_accepted")    return this._renderAcceptedRow(it, i);
+      if (it.kind === "ghost_claim")       return this._renderClaimRow(it, i);
+      if (it.kind === "ghost_claim_proxy") return this._renderClaimProxyRow(it, i);
       return this._renderPlayRow(it, i);
     }
 
@@ -529,6 +531,139 @@
     }
 
     /**
+     * Somebody wants one of YOUR ghosts linked to an account — answered where
+     * it is read, like a buddy request.
+     *
+     * Two sentences, picked by whether subject_display_name is there. The
+     * server sends it only on a proxy claim (on a self-claim the actor and the
+     * subject are one person), so this is a presence test rather than a
+     * comparison of two display names for equality.
+     *
+     * No select circle, for the reason _renderRequestRow gives: the action bar
+     * removes you from plays, and a claim is not a play.
+     */
+    _renderClaimRow(it, i) {
+      const who = it.actor_display_name || "Someone";
+      const ghost = it.ghost_display_name || "that name";
+      const forWhom = it.subject_display_name;
+      const title = forWhom
+        ? `<strong>${escapeHtml(who)}</strong> says “${escapeHtml(ghost)}” on your plays is <strong>${escapeHtml(forWhom)}</strong>`
+        : `<strong>${escapeHtml(who)}</strong> says “${escapeHtml(ghost)}” on your plays is them`;
+      const n = it.group_count;
+      const sub = n ? `${n} ${n === 1 ? "play" : "plays"}` : this._handle(it);
+
+      return `
+        <div class="bgbnotif-row bgbnotif-row--buddy ${it.is_unread ? "is-unread" : ""}"
+             data-key="${escapeAttr(it.entry_key)}" style="--i:${i}">
+          <button class="bgbnotif-row__main" type="button"
+                  onclick="window.notificationsView._openProfile('${jsStr(it.actor_id)}')">
+            ${this._badge(it)}
+            <span class="bgbnotif-row__art bgbnotif-row__art--none" aria-hidden="true">
+              <i data-icon="user-plus" class="w-4 h-4"></i>
+            </span>
+            <span class="bgbnotif-row__body">
+              <span class="bgbnotif-row__title">${title}</span>
+              <span class="bgbnotif-row__sub">${sub}</span>
+            </span>
+          </button>
+          <span class="bgbnotif-row__actions">${this._renderClaimAnswer(it)}</span>
+        </div>
+      `;
+    }
+
+    /**
+     * The claim row's Accept/Decline pair, or the disabled stub while one is in
+     * flight. Its own renderer for the same reason _renderAnswer is: the
+     * in-place swap has to be produced by the same function as the first paint,
+     * or the two drift.
+     */
+    _renderClaimAnswer(it) {
+      const ghost = it.ghost_display_name || "that player";
+      if (this._answering.has(it.claim_id)) {
+        return `<button class="bgbnotif-row__accept" type="button" disabled>Working…</button>`;
+      }
+      return `
+        <button class="bgbnotif-row__accept" type="button"
+                aria-label="Accept the request to link ${escapeAttr(ghost)}"
+                onclick="window.notificationsView._answerClaim('${jsStr(it.entry_key)}','${jsStr(it.claim_id)}',true)">
+          Accept
+        </button>
+        <button class="bgbnotif-row__decline" type="button"
+                aria-label="Decline the request to link ${escapeAttr(ghost)}"
+                onclick="window.notificationsView._answerClaim('${jsStr(it.entry_key)}','${jsStr(it.claim_id)}',false)">
+          Decline
+        </button>
+      `;
+    }
+
+    /**
+     * A buddy asked somebody to link one of their ghosts to YOU.
+     *
+     * One action, and it is not Accept: only the ghost's owner can say yes —
+     * they are the one whose plays would move. What you can do is say it isn't
+     * you, which stops this buddy re-raising it.
+     *
+     * The row names the game, because "a play you're not in, logged by someone
+     * you may not know" is otherwise impossible to place. It does NOT open that
+     * play: you usually cannot see it, which is the whole reason somebody had
+     * to ask on your behalf. Tapping the body opens the asker's profile instead.
+     */
+    _renderClaimProxyRow(it, i) {
+      const who = it.actor_display_name || "Someone";
+      const ghost = it.ghost_display_name || "that name";
+      const host = it.subject_display_name || "whoever logged them";
+      const game = it.game_name;
+      const n = it.group_count;
+      const plays = n ? `${n} ${n === 1 ? "play" : "plays"}` : "their plays";
+      // No origin play means it was deleted, or the claim predates migration
+      // 014. "one of their plays" is honest; naming no game at all reads as a
+      // missing field.
+      const sub = game
+        ? `${escapeHtml(game)} · ${escapeHtml(plays)}`
+        : `From one of their plays · ${escapeHtml(plays)}`;
+
+      const art = it.game_thumbnail_url
+        ? `<img class="bgbnotif-row__art" src="${escapeAttr(it.game_thumbnail_url)}"
+                alt="" loading="lazy" />`
+        : `<span class="bgbnotif-row__art bgbnotif-row__art--none" aria-hidden="true">
+             <i data-icon="user-plus" class="w-4 h-4"></i>
+           </span>`;
+
+      return `
+        <div class="bgbnotif-row bgbnotif-row--buddy ${it.is_unread ? "is-unread" : ""}"
+             data-key="${escapeAttr(it.entry_key)}" style="--i:${i}">
+          <button class="bgbnotif-row__main" type="button"
+                  onclick="window.notificationsView._openProfile('${jsStr(it.actor_id)}')">
+            ${this._badge(it)}
+            ${art}
+            <span class="bgbnotif-row__body">
+              <span class="bgbnotif-row__title">
+                <strong>${escapeHtml(who)}</strong> asked ${escapeHtml(host)} to link you to “${escapeHtml(ghost)}”
+              </span>
+              <span class="bgbnotif-row__sub">${sub}</span>
+            </span>
+          </button>
+          <span class="bgbnotif-row__actions">${this._renderProxyAnswer(it)}</span>
+        </div>
+      `;
+    }
+
+    /** The proxy row's single "Not me". Own renderer, same reason as above. */
+    _renderProxyAnswer(it) {
+      const ghost = it.ghost_display_name || "that player";
+      if (this._answering.has(it.claim_id)) {
+        return `<button class="bgbnotif-row__decline" type="button" disabled>Working…</button>`;
+      }
+      return `
+        <button class="bgbnotif-row__decline" type="button"
+                aria-label="Say you are not ${escapeAttr(ghost)}"
+                onclick="window.notificationsView._declineProxy('${jsStr(it.entry_key)}','${jsStr(it.claim_id)}')">
+          Not me
+        </button>
+      `;
+    }
+
+    /**
      * The sub-line on a buddy row.
      *
      * A play row's sub-line answers "which game, when"; a buddy row has no
@@ -637,13 +772,23 @@
       this.refreshIcons(host);
     }
 
-    /** The Accept/Decline pair on one buddy row, in flight or back again. */
+    /**
+     * The action cluster on one answerable row, in flight or back again.
+     *
+     * Dispatches on kind for the same reason _renderRow does — a buddy request,
+     * a claim on your ghost and a claim raised for you offer different answers
+     * — and every branch goes through the SAME renderer that painted the row
+     * first, so the in-place swap cannot drift from it.
+     */
     _paintAnswer(key) {
       const row = this._rowEl(key);
       const host = row && row.querySelector(".bgbnotif-row__actions");
       const it = this._items.find((x) => x.entry_key === key);
       if (!host || !it) return;
-      host.innerHTML = this._renderAnswer(it);
+      host.innerHTML =
+        it.kind === "ghost_claim"       ? this._renderClaimAnswer(it) :
+        it.kind === "ghost_claim_proxy" ? this._renderProxyAnswer(it) :
+        this._renderAnswer(it);
       this.refreshIcons(host);
     }
 
@@ -747,6 +892,105 @@
     }
 
     /**
+     * Accept or decline a claim on one of YOUR ghosts, in place.
+     *
+     * The mirror of _answer above, with one addition: accepting merges every
+     * play you logged under that name, so it goes through
+     * GhostClaim.confirmAccept first. That confirm runs BEFORE the row is
+     * marked in flight — cancelling has to leave the row exactly as it was, and
+     * a dialog dismissed with no write should not have painted "Working…" over
+     * anything.
+     */
+    async _answerClaim(key, claimId, accept) {
+      if (!claimId || this._answering.has(claimId)) return;
+      const it = this._items.find((x) => x.entry_key === key);
+      if (!it) return;
+      if (accept && !(await window.GhostClaim.confirmAccept(it))) return;
+      // Re-check after the confirm's await: the list can have been re-formed
+      // under the dialog by a pull-to-refresh or a background load.
+      if (this._answering.has(claimId)) return;
+      if (!this._items.some((x) => x.entry_key === key)) return;
+
+      this._answering.add(claimId);
+      this._paintAnswer(key);
+      let dropped = false;
+      try {
+        if (accept) {
+          const res = await window.GhostClaim.accept(claimId);
+          const moved = (res && res.rows_merged) || 0;
+          // The plays changed hands, so every play-shaped cache is stale — the
+          // same invalidation buddies-view._acceptClaim does, and just as
+          // load-bearing here.
+          window.GhostClaim.invalidate();
+          if (window.Play && window.Play.invalidateDeps) window.Play.invalidateDeps();
+          this._dropRow(key, { slot: "claim" });
+          dropped = true;
+          const who = it.subject_display_name || it.actor_display_name || "them";
+          showToast(
+            moved
+              ? `${moved} ${moved === 1 ? "play" : "plays"} moved to ${who}`
+              : "Linked",
+            "success",
+          );
+        } else {
+          await window.GhostClaim.reject(claimId);
+          this._dropRow(key, { slot: "claim" });
+          dropped = true;
+          showToast("Request declined", "info");
+        }
+      } catch (e) {
+        // Same contract as _answer: 409/404 means it was answered elsewhere
+        // while this list was open, so the row is stale either way and goes
+        // quietly. Anything else leaves the claim genuinely unanswered, so the
+        // row STAYS — dropping it would hide a request the user still owes an
+        // answer to.
+        if (e && (e.status === 409 || e.status === 404)) {
+          this._dropRow(key, { slot: "claim" });
+          dropped = true;
+        } else {
+          showToast((e && e.message) || "Couldn't answer that request", "error");
+        }
+      } finally {
+        this._answering.delete(claimId);
+        if (dropped) this.render();
+        else this._paintAnswer(key);
+      }
+    }
+
+    /**
+     * "Not me" on a claim somebody raised for you.
+     *
+     * Cancel rather than reject: this is not the owner declining, and it costs
+     * no strike. It does stick though — the buddy who asked cannot re-raise it
+     * — which is why the server marks the claim dismissed rather than deleting
+     * it. Nothing is decremented: a proxy row has no Profile-tab slot of its
+     * own, only the bell's count, which the next fetch republishes.
+     */
+    async _declineProxy(key, claimId) {
+      if (!claimId || this._answering.has(claimId)) return;
+      this._answering.add(claimId);
+      this._paintAnswer(key);
+      let dropped = false;
+      try {
+        await window.GhostClaim.cancel(claimId);
+        this._dropRow(key, { slot: null });
+        dropped = true;
+        showToast("We've told them that isn't you", "info");
+      } catch (e) {
+        if (e && (e.status === 409 || e.status === 404)) {
+          this._dropRow(key, { slot: null });
+          dropped = true;
+        } else {
+          showToast((e && e.message) || "Couldn't send that", "error");
+        }
+      } finally {
+        this._answering.delete(claimId);
+        if (dropped) this.render();
+        else this._paintAnswer(key);
+      }
+    }
+
+    /**
      * Drop one answered request and tell the rest of the app.
      *
      * The pending count is decremented rather than recomputed: this screen
@@ -754,8 +998,16 @@
      * know the true total. The Buddies screen and the next boot both publish
      * the authoritative number, and setPendingCount clamps at zero, so the
      * worst a drift can do is under-count a dot until then.
+     *
+     * WHICH count, though, depends on the row. `slot` names it: "buddy" (the
+     * default, and every caller that predates ghost claims), "claim" for a
+     * claim on your own ghost, and null for a row that feeds no Profile-tab
+     * signal at all — a claim raised FOR you lives only on the bell. Walking
+     * Buddy's counter down for a ghost claim would take the dot off a buddy
+     * request the user still owes an answer to.
      */
-    _dropRow(key) {
+    _dropRow(key, opts) {
+      const slot = opts && "slot" in opts ? opts.slot : "buddy";
       // Where it sat decides whether the page-one boundary moves: a row from a
       // cursor page leaves it alone. A boundary that drifts would make the next
       // pull-to-refresh splice the fresh page over a row belonging to a page
@@ -769,8 +1021,11 @@
       // already answered. Patched, not dropped — the rest of the page is still
       // good, and it is the whole reason the screen opens instantly.
       window.NotificationFeed.dropFromPage(key);
-      if (window.Buddy && window.Buddy.setPendingCount) {
+      if (slot === "buddy" && window.Buddy && window.Buddy.setPendingCount) {
         window.Buddy.setPendingCount(window.Buddy.pendingCount() - 1);
+      } else if (slot === "claim" && window.GhostClaim
+                 && window.GhostClaim.setPendingCount) {
+        window.GhostClaim.setPendingCount(window.GhostClaim.pendingCount() - 1);
       }
     }
 

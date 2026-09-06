@@ -154,17 +154,26 @@ class FeedCardKind(StrEnum):
 class NotificationKind(StrEnum):
     """What one row on the notifications feed is about.
 
-    The feed is a UNION of three derived sources rather than a table — see
-    bgb_notifications, migration 009 — and each member names both its source
-    and the timestamp it is ordered by: PLAY_LINK from play_players.linked_at,
-    BUDDY_REQUEST from buddy_edges.created_at, BUDDY_ACCEPTED from
-    buddy_edges.accepted_at. The kind also says which block of optional fields
-    on the Notification model is populated.
+    The feed is a UNION of five derived sources rather than a table — see
+    bgb_notifications, migrations 009 and 014 — and each member names both its
+    source and the timestamp it is ordered by: PLAY_LINK from
+    play_players.linked_at, BUDDY_REQUEST from buddy_edges.created_at,
+    BUDDY_ACCEPTED from buddy_edges.accepted_at, and both ghost-claim kinds
+    from ghost_claims.created_at. The kind also says which block of optional
+    fields on the Notification model is populated.
+
+    The two claim kinds are the same row seen from opposite ends, which is why
+    they are separate values rather than one kind with a flag: GHOST_CLAIM goes
+    to the ghost's OWNER and is answerable there (Accept merges the plays),
+    while GHOST_CLAIM_PROXY goes to the person somebody claimed FOR, who cannot
+    accept anything — only the owner can — and whose one move is to call it off.
     """
 
     PLAY_LINK = "play_link"
     BUDDY_REQUEST = "buddy_request"
     BUDDY_ACCEPTED = "buddy_accepted"
+    GHOST_CLAIM = "ghost_claim"
+    GHOST_CLAIM_PROXY = "ghost_claim_proxy"
 
 
 class PlayLinkGroup(StrEnum):

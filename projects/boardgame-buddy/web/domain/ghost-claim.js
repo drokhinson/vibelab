@@ -46,14 +46,31 @@
     // ── Writes ──────────────────────────────────────────────────────────────
 
     /**
-     * Ask `ownerUserId` to link their ghost `displayName` to this account.
+     * Ask `ownerUserId` to link their ghost `displayName` to an account —
+     * this one by default, or a buddy's via opts.
+     *
      * Idempotent while one is pending. 400 own roster, 403 can't see the
      * plays, 409 already seated / already linked / declined twice, 410 gone.
+     *
+     * @param {string} ownerUserId
+     * @param {string} displayName
+     * @param {{claimantUserId?: string, playId?: string}} [opts]
+     *   claimantUserId claims on somebody else's behalf. They must be an
+     *   accepted buddy (403 not_buddies) and playId is then REQUIRED (400
+     *   play_required) — their notification names that game, and it is the only
+     *   thing telling them which of a stranger's plays this is about. 409
+     *   target_seated if the merge would seat them twice, target_declined if
+     *   they have already said it isn't them.
      */
-    static create(ownerUserId, displayName) {
+    static create(ownerUserId, displayName, opts) {
+      const o = opts || {};
       return window.api.post("/ghost-claims", {
         owner_user_id: ownerUserId,
         display_name: displayName,
+        // Omitted rather than sent as null on the self path, so the request
+        // body is byte-identical to what it has always been.
+        ...(o.claimantUserId ? { claimant_user_id: o.claimantUserId } : {}),
+        ...(o.playId ? { play_id: o.playId } : {}),
       });
     }
 
@@ -67,11 +84,62 @@
       return window.api.post(`/ghost-claims/${claimId}/reject`, {});
     }
 
-    // Withdraw a claim WE sent. Distinct from reject() the same way
-    // Buddy.cancel() is from Buddy.reject(): same row, opposite party, and a
-    // withdrawal costs no strike against the two-ask limit.
+    /**
+     * Call off a pending claim, from either end of it.
+     *
+     * Distinct from reject() the same way Buddy.cancel() is from
+     * Buddy.reject(): same row, opposite party, and no strike against the
+     * two-ask limit. Two people may call it: whoever ASKED (a withdrawal — the
+     * row is deleted) and whoever it was raised FOR (a "that isn't me" — the
+     * row is dismissed, so the same buddy cannot re-raise it, though the person
+     * themselves may still claim the ghost later). The server picks which by
+     * who is calling, and the message it returns says which happened.
+     */
     static cancel(claimId) {
       return window.api.post(`/ghost-claims/${claimId}/cancel`, {});
+    }
+
+    /**
+     * The blast-radius confirmation, in ONE place because two surfaces accept
+     * claims (the Buddies screen and the notifications screen) and two copies
+     * of this dialog is exactly the anti-pattern ui-object-design.md §3c names.
+     *
+     * Accepting has always merged EVERY play the owner logged under that name,
+     * not just the one the claim was raised from — `rows_merged` in the toast
+     * afterwards was the first time a host learned how big that was. This says
+     * it first.
+     *
+     * @param {any} claim a GhostClaimResponse, or a notification row
+     * @returns {Promise<boolean>} false = leave the claim pending, send nothing
+     */
+    static confirmAccept(claim) {
+      const c = claim || {};
+      const n = c.play_count != null ? c.play_count : c.group_count;
+      // Exactly one play has no hidden blast radius to make explicit, and a
+      // confirm on it is a tap tax. An UNKNOWN count is NOT the same as one —
+      // a row seeded from the profile bundle carries no count, because that RPC
+      // does not join the plays — so it gets the countless phrasing rather than
+      // silently skipping the guard.
+      if (n === 1) return Promise.resolve(true);
+      const ghost = c.ghost_display_name || "that name";
+      const who = c.claimant_display_name || c.other_display_name
+        || c.subject_display_name || "them";
+      // Raw strings, NOT escaped: PolaroidPopup.confirm escapes title and body
+      // itself, so pre-escaping here would double-escape a ghost called
+      // Bob "the ghost" into visible entities.
+      return window.PolaroidPopup.confirm({
+        title: n == null
+          ? `Link every “${ghost}” play to ${who}?`
+          : `Link all ${n} “${ghost}” plays to ${who}?`,
+        body: `Every play you logged with a player called “${ghost}” moves to `
+            + `their account — not just this one — and starts counting towards `
+            + `their stats. You can't undo it here.`,
+        confirmLabel: "Link all",
+        cancelLabel: "Keep as ghost",
+        // Not destructive: this ADDS a link, it does not lose anything, and
+        // --rust would make the affordance look dangerous at a glance.
+        destructive: false,
+      });
     }
 
     /** "Not me" — stop suggesting this ghost. The owner is never told. */
