@@ -1,0 +1,29 @@
+<!--
+  bgb-badge-96 — the Android status-bar mark for a push notification.
+
+  MONOCHROME BY REQUIREMENT, not by taste. Android renders a notification badge
+  as a MASK: it reads the alpha channel and paints the result in the system
+  accent, discarding every colour in the file. So this is the one BoardgameBuddy
+  asset that cannot use the amber gradient the logo and icons carry — a
+  full-colour badge arrives as an amber-shaped blob, and a badge drawn as a thin
+  outline arrives as a smudge at 24dp.
+
+  The die face is the logo's speech-bubble element, which is the part of the
+  mark that survives being reduced to a silhouette: the buddy head loses its
+  face (the eyes and mouth are knocked out in the app's background colour, which
+  has no alpha to knock out here) and reads as a plain rounded square.
+
+  Solid body with the pips knocked OUT, rather than five floating dots: the
+  cutouts keep their shape at any size, while five separate small circles blur
+  into one another as the mask is downscaled.
+-->
+<svg width="96" height="96" viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#ffffff" fill-rule="evenodd" d="
+    M26 10 h44 a16 16 0 0 1 16 16 v44 a16 16 0 0 1 -16 16 h-44 a16 16 0 0 1 -16 -16 v-44 a16 16 0 0 1 16 -16 z
+    M31 31 m-7 0 a7 7 0 1 0 14 0 a7 7 0 1 0 -14 0 z
+    M65 31 m-7 0 a7 7 0 1 0 14 0 a7 7 0 1 0 -14 0 z
+    M48 48 m-7 0 a7 7 0 1 0 14 0 a7 7 0 1 0 -14 0 z
+    M31 65 m-7 0 a7 7 0 1 0 14 0 a7 7 0 1 0 -14 0 z
+    M65 65 m-7 0 a7 7 0 1 0 14 0 a7 7 0 1 0 -14 0 z
+  "/>
+</svg>

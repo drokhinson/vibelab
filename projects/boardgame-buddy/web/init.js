@@ -963,6 +963,22 @@
     if (document.readyState === "complete") registerWorker();
     else window.addEventListener("load", registerWorker, { once: true });
 
+    // Push (migration 018). Two separate jobs, and neither blocks the boot.
+    //
+    // listen() picks up the "a notification was tapped" message sw.js posts, so
+    // the tap routes inside the running app instead of reloading it. Armed
+    // unconditionally — the worker can post before the account's tier is known.
+    //
+    // syncOnBoot() re-posts whatever subscription this device currently holds.
+    // A browser can rotate an endpoint at any time and the worker cannot report
+    // the new one (no auth token inside a worker), so the page is the
+    // authoritative half of that repair. It no-ops for an account with
+    // notifications off.
+    if (window.BgbPush) {
+      window.BgbPush.listen();
+      window.BgbPush.syncOnBoot();
+    }
+
     // Offer the install once the shell is up. The component owns its own
     // gating (phone viewport, signed in, not already installed, settle delay,
     // and — since it is a modal now — a clear screen to land on) and no-ops on
