@@ -16,6 +16,16 @@
 // Per .claude/rules/ui-object-design.md §2 the surface-specific bits — which
 // view owns the Add button, and whether a tile commits on tap or toggles a
 // selection — are `opts` fields on ONE tile, not a second copy of the markup.
+//
+// An "add" tile also carries a dismiss ×: "stop suggesting this person"
+// (migration `013_buddy_suggestion_dismissals`). It is the answer to the one
+// thing this rail could not do —
+// a suggestion the viewer had already decided against came back every single
+// visit, which is the failure ui/ghost-claim-suggestions.js argues against and
+// the reason "Not me" exists on the list beside it. The × is deliberately NOT
+// offered on a "select" tile: that tile IS a <button>, so a second button
+// inside it is invalid markup, and a grid the user is ticking through has no
+// room for a second meaning per tap.
 
 (function () {
   // Why this person is being suggested, not how much.
@@ -104,6 +114,12 @@
    *   because there is nothing to cancel yet.
    * @param {string} [opts.cancelHandler]   state "sent": global expression
    *   called as `(requestId, userId, buttonEl)`.
+   * @param {string} [opts.dismissHandler] mode "add": global expression called
+   *   as `(userId, buttonEl)` when the tile's × is tapped. Omit and no × is
+   *   drawn, which is what a host that cannot remove a tile should do.
+   *   Rendered only while the tile is in state "none": once a request is out,
+   *   the tile's own button is Cancel and "stop suggesting them" is a sentence
+   *   about somebody the viewer has just asked to be buddies with.
    * @returns {string} HTML
    */
   function renderBuddySuggestionTile(s, opts) {
@@ -141,6 +157,7 @@
     const uid = escapeAttr(s.user_id);
     return `
       <div class="buddy-tile" data-user-id="${uid}">
+        ${renderTileDismiss(s, o)}
         <div class="buddy-tile__avatar-wrap"
              onclick="window.router.go('profile-other',{userId:'${s.user_id}'})">
           ${badge}
@@ -149,6 +166,27 @@
         <div class="buddy-tile__reason">${reason}</div>
         ${renderTileAction(s, o, addHandler)}
       </div>
+    `;
+  }
+
+  // The × in the tile's corner. Separate from renderTileAction because it is
+  // the one control that does not change with the send lifecycle — it is drawn
+  // in state "none" and in no other, rather than showing a different face per
+  // state.
+  //
+  // The label names the person, not the button: a screen reader running the
+  // rail hits a dozen of these, and "Dismiss" twelve times says nothing about
+  // which one is about to go. `title` carries the same sentence for a pointer.
+  function renderTileDismiss(s, o) {
+    if (!o.dismissHandler) return "";
+    if ((o.state || "none") !== "none") return "";
+    const label = escapeAttr(`Stop suggesting ${s.display_name}`);
+    return `
+      <button type="button" class="buddy-tile__dismiss"
+              aria-label="${label}" title="${label}"
+              onclick="${o.dismissHandler}('${escapeAttr(s.user_id)}', this)">
+        <i data-icon="x" class="w-3 h-3"></i>
+      </button>
     `;
   }
 
@@ -186,6 +224,7 @@
   /**
    * @param {SuggestedBuddy[]} suggestions
    * @param {{ addHandler: string, flush?: boolean, cancelHandler?: string,
+   *           dismissHandler?: string,
    *           stateFor?: (userId: string) => {state?: string, requestId?: string} }} opts
    *   addHandler — a global expression called as `(userId, buttonEl)` when
    *     the tile's Add button is tapped, e.g. "window.feedView._addBuddy".
@@ -193,6 +232,8 @@
    *     their own content (the Buddies screen's <main> carries px-4).
    *   cancelHandler — a global expression called as
    *     `(requestId, userId, buttonEl)` for a tile already in the "sent" state.
+   *   dismissHandler — a global expression called as `(userId, buttonEl)` when
+   *     the tile's × is tapped. Omit and the rail draws no ×.
    *   stateFor — lets the host restore per-tile action state across its own
    *     repaints. The rail's markup is rebuilt from backend rows, which know
    *     nothing about what this session has already sent, so without this a
@@ -210,6 +251,7 @@
         mode: "add",
         addHandler: (opts && opts.addHandler) || "window.feedView._addBuddy",
         cancelHandler: opts && opts.cancelHandler,
+        dismissHandler: opts && opts.dismissHandler,
         state: st.state,
         requestId: st.requestId,
       });
@@ -240,9 +282,7 @@
    */
   function patchBuddySuggestionTile(root, s, opts) {
     const scope = root || document;
-    const sel = `.buddy-tile[data-user-id="${(window.CSS && CSS.escape)
-      ? CSS.escape(s.user_id) : s.user_id}"]`;
-    const el = scope.querySelector(sel);
+    const el = scope.querySelector(tileSelector(s.user_id));
     if (!el) return false;
     const holder = document.createElement("div");
     holder.innerHTML = renderBuddySuggestionTile(s, opts);
@@ -275,6 +315,93 @@
     return true;
   }
 
+  /**
+   * Take one tile out of the rail for good, and the rail with it if that was
+   * the last one.
+   *
+   * The counter-argument to removing a tile is written out at
+   * renderBuddySuggestionTile's `state` and again inside
+   * patchBuddySuggestionTile: pulling a tile out of a horizontal rail slides
+   * every tile to its right into a new slot, and the next tap lands on
+   * whoever moved under the finger. That argument holds for a SEND, where
+   * leaving is a side effect nobody asked for. Here leaving is the whole
+   * request — so the answer is not to refuse it but to make it legible: the
+   * tile collapses over ~220ms instead of vanishing between two frames, which
+   * is long enough to read as "that one went away" and to move a finger.
+   *
+   * The rail's own gap is eaten by a negative margin as the basis goes to 0;
+   * without it the row keeps a 0.6rem hole where the tile used to be.
+   *
+   * @param {Element|Document} root  where to look for the tile
+   * @param {string} userId
+   * @returns {Promise<void>} resolves once the node is actually gone
+   */
+  function removeBuddySuggestionTile(root, userId) {
+    const scope = root || document;
+    const el = scope.querySelector(tileSelector(userId));
+    if (!el) return Promise.resolve();
+
+    // Focus would otherwise fall to <body> the moment the node goes, dropping
+    // a keyboard user out of the rail entirely. Hand it to a neighbour's first
+    // live control, preventScroll so the rail does not jump to it. When this
+    // was the last tile the rail is going too, so there is nothing inside it
+    // left to hold focus and <body> is the honest answer.
+    if (document.activeElement && el.contains(document.activeElement)) {
+      const sibling = el.nextElementSibling || el.previousElementSibling;
+      const next = sibling && sibling.querySelector("button:not([disabled])");
+      if (next) { try { next.focus({ preventScroll: true }); } catch (_) { next.focus(); } }
+    }
+
+    // Fixed width first: flex-basis is 130px, but `auto`-ish computed values
+    // and the select variant's `flex: 1 1 auto` do not animate from a keyword.
+    el.style.flexBasis = `${el.offsetWidth}px`;
+    // Force a reflow so the browser has a start value to interpolate from —
+    // setting the basis and the class in one frame animates from nothing.
+    void el.offsetWidth;
+    el.classList.add("buddy-tile--leaving");
+    el.style.flexBasis = "0px";
+
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        const rail = el.closest(".feed-rail");
+        el.remove();
+        // Nothing left to suggest — drop the heading too, rather than leaving
+        // "Buddies you may know" standing over an empty strip.
+        if (rail && !rail.querySelector(".buddy-tile")) rail.remove();
+        resolve();
+      };
+      // No transition to wait for, so waiting would just be a 300ms stall
+      // with nothing happening in it.
+      if (prefersReducedMotion()) { finish(); return; }
+      el.addEventListener("transitionend", (e) => {
+        if (e.target === el && e.propertyName === "flex-basis") finish();
+      });
+      // Belt and braces: a backgrounded tab fires no transitionend at all.
+      setTimeout(finish, 300);
+    });
+  }
+
+  // The selector both patch and remove locate a tile with. Ids are UUIDs, so
+  // the escape is belt-and-braces — but a selector built from data is a
+  // selector that data can break, and one copy of that decision is enough.
+  // Read off `window.CSS` rather than the bare global: the two are the same
+  // object in every browser, and only the property lookup survives being run
+  // somewhere the global is not declared.
+  function tileSelector(userId) {
+    const id = (window.CSS && window.CSS.escape)
+      ? window.CSS.escape(String(userId))
+      : String(userId);
+    return `.buddy-tile[data-user-id="${id}"]`;
+  }
+
+  function prefersReducedMotion() {
+    return !!(window.matchMedia
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+
   // Nearest ancestor that actually scrolls on either axis.
   function scrollParentOf(el) {
     let n = el.parentElement;
@@ -289,4 +416,5 @@
   window.renderBuddySuggestionTile = renderBuddySuggestionTile;
   window.renderSuggestedBuddiesRail = renderSuggestedBuddiesRail;
   window.patchBuddySuggestionTile = patchBuddySuggestionTile;
+  window.removeBuddySuggestionTile = removeBuddySuggestionTile;
 })();

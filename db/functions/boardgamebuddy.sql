@@ -192,6 +192,12 @@
 --                  so the tile can say "Buddy of Priya". The second hop stays
 --                  accepted-only, and `connected` still excludes the people the
 --                  viewer has asked.)
+--               db/migrations/boardgamebuddy/013_buddy_suggestion_dismissals.sql
+--                 (CREATE OR REPLACE — body only, so the GRANT survives. Adds a
+--                  `dismissed` CTE over boardgamebuddy_buddy_suggestion_dismissals
+--                  and excludes those candidates. A separate CTE from `connected`
+--                  on purpose: a dismissed person is not connected to the viewer,
+--                  they are refused by them.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --               (embedded Feed rail, lim 5)
 --               shared-backend/routes/boardgame_buddy/buddy_routes.py
@@ -206,6 +212,8 @@
 --               list agree. Powers the Feed's "Buddies you may know" rail and
 --               the same rail on the Buddies screen, which reads it through
 --               GET /buddies/suggested rather than pulling a feed page.
+--               Skips anyone the viewer has dismissed (migration 013), which is
+--               per-viewer, invisible to the person dismissed, and not a block.
 
 -- bgb_onboarding_buddy_suggestions(uid UUID, lim INT DEFAULT 12,
 --                                  active_window_days INT DEFAULT 90)
@@ -220,6 +228,11 @@
 --                  written to be. tier_graph's floor widened to admit a
 --                  candidate whose only signal is a request the viewer sent;
 --                  tier_active rows carry 0 and NULL for the new columns.)
+--               db/migrations/boardgamebuddy/013_buddy_suggestion_dismissals.sql
+--                 (CREATE OR REPLACE — body only. The dismissal filter goes on
+--                  `eligible`, the shared floor BOTH tiers draw from, so a
+--                  dismissed person is gone from the earned-signal tier and the
+--                  recently-active fallback alike.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --               (GET /buddies/suggested/onboarding, lim 12)
 --   Purpose:    The onboarding "Add buddies" step's candidate list. Same
@@ -243,6 +256,11 @@
 --            rank_in_seed INT)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/072_suggestions_from_sent_requests.sql)
+--               db/migrations/boardgamebuddy/013_buddy_suggestion_dismissals.sql
+--                 (CREATE OR REPLACE — body only. Excludes dismissed candidates
+--                  too: without it a dismissed person would be absent from the
+--                  first paint and then promoted into the grid the moment the
+--                  user ticked one of their buddies.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --               (GET /buddies/suggested/onboarding, alongside the tier list)
 --   Purpose:    The second hop, shipped up front. For each of the suggestions

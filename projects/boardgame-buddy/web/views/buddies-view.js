@@ -398,6 +398,7 @@
         ${window.renderSuggestedBuddiesRail(this._suggested, {
           addHandler: "window.buddiesView._request",
           cancelHandler: "window.buddiesView._cancelFromTile",
+          dismissHandler: "window.buddiesView._dismissSuggestion",
           flush: true,
           stateFor: (id) => this._tileStateFor(id),
         })}
@@ -908,9 +909,53 @@
         mode: "add",
         addHandler: "window.buddiesView._request",
         cancelHandler: "window.buddiesView._cancelFromTile",
+        dismissHandler: "window.buddiesView._dismissSuggestion",
         state: st.state,
         requestId: st.requestId,
       });
+    }
+
+    // "Stop suggesting this person" — the rail tile's ×.
+    //
+    // This is the one suggestion-rail action that DOES take the tile out, and
+    // it does not contradict the restructure rule above: removal is the whole
+    // request rather than a side effect of a send, and the tile collapses over
+    // ~220ms rather than repainting in the tap's own frame, so nothing slides
+    // under a finger already on its way down.
+    //
+    // No confirm. Nothing is destroyed — the person is never told, keeps every
+    // ability they had, and the Add-buddies card's search still finds them,
+    // which is the way back from a mis-tap. That matches the "Not me" on the
+    // ghost-claim list above, which is the same kind of act.
+    async _dismissSuggestion(userId) {
+      const key = "dismiss:" + userId;
+      if (this._busy.has(key)) return;
+      this._busy.add(key);
+
+      const before = this._suggested;
+      // Filtered into a NEW array rather than spliced: _openAdd hands
+      // `this._suggested` straight to the Add-buddies card, so a snapshot it
+      // is holding must not change under it.
+      this._suggested = (before || []).filter((x) => x.user_id !== userId);
+      const removed = window.removeBuddySuggestionTile(this.container, userId);
+
+      try {
+        await window.Buddy.dismissSuggestion(userId);
+        await removed;
+      } catch (e) {
+        this._suggested = before;
+        await removed;
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't remove that suggestion", "error");
+        }
+        // The tile is gone from the DOM and the rail may have gone with it, so
+        // only a repaint can put it back. Allowed here for the reason
+        // _unfriend restructures: continuity is already broken — by the
+        // collapse the user just watched — and this is the error path.
+        this.render();
+      } finally {
+        this._busy.delete(key);
+      }
     }
 
     // The rail's Cancel passes (requestId, userId); _cancel takes the id alone.

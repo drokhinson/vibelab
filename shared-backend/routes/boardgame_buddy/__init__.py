@@ -15,6 +15,10 @@ router = APIRouter(
 from . import game_routes      # noqa: F401, E402
 from . import collection_routes  # noqa: F401, E402
 from . import play_routes      # noqa: F401, E402
+# Ahead of buddy_routes: literal `/buddies/suggested…` paths before the
+# parameterised `/buddies/{edge_id}` ones, which FastAPI resolves in
+# declaration order.
+from . import buddy_suggestion_routes  # noqa: F401, E402
 from . import buddy_routes     # noqa: F401, E402
 from . import ghost_claim_routes  # noqa: F401, E402
 from . import notification_routes  # noqa: F401, E402

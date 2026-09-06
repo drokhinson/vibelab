@@ -3,9 +3,13 @@
 Replaces the legacy one-way /buddies routes that used to live in
 play_routes.py. The new model is friend-request based: send_request →
 incoming/outgoing pending → accept/reject → accepted edge.
+
+The "Buddies you may know" endpoints are NOT here — reading and dismissing a
+suggestion live in buddy_suggestion_routes.py, which is imported ahead of this
+module so its literal `/buddies/suggested…` paths are declared first.
 """
 
-from fastapi import Depends, Path, Query
+from fastapi import Depends, Path
 
 from db import get_supabase
 
@@ -31,12 +35,10 @@ from .models import (
     GhostMergeResponse,
     GhostPlayer,
     MessageResponse,
-    OnboardingSuggestionsResponse,
     PlayedWithUser,
     PlayPartnersResponse,
-    SuggestedBuddiesResponse,
 )
-from .services import buddy_qr_service, buddy_service, feed_service, played_with_service
+from .services import buddy_qr_service, buddy_service, played_with_service
 
 
 @router.get(
@@ -63,52 +65,6 @@ async def list_buddy_requests(
 ) -> BuddyRequestsResponse:
     """Pending buddy requests for the current user, split incoming / outgoing."""
     return buddy_service.list_requests(get_supabase(), user.user_id)
-
-
-@router.get(
-    "/buddies/suggested",
-    response_model=SuggestedBuddiesResponse,
-    status_code=200,
-    summary="Suggest people the current user may know",
-)
-async def list_suggested_buddies(
-    limit: int = Query(12, ge=1, le=50, description="Maximum suggestions to return"),
-    user: CurrentUser = Depends(get_current_user),
-) -> SuggestedBuddiesResponse:
-    """Same ranked candidates the feed's "Buddies you may know" rail renders.
-
-    Shared as a standalone endpoint so the Buddies page can show the rail
-    without pulling a whole feed page."""
-    return feed_service.fetch_suggested_buddies(
-        get_supabase(), user.user_id, limit=limit
-    )
-
-
-@router.get(
-    "/buddies/suggested/onboarding",
-    response_model=OnboardingSuggestionsResponse,
-    status_code=200,
-    summary="Suggest buddies for a brand-new account",
-)
-async def list_onboarding_buddy_suggestions(
-    limit: int = Query(12, ge=1, le=50, description="Maximum suggestions to return"),
-    user: CurrentUser = Depends(get_current_user),
-) -> OnboardingSuggestionsResponse:
-    """Candidates for the onboarding "Add buddies" step, shown once the
-    first-time profile modal is saved.
-
-    Not the same list as /buddies/suggested: that one only returns people the
-    viewer shares a play or a buddy with, which is the empty set for the
-    account that has just been created. This falls back to recently active
-    users once those run out, and tags each candidate with which tier it came
-    from so the client can label it honestly.
-
-    Carries `network` as well: the buddies of each candidate it returns, so
-    the onboarding deck can promote them into the grid the moment the user
-    ticks that candidate, without a round trip (migration 072)."""
-    return feed_service.fetch_onboarding_buddy_suggestions(
-        get_supabase(), user.user_id, limit=limit
-    )
 
 
 @router.post(
