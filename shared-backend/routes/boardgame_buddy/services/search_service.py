@@ -1,5 +1,6 @@
 """Unified game search — collection-first, then DB, optionally BGG."""
 
+import asyncio
 import logging
 import re
 from typing import Any, Optional
@@ -302,7 +303,7 @@ async def _bgg_hits(
         # cannot add to that — /search matches titles, and a url string is not
         # one. So this is the whole answer, including when the link resolved to
         # nothing importable and the answer is an empty list.
-        return _as_results(sb, raw)
+        return await asyncio.to_thread(_as_results, sb, raw)
 
     type_param = "boardgame,boardgameexpansion" if include_expansions else "boardgame"
     try:
@@ -313,13 +314,13 @@ async def _bgg_hits(
         )
     except Exception as exc:
         logger.warning("BGG search failed for %r: %s", query, exc)
-        return _as_results(sb, raw)
+        return await asyncio.to_thread(_as_results, sb, raw)
 
     try:
         root = parse_bgg_xml(body, context=f"unified search query={query!r}")
     except Exception as exc:
         logger.warning("BGG XML parse failed for %r: %s", query, exc)
-        return _as_results(sb, raw)
+        return await asyncio.to_thread(_as_results, sb, raw)
 
     # EVERY item, then filter, then rank, then cap — in that order, and the
     # order is the fix. This used to slice `findall("item")[:limit]` FIRST and
@@ -362,7 +363,9 @@ async def _bgg_hits(
     matches.sort(key=lambda r: _rank_key(q_lower, r))
     # An id hit, if there was one, keeps the top spot: the user named that game
     # outright and no name score outranks having asked for it by number.
-    return _as_results(sb, raw + matches[: max(0, _BGG_HARD_CAP - len(raw))])
+    return await asyncio.to_thread(
+        _as_results, sb, raw + matches[: max(0, _BGG_HARD_CAP - len(raw))],
+    )
 
 
 def _as_results(sb, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
@@ -371,6 +374,10 @@ def _as_results(sb, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
     Its own function because the id lookup can return before the name search
     runs (or instead of it), and every one of those exits still owes the rows
     their "already in the library" flag.
+
+    Blocking, and every caller reaches it through `asyncio.to_thread` — a
+    500-row BGG answer is four chunked round trips, which is not something to
+    run on the event loop.
     """
     if not raw:
         return []
@@ -400,6 +407,48 @@ def _as_results(sb, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
     ]
 
 
+def _catalog_hits(
+    sb,
+    viewer_id: str,
+    query: str,
+    limit: int,
+    *,
+    include_expansions: bool,
+) -> list[UnifiedSearchHit]:
+    """Every catalog read for one search, on one thread.
+
+    Synchronous on purpose, and never called from the event loop — the
+    Supabase client blocks, and `unified_search` hands this whole function to
+    `asyncio.to_thread`. The fallback below is TWO more blocking round trips,
+    so it has to be inside the same off-loop call rather than bolted onto the
+    fast path: wrapping only the RPC would put the slow path back on the loop
+    at exactly the moment the service is already degraded.
+
+    Fast path is one index-backed RPC. Falls back to the two-query PostgREST
+    path if the RPC isn't present yet (migration 041 not applied) or errors,
+    so an auto-deploy ahead of the migration never breaks search.
+    """
+    try:
+        return _rpc_hits(sb, viewer_id, query, limit, include_expansions=include_expansions)
+    except Exception as exc:
+        logger.warning("search RPC unavailable, using two-query fallback: %s", exc)
+    collection_hits = _collection_hits(
+        sb, viewer_id, query, limit, include_expansions=include_expansions,
+    )
+    exclude = {h.game.id for h in collection_hits}
+    remaining = max(0, limit - len(collection_hits))
+    db_hits = (
+        _db_hits(
+            sb, query, remaining,
+            exclude_game_ids=exclude,
+            include_expansions=include_expansions,
+        )
+        if remaining
+        else []
+    )
+    return collection_hits + db_hits
+
+
 async def unified_search(
     sb,
     viewer_id: str,
@@ -418,28 +467,9 @@ async def unified_search(
     if not q:
         return UnifiedSearchResponse(results=[], bgg_results=[], bgg_searched=include_bgg)
 
-    # Fast path: one index-backed RPC. Fall back to the two-query PostgREST
-    # path if the RPC isn't present yet (migration 041 not applied) or errors,
-    # so an auto-deploy ahead of the migration never breaks search.
-    try:
-        all_hits = _rpc_hits(sb, viewer_id, q, limit, include_expansions=include_expansions)
-    except Exception as exc:
-        logger.warning("search RPC unavailable, using two-query fallback: %s", exc)
-        collection_hits = _collection_hits(
-            sb, viewer_id, q, limit, include_expansions=include_expansions,
-        )
-        exclude = {h.game.id for h in collection_hits}
-        remaining = max(0, limit - len(collection_hits))
-        db_hits = (
-            _db_hits(
-                sb, q, remaining,
-                exclude_game_ids=exclude,
-                include_expansions=include_expansions,
-            )
-            if remaining
-            else []
-        )
-        all_hits = collection_hits + db_hits
+    all_hits = await asyncio.to_thread(
+        _catalog_hits, sb, viewer_id, q, limit, include_expansions=include_expansions,
+    )
 
     bgg_results: list[BggSearchResult] = []
     if include_bgg:
