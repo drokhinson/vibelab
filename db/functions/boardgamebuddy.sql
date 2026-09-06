@@ -1,6 +1,15 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 013_hot_games_exclude_imports.sql (bgb_hot_games re-emitted so
+-- Last updated: 017_reaction_notifications.sql (bgb_notifications and
+--               bgb_notifications_unread re-emitted with a fourth arm,
+--               'reaction' — somebody said good game to a play of yours,
+--               grouped on one tap's reaction_group_id. Both stay
+--               CREATE OR REPLACE because the arm reuses the existing play
+--               columns and adds no output column. The enabling change is a
+--               schema one: play_reactions.play_owner_id, so the recipient-side
+--               scan is a range scan rather than one probe per play the viewer
+--               has logged. bgb_mark_link_notifications_seen unchanged again.)
+--               Before that: 013_hot_games_exclude_imports.sql (bgb_hot_games re-emitted so
 --               the Feed's "Hot this week" rail counts live plays only —
 --               rows carrying import_batch_id or import_group_id are filtered
 --               out before the GROUP BY. Signature and ordering unchanged).
@@ -1164,22 +1173,27 @@
 --               beside it stays exact.
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Notifications (migrations 008, 009)
+-- Notifications (migrations 008, 009, 017)
 --
 -- Everything that happens TO an account rather than BY it: someone seats you in
 -- a play they logged, someone asks to be your buddy, someone accepts the
--- request you sent. All three are DERIVED — from play_players + plays, and from
--- boardgamebuddy_buddy_edges — rather than stored as events, so there is no
--- second source of truth for the write paths to keep honest, and answering one
--- empties it by construction: unlinking drops a play row, accepting or
--- declining drops a request row.
+-- request you sent, someone says good game to a play of yours. All four are
+-- DERIVED — from play_players + plays, from boardgamebuddy_buddy_edges, and
+-- from boardgamebuddy_play_reactions — rather than stored as events, so there
+-- is no second source of truth for the write paths to keep honest, and
+-- answering one empties it by construction: unlinking drops a play row,
+-- accepting or declining drops a request row, un-reacting drops a reaction row.
 --
 -- Two stored facts the sources cannot supply: the watermark
 -- boardgamebuddy_profiles.link_notifications_seen_at ("have you seen this",
--- named for plays but covering all three since 009), and
+-- named for plays but covering all four since 009 and 017), and
 -- boardgamebuddy_buddy_edges.accepted_by ("who said yes", which is not
 -- derivable because a QR scan writes an edge that is born accepted with nobody
 -- having asked).
+--
+-- A third column, play_reactions.play_owner_id (017), is NOT a stored fact but
+-- a materialized join key: the recipient of a reaction, which the reactions
+-- table cannot otherwise name and which no index could reach across tables.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- bgb_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
@@ -1199,11 +1213,16 @@
 --   Called by:  services/notification_service.list_notifications
 --               (GET /notifications, and the /bootstrap gather, which prefetches
 --               page one so the bell opens without a round trip)
+--   Last updated in: db/migrations/boardgamebuddy/017_reaction_notifications.sql
+--               (adds the 'reaction' arm — same narrow-scan → top-N keys →
+--                aggregate-the-page pipeline as the play arm, over
+--                play_reactions keyed on play_owner_id. CREATE OR REPLACE, not
+--                a DROP: the arm reuses the play columns and adds none.)
 --   Purpose:    The notifications screen, as one merged feed. `kind` is
---               play_link | buddy_request | buddy_accepted and says which
---               field block is populated; actor_* is the only group present on
---               all three, which is what lets one LEFT JOIN after the union
---               serve every kind. A play_link row is one ENTRY, not one play:
+--               play_link | buddy_request | buddy_accepted | reaction and says
+--               which field block is populated; actor_* is the only group
+--               present on all four, which is what lets one LEFT JOIN after the
+--               union serve every kind. A play_link row is one ENTRY, not one play:
 --               a batch, a run of identical imported plays, or one retroactive
 --               ghost-link collapses to a single row, so a 214-play import is
 --               one line with one tick box. play_ids holds ONLY the plays the
@@ -1212,6 +1231,22 @@
 --               (occurred_at, entry_key) — three sources feeding one ordering
 --               makes ties ordinary, and 008's timestamp-only cursor silently
 --               dropped every row sharing a boundary timestamp.
+--
+--               A REACTION row (017) is also one entry rather than one row: a
+--               tap on a three-game night's footer writes three reaction rows
+--               sharing one reaction_group_id, and this collapses them back
+--               into the single act the user performed. It reuses the play
+--               block — play_ids are plays of YOURS they reacted to — with
+--               play_group, import_batch_id and edge_id all NULL. Note
+--               group_count therefore means something DIFFERENT on the two
+--               kinds: "plays you would be removed from" on play_link (it feeds
+--               the unlink bar's count) versus "plays of yours they said good
+--               game to" on reaction. That overload is safe only because a
+--               reaction row is not selectable in the UI; see 017's header.
+--               Its cursor compares the PREFIXED key 'rx:'||reaction_group_id,
+--               because that is the ekey the outer ORDER BY sorts on and the
+--               client sends back — comparing the bare uuid drops rows at every
+--               tie on a page boundary.
 
 -- bgb_notifications_unread(p_viewer UUID)
 --   → INT
@@ -1225,12 +1260,20 @@
 --                rows instead of all of them.)
 --   Called by:  services/notification_service.unread_count
 --               (GET /notifications, and — via list_notifications — /bootstrap)
---   Purpose:    The header bell's dot: the same three sources against the same
---               watermark, summed. The play term counts ENTRIES on the key the
---               list groups by, so a badge of 214 can never sit over a list of
---               one, and it derives unread from MAX(linked_at) per entry —
---               the identical expression the list's is_unread uses — so the
---               badge and the rail cannot drift apart under a later edit.
+--   Last updated in: db/migrations/boardgamebuddy/017_reaction_notifications.sql
+--               (a fourth term for reactions, grouped on
+--                (reaction_group_id, user_id) to match the list arm's keys, and
+--                filtered on created_at > watermark so it is an index condition
+--                on idx_bgb_play_reactions_owner_created — 010's equivalence,
+--                restated for the new source.)
+--   Purpose:    The header bell's dot: the same four sources against the same
+--               watermark, summed. The play and reaction terms count ENTRIES on
+--               the keys the list groups by, so a badge of 214 can never sit
+--               over a list of one and a one-tap three-game night counts once.
+--               Each derives unread from "some member is newer than the
+--               watermark" — the identical condition the list's is_unread
+--               resolves to — so the badge and the rail cannot drift apart
+--               under a later edit.
 
 -- bgb_mark_link_notifications_seen(p_viewer UUID,
 --                                  p_through TIMESTAMPTZ DEFAULT NULL)

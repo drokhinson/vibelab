@@ -154,17 +154,25 @@ class FeedCardKind(StrEnum):
 class NotificationKind(StrEnum):
     """What one row on the notifications feed is about.
 
-    The feed is a UNION of three derived sources rather than a table — see
-    bgb_notifications, migration 009 — and each member names both its source
-    and the timestamp it is ordered by: PLAY_LINK from play_players.linked_at,
-    BUDDY_REQUEST from buddy_edges.created_at, BUDDY_ACCEPTED from
-    buddy_edges.accepted_at. The kind also says which block of optional fields
-    on the Notification model is populated.
+    The feed is a UNION of four derived sources rather than a table — see
+    bgb_notifications, migrations 009 and 017 — and each member names both its
+    source and the timestamp it is ordered by: PLAY_LINK from
+    play_players.linked_at, BUDDY_REQUEST from buddy_edges.created_at,
+    BUDDY_ACCEPTED from buddy_edges.accepted_at, REACTION from
+    play_reactions.created_at grouped on reaction_group_id. The kind also says
+    which block of optional fields on the Notification model is populated.
+
+    ADDING A MEMBER IS A DEPLOY-ORDER CONSTRAINT, not just an edit. Notification
+    .kind is typed by this enum, so a row carrying a value the running backend
+    does not know fails model_validate and 500s the whole page — and that page
+    is /notifications AND the /bootstrap gather. Ship the enum first, then the
+    migration that starts emitting the value.
     """
 
     PLAY_LINK = "play_link"
     BUDDY_REQUEST = "buddy_request"
     BUDDY_ACCEPTED = "buddy_accepted"
+    REACTION = "reaction"
 
 
 class PlayLinkGroup(StrEnum):

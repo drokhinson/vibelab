@@ -487,14 +487,28 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_reactions (
   user_id UUID NOT NULL,
   reaction_group_id UUID DEFAULT gen_random_uuid() NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  -- The RECIPIENT (migration 017): a copy of plays.user_id, written by
+  -- reaction_service.add. It exists so "who reacted to MY plays" is a
+  -- (recipient, time DESC) range scan rather than one probe per play the viewer
+  -- has ever logged — a read that runs on every app boot via
+  -- bgb_notifications_unread. Safe to denormalize because no write path in the
+  -- codebase updates plays.user_id.
+  play_owner_id UUID NOT NULL,
   CONSTRAINT boardgamebuddy_play_reactions_pkey PRIMARY KEY (play_id, user_id),
   CONSTRAINT boardgamebuddy_play_reactions_play_id_fkey FOREIGN KEY (play_id) REFERENCES boardgamebuddy_plays(id) ON DELETE CASCADE,
-  CONSTRAINT boardgamebuddy_play_reactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE
+  CONSTRAINT boardgamebuddy_play_reactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT boardgamebuddy_play_reactions_play_owner_id_fkey FOREIGN KEY (play_owner_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE
 );
 ALTER TABLE public.boardgamebuddy_play_reactions ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_play_reactions TO boardgamebuddy_role;
+-- Added by 016 "for the future notification arm"; that arm (017) turned out not
+-- to probe by group id — the owner-scoped scan below already yields a group's
+-- membership — so this one currently has no caller. Harmless; kept.
 CREATE INDEX IF NOT EXISTS idx_bgb_play_reactions_group ON public.boardgamebuddy_play_reactions USING btree (reaction_group_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_reactions_user ON public.boardgamebuddy_play_reactions USING btree (user_id);
+-- The notification arm's narrow scan. Deliberate mirror of
+-- idx_bgb_play_players_user_linked (player_user_id, linked_at DESC).
+CREATE INDEX IF NOT EXISTS idx_bgb_play_reactions_owner_created ON public.boardgamebuddy_play_reactions USING btree (play_owner_id, created_at DESC);
 
 
 -- ── Live sessions ─────────────────────────────────────────────────────────────

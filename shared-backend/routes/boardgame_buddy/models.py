@@ -1188,14 +1188,14 @@ class PlayLeaveResponse(BaseModel):
 class Notification(BaseModel):
     """One row on the unified notifications feed.
 
-    Three kinds share one row shape, one cursor and one read watermark, which is
-    the whole point: a feed assembled client-side from three endpoints cannot
-    page, and would need three unread counts to add up to one dot.
+    Four kinds share one row shape, one cursor and one read watermark, which is
+    the whole point: a feed assembled client-side from four endpoints cannot
+    page, and would need four unread counts to add up to one dot.
 
     `kind` says which block below is populated. `actor_*` is the only group
-    present on every kind, because "who did this" is the one question all three
+    present on every kind, because "who did this" is the one question all four
     answer — a play_link's actor logged the play, a buddy_request's sent it, a
-    buddy_accepted's said yes.
+    buddy_accepted's said yes, a reaction's said good game.
 
     On a play_link row, an entry is not a play but one act of linking, and
     `play_group` says which grouping produced it. `play_id` is the entry's
@@ -1203,6 +1203,16 @@ class Notification(BaseModel):
     and opens — while `play_ids` holds the whole set. The unlink does NOT send
     that set back for a batch: `import_batch_id` does the job in one field, so
     a 214-play import is one tick and one short request.
+
+    A reaction row (migration 017) reuses that same play block, and it is the
+    one place two kinds share fields with DIFFERENT meanings. Read it as:
+    `play_ids` are plays of YOURS somebody reacted to, collapsed on one tap's
+    reaction_group_id, and `group_count` therefore means "plays of yours they
+    said good game to" — NOT the play_link meaning, "plays you would be removed
+    from", which is what drives the unlink bar's count. That overload is safe
+    only because a reaction row is not selectable: notifications-view.js gives
+    it no pick button, so it can never enter the selection the unlink reads.
+    `play_group`, `import_batch_id` and `edge_id` are NULL on a reaction row.
     """
 
     entry_key: str
@@ -1215,9 +1225,11 @@ class Notification(BaseModel):
     actor_username: str | None = None
     actor_avatar: dict[str, Any] | None = None
 
-    # PLAY_LINK only. Every field in this block is None on a buddy row —
+    # PLAY_LINK and REACTION. Every field in this block is None on a buddy row —
     # play_ids included, rather than an empty list: one rule with no exception
-    # is what lets a reader check `kind` and stop thinking about it.
+    # is what lets a reader check `kind` and stop thinking about it. On a
+    # reaction row `play_group` and `import_batch_id` stay None as well; see the
+    # docstring above for what the rest of the block means there.
     play_group: PlayLinkGroup | None = None
     play_id: str | None = None
     play_ids: list[str] | None = None
@@ -1615,9 +1627,16 @@ class PlayReactionRequest(BaseModel):
     A list rather than one id because the surface is the SESSION footer: one tap
     reacts to every play of that night at once. One play is just a list of one,
     which is what a future per-card control would send.
+
+    Capped because every id in one request shares one reaction_group_id, and
+    migration 017 made that group an ENTRY on the recipient's notifications
+    feed — bgb_notifications materializes a page row's whole membership. An
+    uncapped list is therefore an uncapped aggregate on somebody else's bell.
+    100 is far above any real game night; the neighbouring bulk requests cap at
+    200-500 for the same class of reason.
     """
 
-    play_ids: list[str]
+    play_ids: list[str] = Field(..., max_length=100)
 
 
 class PlayReactionResponse(BaseModel):
