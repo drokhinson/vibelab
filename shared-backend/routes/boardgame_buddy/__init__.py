@@ -19,6 +19,10 @@ from . import collection_routes  # noqa: F401, E402
 # swallowed by `DELETE /plays/{play_id}` with play_id="reactions". Same
 # hazard the buddy_suggestion_routes ordering below exists for.
 from . import reaction_routes  # noqa: F401, E402
+# Ahead of play_routes for the same reason: `GET /plays/imports` would
+# otherwise be swallowed by `GET /plays/{play_id}` with play_id="imports",
+# which reaches Supabase as an invalid-uuid cast (22P02) and 500s.
+from . import import_routes  # noqa: F401, E402
 from . import play_routes      # noqa: F401, E402
 # Ahead of buddy_routes: literal `/buddies/suggested…` paths before the
 # parameterised `/buddies/{edge_id}` ones, which FastAPI resolves in
@@ -40,6 +44,5 @@ from . import push_routes      # noqa: F401, E402
 from . import bgg_link_routes  # noqa: F401, E402
 from . import bgg_push_routes  # noqa: F401, E402
 from . import bootstrap_routes  # noqa: F401, E402
-from . import import_routes  # noqa: F401, E402
 from . import export_routes  # noqa: F401, E402
 from . import admin_routes  # noqa: F401, E402
