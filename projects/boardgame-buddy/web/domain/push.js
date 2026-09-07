@@ -1,6 +1,6 @@
 // domain/push.js — Web Push, from the page's side.
 //
-// The device half of the notification setting (migration 018). Two independent
+// The device half of the notification setting (migration 017). Two independent
 // pieces of state, and most of this file is keeping them straight:
 //
 //   * THE TIER lives on the profile and is per ACCOUNT. It answers "how much do

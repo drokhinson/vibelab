@@ -324,9 +324,8 @@
           <img class="bgbnotif-state__art" src="assets/illustrations/bgb-loading.svg" alt="" />
           <p class="bgbnotif-state__title">Nothing has happened yet.</p>
           <p class="bgbnotif-state__sub">
-            When someone puts you in a game they logged, says good game to one
-            of yours, asks to be your buddy, or accepts a request you sent, it
-            shows up here.
+            When someone puts you in a game they logged, asks to be your buddy,
+            or accepts a request you sent, it shows up here.
           </p>
         </div>
       `;
@@ -386,14 +385,9 @@
       return out;
     }
 
-    // The fallback is _renderPlayRow, so every kind that is NOT play_link needs
-    // an explicit branch here — an unlisted one does not render as nothing, it
-    // renders as a play row complete with a select circle the action bar would
-    // then count.
     _renderRow(it, i) {
       if (it.kind === "buddy_request")  return this._renderRequestRow(it, i);
       if (it.kind === "buddy_accepted") return this._renderAcceptedRow(it, i);
-      if (it.kind === "reaction")       return this._renderReactionRow(it, i);
       return this._renderPlayRow(it, i);
     }
 
@@ -528,70 +522,6 @@
                 <strong>${escapeHtml(who)}</strong> accepted your buddy request
               </span>
               <span class="bgbnotif-row__sub">${this._handle(it)}</span>
-            </span>
-          </button>
-        </div>
-      `;
-    }
-
-    /**
-     * Somebody said good game to plays of yours (migration 017).
-     *
-     * ONE ROW PER TAP, not per play. The footer under a session covers the
-     * whole night, so a three-game evening writes three reaction rows sharing
-     * one reaction_group_id, and the RPC collapses them back into the single
-     * act the person actually performed. Announcing it three times is the exact
-     * thing migration 016 added that column to prevent.
-     *
-     * NO SELECT CIRCLE, and this one is load-bearing rather than cosmetic. The
-     * action bar's only verb is "remove me from these plays", and these are the
-     * viewer's OWN plays — there is no seat to give up. It matters beyond the
-     * missing affordance because a reaction row's `group_count` reuses the
-     * play_link column while meaning something else ("plays of yours they
-     * reacted to", not "plays you would be removed from"); _playCount() sums
-     * that column over the selection, so a selectable reaction row would make
-     * the bar offer to remove the user from plays it cannot touch. The row
-     * simply never entering `_selected` is what keeps that safe.
-     *
-     * Taps through to the play rather than to the profile: the interesting
-     * thing here is the game night somebody liked, and PlayDetailPopup is
-     * already where a play opens from everywhere else in this app.
-     */
-    _renderReactionRow(it, i) {
-      const many = (it.group_count || 1) > 1;
-      const who = it.actor_display_name || "Someone";
-      const game = it.game_name || "a game";
-
-      // Mirrors feed-view.js's _reactionSentence so the same act reads the same
-      // way in both places. "your game night" rather than naming one of three
-      // games: the tap was on the night, and picking a representative to name
-      // would quietly claim they singled it out.
-      const title = many
-        ? `<strong>${escapeHtml(who)}</strong> said good game to your game night`
-        : `<strong>${escapeHtml(who)}</strong> said good game to your ${escapeHtml(game)}`;
-      const sub = many
-        ? `${it.group_count} plays · ${
-            it.game_count > 1 ? `${it.game_count} games · ` : `${escapeHtml(game)} · `
-          }${this._span(it)}`
-        : this._span(it);
-
-      const art = it.game_thumbnail_url
-        ? `<img class="bgbnotif-row__art" src="${escapeAttr(it.game_thumbnail_url)}"
-                alt="" loading="lazy" />`
-        : `<span class="bgbnotif-row__art bgbnotif-row__art--none" aria-hidden="true">
-             <i data-icon="handshake" class="w-4 h-4"></i>
-           </span>`;
-
-      return `
-        <div class="bgbnotif-row bgbnotif-row--buddy ${it.is_unread ? "is-unread" : ""}"
-             data-key="${escapeAttr(it.entry_key)}" style="--i:${i}">
-          <button class="bgbnotif-row__main" type="button"
-                  onclick="window.notificationsView._open('${jsStr(it.play_id)}')">
-            ${this._badge(it)}
-            ${art}
-            <span class="bgbnotif-row__body">
-              <span class="bgbnotif-row__title">${title}</span>
-              <span class="bgbnotif-row__sub">${sub}</span>
             </span>
           </button>
         </div>

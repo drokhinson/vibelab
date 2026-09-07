@@ -1,35 +1,26 @@
 """Notifications — the things that happened TO you.
 
-Four signals share one feed, one cursor and one read watermark: somebody seated
-you in a play they logged, somebody asked to be your buddy, somebody accepted
-the request you sent, somebody said good game to a play of yours.
+Three signals share one feed, one cursor and one read watermark: somebody
+seated you in a play they logged, somebody asked to be your buddy, somebody
+accepted the request you sent.
 
 The list is DERIVED, not stored. `bgb_notifications` reads plays where the
 viewer is a player and somebody else is the logger, plus the viewer's own rows
-in `bgb_buddy_edges`, plus reactions on plays the viewer logged. There is no
-events table on purpose — a "you were linked" row would be a second source of
-truth about a fact play_players already holds, written by four separate
-play-write paths (live save, offline flush, note importer, BGG sync) and
-correct only if all four remember, and a "they accepted" row would duplicate a
-column the edge already carries. Deriving it also means each kind empties
-itself by construction: unlinking drops a play row, accepting or declining
-drops a request row, and un-reacting drops a reaction row.
+in `bgb_buddy_edges`. There is no events table on purpose — a "you were linked"
+row would be a second source of truth about a fact play_players already holds,
+written by four separate play-write paths (live save, offline flush, note
+importer, BGG sync) and correct only if all four remember, and a "they accepted"
+row would duplicate a column the edge already carries. Deriving it also means
+each kind empties itself by construction: unlinking drops a play row, and
+accepting or declining drops a request row.
 
 What cannot be derived is three facts, and they are the only stored state:
 `play_players.linked_at` (when a seat happened — NOT the play's created_at,
 because linking a ghost to an account retroactively re-seats plays that are
 years old), `profiles.link_notifications_seen_at` (how far the viewer has read,
-named for plays but covering all four kinds since migrations 009 and 017), and
+named for plays but covering all three kinds since migration 009), and
 `buddy_edges.accepted_by` (who said yes, which a QR-scanned edge makes
 underivable).
-
-Migration 017's `play_reactions.play_owner_id` is not a fourth stored fact but a
-materialized join key — the recipient of a reaction, which the reactions table
-otherwise cannot name. See reaction_service.add for why it has to be on the row.
-
-Nothing in this module knows the kinds apart. The RPC returns one row shape and
-`Notification` validates it, so adding a kind is a migration plus an enum member
-— which is exactly how the reaction arm arrived without touching this file.
 """
 
 import asyncio
@@ -111,11 +102,7 @@ def fetch_page(
 
 
 def unread_count(sb, viewer_id: str) -> int:
-    """Everything unread across all four kinds.
-
-    Counts ENTRIES, not rows — a 214-play import is 1 and a one-tap three-game
-    "good game" is 1, so the badge can never sit over a shorter list.
-    """
+    """Everything unread across all three kinds. Counts play ENTRIES, not plays."""
     res = sb.rpc("bgb_notifications_unread", {"p_viewer": viewer_id}).execute()
     return int(res.data or 0)
 

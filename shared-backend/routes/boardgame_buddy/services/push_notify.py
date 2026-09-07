@@ -11,10 +11,13 @@ awaiting it. The mutation has already succeeded by the time any of this runs,
 and nothing here is allowed to change that: push_service.send swallows
 everything, and the work happens after the response either way.
 
-THE COPY IS SECOND PERSON AND NAMES THE ACTOR FIRST. "Priya said good game to
-your Catan night", not "New reaction". A notification is read on a lock screen,
-out of context, next to fifteen others — the two facts worth spending the line
-on are who did it and what it was.
+THE COPY IS SECOND PERSON AND NAMES THE ACTOR FIRST. "Dave added you to Catan",
+not "New play". A notification is read on a lock screen, out of context, next to
+fifteen others — the two facts worth spending the line on are who did it and
+what it was.
+
+"Good game" is deliberately absent. It is the lightest thing that happens in the
+app and it lives on the feed card that earned it — no bell row, no push.
 """
 
 import asyncio
@@ -251,39 +254,6 @@ def play_logged(
     )
     background_tasks.add_task(
         achievements_after_play, sb, seated + [user.user_id]
-    )
-
-
-# ── Reactions ────────────────────────────────────────────────────────────────
-
-
-def reaction(
-    background_tasks: BackgroundTasks,
-    sb: Client,
-    user: CurrentUser,
-    owner_ids: list[str],
-    play_count: int,
-    game_name: str | None,
-) -> None:
-    """Somebody said good game.
-
-    ONE push per recipient for the whole tap, matching the bell row migration
-    017 added: the footer covers a night, so a three-game evening is one act and
-    announcing it three times is precisely what reaction_group_id exists to
-    prevent. A night can legitimately span several loggers, so `owner_ids` can
-    hold more than one person — each of them gets one.
-    """
-    if not owner_ids:
-        return
-    many = play_count > 1
-    what = "your game night" if many else f"your {game_name}" if game_name else "your play"
-    _queue(
-        background_tasks, sb, owner_ids, PushEvent.REACTION,
-        title="Good game",
-        body=f"{user.display_name} said good game to {what}",
-        url="/notifications",
-        tag=f"reaction:{user.user_id}",
-        actor_id=user.user_id,
     )
 
 

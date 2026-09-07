@@ -66,7 +66,7 @@ async def update_profile(
     and can't be changed here. Passing avatar=null clears the customization and
     reverts to the BGB default rendered client-side.
 
-    push_tier (migration 018) rides this endpoint rather than a /push route of
+    push_tier (migration 017) rides this endpoint rather than a /push route of
     its own because it is an account preference like the other two, and this is
     already the one path the FE knows how to save a profile through and
     reconcile from — window.store.user updates and every subscriber re-renders,

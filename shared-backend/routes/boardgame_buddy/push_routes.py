@@ -1,4 +1,4 @@
-"""Web Push endpoints — the device side of notifications (migration 018).
+"""Web Push endpoints — the device side of notifications (migration 017).
 
 Four routes and no more. The per-account TIER is deliberately not here: it is
 an account preference like display name and avatar, so it saves through

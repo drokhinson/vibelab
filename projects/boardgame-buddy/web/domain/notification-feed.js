@@ -22,7 +22,7 @@
 /**
  * @typedef {Object} Notification
  * @property {string} entry_key   Stable id for the ENTRY, and the cursor tiebreak
- * @property {"play_link"|"buddy_request"|"buddy_accepted"|"reaction"} kind
+ * @property {"play_link"|"buddy_request"|"buddy_accepted"} kind
  * @property {string} occurred_at
  * @property {boolean} is_unread
  * @property {string|null} actor_id            Whoever did this
@@ -30,10 +30,6 @@
  * @property {string|null} actor_username
  * @property {Object|null} actor_avatar
  * @property {"batch"|"run"|"act"|null} [play_group]  play_link only, below here
- *   (the rest of this block is shared with `reaction`, where play_group and
- *   import_batch_id stay null and group_count means "plays of yours they
- *   reacted to" rather than "plays you would be removed from" — see
- *   migration 017)
  * @property {string|null} [play_id]           Representative — what the row opens
  * @property {string[]|null} [play_ids]        Every play in the entry
  * @property {number|null} [group_count]

@@ -963,7 +963,7 @@
     if (document.readyState === "complete") registerWorker();
     else window.addEventListener("load", registerWorker, { once: true });
 
-    // Push (migration 018). Two separate jobs, and neither blocks the boot.
+    // Push (migration 017). Two separate jobs, and neither blocks the boot.
     //
     // listen() picks up the "a notification was tapped" message sw.js posts, so
     // the tap routes inside the running app instead of reloading it. Armed

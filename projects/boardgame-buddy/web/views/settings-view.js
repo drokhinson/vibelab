@@ -44,7 +44,7 @@
       this._imports = null;
       this._deletingImport = null;
 
-      // Push notifications (migration 018). null = not read yet, so the card
+      // Push notifications (migration 017). null = not read yet, so the card
       // renders "Checking…" rather than flashing "your browser can't do this"
       // at somebody whose browser can — state() has to ask the service worker
       // and the server, so it cannot answer synchronously on the first paint.
@@ -248,7 +248,7 @@
       this.render();
     }
 
-    // ── Notifications (migration 018) ─────────────────────────────────────────
+    // ── Notifications (migration 017) ─────────────────────────────────────────
     // The same three-way segmented control as Theme above, and for the same
     // reason: the choice is a LADDER (off → the things that need you →
     // everything), and a two-position switch cannot express a middle. Two
@@ -303,7 +303,7 @@
       const sub = blocked
         ? escapeHtml(blocked)
         : st.tier === "all"
-          ? "Buddy requests, plays you're added to, good games and badges."
+          ? "Buddy requests, plays you're added to, and badges."
           : st.tier === "actionable"
             ? "Only the things that need you: buddy requests, plays and invites."
             : "Nothing is sent to this device.";

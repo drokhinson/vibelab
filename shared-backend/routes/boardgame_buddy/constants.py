@@ -154,13 +154,15 @@ class FeedCardKind(StrEnum):
 class NotificationKind(StrEnum):
     """What one row on the notifications feed is about.
 
-    The feed is a UNION of four derived sources rather than a table — see
-    bgb_notifications, migrations 009 and 017 — and each member names both its
-    source and the timestamp it is ordered by: PLAY_LINK from
-    play_players.linked_at, BUDDY_REQUEST from buddy_edges.created_at,
-    BUDDY_ACCEPTED from buddy_edges.accepted_at, REACTION from
-    play_reactions.created_at grouped on reaction_group_id. The kind also says
-    which block of optional fields on the Notification model is populated.
+    The feed is a UNION of three derived sources rather than a table — see
+    bgb_notifications, migration 009 — and each member names both its source
+    and the timestamp it is ordered by: PLAY_LINK from play_players.linked_at,
+    BUDDY_REQUEST from buddy_edges.created_at, BUDDY_ACCEPTED from
+    buddy_edges.accepted_at. The kind also says which block of optional fields
+    on the Notification model is populated.
+
+    "Good game" reactions are deliberately NOT here. They live on the feed card
+    that earned them and nowhere else — see reaction_service.
 
     ADDING A MEMBER IS A DEPLOY-ORDER CONSTRAINT, not just an edit. Notification
     .kind is typed by this enum, so a row carrying a value the running backend
@@ -172,10 +174,9 @@ class NotificationKind(StrEnum):
     PLAY_LINK = "play_link"
     BUDDY_REQUEST = "buddy_request"
     BUDDY_ACCEPTED = "buddy_accepted"
-    REACTION = "reaction"
 
 
-# ── Web Push (migration 018) ─────────────────────────────────────────────────
+# ── Web Push (migration 017) ─────────────────────────────────────────────────
 # VAPID identifies THIS server to the push services, which is what lets a
 # browser's subscription be bound to us and to nobody else. Three values, all
 # unset in local dev by default — push_service.enabled() reads that as "the
@@ -221,7 +222,7 @@ class PushTier(StrEnum):
     independent switches make them reason about four combinations.
 
     Values are the DB values — boardgamebuddy_profiles.push_tier carries a CHECK
-    on exactly these three strings (migration 018).
+    on exactly these three strings (migration 017).
     """
 
     NONE = "none"
@@ -239,6 +240,10 @@ class PushEvent(StrEnum):
     interruptions that the derived bell has no row for, and ACHIEVEMENT is a
     thing the app already tells you about in a popup you have to be present to
     see.
+
+    "Good game" is absent from BOTH lists on purpose. A like is the lightest
+    thing that happens in this app; it belongs on the feed card that earned it,
+    and neither a bell row nor a buzz is worth spending on it.
     """
 
     BUDDY_REQUEST = "buddy_request"
@@ -246,7 +251,6 @@ class PushEvent(StrEnum):
     PLAY_LINK = "play_link"
     GHOST_CLAIM = "ghost_claim"
     BUDDY_ACCEPTED = "buddy_accepted"
-    REACTION = "reaction"
     ACHIEVEMENT = "achievement"
 
 
@@ -261,7 +265,6 @@ PUSH_EVENT_TIER: dict[PushEvent, PushTier] = {
     PushEvent.PLAY_LINK: PushTier.ACTIONABLE,
     PushEvent.GHOST_CLAIM: PushTier.ACTIONABLE,
     PushEvent.BUDDY_ACCEPTED: PushTier.ALL,
-    PushEvent.REACTION: PushTier.ALL,
     PushEvent.ACHIEVEMENT: PushTier.ALL,
 }
 

@@ -190,7 +190,7 @@ class FakeSupabase:
 def test_the_tier_ladder_is_cumulative_and_none_admits_nothing():
     actionable = [PushEvent.BUDDY_REQUEST, PushEvent.SESSION_INVITE,
                   PushEvent.PLAY_LINK, PushEvent.GHOST_CLAIM]
-    informative = [PushEvent.BUDDY_ACCEPTED, PushEvent.REACTION, PushEvent.ACHIEVEMENT]
+    informative = [PushEvent.BUDDY_ACCEPTED, PushEvent.ACHIEVEMENT]
 
     for event in actionable + informative:
         assert not push_tier_admits(PushTier.NONE, event)
@@ -202,7 +202,7 @@ def test_the_tier_ladder_is_cumulative_and_none_admits_nothing():
 
 
 def test_an_unset_tier_reads_as_off():
-    """A profile row written before migration 018 has no value at all.
+    """A profile row written before migration 017 has no value at all.
 
     It must read as "off" rather than as anything else: push is opt-in, and a
     missing column silently meaning "yes" would notify every existing account
@@ -215,7 +215,7 @@ def test_an_unset_tier_reads_as_off():
 def test_willing_recipients_filters_by_each_persons_own_tier():
     sb = FakeSupabase(tiers={"a": "all", "b": "actionable", "c": "none"})
     assert P.willing_recipients(sb, ["a", "b", "c"], PushEvent.BUDDY_REQUEST) == ["a", "b"]
-    assert P.willing_recipients(sb, ["a", "b", "c"], PushEvent.REACTION) == ["a"]
+    assert P.willing_recipients(sb, ["a", "b", "c"], PushEvent.BUDDY_ACCEPTED) == ["a"]
 
 
 # ── Delivery ─────────────────────────────────────────────────────────────────
@@ -229,11 +229,11 @@ def test_the_body_a_browser_receives_decrypts_to_what_was_sent():
         key, sub = _subscription(svc.endpoint)
         sb = FakeSupabase(tiers={"u1": "all"}, subs=[sub])
         payload = P.payload(
-            event=PushEvent.REACTION, title="Good game",
-            body="Priya said good game to your game night",
-            url="/notifications", tag="reaction:priya",
+            event=PushEvent.BUDDY_ACCEPTED, title="You're buddies",
+            body="Priya accepted your buddy request",
+            url="/notifications", tag="buddy_accepted:priya",
         )
-        asyncio.run(P.send(sb, ["u1"], PushEvent.REACTION, payload, exclude="priya"))
+        asyncio.run(P.send(sb, ["u1"], PushEvent.BUDDY_ACCEPTED, payload, exclude="priya"))
 
         assert len(svc.received) == 1
         req = svc.received[0]
@@ -254,8 +254,8 @@ def test_nothing_is_sent_to_the_actor_themselves():
     try:
         _, sub = _subscription(svc.endpoint)
         sb = FakeSupabase(tiers={"u1": "all"}, subs=[sub])
-        asyncio.run(P.send(sb, ["u1"], PushEvent.REACTION,
-                           P.payload(event=PushEvent.REACTION, title="t", body="b",
+        asyncio.run(P.send(sb, ["u1"], PushEvent.BUDDY_ACCEPTED,
+                           P.payload(event=PushEvent.BUDDY_ACCEPTED, title="t", body="b",
                                      url="/", tag="x"),
                            exclude="u1"))
         assert svc.received == []
@@ -268,8 +268,8 @@ def test_a_tier_that_refuses_the_event_sends_nothing():
     try:
         _, sub = _subscription(svc.endpoint)
         sb = FakeSupabase(tiers={"u1": "actionable"}, subs=[sub])
-        asyncio.run(P.send(sb, ["u1"], PushEvent.REACTION,
-                           P.payload(event=PushEvent.REACTION, title="t", body="b",
+        asyncio.run(P.send(sb, ["u1"], PushEvent.BUDDY_ACCEPTED,
+                           P.payload(event=PushEvent.BUDDY_ACCEPTED, title="t", body="b",
                                      url="/", tag="x")))
         assert svc.received == []
         # ...and the same person still gets the actionable half.
@@ -287,8 +287,8 @@ def test_a_gone_endpoint_is_deleted_rather_than_retried_forever(status):
     try:
         _, sub = _subscription(svc.endpoint)
         sb = FakeSupabase(tiers={"u1": "all"}, subs=[sub])
-        asyncio.run(P.send(sb, ["u1"], PushEvent.REACTION,
-                           P.payload(event=PushEvent.REACTION, title="t", body="b",
+        asyncio.run(P.send(sb, ["u1"], PushEvent.BUDDY_ACCEPTED,
+                           P.payload(event=PushEvent.BUDDY_ACCEPTED, title="t", body="b",
                                      url="/", tag="x")))
         assert sb.deleted == ["sub-1"]
         assert sb.failures == []
@@ -307,8 +307,8 @@ def test_a_transient_failure_counts_but_keeps_the_device(status):
     try:
         _, sub = _subscription(svc.endpoint)
         sb = FakeSupabase(tiers={"u1": "all"}, subs=[sub])
-        asyncio.run(P.send(sb, ["u1"], PushEvent.REACTION,
-                           P.payload(event=PushEvent.REACTION, title="t", body="b",
+        asyncio.run(P.send(sb, ["u1"], PushEvent.BUDDY_ACCEPTED,
+                           P.payload(event=PushEvent.BUDDY_ACCEPTED, title="t", body="b",
                                      url="/", tag="x")))
         assert sb.deleted == []
         assert sb.failures == ["sub-1"]
@@ -324,16 +324,16 @@ def test_send_never_raises_whatever_happens():
     """
     _, sub = _subscription("http://127.0.0.1:1/dead")   # nothing listening
     sb = FakeSupabase(tiers={"u1": "all"}, subs=[sub])
-    asyncio.run(P.send(sb, ["u1"], PushEvent.REACTION,
-                       P.payload(event=PushEvent.REACTION, title="t", body="b",
+    asyncio.run(P.send(sb, ["u1"], PushEvent.BUDDY_ACCEPTED,
+                       P.payload(event=PushEvent.BUDDY_ACCEPTED, title="t", body="b",
                                  url="/", tag="x")))
 
     class Exploding(FakeSupabase):
         def execute(self):
             raise RuntimeError("supabase is down")
 
-    asyncio.run(P.send(Exploding(), ["u1"], PushEvent.REACTION,
-                       P.payload(event=PushEvent.REACTION, title="t", body="b",
+    asyncio.run(P.send(Exploding(), ["u1"], PushEvent.BUDDY_ACCEPTED,
+                       P.payload(event=PushEvent.BUDDY_ACCEPTED, title="t", body="b",
                                  url="/", tag="x")))
 
 

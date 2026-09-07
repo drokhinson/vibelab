@@ -1,4 +1,4 @@
--- 018_push_notifications.sql — the bell can reach a phone that isn't open.
+-- 017_push_notifications.sql — the bell can reach a phone that isn't open.
 --
 -- Everything BoardgameBuddy knows how to tell you, it tells you inside
 -- BoardgameBuddy. The bell (008/009/017) is complete and derived and correct,

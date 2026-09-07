@@ -103,7 +103,7 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-// ── Push (migration 018) ─────────────────────────────────────────────────────
+// ── Push (migration 017) ─────────────────────────────────────────────────────
 //
 // OUTSIDE THE IS_DEV GATE, unlike everything above. IS_DEV turns off the
 // CACHING half of this worker so a developer editing JS is never served
