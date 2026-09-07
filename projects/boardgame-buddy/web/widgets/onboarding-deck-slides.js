@@ -1,4 +1,4 @@
-// widgets/onboarding-deck-slides.js — the five panels the deck slides between.
+// widgets/onboarding-deck-slides.js — the six panels the deck slides between.
 //
 // Each slide is `{ el, onEnter? }`: an element the shell appends to the track,
 // and an optional hook run when it arrives on screen. Nothing here knows how
@@ -10,10 +10,13 @@
 //       PolaroidPopup.avatarCustomizer when this became its second caller
 //   2 · buddies — ui/buddy-suggestion-rail.js's select-mode tile, the same one
 //       the Add-buddies card and both rails render
-//   3 · BoardGameGeek — the fields and copy of the deleted
+//   3 · notifications — the soft ask, sharing its decline receipt with
+//       ui/push-prompt.js so the boot-time card does not re-ask a question
+//       this slide already put
+//   4 · BoardGameGeek — the fields and copy of the deleted
 //       widgets/onboarding-bgg-modal.js, whose import readout stays shared
 //       with Settings as ui/bgg-import-log.js
-//   4 · import hint — the one slide that reuses nothing, because it IS
+//   5 · import hint — the one slide that reuses nothing, because it IS
 //       nothing: no fields, no write, no request. It exists because the note
 //       importer was otherwise invisible to a new account, and first-run is
 //       the one screen everybody passes through.
@@ -269,7 +272,154 @@
     return { el, onEnter: load, prefetch: load };
   }
 
-  // ── 3 · BoardGameGeek ──────────────────────────────────────────────────────
+  // ── 3 · Notifications ──────────────────────────────────────────────────────
+  //
+  // The one slide whose Continue is a REAL permission prompt, and the reason
+  // this step exists rather than the app calling requestPermission() on its
+  // own: a browser grants that question once. Answered "block", it can never be
+  // asked again from script and the account is silent on that install forever.
+  // So the deck asks in its own words first, where there is room to say what
+  // the notifications are FOR, and only a yes here reaches the browser's own.
+  //
+  // Placed straight after the buddy step on purpose. The person has just fired
+  // off a handful of requests; "we'll tell you when they say yes" is a promise
+  // about something they did ten seconds ago rather than an abstract offer.
+  //
+  // Since migration 018 the ACCOUNT already wants notifications — push_tier
+  // defaults to 'all'. What is missing is a device to send to, so "Turn them
+  // on" subscribes this browser and re-saves the tier it already had; it never
+  // moves somebody off 'actionable' onto 'all' behind their back.
+  function buildNotifications(deck) {
+    const el = slideEl("ob-slide--notify", `
+      <div class="ob-slide__scroll">
+        <div class="ob-done__mark">
+          <span class="ob-done__ring"><i data-icon="bell" class="w-8 h-8"></i></span>
+        </div>
+        <h2 class="ob-slide__title ob-slide__title--center">Know when it's your turn</h2>
+        <p class="ob-slide__body ob-slide__body--center">
+          A buddy accepts your request, adds you to last night's play, or invites
+          you to a table — we'll tap you on the shoulder instead of waiting for
+          you to open the app.
+        </p>
+        <p class="ob-slide__note" data-note>
+          Nothing noisy: no marketing, no digests. Change how much you hear, or
+          switch it off entirely, in <b>Settings &rsaquo; Notifications</b>.
+        </p>
+      </div>
+      <div class="ob-slide__actions" data-actions></div>
+    `);
+
+    const actionsEl = el.querySelector("[data-actions]");
+    const noteEl = el.querySelector("[data-note]");
+    /** Last BgbPush.state(), or null while the first read is in flight. */
+    let state = null;
+
+    const OFFER = `
+      <button type="button" class="btn btn-ghost ob-btn ob-btn--skip">Not now</button>
+      <button type="button" class="btn btn-primary ob-btn ob-btn--go">Turn them on</button>`;
+    const ACKNOWLEDGE = `
+      <button type="button" class="btn btn-primary ob-btn ob-btn--go">Continue</button>`;
+
+    /**
+     * Why this device cannot be asked, or null if it can.
+     *
+     * Same ladder as the Settings card, and for the same reason: "your browser
+     * can't", "you're in a tab on iOS" and "you've blocked us" are three
+     * different problems with three different answers, and a button that would
+     * fail on tap is worse than a sentence. A state we have not read yet is
+     * NOT a blocker — the read starts when the deck is built and lands long
+     * before this slide arrives; treating the gap as "blocked" would show the
+     * wrong slide to everybody with a slow first paint.
+     */
+    function blockedReason() {
+      if (!window.BgbPush || (state && !state.supported)) {
+        return "This browser can't show notifications. Any device that can will pick them up once you turn them on there.";
+      }
+      if (!state) return null;
+      if (!state.configEnabled) {
+        return "Notifications aren't switched on for this server yet. Nothing to do — they'll be waiting in Settings when they are.";
+      }
+      if (!state.standaloneOk) {
+        return "On iPhone and iPad, notifications need BoardgameBuddy added to your Home Screen. Do that and turn them on from Settings &rsaquo; Notifications.";
+      }
+      if (state.permission === "denied") {
+        return "Your browser is blocking notifications for this site. Turn them back on in its site settings and they'll start arriving.";
+      }
+      return null;
+    }
+
+    // The note the slide ships with, kept so a later read that clears a blocker
+    // can put it back. paint() runs before the first state lands and again on
+    // entry, and a stale "your browser is blocking these" over a working
+    // Turn-them-on button would be the worst of both sentences.
+    const NOTE = noteEl.innerHTML;
+
+    function paint() {
+      const blocked = blockedReason();
+      noteEl.innerHTML = blocked || NOTE;
+      actionsEl.innerHTML = blocked ? ACKNOWLEDGE : OFFER;
+      const skip = actionsEl.querySelector(".ob-btn--skip");
+      if (skip) skip.addEventListener("click", () => leave(false));
+      actionsEl.querySelector(".ob-btn--go")
+        .addEventListener("click", () => leave(!blocked));
+    }
+
+    /**
+     * @param {boolean} turnOn
+     *
+     * DOES NOT AWAIT, like every other handler in this file — but for one extra
+     * reason here: setTier raises the browser's permission prompt, and that
+     * needs this tap's own activation. Anything awaited first spends it, and
+     * Safari refuses silently.
+     */
+    function leave(turnOn) {
+      if (turnOn) {
+        // Keep the account's rung. 'none' only happens to someone who turned
+        // notifications off and then came back through first-run setup, and
+        // for them this tap is the yes.
+        const tier = (state && state.tier && state.tier !== "none") ? state.tier : "all";
+        // ONE ATTEMPT, unlike every other job in the deck. The queue retries a
+        // failed write once — right for a phone on a bad connection, wrong for
+        // this one: a rejection here usually means the person dismissed the
+        // browser's prompt, and re-running the job would raise it a second
+        // time. Worse, a dismissal counts toward Chrome's auto-block, so the
+        // retry could spend the grant rather than win it. Handing the same
+        // promise back turns the retry into a re-read of the answer already
+        // given.
+        let attempt = null;
+        deck.queue(
+          "Notifications on",
+          () => (attempt || (attempt = window.BgbPush.setTier(tier))),
+          () => tier === "actionable"
+            ? "This device, for the things that need you"
+            : "This device will buzz for buddies, plays and badges",
+        );
+      } else if (window.BgbPushPrompt) {
+        // Tell the boot-time card this was already asked and answered, so the
+        // app does not put the same question up again the moment the deck
+        // closes. It is a snooze, not an opt-out: the account keeps its tier,
+        // and Settings still offers the device in one tap.
+        window.BgbPushPrompt.decline();
+      }
+      deck.next();
+    }
+
+    function read() {
+      if (!window.BgbPush) { paint(); return; }
+      window.BgbPush.state().then(
+        (st) => { state = st; paint(); },
+        // A failed read is "we don't know", and the honest thing is still to
+        // offer: setTier says exactly what went wrong, into the ledger.
+        () => { paint(); },
+      );
+    }
+
+    paint();
+    read();
+    return { el, onEnter: read };
+  }
+
+  // ── 4 · BoardGameGeek ──────────────────────────────────────────────────────
   function buildBgg(deck) {
     const el = slideEl("ob-slide--bgg", `
       <div class="ob-slide__scroll">
@@ -356,8 +506,7 @@
     return { el };
   }
 
-  // ── 4 · The finale (uncounted) ─────────────────────────────────────────────
-  // ── 4 · Import your history ────────────────────────────────────────────────
+  // ── 5 · Import your history ────────────────────────────────────────────────
   // Purely informational — the only slide here that queues nothing and asks
   // nothing. Placed after BoardGameGeek on purpose: someone who just tapped
   // Skip on that step because they do not use BGG is exactly who the note
@@ -391,6 +540,7 @@
     return { el };
   }
 
+  // ── The finale (uncounted) ─────────────────────────────────────────────────
   function buildFinale(deck) {
     const el = slideEl("ob-slide--done", `
       <div class="ob-slide__scroll">
@@ -452,13 +602,14 @@
 
   window.OnboardingDeckSlides = {
     /**
-     * @returns {{profile: Object, buddies: Object, bgg: Object,
-     *            importHint: Object, finale: Object}}
+     * @returns {{profile: Object, buddies: Object, notifications: Object,
+     *            bgg: Object, importHint: Object, finale: Object}}
      */
     build(deck) {
       return {
         profile: buildProfile(deck),
         buddies: buildBuddies(deck),
+        notifications: buildNotifications(deck),
         bgg: buildBgg(deck),
         importHint: buildImport(deck),
         finale: buildFinale(deck),

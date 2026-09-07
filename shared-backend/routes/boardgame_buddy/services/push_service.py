@@ -309,20 +309,12 @@ async def send(
     data: dict[str, str],
     *,
     exclude: str | None = None,
-    ignore_tier: bool = False,
 ) -> None:
     """Fan one notification out to everyone who wants it. Never raises.
 
     `exclude` is the actor. Every caller passes it, because every one of these
     events is somebody doing something to somebody else and nobody needs their
     phone to tell them what they just did.
-
-    `ignore_tier` skips the preference check, and exactly one caller sets it:
-    POST /push/test. Pressing "send a test notification" IS the consent, and a
-    test that silently vanished because the account is on `actionable` while
-    the test's own event is informative would answer the opposite of the
-    question being asked — the whole point of that button is to find out
-    whether delivery works at all, which on iOS is otherwise unknowable.
 
     Blocking work — three PostgREST round trips and one HTTPS request per
     device — goes to worker threads for the reason notification_service spells
@@ -337,11 +329,7 @@ async def send(
         if not ids:
             return
 
-        wanted = (
-            ids
-            if ignore_tier
-            else await asyncio.to_thread(willing_recipients, sb, ids, event)
-        )
+        wanted = await asyncio.to_thread(willing_recipients, sb, ids, event)
         if not wanted:
             return
 

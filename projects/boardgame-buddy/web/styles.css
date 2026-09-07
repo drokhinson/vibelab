@@ -12377,6 +12377,83 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .bgb-install .polaroid-popup__card { animation: none; }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Notification permission ask (ui/push-prompt.js)
+
+   The install card's twin, and deliberately so: same backdrop, same card, same
+   pill pair, because it is the same kind of interruption asking the same kind
+   of question one screen later. Only the mark differs — a bell in a ring rather
+   than the app logo, since this is about one capability rather than the app.
+
+   No z-index, no width and no dock offset here either: the .polaroid-popup__
+   backdrop rule owns all three (the overlay rung of the ladder).
+   ───────────────────────────────────────────────────────────────────────────── */
+.bgb-pushask__card {
+  width: min(88vw, 348px);
+  padding: 20px 18px 18px;
+}
+
+.polaroid-popup__backdrop.bgb-pushask.is-closing { animation: fadeOut 200ms ease-out both; }
+
+.bgb-pushask__card:focus { outline: none; }
+
+/* Same ring as the deck's finale mark (.ob-done__ring), sized for a card rather
+   than a full slide. It reads as ink on paper in both themes: the ring is a
+   paper hairline and the glyph takes the paper's own accent, which is a
+   different gold from the ground's. */
+.bgb-pushask__mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 2px auto 12px;
+  border-radius: 50%;
+  border: 1px solid var(--polaroid-line);
+  background: var(--polaroid-bg-soft);
+  color: var(--accent-ink);
+}
+
+.bgb-pushask__blurb {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+/* An offer, not a decision about data, so neither button hugs a corner. 52px is
+   the commit-button floor (.claude/rules/mobile-web.md §5). */
+.polaroid-popup__actions.bgb-pushask__actions {
+  justify-content: center;
+  gap: 10px;
+}
+.bgb-pushask__actions .btn {
+  min-height: 52px;
+  flex: 1 1 0;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.bgb-pushask__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 800;
+}
+
+/* Sub-360px (iPhone SE): the pair no longer fits side by side at 52px with
+   readable labels, so stack them — primary on top, where the thumb is. */
+@media (max-width: 359px) {
+  .bgb-pushask__card { padding: 18px 14px 16px; }
+  .polaroid-popup__actions.bgb-pushask__actions { flex-direction: column-reverse; }
+  .bgb-pushask__actions .btn { width: 100%; flex: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .polaroid-popup__backdrop.bgb-pushask,
+  .polaroid-popup__backdrop.bgb-pushask.is-closing,
+  .bgb-pushask .polaroid-popup__card { animation: none; }
+}
+
 /* ── Theme segmented control (Settings → Appearance) ─────────────────────────
    Three states, so a two-position switch can't express it: "Auto" follows the
    OS, Light and Dark are explicit overrides.
