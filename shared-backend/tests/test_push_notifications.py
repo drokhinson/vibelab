@@ -371,3 +371,106 @@ def test_the_whole_feature_is_inert_without_keys(monkeypatch):
         assert P.willing_recipients(sb, ["u1"], PushEvent.BUDDY_REQUEST) == []
     finally:
         svc.stop()
+
+
+# ── A key that is present but wrong ──────────────────────────────────────────
+#
+# The failure this guards against was live: BGB_VAPID_PUBLIC_KEY held something
+# that was not an uncompressed P-256 point, enabled() asked only whether the
+# string was non-empty, GET /push/config said yes, and the first person to reach
+# for the setting got `Failed to execute 'subscribe' on 'PushManager': The
+# provided applicationServerKey is not valid` — a deploy-time mistake surfaced
+# as a DOM exception in somebody else's browser. The server had everything it
+# needed to know better.
+
+
+def _bad_public_keys() -> dict[str, str]:
+    """Every wrong shape that reaches the browser as the same useless error."""
+    pub = _vapid.public_key
+    return {
+        # By far the likeliest: what public_bytes(DER, SubjectPublicKeyInfo)
+        # and most "export the public key" snippets hand you. 122 chars.
+        "spki_der": _b64(
+            pub.public_bytes(
+                serialization.Encoding.DER,
+                serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+        ),
+        # 44 chars — one longer than the PRIVATE key, so it looks plausible.
+        "compressed_point": _b64(
+            pub.public_bytes(
+                serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint
+            )
+        ),
+        # The pair, pasted the wrong way round.
+        "private_key_in_public_slot": P.BGB_VAPID_PRIVATE_KEY,
+        "pem": pub.public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode(),
+        "not_base64_at_all": "paste your key here",
+    }
+
+
+@pytest.mark.parametrize("shape", sorted(_bad_public_keys()))
+def test_a_malformed_public_key_switches_the_feature_off(shape, monkeypatch):
+    """Not "configured", because a key the browser will refuse is not a key."""
+    monkeypatch.setattr(P, "BGB_VAPID_PUBLIC_KEY", _bad_public_keys()[shape])
+    # Each shape has its own complaint; let every one of them be logged.
+    monkeypatch.setattr(P, "_complained", set())
+    assert P.enabled() is False
+    # And the client is never offered the value — /push/config reads this.
+    assert P.public_key() == ""
+
+
+def test_a_malformed_public_key_sends_nothing(monkeypatch):
+    """The same inert path as having no keys at all, which is the honest
+    description of a key that cannot be used."""
+    monkeypatch.setattr(P, "BGB_VAPID_PUBLIC_KEY", _bad_public_keys()["spki_der"])
+    monkeypatch.setattr(P, "_complained", set())
+    svc = FakePushService()
+    try:
+        _, sub = _subscription(svc.endpoint)
+        sb = FakeSupabase(tiers={"u1": "all"}, subs=[sub])
+        asyncio.run(P.send(sb, ["u1"], PushEvent.BUDDY_REQUEST,
+                           P.payload(event=PushEvent.BUDDY_REQUEST, title="t", body="b",
+                                     url="/", tag="x")))
+        assert svc.received == []
+        assert P.willing_recipients(sb, ["u1"], PushEvent.BUDDY_REQUEST) == []
+    finally:
+        svc.stop()
+
+
+def test_an_unparseable_private_key_switches_the_feature_off(monkeypatch):
+    """The other half, which enabled() never used to consult: _vapid() logged
+    and returned None while /push/config went on advertising the feature, so
+    the setting worked, the subscription was stored, and every send silently
+    did nothing."""
+    monkeypatch.setattr(P, "BGB_VAPID_PRIVATE_KEY", "not-a-key")
+    monkeypatch.setattr(P, "_complained", set())
+    monkeypatch.setattr(P, "_vapid_instance", None)   # forget the memoised good one
+    assert P._vapid() is None
+    assert P.enabled() is False
+
+
+def test_padding_and_whitespace_do_not_make_a_good_key_bad(monkeypatch):
+    """An env var picks up a trailing newline and a paste keeps its '=' padding.
+    Neither is the key being wrong, and rejecting them would be a worse bug than
+    the one this check exists for."""
+    for variant in (
+        P.BGB_VAPID_PUBLIC_KEY + "\n",
+        P.BGB_VAPID_PUBLIC_KEY + "=",
+        " " + P.BGB_VAPID_PUBLIC_KEY + " ",
+        P.BGB_VAPID_PUBLIC_KEY.replace("-", "+").replace("_", "/"),
+    ):
+        monkeypatch.setattr(P, "BGB_VAPID_PUBLIC_KEY", variant)
+        assert P.enabled() is True, variant
+
+
+def test_a_real_pair_is_enabled():
+    """The gate is not simply always-false: the keys this module generated —
+    87 base64url characters and 43 — are accepted."""
+    assert len(P.BGB_VAPID_PUBLIC_KEY) == 87
+    assert P.BGB_VAPID_PUBLIC_KEY.startswith("B")   # 0x04 leads, so base64 'B'
+    assert len(P.BGB_VAPID_PRIVATE_KEY) == 43
+    assert P.enabled() is True

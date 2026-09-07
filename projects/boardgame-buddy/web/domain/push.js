@@ -32,12 +32,27 @@
 
   /** @typedef {"none"|"actionable"|"all"} PushTier */
 
-  /** Base64url (what the server sends) → Uint8Array (what subscribe wants). */
+  /** Base64url (what the server sends) → Uint8Array (what subscribe wants).
+   *
+   * The length check is belt and braces — the server refuses to advertise a key
+   * that isn't an uncompressed P-256 point (push_service._valid_public_key), so
+   * a bad one should never get this far. If one ever does, subscribe() throws
+   * "The provided applicationServerKey is not valid", which tells the person
+   * looking at it nothing about a value they have never seen; this says which
+   * value is wrong instead.
+   */
   function _keyBytes(b64) {
     const pad = "=".repeat((4 - (b64.length % 4)) % 4);
     const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
     const out = new Uint8Array(raw.length);
     for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    if (out.length !== 65 || out[0] !== 0x04) {
+      throw new Error(
+        "Push is misconfigured on the server (VAPID public key is " +
+          out.length +
+          " bytes, expected 65)."
+      );
+    }
     return out;
   }
 

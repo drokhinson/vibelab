@@ -188,6 +188,15 @@ class NotificationKind(StrEnum):
 #     print('public :', base64.urlsafe_b64encode(v.public_key.public_bytes(s.Encoding.X962, s.PublicFormat.UncompressedPoint)).decode().rstrip('=')); \
 #     print('private:', base64.urlsafe_b64encode(v.private_key.private_numbers().private_value.to_bytes(32,'big')).decode().rstrip('='))"
 #
+# THE SHAPES, because getting them wrong fails in the BROWSER with a message
+# that names neither variable: the public key is an uncompressed P-256 point —
+# 65 bytes, leading 0x04, so 87 base64url characters starting with 'B' — and the
+# private key is the raw 32-byte scalar, 43 characters. SPKI/DER (122 chars,
+# starting 'MFkwEwYHKoZI') is what most "export the public key" snippets hand
+# you and is the commonest mistake; PEM and a compressed point (44 chars) are
+# the others. push_service._valid_public_key() rejects all of them at boot and
+# reports the feature as off, so a bad deploy is diagnosable from the log.
+#
 # ROTATING THE PUBLIC KEY INVALIDATES EVERY SUBSCRIPTION. A browser binds its
 # subscription to the applicationServerKey it subscribed with, so a new pair
 # makes every stored row undeliverable — the endpoints stay valid-looking and
