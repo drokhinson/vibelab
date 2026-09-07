@@ -12402,7 +12402,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .theme-seg__opt {
   flex: 1 1 0;
-  min-height: 40px;
+  /* 44px is the tap-target floor (.claude/rules/mobile-web.md §5), not 40:
+     this was under it while Theme was the only consumer, and Notifications
+     made it a shared control. */
+  min-height: 44px;
   padding: 8px 10px;
   border: none;
   border-radius: var(--r-sm);
@@ -12414,11 +12417,19 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   cursor: pointer;
   transition: background 160ms var(--ease), color 160ms var(--ease);
 }
-.theme-seg__opt:hover { color: var(--polaroid-ink); }
+.theme-seg__opt:hover:not(:disabled) { color: var(--polaroid-ink); }
 .theme-seg__opt.is-on {
   background: var(--accent-fill);
   color: var(--on-accent);
 }
+/* Notifications can render this control unusable — no push support, no server
+   keys, an uninstalled iOS copy, or a permission the browser will not re-ask
+   for. Theme never can, so there was no disabled state until now.
+   The whole group dims rather than only the segments: a full-strength selected
+   pill among greyed-out siblings reads as an active choice, when the point is
+   that NOTHING here can be chosen until the sub-line's problem is fixed. */
+.theme-seg:has(.theme-seg__opt:disabled) { opacity: 0.55; }
+.theme-seg__opt:disabled { cursor: not-allowed; }
 
 /* Separator between winner name and score. Was a U+2736 dingbat, which is the
    one non-SVG glyph the app rendered as data-art and drew inconsistently

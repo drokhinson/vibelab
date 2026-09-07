@@ -103,6 +103,109 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+// ── Push (migration 017) ─────────────────────────────────────────────────────
+//
+// OUTSIDE THE IS_DEV GATE, unlike everything above. IS_DEV turns off the
+// CACHING half of this worker so a developer editing JS is never served
+// yesterday's copy — it says nothing about push, and gating these on it would
+// make the feature impossible to try locally, which is where it most needs
+// trying: the alternative is discovering a bad payload shape in production.
+
+self.addEventListener("push", (event) => {
+  event.waitUntil(showPush(event));
+});
+
+async function showPush(event) {
+  // Every notification the app sends is user-visible by construction, and the
+  // browser enforces that: a push handler that shows nothing burns the origin's
+  // budget and eventually gets the subscription revoked. So a payload that
+  // fails to parse still shows SOMETHING — a generic card that opens the bell
+  // is a worse notification than the right one, and a far better outcome than
+  // silently spending a strike.
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (_) {}
+
+  const title = data.title || "BoardgameBuddy";
+  await self.registration.showNotification(title, {
+    body: data.body || "Something happened in BoardgameBuddy.",
+    icon: "/assets/brand/bgb-icon-192.png",
+    // Android's monochrome status-bar mark. Ignored elsewhere.
+    badge: "/assets/brand/bgb-badge-96.png",
+    // The server tags by (event, actor) or by session, so a second buddy
+    // request from the same person REPLACES the first rather than stacking —
+    // it tells the recipient nothing new. renotify makes the replacement still
+    // buzz, because it is a fresh act even when it is the same sentence.
+    tag: data.tag || "bgb",
+    renotify: !!data.tag,
+    data: { url: data.url || "/notifications" },
+  });
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(openFromPush(event.notification.data || {}));
+});
+
+/**
+ * Land the tap on the right screen, in the window the user already has.
+ *
+ * `includeUncontrolled` matters: right after an update the open tab is claimed
+ * by the PREVIOUS worker, so without it matchAll() returns nothing and every
+ * tap opens a second copy of an app that was already on screen.
+ *
+ * The message rather than navigate(): this is a History-API SPA
+ * (.claude/rules/web-frontend.md), so a real navigation would throw away the
+ * booted app — its cache, its session, its Realtime subscription — and pay the
+ * whole splash-and-bootstrap cost to arrive somewhere the router could have
+ * reached in a frame. navigate() is the fallback for a client that never picks
+ * the message up.
+ */
+async function openFromPush(data) {
+  const url = data.url || "/notifications";
+  const clients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  for (const client of clients) {
+    if (new URL(client.url).origin !== self.location.origin) continue;
+    try {
+      client.postMessage({ type: "bgb:push-nav", url });
+      if ("focus" in client) return client.focus();
+    } catch (_) {}
+  }
+  if (self.clients.openWindow) return self.clients.openWindow(url);
+}
+
+/**
+ * The browser rotated this device's subscription out from under us.
+ *
+ * Re-subscribing here keeps the OS-level registration alive, but the new
+ * endpoint CANNOT be reported from a worker: the API needs a bearer token and
+ * the Supabase session lives in the page's localStorage, which is unreachable
+ * from here. So this is half the fix, and domain/push.js's boot-time re-sync is
+ * the other half — the authoritative one. Between the two, a rotation costs at
+ * most the notifications sent before the app is next opened.
+ *
+ * The key is read off the OLD subscription rather than stored separately, so it
+ * cannot drift from what the device actually subscribed with.
+ */
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil((async () => {
+    try {
+      const key = event.oldSubscription && event.oldSubscription.options
+        ? event.oldSubscription.options.applicationServerKey
+        : null;
+      if (!key) return;
+      await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key,
+      });
+    } catch (_) {}
+  })());
+});
+
 /** The FastAPI backend and Supabase, wherever they're deployed. */
 function isBackend(url) {
   if (url.pathname.startsWith("/api/")) return true;
@@ -219,6 +322,11 @@ async function precache() {
   urls.add("/assets/brand/bgb-icon-192.png");
   urls.add("/assets/brand/bgb-icon-512.png");
   urls.add("/assets/brand/bgb-icon-512-maskable.png");
+  // Referenced only from showNotification() below — it appears in neither
+  // index.html nor styles.css, so the derived sweep above cannot find it.
+  // Without this a push that arrives offline draws a blank status-bar mark on
+  // Android, which is the one moment the whole feature is being judged.
+  urls.add("/assets/brand/bgb-badge-96.png");
 
   // Stored from the text we already have rather than re-fetched — the parse
   // above and the cached copy must be the same build's shell.

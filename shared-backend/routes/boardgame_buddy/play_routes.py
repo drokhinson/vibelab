@@ -8,7 +8,7 @@ import logging
 import uuid
 from typing import Optional
 
-from fastapi import Depends, Path, Query, HTTPException, UploadFile, File
+from fastapi import BackgroundTasks, Depends, Path, Query, HTTPException, UploadFile, File
 
 from db import get_supabase
 
@@ -26,7 +26,7 @@ from .models import (
     PlayUpdate,
 )
 from .dependencies import CurrentUser, get_current_user
-from .services import buddy_service, played_with_service
+from .services import buddy_service, played_with_service, push_notify
 from .services._helpers import raise_for_rpc_error
 
 logger = logging.getLogger(__name__)
@@ -338,6 +338,7 @@ async def list_plays(
 )
 async def log_play(
     body: PlayCreate,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayResponse:
     """Record a game play with players and winner (idempotent when client_key is set).
@@ -367,8 +368,14 @@ async def log_play(
     # rather than the payload this attempt carried. Still 201: from the
     # client's side the play is recorded either way.
     if isinstance(data, dict) and data.get("duplicate"):
+        # No push on this branch. The RPC wrote nothing — this is an offline
+        # outbox retry after a lost response, so everyone seated was already
+        # told when the original landed, and notifying again would turn one
+        # flaky connection into a second buzz for six people.
         return load_play_response(sb, data["id"], user.user_id)
-    return PlayResponse.model_validate(data)
+    play = PlayResponse.model_validate(data)
+    push_notify.play_logged(background_tasks, sb, user, play)
+    return play
 
 
 @router.get(

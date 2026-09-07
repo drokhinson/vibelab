@@ -9,12 +9,18 @@ different keys. There is no session identity to key on — see migration 016.
 So one tap covers N plays, and the two things that follow live here:
 
   * every row a tap writes shares one `reaction_group_id`, so the write can be
-    read back as a single act (which is what the notification arm will group on
-    rather than announcing a three-game night three times), and
+    read back as a single act, and
   * the caller's OWN plays are dropped before the insert. You do not
     congratulate yourself, the same way Strava will not let you kudos your own
     ride, and a session can legitimately contain plays logged by several people
     because the grouping keys on participants rather than on the logger.
+
+NOTHING CONSUMES reaction_group_id TODAY, and 016's note that a notification arm
+would is out of date. That arm was built and then deliberately dropped: a like
+is the lightest thing that happens in this app, so it belongs on the feed card
+that earned it and gets neither a bell row nor a push. The column stays because
+it is the only record of which rows were one act — reconstructable from nothing
+else afterwards, and what any future consumer would have to start from.
 """
 
 import uuid

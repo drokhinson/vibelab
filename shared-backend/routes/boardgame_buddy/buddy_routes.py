@@ -9,7 +9,7 @@ suggestion live in buddy_suggestion_routes.py, which is imported ahead of this
 module so its literal `/buddies/suggested…` paths are declared first.
 """
 
-from fastapi import Depends, Path
+from fastapi import BackgroundTasks, Depends, Path
 
 from db import get_supabase
 
@@ -38,7 +38,12 @@ from .models import (
     PlayedWithUser,
     PlayPartnersResponse,
 )
-from .services import buddy_qr_service, buddy_service, played_with_service
+from .services import (
+    buddy_qr_service,
+    buddy_service,
+    played_with_service,
+    push_notify,
+)
 
 
 @router.get(
@@ -75,10 +80,15 @@ async def list_buddy_requests(
 )
 async def send_buddy_request(
     body: BuddyRequestCreate,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> BuddyRequestResponse:
     """Send a request to another user. Auto-accepts if a reverse request exists."""
-    return buddy_service.send_request(get_supabase(), user.user_id, body.target_user_id)
+    sb = get_supabase()
+    result = buddy_service.send_request(sb, user.user_id, body.target_user_id)
+    push_notify.buddy_request_outcome(background_tasks, sb, user, result)
+    return result
+
 
 
 @router.post(
@@ -89,6 +99,7 @@ async def send_buddy_request(
 )
 async def send_buddy_requests_bulk(
     body: BulkBuddyRequestCreate,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> BulkBuddyRequestResponse:
     """Send one request per target, reporting each outcome separately.
@@ -97,9 +108,16 @@ async def send_buddy_requests_bulk(
     shape, not an error: targets that fail (already buddies, blocked, account
     gone) come back in `failed` while the rest are sent, so 200 is correct
     even when some did not land."""
-    return buddy_service.send_requests_bulk(
-        get_supabase(), user.user_id, body.target_user_ids
+    sb = get_supabase()
+    result, outcomes = buddy_service.send_requests_bulk(
+        sb, user.user_id, body.target_user_ids
     )
+    # One push per target that actually landed, through the same branch the
+    # single-request path uses — a bulk send auto-accepts too, whenever one of
+    # the people being added had already asked.
+    for outcome in outcomes:
+        push_notify.buddy_request_outcome(background_tasks, sb, user, outcome)
+    return result
 
 
 @router.post(
@@ -149,13 +167,21 @@ async def peek_buddy_qr(
 )
 async def add_buddy_by_qr(
     body: BuddyQrAddRequest,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> BuddyQrAddResponse:
     """Redeem a scanned QR token — both users become buddies immediately."""
+    sb = get_supabase()
     issuer_id = buddy_qr_service.issuer_from_qr_token(body.token)
-    edge, created = buddy_qr_service.add_buddy_mutually(
-        get_supabase(), user.user_id, issuer_id
-    )
+    edge, created = buddy_qr_service.add_buddy_mutually(sb, user.user_id, issuer_id)
+    # Only on a NEW edge. Re-scanning a code you have already used is a no-op,
+    # and telling the issuer about it a second time would be announcing nothing.
+    #
+    # The issuer is who hears about this: they showed a code and somebody
+    # scanned it, which they may well have missed if their phone was face-down
+    # on the table. The scanner just did it and needs no telling.
+    if created:
+        push_notify.buddy_accepted(background_tasks, sb, user, issuer_id)
     return BuddyQrAddResponse(edge=edge, created=created)
 
 
@@ -166,11 +192,16 @@ async def add_buddy_by_qr(
     summary="Accept a buddy request",
 )
 async def accept_buddy_request(
+    background_tasks: BackgroundTasks,
     request_id: str = Path(..., description="Edge UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> BuddyEdgeResponse:
     """Accept an incoming request and return the resulting accepted edge."""
-    return buddy_service.accept_request(get_supabase(), user.user_id, request_id)
+    sb = get_supabase()
+    edge = buddy_service.accept_request(sb, user.user_id, request_id)
+    push_notify.buddy_accepted(background_tasks, sb, user, edge.other_user_id)
+    return edge
+
 
 
 @router.post(
@@ -293,14 +324,17 @@ async def list_ghost_players(
 )
 async def link_ghost_player(
     body: GhostLinkRequest,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> GhostLinkResponse:
     """Stamp `target_user_id` onto every matching ghost play_players row.
     Subsequent reads of those plays surface the real account's display
     name and the play counts toward the played-with leaderboard."""
+    sb = get_supabase()
     n = played_with_service.link_ghost(
-        get_supabase(), user.user_id, body.display_name, body.target_user_id
+        sb, user.user_id, body.display_name, body.target_user_id
     )
+    push_notify.ghost_linked(background_tasks, sb, user, body.target_user_id, n)
     return GhostLinkResponse(rows_updated=n)
 
 

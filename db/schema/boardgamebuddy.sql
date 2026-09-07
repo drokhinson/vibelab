@@ -82,9 +82,14 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- just link notifications, despite the name (migration 009 widened what it
   -- covers and kept the name; see the COMMENT ON COLUMN there).
   link_notifications_seen_at TIMESTAMPTZ,
+  -- How much of that bell this account wants PUSHED to its devices
+  -- (migration 017). Cumulative: 'all' implies 'actionable'. Per account, so it
+  -- follows the person; the subscriptions it gates are per device. Opt-in.
+  push_tier TEXT DEFAULT 'none'::text NOT NULL,
   CONSTRAINT boardgamebuddy_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,
-  CONSTRAINT bgb_profiles_username_format CHECK ((username ~ '^[a-z0-9_]{3,30}$'::text))
+  CONSTRAINT bgb_profiles_username_format CHECK ((username ~ '^[a-z0-9_]{3,30}$'::text)),
+  CONSTRAINT boardgamebuddy_profiles_push_tier_check CHECK ((push_tier = ANY (ARRAY['none'::text, 'actionable'::text, 'all'::text])))
 );
 ALTER TABLE public.boardgamebuddy_profiles ENABLE ROW LEVEL SECURITY;
 CREATE UNIQUE INDEX IF NOT EXISTS bgb_profiles_username_uk ON public.boardgamebuddy_profiles USING btree (username);
@@ -495,6 +500,36 @@ ALTER TABLE public.boardgamebuddy_play_reactions ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_play_reactions TO boardgamebuddy_role;
 CREATE INDEX IF NOT EXISTS idx_bgb_play_reactions_group ON public.boardgamebuddy_play_reactions USING btree (reaction_group_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_reactions_user ON public.boardgamebuddy_play_reactions USING btree (user_id);
+
+
+-- ── Web Push subscriptions ────────────────────────────────────────────────────
+-- One row per browser per account (migration 017) — the DEVICE half of
+-- notifications, where profiles.push_tier is the ACCOUNT half. `endpoint` is the
+-- identity rather than user_id: it is globally unique by construction and is
+-- what a re-subscribe hands back, so conflicting on it makes the same browser
+-- signing in as a second account MOVE its row instead of ending up with two.
+-- The FK is to profiles rather than auth.users so a deleted account's devices
+-- go with it through the app's own cascade.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_push_subscriptions (
+  id UUID DEFAULT gen_random_uuid() NOT NULL,
+  user_id UUID NOT NULL,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  last_success_at TIMESTAMPTZ,
+  -- Bumped on a failure that is NOT "this endpoint is gone" (404/410 delete the
+  -- row outright). Nothing prunes on it automatically: a phone off for a
+  -- fortnight looks identical to one never coming back.
+  failure_count INTEGER DEFAULT 0 NOT NULL,
+  CONSTRAINT boardgamebuddy_push_subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT boardgamebuddy_push_subscriptions_endpoint_key UNIQUE (endpoint),
+  CONSTRAINT boardgamebuddy_push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE
+);
+ALTER TABLE public.boardgamebuddy_push_subscriptions ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_push_subscriptions TO boardgamebuddy_role;
+CREATE INDEX IF NOT EXISTS idx_bgb_push_subs_user ON public.boardgamebuddy_push_subscriptions USING btree (user_id);
 
 
 -- ── Live sessions ─────────────────────────────────────────────────────────────

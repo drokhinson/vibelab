@@ -291,6 +291,32 @@
   }
 
   const BgbInstallPrompt = {
+    /**
+     * Is the app running as an installed PWA rather than in a browser tab?
+     *
+     * Public because push needs the same answer for a different reason: on iOS,
+     * Notification.requestPermission() and pushManager both exist ONLY in an
+     * installed copy, so the Settings card has to know whether to offer the
+     * control or send the user here first. Exposed rather than copied so the
+     * two cannot disagree about what "installed" means.
+     */
+    isStandalone() {
+      return _isStandalone();
+    },
+
+    /**
+     * Is this an iOS/iPadOS browser?
+     *
+     * Also public for push, and for the same reason as isStandalone: iOS is the
+     * one platform where an uninstalled copy cannot subscribe at all, so the
+     * two together are what the Settings card needs to decide between offering
+     * the control and pointing at the install steps. The iPadOS-reports-as-a-Mac
+     * detection is fiddly enough that a second copy would drift.
+     */
+    isIOS() {
+      return _isIOS();
+    },
+
     // Called once from init.js after the shell has booted.
     init() {
       if (_inited) return;

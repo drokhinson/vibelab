@@ -33,6 +33,7 @@ from .constants import (
     PlayLinkGroup,
     PlayMode,
     PlaySessionStatus,
+    PushTier,
     SessionPhase,
 )
 
@@ -124,9 +125,17 @@ class Avatar(BaseModel):
 
 
 class ProfileCreate(BaseModel):
-    # Both optional so settings can save name and avatar independently.
+    # All optional so settings can save name, avatar and notification tier
+    # independently.
     display_name: Optional[str] = None
     avatar: Optional[Avatar] = None
+    # How much this account wants pushed to its devices (migration 017). Saved
+    # through this endpoint rather than a /push route of its own because it is
+    # an account preference like the two above, and this is already the app's
+    # one profile-save path — the FE merges the response onto window.store.user
+    # and every subscriber re-renders. Typed by the enum so an unknown value is
+    # a 422 here rather than a CHECK violation in Postgres.
+    push_tier: Optional[PushTier] = None
 
 
 class ProfileResponse(BaseModel):
@@ -140,6 +149,10 @@ class ProfileResponse(BaseModel):
     # "Create your profile" modal (migration 030). Cleared by the first
     # successful POST /profile.
     needs_setup: bool = False
+    # Defaulted rather than required: a profile row read by an older cached
+    # client, or written before migration 017, has no value and must read as
+    # "off" rather than 500 the whole profile fetch.
+    push_tier: PushTier = PushTier.NONE
     created_at: datetime
 
 
@@ -1609,15 +1622,70 @@ FeedCard = Union[
 ]
 
 
+# ── Web Push ─────────────────────────────────────────────────────────────────
+
+
+class PushConfigResponse(BaseModel):
+    """What the client needs before it can subscribe.
+
+    `enabled` is not derivable client-side: with no VAPID keys configured the
+    server cannot sign a push, so the Settings card must render its "not
+    available" state rather than offering a control that would take a
+    permission prompt and then silently never deliver anything.
+    """
+
+    enabled: bool
+    vapid_public_key: str | None = None
+
+
+class PushSubscriptionCreate(BaseModel):
+    """One device's subscription, straight from PushSubscription.toJSON().
+
+    Shaped to what the browser hands over rather than to the table, so the
+    client posts what it has without reshaping it.
+    """
+
+    endpoint: str = Field(..., min_length=1, max_length=2048)
+    p256dh: str = Field(..., min_length=1, max_length=256)
+    auth: str = Field(..., min_length=1, max_length=256)
+    user_agent: str | None = Field(None, max_length=512)
+
+
+class PushSubscriptionDelete(BaseModel):
+    """The device to forget. Identified by endpoint, which is what the browser
+    holds — a client has no idea what row id we gave it."""
+
+    endpoint: str = Field(..., min_length=1, max_length=2048)
+
+
+class PushTestResponse(BaseModel):
+    """How many of the caller's own devices the test push was sent to.
+
+    `devices` being 0 is the interesting answer, not an error: it means the
+    permission prompt was accepted on some other device, or this one's
+    subscription was pruned after the browser rotated it. Saying so is more
+    useful than a success message that explains nothing.
+    """
+
+    sent: bool
+    devices: int
+
+
 class PlayReactionRequest(BaseModel):
     """The plays a single tap covers.
 
     A list rather than one id because the surface is the SESSION footer: one tap
     reacts to every play of that night at once. One play is just a list of one,
     which is what a future per-card control would send.
+
+    Capped because the list is unbounded work: one request inserts one row per
+    id and filters the plays with a single `in_()`, so nothing but this bound
+    stops a client asking for either at any size. 100 is far above any real
+    game night — the neighbouring bulk requests cap at 200-500 for the same
+    reason.
     """
 
-    play_ids: list[str]
+    play_ids: list[str] = Field(..., max_length=100)
 
 
 class PlayReactionResponse(BaseModel):

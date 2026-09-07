@@ -160,11 +160,133 @@ class NotificationKind(StrEnum):
     BUDDY_REQUEST from buddy_edges.created_at, BUDDY_ACCEPTED from
     buddy_edges.accepted_at. The kind also says which block of optional fields
     on the Notification model is populated.
+
+    "Good game" reactions are deliberately NOT here. They live on the feed card
+    that earned them and nowhere else — see reaction_service.
+
+    ADDING A MEMBER IS A DEPLOY-ORDER CONSTRAINT, not just an edit. Notification
+    .kind is typed by this enum, so a row carrying a value the running backend
+    does not know fails model_validate and 500s the whole page — and that page
+    is /notifications AND the /bootstrap gather. Ship the enum first, then the
+    migration that starts emitting the value.
     """
 
     PLAY_LINK = "play_link"
     BUDDY_REQUEST = "buddy_request"
     BUDDY_ACCEPTED = "buddy_accepted"
+
+
+# ── Web Push (migration 017) ─────────────────────────────────────────────────
+# VAPID identifies THIS server to the push services, which is what lets a
+# browser's subscription be bound to us and to nobody else. Three values, all
+# unset in local dev by default — push_service.enabled() reads that as "the
+# feature is off" and every send returns immediately, so the app runs complete
+# and unbroken with no keys anywhere.
+#
+# Generate a pair with (needs the deps in requirements.txt):
+#   python -c "from py_vapid import Vapid; from cryptography.hazmat.primitives import serialization as s; import base64; v=Vapid(); v.generate_keys(); \
+#     print('public :', base64.urlsafe_b64encode(v.public_key.public_bytes(s.Encoding.X962, s.PublicFormat.UncompressedPoint)).decode().rstrip('=')); \
+#     print('private:', base64.urlsafe_b64encode(v.private_key.private_numbers().private_value.to_bytes(32,'big')).decode().rstrip('='))"
+#
+# ROTATING THE PUBLIC KEY INVALIDATES EVERY SUBSCRIPTION. A browser binds its
+# subscription to the applicationServerKey it subscribed with, so a new pair
+# makes every stored row undeliverable — the endpoints stay valid-looking and
+# the sends simply fail. Rotation therefore means: change both values, then
+# TRUNCATE boardgamebuddy_push_subscriptions, and every client re-subscribes on
+# its next launch (domain/push.js re-syncs on boot). Do not rotate one of the
+# pair alone; the private key must match the public one clients hold.
+BGB_VAPID_PUBLIC_KEY = os.environ.get("BGB_VAPID_PUBLIC_KEY", "")
+BGB_VAPID_PRIVATE_KEY = os.environ.get("BGB_VAPID_PRIVATE_KEY", "")
+# The spec requires a contact the push service can reach if this server starts
+# misbehaving. "mailto:you@example.com" or an https:// URL.
+BGB_VAPID_SUBJECT = os.environ.get("BGB_VAPID_SUBJECT", "mailto:dev@example.com")
+
+# How long a push service should hold an undelivered message for a phone that is
+# off. Four hours: long enough to survive a night's sleep or a flat battery,
+# short enough that "Priya said good game" cannot arrive two days late and read
+# as something that just happened.
+PUSH_TTL_SECONDS = 4 * 60 * 60
+
+# Seconds to wait on one push service before giving up on that device. These
+# run in a background task, so nobody is watching — but a hung connection would
+# hold a worker thread, and a table of eight people is eight of them.
+PUSH_TIMEOUT_SECONDS = 10.0
+
+
+class PushTier(StrEnum):
+    """How much of the notification feed an account wants pushed to its devices.
+
+    CUMULATIVE, not three separate buckets: ALL means actionable AND
+    informative. The question a person is really answering is "how much do you
+    want to hear from this", and a ladder answers it in one glance where two
+    independent switches make them reason about four combinations.
+
+    Values are the DB values — boardgamebuddy_profiles.push_tier carries a CHECK
+    on exactly these three strings (migration 017).
+    """
+
+    NONE = "none"
+    ACTIONABLE = "actionable"
+    ALL = "all"
+
+
+class PushEvent(StrEnum):
+    """The things worth waking a phone for.
+
+    Deliberately NOT the same list as NotificationKind. The bell records what
+    happened; a push interrupts someone, so this list is shorter in one
+    direction (no push for a bulk import that would fire six phones at once)
+    and longer in another — SESSION_INVITE and GHOST_CLAIM are real
+    interruptions that the derived bell has no row for, and ACHIEVEMENT is a
+    thing the app already tells you about in a popup you have to be present to
+    see.
+
+    "Good game" is absent from BOTH lists on purpose. A like is the lightest
+    thing that happens in this app; it belongs on the feed card that earned it,
+    and neither a bell row nor a buzz is worth spending on it.
+    """
+
+    BUDDY_REQUEST = "buddy_request"
+    SESSION_INVITE = "session_invite"
+    PLAY_LINK = "play_link"
+    GHOST_CLAIM = "ghost_claim"
+    BUDDY_ACCEPTED = "buddy_accepted"
+    ACHIEVEMENT = "achievement"
+
+
+# Which tier each event needs before it may be sent. The split IS the feature:
+# ACTIONABLE is the set that is waiting on the recipient to do something, ALL
+# adds the pleasant noise. A new event must be added here or it can never be
+# delivered — push_service treats a missing entry as ALL-only rather than
+# guessing, so forgetting fails quiet-and-safe rather than loud-and-annoying.
+PUSH_EVENT_TIER: dict[PushEvent, PushTier] = {
+    PushEvent.BUDDY_REQUEST: PushTier.ACTIONABLE,
+    PushEvent.SESSION_INVITE: PushTier.ACTIONABLE,
+    PushEvent.PLAY_LINK: PushTier.ACTIONABLE,
+    PushEvent.GHOST_CLAIM: PushTier.ACTIONABLE,
+    PushEvent.BUDDY_ACCEPTED: PushTier.ALL,
+    PushEvent.ACHIEVEMENT: PushTier.ALL,
+}
+
+# Ranked weakest to strongest, so "does this tier admit this event" is one
+# index comparison rather than a table of pairs.
+_PUSH_TIER_RANK: dict[str, int] = {
+    PushTier.NONE: 0,
+    PushTier.ACTIONABLE: 1,
+    PushTier.ALL: 2,
+}
+
+
+def push_tier_admits(tier: str, event: PushEvent) -> bool:
+    """Would an account on `tier` accept `event`?
+
+    NONE admits nothing — including an event whose required tier somehow
+    resolves to NONE, which is why the rank of the required tier is compared
+    against the account's rather than the two merely being unequal.
+    """
+    have = _PUSH_TIER_RANK.get(tier or PushTier.NONE, 0)
+    need = _PUSH_TIER_RANK.get(PUSH_EVENT_TIER.get(event, PushTier.ALL), 2)
+    return have > 0 and have >= need
 
 
 class PlayLinkGroup(StrEnum):

@@ -43,6 +43,15 @@
       // absent rather than flashing an empty card on the first paint.
       this._imports = null;
       this._deletingImport = null;
+
+      // Push notifications (migration 017). null = not read yet, so the card
+      // renders "Checking…" rather than flashing "your browser can't do this"
+      // at somebody whose browser can — state() has to ask the service worker
+      // and the server, so it cannot answer synchronously on the first paint.
+      this._push = null;
+      // True while a tier change or a test send is in flight. Disables the
+      // segments so a double-tap cannot race two permission prompts.
+      this._pushBusy = false;
     }
 
     async onMount() {
@@ -65,6 +74,12 @@
         if (!document.hidden && window.BggSyncFlow) window.BggSyncFlow.catchUp();
       });
       this.render();
+      // Not awaited: the card paints its "Checking…" row first and settles when
+      // this lands, the same shape the imports section below uses. Re-read on
+      // every mount rather than cached on the instance — this view is a
+      // singleton, and the permission grant or the install state can both have
+      // changed since the last visit.
+      this._refreshPushState();
       await this._loadBggStatus();
       // Not awaited before the first paint — the section appears when it lands,
       // and Settings is fully usable without it.
@@ -121,6 +136,8 @@
         `}
         <div class="set-card-label">Appearance</div>
         ${this._renderAppearanceCard()}
+        <div class="set-card-label">Notifications</div>
+        ${this._renderNotificationsCard()}
         <div class="set-card-label">Connections</div>
         ${this._renderBggCard()}
         <div class="set-card-label">Import</div>
@@ -229,6 +246,155 @@
       if (value === "auto") window.BgbTheme.clear();
       else window.BgbTheme.set(value);
       this.render();
+    }
+
+    // ── Notifications (migration 017) ─────────────────────────────────────────
+    // The same three-way segmented control as Theme above, and for the same
+    // reason: the choice is a LADDER (off → the things that need you →
+    // everything), and a two-position switch cannot express a middle. Two
+    // independent checkboxes could, but then the user has to work out what four
+    // combinations mean to answer a question that is really "how much".
+    //
+    // Every degraded state gets its own sentence rather than a dead control.
+    // "Notifications are off" and "your browser is blocking them" and "install
+    // the app first" are three different problems with three different fixes,
+    // and a greyed-out segment says none of them.
+    _renderNotificationsCard() {
+      const st = this._push;
+      if (!st) {
+        return `
+          <div class="set-card">
+            <div class="set-card__row set-card__row--static">
+              <span class="set-card__row-icon"><i data-icon="bell" class="w-4 h-4"></i></span>
+              <span class="set-card__row-body">
+                <span class="set-card__row-title">Notifications</span>
+                <span class="set-card__row-sub">Checking…</span>
+              </span>
+            </div>
+          </div>`;
+      }
+
+      // Ordered by what the user can do about it: the two they cannot fix from
+      // here come first, so the control is never offered where tapping it would
+      // fail.
+      let blocked = null;
+      if (!st.supported) {
+        blocked = "This browser can't do notifications.";
+      } else if (!st.configEnabled) {
+        blocked = "Notifications aren't switched on for this server yet.";
+      } else if (!st.standaloneOk) {
+        blocked = "Add BoardgameBuddy to your Home Screen to turn these on.";
+      } else if (st.permission === "denied") {
+        // Deliberately names the browser rather than offering a retry:
+        // requestPermission() can never re-ask after a denial, so a button here
+        // would do nothing and look broken.
+        blocked = "Your browser is blocking notifications for this site. Turn them back on in its site settings.";
+      }
+
+      const seg = (value, label) => {
+        const on = st.tier === value;
+        return `
+          <button class="theme-seg__opt${on ? " is-on" : ""}"
+                  aria-pressed="${on ? "true" : "false"}"
+                  ${blocked || this._pushBusy ? "disabled" : ""}
+                  onclick="window.settingsView._setPushTier('${value}')">${label}</button>`;
+      };
+
+      const sub = blocked
+        ? escapeHtml(blocked)
+        : st.tier === "all"
+          ? "Buddy requests, plays you're added to, and badges."
+          : st.tier === "actionable"
+            ? "Only the things that need you: buddy requests, plays and invites."
+            : "Nothing is sent to this device.";
+
+      return `
+        <div class="set-card">
+          <div class="set-card__row set-card__row--static">
+            <span class="set-card__row-icon"><i data-icon="bell" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">Push notifications</span>
+              <span class="set-card__row-sub">${sub}</span>
+            </span>
+          </div>
+          <div class="theme-seg" role="group" aria-label="Push notifications">
+            ${seg("all", "All")}${seg("actionable", "Actionable")}${seg("none", "Off")}
+          </div>
+          ${st.tier !== "none" && !blocked ? `
+            <button class="set-card__row" type="button"
+                    ${this._pushBusy ? "disabled" : ""}
+                    onclick="window.settingsView._sendTestPush()">
+              <span class="set-card__row-icon"><i data-icon="play" class="w-4 h-4"></i></span>
+              <span class="set-card__row-body">
+                <span class="set-card__row-title">Send a test notification</span>
+                <span class="set-card__row-sub">
+                  Check it arrives on this device.
+                </span>
+              </span>
+            </button>` : ""}
+        </div>
+      `;
+    }
+
+    /** Re-read the three states the card renders from, then repaint. */
+    async _refreshPushState() {
+      try {
+        this._push = await window.BgbPush.state();
+      } catch (_) {
+        this._push = { supported: false, standaloneOk: false, permission: "unsupported", tier: "none", subscribed: false, configEnabled: false };
+      }
+      if (this.container) this.render();
+    }
+
+    /**
+     * @param {"none"|"actionable"|"all"} value
+     *
+     * NOT async up to the permission prompt. Browsers require a transient user
+     * activation for Notification.requestPermission(), and awaiting anything
+     * first spends it — so BgbPush.setTier is called straight off this tap and
+     * does its own awaiting inside.
+     */
+    _setPushTier(value) {
+      if (this._pushBusy || !this._push || this._push.tier === value) return;
+      this._pushBusy = true;
+      this.render();
+      window.BgbPush.setTier(value)
+        .catch((e) => {
+          window.PolaroidPopup.alert({
+            title: "Couldn't change notifications",
+            body: (e && e.message) || "Something went wrong. Try again.",
+          });
+        })
+        .finally(() => {
+          this._pushBusy = false;
+          this._refreshPushState();
+        });
+    }
+
+    _sendTestPush() {
+      if (this._pushBusy) return;
+      this._pushBusy = true;
+      this.render();
+      window.BgbPush.test()
+        .then((r) => {
+          // devices === 0 is the interesting answer, not a failure: the
+          // permission was granted on some other device, or this one's
+          // subscription was pruned after the browser rotated it. Saying so
+          // beats a success message that explains nothing.
+          if (!r || !r.devices) {
+            window.PolaroidPopup.alert({
+              title: "No devices registered",
+              body: "This account has no device registered for notifications yet. Try switching them off and on again here.",
+            });
+          }
+        })
+        .catch(() => {
+          window.PolaroidPopup.alert({
+            title: "Couldn't send a test",
+            body: "The request didn't go through. Check your connection and try again.",
+          });
+        })
+        .finally(() => { this._pushBusy = false; this.render(); });
     }
 
     // One row per admin tool, each its own spoke. Previously all three tools
