@@ -27,10 +27,14 @@ permanently gone and keeping it means retrying it forever.
 OFF BY DEFAULT AND INERT. With no VAPID keys configured — which is every local
 dev environment — enabled() is False, send() returns before touching the
 database, and GET /push/config tells the client not to offer the setting. The
-app runs complete with no keys anywhere.
+app runs complete with no keys anywhere. A key that is PRESENT but not usable
+is treated identically — see _valid_public_key — because the alternative is
+advertising a broken configuration and letting it fail in somebody's browser.
 """
 
 import asyncio
+import base64
+import binascii
 import json
 import logging
 from typing import Any, Iterable
@@ -63,14 +67,74 @@ PROFILES = "boardgamebuddy_profiles"
 _vapid_instance: Vapid | None = None
 
 
+# Reasons already shouted about, so a bad deploy says its piece once rather
+# than on every notifying write for the life of the process.
+_complained: set[str] = set()
+
+
+def _complain(reason: str, detail: str) -> None:
+    if reason in _complained:
+        return
+    _complained.add(reason)
+    logger.error("push: %s — push notifications are OFF. %s", reason, detail)
+
+
+def _valid_public_key(key: str) -> bool:
+    """Is this actually an applicationServerKey, or just a non-empty string?
+
+    WHY THIS EXISTS. `subscribe({applicationServerKey})` in the browser wants
+    the raw uncompressed P-256 point — 65 bytes, leading 0x04, which is 87
+    base64url characters. Everything else a "export the public key" snippet
+    hands you is the wrong thing and fails identically: SPKI/DER (122 chars,
+    starts MFkwEwYHKoZI…, and by far the likeliest mistake), PEM, a compressed
+    point (44 chars, leading 0x02/0x03), or the 43-char private key pasted into
+    the public slot.
+
+    Without this check a wrong value is served by GET /push/config as though it
+    worked, and the first person to reach for the setting gets a raw DOM
+    exception for a mistake made in the deploy environment. The server knows;
+    it should say so where a deploy log will show it.
+    """
+    if not key:
+        return False
+    # Env vars pick up padding, trailing newlines and the standard alphabet;
+    # none of those make the key wrong, so normalise before judging it.
+    text = "".join(key.split()).replace("+", "-").replace("/", "_").rstrip("=")
+    try:
+        raw = base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+    except (binascii.Error, ValueError):
+        _complain(
+            "BGB_VAPID_PUBLIC_KEY is not base64url",
+            "Expected 87 base64url characters starting with 'B'.",
+        )
+        return False
+    if len(raw) != 65 or raw[0] != 0x04:
+        _complain(
+            "BGB_VAPID_PUBLIC_KEY is the wrong kind of key",
+            f"Decoded to {len(raw)} bytes; an applicationServerKey is 65 bytes "
+            "starting 0x04 (87 base64url characters starting with 'B'). A "
+            "122-character value starting 'MFkwEwYHKoZI' is SPKI/DER — export "
+            "the uncompressed point instead (see constants.py).",
+        )
+        return False
+    return True
+
+
 def enabled() -> bool:
-    """Are the VAPID keys configured? If not, the whole feature is off."""
-    return bool(BGB_VAPID_PUBLIC_KEY and BGB_VAPID_PRIVATE_KEY)
+    """Are the VAPID keys configured AND usable? If not, the whole feature is off.
+
+    Both halves, because a key that cannot be used is not meaningfully
+    different from no key at all — and pretending otherwise moves a deploy-time
+    error into somebody's browser. The public check is a decode of 87
+    characters and _vapid() is memoised, so this stays cheap enough to call on
+    every notifying write.
+    """
+    return _valid_public_key(BGB_VAPID_PUBLIC_KEY) and _vapid() is not None
 
 
 def public_key() -> str:
     """The applicationServerKey the browser needs to subscribe. '' when off."""
-    return BGB_VAPID_PUBLIC_KEY
+    return BGB_VAPID_PUBLIC_KEY if _valid_public_key(BGB_VAPID_PUBLIC_KEY) else ""
 
 
 def _vapid() -> Vapid | None:
@@ -79,13 +143,20 @@ def _vapid() -> Vapid | None:
     A malformed key is a deploy-time mistake, so it is logged loudly and then
     treated as "push is off" — the alternative is every notifying write path in
     the app raising on a value none of them chose.
+
+    Gated on the private key alone rather than on enabled(), because enabled()
+    now asks this function for half its answer.
     """
     global _vapid_instance
-    if _vapid_instance is None and enabled():
+    if _vapid_instance is None and BGB_VAPID_PRIVATE_KEY:
         try:
             _vapid_instance = Vapid.from_string(private_key=BGB_VAPID_PRIVATE_KEY)
         except Exception:
-            logger.exception("push: BGB_VAPID_PRIVATE_KEY is not a usable key")
+            _complain(
+                "BGB_VAPID_PRIVATE_KEY is not a usable key",
+                "Expected 43 base64url characters (the raw 32-byte P-256 "
+                "scalar), from the same generation run as the public key.",
+            )
             return None
     return _vapid_instance
 
