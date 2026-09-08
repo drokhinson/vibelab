@@ -1,0 +1,1163 @@
+<title>Photo Import Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" />
+
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   PHOTO IMPORT — walkthrough board
+   Fifth board in Docs/mocks/. Same studio wall as play-flow-dark-mock.html:
+   warm neutrals biased toward the app's gold, themed for the viewer, so the
+   phone is judged against a page that isn't pretending to be the app.
+
+   The phone is NOT a picture of the screen — it is the screen, driven by the
+   same three-step state machine views/photo-import-view.js runs, with the
+   token palettes copied verbatim from web/styles.css (both themes) so this
+   board cannot flatter the real thing. The photographs are drawn SVG, since
+   the point of them here is the metadata, not the picture.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: light;
+  --wall:      #EFEBE3;
+  --wall-2:    #F7F4EF;
+  --wall-3:    #E5E0D6;
+  --wall-ink:  #221E19;
+  --wall-mute: #6C645A;
+  --wall-faint:#918878;
+  --wall-line: #D8D1C5;
+  --wall-mark: #8E5F10;
+  --wall-good: #4E7A46;
+  --wall-cost: #A8452F;
+  --wall-sh:   0 1px 2px rgba(120, 96, 60, .10), 0 14px 38px -20px rgba(120, 96, 60, .45);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --wall:      #16140F;
+    --wall-2:    #1F1C16;
+    --wall-3:    #2A251D;
+    --wall-ink:  #EBE5DA;
+    --wall-mute: #9A9285;
+    --wall-faint:#7A7264;
+    --wall-line: #2F2A22;
+    --wall-mark: #E0A94A;
+    --wall-good: #6FBF7F;
+    --wall-cost: #E87B63;
+    --wall-sh:   0 1px 2px rgba(0, 0, 0, .5), 0 14px 38px -20px rgba(0, 0, 0, .85);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --wall:      #16140F;
+  --wall-2:    #1F1C16;
+  --wall-3:    #2A251D;
+  --wall-ink:  #EBE5DA;
+  --wall-mute: #9A9285;
+  --wall-faint:#7A7264;
+  --wall-line: #2F2A22;
+  --wall-mark: #E0A94A;
+  --wall-good: #6FBF7F;
+  --wall-cost: #E87B63;
+  --wall-sh:   0 1px 2px rgba(0, 0, 0, .5), 0 14px 38px -20px rgba(0, 0, 0, .85);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--wall);
+  color: var(--wall-ink);
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page { max-width: 1220px; margin: 0 auto; padding: 44px 24px 96px; }
+
+/* ── Masthead ─────────────────────────────────────────────────────────── */
+.masthead { display: flex; flex-direction: column; gap: 14px; padding-bottom: 26px; border-bottom: 1px solid var(--wall-line); }
+.eyebrow {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--wall-mute); margin: 0;
+}
+h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600; font-size: clamp(30px, 4.4vw, 44px); line-height: 1.05;
+  letter-spacing: -.02em; margin: 0; text-wrap: balance; max-width: 18ch;
+}
+.standfirst { margin: 0; max-width: 64ch; color: var(--wall-mute); font-size: 15.5px; }
+.standfirst strong { color: var(--wall-ink); font-weight: 600; }
+code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+.standfirst code { font-size: 13.5px; color: var(--wall-ink); }
+
+/* ── Control bar ──────────────────────────────────────────────────────── */
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 24px 0 0; }
+.ctl-label {
+  font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--wall-faint);
+}
+.seg { display: inline-flex; padding: 3px; gap: 3px; background: var(--wall-2); border: 1px solid var(--wall-line); border-radius: 999px; }
+.seg button {
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 7px 16px; border: 0; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--wall-mute);
+  transition: background 140ms ease, color 140ms ease;
+}
+.seg button[aria-pressed="true"] { background: var(--wall-mark); color: var(--wall); }
+.seg button:focus-visible { outline: 2px solid var(--wall-mark); outline-offset: 2px; }
+.linkbtn {
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: transparent; border: 1px solid var(--wall-line); border-radius: 999px;
+  padding: 7px 15px; color: var(--wall-mute);
+}
+.linkbtn:hover { color: var(--wall-ink); border-color: var(--wall-mark); }
+.linkbtn:focus-visible { outline: 2px solid var(--wall-mark); outline-offset: 2px; }
+
+/* ── Stage ────────────────────────────────────────────────────────────── */
+.stage { display: grid; grid-template-columns: 390px minmax(0, 1fr); gap: 44px; margin-top: 40px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
+
+.phone-col { position: sticky; top: 28px; display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 900px) { .phone-col { position: static; } }
+.phone-cap {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--wall-faint);
+}
+.phone-cap b { color: var(--wall-mark); font-weight: 700; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   The app. Every token below is copied verbatim from
+   projects/boardgame-buddy/web/styles.css — the base palette, then the
+   --polaroid-* re-point every spoke screen (including this one) applies.
+   ══════════════════════════════════════════════════════════════════════════ */
+.bgb {
+  --bg-0: #1A1310; --bg-1: #251C16; --bg-2: #33261C;
+  --ink: #F0E7D8; --ink-muted: #B0A18E; --ink-faint: #847665;
+  --line: rgba(255, 255, 255, .08); --line-strong: rgba(255, 255, 255, .16);
+  --accent: #E0A94A; --accent-fill: #E0A94A; --accent-hover: #EFBC62; --on-accent: #2B1E06;
+  --accent-quiet: rgba(224, 169, 74, .14);
+  --card-sh: 0 10px 26px -12px rgba(12, 5, 0, .62), 0 2px 6px -2px rgba(12, 5, 0, .62);
+  /* The spoke re-point, dark. */
+  --polaroid-bg: var(--bg-1); --polaroid-bg-soft: var(--bg-2);
+  --polaroid-ink: var(--ink); --polaroid-muted: var(--ink-muted);
+  --polaroid-line: var(--line); --card-border: var(--line); --well: var(--bg-0);
+  --accent-ink: var(--accent); --polaroid-accent: #E87B63;
+  --ok: #6FBF7F; --rust: #E87B63;
+
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg-0);
+}
+.bgb[data-mode="light"] {
+  --bg-0: #F7F0E1; --bg-1: #FFFBF2; --bg-2: #FFFFFF;
+  --ink: #2A2016; --ink-muted: #6F6252; --ink-faint: #93856F;
+  --line: rgba(36, 28, 20, .11); --line-strong: rgba(36, 28, 20, .20);
+  --accent: #A87215; --accent-fill: #8E5F10; --accent-hover: #8E5F10; --on-accent: #FFFFFF;
+  --accent-quiet: rgba(168, 114, 21, .13);
+  --card-sh: 0 10px 26px -12px rgba(120, 88, 44, .20), 0 2px 6px -2px rgba(120, 88, 44, .20);
+  /* On paper the spoke keeps the paper palette. */
+  --polaroid-bg: #FFFFFF; --polaroid-bg-soft: #F6F1E7;
+  --polaroid-ink: #2A2016; --polaroid-muted: #7C7263;
+  --polaroid-line: #E8DFCD; --card-border: #E8DFCD; --well: #F7F0E1;
+  --accent-ink: #8E5F10; --polaroid-accent: #A8452F;
+  --ok: #1B6029; --rust: #A8452F;
+}
+
+.phone {
+  width: 100%; border-radius: 28px; overflow: hidden;
+  border: 1px solid var(--wall-line); box-shadow: var(--wall-sh);
+  background: var(--bg-0);
+}
+.screen { display: flex; flex-direction: column; height: 780px; position: relative; overflow: hidden; }
+
+/* ── .spoke-head ──────────────────────────────────────────────────────── */
+.sp-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px 11px; border-bottom: 1px solid var(--line);
+  background: var(--bg-0); flex: none;
+}
+.sp-head__title { font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 19px; margin: 0; flex: 1; letter-spacing: -.01em; }
+.sp-close {
+  width: 34px; height: 34px; border-radius: 999px; display: grid; place-items: center;
+  background: transparent; border: 1px solid var(--line); color: var(--ink-muted); cursor: pointer;
+}
+
+/* ── .bgb-wizsteps ────────────────────────────────────────────────────── */
+.wiz { padding: 12px 16px 4px; flex: none; }
+.wiz__count { font-family: "JetBrains Mono", monospace; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+.wiz__count b { color: var(--accent-ink); }
+.wiz__bar { display: flex; gap: 4px; margin-top: 7px; }
+.wiz__seg { flex: 1; height: 3px; border-radius: 999px; background: var(--line-strong); overflow: hidden; }
+.wiz__seg.is-done { background: var(--accent); }
+
+/* ── .imp-body ────────────────────────────────────────────────────────── */
+.imp-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 96px; }
+.imp-step { display: flex; flex-direction: column; gap: 14px; }
+.imp-step__title { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 21px; margin: 0; letter-spacing: -.01em; }
+.imp-step__lede { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-muted); }
+.imp-note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-faint); }
+.imp-warn { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--rust); font-weight: 500; }
+.imp-step__foot-row { display: flex; align-items: center; gap: 10px; }
+.imp-filebtn {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  min-height: 40px; padding: 0 14px; border-radius: 999px;
+  border: 1px dashed var(--line-strong); background: transparent; color: var(--ink);
+  font: inherit; font-size: 13px; font-weight: 600;
+}
+.imp-filebtn:active { background: var(--accent-quiet); }
+.imp-count { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+/* ── Step 1: picked photos ────────────────────────────────────────────── */
+.pimp-picks { display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.pimp-pick {
+  display: flex; align-items: center; gap: 11px; padding: 8px 10px;
+  border: 1px solid var(--card-border); border-radius: 16px;
+  background: var(--polaroid-bg); color: var(--polaroid-ink);
+}
+.pimp-pick__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pimp-pick__name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pimp-pick__meta { display: flex; align-items: flex-start; gap: 5px; font-size: 11.5px; line-height: 1.35; color: var(--polaroid-muted); }
+.pimp-pick__meta svg { margin-top: 2px; }
+.pimp-pick__meta svg { flex: none; }
+.pimp-pick__x { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--polaroid-muted); cursor: pointer; }
+.pimp-pick__x:hover { background: var(--polaroid-bg-soft); }
+
+/* ── Step 2: filmstrip, hero, fields ──────────────────────────────────── */
+.pimp-filmstrip {
+  display: flex; gap: 6px; margin: 0 -16px; padding: 2px 16px 6px;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+}
+.pimp-filmstrip::-webkit-scrollbar { display: none; }
+.pimp-film {
+  position: relative; flex: none; width: 48px; height: 48px; padding: 0;
+  border: 2px solid transparent; border-radius: 10px; background: var(--bg-2);
+  overflow: hidden; opacity: .5; cursor: pointer;
+}
+.pimp-film.is-done { opacity: 1; }
+.pimp-film.is-current { opacity: 1; border-color: var(--accent); }
+.pimp-film__tick {
+  position: absolute; right: 2px; bottom: 2px; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent); display: grid; place-items: center;
+}
+.pimp-hero { border-radius: 18px; overflow: hidden; background: var(--bg-2); border: 1px solid var(--card-border); }
+.pimp-hero__img { display: block; width: 100%; height: 172px; }
+.pimp-hero__gone { display: flex; align-items: center; gap: 10px; padding: 16px; font-size: 12.5px; line-height: 1.35; color: var(--ink-muted); }
+
+.pimp-fields { display: flex; flex-direction: column; gap: 7px; }
+.pimp-field {
+  display: flex; align-items: center; gap: 11px; width: 100%; min-height: 56px;
+  padding: 8px 11px; text-align: left; cursor: pointer;
+  border: 1px solid var(--card-border); border-radius: 16px;
+  background: var(--polaroid-bg); color: var(--polaroid-ink); font: inherit;
+}
+.pimp-field:hover { background: var(--polaroid-bg-soft); }
+.pimp-field__mark {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px;
+  border-radius: 9px; background: var(--well); color: var(--polaroid-muted); overflow: hidden;
+}
+.pimp-field__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pimp-field__label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--polaroid-muted); }
+.pimp-field__value { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pimp-field__chev { flex: none; color: var(--polaroid-muted); }
+.pimp-field--unset .pimp-field__value { color: var(--accent-ink); }
+
+.pimp-seats { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pimp-seat {
+  display: flex; align-items: center; border: 1px solid var(--polaroid-line);
+  border-radius: 999px; background: var(--polaroid-bg); color: var(--polaroid-ink); overflow: hidden;
+}
+.pimp-seat__toggle {
+  display: flex; align-items: center; gap: 6px; min-height: 40px;
+  padding: 4px 5px 4px 5px; border: 0; background: transparent; color: inherit;
+  font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.pimp-badge {
+  flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 11px;
+  background: #4E6B4A; color: #EDF3E9;
+}
+.pimp-badge--ghost { background: transparent; border: 1.5px dashed var(--polaroid-line); color: var(--polaroid-muted); }
+.pimp-badge--me { background: var(--accent); color: var(--on-accent); }
+.pimp-seat__name { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pimp-seat__win { flex: none; opacity: 0; color: var(--polaroid-accent); display: grid; place-items: center; }
+.pimp-seat__x {
+  display: grid; place-items: center; width: 30px; min-height: 40px;
+  border: 0; border-left: 1px solid var(--polaroid-line); background: transparent;
+  color: var(--polaroid-muted); cursor: pointer;
+}
+.pimp-seat.is-winner { border-color: var(--polaroid-accent); background: color-mix(in srgb, var(--polaroid-accent) 14%, transparent); font-weight: 600; }
+.pimp-seat.is-winner .pimp-seat__win { opacity: 1; }
+.pimp-seat.is-winner .pimp-seat__x { border-left-color: var(--polaroid-accent); }
+
+.pimp-meta { display: flex; gap: 7px; }
+.imp-field {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;
+  padding: 8px 11px; text-align: left; font: inherit; cursor: pointer;
+  border: 1px solid var(--card-border); border-radius: 14px;
+  background: var(--polaroid-bg); color: var(--polaroid-ink);
+}
+.imp-field__label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--polaroid-muted); }
+.imp-field__value { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-field__value.is-dim { color: var(--polaroid-muted); font-weight: 500; }
+
+.pimp-rowacts { display: flex; flex-direction: column; gap: 8px; }
+.imp-cta {
+  width: 100%; min-height: 48px; border: 0; border-radius: 12px; cursor: pointer;
+  background: var(--accent-fill); color: var(--on-accent); font: inherit; font-weight: 700; font-size: 14px;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.imp-cta:disabled { opacity: .5; cursor: default; }
+.imp-cta--ghost { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+.pimp-drop {
+  display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px;
+  border: 0; border-radius: 12px; background: transparent; color: var(--rust);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.pimp-drop:hover { background: color-mix(in srgb, var(--rust) 12%, transparent); }
+
+/* ── Step 3: summary + progress ───────────────────────────────────────── */
+.imp-summary { display: flex; gap: 7px; margin: 0; }
+.imp-summary > div {
+  flex: 1; min-width: 0; text-align: center; padding: 10px 6px;
+  border: 1px solid var(--card-border); border-radius: 14px;
+  background: var(--polaroid-bg); color: var(--polaroid-ink);
+}
+.imp-summary dt { font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--polaroid-muted); }
+.imp-summary dd { margin: 2px 0 0; font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
+.imp-summary__note { margin-top: 2px; font-size: 10px; line-height: 1.25; color: var(--polaroid-muted); }
+.imp-bygame { margin: 0; padding: 0; border: 1px solid var(--card-border); border-radius: 16px; background: var(--polaroid-bg); color: var(--polaroid-ink); overflow: hidden; }
+.imp-bygame li { display: flex; justify-content: space-between; gap: 8px; list-style: none; padding: 9px 13px; font-size: 13px; }
+.imp-bygame li + li { border-top: 1px solid var(--polaroid-line); }
+.imp-bygame li span:last-child { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.imp-progress { height: 8px; border-radius: 999px; background: var(--line-strong); overflow: hidden; }
+.imp-progress__fill { height: 100%; background: var(--accent); border-radius: inherit; transition: width 200ms cubic-bezier(.32,.72,0,1); }
+.imp-progress__label { text-align: center; font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; margin: 0; }
+
+/* ── Docked nav ───────────────────────────────────────────────────────── */
+.imp-nav {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 18px;
+  display: flex; gap: 8px; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, var(--bg-0) 46%);
+}
+.imp-nav > * { pointer-events: auto; }
+.imp-nav__back, .imp-nav__next { min-height: 48px; border-radius: 12px; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; }
+.imp-nav__back { flex: 0 0 auto; padding: 0 18px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); }
+.imp-nav__next { flex: 1; border: 0; background: var(--accent-fill); color: var(--on-accent); }
+.imp-nav__next:disabled { opacity: .5; cursor: default; }
+
+/* ── Bottom sheets ────────────────────────────────────────────────────── */
+.sheet-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: grid; align-items: end; z-index: 10; }
+.sheet {
+  background: var(--polaroid-bg); color: var(--polaroid-ink);
+  border-radius: 20px 20px 0 0; padding: 8px 16px 16px; max-height: 78%;
+  display: flex; flex-direction: column; gap: 10px;
+  animation: rise 220ms cubic-bezier(.32,.72,0,1);
+}
+@keyframes rise { from { transform: translateY(18px); opacity: .4; } }
+.sheet__grip { width: 36px; height: 4px; border-radius: 999px; background: var(--polaroid-line); margin: 2px auto 4px; }
+.sheet__title { font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 17px; margin: 0; }
+.sheet__sub { margin: 0; font-size: 12px; color: var(--polaroid-muted); }
+.sheet__list { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin: 0 -6px; padding: 0 6px; }
+.sheet__row {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; width: 100%;
+  padding: 6px 8px; border: 0; border-radius: 12px; background: transparent;
+  color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer;
+}
+.sheet__row:hover { background: var(--polaroid-bg-soft); }
+.sheet__row[aria-selected="true"] { background: var(--accent-quiet); }
+.sheet__row .tick { margin-left: auto; color: var(--accent-ink); opacity: 0; flex: none; }
+.sheet__row[aria-selected="true"] .tick { opacity: 1; }
+.sheet__art { flex: none; width: 36px; height: 36px; border-radius: 8px; overflow: hidden; background: var(--well); }
+.sheet__sec { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--polaroid-muted); padding: 8px 8px 2px; }
+.sheet__cancel { min-height: 48px; border: 1px solid var(--polaroid-line); border-radius: 12px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.sheet__confirm { min-height: 48px; border: 0; border-radius: 12px; background: var(--accent-fill); color: var(--on-accent); font: inherit; font-weight: 700; cursor: pointer; }
+
+/* ── Annotation column ────────────────────────────────────────────────── */
+.notes { display: flex; flex-direction: column; gap: 26px; min-width: 0; }
+.note-block { display: flex; flex-direction: column; gap: 10px; }
+.note-block h2 {
+  font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 23px;
+  margin: 0; letter-spacing: -.01em; text-wrap: balance;
+}
+.note-key { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--wall-mark); }
+.note-block p { margin: 0; color: var(--wall-mute); font-size: 14.5px; max-width: 60ch; }
+.note-block p b { color: var(--wall-ink); font-weight: 600; }
+.beats { display: flex; flex-direction: column; gap: 9px; margin: 4px 0 0; padding: 0; list-style: none; }
+.beats li { display: grid; grid-template-columns: 15px 1fr; gap: 10px; font-size: 14px; color: var(--wall-mute); align-items: start; max-width: 60ch; }
+.beats li::before { content: "+"; font-family: "JetBrains Mono", monospace; color: var(--wall-good); font-weight: 700; line-height: 1.5; }
+.beats li.cost::before { content: "\2212"; color: var(--wall-cost); }
+.beats li b { color: var(--wall-ink); font-weight: 600; }
+
+/* ── The EXIF readout ─────────────────────────────────────────────────── */
+.readout {
+  border: 1px solid var(--wall-line); border-radius: 18px; background: var(--wall-2);
+  overflow: hidden;
+}
+.readout__head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 14px 18px; border-bottom: 1px solid var(--wall-line); background: var(--wall-3);
+}
+.readout__head h3 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 16px; margin: 0; }
+.readout__file { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--wall-mute); }
+.readout__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 560px) { .readout__grid { grid-template-columns: minmax(0, 1fr); } }
+.readout__col { padding: 14px 18px 16px; }
+.readout__col + .readout__col { border-left: 1px solid var(--wall-line); }
+@media (max-width: 560px) { .readout__col + .readout__col { border-left: 0; border-top: 1px solid var(--wall-line); } }
+.readout__cap { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--wall-faint); margin: 0 0 8px; }
+.tags { display: flex; flex-direction: column; gap: 5px; margin: 0; }
+.tags div { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 10px; font-family: "JetBrains Mono", monospace; font-size: 12px; font-variant-numeric: tabular-nums; }
+.tags dt { color: var(--wall-faint); overflow: hidden; text-overflow: ellipsis; }
+.tags dd { margin: 0; color: var(--wall-ink); overflow-wrap: anywhere; }
+.tags dd.absent { color: var(--wall-cost); }
+.arrow { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 13px; color: var(--wall-mute); }
+.arrow .to { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--wall-ink); background: var(--wall-3); border: 1px solid var(--wall-line); border-radius: 6px; padding: 2px 8px; }
+.payload {
+  margin: 0; padding: 14px 18px 16px; font-family: "JetBrains Mono", monospace;
+  font-size: 12px; line-height: 1.6; color: var(--wall-ink);
+  overflow-x: auto; border-top: 1px solid var(--wall-line); background: var(--wall);
+}
+.payload .k { color: var(--wall-mark); }
+.payload .s { color: var(--wall-good); }
+.payload .n { color: var(--wall-cost); }
+.payload .c { color: var(--wall-faint); }
+
+/* ── Explainer trio ───────────────────────────────────────────────────── */
+.explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-top: 64px; padding-top: 34px; border-top: 1px solid var(--wall-line); }
+@media (max-width: 860px) { .explain { grid-template-columns: minmax(0, 1fr); gap: 30px; } }
+.card { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.card h3 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 19px; margin: 0; letter-spacing: -.01em; }
+.card p { margin: 0; font-size: 14px; color: var(--wall-mute); }
+.card p b { color: var(--wall-ink); font-weight: 600; }
+.card .file { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--wall-faint); }
+
+.coda { margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--wall-line); display: flex; flex-direction: column; gap: 10px; }
+.coda p { margin: 0; max-width: 68ch; font-size: 14px; color: var(--wall-mute); }
+.coda p b { color: var(--wall-ink); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <p class="eyebrow">BoardgameBuddy &middot; Settings &rarr; Import plays from photos</p>
+    <h1>Thirty photos, thirty plays</h1>
+    <p class="standfirst">
+      The camera roll already knows <strong>when</strong> and <strong>where</strong>. It cannot know
+      <strong>what</strong> and <strong>who</strong>. This screen reads the first pair out of each file's own
+      EXIF block, on the device, and then asks you for the second pair one photo at a time.
+      The phone below is live &mdash; step through it. Its palette is
+      <code>web/styles.css</code>, verbatim.
+    </p>
+    <div class="controls">
+      <span class="ctl-label">App theme</span>
+      <div class="seg" role="group" aria-label="App theme">
+        <button type="button" data-mode-btn="dark" aria-pressed="true">Dark</button>
+        <button type="button" data-mode-btn="light" aria-pressed="false">Light</button>
+      </div>
+      <button type="button" class="linkbtn" data-reset>Start over</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="phone-col">
+      <div class="phone-cap">
+        <span data-cap-left>Step 1 &mdash; the pick</span>
+        <span data-cap-right>five photos, one evening and a convention</span>
+      </div>
+      <div class="phone bgb" data-mode="dark">
+        <div class="screen" data-screen></div>
+      </div>
+      <p class="phone-cap" style="text-transform:none;letter-spacing:0;font-family:inherit;font-size:12.5px;color:var(--wall-faint)">
+        Photographs are drawn, not photographed &mdash; what is being reviewed here is the metadata, not the picture.
+      </p>
+    </div>
+
+    <div class="notes" data-notes></div>
+  </div>
+
+  <section class="readout" aria-live="polite" data-readout></section>
+
+  <section class="explain">
+    <article class="card">
+      <h3>Reading the file</h3>
+      <p class="file">domain/exif.js &middot; ~150 lines</p>
+      <p>
+        Walks the JPEG segment chain to the <b>APP1/Exif</b> block rather than searching for the string
+        &mdash; those four bytes turn up inside compressed image data, and a false hit is a TIFF header
+        pointing anywhere. Six tags are read and the rest ignored, which is why this is a file and not a
+        30&ndash;80&nbsp;KB library.
+      </p>
+      <p>
+        <b>The date is taken verbatim, never through a <code>Date</code>.</b> An EXIF timestamp is already
+        local wall-clock time where the shutter fired. Reparsing it in the phone's current zone is what
+        moves a 9pm holiday play to the following day.
+      </p>
+    </article>
+    <article class="card">
+      <h3>The country raster</h3>
+      <p class="file">domain/geo-grid.js + generated data &middot; 162 KB, lazy</p>
+      <p>
+        A <b>0.1&deg; grid</b> of the world's borders, run-length encoded as
+        <code>&lt;count base36&gt;&lt;ISO code&gt;</code> &mdash; self-delimiting with no separators,
+        because run lengths are lower case and country codes are upper case. Coordinate in, country out,
+        in an array index.
+      </p>
+      <p>
+        <b>The coordinate never leaves the device</b>, and it is never written to the draft. It also never
+        reaches the photo bucket: the copy that uploads is re-encoded through a canvas, which is what
+        strips the tag the app just read.
+      </p>
+    </article>
+    <article class="card">
+      <h3>What gets written</h3>
+      <p class="file">POST /plays/photo, then POST /plays/import</p>
+      <p>
+        No new endpoint and no migration. <code>PlayCreate</code> already carried <code>photo_url</code>
+        and <code>country_code</code>, and <code>bgb_log_play</code> already wrote both. Photos go up
+        first, one at a time, each URL memoised on its shot; then the plays go in chunks of fifty.
+      </p>
+      <p>
+        A <b><code>client_key</code> per play</b> means a half-finished run resumes and re-writes nothing.
+        <b>One <code>import_batch_id</code></b> for the run means Settings can undo the whole thing in one tap.
+      </p>
+    </article>
+  </section>
+
+  <div class="coda">
+    <p>
+      <b>Where this is wrong, and how you find out.</b> Country granularity is the ceiling &mdash; the play
+      row holds nothing finer &mdash; and 0.1&deg; is about 7&nbsp;km across at 50&deg;N, so a play a few
+      kilometres from a border can land on the wrong side of it. Basel, Geneva and Maastricht are the cities
+      that decided the resolution; Tijuana and Windsor&nbsp;ON still come out wrong, because they are metres
+      from one. That is why the resolved country is on screen on every photo, with the picker one tap away:
+      a guess you can see beats a value you can't.
+    </p>
+    <p>
+      <b>One photo is one play.</b> Not a session, not an evening. Four shots of one game means removing
+      three, which is one tap each on the pick step &mdash; the alternative, grouping by time and place and
+      asking you to un-group, guesses at the thing you came here to say.
+    </p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── Icons: the app's own vendored Phosphor paths ──────────────────── */
+  var P = {
+    x: '<path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/>',
+    chev: '<path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>',
+    trophy: '<path d="M232,64H208V48a8,8,0,0,0-8-8H56a8,8,0,0,0-8,8V64H24A16,16,0,0,0,8,80V96a40,40,0,0,0,40,40h3.65A80.13,80.13,0,0,0,120,191.61V216H96a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16H136V191.58c31.94-3.23,58.44-25.64,68.08-55.58H208a40,40,0,0,0,40-40V80A16,16,0,0,0,232,64ZM48,120A24,24,0,0,1,24,96V80H48v32q0,4,.39,8Zm144-8.9c0,35.52-29,64.64-64,64.9a64,64,0,0,1-64-64V56H192ZM232,96a24,24,0,0,1-24,24h-.5a81.81,81.81,0,0,0,.5-8.9V80h24Z"/>',
+    clock: '<path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z"/>',
+    flag: '<path d="M42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,16.4,8.11,34.06,16.85,53,16.85,13.93,0,28.54-4.75,43.82-18a8,8,0,0,0,2.76-6V56A8,8,0,0,0,218.76,50c-28,24.23-51.72,12.49-79.21-1.12C111.07,34.76,78.78,18.79,42.76,50ZM216,172.25c-26.79,21.16-49.87,9.74-76.45-3.41-25-12.35-52.81-26.13-83.55-8.4V59.79c26.79-21.16,49.87-9.75,76.45,3.4,25,12.35,52.82,26.13,83.55,8.4Z"/>',
+    imagePlus: '<path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM48,48H208v77.38l-24.69-24.7a16,16,0,0,0-22.62,0L53.37,208H48ZM208,208H76l96-96,36,36v60ZM96,120A24,24,0,1,0,72,96,24,24,0,0,0,96,120Zm0-32a8,8,0,1,1-8,8A8,8,0,0,1,96,88Z"/>',
+    imageOff: '<path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16h64a8,8,0,0,0,7.59-5.47l14.83-44.48L163,151.43a8.07,8.07,0,0,0,4.46-4.46l14.62-36.55,44.48-14.83A8,8,0,0,0,232,88V56A16,16,0,0,0,216,40ZM112.41,157.47,98.23,200H40V172l52-52,30.42,30.42L117,152.57A8,8,0,0,0,112.41,157.47ZM216,82.23,173.47,96.41a8,8,0,0,0-4.9,4.62l-14.72,36.82L138.58,144l-35.27-35.27a16,16,0,0,0-22.62,0L40,149.37V56H216Zm12.68,33a8,8,0,0,0-7.21-1.1l-23.8,7.94a8,8,0,0,0-4.9,4.61l-14.31,35.77-35.77,14.31a8,8,0,0,0-4.61,4.9l-7.94,23.8A8,8,0,0,0,137.73,216H216a16,16,0,0,0,16-16V121.73A8,8,0,0,0,228.68,115.24ZM216,200H148.83l3.25-9.75,35.51-14.2a8.07,8.07,0,0,0,4.46-4.46l14.2-35.51,9.75-3.25Z"/>',
+    dices: '<path d="M192,32H64A32,32,0,0,0,32,64V192a32,32,0,0,0,32,32H192a32,32,0,0,0,32-32V64A32,32,0,0,0,192,32Zm16,160a16,16,0,0,1-16,16H64a16,16,0,0,1-16-16V64A16,16,0,0,1,64,48H192a16,16,0,0,1,16,16ZM104,92A12,12,0,1,1,92,80,12,12,0,0,1,104,92Zm72,0a12,12,0,1,1-12-12A12,12,0,0,1,176,92Zm-72,72a12,12,0,1,1-12-12A12,12,0,0,1,104,164Zm36-36a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm36,36a12,12,0,1,1-12-12A12,12,0,0,1,176,164Z"/>',
+    users: '<path d="M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z"/>',
+    copy: '<path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/>',
+    trash: '<path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/>',
+    check: '<path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/>'
+  };
+  function icon(name, px) {
+    return '<svg viewBox="0 0 256 256" width="' + px + '" height="' + px + '" fill="currentColor" aria-hidden="true">' + P[name] + '</svg>';
+  }
+
+  /* ── The photographs, drawn ─────────────────────────────────────────────
+     Five scenes: two from one table at home, two from a convention hall, and
+     a screenshot that carries no EXIF at all — which is the case the fallback
+     copy on the pick step exists for. */
+  var SCENES = [
+    { table: "#6B4A2F", felt: "#2F4A34", card: "#F2E6CE", accent: "#C8553D", second: "#4E6B8A" },
+    { table: "#6B4A2F", felt: "#3A5540", card: "#EFE2C6", accent: "#E0A94A", second: "#8A5A3C" },
+    { table: "#C0AA88", felt: "#8E7B5C", card: "#F6EFE0", accent: "#4E6B8A", second: "#7B4A3A" },
+    { table: "#2A2A31", felt: "#25455C", card: "#E8F0F4", accent: "#3E8E9C", second: "#D4A64B" },
+    null /* the screenshot */
+  ];
+  function photo(i) {
+    var s = SCENES[i];
+    var g = 'g' + i;
+    if (!s) {
+      /* A screenshot of a scoring app: flat, gridded, obviously not a camera. */
+      return '<svg viewBox="0 0 320 240" preserveAspectRatio="xMidYMid slice" width="100%" height="100%" role="img" aria-label="A screenshot of a scoring app">' +
+        '<rect width="320" height="240" fill="#E9E6E0"/>' +
+        '<rect x="0" y="0" width="320" height="34" fill="#FFFFFF"/>' +
+        '<rect x="14" y="13" width="86" height="8" rx="4" fill="#B9B4AA"/>' +
+        '<rect x="272" y="11" width="34" height="12" rx="6" fill="#D8D4CB"/>' +
+        [0, 1, 2, 3].map(function (r) {
+          return '<rect x="14" y="' + (48 + r * 44) + '" width="292" height="34" rx="8" fill="#FFFFFF"/>' +
+            '<circle cx="34" cy="' + (65 + r * 44) + '" r="10" fill="#CFC9BD"/>' +
+            '<rect x="52" y="' + (60 + r * 44) + '" width="' + (72 + r * 18) + '" height="8" rx="4" fill="#C6C0B4"/>' +
+            '<rect x="262" y="' + (58 + r * 44) + '" width="30" height="12" rx="3" fill="#A9C2A4"/>';
+        }).join("") +
+        '</svg>';
+    }
+    return '<svg viewBox="0 0 320 240" preserveAspectRatio="xMidYMid slice" width="100%" height="100%" role="img" aria-label="An overhead photo of a game in progress">' +
+      '<defs>' +
+      '<radialGradient id="v' + g + '" cx="50%" cy="42%" r="78%">' +
+      '<stop offset="55%" stop-color="#000" stop-opacity="0"/>' +
+      '<stop offset="100%" stop-color="#000" stop-opacity="0.42"/></radialGradient>' +
+      '<linearGradient id="l' + g + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#fff" stop-opacity="0.16"/>' +
+      '<stop offset="60%" stop-color="#fff" stop-opacity="0"/></linearGradient>' +
+      '</defs>' +
+      '<rect width="320" height="240" fill="' + s.table + '"/>' +
+      '<rect width="320" height="240" fill="url(#l' + g + ')"/>' +
+      '<g transform="rotate(' + (i % 2 ? -4 : 3) + ' 160 120)">' +
+      '<rect x="46" y="52" width="228" height="136" rx="7" fill="' + s.felt + '"/>' +
+      '<rect x="58" y="64" width="204" height="112" rx="4" fill="#000" opacity=".14"/>' +
+      [0, 1, 2, 3, 4, 5].map(function (n) {
+        /* Jitter: six cards on a perfect grid read as a spreadsheet, not a table. */
+        var j = [[0, 0, -3], [4, -5, 2], [-3, 3, 5], [2, 4, -6], [-5, -2, 4], [3, -4, -2]][n];
+        var x = 68 + (n % 3) * 66 + j[0], y = 74 + Math.floor(n / 3) * 50 + j[1];
+        return '<g transform="rotate(' + j[2] + " " + (x + 26) + " " + (y + 20) + ')">' +
+          '<rect x="' + x + '" y="' + y + '" width="52" height="40" rx="3" fill="' + s.card + '" opacity="' + (0.86 + (n % 2) * 0.1) + '"/>' +
+          '<rect x="' + (x + 5) + '" y="' + (y + 6) + '" width="' + (28 + n * 3) + '" height="4" rx="2" fill="' + s.accent + '" opacity=".7"/>' +
+          '<rect x="' + (x + 5) + '" y="' + (y + 15) + '" width="34" height="3" rx="1.5" fill="#000" opacity=".2"/>' +
+          '<rect x="' + (x + 5) + '" y="' + (y + 22) + '" width="24" height="3" rx="1.5" fill="#000" opacity=".14"/></g>';
+      }).join("") +
+      '</g>' +
+      '<circle cx="' + (36 + i * 9) + '" cy="204" r="11" fill="' + s.accent + '"/>' +
+      '<circle cx="' + (66 + i * 9) + '" cy="212" r="9" fill="' + s.second + '"/>' +
+      '<circle cx="286" cy="42" r="10" fill="' + s.second + '"/>' +
+      '<rect x="238" y="196" width="46" height="30" rx="4" fill="' + s.card + '" opacity=".92" transform="rotate(9 261 211)"/>' +
+      '<rect width="320" height="240" fill="url(#v' + g + ')"/>' +
+      '</svg>';
+  }
+
+  /* ── Catalog and people the sheets offer ────────────────────────────── */
+  var GAMES = [
+    { id: "g-wingspan", name: "Wingspan", art: 0 },
+    { id: "g-carcassonne", name: "Carcassonne", art: 2 },
+    { id: "g-azul", name: "Azul", art: 3 },
+    { id: "g-everdell", name: "Everdell", art: 1 },
+    { id: "g-brass", name: "Brass: Birmingham", art: 2 },
+    { id: "g-arknova", name: "Ark Nova", art: 0 },
+    { id: "g-cascadia", name: "Cascadia", art: 1 },
+    { id: "g-root", name: "Root", art: 3 }
+  ];
+  var PEOPLE = [
+    { name: "Dan", userId: "u-me", me: true, sub: "You" },
+    { name: "Sean O'Brien", userId: "u-sean", sub: "14 plays together" },
+    { name: "Mick Farrell", userId: "u-mick", sub: "11 plays together" },
+    { name: "Jasmine Okafor", userId: "u-jas", sub: "6 plays together" },
+    { name: "Priya Raman", userId: "u-priya", sub: "3 plays together" },
+    { name: "Tom", userId: null, sub: "Ghost player — no account yet" }
+  ];
+  var COUNTRIES = [
+    { code: "", name: "Don't record a country" },
+    { code: "GB", name: "United Kingdom" },
+    { code: "DE", name: "Germany" },
+    { code: "IE", name: "Ireland" },
+    { code: "NL", name: "Netherlands" },
+    { code: "FR", name: "France" },
+    { code: "US", name: "United States" }
+  ];
+  var COUNTRY_NAME = { GB: "United Kingdom", DE: "Germany", IE: "Ireland", NL: "Netherlands", FR: "France", US: "United States" };
+
+  /* ── The five shots, as the pick step leaves them ───────────────────── */
+  function seed() {
+    return [
+      {
+        id: "3f2a91c4", label: "IMG_4471.jpg", art: 0,
+        playedAt: "2026-08-14", dateSource: "exif",
+        countryCode: "GB", countrySource: "photo",
+        exif: { model: "Apple iPhone 15 Pro", taken: "2026:08:14 21:47:03", lat: 51.5412, lon: -0.1425, size: "3.9 MB" },
+        game: GAMES[0], players: [
+          { name: "Dan", userId: "u-me", isWinner: false },
+          { name: "Sean O'Brien", userId: "u-sean", isWinner: true },
+          { name: "Mick Farrell", userId: "u-mick", isWinner: false }
+        ], notes: "First outing for the European expansion."
+      },
+      {
+        id: "8b70d215", label: "IMG_4478.jpg", art: 1,
+        playedAt: "2026-08-14", dateSource: "exif",
+        countryCode: "GB", countrySource: "sibling",
+        exif: { model: "Apple iPhone 15 Pro", taken: "2026:08:14 23:12:40", lat: null, lon: null, size: "4.2 MB" },
+        game: null, players: [], notes: null
+      },
+      {
+        id: "c41e6f88", label: "IMG_4502.jpg", art: 2,
+        playedAt: "2026-08-22", dateSource: "exif",
+        countryCode: "DE", countrySource: "photo",
+        exif: { model: "Apple iPhone 15 Pro", taken: "2026:08:22 14:05:19", lat: 51.4310, lon: 7.0090, size: "3.4 MB" },
+        game: null, players: [], notes: null
+      },
+      {
+        id: "0da95b37", label: "IMG_4506.jpg", art: 3,
+        playedAt: "2026-08-22", dateSource: "exif",
+        countryCode: "DE", countrySource: "photo",
+        exif: { model: "Apple iPhone 15 Pro", taken: "2026:08:22 19:38:52", lat: 51.4318, lon: 7.0102, size: "3.8 MB" },
+        game: null, players: [], notes: null
+      },
+      {
+        id: "5e18ca60", label: "Screenshot 2026-08-30 at 20.11.png", art: 4,
+        playedAt: "2026-08-30", dateSource: "file",
+        countryCode: null, countrySource: null,
+        exif: null, game: null, players: [], notes: null
+      }
+    ];
+  }
+
+  var STEPS = ["photos", "assign", "import"];
+  var state;
+  function reset() {
+    state = { step: 0, cursor: 0, shots: seed(), sheet: null, picks: [], progress: null, mode: state ? state.mode : "dark" };
+  }
+  reset();
+
+  var screenEl = document.querySelector("[data-screen]");
+  var notesEl = document.querySelector("[data-notes]");
+  var readoutEl = document.querySelector("[data-readout]");
+  var phoneEl = document.querySelector(".phone");
+  var capL = document.querySelector("[data-cap-left]");
+  var capR = document.querySelector("[data-cap-right]");
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function stepName() { return STEPS[state.step]; }
+  function current() { return state.shots[state.cursor] || null; }
+  function importable() { return state.shots.filter(function (s) { return !!s.game; }); }
+  function fmtDate(iso) {
+    var d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  }
+  function initials(name) {
+    var parts = String(name).trim().split(/\s+/);
+    return (parts[0][0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
+  }
+  function badge(p) {
+    var cls = p.userId ? (p.userId === "u-me" ? "pimp-badge pimp-badge--me" : "pimp-badge") : "pimp-badge pimp-badge--ghost";
+    return '<span class="' + cls + '">' + esc(initials(p.name)) + "</span>";
+  }
+  function placeLine(shot) {
+    if (!shot.countryCode) return "No location in this photo";
+    var n = COUNTRY_NAME[shot.countryCode] || shot.countryCode;
+    if (shot.countrySource === "sibling") return esc(n) + " — from another photo that day";
+    return esc(n);
+  }
+  function dateLine(shot) {
+    if (shot.dateSource === "file") return esc(fmtDate(shot.playedAt)) + " — from the file, not the photo";
+    return esc(fmtDate(shot.playedAt));
+  }
+
+  /* ── Step bodies ────────────────────────────────────────────────────── */
+  function renderPhotos() {
+    var withPlace = state.shots.filter(function (s) { return !!s.countryCode; }).length;
+    var fromFile = state.shots.filter(function (s) { return s.dateSource === "file"; }).length;
+    return '<div class="imp-step">' +
+      '<h3 class="imp-step__title">Pick your photos</h3>' +
+      '<p class="imp-step__lede">Photos of games you\'ve already played. Each one becomes a play, dated and placed from what your camera wrote into it &mdash; you say which game and who was there. Nothing is uploaded until the last step.</p>' +
+      '<div class="imp-step__foot-row">' +
+      '<span class="imp-filebtn">' + icon("imagePlus", 15) + "<span>Add more</span></span>" +
+      '<span class="imp-count">' + state.shots.length + " / 30</span>" +
+      "</div>" +
+      '<ul class="pimp-picks">' + state.shots.map(function (s, i) {
+        return '<li class="pimp-pick">' +
+          '<span style="flex:none;width:56px;height:56px;border-radius:11px;overflow:hidden;border:1px solid var(--polaroid-line)">' + photo(s.art) + "</span>" +
+          '<span class="pimp-pick__body">' +
+          '<span class="pimp-pick__name">' + esc(s.label) + "</span>" +
+          '<span class="pimp-pick__meta">' + icon("clock", 13) + " " + dateLine(s) + "</span>" +
+          '<span class="pimp-pick__meta">' + icon("flag", 13) + " " + placeLine(s) + "</span>" +
+          "</span>" +
+          '<button class="pimp-pick__x" type="button" data-act="remove" data-i="' + i + '" aria-label="Remove ' + esc(s.label) + '">' + icon("x", 15) + "</button>" +
+          "</li>";
+      }).join("") + "</ul>" +
+      '<p class="imp-note">' + state.shots.length + " photo" + (state.shots.length === 1 ? "" : "s") + " · " + withPlace +
+      " with a location" + (fromFile ? " · " + fromFile + " dated from the file rather than the photo" : "") +
+      ". Several photos of one game? Remove the spares &mdash; one photo is one play.</p>" +
+      "</div>";
+  }
+
+  function renderAssign() {
+    var shot = current();
+    if (!shot) return '<div class="imp-step"><h3 class="imp-step__title">No photos left</h3></div>';
+    var i = state.cursor, total = state.shots.length;
+    var prev = i > 0 ? state.shots[i - 1] : null;
+    var canCopy = !!(prev && (prev.game || prev.players.length));
+    var provenance = "";
+    if (shot.dateSource === "exif" && shot.countrySource === "photo") provenance = "The date and the country came out of this photo.";
+    else if (shot.dateSource === "exif") provenance = "The date came out of this photo.";
+    else if (shot.countrySource === "photo") provenance = "The country came out of this photo.";
+
+    return '<div class="imp-step">' +
+      '<div class="pimp-filmstrip">' + state.shots.map(function (s, n) {
+        return '<button class="pimp-film' + (n === i ? " is-current" : "") + (s.game ? " is-done" : "") +
+          '" type="button" data-act="goto" data-i="' + n + '" aria-label="Photo ' + (n + 1) + " of " + total + '">' +
+          photo(s.art) + (s.game ? '<span class="pimp-film__tick">' + icon("check", 9) + "</span>" : "") + "</button>";
+      }).join("") + "</div>" +
+      '<div class="pimp-hero"><div class="pimp-hero__img">' + photo(shot.art) + "</div></div>" +
+      '<div class="pimp-fields">' +
+      '<button class="pimp-field' + (shot.game ? "" : " pimp-field--unset") + '" type="button" data-act="sheet" data-sheet="game">' +
+      '<span class="pimp-field__mark">' + (shot.game ? photo(shot.game.art) : icon("dices", 17)) + "</span>" +
+      '<span class="pimp-field__body"><span class="pimp-field__label">Game</span>' +
+      '<span class="pimp-field__value">' + (shot.game ? esc(shot.game.name) : "Pick a game") + "</span></span>" +
+      '<span class="pimp-field__chev">' + icon("chev", 15) + "</span></button>" +
+      '<button class="pimp-field' + (shot.players.length ? "" : " pimp-field--unset") + '" type="button" data-act="sheet" data-sheet="players">' +
+      '<span class="pimp-field__mark">' + icon("users", 17) + "</span>" +
+      '<span class="pimp-field__body"><span class="pimp-field__label">Players</span>' +
+      '<span class="pimp-field__value">' + (shot.players.length ? esc(shot.players.map(function (p) { return p.name; }).join(", ")) : "Who played?") + "</span></span>" +
+      '<span class="pimp-field__chev">' + icon("chev", 15) + "</span></button>" +
+      "</div>" +
+      (shot.players.length ? renderSeats(shot) : "") +
+      '<div class="pimp-meta">' +
+      '<span class="imp-field"><span class="imp-field__label">Date</span><span class="imp-field__value">' + esc(fmtDate(shot.playedAt)) + "</span></span>" +
+      '<button class="imp-field" type="button" data-act="sheet" data-sheet="country">' +
+      '<span class="imp-field__label">Where</span>' +
+      '<span class="imp-field__value' + (shot.countryCode ? "" : " is-dim") + '">' +
+      (shot.countryCode ? esc(COUNTRY_NAME[shot.countryCode] || shot.countryCode) : "Not recorded") + "</span></button>" +
+      "</div>" +
+      (provenance ? '<p class="imp-note">' + provenance + " Change either if it’s wrong.</p>" : "") +
+      (shot.notes ? '<p class="imp-note" style="color:var(--ink-muted)">“' + esc(shot.notes) + "”</p>" : "") +
+      '<div class="pimp-rowacts">' +
+      (canCopy ? '<button class="imp-cta imp-cta--ghost" type="button" data-act="copy">' + icon("copy", 15) + " Same as the last one</button>" : "") +
+      '<button class="pimp-drop" type="button" data-act="drop">' + icon("trash", 15) + " Don’t import this photo</button>" +
+      "</div></div>";
+  }
+
+  function renderSeats(shot) {
+    return '<ul class="pimp-seats">' + shot.players.map(function (p) {
+      return '<li class="pimp-seat' + (p.isWinner ? " is-winner" : "") + '">' +
+        '<button class="pimp-seat__toggle" type="button" data-act="win" data-name="' + esc(p.name) + '" aria-pressed="' + (p.isWinner ? "true" : "false") + '">' +
+        badge(p) + '<span class="pimp-seat__name">' + esc(p.name) + "</span>" +
+        '<span class="pimp-seat__win">' + icon("trophy", 13) + "</span></button>" +
+        '<button class="pimp-seat__x" type="button" data-act="unseat" data-name="' + esc(p.name) + '" aria-label="Remove ' + esc(p.name) + '">' + icon("x", 12) + "</button>" +
+        "</li>";
+    }).join("") + "</ul>" +
+      '<p class="imp-note">Tap a player to mark them the winner &mdash; several is a tie. × takes them off this table.</p>';
+  }
+
+  function renderImport() {
+    var ready = importable();
+    var missing = state.shots.length - ready.length;
+    var p = state.progress;
+    if (p) {
+      var pct = p.total ? Math.round((p.done / p.total) * 100) : 100;
+      var busy = p.done < p.total;
+      var uploading = busy && p.done < p.total / 2;
+      return '<div class="imp-step">' +
+        '<h3 class="imp-step__title">' + (busy ? (uploading ? "Uploading photos…" : "Saving plays…") : "Imported") + "</h3>" +
+        '<div class="imp-progress"><div class="imp-progress__fill" style="width:' + pct + '%"></div></div>' +
+        '<p class="imp-progress__label">' + p.done + " of " + p.total + "</p>" +
+        (busy ? "" :
+          '<dl class="imp-summary"><div><dt>Added</dt><dd>' + ready.length + "</dd></div>" +
+          "<div><dt>Photos</dt><dd>" + ready.length + "</dd></div>" +
+          "<div><dt>Failed</dt><dd>0</dd></div></dl>" +
+          '<button class="imp-cta" type="button" data-act="finish">See your plays</button>') +
+        "</div>";
+    }
+    var byGame = {};
+    ready.forEach(function (s) { byGame[s.game.name] = (byGame[s.game.name] || 0) + 1; });
+    return '<div class="imp-step">' +
+      '<h3 class="imp-step__title">Ready to import</h3>' +
+      '<dl class="imp-summary">' +
+      "<div><dt>Plays</dt><dd>" + ready.length + "</dd></div>" +
+      "<div><dt>Games</dt><dd>" + Object.keys(byGame).length + "</dd></div>" +
+      "<div><dt>Photos</dt><dd>" + ready.length + '</dd><div class="imp-summary__note">one each</div></div>' +
+      "</dl>" +
+      '<ul class="imp-bygame">' + Object.keys(byGame).map(function (n) {
+        return "<li><span>" + esc(n) + "</span><span>" + byGame[n] + "</span></li>";
+      }).join("") + "</ul>" +
+      (missing ? '<p class="imp-warn">' + missing + " photo" + (missing === 1 ? "" : "s") + " still " + (missing === 1 ? "has" : "have") +
+        " no game, so " + (missing === 1 ? "it won’t" : "they won’t") + " be imported. Go back to match " +
+        (missing === 1 ? "it" : "them") + ".</p>" : "") +
+      '<button class="imp-cta" type="button" data-act="run"' + (ready.length ? "" : " disabled") + ">Import " + ready.length +
+      " play" + (ready.length === 1 ? "" : "s") + "</button>" +
+      '<p class="imp-note">The photos go up first, then the plays. Leaving the screen mid-run stops it; everything already saved stays saved.</p>' +
+      "</div>";
+  }
+
+  /* ── Sheets ─────────────────────────────────────────────────────────── */
+  function renderSheet() {
+    var shot = current();
+    if (!shot || !state.sheet) return "";
+    var body = "";
+    if (state.sheet === "game") {
+      body = '<h3 class="sheet__title">Which game is this?</h3>' +
+        '<p class="sheet__sub">Your library, then everything on BoardgameBuddy.</p>' +
+        '<div class="sheet__list">' + GAMES.map(function (g) {
+          var on = shot.game && shot.game.id === g.id;
+          return '<button class="sheet__row" type="button" role="option" aria-selected="' + (on ? "true" : "false") +
+            '" data-act="pickgame" data-id="' + g.id + '">' +
+            '<span class="sheet__art">' + photo(g.art) + "</span><span>" + esc(g.name) + "</span>" +
+            '<span class="tick">' + icon("check", 15) + "</span></button>";
+        }).join("") + "</div>" +
+        '<button class="sheet__cancel" type="button" data-act="closesheet">Cancel</button>';
+    } else if (state.sheet === "players") {
+      var seated = shot.players.map(function (p) { return p.name; });
+      body = '<h3 class="sheet__title">Who played?</h3>' +
+        '<p class="sheet__sub">Anyone without an account comes in as a ghost player, and can claim these plays later.</p>' +
+        '<div class="sheet__list"><div class="sheet__sec">Recently played with</div>' +
+        PEOPLE.map(function (p) {
+          var already = seated.indexOf(p.name) !== -1;
+          var on = already || state.picks.indexOf(p.name) !== -1;
+          return '<button class="sheet__row" type="button" role="option" aria-selected="' + (on ? "true" : "false") +
+            '" data-act="pickplayer" data-name="' + esc(p.name) + '"' + (already ? " disabled style=\"opacity:.5\"" : "") + ">" +
+            badge(p) + "<span><span>" + esc(p.name) + "</span><br><span style=\"font-size:11.5px;color:var(--polaroid-muted)\">" +
+            esc(already ? "Already at this table" : p.sub) + "</span></span>" +
+            '<span class="tick">' + icon("check", 15) + "</span></button>";
+        }).join("") + "</div>" +
+        '<button class="sheet__confirm" type="button" data-act="confirmplayers"' + (state.picks.length ? "" : " disabled style=\"opacity:.5\"") + ">" +
+        (state.picks.length ? "Add " + state.picks.length + " player" + (state.picks.length === 1 ? "" : "s") : "Select players to add") + "</button>" +
+        '<button class="sheet__cancel" type="button" data-act="closesheet">Cancel</button>';
+    } else {
+      body = '<h3 class="sheet__title">Where was this played?</h3>' +
+        '<p class="sheet__sub">Country only &mdash; the play row holds nothing finer.</p>' +
+        '<div class="sheet__list">' + COUNTRIES.map(function (c) {
+          var on = (shot.countryCode || "") === c.code;
+          return '<button class="sheet__row" type="button" role="option" aria-selected="' + (on ? "true" : "false") +
+            '" data-act="pickcountry" data-code="' + c.code + '"><span>' + esc(c.name) + "</span>" +
+            '<span class="tick">' + icon("check", 15) + "</span></button>";
+        }).join("") + "</div>" +
+        '<button class="sheet__cancel" type="button" data-act="closesheet">Cancel</button>';
+    }
+    return '<div class="sheet-scrim" data-act="closesheet"><div class="sheet" data-stop>' +
+      '<div class="sheet__grip"></div>' + body + "</div></div>";
+  }
+
+  /* ── The phone ──────────────────────────────────────────────────────── */
+  function nav() {
+    if (state.progress) return "";
+    if (stepName() === "import") {
+      return '<div class="imp-nav"><button class="imp-nav__back" type="button" data-act="back">Back</button></div>';
+    }
+    var onLast = stepName() === "assign" && state.cursor >= state.shots.length - 1;
+    var label = stepName() === "photos" ? "Start assigning" : (onLast ? "Review" : "Next photo");
+    var showBack = state.step > 0 || state.cursor > 0;
+    return '<div class="imp-nav">' +
+      (showBack ? '<button class="imp-nav__back" type="button" data-act="back">Back</button>' : "") +
+      '<button class="imp-nav__next" type="button" data-act="next"' + (state.shots.length ? "" : " disabled") + ">" + label + "</button></div>";
+  }
+
+  function renderPhone() {
+    var body = stepName() === "photos" ? renderPhotos() : stepName() === "assign" ? renderAssign() : renderImport();
+    var segs = STEPS.map(function (_, n) {
+      return '<div class="wiz__seg' + (n <= state.step ? " is-done" : "") + '"></div>';
+    }).join("");
+    screenEl.innerHTML =
+      '<header class="sp-head"><h2 class="sp-head__title">Import from photos</h2>' +
+      '<button class="sp-close" type="button" data-act="reset" aria-label="Close importer">' + icon("x", 15) + "</button></header>" +
+      '<div class="wiz"><div class="wiz__count">Step <b>' + (state.step + 1) + "</b> of 3</div>" +
+      '<div class="wiz__bar">' + segs + "</div></div>" +
+      '<div class="imp-body">' + body + "</div>" + nav() + renderSheet();
+  }
+
+  /* ── The annotation column ──────────────────────────────────────────── */
+  var NOTES = {
+    photos: {
+      key: "Step 1 of 3",
+      h: "Everything a file already knew",
+      p: "Five photos off a phone, read in the browser. Two came off one table on a Friday, two off a convention hall eight days later, and the last is a screenshot &mdash; which is the interesting one.",
+      beats: [
+        ["<b>IMG_4478</b> has no GPS tag at all, and still says United Kingdom. It borrows the country from the photo taken 85 minutes earlier the same day. That is not a guess: a phone writes a GPS tag only when the camera had a lock, so one shot of an evening having one and the next not is routine.", 0],
+        ["<b>The screenshot</b> has no EXIF block, so its date falls back to the file's modified time and the row says so rather than pretending. Its country stays empty &mdash; “we don’t know” is a legitimate value, and guessing poisons the only thing the column exists for.", 0],
+        ["Every row is a tap away from removal, because <b>one photo is one play</b> and a burst of four shots of one game is four plays until you say otherwise.", 1]
+      ]
+    },
+    assign: {
+      key: "Step 2 of 3",
+      h: "One photo, two questions",
+      p: "The pager is the step. <b>Continue means the next photo</b> and only becomes Review on the last one, so there is a single forward control rather than two competing ones. The filmstrip is how you skip around &mdash; and how you see at a glance how much is left.",
+      beats: [
+        ["Game and Players open <b>the app's own sheets</b> &mdash; the same ones Gather seats a table with. Picking a game here is the interaction you already know.", 0],
+        ["Seats are winner <b>toggles</b>, not a radio group, because several winners is a tie and that is a real answer.", 0],
+        ["<b>Same as the last one</b> copies the game and the table forward, never the date or the country &mdash; those came out of this photo's own EXIF and are the part the importer knows better than you do.", 0],
+        ["A photo can be left unassigned. It is simply left out, and the last step names the cost.", 1]
+      ]
+    },
+    "import": {
+      key: "Step 3 of 3",
+      h: "Photos first, then plays",
+      p: "The bar has two halves that move at different speeds, which is why the heading names which one is running. Photos go up one at a time &mdash; thirty parallel multipart uploads on a phone is where the connection gives up &mdash; and each URL is memoised on its shot so a retry never re-pushes bytes.",
+      beats: [
+        ["A photo that won't upload <b>costs the picture, not the play</b>. The play lands without it and the count says so at the end.", 0],
+        ["The whole run shares one <code>import_batch_id</code>, so Settings can undo it in a single tap.", 0],
+        ["Every play carries its own <code>client_key</code>, so running a half-finished import again lands the rest and re-writes nothing.", 0]
+      ]
+    }
+  };
+
+  function renderNotes() {
+    var n = NOTES[stepName()];
+    notesEl.innerHTML =
+      '<div class="note-block">' +
+      '<span class="note-key">' + n.key + "</span>" +
+      "<h2>" + n.h + "</h2>" +
+      "<p>" + n.p + "</p>" +
+      '<ul class="beats">' + n.beats.map(function (b) {
+        return '<li class="' + (b[1] ? "cost" : "") + '"><span>' + b[0] + "</span></li>";
+      }).join("") + "</ul></div>";
+  }
+
+  /* ── The readout: what the file said, and what gets written ─────────── */
+  function renderReadout() {
+    var shot = stepName() === "photos" ? state.shots[0] : current();
+    if (!shot) { readoutEl.innerHTML = ""; return; }
+    var e = shot.exif;
+    var tags = e
+      ? [["Model", e.model], ["DateTimeOriginal", e.taken],
+      ["GPSLatitude", e.lat == null ? "— absent —" : e.lat.toFixed(4) + "° N"],
+      ["GPSLongitude", e.lon == null ? "— absent —" : (e.lon < 0 ? Math.abs(e.lon).toFixed(4) + "° W" : e.lon.toFixed(4) + "° E")],
+      ["File size", e.size]]
+      : [["APP1/Exif segment", "— absent —"], ["File modified", shot.playedAt + " 20:11:04"]];
+
+    var resolved = e && e.lat != null
+      ? "geo-grid " + shot.countryCode + " · " + (COUNTRY_NAME[shot.countryCode] || "")
+      : (shot.countrySource === "sibling" ? "inherited " + shot.countryCode + " · same day" : "no country");
+
+    var payload = shot.game ? [
+      "{",
+      '  <span class="k">"game_id"</span>:        <span class="s">"' + shot.game.id + '"</span>,',
+      '  <span class="k">"played_at"</span>:      <span class="s">"' + shot.playedAt + '"</span>,',
+      '  <span class="k">"country_code"</span>:   ' + (shot.countryCode ? '<span class="s">"' + shot.countryCode + '"</span>' : '<span class="n">null</span>') + ",",
+      '  <span class="k">"photo_url"</span>:      <span class="s">"…/play-photos/' + shot.id + '.jpg"</span>,',
+      '  <span class="k">"players"</span>: [' + shot.players.map(function (p) {
+        return '<span class="s">"' + esc(p.name) + '"</span>' + (p.isWinner ? ' <span class="c">/* won */</span>' : "");
+      }).join(", ") + "],",
+      '  <span class="k">"client_key"</span>:     <span class="s">"' + shot.id + '-…"</span>,',
+      '  <span class="k">"import_batch_id"</span>: <span class="s">"9c2f…"</span>',
+      "}"
+    ].join("\n")
+      : '<span class="c">/* No game picked yet, so this photo is not in the import.\n   The last step names the cost rather than dropping it silently. */</span>';
+
+    readoutEl.innerHTML =
+      '<div class="readout__head">' +
+      "<h3>What the file said</h3>" +
+      '<span class="readout__file">' + esc(shot.label) + "</span></div>" +
+      '<div class="readout__grid">' +
+      '<div class="readout__col">' +
+      '<p class="readout__cap">Read on the device</p>' +
+      '<dl class="tags">' + tags.map(function (t) {
+        var absent = String(t[1]).indexOf("absent") !== -1;
+        return "<div><dt>" + esc(t[0]) + '</dt><dd class="' + (absent ? "absent" : "") + '">' + esc(t[1]) + "</dd></div>";
+      }).join("") + "</dl>" +
+      '<div class="arrow">' + icon("chev", 13) + '<span class="to">' + esc(resolved) + "</span></div>" +
+      "</div>" +
+      '<div class="readout__col">' +
+      '<p class="readout__cap">What leaves the device</p>' +
+      '<dl class="tags">' +
+      "<div><dt>Coordinate</dt><dd>never sent</dd></div>" +
+      "<div><dt>EXIF on the upload</dt><dd>stripped by re-encode</dd></div>" +
+      "<div><dt>Country on the play</dt><dd>" + esc(shot.countryCode || "null") + "</dd></div>" +
+      "<div><dt>Endpoint</dt><dd>POST /plays/photo</dd></div>" +
+      "<div><dt>then</dt><dd>POST /plays/import</dd></div>" +
+      "</dl></div></div>" +
+      '<pre class="payload">' + payload + "</pre>";
+  }
+
+  var CAPS = {
+    photos: ["Step 1 — the pick", "five photos, one evening and a convention"],
+    assign: ["Step 2 — the pager", "photo <b>" + 0 + "</b> of 5"],
+    "import": ["Step 3 — the write", "photos up first, then the plays"]
+  };
+  function render() {
+    phoneEl.setAttribute("data-mode", state.mode);
+    renderPhone();
+    renderNotes();
+    renderReadout();
+    var c = CAPS[stepName()];
+    capL.innerHTML = c[0];
+    capR.innerHTML = stepName() === "assign"
+      ? "photo <b>" + (state.cursor + 1) + "</b> of " + state.shots.length
+      : c[1];
+  }
+
+  /* ── Behaviour ──────────────────────────────────────────────────────── */
+  function runImport() {
+    var ready = importable();
+    state.progress = { done: 0, total: ready.length * 2 };
+    render();
+    var timer = setInterval(function () {
+      state.progress.done++;
+      render();
+      if (state.progress.done >= state.progress.total) clearInterval(timer);
+    }, 260);
+  }
+
+  document.addEventListener("click", function (ev) {
+    var modeBtn = ev.target.closest("[data-mode-btn]");
+    if (modeBtn) {
+      state.mode = modeBtn.getAttribute("data-mode-btn");
+      document.querySelectorAll("[data-mode-btn]").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b === modeBtn));
+      });
+      render();
+      return;
+    }
+    if (ev.target.closest("[data-reset]")) { var m = state.mode; reset(); state.mode = m; render(); return; }
+
+    var el = ev.target.closest("[data-act]");
+    if (!el || !screenEl.contains(el)) return;
+    var act = el.getAttribute("data-act");
+    /* The scrim closes the sheet; the card standing on it does not. Without
+       this, a tap on the sheet's own title walks up to the scrim and closes
+       the thing it was aimed at. */
+    if (act === "closesheet" && el.classList.contains("sheet-scrim") && ev.target.closest("[data-stop]")) return;
+    var shot = current();
+
+    if (act === "reset") { var mm = state.mode; reset(); state.mode = mm; }
+    else if (act === "remove") { state.shots.splice(+el.getAttribute("data-i"), 1); if (state.cursor >= state.shots.length) state.cursor = Math.max(0, state.shots.length - 1); }
+    else if (act === "goto") { state.cursor = +el.getAttribute("data-i"); }
+    else if (act === "next") {
+      if (stepName() === "photos") { state.step = 1; state.cursor = 0; }
+      else if (state.cursor < state.shots.length - 1) state.cursor++;
+      else state.step = 2;
+    } else if (act === "back") {
+      if (stepName() === "import") { state.step = 1; state.cursor = state.shots.length - 1; state.progress = null; }
+      else if (state.cursor > 0) state.cursor--;
+      else state.step = 0;
+    } else if (act === "sheet") { state.sheet = el.getAttribute("data-sheet"); state.picks = []; }
+    else if (act === "closesheet") { state.sheet = null; state.picks = []; }
+    else if (act === "pickgame") {
+      var g = GAMES.filter(function (x) { return x.id === el.getAttribute("data-id"); })[0];
+      if (shot) shot.game = g;
+      state.sheet = null;
+    } else if (act === "pickplayer") {
+      var nm = el.getAttribute("data-name");
+      var at = state.picks.indexOf(nm);
+      if (at === -1) state.picks.push(nm); else state.picks.splice(at, 1);
+    } else if (act === "confirmplayers") {
+      state.picks.forEach(function (nm) {
+        var person = PEOPLE.filter(function (p) { return p.name === nm; })[0];
+        if (shot && person) shot.players.push({ name: person.name, userId: person.userId, isWinner: false });
+      });
+      state.picks = [];
+      state.sheet = null;
+    } else if (act === "pickcountry") {
+      var code = el.getAttribute("data-code");
+      if (shot) { shot.countryCode = code || null; shot.countrySource = "user"; }
+      state.sheet = null;
+    } else if (act === "win") {
+      var wn = el.getAttribute("data-name");
+      if (shot) shot.players.forEach(function (p) { if (p.name === wn) p.isWinner = !p.isWinner; });
+    } else if (act === "unseat") {
+      var un = el.getAttribute("data-name");
+      if (shot) shot.players = shot.players.filter(function (p) { return p.name !== un; });
+    } else if (act === "copy") {
+      var prev = state.shots[state.cursor - 1];
+      if (shot && prev) {
+        shot.game = prev.game;
+        shot.players = prev.players.map(function (p) { return { name: p.name, userId: p.userId, isWinner: p.isWinner }; });
+      }
+    } else if (act === "drop") {
+      state.shots.splice(state.cursor, 1);
+      if (state.cursor >= state.shots.length) state.cursor = Math.max(0, state.shots.length - 1);
+      if (!state.shots.length) state.step = 0;
+    } else if (act === "run") { runImport(); return; }
+    else if (act === "finish") { var m2 = state.mode; reset(); state.mode = m2; }
+    render();
+  });
+
+  render();
+})();
+</script>

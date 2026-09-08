@@ -14709,17 +14709,19 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Wraps rather than truncating. "United Kingdom — from another photo that day"
+   does not fit one line at 390px, and where a row's date and country came from
+   is the whole thing this step is asking the user to check — an ellipsis here
+   would hide the sentence that explains the value. */
 .pimp-pick__meta {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.3rem;
   font-size: 0.74rem;
+  line-height: 1.35;
   color: var(--polaroid-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.pimp-pick__meta i, .pimp-pick__meta svg { flex: none; }
+.pimp-pick__meta i, .pimp-pick__meta svg { flex: none; margin-top: 2px; }
 /* A 16px glyph with its hit area padded out to 44 rather than a 44px button —
    .claude/rules/mobile-web.md § Tap targets. */
 .pimp-pick__x {
