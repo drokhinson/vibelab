@@ -212,6 +212,22 @@
     return total;
   }
 
+  // Did anyone actually type into this player's row? Blank cells sum to 0 in
+  // roundGridTotal, which is right for the number UNDER the column — an
+  // untouched grid reads 0 — and wrong for what gets SAVED: a play stored with
+  // every seat on 0 is indistinguishable from a table that genuinely all
+  // scored nothing, so it counts as a recorded loss in the feed caption and in
+  // the win rate. Every persistence boundary asks this first and stores NULL
+  // when it comes back false. Same resolver contract as roundGridTotal.
+  function roundGridHasAnyScore(player, roundCount, getCell) {
+    const resolve = typeof getCell === "function" ? getCell : defaultCellValue;
+    const n = Math.max(0, Number(roundCount) || 0);
+    for (let r = 0; r < n; r++) {
+      if (parseRoundScore(resolve(player, r)) != null) return true;
+    }
+    return false;
+  }
+
   // Column-header badge. Renders the player's colored bubble but FORCES
   // initials inside (even when the user picked an icon avatar) so the
   // narrow header column stays scannable while still being color-coded
@@ -449,6 +465,7 @@
   window.renderRoundGridTotalsCell = renderTotalsCell;
   window.roundGridRoundCount = roundGridRoundCount;
   window.roundGridTotal = roundGridTotal;
+  window.roundGridHasAnyScore = roundGridHasAnyScore;
   window.sanitizeRoundScore = sanitizeRoundScore;
   window.parseRoundScore = parseRoundScore;
   window.nextSignToggle = nextSignToggle;

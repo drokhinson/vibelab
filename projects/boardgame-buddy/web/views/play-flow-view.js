@@ -1791,9 +1791,20 @@
           const v = this._resolvedScore(p, r);
           p.roundScores[r] = v == null ? null : String(v);
         }
-        p.score = this._playerTotal(p);
+        // NULL, not 0, when the grid was left blank — see rollupScore in
+        // domain/play-session.js. The two have to agree: this one writes the
+        // draft, that one writes the payload.
+        p.score = this._playerHasScore(p) ? this._playerTotal(p) : null;
       }
       this._ps.persist();
+    }
+
+    _playerHasScore(player) {
+      return window.roundGridHasAnyScore(
+        player,
+        this._maxRoundCount(),
+        (p, r) => this._cellValue(p, r)
+      );
     }
 
     // Delegates to the grid widget's own totals-cell renderer. This used to be
@@ -2545,6 +2556,26 @@
       ps.persist();
     }
 
+    // A co-op table that did not beat the game has a real outcome — a loss —
+    // but its roster is shaped exactly like a play nobody bothered to score:
+    // no seat flagged a winner, no seat carrying a number. The feed card and
+    // the stats RPCs cannot tell the two apart from the data, so make the loss
+    // explicit and record the zero the table actually got.
+    //
+    // Scoped to this flow on purpose. The Play screen shows the "Mark as won"
+    // toggle (_renderCoopOutcome), so leaving it off here is a decision;
+    // imports and photo-import never showed it and must not have an outcome
+    // invented on their behalf.
+    _stampCoopLoss() {
+      const ps = this._ps;
+      if (!ps || !ps.players || ps.players.length === 0) return;
+      if (this._resolvePlayMode() !== "coop") return;
+      if (ps.players.some((p) => p.is_winner)) return;   // the table won
+      if (ps.players.some((p) => p.score != null)) return; // the table scored
+      ps.players.forEach((p) => { p.score = 0; });
+      ps.persist();
+    }
+
     _toggleWinner(i) {
       const ps = this._ps;
       const p = ps.players[i];
@@ -3173,6 +3204,9 @@
       // with those rounds blank, so the saved score didn't match the grid the
       // host had just been looking at.
       this._commitResolvedScores();
+      // After the commit, so it sees the settled scores rather than the
+      // pre-overlay draft.
+      this._stampCoopLoss();
 
       const payload = this._ps.toPlayCreate();
       // One key per finished play, minted here and carried by every attempt —

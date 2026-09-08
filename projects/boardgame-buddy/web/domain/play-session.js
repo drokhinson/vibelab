@@ -362,7 +362,12 @@
   // number the host was looking at when they hit Save.
   function rollupScore(p) {
     const rs = p && p.roundScores;
-    if (Array.isArray(rs) && rs.length > 0) {
+    // An all-blank grid is "nothing was typed", not "the table scored zero".
+    // Rolling it up to 0 is what made a play nobody scored read as a recorded
+    // loss — on the feed card and in every win-rate denominator. Such a grid
+    // falls through to `score`, which is normally null but carries a
+    // deliberate 0 for a co-op loss (play-flow-view's _stampCoopLoss).
+    if (Array.isArray(rs) && rs.length > 0 && window.roundGridHasAnyScore(p, rs.length)) {
       return window.roundGridTotal(p, rs.length);
     }
     return p && p.score != null ? p.score : null;

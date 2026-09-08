@@ -25,6 +25,8 @@
    * @property {string} name
    * @property {string} [thumbnail_url]
    * @property {number} plays
+   * @property {number} [decided_plays]  the subset of `plays` that recorded a
+   *   result; the denominator `wins` is read against.
    * @property {number} wins
    * @property {string} [last_played_at]
    * @property {string} [play_mode]   "coop" suppresses the win rate.
@@ -77,9 +79,15 @@
         : plays;
       // A co-op game has no per-player win to rate, so it says what it is
       // rather than reporting a meaningless 0%.
+      // Same denominator as the Stats panel's ring: plays that recorded a
+      // result, not every play. A game only ever logged without a winner or a
+      // score has no rate to report, so it says so instead of "0% won".
+      const decided = g.decided_plays != null ? g.decided_plays : g.plays;
       const rate = isCoop
         ? `<span class="game-picker__rate game-picker__rate--coop">Co-op</span>`
-        : `<span class="game-picker__rate">${g.plays ? Math.round((g.wins / g.plays) * 100) : 0}% won</span>`;
+        : (decided
+          ? `<span class="game-picker__rate">${Math.round((g.wins / decided) * 100)}% won</span>`
+          : `<span class="game-picker__rate game-picker__rate--coop">No results</span>`);
       return `
         <button class="game-picker__row" type="button" role="option"
                 aria-selected="${on}" data-picker-game-id="${escapeAttr(g.game_id)}">
