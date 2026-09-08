@@ -760,7 +760,14 @@
       // host writes a null placeholder row on _addRound (play-flow-view.js)
       // so an empty new round still grows maxRound() here.
       const maxRound = this._liveScores ? this._liveScores.maxRound() : -1;
-      const rounds = Math.max(1, maxRound + 1);
+      // The template's own row count is a third floor (migration 018). The
+      // host's null placeholder normally grows maxRound() for us, but the
+      // template lands on the session row a beat before that write does, and
+      // without this the mirror flashes a grid shorter than its own labels.
+      const rowLabels = (s && s.scoring_template && Array.isArray(s.scoring_template.rows))
+        ? s.scoring_template.rows
+        : null;
+      const rounds = Math.max(1, maxRound + 1, rowLabels ? rowLabels.length : 0);
       // Remember what we just sized the grid to, so the live-scores callback
       // can tell when the host added/removed a round and re-render the rows.
       this._renderedRounds = rounds;
@@ -777,6 +784,7 @@
         editable: false,
         roundCount: rounds,
         headerNames: true,
+        rowLabels,
         getCellValue: (p, r) => this._cellValue(p, r),
       });
       return `
