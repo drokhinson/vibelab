@@ -377,6 +377,7 @@
      .cascade-player--drag-clone,
      .ob-deck,
      [data-view="import-plays"],
+     [data-view="photo-import"],
      [data-view="log-play"],
      [data-view="play-flow"],
      [data-view="session-viewer"]) {
@@ -425,6 +426,7 @@
      .cascade-player--drag-clone,
      .ob-deck,
      [data-view="import-plays"],
+     [data-view="photo-import"],
      [data-view="log-play"],
      [data-view="play-flow"],
      [data-view="session-viewer"]) {
@@ -14663,6 +14665,308 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 @media (prefers-reduced-motion: reduce) {
   .bgb-wizsteps__seg::after, .imp-progress__fill { transition: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Photo importer — Settings → Import from photos (views/photo-import-view.js)
+   ══════════════════════════════════════════════════════════════════════════
+   Shares the whole .imp-* chrome above — the body padding, the docked nav, the
+   step titles, the summary cards, the CTA. Only the parts that have no
+   counterpart in the notes importer live here, and they are all about the one
+   thing that flow has and this one doesn't: the photograph in front of you.
+
+   Named in the --polaroid-* re-points at the top of this file alongside
+   [data-view="import-plays"], so every card below inverts with the theme.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Step 1: the picked photos ────────────────────────────────────────────── */
+/* A list, not the grid of squares the notes importer uses. Those pages are
+   interchangeable and the only question is "did I get all four"; these each
+   carry a date and a place the user is being asked to sanity-check, and a
+   caption under a thumbnail is unreadable at 84px. */
+.pimp-picks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pimp-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+}
+.pimp-pick__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pimp-pick__name {
+  font-weight: 600;
+  font-size: 0.86rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pimp-pick__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+  color: var(--polaroid-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pimp-pick__meta i, .pimp-pick__meta svg { flex: none; }
+/* A 16px glyph with its hit area padded out to 44 rather than a 44px button —
+   .claude/rules/mobile-web.md § Tap targets. */
+.pimp-pick__x {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--polaroid-muted);
+}
+.pimp-pick__x::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+.pimp-pick__x:active { background: var(--polaroid-bg-soft); }
+
+.pimp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.4rem 0 0.4rem;
+}
+
+/* ── Step 2: the filmstrip ────────────────────────────────────────────────── */
+/* How you skip around, and — more usefully — how you see at a glance how much
+   is left: an assigned photo carries an accent ring, an unassigned one
+   doesn't. Scrolls sideways rather than wrapping so thirty photos never push
+   the picture itself off the top of a phone. */
+.pimp-filmstrip {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 -16px;
+  padding: 0.2rem 16px 0.4rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.pimp-filmstrip::-webkit-scrollbar { display: none; }
+.pimp-film {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 0.6rem;
+  background: var(--bg-2);
+  overflow: hidden;
+  opacity: 0.55;
+}
+/* The hit area, padded to 44 in both directions around a 48px control that
+   sits 4px from its neighbour. */
+.pimp-film::before { content: ""; position: absolute; inset: -2px; }
+.pimp-film.is-done { opacity: 1; }
+.pimp-film.is-current {
+  opacity: 1;
+  border-color: var(--accent);
+}
+.pimp-film .pimp-thumb { border-radius: 0.45rem; }
+
+/* ── Step 2: the photo itself ─────────────────────────────────────────────── */
+.pimp-hero {
+  border-radius: 1.1rem;
+  overflow: hidden;
+  background: var(--bg-2);
+  border: 1px solid var(--card-border);
+}
+.pimp-hero__img {
+  display: block;
+  width: 100%;
+  /* Contained rather than cropped: a photo of a table is landscape as often as
+     it is portrait, and the point of showing it is remembering which evening
+     it was — a cover crop through the middle of the table doesn't say that. */
+  max-height: 46vh;
+  object-fit: contain;
+  background: var(--bg-2);
+}
+.pimp-hero__gone {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+.pimp-hero__gone i, .pimp-hero__gone svg { flex: none; }
+
+.pimp-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pimp-thumb--gone {
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+  background: var(--bg-2);
+}
+.pimp-pick .pimp-thumb {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 0.7rem;
+  border: 1px solid var(--polaroid-line);
+}
+
+/* ── Step 2: the two assignments ──────────────────────────────────────────── */
+/* Game and Players are the whole job of this screen, so they are full rows
+   with 56px of height and their own art, not the compact .imp-field pair the
+   date and the country sit in below. */
+.pimp-fields { display: flex; flex-direction: column; gap: 0.4rem; }
+.pimp-field {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 56px;
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+}
+.pimp-field:active { background: var(--polaroid-bg-soft); }
+.pimp-field__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 0.55rem;
+  background: var(--well);
+  color: var(--polaroid-muted);
+  overflow: hidden;
+}
+.pimp-field__mark img { width: 100%; height: 100%; object-fit: cover; }
+.pimp-field__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pimp-field__label {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--polaroid-muted);
+}
+.pimp-field__value {
+  font-weight: 600;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pimp-field__chev { flex: none; color: var(--polaroid-muted); }
+.pimp-field--unset .pimp-field__value { color: var(--accent-ink); }
+
+/* ── Step 2: the table ────────────────────────────────────────────────────── */
+/* Each seat is a toggle for "did they win". Several winners is a tie, which is
+   why these are pressed-state buttons rather than a radio group — the same
+   rule Settle Up follows. */
+.pimp-seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The pill is the <li>; the two controls inside it are siblings, because a
+   button nested in a button is not something a browser will render. */
+.pimp-seat {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--polaroid-line);
+  border-radius: var(--r-pill);
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  overflow: hidden;
+}
+.pimp-seat__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.25rem 0.3rem 0.25rem 0.3rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.82rem;
+}
+.pimp-seat__badge { flex: none; }
+.pimp-seat__name { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Present but blank until they've won, so the pill doesn't resize under the
+   thumb that just tapped it. */
+.pimp-seat__win { flex: none; opacity: 0; color: var(--polaroid-accent); }
+.pimp-seat__x {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-height: 44px;
+  border: 0;
+  border-left: 1px solid var(--polaroid-line);
+  background: transparent;
+  color: var(--polaroid-muted);
+}
+.pimp-seat.is-winner {
+  border-color: var(--polaroid-accent);
+  background: color-mix(in srgb, var(--polaroid-accent) 14%, transparent);
+  font-weight: 600;
+}
+.pimp-seat.is-winner .pimp-seat__win { opacity: 1; }
+.pimp-seat.is-winner .pimp-seat__x { border-left-color: var(--polaroid-accent); }
+.pimp-seat__toggle:active,
+.pimp-seat__x:active { background: var(--polaroid-bg-soft); }
+
+/* ── Step 2: date, place, notes, row actions ──────────────────────────────── */
+.pimp-meta { display: flex; gap: 0.4rem; }
+.pimp-meta > * { flex: 1; min-width: 0; }
+.pimp-notes { display: flex; flex-direction: column; gap: 0.25rem; }
+.pimp-rowacts { display: flex; flex-direction: column; gap: 0.5rem; }
+.pimp-rowacts .imp-cta--ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.pimp-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--rounded-btn, 0.6rem);
+  background: transparent;
+  color: var(--rust);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.pimp-drop:active { background: color-mix(in srgb, var(--rust) 12%, transparent); }
 
 /* ══════════════════════════════════════════════════════════════════════════
    Play card — the run variant (.play-card--stack)

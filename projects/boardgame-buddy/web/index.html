@@ -232,6 +232,7 @@
     <main data-view="notifications" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="settings" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="import-plays" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
+    <main data-view="photo-import" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="bgg-sync" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="admin-reports" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="admin-images" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
@@ -327,11 +328,14 @@
   <script src="domain/expansion-tree.js"></script>
   <script src="domain/geo-data.js"></script>
   <script src="domain/geo.js"></script>
+  <script src="domain/geo-grid.js"></script>
+  <script src="domain/exif.js"></script>
   <script src="domain/play.js"></script>
   <script src="domain/notification-feed.js"></script>
   <script src="domain/push.js"></script>
   <script src="domain/name-match.js"></script>
   <script src="domain/play-import.js"></script>
+  <script src="domain/photo-import.js"></script>
   <script src="domain/play-session.js"></script>
   <script src="domain/score-write-queue.js"></script>
   <script src="domain/live-scores.js"></script>
@@ -395,6 +399,11 @@
        neither can compete with /bootstrap on a cold boot. -->
   <link rel="prefetch" href="ui/qr-encode.js" as="script" />
   <link rel="prefetch" href="ui/qr-decode.js" as="script" />
+  <!-- The country raster, on the same terms and for the same reasons: 162 KB
+       of border data that only the photo importer ever asks for, kept in the
+       precache sweep by this href and pulled in on first use by
+       domain/geo-grid.js. -->
+  <link rel="prefetch" href="domain/geo-grid-data.js" as="script" />
   <script src="ui/lazy-script.js"></script>
   <script src="ui/qr-camera.js"></script>
 
@@ -420,6 +429,7 @@
   <script src="widgets/onboarding-deck.js"></script>
   <script src="widgets/import-expansions-modal.js"></script>
   <script src="widgets/import-plays-steps.js"></script>
+  <script src="widgets/photo-import-steps.js"></script>
   <script src="widgets/chapter-wizard-steps.js"></script>
   <script src="widgets/chapter-import-sheet.js"></script>
   <script src="widgets/play-run-sheet.js"></script>
@@ -452,6 +462,7 @@
   <script src="views/notifications-view.js"></script>
   <script src="views/settings-view.js"></script>
   <script src="views/import-plays-view.js"></script>
+  <script src="views/photo-import-view.js"></script>
   <script src="views/bgg-sync-view.js"></script>
   <script src="widgets/admin-backfill-panel.js"></script>
   <script src="views/admin-reports-view.js"></script>
