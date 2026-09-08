@@ -10,7 +10,7 @@
 //       PolaroidPopup.avatarCustomizer when this became its second caller
 //   2 · buddies — ui/buddy-suggestion-rail.js's select-mode tile, the same one
 //       the Add-buddies card and both rails render
-//   3 · notifications — the soft ask, sharing its decline receipt with
+//   3 · notifications — the offer, sharing its decline receipt with
 //       ui/push-prompt.js so the boot-time card does not re-ask a question
 //       this slide already put
 //   4 · BoardGameGeek — the fields and copy of the deleted
@@ -285,10 +285,11 @@
   // off a handful of requests; "we'll tell you when they say yes" is a promise
   // about something they did ten seconds ago rather than an abstract offer.
   //
-  // Since migration 018 the ACCOUNT already wants notifications — push_tier
-  // defaults to 'all'. What is missing is a device to send to, so "Turn them
-  // on" subscribes this browser and re-saves the tier it already had; it never
-  // moves somebody off 'actionable' onto 'all' behind their back.
+  // Notifications are OFF until somebody says otherwise — push_tier defaults to
+  // 'none' (018 flipped that briefly, 019 put it back). So this slide is a real
+  // offer rather than a formality: "Turn them on" is what sets the account to
+  // 'all' AND subscribes this browser, and "Not now" leaves an account that
+  // sends nothing exactly as it was.
   function buildNotifications(deck) {
     const el = slideEl("ob-slide--notify", `
       <div class="ob-slide__scroll">
@@ -302,8 +303,9 @@
           you to open the app.
         </p>
         <p class="ob-slide__note" data-note>
-          Nothing noisy: no marketing, no digests. Change how much you hear, or
-          switch it off entirely, in <b>Settings &rsaquo; Notifications</b>.
+          Off unless you turn them on, and nothing noisy either way: no
+          marketing, no digests. Change how much you hear, or switch them off
+          again, in <b>Settings &rsaquo; Notifications</b>.
         </p>
       </div>
       <div class="ob-slide__actions" data-actions></div>
@@ -374,9 +376,10 @@
      */
     function leave(turnOn) {
       if (turnOn) {
-        // Keep the account's rung. 'none' only happens to someone who turned
-        // notifications off and then came back through first-run setup, and
-        // for them this tap is the yes.
+        // 'all' is what the yes means for the account this slide is actually
+        // for: a new one, which is off. A tier already above 'none' belongs to
+        // someone who set it deliberately and is only here because first-run
+        // setup came back — they keep the rung they chose.
         const tier = (state && state.tier && state.tier !== "none") ? state.tier : "all";
         // ONE ATTEMPT, unlike every other job in the deck. The queue retries a
         // failed write once — right for a phone on a bad connection, wrong for

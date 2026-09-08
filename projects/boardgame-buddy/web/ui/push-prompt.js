@@ -1,10 +1,13 @@
-// ui/push-prompt.js — the ask that turns the account's tier into a real device.
+// ui/push-prompt.js — the one time the app suggests turning notifications on.
 //
-// Since migration 018 an account arrives with push_tier 'all', so the SERVER
-// half of notifications is on for everyone by default. That half delivers
-// nothing on its own: a send needs a subscription, a subscription needs the
-// browser's permission, and permission can only be granted from a tap. This
-// card is that tap — the one thing the default cannot do for itself.
+// Notifications are OFF by default and stay that way: `push_tier` defaults to
+// 'none' and nothing is ever sent to an account that has not asked for it.
+// (Migration 018 briefly defaulted it to 'all' on the argument that the column
+// is intent and delivers nothing on its own; 019 put it back, because an
+// account nobody asked should read as off wherever it is shown.) This file is
+// the other half of an opt-in that actually works — because an opt-in nobody is
+// told about is not a choice, it is a feature that quietly does not exist. So
+// the app makes the offer once, plainly, and takes no for an answer.
 //
 // WHY A CARD OF OUR OWN RATHER THAN Notification.requestPermission() AT BOOT.
 // The browser's prompt can be answered "block", and a block is permanent: no
@@ -20,18 +23,23 @@
 // silently. A boot-time call would fail on exactly the platform that matters
 // most here (an installed iOS PWA).
 //
-// Gating mirrors ui/install-prompt.js, because it is the same kind of
-// interruption: a settle delay, the feed and nowhere else, a clear screen to
-// land on, session-scoped dismissal, and a lifetime cap of MAX_ASKS refusals.
-// The two cannot collide — each treats any `.polaroid-popup__backdrop` as a
-// busy screen, so whichever gets there first makes the other wait its turn.
+// THE CAP IS THE POINT, and it is lower than the install card's. This suggests
+// something the person has not opted into, so MAX_ASKS is two: the one offer
+// the app owes them, plus a single later reminder for the session where the
+// card landed at a bad moment. The first-run deck's own notifications slide
+// spends one of those, so somebody who skipped it there sees this at most once
+// more, and then never again. Everything else is gating shared with
+// ui/install-prompt.js: a settle delay, the feed and nowhere else, a clear
+// screen to land on, and session-scoped dismissal. The two cards cannot
+// collide — each treats any `.polaroid-popup__backdrop` as a busy screen, so
+// whichever gets there first makes the other wait its turn.
 
 // @ts-check
 
 (function () {
   const SS_KEY = "bgb.push.askDismissed";
   const LS_ASKS = "bgb.push.askDeclines";
-  const MAX_ASKS = 3;
+  const MAX_ASKS = 2;
 
   // Same dwell as the install card: long enough for the splash→feed handoff to
   // finish, so this reads as part of opening the app rather than as an
@@ -104,11 +112,17 @@
    *   • not installed on iOS — requestPermission() resolves "denied" without
    *     asking there, burning the grant. ui/install-prompt.js is the card that
    *     belongs on that screen, and it has its own gates
-   *   • permission already decided — "granted" needs no card (syncOnBoot has
-   *     the subscription in hand), "denied" cannot be undone from script
-   *   • tier 'none' — an explicit "off" on this account. The whole point of
-   *     asking is that the default said yes; someone who said no is not asked
-   *     again by a default change
+   *   • permission already decided — "granted" needs no card (the account is
+   *     either already on or one tap away in Settings), "denied" cannot be
+   *     undone from script
+   *
+   * THERE IS DELIBERATELY NO TIER CLAUSE. `push_tier: 'none'` is the state this
+   * card exists for — it is what every account starts on, and suggesting the
+   * feature to someone who has it switched off is the whole job. It is also
+   * why the permission clause carries the weight of not nagging: switching
+   * notifications off in Settings runs an unsubscribe, which is only reachable
+   * from a device that granted permission, so a deliberate "off" reads as
+   * "granted" here and this card stands down without needing to know why.
    */
   function _askable() {
     const st = _state;
@@ -116,8 +130,7 @@
       && st.supported
       && st.configEnabled
       && st.standaloneOk
-      && st.permission === "default"
-      && st.tier !== "none";
+      && st.permission === "default";
   }
 
   function _screenBusy() {
@@ -255,9 +268,9 @@
      * "Not now", from every exit this card has, and from the first-run deck's
      * own notifications slide — which is why it is public. Hidden for the rest
      * of this browser session, and counted so the ask retires itself after
-     * MAX_ASKS refusals. It deliberately does NOT write 'none' to the account:
-     * the person declined a prompt on this device, which is not the same as
-     * saying their other devices should go quiet.
+     * MAX_ASKS refusals. It writes nothing to the account: the tier is already
+     * 'none' for anybody this card was shown to, and saying "not now" to an
+     * offer is not a preference worth a round trip.
      */
     decline() {
       _safe(() => sessionStorage.setItem(SS_KEY, "1"));
@@ -279,10 +292,13 @@
      * is the browser's message to give, not ours to repeat.
      */
     _allow() {
-      const tier = window.BgbPush ? window.BgbPush.tier() : "all";
-      // The account default since 018. A person mid-ladder ('actionable')
-      // keeps their rung — this card grants a DEVICE, it does not re-decide
-      // how much they hear.
+      const tier = window.BgbPush ? window.BgbPush.tier() : "none";
+      // 'all' is what the yes means for the account this card is actually for:
+      // one that is off, which is every account until somebody turns it on.
+      // The ladder's middle rung is a Settings decision made by someone who
+      // already has notifications — so a person on 'actionable' whose device is
+      // simply unsubscribed keeps their rung rather than being quietly promoted
+      // to everything by a card that only offered them a device.
       const wanted = tier === "none" ? "all" : tier;
       if (window.BgbPush) window.BgbPush.setTier(wanted).catch(() => {});
       _done = true;
