@@ -84,9 +84,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   link_notifications_seen_at TIMESTAMPTZ,
   -- How much of that bell this account wants PUSHED to its devices
   -- (migration 017). Cumulative: 'all' implies 'actionable'. Per account, so it
-  -- follows the person; the subscriptions it gates are per device. Opt-in —
-  -- 018 defaulted it to 'all' and 019 put it back, so what makes the opt-in
-  -- reachable is that the app offers it, not a pre-set column.
+  -- follows the person; the subscriptions it gates are per device. Opt-in, and
+  -- what makes the opt-in reachable is that the app offers it (the first-run
+  -- deck's notifications slide, ui/push-prompt.js), not a pre-set column.
   push_tier TEXT DEFAULT 'none'::text NOT NULL,
   CONSTRAINT boardgamebuddy_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,
