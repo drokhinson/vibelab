@@ -15202,8 +15202,20 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border-left: 2px solid var(--sheet-line, var(--line));
   font-style: italic;
 }
-/* The scoreline every play in the run shares. A list, not a scorecard: there
-   is one result here, however many plays stand behind it. */
+/* Whose import the run is, when it isn't the viewer's. One muted line under
+   the title rather than a badge: it answers "why is this on my timeline" and
+   then gets out of the way. */
+.run-sheet__by {
+  font-size: 0.8rem;
+  color: var(--sheet-ink-muted, var(--ink-muted));
+  margin: 0 0 0.1rem;
+}
+.run-sheet__by b { color: var(--sheet-ink, var(--ink)); font-weight: 700; }
+/* The roster every play in the run shares — who played, who won, what they
+   scored. A list, not a scorecard: there is one result here, however many
+   plays stand behind it. The score column is drawn only when the run has
+   scores at all, so an unscored roster is names and a trophy, not a column of
+   dashes. */
 .run-sheet__seats {
   display: flex;
   flex-direction: column;
@@ -15214,21 +15226,35 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .run-sheet__seat {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.86rem;
   color: var(--sheet-ink, var(--ink));
-  padding: 0.2rem 0;
+  padding: 0.3rem 0;
   border-bottom: 1px solid var(--sheet-line, var(--line));
 }
 .run-sheet__seat:last-child { border-bottom: none; }
 .run-sheet__seat.is-winner .run-sheet__seat-name { font-weight: 700; }
-.run-sheet__seat-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-sheet__seat-badge { flex: none; }
+.run-sheet__seat-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .run-sheet__seat-score {
   flex: none;
   font-family: var(--font-score, inherit);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+/* The winner mark. Trailing, like the import review's seats — the name stays
+   left-aligned across winner and loser rows so the column doesn't jog. */
+.run-sheet__seat-win {
+  flex: none;
+  display: inline-flex;
+  color: var(--accent-ink);
 }
 .run-sheet__delete {
   display: flex;
