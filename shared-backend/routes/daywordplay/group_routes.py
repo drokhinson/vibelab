@@ -136,6 +136,37 @@ async def my_groups(current_user: CurrentUser = Depends(get_current_user)):
     return {"groups": groups_result.data or []}
 
 
+# Ahead of `/groups/{group_id}`, and this is load-bearing: FastAPI resolves in
+# declaration order, so declared after it this path is answered by get_group
+# with group_id="my-requests". Pinned by tests/test_route_ordering.py.
+@router.get("/groups/my-requests")
+async def my_join_requests(current_user: CurrentUser = Depends(get_current_user)):
+    """List the current user's pending join requests."""
+    sb = get_supabase()
+
+    requests = (
+        sb.table("daywordplay_join_requests")
+        .select("id, group_id, status, created_at, daywordplay_groups(name)")
+        .eq("user_id", current_user.user_id)
+        .eq("status", "pending")
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    results = []
+    for r in (requests.data or []):
+        group_info = r.get("daywordplay_groups") or {}
+        results.append({
+            "id": r["id"],
+            "group_id": r["group_id"],
+            "group_name": group_info.get("name", ""),
+            "status": r["status"],
+            "created_at": r["created_at"],
+        })
+
+    return {"requests": results}
+
+
 @router.get("/groups/{group_id}")
 async def get_group(group_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Get group details and member list."""
@@ -451,31 +482,3 @@ async def review_join_request(
         }).execute()
 
     return {"status": new_status}
-
-
-@router.get("/groups/my-requests")
-async def my_join_requests(current_user: CurrentUser = Depends(get_current_user)):
-    """List the current user's pending join requests."""
-    sb = get_supabase()
-
-    requests = (
-        sb.table("daywordplay_join_requests")
-        .select("id, group_id, status, created_at, daywordplay_groups(name)")
-        .eq("user_id", current_user.user_id)
-        .eq("status", "pending")
-        .order("created_at", desc=True)
-        .execute()
-    )
-
-    results = []
-    for r in (requests.data or []):
-        group_info = r.get("daywordplay_groups") or {}
-        results.append({
-            "id": r["id"],
-            "group_id": r["group_id"],
-            "group_name": group_info.get("name", ""),
-            "status": r["status"],
-            "created_at": r["created_at"],
-        })
-
-    return {"requests": results}
