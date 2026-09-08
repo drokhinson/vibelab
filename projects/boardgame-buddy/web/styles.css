@@ -7008,6 +7008,18 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   border-bottom: 1px solid var(--polaroid-line);
   color: var(--polaroid-ink);
 }
+/* Column rules. The grid used to be horizontal-only, which left a 5-player
+   table as five unbounded runs of digits — nothing said where one player's
+   column ended and the next began. The vertical hairline is deliberately
+   LIGHTER than the row rule (the same --polaroid-line, thinned): the rows are
+   what you read across, the columns only need to be separable, and a
+   full-strength grid on paper reads as a spreadsheet.
+   :not(:first-child) keeps the rule OFF the round-label column's left edge,
+   so the table still has no outer border of its own. */
+.scoring-table th:not(:first-child),
+.scoring-table td:not(:first-child) {
+  border-left: 1px solid color-mix(in srgb, var(--polaroid-line) 60%, transparent);
+}
 /* The column headers pin to the top of the scrollport above, so a 20-round
    game still tells you whose column you are typing into. `top: 0` is the top
    of .scoring-table-wrap, which is why that box has to be the vertical
@@ -7080,7 +7092,12 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   border: 1px solid var(--polaroid-line);
   color: var(--polaroid-ink);
   border-radius: 0.35rem;
-  text-align: right;
+  /* Centred, not right-aligned: the thing a cell has to line up with is the
+     player it belongs to, and that header is a centred 36px bubble (or a
+     centred name). Right alignment parked every number against the column's
+     right edge, reading as if it belonged to the player one column over.
+     tabular-nums still keeps the digits from jittering as you type. */
+  text-align: center;
   font-family: var(--font-score);
   font-variant-numeric: tabular-nums;
   /* Overridden to 16px by the iOS focus-zoom block at the END of this file —
@@ -9089,20 +9106,20 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    It deliberately does NOT carry .scoring-cell: the border, fill and radius
    there are input chrome, and a table full of boxes nobody can type in reads
    as a different, boxier component than the host's grid. What it does keep is
-   that box's METRICS (padding, min-width, min-height, right alignment, score
-   font) so a read-only grid lines up column-for-column with an editable one
+   that box's METRICS (padding, min-width, min-height, centred alignment,
+   score font) so a read-only grid lines up column-for-column with an editable one
    and the two read as the same table. min-height stops an empty cell from
    collapsing the row. */
 .scoring-cell--read {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   box-sizing: border-box;
   width: 100%;
   min-width: 2.4rem;
   min-height: 1.85rem;
   padding: 0.25rem 0.4rem;
-  text-align: right;
+  text-align: center;
   font-family: var(--font-score);
   font-variant-numeric: tabular-nums;
   /* Overridden to 16px by the iOS focus-zoom block at the END of this file, in
