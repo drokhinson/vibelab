@@ -380,16 +380,19 @@ Four properties are load-bearing, and each is a rule this codebase already had:
   lists in `styles.css`, so its tiles and fields follow the ground in both
   themes; `.ob-paper` restores the alias family for the badge carousel at
   (0,4,0), for the reason §4.2b spells out.
-- **The notifications slide asks before the browser does.** Since migration 018
-  an account arrives on `push_tier: 'all'`, so the server half of notifications
-  is already on for everybody; what a device still needs is a permission grant,
-  and a browser answers that question exactly once — a "block" can never be
-  re-asked from script. So the deck puts it in its own words first, and only a
-  yes reaches `Notification.requestPermission()`. "Not now" writes the decline
-  receipt `ui/push-prompt.js` reads (`bgb.push.askDeclines`), so the boot-time
-  card does not re-ask the moment the deck closes. This is also the one handler
-  in the file with a second reason not to await: the permission prompt needs the
-  tap's own transient activation, which an `await` spends.
+- **The notifications slide asks before the browser does.** Notifications stay
+  off by default (`push_tier: 'none'` — 018 flipped that briefly, 019 put it
+  back) — this slide and
+  `ui/push-prompt.js` are how an opt-in nobody would otherwise find becomes a
+  choice somebody actually makes. It asks in the app's own words first because a
+  browser answers the real question exactly once: a "block" can never be re-asked
+  from script, so only a yes here reaches `Notification.requestPermission()`.
+  "Not now" changes nothing on the account and writes the decline receipt
+  `ui/push-prompt.js` reads (`bgb.push.askDeclines`), which is shared so the two
+  surfaces spend one budget of at most two asks between them rather than one
+  each. This is also the one handler in the file with a second reason not to
+  await: the permission prompt needs the tap's own transient activation, which
+  an `await` spends.
 
 **`ui/avatar-picker.js` (`BgbAvatarPicker.mount`)** is the third extraction of
 the shape described above: the icon carousel, the Icon/Background target toggle

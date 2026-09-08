@@ -309,12 +309,12 @@
             : "Nothing is sent to this device.";
 
       // The account can want notifications while THIS browser has no way to
-      // receive them — which since migration 018 is the state every new account
-      // starts in, and the state anyone who tapped "Not now" on the boot card
-      // stays in. Without this row the card would show "All" lit up over a
-      // device that gets nothing, and say nothing about the one tap that fixes
-      // it. Covers the pruned-subscription case too (permission granted, row
-      // gone after the browser rotated the endpoint): same row, same repair.
+      // receive them: the tier follows the person to a new phone, the
+      // subscription does not. Without this row the card would show "All" lit
+      // up over a device that gets nothing, and say nothing about the one tap
+      // that fixes it. Covers the pruned-subscription case too (permission
+      // granted, row gone after the browser rotated the endpoint): same row,
+      // same repair.
       const needsDevice = !blocked && st.tier !== "none" && !st.subscribed;
 
       return `

@@ -112,16 +112,10 @@
       try { return Notification.permission; } catch (_) { return "unsupported"; }
     },
 
-    /**
-     * The account's tier. Absent on a profile cached before 017 — read as the
-     * column's own default rather than as off, so a stale cache cannot be the
-     * reason somebody is never asked (migration 018). Nothing is delivered on
-     * the strength of this value alone: every send needs a device subscription,
-     * and only a permission grant makes one.
-     */
+    /** The account's tier. Absent on a profile cached before 017 — read as off. */
     tier() {
       const me = window.store && window.store.get("user");
-      return (me && me.push_tier) || "all";
+      return (me && me.push_tier) || "none";
     },
 
     /**
