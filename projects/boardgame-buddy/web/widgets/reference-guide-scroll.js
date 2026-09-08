@@ -95,6 +95,7 @@
         this._chapters = cached;
         this._loading = false;
         seeded = true;
+        this._announceChapters();
       } else {
         this._loading = true;
       }
@@ -105,6 +106,7 @@
       // the same list one failed round trip later.
       if (window.BgbNet && window.BgbNet.isOffline()) {
         this._loading = false;
+        this._announceChapters();
         this._render();
         return;
       }
@@ -118,8 +120,24 @@
         if (!seeded) this._chapters = [];
       } finally {
         this._loading = false;
+        this._announceChapters();
         this._render();
       }
+    }
+
+    // Hand the loaded chapter list to anyone else on the screen that needs it.
+    //
+    // The only listener today is play-flow-view, which wants the scoring-grid
+    // chapters (migration 018) to know whether to pre-fill the scoring table.
+    // It listens rather than fetching because the two mount in the SAME frame
+    // for the same gameIds: calling Chapter.myChapters itself would double the
+    // request on every cold mount, and this widget has already done it — with a
+    // localStorage seed, an offline bail and a revalidation the other one would
+    // have to reimplement.
+    _announceChapters() {
+      document.dispatchEvent(new CustomEvent("guide-chapters-loaded", {
+        detail: { gameId: this._baseGameId, chapters: this._chapters },
+      }));
     }
 
     _render() {
