@@ -381,8 +381,7 @@ Four properties are load-bearing, and each is a rule this codebase already had:
   themes; `.ob-paper` restores the alias family for the badge carousel at
   (0,4,0), for the reason §4.2b spells out.
 - **The notifications slide asks before the browser does.** Notifications stay
-  off by default (`push_tier: 'none'` — 018 flipped that briefly, 019 put it
-  back) — this slide and
+  off by default (`push_tier: 'none'`, migration 017) — this slide and
   `ui/push-prompt.js` are how an opt-in nobody would otherwise find becomes a
   choice somebody actually makes. It asks in the app's own words first because a
   browser answers the real question exactly once: a "block" can never be re-asked

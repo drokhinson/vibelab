@@ -286,10 +286,10 @@
   // about something they did ten seconds ago rather than an abstract offer.
   //
   // Notifications are OFF until somebody says otherwise — push_tier defaults to
-  // 'none' (018 flipped that briefly, 019 put it back). So this slide is a real
-  // offer rather than a formality: "Turn them on" is what sets the account to
-  // 'all' AND subscribes this browser, and "Not now" leaves an account that
-  // sends nothing exactly as it was.
+  // 'none' and nothing here changes that on the user's behalf. So this slide is
+  // a real offer rather than a formality: "Turn them on" is what sets the
+  // account to 'all' AND subscribes this browser, and "Not now" leaves an
+  // account that sends nothing exactly as it was.
   function buildNotifications(deck) {
     const el = slideEl("ob-slide--notify", `
       <div class="ob-slide__scroll">

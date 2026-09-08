@@ -1,13 +1,13 @@
 // ui/push-prompt.js — the one time the app suggests turning notifications on.
 //
 // Notifications are OFF by default and stay that way: `push_tier` defaults to
-// 'none' and nothing is ever sent to an account that has not asked for it.
-// (Migration 018 briefly defaulted it to 'all' on the argument that the column
-// is intent and delivers nothing on its own; 019 put it back, because an
-// account nobody asked should read as off wherever it is shown.) This file is
-// the other half of an opt-in that actually works — because an opt-in nobody is
-// told about is not a choice, it is a feature that quietly does not exist. So
-// the app makes the offer once, plainly, and takes no for an answer.
+// 'none' (migration 017) and nothing is ever sent to an account that has not
+// asked for it. This file is the other half of an opt-in that actually works —
+// because an opt-in nobody is told about is not a choice, it is a feature that
+// quietly does not exist. Defaulting the column on was considered and rejected
+// for the reason this card is built around: an account nobody asked should read
+// as off wherever it is shown. So the app makes the offer once, plainly, and
+// takes no for an answer.
 //
 // WHY A CARD OF OUR OWN RATHER THAN Notification.requestPermission() AT BOOT.
 // The browser's prompt can be answered "block", and a block is permanent: no
