@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # junction) and refuses to auto-pick — so we name the FK explicitly.
 _SELECT_PLAY = (
     "id, user_id, game_id, played_at, notes, photo_url, play_mode, "
-    "country_code, created_at, "
+    "country_code, scoring_template, created_at, "
     "boardgamebuddy_games!boardgamebuddy_plays_game_id_fkey(name, thumbnail_url), "
     "boardgamebuddy_profiles!user_id(display_name)"
 )
@@ -68,6 +68,7 @@ def _build_play_response(
         created_at=play["created_at"],
         play_mode=play.get("play_mode") or "competitive",
         country_code=play.get("country_code"),
+        scoring_template=play.get("scoring_template"),
         logged_by_id=play["user_id"],
         logged_by_name=logger_profile.get("display_name", "Unknown"),
         is_own=is_own,
@@ -442,6 +443,13 @@ async def update_play(
         update_payload["play_mode"] = body.play_mode.value
     if body.country_code is not None:
         update_payload["country_code"] = body.country_code
+    # Migration 018, omitted-means-keep for the same reason: the popup's edit
+    # mode round-trips the snapshot it was handed and never offers a way to
+    # change it (editing row labels is a chapter edit — this play's copy is
+    # deliberately frozen), so an absent value must not strip the labels off
+    # every row of a play somebody edited a note on.
+    if body.scoring_template is not None:
+        update_payload["scoring_template"] = body.scoring_template.model_dump(mode="json")
     sb.table("boardgamebuddy_plays").update(update_payload).eq("id", play_id).execute()
 
     # Full-replace the nested lists. Read the seats' linked_at BEFORE the

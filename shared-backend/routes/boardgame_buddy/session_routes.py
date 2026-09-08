@@ -43,6 +43,7 @@ from .models import (
     SessionPhaseUpdate,
     SessionReorderParticipantsBody,
     SessionResponse,
+    SessionScoringTemplateUpdate,
     SessionUpdateBody,
 )
 from .services import push_notify, session_service
@@ -209,6 +210,28 @@ async def update_session(
         viewer_id=user.user_id,
         code=code,
         game_id=body.game_id,
+    )
+
+
+@router.patch(
+    "/sessions/{code}/scoring-template",
+    response_model=SessionResponse,
+    status_code=200,
+    summary="Set the live grid's scoring template (host-only)",
+)
+async def update_session_scoring_template(
+    body: SessionScoringTemplateUpdate,
+    code: str = Path(..., description="Session code"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionResponse:
+    """Publish the scoring grid every spectator's mirror labels its rows from.
+    Pass template=null to clear it; clearing keeps the rows and their scores and
+    drops only the labels."""
+    return session_service.set_scoring_template(
+        get_supabase(),
+        viewer_id=user.user_id,
+        code=code,
+        template=body.template,
     )
 
 

@@ -26,6 +26,7 @@ from ..constants import (
 from ..models import (
     JoinableSession,
     PlayResponse,
+    PlayScoringTemplate,
     SessionResponse,
 )
 from ._helpers import raise_for_rpc_error
@@ -281,6 +282,35 @@ def _transitions_payload() -> dict[str, list[str]]:
         phase.value: sorted(nxt.value for nxt in allowed)
         for phase, allowed in ALLOWED_PHASE_TRANSITIONS.items()
     }
+
+
+def set_scoring_template(
+    sb,
+    *,
+    viewer_id: str,
+    code: str,
+    template: Optional[PlayScoringTemplate],
+) -> SessionResponse:
+    """Host-only: publish (or clear) the scoring grid the lobby is scored on.
+
+    This is the only route the row labels have to a spectator. Their mirror
+    holds no local draft and sizes itself from the live-scores round indexes, so
+    without the session row carrying the template they would watch the host type
+    into rows still labelled R1..Rn.
+
+    Clearing is non-destructive — the rows and their scores stay, only the
+    labels go — which is why `template=None` needs no confirmation upstream.
+    """
+    data = (
+        sb.rpc("bgb_set_session_scoring", {
+            "p_host": viewer_id,
+            "p_code": code,
+            "p_template": template.model_dump(mode="json") if template else None,
+        })
+        .execute()
+        .data
+    )
+    return _bundle_to_response(data)
 
 
 def update_phase(
