@@ -76,8 +76,13 @@
     // range the rows below were built from.
     const getTotal = (p) => roundGridTotal(p, roundCount, getCell);
 
+    // The pane keeps its place across the host's re-renders, and drops to the
+    // bottom when this render added a round. See RoundGridScroll.
+    RoundGridScroll.schedule(host, roundCount);
+
     return `
-      <div class="scoring-table-wrap">
+      <div class="scoring-table-wrap" data-round-grid="${escapeAttr(host)}"
+           onscroll="window.RoundGridScroll.remember('${host}', this)">
         <table class="scoring-table">
           <thead>
             <tr>
@@ -287,6 +292,66 @@
     return s.charAt(0) === "-" ? s.slice(1) : "-" + s;
   }
 
+  // ── Pane scroll continuity ─────────────────────────────────────────
+  // .scoring-table-wrap is a bounded scrollport now (styles.css — that is what
+  // lets the header row pin), which turns the hosts' full re-renders into a
+  // visible problem they never had while the pane was unbounded:
+  //
+  //   * every host repaints the whole grid on _addRound / _removeRoundAt /
+  //     _toggleWinner, and the spectator mirror repaints on every realtime
+  //     score echo — each one resetting scrollTop to 0, i.e. yanking the view
+  //     back to round 1 mid-game, sometimes while the host is simply typing;
+  //   * "Add round" appends a row BELOW the fold of a scrolled-out pane, so
+  //     the button would read as doing nothing at all.
+  //
+  // So the pane's offsets are remembered per host and reapplied on the next
+  // render — unless the round count grew, in which case the new last row is
+  // what the user just asked for and the pane scrolls to it. scrollLeft rides
+  // along for free, which also settles the wide-table half of the same wart
+  // (see the note on renderScoringHead about repaints losing the column you
+  // were on).
+  //
+  // The restore runs in a rAF because the renderer hands back a STRING: the
+  // host injects it synchronously in the same task, so the next frame is the
+  // first moment the pane exists. If a host ever injects late the restore
+  // simply finds nothing and the pane starts at the top, exactly as before.
+  const _paneScroll = Object.create(null);
+  const RoundGridScroll = {
+    /** @param {string} host @param {HTMLElement} el */
+    remember(host, el) {
+      if (!el) return;
+      const prev = _paneScroll[host];
+      _paneScroll[host] = {
+        top: el.scrollTop,
+        left: el.scrollLeft,
+        rounds: prev ? prev.rounds : 0,
+      };
+    },
+    /** @param {string} host @param {number} roundCount */
+    schedule(host, roundCount) {
+      const prev = _paneScroll[host];
+      const grew = !!prev && roundCount > prev.rounds;
+      _paneScroll[host] = {
+        top: prev ? prev.top : 0,
+        left: prev ? prev.left : 0,
+        rounds: roundCount,
+      };
+      if (typeof requestAnimationFrame !== "function") return;
+      requestAnimationFrame(() => {
+        const el = document.querySelector(
+          `.scoring-table-wrap[data-round-grid="${host}"]`
+        );
+        if (!el) return;
+        const at = _paneScroll[host] || { top: 0, left: 0 };
+        // scrollHeight, not a row measurement: the pane clamps whatever it is
+        // given, so this lands on the last round whatever its height.
+        el.scrollTop = grew ? el.scrollHeight : at.top;
+        el.scrollLeft = at.left;
+        this.remember(host, el);
+      });
+    },
+  };
+
   // Persisted user preference for whether the per-cell +/− sign buttons show.
   // Defaults OFF — many phone keyboards already expose a minus key, so the
   // toggle is opt-in for the ones that don't.
@@ -387,6 +452,7 @@
   window.sanitizeRoundScore = sanitizeRoundScore;
   window.parseRoundScore = parseRoundScore;
   window.nextSignToggle = nextSignToggle;
+  window.RoundGridScroll = RoundGridScroll;
   window.RoundGridSign = RoundGridSign;
   window.RoundGridNames = RoundGridNames;
 })();
