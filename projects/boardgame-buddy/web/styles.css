@@ -6963,9 +6963,39 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    --well is declared only on chrome surfaces, so the fallback in
    `var(--well, …)` is what a paper surface actually gets.
    ────────────────────────────────────────────────────────────────────────── */
+/* The grid's scrollport — horizontal for a 6-player table, and, once a game
+   runs long, vertical too, so the header row can pin over it.
+
+   Vertical scrolling lives HERE rather than on the page by necessity, not by
+   preference: `overflow-x: auto` already made this box a scroll container on
+   BOTH axes (an absent overflow-y computes to `auto` beside a scrollable
+   overflow-x, CSS Overflow 3 §3 — the same rule the feed rails call out), and
+   a sticky thead resolves against its nearest scroll container. So the header
+   could never have pinned to the viewport from in here whatever the page did;
+   the only way it pins at all is if the box it sits in is the box that
+   scrolls. Hence the ceiling below.
+
+   The ceiling only bites once the table outgrows it — roughly 8+ rounds on a
+   phone — so every short grid renders exactly as it always has, page-scrolled
+   and unbounded in feel.
+
+   Sized off --bgb-vv-h (ui/viewport-lock.js), not dvh alone, because the whole
+   point of the pane is typing into it: iOS overlays the keyboard WITHOUT
+   shrinking the layout viewport, so a dvh-tall pane would run past the bottom
+   of what is actually on screen and the header pinned to its top would sit
+   above the fold — pinned, but nowhere the user can see. The 11rem term is the
+   chrome the pane shares its visible box with (the card's label row and
+   padding, plus the docked CTA bar that :root.bgb-kb-open parks on top of the
+   keyboard). The max() floor keeps a landscape phone at a workable few rows
+   instead of collapsing to the header alone. */
 .scoring-table-wrap {
-  overflow-x: auto;
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
+  /* Stated, not inherited: a max-height caps the CONTENT box, so a padding or
+     border added here later would land outside the cap (mobile-web.md §7). */
+  box-sizing: border-box;
+  max-height: 62vh;                                                  /* no-dvh fallback */
+  max-height: max(11rem, min(62dvh, calc(var(--bgb-vv-h, 100dvh) - 11rem)));
 }
 .scoring-table {
   width: 100%;
@@ -6978,19 +7008,35 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   border-bottom: 1px solid var(--polaroid-line);
   color: var(--polaroid-ink);
 }
+/* The column headers pin to the top of the scrollport above, so a 20-round
+   game still tells you whose column you are typing into. `top: 0` is the top
+   of .scoring-table-wrap, which is why that box has to be the vertical
+   scroller — see the note there.
+
+   Two things a sticky row cannot do without: an OPAQUE background (the round
+   rows travel under it) and a paint order above them. Hence the explicit
+   --polaroid-bg — the same value the card underneath paints, so a header that
+   is not currently pinned looks untouched — and the drop of the 0.75 opacity
+   this rule used to carry, which would have let the rows show straight
+   through. That fade only ever reached the empty corner cell in practice:
+   every player header already reset it to 1 for its colour bubble. */
 .scoring-table thead th {
   font-size: 0.72rem;
   font-weight: 600;
-  opacity: 0.75;
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--polaroid-bg);
 }
 /* Column-header bubble. Sized between user-badge `sm` (28/12) and `md`
    (40/16) so the player's initials are easily legible in a dense scoring
    grid without blowing out column widths in 4–6 player tables. The
-   surrounding th's faded opacity is dropped so the player's chosen colors
-   land exactly the way they look elsewhere — the bubble IS the identity.
+   header row carries no fade of its own any more (it is sticky, so it has to
+   be opaque), so the bubble lands exactly the way it looks elsewhere — the
+   bubble IS the identity.
    Shared between display and edit modes via widgets/round-score-grid.js. */
-.scoring-table thead th:has(.scoring-head__badge) { opacity: 1; padding: 0.35rem 0.35rem; }
+.scoring-table thead th:has(.scoring-head__badge) { padding: 0.35rem 0.35rem; }
 .scoring-head__badge { width: 36px; height: 36px; vertical-align: middle; }
 .scoring-head__badge .user-badge__initials { font-size: 16px; }
 /* Tap any column header to flip EVERY header between the bubble and the
@@ -7096,6 +7142,34 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    units of the card and the band disappeared. On cream this lands within three
    units of the tan it replaces. */
 .scoring-total-row { background: color-mix(in srgb, var(--polaroid-line) 55%, transparent); }
+/* The other half of the pinned header: with the grid in a bounded scrollport,
+   the running total would otherwise sit below the fold for exactly the rounds
+   you are still entering. So the band pins to the bottom the way the headers
+   pin to the top — and, like them, has to be opaque to do it, which is what
+   the second color-mix is for: the same wash as the row rule above, resolved
+   over the paper instead of over transparency. The sticky background lands on
+   the CELLS (a <tr> can't be positioned), so the winner cell restates its own
+   over the same band or it would lose its highlight to this rule. */
+.scoring-total-row th,
+.scoring-total-row td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--polaroid-line) 55%, var(--polaroid-bg));
+}
+/* The "Total" label is a tbody th, so it arrives carrying that rule's
+   opacity: 0.7 — which fades the sticky background with it and let the round
+   row underneath ghost straight through the word. The fade moves onto the ink,
+   where it was doing its work anyway: same 70% of the same colour, and the
+   cell itself stays opaque.
+
+   Selector matched to the one it is overriding: `.scoring-table tbody th` is
+   (0,1,2), so a bare `.scoring-total-row th` at (0,1,1) loses to it outright —
+   source order never gets a say. */
+.scoring-table tbody tr.scoring-total-row th {
+  opacity: 1;
+  color: color-mix(in srgb, var(--polaroid-ink) 70%, transparent);
+}
 .scoring-total {
   font-family: var(--font-score);
   font-weight: 700;
@@ -7121,7 +7195,13 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   display: inline-flex; align-items: center; gap: 0.35rem;
   justify-content: center;
 }
-.scoring-total-cell--winner { background: color-mix(in srgb, var(--accent-ink) 18%, transparent); }
+/* Opaque for the same reason the totals band above it is: this cell is in that
+   sticky row. Same 18% wash, resolved over the band rather than over whatever
+   happens to be scrolling underneath. */
+.scoring-total-row td.scoring-total-cell--winner {
+  background: color-mix(in srgb, var(--accent-ink) 18%,
+              color-mix(in srgb, var(--polaroid-line) 55%, var(--polaroid-bg)));
+}
 .scoring-winner-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.4rem; height: 1.4rem;
