@@ -174,16 +174,30 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
   created_by UUID,
   layout TEXT DEFAULT 'text'::text NOT NULL,
   content TEXT NOT NULL,
+  -- Row definitions for a layout='scoring_grid' chapter (migration 018). NULL
+  -- for 'text'. `content` still carries a generated plain-text mirror of these
+  -- rows so pool search and the moderation preview keep working.
+  grid JSONB,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
   CONSTRAINT boardgamebuddy_guide_chunks_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_guide_chunks_chunk_type_fkey FOREIGN KEY (chapter_type) REFERENCES boardgamebuddy_chapter_types(id),
   CONSTRAINT boardgamebuddy_guide_chunks_created_by_fkey FOREIGN KEY (created_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_guide_chunks_game_id_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE CASCADE,
-  CONSTRAINT boardgamebuddy_guide_chunks_layout_check CHECK ((layout = 'text'::text))
+  CONSTRAINT boardgamebuddy_guide_chunks_layout_check CHECK ((layout = ANY (ARRAY['text'::text, 'scoring_grid'::text]))),
+  -- Layout and body move together or not at all. The 1..24 ceiling is set by
+  -- play_session_scores.round_index (CHECK 0..63) — template rows take the low
+  -- indexes, so 24 leaves 40 rounds of headroom for appended extras.
+  CONSTRAINT bgb_chapters_grid_shape CHECK (
+    ((layout = 'text'::text) AND (grid IS NULL))
+    OR ((layout = 'scoring_grid'::text)
+        AND (jsonb_typeof(grid -> 'rows'::text) = 'array'::text)
+        AND (jsonb_array_length(grid -> 'rows'::text) BETWEEN 1 AND 24))
+  )
 );
 ALTER TABLE public.boardgamebuddy_guide_chapters ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_chapters_game_type ON public.boardgamebuddy_guide_chapters USING btree (game_id, chapter_type);
+CREATE INDEX IF NOT EXISTS idx_bgb_chapters_scoring_grid ON public.boardgamebuddy_guide_chapters USING btree (game_id) WHERE (layout = 'scoring_grid'::text);
 GRANT SELECT ON public.boardgamebuddy_guide_chapters TO boardgamebuddy_role;
 
 
@@ -419,6 +433,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   import_group_id UUID,
   import_batch_id UUID,
   imported_at TIMESTAMPTZ,
+  -- Snapshot of the scoring-grid chapter this play was scored with, or NULL
+  -- for the plain R1..Rn grid (migration 018). Deliberately not an FK — see
+  -- the COMMENT ON COLUMN at the foot of this file.
+  scoring_template JSONB,
   CONSTRAINT boardgamebuddy_plays_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_plays_game_id_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_plays_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -549,6 +567,10 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_sessions (
   expires_at TIMESTAMPTZ DEFAULT (now() + '02:00:00'::interval) NOT NULL,
   finalized_at TIMESTAMPTZ,
   phase TEXT DEFAULT 'gather'::text NOT NULL,
+  -- The template the host applied to the live grid (migration 018). Read by
+  -- bgb_session_bundle so the spectator's read-only mirror can label its rows;
+  -- copied onto the play at finalize.
+  scoring_template JSONB,
   CONSTRAINT boardgamebuddy_play_sessions_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_play_sessions_finalized_play_id_fkey FOREIGN KEY (finalized_play_id) REFERENCES boardgamebuddy_plays(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_play_sessions_game_id_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE SET NULL,
@@ -687,6 +709,9 @@ COMMENT ON COLUMN public.boardgamebuddy_play_players.round_scores IS 'Per-round 
 COMMENT ON COLUMN public.boardgamebuddy_play_session_participants."position" IS 'Host-assigned column order, 0-based. NULL = never ordered; see bgb_session_bundle''s (position NULLS LAST, joined_at) sort.';
 COMMENT ON COLUMN public.boardgamebuddy_plays.client_key IS 'Client-generated idempotency key for offline-queued plays. NULL for live writes.';
 COMMENT ON COLUMN public.boardgamebuddy_plays.country_code IS 'ISO 3166-1 alpha-2 country where the play happened, uppercase. Resolved by the client from the device timezone (or picked by the host in Settle Up); NULL when unknown, and NULL on every row predating migration 065. Feeds a future popularity-by-country view and nothing today.';
+COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Denormalised snapshot of the scoring-grid chapter this play was scored with: {"v":1,"chapter_id":…,"title":…,"rows":[…]}. NOT a foreign key, on purpose. The chapter is community-owned, editable by its author and deletable by author or admin, so a play holding only an id would render bare R1..Rn the moment a moderator cleared the chapter, and would silently RELABEL a two-year-old play if the author reordered its rows — labels that stop describing the numbers under them is precisely the failure widgets/round-score-grid.js is written to prevent. ON DELETE SET NULL loses the labels and CASCADE deletes plays, so neither constraint tells the truth. chapter_id rides INSIDE the document as provenance: a bare uuid column would imply an integrity the database is not enforcing. Same reasoning as game_name / game_thumbnail_url on this table.';
+COMMENT ON COLUMN public.boardgamebuddy_play_sessions.scoring_template IS 'The template the host applied to this live grid, same shape as boardgamebuddy_plays.scoring_template. Copied onto the play at finalize.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS 'Row definitions for a layout=''scoring_grid'' chapter: {"v":1,"rows":[{"label":…,"color":…,"note":…}]}. `color` is a SLUG from a fixed palette (neutral|gold|green|blue|rust|purple), never a hex — the grid lands on the cream scorepad, and only a fixed palette can be guaranteed legible there in both themes. NULL for layout=''text''; see the bgb_chapters_grid_shape constraint.';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.avatar IS 'Customizable badge config: {icon, iconColor, bgColor}. icon is "initials" or an icon key from the client library. NULL = use BGB default (brown badge + gold initials).';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.needs_setup IS 'TRUE for brand-new accounts that have not yet completed the "Create your profile" modal. Cleared by the first successful POST /profile.';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS 'First time this account was seen running as an installed PWA (migration 062). Drives the "Pocket Buddy" achievement; nothing else reads it.';

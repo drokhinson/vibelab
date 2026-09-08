@@ -1,6 +1,13 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 017_push_notifications.sql (adds bgb_push_note_failure — a
+-- Last updated: 018_scoring_templates.sql (adds bgb_set_session_scoring, and
+--               re-emits bgb_log_play, bgb_session_bundle and bgb_plays_page
+--               so a play, a live lobby and the History page each carry the
+--               scoring-grid row labels the play was scored on. bgb_feed_plays
+--               is deliberately NOT re-emitted — its RETURNS TABLE signature
+--               would force a DROP + full re-CREATE for one column, and the
+--               play-detail popup revalidates through GET /plays/{id} anyway.)
+--               Before that: 017_push_notifications.sql (adds bgb_push_note_failure — a
 --               one-line UPDATE as an RPC because PostgREST cannot express
 --               `failure_count = failure_count + 1`. The notification RPCs are
 --               untouched: push rides the write paths, not the derived feed.)
@@ -448,13 +455,18 @@
 -- bgb_session_bundle(p_session_id UUID)
 --   → JSONB shaped like models.SessionResponse { id, code, status, phase,
 --     host_user_id, game_id, game, participants[], scores[], created_at,
---     expires_at, finalized_play_id } or {"error": "not_found"}
+--     expires_at, finalized_play_id, scoring_template }
+--     or {"error": "not_found"}
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/036_session_rpcs.sql)
 --   Last updated in: db/migrations/boardgamebuddy/056_participant_order.sql
 --               (participants sort by `position NULLS LAST, joined_at` — the
 --               one and only live participant-ordering site. 054 added
 --               `scores`, the live grid, [] outside phase='play')
+--   Last updated in: db/migrations/boardgamebuddy/018_scoring_templates.sql
+--               (emits `scoring_template`, the row labels the host applied, so
+--               the spectator's read-only mirror can label its rows too — it
+--               holds no local draft and sizes its grid from `scores`.)
 --   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
 --               (_build_response — the response builder for every session
 --               endpoint; also invoked internally by the three RPCs below)
@@ -539,8 +551,8 @@
 -- bgb_log_play(p_user UUID, p_payload JSONB)
 --   → JSONB shaped like models.PlayResponse { id, game_id, game_name,
 --     game_thumbnail, played_at, notes, players[], photo_url, expansions[],
---     created_at, play_mode, country_code, logged_by_id, logged_by_name,
---     is_own }
+--     created_at, play_mode, country_code, scoring_template, logged_by_id,
+--     logged_by_name, is_own }
 --     or {"error": "game_not_found"}
 --     or {"duplicate": true, "id": <uuid>} when p_payload.client_key is one
 --     this user already has a play for (048) — the caller re-reads that row.
@@ -554,6 +566,11 @@
 --   Last updated in: db/migrations/boardgamebuddy/007_play_import_batches.sql
 --               (also persists p_payload.import_batch_id and stamps
 --               imported_at server-side when one is present.)
+--   Last updated in: db/migrations/boardgamebuddy/018_scoring_templates.sql
+--               (persists and echoes p_payload.scoring_template, the snapshot
+--               of the scoring-grid chapter the play was scored on. Covers the
+--               lobby finalize path too — bgb_finalize_session calls this with
+--               the same payload shape.)
 --               db/migrations/boardgamebuddy/044_cleanup.sql
 --                 (stops writing plays.game_image_url / game_play_mode, which
 --                  044 drops; stops writing the boardgamebuddy_buddies roster,
@@ -645,6 +662,10 @@
 --               `filtered` so `counted` totals CARDS — a pager reading 106
 --               over a six-row list would offer five empty pages. Each play
 --               object carries group_count.)
+--   Last updated in: db/migrations/boardgamebuddy/018_scoring_templates.sql
+--               (each play object carries scoring_template, so the play-detail
+--               popup opened from the History page paints its labelled rows on
+--               the seed rather than one revalidation later.)
 --   Purpose:    One-call History page. Visibility = plays the target logged
 --               plus plays where they appear as a participant. Filters
 --               (game / buddy participant / free-text over game_name +
@@ -810,6 +831,19 @@
 --               their next poll. Idempotent (skips the write when unchanged)
 --               and allowed in any open phase, not just Gather — the host
 --               flow's picker relies on that. p_game NULL clears the pick.
+
+-- bgb_set_session_scoring(p_host UUID, p_code TEXT, p_template JSONB)
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
+--     "host_only"}
+--   Defined in: db/migrations/boardgamebuddy/018_scoring_templates.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (set_session_scoring_template —
+--                PATCH /sessions/{code}/scoring-template)
+--   Purpose:    Publish the host's chosen scoring grid to the lobby so every
+--               spectator's mirror labels the same rows. p_template NULL (or
+--               jsonb 'null') clears it, which is non-destructive: the rows
+--               and their scores stay, only the labels go. Allowed in any open
+--               phase — the host can apply a template before Play starts.
 
 -- bgb_advance_phase(p_host UUID, p_code TEXT, p_phase TEXT, p_transitions JSONB)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
