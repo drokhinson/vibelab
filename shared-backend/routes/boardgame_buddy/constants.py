@@ -572,3 +572,57 @@ EXPORT_MAX_ROWS = 200_000
 # string, so a larger chunk risks a 414 from whatever proxy sits in front of
 # Supabase rather than a clean error.
 EXPORT_IN_CHUNK = 100
+
+
+# ── Scoring templates (migration 018) ────────────────────────────────────────
+
+
+class ChapterLayout(StrEnum):
+    """How a guide chapter's body is stored.
+
+    Mirrors the CHECK on boardgamebuddy_guide_chapters.layout — the DB values
+    ARE these values. `scoring_grid` is a layout of the `scoring` chapter type,
+    not a type of its own: the guide scroll groups by chapter_type with one
+    header per type, so a 7th type would split a user's scoring material into
+    two sections both labelled "scoring".
+    """
+
+    TEXT = "text"                  # Markdown, rendered by web/ui/markdown.js
+    SCORING_GRID = "scoring_grid"  # Labelled rows the play screen fills in
+
+
+class ScoringRowColor(StrEnum):
+    """Row-header tint for one scoring-grid row.
+
+    A SLUG, never a hex. The grid lands on the cream scorepad — a paper surface
+    that stays light in both themes — so only a fixed palette the stylesheet
+    owns can be guaranteed legible there, and a literal colour travelling
+    through a data path is what .claude/rules/theming.md §10 forbids. These six
+    mirror COLOR_SWATCHES in web/views/reference-guide-add-view.js, which are
+    already contrast-tuned for parchment.
+    """
+
+    NEUTRAL = "neutral"
+    GOLD = "gold"
+    GREEN = "green"
+    BLUE = "blue"
+    RUST = "rust"
+    PURPLE = "purple"
+
+
+# Rows in one scoring template. boardgamebuddy_play_session_scores.round_index
+# is CHECK'd 0..63 and template rows occupy the low indexes, so 24 leaves 40
+# rounds of headroom for the extras a scorer appends before a live-scores write
+# starts failing — and those writes are fire-and-forget, so it would fail
+# silently. Do not raise this without raising that CHECK. Also enforced in SQL
+# by bgb_chapters_grid_shape.
+MAX_SCORING_TEMPLATE_ROWS = 24
+
+# A row label is the first column of a horizontally-scrolling table whose
+# header cell is `white-space: nowrap`. Longer than this and the score columns
+# start off-screen on a 390px phone.
+MAX_SCORING_ROW_LABEL_CHARS = 24
+
+# Optional per-row hint ("3 pts each"). v1 renders it only into the row's
+# title= / aria-label — a 0.72rem header cell has no room for a second line.
+MAX_SCORING_ROW_NOTE_CHARS = 80
