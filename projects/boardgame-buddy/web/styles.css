@@ -7197,6 +7197,61 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-round-label {
   display: inline-flex; align-items: center; gap: 0.3rem;
 }
+/* ── Scoring-template rows (migration 018) ──────────────────────────────────
+   A row of a custom scoring grid — Everdell's "Prosperity", an Arboretum
+   species — instead of a bare R1..Rn. The chapter stores a palette SLUG, never
+   a hex: this grid lands on the scorepad, which is PAPER and therefore light in
+   BOTH themes (theming.md §6), so the stylesheet has to own the ink or an
+   author could pick a yellow nobody can read. These five are the chapter
+   editor's own COLOR_SWATCHES, already tuned for parchment. */
+:root {
+  --row-gold:   #C9922A;
+  --row-green:  #4A7A4A;
+  --row-blue:   #4A6F94;
+  --row-rust:   #A65D2C;
+  --row-purple: #7A5293;
+}
+/* The slug arrives from a database column, so the set is open and an unknown
+   name has to render as something rather than as nothing (web-frontend.md, the
+   same rule the icon map follows). This declaration is that fallback AND the
+   `neutral` case — and it lives on the element rather than in :root above so
+   `--polaroid-muted` resolves against the SURFACE the row is on: a var() inside
+   a custom property is substituted on the element that declares it, so a
+   :root-level `--row-neutral: var(--polaroid-muted)` would freeze the root's
+   value and miss the scorepad island's own. */
+.scoring-round-th--tpl { --row-accent: var(--polaroid-muted); }
+.scoring-round-th--tpl[data-row-color="gold"]   { --row-accent: var(--row-gold); }
+.scoring-round-th--tpl[data-row-color="green"]  { --row-accent: var(--row-green); }
+.scoring-round-th--tpl[data-row-color="blue"]   { --row-accent: var(--row-blue); }
+.scoring-round-th--tpl[data-row-color="rust"]   { --row-accent: var(--row-rust); }
+.scoring-round-th--tpl[data-row-color="purple"] { --row-accent: var(--row-purple); }
+/* The tint MIXES INTO THE SURFACE's own ground rather than being a literal, so
+   the rule works unchanged wherever the grid is rendered — the live scorepad,
+   the play-detail popup, the author's preview — and follows the surface if one
+   of them is ever re-pointed. The 3px inset rule does the identifying work, so
+   the wash only has to be noticeable, not strong. */
+.scoring-round-th--tpl {
+  background: color-mix(in srgb, var(--row-accent) 14%, var(--polaroid-bg));
+  box-shadow: inset 3px 0 0 var(--row-accent);
+}
+/* `.scoring-table tbody th` is (0,1,2) and sets opacity: 0.7, which would fade
+   the tint along with the ink and let the row above ghost through. The fade
+   moves onto the colour instead — exactly the repair the totals row above makes
+   for the same reason, and matched to the same specificity so source order
+   never gets a say. */
+.scoring-table tbody th.scoring-round-th--tpl {
+  opacity: 1;
+  color: color-mix(in srgb, var(--polaroid-ink) 88%, transparent);
+}
+/* The label column is the first column of a horizontally-scrolling table, so a
+   long row name has to stop rather than push the score columns off a 390px
+   screen. The full text (plus the row's note, when it has one) is on the th's
+   title=. */
+.scoring-round-text {
+  display: inline-block;
+  max-width: 7.5rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .scoring-round-remove {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.1rem; height: 1.1rem;
