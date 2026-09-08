@@ -255,6 +255,11 @@ components above.
       const rawExp = p.expansionIds || "";
       this._expansionIds = rawExp.split(",").map((s) => s.trim()).filter(Boolean);
       this._createTargetGameId = this._gameId;
+      // Pre-set the browse tab's type filter. The reference-guide scroll's
+      // "scoring templates available" notice arrives with filter=scoring so the
+      // pool opens on the rows the notice was about, rather than on everything
+      // and a hunt (migration 018). Set AFTER _resetFormState, which cleared it.
+      if (p.filter) this._typeFilter = p.filter;
       this._expansionMeta = this._gameId
         ? { [this._gameId]: { name: this._gameName, color: null, thumb: null } }
         : {};

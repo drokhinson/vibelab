@@ -727,6 +727,64 @@ body {
 }
 .scroll-panel__hint:hover { color: #2B1D0A; }
 
+/* "Custom scoring grids are available — tap to add" (migration 018).
+   Two placements, one renderer: first in the always-visible peek (so it shows
+   with the scroll ROLLED UP, which is how the Play screen opens it) and again
+   inside the empty state, which renders no peek at all and is exactly the case
+   the nudge is most for.
+
+   Literal colours, like .scroll-panel__hint above and the rest of this family:
+   the scroll is a photograph of parchment, so it is light in both themes and
+   paints from literals rather than from the ground tokens
+   (.claude/rules/theming.md §6). */
+.scroll-panel__notice-host:empty { display: none; }
+.scroll-panel__notice {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  /* 44px floor: this is the whole affordance for adding a template
+     (.claude/rules/mobile-web.md §5). */
+  min-height: 44px;
+  margin-bottom: 0.45rem;
+  padding: 6px 8px 6px 10px;
+  text-align: left;
+  border: 1px solid rgba(107, 74, 26, 0.28);
+  border-radius: 10px;
+  background: rgba(201, 146, 42, 0.14);
+  color: #5C3F14;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+.scroll-panel__notice > [data-icon-name] { flex: none; color: #8A5F0B; }
+.scroll-panel__notice-text { flex: 1; min-width: 0; line-height: 1.25; }
+.scroll-panel__notice:active { background: rgba(201, 146, 42, 0.22); }
+@media (hover: hover) {
+  .scroll-panel__notice:hover { background: rgba(201, 146, 42, 0.2); }
+}
+.scroll-panel__notice:focus-visible {
+  outline: 2px solid #8A5F0B;
+  outline-offset: 2px;
+}
+.scroll-panel__notice-x {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px; height: 20px;
+  border-radius: 999px;
+  color: rgba(92, 63, 20, 0.65);
+  cursor: pointer;
+}
+/* 44x44 without inflating a 14px glyph inside a 44px row. */
+.scroll-panel__notice-x::before { content: ""; position: absolute; inset: -12px; }
+.scroll-panel__notice-x:active { color: #5C3F14; }
+/* Inside the empty state the notice is the only thing between the copy and the
+   Add button, so it gets air on both sides rather than just below. */
+.scroll-panel__empty .scroll-panel__notice { margin: 0.6rem 0; }
+
 /* Per-type section inside the guide. Header above its chapter list. */
 .scroll-section {
   margin-top: 0.6rem;
@@ -1870,17 +1928,20 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* Same 44x44 trick as the row controls: six full-size targets would not fit. */
 .tmpl-sw::before { content: ""; position: absolute; inset: -9px; }
 /* "No colour" needs to look like an absence rather than like a missing swatch,
-   so it is an outlined ring instead of a filled disc. */
+   so it is an outlined ring instead of a filled disc. The ring is drawn in INK
+   at low alpha rather than in --b3: --b3 is a ground step, so in dark it is
+   nearly the card it sits on and the swatch read as a hole rather than as an
+   option. */
 .tmpl-sw--none {
   background: oklch(var(--b1));
-  box-shadow: inset 0 0 0 1.5px oklch(var(--b3));
+  box-shadow: inset 0 0 0 1.5px oklch(var(--bc) / 0.38);
 }
 .tmpl-sw--on {
   border-color: oklch(var(--bc) / 0.75);
   box-shadow: 0 0 0 2px oklch(var(--b2));
 }
 .tmpl-sw--none.tmpl-sw--on {
-  box-shadow: inset 0 0 0 1.5px oklch(var(--b3)), 0 0 0 2px oklch(var(--b2));
+  box-shadow: inset 0 0 0 1.5px oklch(var(--bc) / 0.38), 0 0 0 2px oklch(var(--b2));
 }
 .tmpl-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tmpl-addrow {
@@ -1904,20 +1965,40 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   .tmpl-addrow:not(:disabled):hover { background: oklch(var(--b2)); border-style: solid; }
 }
 .tmpl-addrow:not(:disabled):active { transform: scale(0.99); }
-/* The preview is the REAL scoring grid (ui-object-design.md §2), so it paints
-   from the --polaroid-* family — which on THIS screen already resolves to the
-   paper tokens, because main[data-view="reference-guide-add"] is deliberately
-   not in the --polaroid-* re-point at the top of this file (see the note above
-   .chapter-wiz__step). So the island needs no token work at all: it only has to
-   supply the paper GROUND under a grid whose own cells are transparent, or the
-   author would preview their rows floating on the dark app background. If this
-   screen is ever added to that re-point list, this block is where the paper
-   family has to be restored (theming.md §7). */
-.tmpl-preview {
+/* A PAPER ISLAND, exactly like .cascade-card--scoring above — same reasoning,
+   same doubled selector, and it must stay that way.
+
+   The preview is the REAL scoring grid (ui-object-design.md §2), so it paints
+   from the --polaroid-* family. On the chapter editor's own screen that already
+   resolves to paper (main[data-view="reference-guide-add"] is deliberately
+   outside the re-point — see the note above .chapter-wiz__step), which is what
+   made this look fine and be wrong: ScoringTemplateEditor.preview() is ALSO the
+   body of an expanded scoring-grid chapter in the reference-guide scroll, and
+   that scroll is mounted on [data-view="play-flow"] and [data-view="log-play"],
+   both of which ARE re-pointed. Without the restore below, opening a scoring
+   grid in the guide mid-game drew espresso row headers inside a cream box.
+
+   Doubled to (0,4,0) so it beats the dark re-point's (0,3,0) outright rather
+   than on source order. Do not simplify it back. */
+.tmpl-preview.tmpl-preview {
   margin-top: 1rem;
   padding: 0.7rem;
   border-radius: 14px;
   background: var(--paper);
+
+  --polaroid-bg:       var(--paper);
+  --polaroid-bg-soft:  color-mix(in srgb, var(--paper) 92%, var(--paper-line));
+  --polaroid-ink:      var(--paper-ink);
+  --polaroid-ink-soft: color-mix(in srgb, var(--paper-ink) 78%, var(--paper));
+  --polaroid-muted:    var(--paper-muted);
+  --polaroid-line:     var(--paper-line);
+  --polaroid-accent:   var(--win);
+
+  --accent-ink:        var(--accent-on-paper);
+  --ghost-ink:         var(--ghost-ink-paper);
+
+  /* A well cut into cream paper is not the espresso ground. */
+  --well:              var(--polaroid-bg);
 }
 .tmpl-preview__label {
   display: block;

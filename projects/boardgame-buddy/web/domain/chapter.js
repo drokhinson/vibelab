@@ -13,6 +13,11 @@
   // game-detail page is instant. Mutations clear the namespace so a just-edited
   // guide is never served stale.
   const CHAPTERS_NS = "chapters";
+  // The scoring-grid chapters that EXIST for a game, adopted or not (migration
+  // 018). A separate namespace from the guide above because it answers a
+  // different question — "what is out there" rather than "what is mine" — and
+  // is read by the scroll's "templates available" notice.
+  const TEMPLATES_NS = "scoring-templates";
   const CH_FRESH = 10 * 60 * 1000; // instant-seed (get) window
   const CH_STALE = 30 * 60 * 1000; // outer bound retained in storage
 
@@ -70,19 +75,58 @@
     // Drop every cached guide. Called after any chapter mutation so the next
     // open refetches rather than serving the pre-mutation list.
     invalidateChaptersCache() {
-      if (window.bgbCache) window.bgbCache.clear(CHAPTERS_NS);
+      if (window.bgbCache) {
+        window.bgbCache.clear(CHAPTERS_NS);
+        // Adding a template is what makes the notice go away, so its cache has
+        // to fall with the guide's or the notice outlives the tap that answered
+        // it by up to ten minutes.
+        window.bgbCache.clear(TEMPLATES_NS);
+      }
       // Three tiers of "chapters in your guide" hang off this count, so every
       // chapter mutation is an achievement mutation too.
       if (window.Achievements && window.Achievements.invalidate) window.Achievements.invalidate();
     },
-    pool(gameId, { q, chapterType, expansionIds } = {}) {
+    pool(gameId, { q, chapterType, layout, expansionIds } = {}) {
       const query = {};
       if (q) query.q = q;
       if (chapterType) query.chapter_type = chapterType;
+      if (layout) query.layout = layout;
       if (expansionIds && expansionIds.length) {
         query.expansion_ids = expansionIds.join(",");
       }
       return window.api.get(`/games/${gameId}/chapter-pool`, query);
+    },
+
+    // ── Scoring templates (migration 018) ───────────────────────────────────
+    //
+    // The pool already answers "does this game have scoring templates I haven't
+    // added?" — every row carries in_my_guide — so this is the pool with one
+    // filter, not a second endpoint. Same cache discipline as the guide above,
+    // in its own namespace.
+
+    scoringTemplates(gameId, { expansionIds } = {}) {
+      return this.pool(gameId, {
+        chapterType: "scoring",
+        layout: "scoring_grid",
+        expansionIds,
+      });
+    },
+    // Synchronous read, or null when absent/stale. Offline reads through
+    // peek() for the same reason cachedMyChapters does: with no server to
+    // revalidate against, a stale answer beats no answer.
+    cachedScoringTemplates(baseGameId, expansionIds) {
+      if (!window.bgbCache || !baseGameId) return null;
+      const key = chaptersKey(baseGameId, expansionIds);
+      return (window.BgbNet && window.BgbNet.isOffline())
+        ? window.bgbCache.peek(TEMPLATES_NS, key)
+        : window.bgbCache.get(TEMPLATES_NS, key);
+    },
+    cacheScoringTemplates(baseGameId, expansionIds, rows) {
+      if (!window.bgbCache || !baseGameId) return;
+      window.bgbCache.setWithTtls(TEMPLATES_NS, chaptersKey(baseGameId, expansionIds), rows || [], {
+        freshTtl: CH_FRESH,
+        staleTtl: CH_STALE,
+      });
     },
     create(gameId, payload) {
       return window.api.post(`/games/${gameId}/chapters`, payload);
