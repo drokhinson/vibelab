@@ -71,6 +71,19 @@
 --             taste, comeback, coop, personal_bests }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/058_user_stats_detail.sql)
+--   Last updated in: db/migrations/boardgamebuddy/018_unscored_plays.sql
+--               (`mine` carries a `decided` flag — EXISTS over the play's whole
+--                roster for a winner OR a score — and every RATIO is filtered
+--                by it: career.rated_plays, the nemesis opponent set and the
+--                co-op record. A play where nobody won and nobody scored
+--                recorded no outcome, so counting it as a loss reported defeats
+--                that never happened. Counts are untouched: it still lands in
+--                total_plays, unique_games, podium, rhythm, table_size, taste.
+--                games[] gains decided_plays — the denominator wins is read
+--                against, NOT to be confused with the existing scored_plays,
+--                which counts plays with a WINNER'S score for the average.
+--                personal_bests now excludes co-op, so the deliberate 0 a co-op
+--                loss records cannot become somebody's "record".)
 --               (shelf block replaced by 059_shelf_played_before.sql)
 --   Called by:  shared-backend/routes/boardgame_buddy/stats_routes.py
 --               (GET /users/me/stats/detail)
@@ -341,7 +354,15 @@
 --   → JSONB
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/021_profile_and_game_detail_bundles.sql)
---   Last updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
+--   Last updated in: db/migrations/boardgamebuddy/018_unscored_plays.sql
+--               (the buddy-only `together` block counts only plays that
+--                recorded a result — same `decided` rule as
+--                bgb_user_stats_detail. shared_plays is the denominator
+--                your_wins/their_wins are read against, so a play nobody won
+--                and nobody scored showed up as a game you had both somehow
+--                lost, and the profile's split bar drew the difference as a
+--                phantom third party. Everything else is verbatim from 011.)
+--   Previously updated in: db/migrations/boardgamebuddy/069_prev_owned_status.sql
 --               (owned_page returns the SET ('owned','prev_owned') so the
 --                Collection spoke's first-frame seed holds the same rows
 --                bgb_collection_shelf will; owned_total stays owned-only and

@@ -233,6 +233,10 @@
    * "You won all 58" is the thing a person would actually say.
    */
   function stackOutcome(card, me, n) {
+    // Same rule as the single card: a run that recorded no result says nothing.
+    // "No winner recorded" is kept for the run that HAS scores but crowned
+    // nobody — there the absence of a winner is itself the fact.
+    if (outcomeUnrecorded(card)) return "";
     const winnerCount = countWinners(card.winner_display_name);
     if (winnerCount === 0) return `<span class="win-loss">No winner recorded</span>`;
     const everyoneWon = (card.participant_count || 0) > 0
@@ -259,10 +263,10 @@
     // popup fetches the full play itself, so the front needs no hydration.
     const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
 
-    // Caption "winner" block. Three modes:
-    //   - cooperative + any winners → "We beat the game" (brass win style)
-    //   - cooperative + no winners  → "The game won" (muted, no star)
-    //   - competitive               → winner name(s) · score (or just name)
+    // Caption "winner" block. See buildWinnerBlock for the buckets; a play
+    // that recorded no result at all renders an empty string here, and
+    // .play-card__caption-meta holds its line box open so the card stays the
+    // same height as its neighbours.
     // Coop renderings don't list players because everyone won/lost together
     // and the joined name list overruns the caption on big tables.
     const winnerBlock = buildWinnerBlock(card, me);
@@ -348,21 +352,29 @@
     `;
   }
 
-  // Build the "won" caption span. Three buckets:
+  // Build the "won" caption span. Four buckets:
+  //   - no outcome recorded (nobody won AND nobody scored) → nothing at all
   //   - all-or-nothing (coop, OR everyone won, OR nobody won) →
   //       any winners → "We won!" / "They won!"     (brass)
   //       no winners  → "We lost" / "They lost"     (grey/italic)
   //   - standard competitive (a single named winner) →
   //       "Won by <You|Name> · <score>" (score omitted if unknown)
+  // The first bucket has to come first: a play with no result looks exactly
+  // like a nobody-won loss from the winner list alone, and only the scores
+  // tell them apart.
   // "We" vs "They" depends on whether the viewer is in the play (logged it
   // OR appears in participants).
   function buildWinnerBlock(card, me) {
+    // Nobody won and nobody scored: say nothing. This is the case that used to
+    // fall through to the nobodyWon branch below and render "We lost" over a
+    // play whose result was simply never entered.
+    if (outcomeUnrecorded(card)) return "";
     const playMode = card.play_mode || "competitive";
     const winnerCount = countWinners(card.winner_display_name);
     const participantTotal = card.participant_count || 0;
     const everyoneWon = participantTotal > 0 && winnerCount > 0 && winnerCount >= participantTotal;
     const nobodyWon = winnerCount === 0;
-    const teamBucket = (playMode === "cooperative") || everyoneWon || nobodyWon;
+    const teamBucket = (playMode === "coop") || everyoneWon || nobodyWon;
     const we = viewerInPlay(card, me) ? "We" : "They";
 
     if (teamBucket) {
@@ -389,6 +401,20 @@
   function countWinners(raw) {
     if (!raw) return 0;
     return String(raw).split(",").map((s) => s.trim()).filter(Boolean).length;
+  }
+
+  // A play whose outcome was never recorded: nobody is flagged a winner AND not
+  // one seat carries a score. That is not "we lost" — it is "nobody said", and
+  // the card has no business inventing a result for it.
+  //
+  // The roster is the evidence, so a card built without `players` — a payload
+  // predating migration 015, or an adapter that omits it — keeps the old
+  // reading rather than guessing from an absence it cannot see.
+  function outcomeUnrecorded(card) {
+    if (countWinners(card.winner_display_name) > 0) return false;
+    const players = card.players;
+    if (!Array.isArray(players) || !players.length) return false;
+    return !players.some((p) => p && p.score != null && p.score !== "");
   }
 
   // True when the viewer's user_id matches the play logger or any visible

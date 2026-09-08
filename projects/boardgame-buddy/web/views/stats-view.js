@@ -17,7 +17,10 @@
 //                                    rated_plays, rated_wins, hours_played,
 //                                    first_played_at, last_played_at
 // @property {Array}  podium          up to 3 × {game_id, name, thumbnail_url, plays}
-// @property {Array}  games           per-game rows for the picker
+// @property {Array}  games           per-game rows for the picker. `plays` is
+//                                    every play of the game; `decided_plays` is
+//                                    the subset that recorded a result and is
+//                                    the denominator wins is read against
 // @property {?Object} nemesis        {user_id, display_name, avatar, shared_plays,
 //                                     their_wins, your_wins} — null under 3 shared plays
 // @property {Object} rhythm          {weeks[], current_streak_weeks,
@@ -288,7 +291,14 @@
     }
 
     _renderGamePanel(g) {
-      const pct = g.plays ? Math.round((g.wins / g.plays) * 100) : 0;
+      // Wins are read against the plays that recorded a RESULT, never against
+      // every play: a play nobody won and nobody scored said nothing about how
+      // it went, and counting it here reports a loss that never happened. The
+      // fallback keeps a cached pre-018 payload rendering the old way rather
+      // than dividing by undefined.
+      const decided = g.decided_plays != null ? g.decided_plays : g.plays;
+      const pct = decided ? Math.round((g.wins / decided) * 100) : 0;
+      const undecided = Math.max(0, (g.plays || 0) - decided);
       const circ = 2 * Math.PI * RING_R;
       const offset = circ * (1 - pct / 100);
       const isCoop = g.play_mode === "coop";
@@ -311,7 +321,7 @@
             </svg>
             <div class="stats-ring__mid">
               <div>
-                <div class="stats-ring__pct">${pct}%</div>
+                <div class="stats-ring__pct">${decided ? `${pct}%` : "&mdash;"}</div>
                 <div class="stats-ring__lab">${isCoop ? "Table wins" : "Win rate"}</div>
               </div>
             </div>
@@ -325,32 +335,47 @@
           </div>
         </div>
 
-        <div class="stats-split">
-          <i class="stats-split__win" style="width:${pct}%"></i>
-          <i class="stats-split__loss" style="width:${100 - pct}%"></i>
-        </div>
-        <div class="stats-legend">
-          <span>${isCoop ? "Beat the game" : "Won"} <b>${g.wins}</b></span>
-          <span>${isCoop ? "Lost to it" : "Lost"} <b>${g.plays - g.wins}</b></span>
-        </div>
+        ${decided ? `
+          <div class="stats-split">
+            <i class="stats-split__win" style="width:${pct}%"></i>
+            <i class="stats-split__loss" style="width:${100 - pct}%"></i>
+          </div>
+          <div class="stats-legend">
+            <span>${isCoop ? "Beat the game" : "Won"} <b>${g.wins}</b></span>
+            <span>${isCoop ? "Lost to it" : "Lost"} <b>${decided - g.wins}</b></span>
+          </div>
+        ` : ""}
 
-        <p class="stats-foot">${this._panelFootnote(g, isCoop, noScores)}</p>
+        <p class="stats-foot">${this._panelFootnote(g, isCoop, noScores, decided, undecided)}</p>
       `;
     }
 
-    _panelFootnote(g, isCoop, noScores) {
+    _panelFootnote(g, isCoop, noScores, decided, undecided) {
       const last = g.last_played_at ? ` Last played ${formatDate(g.last_played_at)}.` : "";
+      // The Plays fact counts every play; the ring counts only the ones that
+      // recorded a result. Say so, or the two numbers look like a bug.
+      const blanks = undecided
+        ? ` ${undecided} of ${g.plays} ${g.plays === 1 ? "play" : "plays"} recorded no result and ${undecided === 1 ? "is" : "are"} left out of the win rate.`
+        : "";
+      if (!decided) {
+        return escapeHtml(
+          (g.plays === 1
+            ? "This play recorded no winner and no score, so there's no win rate to show yet."
+            : `None of these ${g.plays} plays recorded a winner or a score, so there's no win rate to show yet.`)
+          + last,
+        );
+      }
       if (isCoop) {
         return escapeHtml(
-          `Co-operative game — a win here is the whole table beating the game, and no per-player score is kept.${last}`,
+          `Co-operative game — a win here is the whole table beating the game, and no per-player score is kept.${blanks}${last}`,
         );
       }
       if (noScores) {
-        return escapeHtml(`No scores were logged on any of these plays, so there's no average to show.${last}`);
+        return escapeHtml(`No scores were logged on any of these plays, so there's no average to show.${blanks}${last}`);
       }
       return escapeHtml(
         `Winning score averaged across the ${g.scored_plays} of ${g.plays} ` +
-        `${g.plays === 1 ? "play" : "plays"} that recorded scores.${last}`,
+        `${g.plays === 1 ? "play" : "plays"} that recorded scores.${blanks}${last}`,
       );
     }
 

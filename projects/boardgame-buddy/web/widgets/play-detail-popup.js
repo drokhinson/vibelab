@@ -784,6 +784,18 @@
     return window.roundGridTotal(player, window.roundGridRoundCount(roster));
   }
 
+  // What playerTotal is worth SAVING: null when the row was left blank, so an
+  // untouched grid does not persist a table of zeroes. The simple-score branch
+  // of the save already maps "" to null; this gives the grid branch the same
+  // manners. See rollupScore in domain/play-session.js.
+  function playerScoreForSave(player, players) {
+    const roster = players || (state.draft && state.draft.players) || [];
+    const rounds = window.roundGridRoundCount(roster);
+    return window.roundGridHasAnyScore(player, rounds)
+      ? window.roundGridTotal(player, rounds)
+      : null;
+  }
+
   // Pad every player's roundScores out to the grid's round count so an edit
   // can't leave the columns at different lengths. Mirrors play-flow-view's
   // _normalizeRoundArrays.
@@ -983,7 +995,7 @@
           ? rs.slice(0, gridRounds).map((v) => window.parseRoundScore(v))
           : null;
         const score = gridActive
-          ? playerTotal(p, state.draft.players)
+          ? playerScoreForSave(p, state.draft.players)
           : (p.score === "" || p.score == null ? null : Number(p.score));
         return {
           name: p.name,

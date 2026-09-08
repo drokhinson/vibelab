@@ -2896,6 +2896,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      "We won!" without one — and one card height is the contract now, not a
      coincidence of which spans a caption happens to hold. */
   line-height: 16px;
+  /* A play that recorded no outcome renders an EMPTY caption, and an empty
+     block generates no line box — so line-height alone would let the card
+     lose 16px and break the one-card-height contract above. */
+  min-height: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

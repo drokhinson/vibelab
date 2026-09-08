@@ -598,8 +598,14 @@ class PlayerEntry(BaseModel):
         this model into the RPC payload) goes through here, so the invariant
         holds for all of them. Rounds that came in NULL count as zero — that's
         a round nobody scored in, which is what the grid shows too.
+
+        A breakdown of nothing but NULLs is the exception, and it is not a
+        zero: it means rounds were added and never filled in. Summing it to 0
+        stored a scoreline for a play that recorded no result, which then read
+        as a loss in the feed caption and in every win-rate denominator. Leave
+        `score` alone there — the client sends NULL for exactly this case.
         """
-        if self.round_scores:
+        if self.round_scores and any(v is not None for v in self.round_scores):
             self.score = sum(v or 0 for v in self.round_scores)
         return self
 
