@@ -8,6 +8,21 @@
 
 (function () {
 
+  // The body of an expanded chapter. A scoring grid's rows live in `grid`, not
+  // in `content` — `content` holds a generated bullet mirror of them, which is
+  // what keeps the pool's search and the moderation preview working — so show
+  // the real grid instead of the mirror. Falls through to markdown whenever the
+  // rows aren't there, which covers a cached row from before migration 018.
+  function chapterBodyHtml(c) {
+    const rows = c.layout === "scoring_grid" && c.grid && Array.isArray(c.grid.rows)
+      ? c.grid.rows
+      : null;
+    if (rows && rows.length && window.ScoringTemplateEditor) {
+      return window.ScoringTemplateEditor.preview(rows);
+    }
+    return window.renderMarkdown(c.content || "");
+  }
+
   class ReferenceGuideScroll {
     constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = true, gameImage = null } = {}) {
       this._baseGameId = baseGameId || (gameIds && gameIds[0]) || null;
@@ -287,7 +302,7 @@
               <span class="scroll-chapter__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
               <span class="scroll-chapter__title">${escapeHtml(c.title)}</span>
             </summary>
-            <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
+            <div class="scroll-chapter__content">${chapterBodyHtml(c)}</div>
             <div class="scroll-chapter__actions">
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._removeChapter('${c.id}', '${c.source_game_id || c.game_id}', event)">

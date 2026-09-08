@@ -1742,6 +1742,197 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   outline-offset: 2px;
 }
 
+/* The Scoring type's second question, revealed under the type list once
+   Scoring is picked. Reuses .chapter-wiz__type wholesale — same rows, same
+   metrics, same tick — because it IS the same control asking a narrower
+   question; only the heading and the second line are new. */
+.chapter-wiz__layout { margin-top: 0.9rem; }
+.chapter-wiz__layout-head {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.72);
+  margin: 0 0 0.4rem;
+}
+.chapter-wiz__type-hint {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: oklch(var(--bc) / 0.6);
+  margin-top: 2px;
+  /* The row is one line taller with a hint under it, so let the label wrap
+     rather than ellipsising a sentence that has to be read. */
+  white-space: normal;
+}
+
+/* ── Scoring-grid rows (migration 018) ───────────────────────────────────────
+   The body of a layout='scoring_grid' chapter, in place of the markdown
+   toolbar + textarea. One card per row: the label, its position controls, and
+   a swatch strip.
+
+   The swatches are an inline radiogroup rather than a sheet or a popover, and
+   that is not a violation of overlays.md §1 — that rule is about a list
+   ANCHORED to an input, which needs a fit pass and a flip and loses to the
+   software keyboard. Six chips laid out in normal flow have no such geometry,
+   and seeing all six at once is the entire point of choosing a colour. */
+.tmpl-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+.tmpl-rows__empty {
+  font-size: 0.82rem;
+  color: oklch(var(--bc) / 0.6);
+  padding: 0.6rem 0;
+}
+.tmpl-row {
+  border: 1.5px solid oklch(var(--b3));
+  border-radius: 14px;
+  background: oklch(var(--b2));
+  padding: 8px 10px 10px;
+}
+.tmpl-row__top {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.tmpl-row__num {
+  flex: none;
+  width: 20px;
+  font-family: var(--font-score);
+  font-size: 0.78rem;
+  color: oklch(var(--bc) / 0.55);
+  text-align: center;
+}
+.tmpl-row__label {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1.5px solid oklch(var(--b3));
+  border-radius: 10px;
+  background: oklch(var(--b1));
+  color: oklch(var(--bc));
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.tmpl-row__label:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.tmpl-row__move,
+.tmpl-row__del {
+  flex: none;
+  display: grid;
+  place-items: center;
+  /* 30px visible, 44x44 hit area from the inset ::before below — four controls
+     at a full 44px each would leave no room for the label on a 390px screen
+     (.claude/rules/mobile-web.md §5). */
+  width: 30px;
+  height: 30px;
+  position: relative;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: oklch(var(--bc) / 0.62);
+  cursor: pointer;
+}
+.tmpl-row__move::before,
+.tmpl-row__del::before { content: ""; position: absolute; inset: -7px; }
+.tmpl-row__move:disabled { opacity: 0.3; cursor: default; }
+.tmpl-row__del { color: var(--rust); }
+@media (hover: hover) {
+  .tmpl-row__move:not(:disabled):hover,
+  .tmpl-row__del:hover { background: oklch(var(--b3)); }
+}
+.tmpl-row__move:not(:disabled):active,
+.tmpl-row__del:active { transform: scale(0.94); }
+.tmpl-row__colors {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.5rem 0 0 24px;
+}
+.tmpl-sw {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: var(--sw, transparent);
+  cursor: pointer;
+  padding: 0;
+}
+/* Same 44x44 trick as the row controls: six full-size targets would not fit. */
+.tmpl-sw::before { content: ""; position: absolute; inset: -9px; }
+/* "No colour" needs to look like an absence rather than like a missing swatch,
+   so it is an outlined ring instead of a filled disc. */
+.tmpl-sw--none {
+  background: oklch(var(--b1));
+  box-shadow: inset 0 0 0 1.5px oklch(var(--b3));
+}
+.tmpl-sw--on {
+  border-color: oklch(var(--bc) / 0.75);
+  box-shadow: 0 0 0 2px oklch(var(--b2));
+}
+.tmpl-sw--none.tmpl-sw--on {
+  box-shadow: inset 0 0 0 1.5px oklch(var(--b3)), 0 0 0 2px oklch(var(--b2));
+}
+.tmpl-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tmpl-addrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0.55rem;
+  border: 1.5px dashed oklch(var(--b3));
+  border-radius: 12px;
+  background: transparent;
+  color: oklch(var(--bc) / 0.8);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tmpl-addrow:disabled { opacity: 0.5; cursor: default; }
+@media (hover: hover) {
+  .tmpl-addrow:not(:disabled):hover { background: oklch(var(--b2)); border-style: solid; }
+}
+.tmpl-addrow:not(:disabled):active { transform: scale(0.99); }
+/* The preview is the REAL scoring grid (ui-object-design.md §2), so it paints
+   from the --polaroid-* family — which on THIS screen already resolves to the
+   paper tokens, because main[data-view="reference-guide-add"] is deliberately
+   not in the --polaroid-* re-point at the top of this file (see the note above
+   .chapter-wiz__step). So the island needs no token work at all: it only has to
+   supply the paper GROUND under a grid whose own cells are transparent, or the
+   author would preview their rows floating on the dark app background. If this
+   screen is ever added to that re-point list, this block is where the paper
+   family has to be restored (theming.md §7). */
+.tmpl-preview {
+  margin-top: 1rem;
+  padding: 0.7rem;
+  border-radius: 14px;
+  background: var(--paper);
+}
+.tmpl-preview__label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-muted);
+  margin-bottom: 0.4rem;
+}
+/* The preview is a picture, not a control: it must not steal a tap meant for
+   the row editor above it, and its own scrollport would fight the editor's. */
+.tmpl-preview .scoring-table-wrap {
+  pointer-events: none;
+  max-height: none;
+}
+
 /* ── Step 2: the head start ──────────────────────────────────────────────── */
 .chapter-wiz__field {
   display: flex;

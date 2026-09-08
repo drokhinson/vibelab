@@ -23,6 +23,21 @@
 // Edit is for.
 
 (function () {
+
+  // The body of an expanded chapter. A scoring grid's rows live in `grid`, not
+  // in `content` — `content` holds a generated bullet mirror of them, which is
+  // what keeps the pool's search and the moderation preview working — so show
+  // the real grid instead of the mirror. Falls through to markdown whenever the
+  // rows aren't there, which covers a cached row from before migration 018.
+  function chapterBodyHtml(c) {
+    const rows = c.layout === "scoring_grid" && c.grid && Array.isArray(c.grid.rows)
+      ? c.grid.rows
+      : null;
+    if (rows && rows.length && window.ScoringTemplateEditor) {
+      return window.ScoringTemplateEditor.preview(rows);
+    }
+    return window.renderMarkdown(c.content || "");
+  }
   // Inline color swatches — hex values map straight into the existing
   // <span style="color:#hex"> markdown renderer (see ui/markdown.js).
   const COLOR_SWATCHES = [
@@ -162,6 +177,11 @@ components above.
       this._formTitle = "";
       this._formContent = "";
       this._formType = "";
+      // Migration 018. Which BODY this chapter has: "text" (markdown, the
+      // original) or "scoring_grid" (labelled rows the play screen fills in).
+      // Only the `scoring` type offers the choice; every other type is text.
+      this._formLayout = "text";
+      this._formRows = [];           // [{label, color}] — only for scoring_grid
       // The wizard's optional focus prompt for the AI draft. Survives Back
       // from step 2 so tweak-and-regenerate is two taps, and dies with the
       // rest of the form buffer here.
@@ -332,14 +352,9 @@ components above.
       if (p.mode === "edit" && this._prefillChapter) {
         const c = this._prefillChapter;
         this._prefillChapter = null;
-        this._editingChapterId = c.id;
-        this._formTitle = c.title || "";
-        this._formContent = c.content || "";
-        this._formType = c.chapter_type || "";
-        this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
+        this._loadChapterIntoForm(c);
         this._tab = "edit";
         this._externalEdit = true;
-        this._centerTypeScrollOnNext = true;
       }
       // else: fresh mount stays on browse — _resetFormState() at the top of
       // onMount already set _tab = "browse" and cleared the form buffer.
@@ -650,9 +665,20 @@ components above.
     // whatever the current step requires (a chapter type on step 0).
     _wizNext() {
       if (this._tab !== "create") return;
-      this._step = Math.min(2, this._step + 1);
+      // A scoring grid skips step 1 in both directions. That step is the AI
+      // head start, which drafts MARKDOWN against CHAPTER_AUTHORING_GUIDE — and
+      // a grid is six labels the author already knows. Skipping keeps
+      // services/chapter_ai.py and the guide string out of this feature
+      // entirely, so the sync obligation between them is undisturbed.
+      const jump = this._isGridLayout() && this._step === 0 ? 2 : this._step + 1;
+      this._step = Math.min(2, jump);
       this._error = null;
       this.render();
+    }
+
+    /** True when the create wizard is authoring a scoring grid, not markdown. */
+    _isGridLayout() {
+      return this._formLayout === "scoring_grid";
     }
 
     // Step back, and off the front of the wizard back to browse. Shared by the
@@ -673,7 +699,9 @@ components above.
         this._backToBrowse().then(() => this.render());
         return;
       }
-      this._step -= 1;
+      // Mirror of the forward jump in _wizNext: a grid never lands on step 1,
+      // so backing out of its editor goes straight to the type picker.
+      this._step = this._isGridLayout() && this._step === 2 ? 0 : this._step - 1;
       this._error = null;
       this.render();
     }
@@ -852,7 +880,7 @@ components above.
               </div>
               ${toggleBtn}
             </summary>
-            <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
+            <div class="scroll-chapter__content">${chapterBodyHtml(c)}</div>
             <div class="scroll-chapter__actions">
               ${isOwner ? `
                 <button class="btn btn-ghost btn-xs"
@@ -880,20 +908,36 @@ components above.
 
     // In-view edit transition: no routing, no _externalEdit flag → Cancel
     // and Save return to browse instead of popping the router stack.
-    _editFromPool(chapterId) {
-      const c = this._allPool.find((x) => x.id === chapterId);
-      if (!c) return;
+    // Load an existing chapter into the editor's form buffer. Both edit entry
+    // points go through here — the in-view "Edit" on an expanded pool row, and
+    // the mode=edit route the reference-guide scroll takes — because they had
+    // already drifted once and a scoring grid gives them two more fields to
+    // drift on. `grid` is read defensively: a stale localStorage row cached
+    // before migration 018 can carry a layout with no rows, and that has to
+    // open as text rather than as a broken grid editor.
+    _loadChapterIntoForm(c) {
       this._editingChapterId = c.id;
       this._formTitle = c.title || "";
       this._formContent = c.content || "";
       this._formType = c.chapter_type || "";
+      const rows = (c.grid && Array.isArray(c.grid.rows)) ? c.grid.rows : null;
+      this._formLayout = c.layout === "scoring_grid" && rows ? "scoring_grid" : "text";
+      this._formRows = rows
+        ? rows.map((r) => ({ label: r.label || "", color: r.color || "neutral" }))
+        : [];
       this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
+      this._centerTypeScrollOnNext = true;
+    }
+
+    _editFromPool(chapterId) {
+      const c = this._allPool.find((x) => x.id === chapterId);
+      if (!c) return;
+      this._loadChapterIntoForm(c);
       this._editorView = "write";
       this._error = null;
       this._activePop = null;
       this._tab = "edit";
       this._externalEdit = false;
-      this._centerTypeScrollOnNext = true;
       this.render();
     }
 
@@ -988,15 +1032,22 @@ components above.
     _renderEditor(isEditing) {
       // Edit is not a wizard — no step bar, and the editor is the only body.
       const step = isEditing ? 2 : this._step;
+      // A grid wizard has two steps, not three — it never visits the AI head
+      // start (see _wizNext), so counting it would leave the bar reading
+      // "Step 3 of 3" on what is really the second thing the author does.
+      const grid = this._isGridLayout();
       const bar = isEditing
         ? ""
-        : window.BgbWizardProgress.render({ step, total: 3 });
+        : window.BgbWizardProgress.render(
+            grid ? { step: step === 2 ? 1 : 0, total: 2 } : { step, total: 3 }
+          );
 
       let body;
       if (step === 0) {
         body = window.ChapterWizardSteps.type({
           types: this._types,
           formType: this._formType,
+          formLayout: this._formLayout,
           // Create-only, and only when expansions are in scope: the chapter's
           // pool is chosen here alongside its type, and the backend's PATCH
           // can't move a chapter between pools afterwards.
@@ -1119,32 +1170,71 @@ components above.
     // function of state: the toolbar reads and writes the live textarea's
     // selection, and the popovers restore a caret the re-render destroyed.
     _renderEditStep(isEditing) {
-      // Edit keeps the pill scroller: the chapter already has a type and
-      // changing it is a normal edit. Create picked one on step 0, so here it
-      // is a read-only chip — Back is how you change it, which keeps one
-      // control per decision instead of two that can disagree.
-      const typeRow = isEditing
-        ? `<div class="chapter-edit__typescroll">${this._types.map((t) => `
+      if (this._isGridLayout()) return this._renderGridStep(isEditing);
+      return this._renderMarkdownStep(isEditing);
+    }
+
+    // The scoring-grid body: a title and a row list, no markdown toolbar, no
+    // Write/Preview toggle and no Import — the row editor replaces all of it,
+    // and the preview it renders is the real scoring grid rather than a
+    // lookalike (widgets/scoring-template-editor.js).
+    _renderGridStep(isEditing) {
+      return window.ScoringTemplateEditor.render({
+        title: this._formTitle,
+        rows: this._formRows,
+        typeRow: this._renderTypeRow(isEditing),
+        error: this._error,
+      });
+    }
+
+    // Edit keeps the pill scroller: the chapter already has a type and changing
+    // it is a normal edit. Create picked one on step 0, so there it is a
+    // read-only chip — Back is how you change it, which keeps one control per
+    // decision instead of two that can disagree.
+    //
+    // Shared by both editor bodies. The grid editor's type is always `scoring`,
+    // but it still shows the same chip and the same Change link: two editors
+    // that head themselves differently would read as two screens.
+    _renderTypeRow(isEditing) {
+      if (isEditing) {
+        // A scoring grid can't move type — the layout would be stranded under a
+        // type the guide scroll files elsewhere, which the backend 400s — so it
+        // gets the same read-only chip Create uses.
+        if (this._isGridLayout()) {
+          const t = this._activeType();
+          return `
+            <div class="chapter-wiz__picked">
+              <span class="chapter-wiz__typechip">
+                <i data-icon="${escapeAttr(t.icon || "book")}" class="w-3 h-3"></i>
+                ${escapeHtml(t.label)}
+              </span>
+            </div>
+          `;
+        }
+        return `<div class="chapter-edit__typescroll">${this._types.map((t) => `
              <button type="button"
                      class="chapter-edit__tpill ${t.id === this._formType ? "chapter-edit__tpill--on" : ""}"
                      onclick="window.referenceGuideAddView._pickType('${t.id}')">
                <i data-icon="${t.icon || "book"}" class="w-4 h-4"></i>
                <span>${escapeHtml(t.label)}</span>
              </button>
-           `).join("")}</div>`
-        : (() => {
-            const t = this._activeType();
-            return `
-              <div class="chapter-wiz__picked">
-                <span class="chapter-wiz__typechip">
-                  <i data-icon="${escapeAttr(t.icon || "book")}" class="w-3 h-3"></i>
-                  ${escapeHtml(t.label)}
-                </span>
-                <button type="button" class="chapter-wiz__change"
-                        onclick="window.referenceGuideAddView._goToStep(0)">Change</button>
-              </div>
-            `;
-          })();
+           `).join("")}</div>`;
+      }
+      const t = this._activeType();
+      return `
+        <div class="chapter-wiz__picked">
+          <span class="chapter-wiz__typechip">
+            <i data-icon="${escapeAttr(t.icon || "book")}" class="w-3 h-3"></i>
+            ${escapeHtml(t.label)}
+          </span>
+          <button type="button" class="chapter-wiz__change"
+                  onclick="window.referenceGuideAddView._goToStep(0)">Change</button>
+        </div>
+      `;
+    }
+
+    _renderMarkdownStep(isEditing) {
+      const typeRow = this._renderTypeRow(isEditing);
 
       const isPreview = this._editorView === "preview";
 
@@ -1321,7 +1411,91 @@ components above.
 
     _pickType(id) {
       this._formType = id;
+      // Only `scoring` has two shapes, so leaving a stale scoring_grid on any
+      // other type would send a body the DB's bgb_chapters_grid_shape CHECK
+      // rejects — and the type/layout cross-check in the backend's
+      // services/chapter_grid.py would 400 first.
+      if (id !== "scoring") this._formLayout = "text";
       this.render();
+    }
+
+    // ── Scoring-grid rows (migration 018) ───────────────────────────────────
+    //
+    // Each of these repaints ONLY #tmpl-rows-host, never the editor: a full
+    // render would destroy the label input the user is typing into along with
+    // its focus and caret (.claude/rules/overlays.md §6). _tmplSetLabel does
+    // not repaint at all — the input already shows what was typed, and the
+    // preview catches up on the next structural change.
+
+    _pickLayout(id) {
+      if (this._formLayout === id) return;
+      this._formLayout = id === "scoring_grid" ? "scoring_grid" : "text";
+      // Seed one empty row so the editor opens on something to fill in rather
+      // than on its own empty state.
+      if (this._formLayout === "scoring_grid" && !this._formRows.length) {
+        this._formRows = [window.ScoringTemplateEditor.blankRow()];
+      }
+      this.render();
+    }
+
+    /** Repaint the row list in place, and the preview beside it. */
+    _paintRows() {
+      const host = this.container.querySelector("#tmpl-rows-host");
+      if (!host) { this.render(); return; }
+      host.innerHTML = window.ScoringTemplateEditor.renderRowList(this._formRows);
+      const prev = this.container.querySelector(".tmpl-preview");
+      if (prev) {
+        prev.innerHTML = `<span class="tmpl-preview__label">Preview</span>`
+          + window.ScoringTemplateEditor.preview(this._formRows);
+      }
+      this.refreshIcons();
+    }
+
+    _tmplSetLabel(i, value) {
+      const row = this._formRows[i];
+      if (!row) return;
+      row.label = value;
+      // No repaint: see the note above. The preview refreshes on the next
+      // add / remove / reorder / colour change, which is often enough for a
+      // picture and never costs the user their caret.
+    }
+
+    _tmplSetColor(i, slug) {
+      const row = this._formRows[i];
+      if (!row) return;
+      row.color = slug;
+      this._paintRows();
+    }
+
+    _tmplAddRow() {
+      if (this._formRows.length >= window.ScoringTemplateEditor.MAX_ROWS) return;
+      this._formRows.push(window.ScoringTemplateEditor.blankRow());
+      this._error = null;
+      // The button's own label flips at the ceiling, so this one needs the
+      // whole editor rather than just the row host.
+      this.render();
+      const el = this.container.querySelector(
+        `#tmpl-row-label-${this._formRows.length - 1}`
+      );
+      if (el) el.focus();
+    }
+
+    _tmplRemoveRow(i) {
+      if (i < 0 || i >= this._formRows.length) return;
+      this._formRows.splice(i, 1);
+      this._error = null;
+      // Same reason as _tmplAddRow: the add button may have come back off its
+      // disabled state.
+      this.render();
+    }
+
+    _tmplMoveRow(i, dir) {
+      const j = i + dir;
+      if (i < 0 || i >= this._formRows.length) return;
+      if (j < 0 || j >= this._formRows.length) return;
+      const [row] = this._formRows.splice(i, 1);
+      this._formRows.splice(j, 0, row);
+      this._paintRows();
     }
 
     // Jump straight to a step — the "Change" affordance on step 2's type chip.
@@ -1674,12 +1848,40 @@ components above.
         return;
       }
       const title = (this._formTitle || "").trim();
-      const content = (this._formContent || "").trim();
-      if (!title || !content) {
+      const isGrid = this._isGridLayout();
+
+      // A grid's rows ARE its body, so they answer the "is there anything to
+      // save" question that `content` answers for markdown. `content` is then
+      // DERIVED from them — a plain bullet list — and that mirror is what keeps
+      // the chapter pool's title+content search and the moderation preview
+      // working without either learning about grids. The backend regenerates
+      // the same string from the rows; sending it here just means an offline
+      // reader of the cached row sees prose rather than an empty body.
+      let rows = null;
+      let content = (this._formContent || "").trim();
+      if (isGrid) {
+        rows = (this._formRows || [])
+          .map((r) => ({ label: (r.label || "").trim(), color: r.color || "neutral" }))
+          .filter((r) => r.label);
+        if (!title || !rows.length) {
+          this._error = rows && rows.length
+            ? "Give the chapter a title."
+            : "Add at least one scoring row.";
+          this.render();
+          return;
+        }
+        content = rows.map((r) => `- ${r.label}`).join("\n");
+      } else if (!title || !content) {
         this._error = "Title and content are required.";
         this.render();
         return;
       }
+      // Both writes carry the layout. This used to be `layout: "text"` hardcoded
+      // on create and absent entirely on update, which was invisible while
+      // 'text' was the only value the column's CHECK allowed and is a hard error
+      // the moment it isn't.
+      const layout = isGrid ? "scoring_grid" : "text";
+      const grid = isGrid ? { v: 1, rows } : null;
       this._saving = true;
       this.render();
       const isEditing = this._tab === "edit";
@@ -1691,6 +1893,8 @@ components above.
             chapter_type: this._formType,
             title,
             content,
+            layout,
+            grid,
           });
           showToast("Chapter updated", "success");
         } else {
@@ -1698,7 +1902,8 @@ components above.
             chapter_type: this._formType,
             title,
             content,
-            layout: "text",
+            layout,
+            grid,
           });
           showToast("Chapter added to your guide", "success");
         }
