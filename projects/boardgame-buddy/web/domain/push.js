@@ -112,10 +112,16 @@
       try { return Notification.permission; } catch (_) { return "unsupported"; }
     },
 
-    /** The account's tier. Absent on a profile cached before 018 — read as off. */
+    /**
+     * The account's tier. Absent on a profile cached before 017 — read as the
+     * column's own default rather than as off, so a stale cache cannot be the
+     * reason somebody is never asked (migration 018). Nothing is delivered on
+     * the strength of this value alone: every send needs a device subscription,
+     * and only a permission grant makes one.
+     */
     tier() {
       const me = window.store && window.store.get("user");
-      return (me && me.push_tier) || "none";
+      return (me && me.push_tier) || "all";
     },
 
     /**
@@ -302,11 +308,6 @@
         const sub = await this._subscription();
         if (sub) await this._register(sub);
       } catch (_) {}
-    },
-
-    /** Send a test notification to this account's devices. */
-    test() {
-      return window.api.post("/push/test", {});
     },
 
     /**

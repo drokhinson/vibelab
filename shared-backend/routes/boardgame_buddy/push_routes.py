@@ -1,6 +1,6 @@
 """Web Push endpoints — the device side of notifications (migration 017).
 
-Four routes and no more. The per-account TIER is deliberately not here: it is
+Three routes and no more. The per-account TIER is deliberately not here: it is
 an account preference like display name and avatar, so it saves through
 POST /profile, which the FE already knows how to call and reconcile. What lives
 here is the per-DEVICE half — this browser's subscription — which nothing else
@@ -12,19 +12,17 @@ publish the key more widely than that. It is safe to hand out regardless: the
 VAPID public key IS the thing browsers subscribe with.
 """
 
-from fastapi import BackgroundTasks, Depends
+from fastapi import Depends
 
 from db import get_supabase
 
 from . import router
-from .constants import PushEvent
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     MessageResponse,
     PushConfigResponse,
     PushSubscriptionCreate,
     PushSubscriptionDelete,
-    PushTestResponse,
 )
 from .services import push_service
 
@@ -104,49 +102,3 @@ async def delete_push_subscription(
         .execute()
     )
     return MessageResponse(message="Unsubscribed")
-
-
-@router.post(
-    "/push/test",
-    response_model=PushTestResponse,
-    status_code=200,
-    summary="Send a test notification to the caller's own devices",
-)
-async def send_test_push(
-    background_tasks: BackgroundTasks,
-    user: CurrentUser = Depends(get_current_user),
-) -> PushTestResponse:
-    """Push a canned notification to every device this account has registered."""
-    sb = get_supabase()
-    devices = len(
-        (
-            sb.table("boardgamebuddy_push_subscriptions")
-            .select("id")
-            .eq("user_id", user.user_id)
-            .execute()
-        ).data
-        or []
-    )
-    if push_service.enabled() and devices:
-        # On iOS this is the only way to find out whether an install actually
-        # works, short of asking a friend to react to something.
-        background_tasks.add_task(
-            push_service.send,
-            sb,
-            [user.user_id],
-            PushEvent.ACHIEVEMENT,
-            push_service.payload(
-                event=PushEvent.ACHIEVEMENT,
-                title="BoardgameBuddy",
-                body="Notifications are working. This is what they look like.",
-                url="/notifications",
-                tag="push-test",
-            ),
-            # No `exclude`: this is the single case where a person genuinely
-            # does want their own phone to tell them about something they just
-            # did. And no tier gate — see push_service.send.
-            ignore_tier=True,
-        )
-    return PushTestResponse(
-        sent=push_service.enabled() and devices > 0, devices=devices
-    )

@@ -150,9 +150,12 @@ class ProfileResponse(BaseModel):
     # successful POST /profile.
     needs_setup: bool = False
     # Defaulted rather than required: a profile row read by an older cached
-    # client, or written before migration 017, has no value and must read as
-    # "off" rather than 500 the whole profile fetch.
-    push_tier: PushTier = PushTier.NONE
+    # client, or written before migration 017, has no value at all and must
+    # still parse rather than 500 the whole profile fetch. It reads as ALL
+    # because that is the column's default since migration 018 — and because a
+    # tier only ever describes intent: with no device subscription behind it,
+    # the value delivers nothing either way.
+    push_tier: PushTier = PushTier.ALL
     created_at: datetime
 
 
@@ -1656,19 +1659,6 @@ class PushSubscriptionDelete(BaseModel):
     holds — a client has no idea what row id we gave it."""
 
     endpoint: str = Field(..., min_length=1, max_length=2048)
-
-
-class PushTestResponse(BaseModel):
-    """How many of the caller's own devices the test push was sent to.
-
-    `devices` being 0 is the interesting answer, not an error: it means the
-    permission prompt was accepted on some other device, or this one's
-    subscription was pruned after the browser rotated it. Saying so is more
-    useful than a success message that explains nothing.
-    """
-
-    sent: bool
-    devices: int
 
 
 class PlayReactionRequest(BaseModel):

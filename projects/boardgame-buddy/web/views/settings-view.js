@@ -49,8 +49,8 @@
       // at somebody whose browser can — state() has to ask the service worker
       // and the server, so it cannot answer synchronously on the first paint.
       this._push = null;
-      // True while a tier change or a test send is in flight. Disables the
-      // segments so a double-tap cannot race two permission prompts.
+      // True while a tier change is in flight. Disables the segments so a
+      // double-tap cannot race two permission prompts.
       this._pushBusy = false;
     }
 
@@ -308,6 +308,15 @@
             ? "Only the things that need you: buddy requests, plays and invites."
             : "Nothing is sent to this device.";
 
+      // The account can want notifications while THIS browser has no way to
+      // receive them — which since migration 018 is the state every new account
+      // starts in, and the state anyone who tapped "Not now" on the boot card
+      // stays in. Without this row the card would show "All" lit up over a
+      // device that gets nothing, and say nothing about the one tap that fixes
+      // it. Covers the pruned-subscription case too (permission granted, row
+      // gone after the browser rotated the endpoint): same row, same repair.
+      const needsDevice = !blocked && st.tier !== "none" && !st.subscribed;
+
       return `
         <div class="set-card">
           <div class="set-card__row set-card__row--static">
@@ -320,15 +329,16 @@
           <div class="theme-seg" role="group" aria-label="Push notifications">
             ${seg("all", "All")}${seg("actionable", "Actionable")}${seg("none", "Off")}
           </div>
-          ${st.tier !== "none" && !blocked ? `
+          ${needsDevice ? `
             <button class="set-card__row" type="button"
                     ${this._pushBusy ? "disabled" : ""}
-                    onclick="window.settingsView._sendTestPush()">
-              <span class="set-card__row-icon"><i data-icon="play" class="w-4 h-4"></i></span>
+                    onclick="window.settingsView._allowOnThisDevice()">
+              <span class="set-card__row-icon"><i data-icon="bell" class="w-4 h-4"></i></span>
               <span class="set-card__row-body">
-                <span class="set-card__row-title">Send a test notification</span>
+                <span class="set-card__row-title">Turn on for this device</span>
                 <span class="set-card__row-sub">
-                  Check it arrives on this device.
+                  Your account is set to hear about these, but this browser
+                  hasn't been allowed to show them yet.
                 </span>
               </span>
             </button>` : ""}
@@ -371,30 +381,33 @@
         });
     }
 
-    _sendTestPush() {
-      if (this._pushBusy) return;
+    /**
+     * Grant THIS browser, without touching the account's rung.
+     *
+     * Not a tier change — the ladder is already where the person wants it — so
+     * it cannot go through _setPushTier, which returns early when the value it
+     * is handed is the one already set. What it does need from that path is the
+     * subscribe, which is why it calls setTier with the current tier: the write
+     * that follows is an idempotent re-save of a value that has not moved.
+     *
+     * NOT async, for _setPushTier's reason: the permission prompt has to be
+     * raised inside this tap's own activation.
+     */
+    _allowOnThisDevice() {
+      if (this._pushBusy || !this._push || this._push.tier === "none") return;
       this._pushBusy = true;
       this.render();
-      window.BgbPush.test()
-        .then((r) => {
-          // devices === 0 is the interesting answer, not a failure: the
-          // permission was granted on some other device, or this one's
-          // subscription was pruned after the browser rotated it. Saying so
-          // beats a success message that explains nothing.
-          if (!r || !r.devices) {
-            window.PolaroidPopup.alert({
-              title: "No devices registered",
-              body: "This account has no device registered for notifications yet. Try switching them off and on again here.",
-            });
-          }
-        })
-        .catch(() => {
+      window.BgbPush.setTier(this._push.tier)
+        .catch((e) => {
           window.PolaroidPopup.alert({
-            title: "Couldn't send a test",
-            body: "The request didn't go through. Check your connection and try again.",
+            title: "Couldn't turn on notifications",
+            body: (e && e.message) || "Something went wrong. Try again.",
           });
         })
-        .finally(() => { this._pushBusy = false; this.render(); });
+        .finally(() => {
+          this._pushBusy = false;
+          this._refreshPushState();
+        });
     }
 
     // One row per admin tool, each its own spoke. Previously all three tools

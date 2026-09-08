@@ -985,6 +985,13 @@
     // browsers that never report the app as installable.
     if (window.BgbInstallPrompt) window.BgbInstallPrompt.init();
 
+    // And ask for the permission the account's own default is waiting on
+    // (migration 018): every account arrives wanting notifications, and only a
+    // tap on this device can turn that into somewhere to send them. Same shape
+    // as the install card — its own gating, its own settle delay, and it
+    // no-ops for anyone already granted, already blocked, or switched off.
+    if (window.BgbPushPrompt) window.BgbPushPrompt.init();
+
     // Listen for badges unlocking mid-session. The queue itself waits for a
     // clear screen before showing anything, so this is safe to arm at boot.
     if (window.BgbAchievementPopup) window.BgbAchievementPopup.init();
