@@ -180,6 +180,7 @@ do not have an account.
 | notes | TEXT | nullable |
 | bgg_play_id | BIGINT | nullable; set when the row was imported from BGG. Unique per (user_id, bgg_play_id) — re-running BGG sync is idempotent. |
 | photo_url | TEXT | nullable; Storage URL for the play photo |
+| scoring_template | JSONB | nullable; snapshot of the scoring-grid chapter this play was scored on — `{v, chapter_id, title, rows[]}` (migration 018). **Not** an FK, on purpose: the chapter is community-owned, editable by its author and deletable by author or admin, so a play holding only an id would render bare R1..Rn once a moderator cleared it and would silently relabel an old play if the author reordered its rows. Same denormalisation as `game_name` two rows down. |
 | play_mode | TEXT | `competitive` / `coop` / `team` — what the user actually played, which may differ from the game's intrinsic mode |
 | game_name | TEXT | denormalized off games (migration 020) so play lists are a single-table read |
 | game_thumbnail_url | TEXT | denormalized off games |
@@ -270,6 +271,7 @@ walks the row through phase=gather → play → settle → finalized.
 | host_user_id | UUID FK | → profiles |
 | game_id | UUID FK | nullable → games |
 | status | TEXT | open / finalized / abandoned (gates expiry + finalize path) |
+| scoring_template | JSONB | nullable; the grid the host applied, same shape as `plays.scoring_template` (migration 018). The only route the row labels have to a spectator — their mirror holds no local draft and sizes itself from the live-scores round indexes. |
 | phase | TEXT | gather / play / settle / finalized / abandoned (drives cascading screen state; migration 026). Watched by joiners via Supabase Realtime. |
 | finalized_play_id | UUID FK | nullable → plays |
 | created_at | TIMESTAMPTZ | |
@@ -327,8 +329,9 @@ browse pool sorted by popularity.
 | chapter_type | TEXT FK | → chapter_types |
 | title | TEXT | short label |
 | created_by | UUID FK | nullable → profiles (creator can edit; creator or admin can delete) |
-| layout | TEXT | `text` for now; future `table`, `grid` |
-| content | TEXT | markdown |
+| layout | TEXT | `text` (markdown) or `scoring_grid` (migration 018). A layout of the existing `scoring` type, not a type of its own — the guide scroll groups by `chapter_type` with one header each, so a seventh would split a user's scoring material in two. |
+| grid | JSONB | nullable; `{v, rows:[{label, color, note?}]}` for `layout='scoring_grid'`, NULL otherwise (CHECK `bgb_chapters_grid_shape`, 1–24 rows). `color` is a slug (`neutral\|gold\|green\|blue\|rust\|purple`) resolved by the stylesheet, never a hex — the grid lands on the cream scorepad, which is paper in both themes. |
+| content | TEXT | markdown. For a scoring grid this is a **generated** bullet mirror of `grid.rows`, rewritten on every save and never hand-edited — which is what keeps the pool's title+content ILIKE search and the moderation preview working with no branch for grids. |
 | created_at / updated_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_user_chapters
@@ -702,13 +705,19 @@ An import is `domain/bgg-import.js`'s, not the sheet's: it keeps running when th
 
 **Expansion labels drop the base game's name** wherever the base game is already the surrounding context: the Game Detail reel, the host's Gather picker, the reference guide's expansion chips, and a play's expansion list. "Carcassonne: Abbey & Mayor" reads as "Abbey & Mayor" there. This is display-only via `stripBaseGameName()` in `web/helpers.js` (the frontend twin of the backend's `_strip_base_prefix` — keep the pair in sync); the stored name is untouched, the full name stays on the element's `title` and on the `gameName` navigation param, and every other surface — the expansion's own page, collection, search, feed, plays — shows it in full.
 6. **Reference guide chapter add**: full-screen view. **Browse** searches the per-game pool (sorted by popularity, tap + to add); each row also carries the actions its viewer is entitled to: **Edit** and **Delete** for the chapter's creator (Delete for an admin too, matching `DELETE /chapters/{id}`, and gated behind the destructive confirm), **Report** for everybody else. **Create** is a three-step wizard sharing one fixed keyboard-safe shell, with a step counter + segment bar (`web/ui/wizard-progress.js`, shared with the play importer) above the body and a two-button footer below it:
-   1. **Pick type** — the six chapter types as 56px rows, plus the "Save to" expansion-target selector when expansions are in scope. Continue reads "Pick a type" and stays disabled until one is chosen. Cancel returns to Browse.
+   1. **Pick type** — the six chapter types as 56px rows, plus the "Save to" expansion-target selector when expansions are in scope. Continue reads "Pick a type" and stays disabled until one is chosen. Cancel returns to Browse. Picking **Scoring** reveals a second 56px pair underneath it — *Written notes* or *Scoring grid* (migration 018) — reusing the same `.chapter-wiz__type` rows, because it is the same control asking a narrower question.
    2. **Head start (optional)** — an optional free-text focus prompt (≤500 chars) and nothing else in the body: the step's two exits are its footer, **Skip** and **Generate**. Generate jumps to step 3 on success; a failure keeps the user here with the error and the prompt intact. Back from step 3 preserves the prompt, so tweak-and-regenerate is two taps. There is no footer Back — the picked type shows as a chip with a **Change** link to step 1, and the device back gesture still walks the steps.
    3. **Edit** — title, Write/Preview toggle and the markdown editor. The chosen type shows as a read-only chip with a **Change** link back to step 1. The toolbar's trailing group holds the two document-level actions: **Import a file** and the authoring guide. Import opens a bottom sheet (`web/widgets/chapter-import-sheet.js`) that takes a `.md` or `.txt` file and drops it straight into the editor — a leading `# Heading` becomes the title, the rest becomes the body. Overwriting an already-drafted body — by Generate or by Import — goes through the project's `PolaroidPopup.confirm()` first.
 
    Steps 1 and 2 are pure-function bodies in `web/widgets/chapter-wizard-steps.js`; step 3 stays in the view because its toolbar reads and writes the live textarea selection. The device back button walks the steps rather than popping the view (one `ui/back-guard.js` guard for the whole wizard, re-armed from its own close).
 
    **Edit does not enter the wizard**: `mode=edit` and the browse-row Edit both open step 3 directly, with no step bar and with the horizontal type pill scroller instead of the read-only chip — the chapter already has a type and a body, and re-drafting over it is not what Edit is for.
+
+   **Scoring grids** (`layout='scoring_grid'`, migration 018) replace step 3's markdown editor with a row list (`web/widgets/scoring-template-editor.js`): one card per scoring category, each a label field, a six-swatch colour radiogroup, reorder chevrons and a remove ×, over a live preview rendered by `window.renderRoundGrid` itself so the author's picture and what a scorer sees cannot disagree. A grid **skips step 2 in both directions** and its bar reads 2 steps rather than 3 — that step drafts markdown against `CHAPTER_AUTHORING_GUIDE`, and a grid is six labels the author already knows, so `services/chapter_ai.py` and its sync obligation stay out of this entirely. The markdown toolbar, the Write/Preview toggle and Import do not render. The type is fixed at `scoring` and read-only even in Edit: a grid stranded under another type is a 400 from the backend's `chapter_grid.validate_layout_pairing`.
+
+   **Adopting one changes the scoring table.** With exactly one scoring grid in the viewer's guide for the game, the Play step's grid opens already labelled and tinted, its rows locked (no remove ×) while **+ Round** still appends removable extras below them and keeps absolute numbering (R7 under a six-row template — the number a row shows is its `round_index`, which is the key live scores are stored under). With two or more, nothing auto-applies and a bottom sheet (`web/widgets/scoring-template-sheet.js`) picks; *Plain rounds* is one of its options, because clearing is non-destructive — the rows and scores stay, only the labels go. Auto-apply is refused on a grid that already holds numbers, so a resumed draft is never restructured under the host. The play keeps a **snapshot** of the rows it used, so the play-detail popup and the spectator's mirror render the same labels forever, independent of what later happens to the chapter.
+
+   **Templates you haven't added announce themselves.** When the pool holds scoring grids the viewer has not adopted, the parchment scroll shows *"…custom scoring grids are available — tap to add"* in `.scroll-panel__peek`, the strip that stays visible with the scroll **rolled up** — which is how the Play screen opens it — and again inside the empty state, which renders no peek at all and is exactly the case the nudge is most for. Tapping lands in Browse filtered to Scoring. Dismissal is stored as the set of chapter ids turned down, per game, not a boolean, so a grid published later can say so once more.
 7. **Profile** (own): Strava-style stats strip (plays / games / wins / hours), collection grid, recent plays. Admin users get an "Admin tools" link.
 8. **Profile (other user)**: fully public — same stats strip + collection grid for any account. The header surfaces buddy-state ("Add buddy" / "Accept request" / "Request sent" / "Buddies").
 9. **Buddies**: accepted mutual edges, plus incoming and outgoing pending requests. Search-by-display-name to send a new request.
