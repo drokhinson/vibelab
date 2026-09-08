@@ -630,12 +630,20 @@
     }
 
     /**
-     * The play importer's front door (views/import-plays-view.js).
+     * The two importers' front door (views/import-plays-view.js and
+     * views/photo-import-view.js).
      *
-     * Its own section rather than a row under Connections: BGG sync links an
-     * account and keeps two libraries in step, and this reads a block of text
-     * once. Filing them together would suggest the importer needs an account
-     * somewhere, which is the whole point of it not doing.
+     * Their own section rather than rows under Connections: BGG sync links an
+     * account and keeps two libraries in step, and these read something the
+     * user already has, once. Filing them together would suggest an importer
+     * needs an account somewhere, which is the whole point of it not doing.
+     *
+     * Two rows rather than one screen with a source picker, because they are
+     * not two sources for one flow — they ask for different things (a note to
+     * be read and checked; a photo to be captioned) and they end up somewhere
+     * different (plays; plays with their photographs). Which one somebody
+     * wants is decided by what they have, and that is a decision they can make
+     * from these two lines without opening either.
      */
     _renderImportCard() {
       return `
@@ -647,6 +655,17 @@
               <span class="set-card__row-sub">
                 Paste a list or a page of tally marks — you review every play
                 before anything is saved.
+              </span>
+            </span>
+            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+          </button>
+          <button class="set-card__row" onclick="window.router.go('photo-import')">
+            <span class="set-card__row-icon"><i data-icon="camera" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">Import plays from photos</span>
+              <span class="set-card__row-sub">
+                Pick photos of games you've played — each one keeps its date and
+                its country, and you add the game and the players.
               </span>
             </span>
             <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>

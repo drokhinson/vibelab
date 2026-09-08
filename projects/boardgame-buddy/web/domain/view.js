@@ -167,6 +167,8 @@
           build: (p) => `/u/${encodeURIComponent(p.userId || "")}` },
         { name: "import-plays",        pattern: /^\/settings\/import-plays\/?$/,
           build: () => "/settings/import-plays" },
+        { name: "photo-import",        pattern: /^\/settings\/import-photos\/?$/,
+          build: () => "/settings/import-photos" },
         { name: "bgg-sync",            pattern: /^\/settings\/bgg\/?$/,
           build: () => "/settings/bgg" },
         { name: "notifications",       pattern: /^\/notifications\/?$/,           build: () => "/notifications" },

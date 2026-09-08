@@ -29,6 +29,7 @@
   window.notificationsView = new window.NotificationsView();
   window.settingsView    = new window.SettingsView();
   window.importPlaysView = new window.ImportPlaysView();
+  window.photoImportView = new window.PhotoImportView();
   window.bggSyncView    = new window.BggSyncView();
   window.adminReportsView = new window.AdminReportsView();
   // Two instances of one class — the tools differ only in their strings and
@@ -62,6 +63,7 @@
   window.router.register("notifications", window.notificationsView);
   window.router.register("settings",      window.settingsView);
   window.router.register("import-plays",  window.importPlaysView);
+  window.router.register("photo-import",  window.photoImportView);
   window.router.register("bgg-sync",      window.bggSyncView);
   window.router.register("admin-reports",      window.adminReportsView);
   window.router.register("admin-images",       window.adminImagesView);

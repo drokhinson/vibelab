@@ -271,6 +271,25 @@ window.IMPORT_PHOTO_OPTS = {
 };
 
 /**
+ * The third caller's budget: the photo importer (views/photo-import-view.js),
+ * where a picked photo becomes the play's own photo and is kept forever.
+ *
+ * Same edge and quality as a play photo logged live, because that is exactly
+ * what it becomes. The two differences are deliberate. `alwaysReencode`
+ * guarantees the EXIF block — including the GPS tag the importer has just read
+ * — is gone from the bytes that reach the bucket. And a tighter `maxEdge` than
+ * IMPORT_PHOTO_OPTS, because this path may prepare thirty photos in one go and
+ * each one decodes a full-size bitmap to do it.
+ */
+window.PHOTO_IMPORT_OPTS = {
+  maxEdge: 1600,
+  quality: 0.82,
+  maxBytes: window.MAX_PHOTO_BYTES,
+  allowedTypes: ["image/jpeg", "image/png", "image/webp"],
+  alwaysReencode: true,
+};
+
+/**
  * @typedef {{ ok: true, file: File, originalSize: number, compressedSize: number, compressed: boolean }
  *        | { ok: false, error: string }} PreparedPhoto
  */
@@ -290,12 +309,13 @@ function _loadImageViaTag(file) {
  * untouched; everything else is decoded, downscaled to a max edge, and
  * re-encoded as JPEG so the upload stays under the backend cap.
  *
- * `opts` exists because the two callers are photographing different things for
- * different lifetimes — see IMPORT_PHOTO_OPTS. Omitted, the defaults are the
- * play-photo ones this function was written for, so its original call site
- * reads exactly as it did.
+ * `opts` exists because the three callers are photographing different things
+ * for different lifetimes — see IMPORT_PHOTO_OPTS and PHOTO_IMPORT_OPTS.
+ * Omitted, the defaults are the play-photo ones this function was written for,
+ * so its original call site reads exactly as it did.
  * @param {File} file
- * @param {{maxEdge?: number, quality?: number, maxBytes?: number, allowedTypes?: string[]}} [opts]
+ * @param {{maxEdge?: number, quality?: number, maxBytes?: number,
+ *          allowedTypes?: string[], alwaysReencode?: boolean}} [opts]
  * @returns {Promise<PreparedPhoto>}
  */
 async function preparePhotoForUpload(file, opts) {
@@ -306,7 +326,13 @@ async function preparePhotoForUpload(file, opts) {
   const maxBytes = o.maxBytes || window.MAX_PHOTO_BYTES;
   const allowed = o.allowedTypes ? new Set(o.allowedTypes) : _ALLOWED_PHOTO_MIME;
 
-  if (file.size < _PHOTO_FAST_PATH_BYTES && allowed.has(file.type)) {
+  // The fast path hands back the user's own file, metadata and all. That is
+  // fine for a photo the app knows nothing about, and wrong for the photo
+  // importer, which has just read that file's GPS tag: a coordinate the user
+  // agreed to turn into a country must not also travel to the bucket, where
+  // every buddy who can see the play can read it back out. Re-encoding through
+  // a canvas is what drops it — see PHOTO_IMPORT_OPTS.
+  if (!o.alwaysReencode && file.size < _PHOTO_FAST_PATH_BYTES && allowed.has(file.type)) {
     return { ok: true, file, originalSize: file.size, compressedSize: file.size, compressed: false };
   }
 
