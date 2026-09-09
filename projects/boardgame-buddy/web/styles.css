@@ -26,6 +26,23 @@
      a sub-pixel seam for list content to show through. */
   --bgb-spoke-head-height: 59px;
 
+  /* Layout tiers. <html data-bgb-layout="phone|tablet|wide"> is set before
+     first paint by the inline boot in index.html and owned after that by
+     domain/layout.js — the same lever shape as data-bgb for the theme. These
+     are the phone values; the two tier blocks below re-declare them.
+       --bgb-col-max     the content column: #app's width, and the width every
+                         docked bar pins to (they used to carry a literal 480).
+       --bgb-rail-width  the left nav rail; 0 on the bottom-bar tiers.
+       --bgb-col-center  the column's centre line for fixed chrome that pins
+                         with `left: … ; transform: translateX(-50%)`. Reads as
+                         `50%` on the phone; the rail shifts the column right
+                         by half its width on wide. The 50% resolves at the use
+                         site, against the viewport, which is what a fixed
+                         element measures itself against. */
+  --bgb-col-max: 480px;
+  --bgb-rail-width: 0px;
+  --bgb-col-center: calc(50% + var(--bgb-rail-width) / 2);
+
   /* The header is sticky, so an unpadded scroll-into-view drops its target
      underneath it. Callers: play-flow-view.js, game-explorer-view.js,
      session-viewer-view.js. */
@@ -82,6 +99,25 @@
      cream ink on a cream plate at 1.2:1. */
   --photo-plate: rgba(255, 251, 241, 0.9);
   --on-photo:    #211A12;
+}
+
+/* ── Layout tiers ──────────────────────────────────────────────────────────── */
+/* tablet: an iPad held upright. The column widens, the bottom bar stays —
+   thumbs are still at the bottom. Screens that split into two panes do so
+   from here (grep `data-bgb-layout="tablet"], :root[data-bgb-layout="wide"]`).
+   wide: an iPad on its side, a laptop, a monitor. The bottom bar becomes a
+   left rail carrying the header's logo, bell and gear, so the header itself
+   is hidden — and both height tokens go to 0px, which collapses #app's
+   bottom padding, every `bottom: calc(var(--bgb-nav-height) + …)` and every
+   sticky sub-header's `top:` without touching those rules. */
+:root[data-bgb-layout="tablet"] {
+  --bgb-col-max: 720px;
+}
+:root[data-bgb-layout="wide"] {
+  --bgb-col-max: 1040px;
+  --bgb-rail-width: 88px;
+  --bgb-nav-height: 0px;
+  --bgb-header-height: 0px;
 }
 
 /* ── Dark (default) ─────────────────────────────────────────────────────────── */
@@ -1250,11 +1286,11 @@ body {
 main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   position: fixed;
   top: var(--bgb-vv-top, 0px);
-  left: 0;
+  left: var(--bgb-rail-width);  /* clear of the wide tier's nav rail */
   right: 0;
   margin-inline: auto;          /* keeps the column centred on desktop */
-  width: 100%;
-  max-width: 480px;             /* matches #app's max-w-[480px] */
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max); /* matches #app's column */
   height: 100vh;                /* no-dvh fallback */
   height: 100dvh;               /* drops the retracted URL-bar strip */
   /* --bgb-vv-h drops the keyboard too, but it is only as fresh as the last
@@ -2434,7 +2470,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    collides with the tab bar. */
 .chapter-add__fab {
   position: fixed;
-  right: 18px;
+  /* 18px in from the CONTENT COLUMN's edge, not the viewport's: on a tablet
+     or a monitor the column is narrower than the window, and a FAB hugging
+     the window corner floats a screen-width away from the list it acts on.
+     The column's right edge sits (viewport - rail - column) / 2 in from the
+     right; on a phone that is negative and max() falls back to 18px. */
+  right: max(18px, calc(50% - var(--bgb-rail-width) / 2 - var(--bgb-col-max) / 2 + 18px));
   bottom: calc(var(--bgb-nav-height, 64px) + 18px);
   z-index: 25;
   display: inline-flex;
@@ -2462,7 +2503,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    ("Back to game details", etc.). */
 .chapter-add__fab-back {
   position: fixed;
-  left: 18px;
+  /* Mirror of .chapter-add__fab's right: the column's left edge is the rail
+     plus the same centring gap, so this also stays clear of the rail. */
+  left: max(calc(var(--bgb-rail-width) + 18px), calc(50% + var(--bgb-rail-width) / 2 - var(--bgb-col-max) / 2 + 18px));
   bottom: calc(var(--bgb-nav-height, 64px) + 18px);
   z-index: 25;
   display: inline-flex;
@@ -2605,6 +2648,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      height a second time. See the cascade block below. */
   min-height: 100dvh;
   padding-bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
+  /* The content column. Was Tailwind's max-w-[480px] mx-auto on the element;
+     it is a token now so the tablet and wide tiers can widen it, and so the
+     docked bars below can pin to the same number instead of repeating it. */
+  width: 100%;
+  max-width: var(--bgb-col-max);
+  margin-inline: auto;
+}
+/* The rail is position:fixed at the left edge (see .bgb-nav below), so the
+   page makes room for it here and #app centres in what is left. */
+:root[data-bgb-layout="wide"] body {
+  padding-left: var(--bgb-rail-width);
 }
 
 /* Flat rectangular tab bar — square corners, edge-to-edge, nothing
@@ -2897,18 +2951,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   .bgb-global-header__settings:hover,
   .bgb-global-header__bell[aria-pressed="true"],
   .bgb-global-header__settings[aria-pressed="true"] { transform: none; }
-}
-
-/* DaisyUI's .btm-nav is position:fixed left:0 right:0 — fine on a phone but
-   on a desktop browser it stretches the full viewport while the app itself
-   is capped at 480px and centered. Pin the nav to the same column so it
-   visually belongs to the app instead of the browser chrome. */
-.btm-nav {
-  left: 50% !important;
-  right: auto !important;
-  transform: translateX(-50%);
-  max-width: 480px;
-  width: 100%;
 }
 
 /* ── OAuth buttons (per .claude/rules/auth-ui.md) ─────────────────────────── */
@@ -4548,10 +4590,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgbnotif-bar {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
-  left: 50%;
+  /* Pinned to the content column, not the viewport — the same recipe as
+     .cascade-cta-wrap. On wide the rail shifts the column right, which is
+     what --bgb-col-center carries. */
+  left: var(--bgb-col-center);
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max);
   box-sizing: border-box;
   padding: 12px 16px 28px;
   z-index: 35;
@@ -5279,7 +5324,7 @@ html.bgb-ptr-armed body {
 .bgb-ptr {
   position: fixed;
   top: var(--bgb-header-height);
-  left: 50%;
+  left: var(--bgb-col-center);   /* the column's centre, not the viewport's */
   transform: translateX(-50%);
   z-index: 25;
   pointer-events: none;
@@ -6669,7 +6714,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .bgb-import-toasts {
   position: fixed;
   top: calc(var(--bgb-vv-top, 0px) + 10px);
-  left: 50%;
+  left: var(--bgb-col-center);   /* the column's centre, not the viewport's */
   transform: translateX(-50%);
   z-index: 111;
   width: min(calc(100vw - 20px), 460px);
@@ -8888,12 +8933,14 @@ main[data-view="session-viewer"].hidden {
 .cascade-cta-wrap {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
-  /* Pin to #app's 480px column rather than the viewport — .bgb-nav itself
-     is deliberately edge-to-edge, but the CTA belongs to the content column. */
-  left: 50%;
+  /* Pin to #app's content column rather than the viewport — .bgb-nav itself
+     is deliberately edge-to-edge, but the CTA belongs to the content column.
+     The column's width and centre are tokens (see the Layout tiers block at
+     the top of the file), so a wider tier and the left rail both move it. */
+  left: var(--bgb-col-center);
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max);
   box-sizing: border-box;    /* don't lean on preflight */
   padding: 12px 16px 28px;   /* sums to --cascade-cta-bar */
   z-index: 35;
@@ -8956,10 +9003,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
      the bar's top edge, which is 12px of bar padding above the button. */
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + var(--cascade-cta-bar));
-  left: 50%;
+  left: var(--bgb-col-center);
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max);
   box-sizing: border-box;
   padding: 0 16px;
   z-index: 36;
@@ -14817,7 +14864,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   flex-direction: column;
   padding: 4px 16px 0;
   /* The app's content column, not the viewport, on a tablet or desktop. */
-  max-width: 480px;
+  max-width: var(--bgb-col-max);
   margin-inline: auto;
   box-sizing: border-box;
 }
@@ -15561,10 +15608,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .imp-nav {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
-  left: 50%;
+  /* Pinned to the content column, not the viewport — the same recipe as
+     .cascade-cta-wrap. On wide the rail shifts the column right, which is
+     what --bgb-col-center carries. */
+  left: var(--bgb-col-center);
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max);
   box-sizing: border-box;
   padding: 12px 16px 28px;
   z-index: 35;

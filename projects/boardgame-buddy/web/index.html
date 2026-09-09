@@ -68,6 +68,23 @@
     })();
   </script>
 
+  <!-- Layout boot. Same contract as the theme boot above, for the layout
+       tier (phone / tablet / wide — see domain/layout.js, which owns every
+       change after this): a stored pin wins, otherwise the viewport width.
+       Before first paint so a tablet never flashes the phone column. Keep
+       the breakpoints and the 600px floor in step with domain/layout.js. -->
+  <script>
+    (function () {
+      var stored = null;
+      try { stored = localStorage.getItem("bgb.layout"); } catch (e) {}
+      var mm = window.matchMedia ? function (q) { return window.matchMedia(q).matches; } : function () { return false; };
+      var tier = mm("(min-width: 1024px)") ? "wide" : mm("(min-width: 768px)") ? "tablet" : "phone";
+      if (stored === "phone") tier = "phone";
+      else if (stored === "tablet") tier = mm("(max-width: 599px)") ? "phone" : "tablet";
+      document.documentElement.setAttribute("data-bgb-layout", tier);
+    })();
+  </script>
+
   <!-- Boot backstop. Deliberately here rather than in init.js: the failure this
        covers is init.js NEVER ARRIVING — a stalled bundle, a 404 after a bad
        deploy, a connection that dies mid-download. Every script below is
@@ -133,7 +150,10 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="app" class="max-w-[480px] mx-auto min-h-screen flex flex-col">
+  <!-- The column width is a token (--bgb-col-max, styles.css #app), not a
+       Tailwind class: it changes per layout tier and every docked bar pins
+       to the same number. -->
+  <div id="app" class="min-h-screen flex flex-col">
 
     <!-- Global app header — persists across views once the user is signed in.
          Brand on the left routes back to the feed; the gear on the right opens
@@ -316,6 +336,7 @@
   <script src="domain/notifications.js"></script>
   <script src="domain/admin-review.js"></script>
   <script src="domain/theme.js"></script>
+  <script src="domain/layout.js"></script>
   <script src="domain/net.js"></script>
   <script src="domain/outbox.js"></script>
   <script src="domain/cache.js"></script>

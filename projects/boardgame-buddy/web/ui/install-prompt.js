@@ -98,7 +98,11 @@
       || window.navigator.standalone === true;
   }
 
+  // The viewport's OWN answer (BgbLayout.auto), not the tier on screen: a
+  // desktop user who pinned the phone layout in Settings is still on a desktop,
+  // and must not be offered Add to Home Screen.
   function _isPhone() {
+    if (window.BgbLayout) return window.BgbLayout.auto() === "phone";
     return _safe(() => window.matchMedia("(max-width: 767px)").matches, false);
   }
 
@@ -330,7 +334,7 @@
       // Rotating a phone into landscape crosses the 767px gate, and launching
       // an installed copy flips display-mode without a reload. Re-run the
       // gates on both rather than waiting for the next navigation.
-      _watch("(max-width: 767px)");
+      _watch("(max-width: " + ((window.BgbLayout ? window.BgbLayout.BREAKPOINTS.tablet : 768) - 1) + "px)");
       _watch("(display-mode: standalone)");
 
       setTimeout(() => { _settled = true; _sync(); }, SETTLE_MS);

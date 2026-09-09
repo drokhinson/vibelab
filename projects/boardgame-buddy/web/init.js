@@ -619,7 +619,7 @@
 
   // Bottom nav: Feed | Play | Profile (floating bar + raised Create).
   function wireBottomNav() {
-    document.querySelectorAll(".bgb-nav button[data-nav], .btm-nav button[data-nav]").forEach((btn) => {
+    document.querySelectorAll(".bgb-nav button[data-nav]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const target = btn.dataset.nav;
         if (!window.store.get("user")) return;
@@ -878,6 +878,7 @@
     // Owns theme changes from here on; index.html's inline boot set the
     // initial attribute before first paint.
     window.BgbTheme.start();
+    window.BgbLayout.start();
     window.store.set("outboxCount", window.Outbox.count());
     // start() only publishes on an edge, so a page that loads already offline
     // would never fire the subscriber. Paint the banner from the current state.
