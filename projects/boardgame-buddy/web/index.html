@@ -294,8 +294,11 @@
       </span>
       <span class="bgb-nav__label">Play</span>
     </button>
+    <!-- Settings is deliberately absent from data-nav-views: like
+         notifications, it is a header/rail toggle screen rather than a Profile
+         spoke, so no tab is lit while it is open (domain/view.js#go). -->
     <button class="bgb-nav__tab" data-nav="profile-self"
-            data-nav-views="profile-self,collection,plays,buddies,stats,achievements,settings">
+            data-nav-views="profile-self,collection,plays,buddies,stats,achievements">
       <span class="bgb-nav__ico">
         <i data-icon="user" class="w-5 h-5"></i>
         <!-- Something is waiting behind this tab — a buddy request, a ghost
