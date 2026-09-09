@@ -2656,8 +2656,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin-inline: auto;
 }
 /* The rail is position:fixed at the left edge (see .bgb-nav below), so the
-   page makes room for it here and #app centres in what is left. */
-:root[data-bgb-layout="wide"] body {
+   page makes room for it here and #app centres in what is left. Only while
+   the rail is actually on screen: it is data-auth-only, and the splash and
+   auth screens would otherwise sit 88px off-centre with nothing beside them. */
+:root[data-bgb-layout="wide"] body:has(> .bgb-nav:not(.hidden)) {
   padding-left: var(--bgb-rail-width);
 }
 
