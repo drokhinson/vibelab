@@ -209,9 +209,10 @@ Every piece of fixed or sticky chrome:
   preflight here — a `max-height` caps the content box, and padding plus borders
   land outside the cap.
 - Offsets from the bottom as `calc(<nav-height-token> + env(safe-area-inset-bottom))`.
-- Pins to the app's content column (`left: 50%` + `translateX(-50%)` +
-  `max-width`), not the viewport — unless it is deliberately edge-to-edge, like
-  the bottom nav itself.
+- Pins to the app's content column (`left: var(--col-center, 50%)` +
+  `translateX(-50%)` + `max-width: var(--col-max)`), not the viewport — unless
+  it is deliberately edge-to-edge, like the bottom nav itself. Both are tokens
+  so a wider layout tier, or a side rail, moves every bar at once.
 
 See `.claude/rules/web-frontend.md` § App chrome & layering for the z-index
 ladder and the sticky-vs-fixed rule.
