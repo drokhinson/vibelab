@@ -25,12 +25,18 @@
   // both themes, so the stylesheet owns the ink (.claude/rules/theming.md §10).
   // The hex here is for the swatch chip in this editor ONLY — it never travels
   // to the server and never reaches the grid.
+  //
+  // Spectrum order, which is also the order the 5x2 swatch grid reads in.
   const ROW_COLORS = [
     { id: "neutral", label: "No colour", hex: null },
+    { id: "red", label: "Red", hex: "#B03028" },
+    { id: "pink", label: "Pink", hex: "#C2557E" },
+    { id: "rust", label: "Rust", hex: "#A65D2C" },
+    { id: "brown", label: "Brown", hex: "#6B4423" },
     { id: "gold", label: "Gold", hex: "#C9922A" },
+    { id: "yellow", label: "Yellow", hex: "#B5A800" },
     { id: "green", label: "Green", hex: "#4A7A4A" },
     { id: "blue", label: "Blue", hex: "#4A6F94" },
-    { id: "rust", label: "Rust", hex: "#A65D2C" },
     { id: "purple", label: "Purple", hex: "#7A5293" },
   ];
 

@@ -330,7 +330,7 @@ browse pool sorted by popularity.
 | title | TEXT | short label |
 | created_by | UUID FK | nullable → profiles (creator can edit; creator or admin can delete) |
 | layout | TEXT | `text` (markdown) or `scoring_grid` (migration 018). A layout of the existing `scoring` type, not a type of its own — the guide scroll groups by `chapter_type` with one header each, so a seventh would split a user's scoring material in two. |
-| grid | JSONB | nullable; `{v, rows:[{label, color, note?}]}` for `layout='scoring_grid'`, NULL otherwise (CHECK `bgb_chapters_grid_shape`, 1–24 rows). `color` is a slug (`neutral\|gold\|green\|blue\|rust\|purple`) resolved by the stylesheet, never a hex — the grid lands on the cream scorepad, which is paper in both themes. |
+| grid | JSONB | nullable; `{v, rows:[{label, color, note?}]}` for `layout='scoring_grid'`, NULL otherwise (CHECK `bgb_chapters_grid_shape`, 1–24 rows). `color` is a slug (`neutral\|red\|pink\|rust\|brown\|gold\|yellow\|green\|blue\|purple`) resolved by the stylesheet, never a hex — the grid lands on the cream scorepad, which is paper in both themes. |
 | content | TEXT | markdown. For a scoring grid this is a **generated** bullet mirror of `grid.rows`, rewritten on every save and never hand-edited — which is what keeps the pool's title+content ILIKE search and the moderation preview working with no branch for grids. |
 | created_at / updated_at | TIMESTAMPTZ | |
 

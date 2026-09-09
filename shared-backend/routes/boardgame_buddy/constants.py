@@ -597,16 +597,27 @@ class ScoringRowColor(StrEnum):
     A SLUG, never a hex. The grid lands on the cream scorepad — a paper surface
     that stays light in both themes — so only a fixed palette the stylesheet
     owns can be guaranteed legible there, and a literal colour travelling
-    through a data path is what .claude/rules/theming.md §10 forbids. These six
-    mirror COLOR_SWATCHES in web/views/reference-guide-add-view.js, which are
-    already contrast-tuned for parchment.
+    through a data path is what .claude/rules/theming.md §10 forbids.
+
+    This enum is the only place the set is VALIDATED; the hexes live in
+    styles.css (--row-*) and the editor's swatch chips in
+    web/widgets/scoring-template-editor.js mirror both. Adding a colour means
+    touching all three, plus the two COMMENT ON COLUMN strings and STRUCTURE.md
+    that describe the set in prose.
+
+    Spectrum order, so the editor's 5x2 swatch grid is scannable. Position
+    carries no meaning — the slug is the key.
     """
 
     NEUTRAL = "neutral"
+    RED = "red"
+    PINK = "pink"
+    RUST = "rust"
+    BROWN = "brown"
     GOLD = "gold"
+    YELLOW = "yellow"
     GREEN = "green"
     BLUE = "blue"
-    RUST = "rust"
     PURPLE = "purple"
 
 

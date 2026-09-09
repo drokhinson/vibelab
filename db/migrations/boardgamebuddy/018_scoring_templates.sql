@@ -62,7 +62,7 @@ ALTER TABLE public.boardgamebuddy_guide_chapters
 
 COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS
   'Row definitions for a layout=''scoring_grid'' chapter: {"v":1,"rows":[{"label":…,"color":…,"note":…}]}. '
-  '`color` is a SLUG from a fixed palette (neutral|gold|green|blue|rust|purple), never a hex — the grid '
+  '`color` is a SLUG from a fixed palette (neutral|red|pink|rust|brown|gold|yellow|green|blue|purple), never a hex — the grid '
   'lands on the cream scorepad, and only a fixed palette can be guaranteed legible there in both themes. '
   'NULL for layout=''text''; see the bgb_chapters_grid_shape constraint.';
 

@@ -1908,42 +1908,78 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .tmpl-row__move:not(:disabled):active,
 .tmpl-row__del:active { transform: scale(0.94); }
+/* Ten swatches at 26px + a 0.45rem gap want ~325px and the row card gives about
+   311px, so this is a 5x2 grid rather than a strip. Grid also retires the
+   negative-inset hit area the flex row used, which was a bug the six-colour
+   version was quietly carrying: a 26px swatch on a 33px pitch with a 44px hit
+   area meant ADJACENT HIT ZONES OVERLAPPED by ~11px, so a tap near a swatch's
+   right edge selected its neighbour. Here the CELL is the target — ~60px wide,
+   nothing overlaps, and the >= 8px clear space in mobile-web.md §5 holds by
+   construction.
+
+   repeat(5, …) rather than auto-fit: the palette is a deliberate fixed set of
+   ten, and two tidy rows of five read better than the 7+3 auto-fit lands on. */
 .tmpl-row__colors {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  /* 8px, not 4: the whole 61x44 cell is clickable, so the gap IS the clear
+     space between adjacent hit zones and mobile-web.md §5 wants >= 8px of it. */
+  gap: 8px;
+  justify-items: center;
   margin: 0.5rem 0 0 24px;
 }
+/* The BUTTON is the tap target and fills its grid cell (~60x44); the disc is
+   drawn by ::before inside it. Doing it this way rather than growing a 26px
+   button with a negative-inset pseudo is what actually keeps the targets apart:
+   the earlier version measured 58x42 with ~12px of VERTICAL overlap between the
+   two rows and only 6.8px of horizontal clearance, both of which the ">= 44px,
+   >= 8px apart" rule in mobile-web.md §5 rules out. */
 .tmpl-sw {
-  position: relative;
-  flex: none;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.tmpl-sw::before {
+  content: "";
   width: 26px;
   height: 26px;
   border-radius: 999px;
-  border: 2px solid transparent;
   background: var(--sw, transparent);
-  cursor: pointer;
-  padding: 0;
+  /* Every disc gets an edge. Measured: as a filled disc `brown` is only 2.19:1
+     against the dark card and `yellow` 2.29:1 against the light one — under the
+     3:1 at which a shape reads as distinct from its ground, so the darkest and
+     lightest swatches lost their silhouette without this. */
+  box-shadow: inset 0 0 0 1px oklch(var(--bc) / 0.22);
 }
-/* Same 44x44 trick as the row controls: six full-size targets would not fit. */
-.tmpl-sw::before { content: ""; position: absolute; inset: -9px; }
 /* "No colour" needs to look like an absence rather than like a missing swatch,
-   so it is an outlined ring instead of a filled disc. The ring is drawn in INK
-   at low alpha rather than in --b3: --b3 is a ground step, so in dark it is
-   nearly the card it sits on and the swatch read as a hole rather than as an
-   option. */
-.tmpl-sw--none {
+   so it is an outlined ring instead of a filled disc, heavier than the base
+   ring above. The ring is drawn in INK at low alpha rather than in --b3: --b3
+   is a ground step, so in dark it is nearly the card it sits on and the swatch
+   read as a hole rather than as an option. */
+.tmpl-sw--none::before {
   background: oklch(var(--b1));
   box-shadow: inset 0 0 0 1.5px oklch(var(--bc) / 0.38);
 }
-.tmpl-sw--on {
-  border-color: oklch(var(--bc) / 0.75);
-  box-shadow: 0 0 0 2px oklch(var(--b2));
+/* box-shadow does not cascade per-layer, so each state restates the ring it
+   sits on top of: hairline, a 2px gap in the card's own colour, then the ink
+   ring that says "picked". */
+.tmpl-sw--on::before {
+  box-shadow: inset 0 0 0 1px oklch(var(--bc) / 0.22),
+              0 0 0 2px oklch(var(--b2)),
+              0 0 0 4px oklch(var(--bc) / 0.75);
 }
-.tmpl-sw--none.tmpl-sw--on {
-  box-shadow: inset 0 0 0 1.5px oklch(var(--bc) / 0.38), 0 0 0 2px oklch(var(--b2));
+.tmpl-sw--none.tmpl-sw--on::before {
+  box-shadow: inset 0 0 0 1.5px oklch(var(--bc) / 0.38),
+              0 0 0 2px oklch(var(--b2)),
+              0 0 0 4px oklch(var(--bc) / 0.75);
 }
-.tmpl-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tmpl-sw:active::before { transform: scale(0.92); }
+.tmpl-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 12px; }
 .tmpl-addrow {
   display: flex;
   align-items: center;
@@ -7577,13 +7613,26 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    species — instead of a bare R1..Rn. The chapter stores a palette SLUG, never
    a hex: this grid lands on the scorepad, which is PAPER and therefore light in
    BOTH themes (theming.md §6), so the stylesheet has to own the ink or an
-   author could pick a yellow nobody can read. These five are the chapter
-   editor's own COLOR_SWATCHES, already tuned for parchment. */
+   author could pick a yellow nobody can read.
+
+   Five (gold, green, blue, rust, purple) are the chapter editor's own
+   COLOR_SWATCHES, already tuned for parchment. The other four were picked
+   against those five by measurement rather than by eye: every pair is at least
+   dE 23 apart at FULL strength, which is what matters because the 3px inset
+   rule below is what identifies a row — the 14% wash behind the label is
+   deliberately too subtle to carry it. The close pairs are yellow/gold (dE 25),
+   rust/brown (23) and neutral/brown (23); there are only so many warm hues on a
+   cream ground, and those are the ones to re-check first if the palette is ever
+   retuned. Label contrast at the wash stays >= 9.2:1 on both themes' paper. */
 :root {
+  --row-red:    #B03028;
+  --row-pink:   #C2557E;
+  --row-rust:   #A65D2C;
+  --row-brown:  #6B4423;
   --row-gold:   #C9922A;
+  --row-yellow: #B5A800;
   --row-green:  #4A7A4A;
   --row-blue:   #4A6F94;
-  --row-rust:   #A65D2C;
   --row-purple: #7A5293;
 }
 /* The slug arrives from a database column, so the set is open and an unknown
@@ -7595,10 +7644,14 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    :root-level `--row-neutral: var(--polaroid-muted)` would freeze the root's
    value and miss the scorepad island's own. */
 .scoring-round-th--tpl { --row-accent: var(--polaroid-muted); }
+.scoring-round-th--tpl[data-row-color="red"]    { --row-accent: var(--row-red); }
+.scoring-round-th--tpl[data-row-color="pink"]   { --row-accent: var(--row-pink); }
+.scoring-round-th--tpl[data-row-color="rust"]   { --row-accent: var(--row-rust); }
+.scoring-round-th--tpl[data-row-color="brown"]  { --row-accent: var(--row-brown); }
 .scoring-round-th--tpl[data-row-color="gold"]   { --row-accent: var(--row-gold); }
+.scoring-round-th--tpl[data-row-color="yellow"] { --row-accent: var(--row-yellow); }
 .scoring-round-th--tpl[data-row-color="green"]  { --row-accent: var(--row-green); }
 .scoring-round-th--tpl[data-row-color="blue"]   { --row-accent: var(--row-blue); }
-.scoring-round-th--tpl[data-row-color="rust"]   { --row-accent: var(--row-rust); }
 .scoring-round-th--tpl[data-row-color="purple"] { --row-accent: var(--row-purple); }
 /* The tint MIXES INTO THE SURFACE's own ground rather than being a literal, so
    the rule works unchanged wherever the grid is rendered — the live scorepad,
