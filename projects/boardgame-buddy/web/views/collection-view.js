@@ -51,9 +51,18 @@
 // it would also throw away the scroll position the user is reading from.
 
 (function () {
-  // Seven rows of the 3-up grid. Deep enough that one batch is a couple of
-  // screens on a phone, so the sentinel is well below the fold when it arms.
-  const BATCH_SIZE = 21;
+  // Seven rows of the grid. Deep enough that one batch is a couple of screens
+  // on a phone, so the sentinel is well below the fold when it arms. Rows,
+  // not items: the grid is 3-up on a phone, 4 on a tablet and 6 on a wide
+  // screen (styles.css .profile-collection-grid), and a batch has to fill a
+  // comparable amount of screen whatever the column count
+  // (.claude/rules/ui-object-design.md §3d). Keep COLS in step with the CSS.
+  const BATCH_ROWS = 7;
+  const COLS = { phone: 3, tablet: 4, wide: 6 };
+  function batchSize() {
+    const tier = window.BgbLayout ? window.BgbLayout.current() : "phone";
+    return BATCH_ROWS * (COLS[tier] || COLS.phone);
+  }
   const MODE_OWNED = "owned";
   const MODE_WISHLIST = "wishlist";
   const MODE_PLAYED = "played";
@@ -97,7 +106,7 @@
       super("collection");
       this.ctl = new window.ShelfController({
         modes: [MODE_OWNED, MODE_WISHLIST, MODE_PLAYED],
-        batchSize: BATCH_SIZE,
+        batchSize: batchSize(),
         target: () => this._shelfTarget(),
         otherUserId: () => (this._isOther() ? this._targetUserId : null),
         onChange: () => this.render(),
@@ -211,6 +220,9 @@
       this._unsubs.push(() => this.container.removeEventListener("click", onTreeClick));
       this.listen("user", () => this.render());
       this.listen("myCollectionMap", () => this._refreshMaps());
+      // A tier change changes the column count, so the next batch is sized
+      // for the new grid. What is already revealed stays revealed.
+      this.listen("layout", () => { this.ctl.batchSize = batchSize(); });
       this.listenDom("status-changed", (e) => {
         const { gameId, status } = e.detail || {};
         if (!gameId) return;
@@ -1293,7 +1305,7 @@
         onRetry: "window.collectionView._retryMore()",
         // Only worth saying once the list actually ran past a batch; on a
         // twelve-game shelf the end of the list is self-evident.
-        endLabel: shown > BATCH_SIZE
+        endLabel: shown > batchSize()
           ? `That's all ${this._countLabel(mode, { rows: true })}.`
           : "",
       });

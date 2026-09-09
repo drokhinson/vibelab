@@ -3124,6 +3124,108 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   min-width: 0;
 }
 .feed-aside::-webkit-scrollbar { display: none; }
+
+/* ── Every other screen on the tablet and wide tiers ──────────────────────
+   The rest of the per-tier layout, in one place. The pattern throughout: a
+   screen's <main> or its root becomes a grid from the tablet tier up, every
+   child spans both columns by default, and the cards that read well side by
+   side opt back into a single column. Nothing here applies on a phone. */
+
+/* The Play tab: Host on the left, Join on the right, where the live-session
+   list is visible without scrolling past the host cards. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 24px;
+  align-content: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .cascade-chooser__header {
+  grid-column: 1 / -1;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .lp-divider { display: none; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .lp-join-section {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + 16px);
+  align-self: start;
+}
+
+/* Polaroid grids: the tile never changes, the column count does. The batch
+   and page sizes in collection-view.js and game-explorer-view.js are rows ×
+   these columns — change both together. */
+:root[data-bgb-layout="tablet"] :is(.profile-collection-grid, .lp-find-grid) { grid-template-columns: repeat(4, 1fr); }
+:root[data-bgb-layout="wide"]   :is(.profile-collection-grid, .lp-find-grid) { grid-template-columns: repeat(6, 1fr); }
+
+/* Game detail: the polaroid, status and actions in a sticky left column, the
+   description, expansions, guide scroll and recent plays down the right. The
+   back button is position:absolute and so takes no grid cell. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  column-gap: 24px;
+  align-items: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail__cover {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + 16px);
+  padding: 2.75rem 0 0.75rem;   /* room for the back button above the polaroid */
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail__body { padding-top: 0.75rem; }
+/* Its -1rem bleed is for the phone column's gutters; in the right-hand pane it
+   would run into the gap. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail__plays-scroll { margin: 0; padding-inline: 0; }
+
+/* Profile hubs (own and other): the account card, the stats block and any
+   back row span; the preview cards pair up two to a row. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 16px;
+  align-content: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > * {
+  grid-column: 1 / -1;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > .preview-card {
+  grid-column: auto;
+}
+
+/* Stats: the head, the podium and the career strip span; the stat cards pair
+   up. Loading, empty and error states render one child, which spans. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="stats"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 16px;
+  align-content: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="stats"] > * { grid-column: 1 / -1; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="stats"] > .preview-card { grid-column: auto; }
+
+/* Achievements: each group's horizontal rail wraps into a grid of the same
+   medallions, so a whole group is on screen at once. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .ach-rail {
+  flex-wrap: wrap;
+  overflow: visible;
+  scroll-snap-type: none;
+  margin-inline: 0;
+  padding-inline: 0;
+}
+
+/* Reading screens keep a single 720px column even on a monitor: a settings
+   list, a wizard or a log of rows does not want 1040px of line length. The
+   token is re-declared on the <main> so a docked bar inside it (the wizard
+   footers, the notification bar) pins to the same narrower column — fixed
+   descendants inherit custom properties from where they sit in the tree. */
+:root[data-bgb-layout="wide"] :is(
+  main[data-view="auth"], main[data-view="settings"], main[data-view="notifications"],
+  main[data-view="plays"], main[data-view="buddies"], main[data-view="add-games"],
+  main[data-view="import-plays"], main[data-view="photo-import"], main[data-view="bgg-sync"],
+  main[data-view="reference-guide-add"], main[data-view^="admin-"]) {
+  --bgb-col-max: 720px;
+  width: 100%;
+  max-width: var(--bgb-col-max);
+  margin-inline: auto;
+}
+
 .feed-aside .feed-rail__header,
 .feed-aside .feed-rail__scroll { padding-left: 0; padding-right: 0; }
 .feed-aside .feed-rail__scroll {
