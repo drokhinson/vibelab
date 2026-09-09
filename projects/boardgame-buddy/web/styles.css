@@ -3134,15 +3134,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    side opt back into a single column. Nothing here applies on a phone. */
 
 /* The Play tab: Host on the left, Join on the right, where the live-session
-   list is visible without scrolling past the host cards. */
+   list is visible without scrolling past the host cards. Each column keeps its
+   own heading ("Host a game" / "Join a game") — there is no page title
+   spanning the two, so the columns are labelled by what they do rather than by
+   one header that belongs to neither. The divider goes out with display:none,
+   which also takes it out of the grid flow so it claims no cell. */
 :root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   column-gap: 24px;
   align-content: start;
-}
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .cascade-chooser__header {
-  grid-column: 1 / -1;
 }
 :root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .lp-divider { display: none; }
 :root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .lp-join-section {
@@ -9844,16 +9845,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .cascade-where__value--empty { font-weight: 500; color: var(--polaroid-muted); }
 .cascade-where__caret { flex: none; color: var(--polaroid-muted); }
 
-/* ── Play tab, Host half — heading + the option-card list ───────────────── */
-.cascade-chooser__header { padding: 12px 4px 18px; text-align: center; }
-.cascade-chooser__header h1 {
-  /* No lead paragraph under it any more, so the header's own 18px bottom
-     padding carries the gap to the cards — no margin needed here. */
-  font-size: 28px;
-  margin: 0;
-  color: oklch(var(--bc));
-}
-
+/* ── Play tab, Host half — the option-card list ─────────────────────────── */
+/* The heading above it is a plain .lp-section-title, shared with the Join
+   half — see the "Play tab split" block further down. */
 .lp-opts {
   display: flex;
   flex-direction: column;
@@ -10999,16 +10993,20 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .cascade-game-chip__details { color: var(--polaroid-ink); }
 
 /* ── Play tab split — divider + section titles ───────────────────────────── */
-/* The rule between the Host half (chooser cards) and the Join half, and the
-   heading that labels the lower section. Sized to match .cascade-chooser__header
-   h1 so the two halves read as siblings rather than a page plus a subsection. */
+/* The rule between the Host half (chooser cards) and the Join half, plus the
+   heading each half carries. There is no page title over the two: both halves
+   get the same 28px display heading, so they read as siblings rather than a
+   page plus a subsection — which is also what lets the tablet tier drop the
+   divider and set them side by side as two labelled columns. Matching top
+   padding on both sections keeps the two headings on one line there. */
 .lp-divider {
   border: 0;
   height: 1px;
   background: var(--polaroid-line);
   margin: 24px 4px;
 }
-.lp-join-section { padding-bottom: 24px; }
+.lp-host-section { padding-top: 12px; }   /* .lp-opts carries the bottom gap */
+.lp-join-section { padding: 12px 0 24px; }
 .lp-section-title {
   font-size: 28px;
   text-align: center;
