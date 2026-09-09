@@ -338,10 +338,13 @@ h1 {
 .photo-drop svg { width: 28px; height: 28px; }
 .notes { min-height: 90px; border: 1px solid var(--paper-line); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,0.55); font-size: 13px; color: var(--paper-muted); }
 
-/* ── Play tab (Let's play) ────────────────────────────────────────────── */
+/* ── Play tab (Host a game / Join a game) ─────────────────────────────── */
+/* No page title over the two halves: each column carries its own heading, so
+   the tablet grid reads as two labelled columns rather than one header
+   spanning a split it does not describe. */
 .lp { display: block; }
 .screen[data-tier="tablet"] .lp, .screen[data-tier="wide"] .lp { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; align-content: start; }
-.lp__h { grid-column: 1 / -1; font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; margin: 4px 0 12px; }
+.lp__sect-h { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; margin: 4px 0 12px; }
 .lp__opts { display: flex; flex-direction: column; gap: 10px; }
 .opt { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 12px; background: var(--card); color: var(--card-ink); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px; min-height: 76px; box-shadow: var(--sh-2); }
 .opt--host { background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
@@ -355,6 +358,7 @@ h1 {
 .lp__hr { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
 .screen[data-tier="tablet"] .lp__hr, .screen[data-tier="wide"] .lp__hr { display: none; }
 .lp__join h2 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin: 0 0 10px; }
+.lp__join .lp__sect-h { font-size: 1.7rem; margin: 4px 0 12px; }
 .code { display: flex; gap: 8px; }
 .code span { flex: 1; height: 52px; border-radius: 10px; background: var(--bg-1); border: 1px solid var(--line-strong); display: grid; place-items: center; font-family: var(--font-score); font-size: 1.3rem; font-weight: 700; color: var(--ink-muted); }
 .live { margin-top: 12px; display: grid; gap: 8px; }
@@ -803,16 +807,18 @@ table.sum td { color: var(--board-dim); }
 
 <template id="t-lp">
   <div class="body"><main class="main"><div class="lp">
-    <h1 class="lp__h">Let's play</h1>
+    <section class="lp__host">
+    <h1 class="lp__sect-h">Host a game</h1>
     <div class="lp__opts">
       <div class="opt opt--live"><span class="opt__ico"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M232.4 114.5 88.3 26.4A16 16 0 0 0 64 40v176a16 16 0 0 0 24.3 13.6l144.1-88.1a16 16 0 0 0 0-27Z"/></svg></span><span><div class="opt__t">Resume hosting</div><div class="opt__s">Wingspan · Play step · 6 at the table</div></span><span class="opt__go"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m181.7 133.7-80 80a8 8 0 0 1-11.4-11.4L164.7 128 90.3 53.7a8 8 0 0 1 11.4-11.4l80 80a8 8 0 0 1 0 11.4Z"/></svg></span></div>
       <div class="opt opt--host"><span class="opt__ico"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M192 32H64a32 32 0 0 0-32 32v128a32 32 0 0 0 32 32h128a32 32 0 0 0 32-32V64a32 32 0 0 0-32-32ZM84 100a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Z"/></svg></span><span><div class="opt__t">Host a game</div><div class="opt__s">Pick a game, seat the table, keep score</div></span><span class="opt__go"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m181.7 133.7-80 80a8 8 0 0 1-11.4-11.4L164.7 128 90.3 53.7a8 8 0 0 1 11.4-11.4l80 80a8 8 0 0 1 0 11.4Z"/></svg></span></div>
       <div class="opt"><span class="opt__ico"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M197.7 186.3a8 8 0 0 1-11.4 11.4L128 139.3l-58.3 58.4a8 8 0 0 1-11.4-11.4l58.4-58.3-58.4-58.3a8 8 0 0 1 11.4-11.4l58.3 58.4 58.3-58.4a8 8 0 0 1 11.4 11.4L139.3 128Z" opacity="0"/><path d="M128 24a104 104 0 1 0 104 104A104.1 104.1 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88 88.1 88.1 0 0 1-88 88Zm40-88a8 8 0 0 1-8 8h-24v24a8 8 0 0 1-16 0v-24H96a8 8 0 0 1 0-16h24V96a8 8 0 0 1 16 0v24h24a8 8 0 0 1 8 8Z"/></svg></span><span><div class="opt__t">Another round</div><div class="opt__s">Azul with Sam — same table as yesterday</div></span><span class="opt__go"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m181.7 133.7-80 80a8 8 0 0 1-11.4-11.4L164.7 128 90.3 53.7a8 8 0 0 1 11.4-11.4l80 80a8 8 0 0 1 0 11.4Z"/></svg></span></div>
       <div class="opt"><span class="opt__ico"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M232 128a104 104 0 1 1-104-104 104.1 104.1 0 0 1 104 104Zm-64.6-36.7-56 24a8 8 0 0 0-4.1 4.1l-24 56a8 8 0 0 0 10.5 10.5l56-24a8 8 0 0 0 4.1-4.1l24-56a8 8 0 0 0-10.5-10.5Z"/></svg></span><span><div class="opt__t">Game Explorer</div><div class="opt__s">Filter by players, time and type</div></span><span class="opt__go"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m181.7 133.7-80 80a8 8 0 0 1-11.4-11.4L164.7 128 90.3 53.7a8 8 0 0 1 11.4-11.4l80 80a8 8 0 0 1 0 11.4Z"/></svg></span></div>
     </div>
+    </section>
     <hr class="lp__hr" />
     <section class="lp__join">
-      <h2>Join a game</h2>
+      <h2 class="lp__sect-h">Join a game</h2>
       <div class="code"><span>K</span><span>7</span><span>Q</span><span>·</span><span>·</span></div>
       <div class="live">
         <div class="live__row"><span class="live__art g-root"></span><span><div class="live__n">Root</div><div class="live__s">Lee is hosting · Gather</div></span><span class="live__tag">Join</span></div>

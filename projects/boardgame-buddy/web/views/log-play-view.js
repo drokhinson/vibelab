@@ -1,13 +1,17 @@
 // views/log-play-view.js — The Play tab: Host on top, Join on the bottom.
 //
-// Two halves on a single screen, split by a divider:
-//   • Top (Host): "Let's play" heading, then one list of option cards —
+// Two titled halves on a single screen. On a phone they stack, split by a
+// divider; from the tablet tier up the divider is hidden and the two sections
+// become the two columns of a grid, each keeping its own heading — so the
+// screen is labelled by its halves rather than by one page title spanning
+// both (see the log-play block in styles.css).
+//   • Host: "Host a game" heading, then one list of option cards —
 //     the session in progress (when there is one), Host a game, Another
 //     Round, Game Explorer. They are all the same .lp-opt component; the
 //     only difference between them is surface weight. With no connection the
 //     cards stay exactly where they are and only their copy changes: offline
 //     is detected, never chosen, so there is nothing here to opt into.
-//   • Bottom (Join): the JoinPanel widget — a 5-char code input and the list
+//   • Join: the JoinPanel widget — a 5-char code input and the list
 //     of active sessions the user can join or spectate.
 //
 // Game browsing lives on its own screen now (views/game-explorer-view.js,
@@ -80,11 +84,10 @@
 
     render() {
       this.container.innerHTML = `
-        <header class="cascade-chooser__header">
-          <h1 class="font-display">Let's play</h1>
-        </header>
-
-        <div class="lp-opts">${this._renderChooserCards()}</div>
+        <section class="lp-host-section">
+          <h1 class="lp-section-title font-display">Host a game</h1>
+          <div class="lp-opts">${this._renderChooserCards()}</div>
+        </section>
 
         <hr class="lp-divider" />
 
