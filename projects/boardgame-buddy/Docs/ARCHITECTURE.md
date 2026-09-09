@@ -240,7 +240,7 @@ rather than trusting a count):
 |---|---|---|
 | Status picker | `ui/status-tag.js` | radio group, its own `.status-sheet__*` chrome, deliberately paper in both themes |
 | Stats by-game picker | `widgets/game-picker-sheet.js` | single-select, client-side filter |
-| Gather players | `widgets/player-picker-sheet.js` | **multi-select**, footer confirm, tick order preserved |
+| Gather players | `widgets/player-picker-sheet.js` | **multi-select**, footer confirm, tick order preserved, ticked rows pinned under **Selected** and filtered by the query |
 | Gather game | `widgets/game-search-sheet.js` | hosts `widgets/game-finder.js` with `inlineDropdown` |
 | Settle Up country | `widgets/country-picker-sheet.js` | single-select over 247 rows, filter matches name **and** code, plus a pinned opt-out row |
 | Collection expansions | `widgets/expansion-picker-sheet.js` | single-select over one base game's catalog expansions (`.exp-picker`) |
