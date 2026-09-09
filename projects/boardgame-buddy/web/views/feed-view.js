@@ -26,6 +26,10 @@
       // replace page one in place without discarding the pages the user
       // scrolled down to — see _onUploadsLanded.
       this._firstPageLen = 0;
+      // True while _page holds a page this view did not fetch itself — see
+      // _adoptPage. It is what tells an initial _load still in the air to
+      // splice its answer in rather than replace what the viewer is reading.
+      this._adopted = false;
       // False until the viewer's collection map is known either way — see
       // onMount. Gates the status corner on every game tile in the feed.
       this._statusReady = false;
@@ -69,7 +73,18 @@
       } else {
         this._statusReady = false;
       }
-      this.listen("feed", () => this.render());
+      // A first page can arrive from somewhere other than this view's own
+      // fetch: /bootstrap carries feed_first_page and publishes it here on
+      // every launch (domain/bootstrap.js#_seedStore). On a cold cache that
+      // regularly lands BEFORE the /feed call _load fired a moment earlier —
+      // and ignoring it is what left the feed sitting on its loader over data
+      // the app already had, until a tab switch remounted the view and read
+      // the now-warm cache. Adopt it instead; _load splices its own answer in
+      // when it finally arrives.
+      this.listen("feed", (page) => {
+        if (!this._page && page && Array.isArray(page.cards)) this._adoptPage(page);
+        else this.render();
+      });
       // A tier change (rotation, a resized window, the Settings pin) moves the
       // rail cards between the stream and the sidebar — see render().
       this.listen("layout", () => this.render());
@@ -251,9 +266,14 @@
      * @param {{cards: Array, next_cursor: string|null}} page
      */
     _spliceFirstPage(page) {
-      // Still on the skeleton (or a failed first load) — _load owns the first
-      // paint and racing it would only get overwritten.
-      if (!this._page || !Array.isArray(this._page.cards)) return;
+      // Still on the skeleton (or a failed first load): there is no page-one
+      // slice to splice over, but this IS a first page — take it. _load's own
+      // request, if one is still out, splices its answer over this rather than
+      // replacing it, so adopting can't be undone by the fetch it beat.
+      if (!this._page || !Array.isArray(this._page.cards)) {
+        this._adoptPage(page);
+        return;
+      }
 
       const tail = this._page.cards.slice(this._firstPageLen);
       // The refreshed page-one window can now extend over rows the tail already
@@ -295,6 +315,33 @@
       window.store.set("feed", this._page);
     }
 
+    /**
+     * Paint a first page this view did not fetch.
+     *
+     * Every caller has the same shape of thing in hand — the first page of the
+     * same feed, fetched by somebody else (the boot payload, an outbox flush,
+     * a pull-to-refresh that found nothing painted) — and the alternative is
+     * the loader, so there is nothing to weigh: paint it.
+     *
+     * @param {{cards: Array, next_cursor?: string|null}} page
+     */
+    _adoptPage(page) {
+      if (!page || !Array.isArray(page.cards)) return;
+      this._page = page;
+      this._firstPageLen = page.cards.length;
+      this._adopted = true;
+      // Whoever published this fetched the rows our own request is out for, so
+      // a failure from that request is no longer the viewer's problem — see
+      // the catch in _load, which stops reporting one once a page is up.
+      this._error = null;
+      // Same repaint mechanism as _onPlayChanged and _spliceFirstPage: the
+      // publish fires this view's own listen("feed") subscriber exactly once.
+      // The exception is being called FROM that subscriber, where the page
+      // already IS the published value and store.set would no-op — paint here.
+      if (window.store.get("feed") === page) this.render();
+      else window.store.set("feed", page);
+    }
+
     async onUnmount() {
       this._uninstallScrollObserver();
       if (this._ptr) this._ptr.detach();
@@ -330,7 +377,12 @@
     async _load({ initial = false, cursor = null } = {}) {
       this._loading = true;
       this._error = null;
-      if (initial) this._page = null;
+      if (initial) {
+        this._page = null;
+        // Cleared with the page it describes: any adoption on record belongs
+        // to the page this load just dropped.
+        this._adopted = false;
+      }
       this.render();
       try {
         const data = await window.Feed.fetchPage({ cursor });
@@ -338,13 +390,30 @@
           this._page.cards = [...this._page.cards, ...data.cards];
           this._page.next_cursor = data.next_cursor;
           // _firstPageLen stays put: appends land strictly behind it.
+        } else if (this._adopted && this._page && Array.isArray(this._page.cards)) {
+          // Somebody else's first page went up while this request was in the
+          // air, and the viewer has been reading it — possibly scrolling
+          // cursor pages in behind it. This answer is the same window of the
+          // same feed, so splice it over page one instead of replacing the
+          // lot: an identical page is then a no-op rather than a jump to the
+          // top, and a tail the viewer paged in survives.
+          this._adopted = false;
+          this._spliceFirstPage(data);
         } else {
           this._page = data;
           this._firstPageLen = data.cards.length;
+          this._adopted = false;
         }
+        // No-op on the two branches above that publish (or deliberately don't)
+        // for themselves: the page they left on `_page` is already the one in
+        // the slot, and store.set skips a write of the value it holds.
         window.store.set("feed", this._page);
       } catch (e) {
-        this._error = e.message || "Failed to load feed";
+        // A first load that failed under a page somebody else already put up
+        // has nothing to report: the viewer is looking at the rows this
+        // request went for. A cursor page is different — the tail they asked
+        // for really is missing, so that one still says so.
+        if (!initial || !this._page) this._error = e.message || "Failed to load feed";
       } finally {
         this._loading = false;
         this.render();
