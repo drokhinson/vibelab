@@ -675,12 +675,12 @@
   // the dot is aria-hidden, so the BUTTON's accessible name is what has to
   // change, rebuilt from its resting name so a queue that empties doesn't keep
   // a stale one.
+  //
+  // Every match, not the first: each toggle exists twice — in the header and
+  // in the wide tier's nav rail (index.html) — and whichever copy is on screen
+  // has to carry the dot. The rail copy wears the nav's dot class.
   function syncHeaderDot(selector, tally, restingName) {
-    const btn = document.querySelector(selector);
-    const dot = btn && btn.querySelector(".bgb-global-header__dot");
-    if (!btn || !dot) return;
     const { total, parts } = tally();
-    dot.hidden = total === 0;
     // A sentence here, not the nav bar's comma list: one button announcing two
     // unrelated things ("2 chapter reports and 1 play to upload") reads as
     // speech, and the single "waiting" lands after the join rather than after
@@ -689,8 +689,12 @@
     const label = parts.length
       ? `${restingName} \u2014 ${window.BgbNotifications.phrase(parts)} waiting`
       : restingName;
-    btn.setAttribute("aria-label", label);
-    btn.setAttribute("title", label);
+    document.querySelectorAll(selector).forEach((btn) => {
+      const dot = btn.querySelector(".bgb-global-header__dot, .bgb-nav__dot");
+      if (dot) dot.hidden = total === 0;
+      btn.setAttribute("aria-label", label);
+      btn.setAttribute("title", label);
+    });
   }
 
   /**
@@ -729,9 +733,9 @@
 
   function syncHeaderDots() {
     if (!window.BgbNotifications) return;
-    syncHeaderDot(".bgb-global-header__bell",
+    syncHeaderDot('[data-toggle="notifications"]',
                   window.BgbNotifications.forBell, "Notifications");
-    syncHeaderDot(".bgb-global-header__settings",
+    syncHeaderDot('[data-toggle="settings"]',
                   window.BgbNotifications.forGear, "Settings");
   }
 

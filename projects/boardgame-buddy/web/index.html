@@ -179,7 +179,7 @@
            box shows that: aria-pressed, set on every navigation by
            domain/view.js#go, lights and turns it while the screen is open. -->
       <button class="bgb-global-header__bell" title="Notifications" aria-label="Notifications"
-              aria-pressed="false"
+              data-toggle="notifications" aria-pressed="false"
               onpointerdown="window.NotificationFeed && window.NotificationFeed.warm()"
               onclick="window.toggleNotifications()">
         <i data-icon="bell" class="w-5 h-5"></i>
@@ -190,7 +190,7 @@
            bottom-nav tab, so the badge here was both redundant and misleading.
            Toggles, and wears its screen's state, exactly like the bell above. -->
       <button class="bgb-global-header__settings" title="Settings" aria-label="Settings"
-              aria-pressed="false"
+              data-toggle="settings" aria-pressed="false"
               onclick="window.toggleSettings()">
         <i data-icon="gear" class="w-5 h-5"></i>
         <!-- Admin review dot. Same contract as .bgb-nav__dot: aria-hidden, so
@@ -270,6 +270,17 @@
        stays lit throughout play-flow, the game explorer, and the joiner's
        session-viewer mirror. -->
   <nav class="hidden bgb-nav" data-auth-only>
+    <!-- Wide tier only (styles.css, the "Left rail" block): on a screen wide
+         enough for the rail the global header is hidden and the rail carries
+         its lockup and its two utilities instead. The brand mark routes home
+         exactly as the header's does; the bell and gear below the tabs are
+         the SAME toggles as the header's, sharing their data-toggle name so
+         domain/view.js#go lights whichever copy is on screen and
+         init.js#syncHeaderDots paints both dots. Hidden on phone and tablet,
+         where the header is present and the bar has no room for them. -->
+    <a class="bgb-nav__brand" onclick="window.router.go('feed')" aria-label="Boardgame Buddy — Feed">
+      <img src="assets/brand/bgb-logo.svg" alt="" class="bgb-nav__logo" />
+    </a>
     <button class="bgb-nav__tab" data-nav="feed">
       <span class="bgb-nav__ico">
         <i data-icon="home" class="w-5 h-5"></i>
@@ -299,6 +310,25 @@
         <span class="bgb-nav__dot" aria-hidden="true" hidden></span>
       </span>
       <span class="bgb-nav__label">Profile</span>
+    </button>
+    <button class="bgb-nav__tab bgb-nav__tab--util" title="Notifications" aria-label="Notifications"
+            data-toggle="notifications" aria-pressed="false"
+            onpointerdown="window.NotificationFeed && window.NotificationFeed.warm()"
+            onclick="window.toggleNotifications()">
+      <span class="bgb-nav__ico">
+        <i data-icon="bell" class="w-5 h-5"></i>
+        <span class="bgb-nav__dot" aria-hidden="true" hidden></span>
+      </span>
+      <span class="bgb-nav__label">Alerts</span>
+    </button>
+    <button class="bgb-nav__tab bgb-nav__tab--util" title="Settings" aria-label="Settings"
+            data-toggle="settings" aria-pressed="false"
+            onclick="window.toggleSettings()">
+      <span class="bgb-nav__ico">
+        <i data-icon="gear" class="w-5 h-5"></i>
+        <span class="bgb-nav__dot" aria-hidden="true" hidden></span>
+      </span>
+      <span class="bgb-nav__label">Settings</span>
     </button>
   </nav>
 

@@ -2783,6 +2783,91 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   box-shadow: 0 0 0 2px rgba(245, 220, 142, 0.35);
 }
 
+/* ── Left rail (wide tier) ──────────────────────────────────────────────────
+   Same element, stood on its end. On a screen wide enough (≥ 1024px, or
+   whatever data-bgb-layout="wide" resolves to — see the Layout tiers block at
+   the top of the file) the bar leaves the bottom edge for the left one, and
+   takes over the global header's job: the brand mark on top, the three tabs,
+   then the bell and the gear sunk to the bottom. The header itself is hidden
+   here, and --bgb-header-height is 0px with it.
+
+   The rail hugs the CONTENT COLUMN, not the window edge: #app centres in the
+   space right of the rail (body's padding-left, see #app above), so on a
+   monitor wider than rail + column the rail slides in to sit against the
+   column's left edge, where the eye already is. On a screen narrower than
+   that, max() pins it to the edge.
+
+   Everything hidden by data-auth-only stays hidden: .hidden is display:none
+   !important (the hiding contract at the top of the file), so none of the
+   display values below can leak the rail onto the splash or auth screen. */
+.bgb-nav__brand,
+.bgb-nav__tab--util { display: none; }
+
+:root[data-bgb-layout="wide"] .bgb-global-header { display: none; }
+
+:root[data-bgb-layout="wide"] .bgb-nav {
+  top: 0;
+  bottom: 0;
+  right: auto;
+  left: max(0px, calc(50% - (var(--bgb-col-max) + var(--bgb-rail-width)) / 2));
+  width: var(--bgb-rail-width);
+  height: auto;              /* --bgb-nav-height is 0px on this tier */
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+  border-top: 0;
+  border-right: 1px solid var(--line-strong);
+  box-shadow: 1px 0 12px rgba(0, 0, 0, 0.3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:root[data-bgb-layout="wide"] .bgb-nav__brand {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+:root[data-bgb-layout="wide"] .bgb-nav__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 0.6rem;
+  object-fit: cover;
+}
+:root[data-bgb-layout="wide"] .bgb-nav__tab {
+  flex: 0 0 auto;
+  min-height: 64px;
+}
+:root[data-bgb-layout="wide"] .bgb-nav__tab--util { display: flex; }
+/* The utilities sink to the bottom of the rail, under the tabs: the first
+   utility (the one directly after the last route tab) takes the slack. */
+:root[data-bgb-layout="wide"] .bgb-nav__tab[data-nav] + .bgb-nav__tab--util { margin-top: auto; }
+/* The active marker turns from a rule under the tab into a rule down its
+   leading edge. */
+:root[data-bgb-layout="wide"] .bgb-nav__tab.active::before {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: auto;
+  width: 2px;
+  height: auto;
+}
+/* A toggle wears its screen's state the way a tab wears its route's:
+   domain/view.js#go sets aria-pressed on every navigation. */
+.bgb-nav__tab--util[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-quiet);
+}
+:root[data-bgb-layout="wide"] .bgb-nav__tab--util[aria-pressed="true"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--accent, #CDA23F);
+}
+
 /* ── Tabs — warm gold active state ──────────────────────────────────────────── */
 .tabs-boxed {
   border: 1px solid rgba(200, 155, 40, 0.15);
