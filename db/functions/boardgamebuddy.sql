@@ -136,11 +136,23 @@
 --            participant_count INT, participants JSONB, group_count INT,
 --            import_group_id UUID, players JSONB, expansions JSONB,
 --            country_code TEXT, reaction_count INT, viewer_reacted BOOLEAN,
---            reactors JSONB)
+--            reactors JSONB, import_batch_id UUID)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/014_feed_order_by_played_at.sql)
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/016_play_reactions.sql
+--   Last updated in: db/migrations/boardgamebuddy/022_feed_import_batch.sql
+--               (adds import_batch_id, carried straight off the `page` CTE —
+--               no new read, no behavior change in SQL. It is the flag the
+--               feed's client-side grouping needs to tell an imported play
+--               from a live one: imports group on (played_at, LOGGER) instead
+--               of on the roster, so one afternoon's paste is one section
+--               headed "Marco imported 19 games" rather than one section per
+--               permutation of who was at the table. import_group_id could not
+--               answer it — 005 sets that only on plays the importer found
+--               indistinguishable from another in the same paste, so every
+--               one-off in an import carries a batch id and no group id.
+--               DROP + CREATE, since another OUT column is a new return type.)
+--   Previously updated in: db/migrations/boardgamebuddy/016_play_reactions.sql
 --               (adds reaction_count, viewer_reacted and reactors — the "Good
 --               game" reaction, drawn on the SESSION footer but stored per
 --               play, because a feed session is grouped client-side off a

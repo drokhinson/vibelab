@@ -1651,6 +1651,14 @@ class FeedPlayCard(BaseModel):
     # the count without it, which let the feed say "58 plays" and do nothing
     # about them.
     import_group_id: Optional[str] = None
+    # The paste this play came from (migration 007, on the feed payload since
+    # 022), or None for a live log. The feed groups imported plays by
+    # (played_at, LOGGER) rather than by roster, so one afternoon's import is
+    # one section instead of one per permutation of who was at the table — and
+    # `import_group_id` cannot answer "was this imported", because the importer
+    # sets it only on plays it found indistinguishable from another in the same
+    # paste. Every one-off in a paste carries a batch id and no group id.
+    import_batch_id: Optional[str] = None
     # ── Migration 015 — the whole play, so the card's other two faces are free.
     #
     # The front paints from the fields above; the back and the detail popup each

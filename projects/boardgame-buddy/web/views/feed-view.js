@@ -436,7 +436,8 @@
         return;
       }
       const rawCards = (this._page && this._page.cards) || [];
-      // Collapse runs of same-day, same-buddy-set plays into a session card.
+      // Collapse same-day plays into session cards — by buddy set for a game
+      // night, by importer for an import.
       // Run on every render so cross-page boundaries fold naturally when new
       // pages append.
       const cards = groupCards(rawCards);
@@ -618,6 +619,11 @@
         loggerFallback: firstPlay && firstPlay.user,
         gameCount: playCount,
         gameNameForSingle,
+        // "Marco imported 19 games", not "Marco played 19 games": the whole
+        // reason these are one section is that they arrived together as a
+        // record of the past, and saying "played" of a notebook typed up
+        // months later reads as a claim about tonight.
+        verb: card.is_import ? "imported" : "played",
       });
       // Every play is a tile of one of two widths now, so the rail needs no
       // size hint. `isSingle` survives only to centre a lone tile.
@@ -1035,14 +1041,17 @@
 
   // ── Same-day session grouping ─────────────────────────────────────────────
   //
-  // Bucket plays by sessionKey across the whole page. Every play that shares
-  // a (played_at, sorted-participant-set) key collapses into one
-  // { kind: "play_session", plays: [...] } card no matter what non-play
-  // cards (Hot Games, Suggested Buddies) the backend interleaves between
-  // them. The session card lands at the
+  // Bucket plays by sessionKey across the whole page. Every play that shares a
+  // key collapses into one { kind: "play_session", plays: [...] } card no
+  // matter what non-play cards (Hot Games, Suggested Buddies) the backend
+  // interleaves between them. The session card lands at the
   // position of the FIRST play with that key; non-play cards stay where
   // the backend put them. Single-play sessions still wrap so every feed
   // item carries the gold-bordered section + clickable header.
+  //
+  // Two keys, because the feed carries two different things (see sessionKey):
+  // a game night keys on (played_at, sorted-participant-set), an IMPORT on
+  // (played_at, logger).
   //
   // Before: a strict consecutive walk fragmented sessions whenever the
   // backend interleaved a non-play card between two same-key plays — a
@@ -1061,10 +1070,18 @@
       const key = sessionKey(card);
       let existing = sessionByKey.get(key);
       if (!existing) {
+        const isImport = !!card.import_batch_id;
         existing = {
           kind: "play_session",
           played_at: card.played_at,
-          participants: card.participants || [],
+          // Read by _renderPlaySession for the header's verb.
+          is_import: isImport,
+          // An import's header names the one person who imported, so the
+          // session carries a logger-only participant list rather than the
+          // roster of whichever play happened to land first. A game night
+          // keeps the roster: the people at the table are what make it one
+          // night, and they are the clickable names in its header.
+          participants: isImport ? loggerParticipants(card) : (card.participants || []),
           plays: [],
         };
         sessionByKey.set(key, existing);
@@ -1073,6 +1090,13 @@
       existing.plays.push(card);
     }
     return out;
+  }
+
+  /** The logger as a one-entry participant list, for an import's header. */
+  function loggerParticipants(card) {
+    const u = card.user;
+    if (!u || !u.id) return [];
+    return [{ user_id: u.id, display_name: u.display_name || "Someone" }];
   }
 
   // Identity signature of a card list — what would visibly change if painted.
@@ -1088,6 +1112,26 @@
   }
 
   function sessionKey(card) {
+    // An IMPORT is not a game night, and keying it like one is what made a
+    // single afternoon's paste take five screens. A pasted notebook writes a
+    // play per line and the rosters differ line to line — Marco and Lachie for
+    // two, Marco alone for the next four — so the roster key gave every
+    // permutation its own bordered section, its own header and its own footer,
+    // all under one date. Imports key on (day, LOGGER) instead: one person's
+    // import of one day is one section, headed "Marco imported 19 games", with
+    // every run's card in its rail and each card still naming its own winner.
+    //
+    // `import_batch_id` rather than `import_group_id` is the flag on purpose
+    // (migration 022): the group id is set only on plays the importer judged
+    // indistinguishable from another in the same paste, so every one-off in an
+    // import carries no group id and would otherwise be left behind as its own
+    // section beside the runs it arrived with. Deliberately NOT keyed on the
+    // batch either — two pastes covering the same day are still one day's
+    // import to the person reading the feed, and a section cannot span two
+    // dates anyway, since render() prints the day heading above it.
+    if (card.import_batch_id) {
+      return `${card.played_at}|import:${(card.user && card.user.id) || ""}`;
+    }
     // Backend already filtered participants to viewer + buddies and sorted
     // by display name. Stringify the user_id list to get a stable key.
     // Fallback to the logger id in the (unexpected) event the play has no
@@ -1101,7 +1145,7 @@
 
   // ── Session header ────────────────────────────────────────────────────────
 
-  function formatSessionTitleHtml({ participants, viewer, loggerFallback, gameCount, gameNameForSingle }) {
+  function formatSessionTitleHtml({ participants, viewer, loggerFallback, gameCount, gameNameForSingle, verb }) {
     // Build a "name token" list. Each token has { html, isViewer } where
     // html is the already-escaped, possibly-anchored name span. We rotate
     // "You" to position 0 when the viewer is among the participants.
@@ -1142,9 +1186,10 @@
     // Single-play sessions surface the game name; multi-play sessions
     // count games. The session header is the only place either appears
     // now that the card front dropped its "User played Game" line.
+    const word = verb || "played";
     const trailing = gameNameForSingle
-      ? `played ${escapeHtml(gameNameForSingle)}`
-      : `played ${gameCount} games`;
+      ? `${word} ${escapeHtml(gameNameForSingle)}`
+      : `${word} ${gameCount} games`;
     return `${who} ${trailing}`;
   }
 
