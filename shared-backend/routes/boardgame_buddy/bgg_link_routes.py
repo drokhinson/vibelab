@@ -199,6 +199,7 @@ def _materialize_play(
     user_id: str,
     game: dict,
     play_payload: dict,
+    owner_name: Optional[str] = None,
 ) -> None:
     """Insert a play + its play_players from a BGG-derived payload.
 
@@ -207,6 +208,11 @@ def _materialize_play(
 
     Dedups on (user_id, bgg_play_id): if a row with this BGG play id already
     exists for this user we skip re-inserting and don't touch its players.
+
+    `owner_name` is the syncing account's display name, for the seat
+    _player_rows falls back to when BGG recorded no roster. Passed in by the
+    batch path, which resolves it once; None means resolve it here, and only
+    if this play actually needs it.
     """
     bgg_play_id = play_payload.get("bgg_play_id")
 
@@ -230,9 +236,10 @@ def _materialize_play(
         return
     play_id = play_result.data[0]["id"]
 
-    rows = _player_rows(play_id, play_payload)
-    if rows:
-        sb.table("boardgamebuddy_play_players").insert(rows).execute()
+    if owner_name is None and not (play_payload.get("players") or []):
+        owner_name = _owner_display_name(sb, user_id)
+    rows = _player_rows(play_id, play_payload, user_id, owner_name or "")
+    sb.table("boardgamebuddy_play_players").insert(rows).execute()
 
 
 def _play_row(user_id: str, game: dict, play_payload: dict) -> dict:
@@ -247,21 +254,81 @@ def _play_row(user_id: str, game: dict, play_payload: dict) -> dict:
     }
 
 
-def _player_rows(play_id: str, play_payload: dict) -> list[dict]:
-    """play_players rows for one play, skipping blank names.
+def _owner_display_name(sb: Client, user_id: str) -> str:
+    """The syncing account's display name, for the fallback seat below.
+
+    A seat carrying only player_user_id would render fine — every reader
+    resolves an account's name from its profile — but the FK is ON DELETE SET
+    NULL, so deleting that profile would leave a row with neither an id nor a
+    name and break the identity CHECK. The name is what survives.
+    """
+    res = (
+        sb.table("boardgamebuddy_profiles")
+        .select("display_name")
+        .eq("id", user_id)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    return (rows[0].get("display_name") or "").strip() if rows else ""
+
+
+def _player_rows(
+    play_id: str,
+    play_payload: dict,
+    user_id: str,
+    owner_name: str,
+) -> list[dict]:
+    """play_players rows for one play. Never empty, never one person twice.
 
     Writes through the migration-009 columns so we don't touch the dropped
     buddy_id (migration 013).
+
+    TWO NORMALIZATIONS, both of migration 023's invariants (the other two
+    importers get them from bgb_log_play, which this path does not go
+    through — it writes the tables directly, in bulk):
+
+      • BGG's <players> element is optional and most plays don't carry one, so
+        a straight read of it imported plays with nobody at the table: an empty
+        scoreboard on the card, and a play no ghost could ever be claimed off.
+        Those get ONE seat, the syncing account — which is not an invention,
+        because boardgamebuddy_plays.user_id already says whose play it is and
+        bgb_user_stats already counts it as theirs. It moves no counter: seats
+        land with is_winner false, and win_count reads winning seats.
+
+      • BGG allows the same name on two seats of one play, and those arrive
+        here as two ghosts. Deduped case-insensitively, winning on any of them
+        winning — the same fold migration 023 applied to the rows already
+        stored.
     """
     out: list[dict] = []
+    seen: dict[str, dict] = {}
     for player in play_payload.get("players") or []:
         name = (player.get("name") or "").strip()
         if not name:
             continue
-        out.append({
+        key = name.lower()
+        row = seen.get(key)
+        if row is not None:
+            row["is_winner"] = row["is_winner"] or bool(player.get("is_winner"))
+            continue
+        row = {
             "play_id": play_id,
             "player_display_name": name,
             "is_winner": bool(player.get("is_winner")),
+        }
+        seen[key] = row
+        out.append(row)
+
+    if not out:
+        out.append({
+            "play_id": play_id,
+            "player_user_id": user_id,
+            # Empty only when the profile has gone missing between the sync
+            # starting and this write, which the identity CHECK tolerates —
+            # the id on the same row is the other half of it.
+            "player_display_name": owner_name or None,
+            "is_winner": False,
         })
     return out
 
@@ -362,6 +429,15 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
     key, so they fall through to the single-row path. BGG always supplies one,
     so this is a guard rather than a code path we expect to take.
     """
+    # One read for the whole batch, and only when a play in it actually needs
+    # the fallback seat — a sync whose plays all carry a BGG roster pays
+    # nothing for this.
+    owner_name = (
+        _owner_display_name(sb, user_id)
+        if any(not (payload.get("players") or []) for _, payload in items)
+        else ""
+    )
+
     keyed: dict[int, tuple] = {}
     unkeyed: list[tuple] = []
     for game, payload in items:
@@ -373,7 +449,7 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
             keyed[bgg_play_id] = (game, payload)
 
     for game, payload in unkeyed:
-        _materialize_play(sb, user_id, game, payload)
+        _materialize_play(sb, user_id, game, payload, owner_name)
 
     if not keyed:
         return
@@ -408,7 +484,7 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
             play_id = by_bgg.get(bgg_play_id)
             if play_id is None:
                 continue
-            player_rows.extend(_player_rows(play_id, payload))
+            player_rows.extend(_player_rows(play_id, payload, user_id, owner_name))
 
     for chunk in _chunked(player_rows):
         sb.table("boardgamebuddy_play_players").insert(chunk).execute()

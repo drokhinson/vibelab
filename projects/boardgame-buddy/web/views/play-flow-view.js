@@ -2411,8 +2411,16 @@
      *   seating several players at once so the screen paints once, not N times.
      */
     _addPlayer({ name, user_id, avatar }, opts = {}) {
+      // Seated identity, not seated SPELLING. The name test alone let one
+      // account take two seats: the buddy list spells someone by their display
+      // name and "search all of BoardgameBuddy" by whatever the search
+      // matched, and a seat renamed from the roster (_renameSeat) keeps its
+      // user_id under a name the picker no longer recognises. Migration 023's
+      // unique index refuses a play that seats the same account twice, so a
+      // double seat is now a rejected save rather than an odd scoreboard.
       const exists = this._ps.players.some(
-        (p) => (p.name || "").toLowerCase() === (name || "").toLowerCase()
+        (p) => (user_id && p.user_id === user_id)
+          || (p.name || "").toLowerCase() === (name || "").toLowerCase()
       );
       if (!exists) {
         const currentRounds = this._maxRoundCount();
@@ -3581,8 +3589,12 @@
       const candidates = this._buddyCandidates();
       const byUserId = new Map(candidates.filter((c) => c.user_id).map((c) => [c.user_id, c]));
       const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
+      const seatedAccounts = new Set(this._ps.players.map((p) => p.user_id).filter(Boolean));
       const rows = [];
       for (const r of (this._recent || [])) {
+        // Offering somebody already at the table is offering a seat that
+        // cannot be taken — _addPlayer drops it, so the row would do nothing.
+        if (r.user_id && seatedAccounts.has(r.user_id)) continue;
         const hit = byUserId.get(r.user_id);
         if (hit) { rows.push(hit); continue; }
         if (!already.has((r.display_name || "").toLowerCase())) {
@@ -3647,6 +3659,16 @@
     _save() {
       if (!this._ps.gameId) {
         this._error = "Pick a game first.";
+        this.render();
+        return;
+      }
+      // The same bar the Gather step sets, re-checked here because the seats
+      // can be removed after it: a play with nobody at it counts towards
+      // nobody's record, and since migration 023 bgb_log_play refuses it. Said
+      // on this screen, where the fix is, rather than as a failed write the
+      // outbox parks in `failed` a moment later.
+      if (this._ps.players.length === 0) {
+        this._error = "Add at least one player.";
         this.render();
         return;
       }

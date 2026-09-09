@@ -227,6 +227,11 @@ def _write_play_players(
     player already on the play keeps the timestamp they were first seated at;
     one who is genuinely new to it falls through to the column default and is
     notified, which is the whole point.
+
+    The roster itself is already checked by the time it gets here: this is only
+    reached from PUT /plays/{id}, whose PlayUpdate validator refuses an empty
+    one and refuses one account on two seats (migration 023) before the caller
+    deletes the seats these replace.
     """
     out: list[PlayPlayerResponse] = []
     if not players:

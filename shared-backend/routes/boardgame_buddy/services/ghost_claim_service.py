@@ -134,8 +134,10 @@ def accept_claim(sb, viewer_id: str, claim_id: str) -> GhostClaimAcceptResponse:
 
     One transaction inside the RPC, which is what lets it re-check the
     double-seat collision at accept time — state moves between request and
-    accept, and there is no unique constraint on (play_id, player_user_id) to
-    catch it afterwards.
+    accept, and a claim that was clean when it was sent can collide by the time
+    it is approved. Migration 023's uq_bgb_play_players_play_user would refuse
+    the merge regardless; the re-check is what turns that into "You're already a
+    player on one of those plays" rather than a failed write.
     """
     data = (
         sb.rpc(

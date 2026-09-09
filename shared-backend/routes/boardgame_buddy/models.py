@@ -709,6 +709,36 @@ class PlayCreate(BaseModel):
     scoring_template: Optional[PlayScoringTemplate] = None
 
 
+def validated_roster(players: list[PlayerEntry]) -> list[PlayerEntry]:
+    """The seats of a play, checked against migration 023's two invariants.
+
+    A SEAT NAMES SOMEBODY. `player_display_name` is a plain TEXT column and ""
+    is not NULL, so a blank seat clears the identity CHECK and lands an
+    anonymous row on the scoreboard; those are dropped rather than rejected,
+    matching bgb_log_play, because a trailing empty row is a form artifact and
+    not something the user did. What IS rejected is a roster with nothing left
+    in it — every play has somebody at the table, and the three importers each
+    wrote plays that had nobody until 023.
+
+    ONE ACCOUNT, ONE SEAT. Two spellings of one buddy is the thing the notes
+    importer's Players step exists to resolve; if it resolves them to the same
+    account they are one seat, not two, and a play seating Jasmine twice — once
+    winning — is what shipped before. The unique index added by 023 is the
+    backstop; this is the readable error.
+
+    Ghost seats are deliberately not deduped: two Daves at one table is a real
+    roster, and the place to notice that two spellings meant one person is the
+    mapping step, which now collapses them before the write.
+    """
+    seated = [p for p in players if (p.user_id or (p.name or "").strip())]
+    if not seated:
+        raise ValueError("A play needs at least one player.")
+    accounts = [p.user_id for p in seated if p.user_id]
+    if len(set(accounts)) != len(accounts):
+        raise ValueError("That play seats the same person twice.")
+    return seated
+
+
 class PlayUpdate(BaseModel):
     # Full replacement of the play. Mirrors PlayCreate but game_id can't change
     # — pivoting a play to a different game would orphan the per-player scores.
@@ -727,6 +757,24 @@ class PlayUpdate(BaseModel):
     # given and never offers a way to change it (editing row labels is a
     # chapter edit — this play's copy is deliberately frozen).
     scoring_template: Optional[PlayScoringTemplate] = None
+
+    @model_validator(mode="after")
+    def _check_roster(self) -> "PlayUpdate":
+        """Migration 023's roster gate, on the one write path that isn't an RPC.
+
+        PUT /plays/{id} is a full replacement done in Python — it deletes every
+        seat and re-inserts the body's — so bgb_log_play never sees it. Raising
+        here rejects the request BEFORE the delete, which is the whole point: a
+        roster refused halfway through would leave the play with no seats at
+        all, which is the bug this is here to prevent.
+
+        PlayCreate deliberately has no such validator. Every path that builds
+        one ends at bgb_log_play, which checks the same two things and answers
+        with a per-play error envelope — and a chunk of fifty imported plays
+        must land the other forty-nine rather than 422 over one bad row.
+        """
+        self.players = validated_roster(self.players)
+        return self
 
 
 class PlayPhotoResponse(BaseModel):

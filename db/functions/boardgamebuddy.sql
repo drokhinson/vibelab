@@ -1,6 +1,15 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 019_scoring_grid_achievements.sql (re-emits
+-- Last updated: 023_play_roster_integrity.sql (re-emits bgb_log_play with the
+--               roster gate — a play with nobody at the table and a play
+--               seating one account twice are both refused, with an error
+--               envelope, before anything is written. Same signature and same
+--               success shape; the seats it echoes are now the NORMALIZED
+--               ones, so what the caller is told is what landed. The migration
+--               also adds uq_bgb_play_players_play_user, which is what finally
+--               makes the double seat impossible rather than merely guarded —
+--               see the note under bgb_ghost_summary.)
+--               Before that: 019_scoring_grid_achievements.sql (re-emits
 --               bgb_sync_achievements with two more metrics — plays_with_grid
 --               and grid_adopters — behind the Ruled Lines and Gold Standard
 --               badges. Signature and return shape unchanged; the achievements
@@ -593,6 +602,7 @@
 --     created_at, play_mode, country_code, scoring_template, logged_by_id,
 --     logged_by_name, is_own }
 --     or {"error": "game_not_found"}
+--     or {"error": "no_players"} / {"error": "duplicate_player"} (023)
 --     or {"duplicate": true, "id": <uuid>} when p_payload.client_key is one
 --     this user already has a play for (048) — the caller re-reads that row.
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
@@ -610,6 +620,17 @@
 --               of the scoring-grid chapter the play was scored on. Covers the
 --               lobby finalize path too — bgb_finalize_session calls this with
 --               the same payload shape.)
+--   Last updated in: db/migrations/boardgamebuddy/023_play_roster_integrity.sql
+--               (the roster gate. p_payload.players is normalized ONCE into a
+--               local — seats naming nobody dropped, since "" is not NULL and
+--               would land a blank row — and both the insert and the echoed
+--               response read that local, so the seats the caller is told
+--               about are the seats stored. An empty result is
+--               {"error": "no_players"}; one account on two seats is
+--               {"error": "duplicate_player"}. Both are checked BEFORE the
+--               play insert, so a refused play leaves nothing behind, and both
+--               are envelopes rather than exceptions so bgb_import_plays fails
+--               one element of a chunk instead of the chunk.)
 --               db/migrations/boardgamebuddy/044_cleanup.sql
 --                 (stops writing plays.game_image_url / game_play_mode, which
 --                  044 drops; stops writing the boardgamebuddy_buddies roster,
@@ -648,7 +669,8 @@
 --               logic: it loops the payload and calls bgb_log_play per element,
 --               so game resolution, the denormalized game columns, client_key
 --               idempotency and the player/expansion inserts have exactly one
---               implementation. A game_not_found element reports in `results`
+--               implementation. A game_not_found element — or, since 023, a
+--               no_players or duplicate_player one — reports in `results`
 --               and the rest of the chunk still lands — a batch that aborted
 --               wholesale would make a 300-play import unfinishable over one
 --               typo.
@@ -1116,9 +1138,11 @@
 --               bgb_accept_ghost_claim, bgb_dismiss_ghost_claim (SQL only)
 --   Purpose:    The four facts every single-ghost path needs, computed once so
 --               they cannot disagree. `visible` mirrors the FEED's rule (043);
---               `collides` is the double-seat guard — there is no unique
---               constraint on (play_id, player_user_id), so this check is the
---               only thing stopping one person appearing twice in one game.
+--               `collides` is the double-seat guard — migration 023 added
+--               uq_bgb_play_players_play_user, so a merge that would seat one
+--               person twice is now refused by the database either way, and
+--               this check is what turns that into an answerable "already
+--               seated" instead of a failed merge.
 
 -- bgb_ghost_claim_suggestions(p_viewer UUID, p_limit INT DEFAULT 10,
 --                             p_threshold REAL DEFAULT 0.35)

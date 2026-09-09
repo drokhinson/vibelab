@@ -308,14 +308,20 @@
     const first = row.plays[0];
     const n = row.plays.length;
     const open = !!expanded[first.id];
-    const winners = first.players.filter((p) => p.isWinner);
-    const summary = winners.length === 0
-      ? "No winner recorded"
-      : (winners.length > 1
-        ? `Tie — ${winners.map((p) => escapeHtml(labelFor(draft, p.name))).join(" & ")}`
-        : `${escapeHtml(labelFor(draft, winners[0].name))} won`);
+    // Off the WRITTEN seats (PlayImport#seats), not the note's raw player list:
+    // two spellings of one buddy are one player by this step, and a tie caption
+    // naming the same person twice is the tell that they weren't.
+    const seats = draft.seats(first);
+    const winners = seats.filter((p) => p.is_winner);
+    const summary = seats.length === 0
+      ? "Nobody at the table"
+      : (winners.length === 0
+        ? "No winner recorded"
+        : (winners.length > 1
+          ? `Tie — ${winners.map((p) => escapeHtml(p.name)).join(" & ")}`
+          : `${escapeHtml(winners[0].name)} won`));
     return `
-      <div class="imp-play${open ? " is-open" : ""}">
+      <div class="imp-play${open ? " is-open" : ""}${seats.length ? "" : " imp-play--seatless"}">
         <button class="imp-play__head" type="button" aria-expanded="${open}"
                 onclick="${call("_toggleRow", first.id)}">
           <span class="imp-play__chev"><i data-icon="${open ? "chevron-down" : "chevron-right"}" class="w-4 h-4"></i></span>
@@ -341,25 +347,29 @@
   function renderRowDetail(draft, row) {
     const first = row.plays[0];
     const game = draft.playGame(first);
-    const players = first.players.map((p) => {
-      const m = draft.playerMapping(p.name);
-      return `
-        <li class="imp-seat${p.isWinner ? " is-winner" : ""}">
+    const seats = draft.seats(first);
+    const players = seats.map((p) => `
+        <li class="imp-seat${p.is_winner ? " is-winner" : ""}">
           ${window.BgbBadge.render({
-            displayName: m.label || p.name,
+            displayName: p.name,
             size: "xs",
-            isGhost: m.kind !== "buddy",
+            isGhost: !p.user_id,
             extraClass: "imp-seat__badge",
           })}
-          <span class="imp-seat__name">${escapeHtml(m.label || p.name)}</span>
+          <span class="imp-seat__name">${escapeHtml(p.name)}</span>
           ${p.score != null ? `<span class="imp-seat__score">${p.score}</span>` : ""}
-          ${p.isWinner ? `<span class="imp-seat__win"><i data-icon="trophy" class="w-3.5 h-3.5"></i></span>` : ""}
+          ${p.is_winner ? `<span class="imp-seat__win"><i data-icon="trophy" class="w-3.5 h-3.5"></i></span>` : ""}
         </li>
-      `;
-    }).join("");
+      `).join("");
     return `
       <div class="imp-play__detail">
-        <ul class="imp-seats">${players}</ul>
+        ${seats.length
+          ? `<ul class="imp-seats">${players}</ul>`
+          : `<p class="imp-warn">
+               Nobody came out of your notes for this one, so it can't be
+               imported — a play needs at least one player. Drop it, or go back
+               and check what the line said.
+             </p>`}
         ${first.notes ? `<p class="imp-play__notes">${escapeHtml(first.notes)}</p>` : ""}
         <div class="imp-play__fields">
           <label class="imp-field">
@@ -395,19 +405,29 @@
     `;
   }
 
-  function labelFor(draft, name) {
-    const m = draft.playerMapping(name);
-    return m.label || name;
-  }
-
   // ── Step 6: Import ─────────────────────────────────────────────────────────
 
   function renderImport(draft, opts) {
     const busy = !!(opts && opts.importing);
     const done = draft.progress && draft.progress.done >= draft.progress.total;
-    const importable = draft.importable().length;
-    const skipped = draft.liveCount - importable;
-    const groups = draft.groups().filter((g) => g.game);
+    const ready = draft.importable();
+    const importable = ready.length;
+    const seatless = draft.seatless().length;
+    // Two reasons a live play is being left behind, counted apart because they
+    // have different fixes — one is a step back to Games, the other is a line
+    // the note never named anybody on.
+    const gameless = draft.liveCount - importable - seatless;
+    // The by-game breakdown counts THE PLAYS THAT WILL LAND, not the review
+    // list's groups: a group is every live play of one game, seatless ones
+    // included, so reading the breakdown off it would print a per-game tally
+    // that doesn't add up to the number above it.
+    const byGame = new Map();
+    for (const play of ready) {
+      const game = draft.playGame(play);
+      const row = byGame.get(game.id);
+      if (row) { row.plays++; continue; }
+      byGame.set(game.id, { name: game.name, plays: 1 });
+    }
     const buddies = draft.playerNames.filter((n) => draft.playerMapping(n).kind === "buddy").length;
     const ghosts = draft.playerNames.length - buddies;
 
@@ -419,7 +439,7 @@
         <h3 class="imp-step__title font-display">Ready to import</h3>
         <dl class="imp-summary">
           <div><dt>Plays</dt><dd>${importable}</dd></div>
-          <div><dt>Games</dt><dd>${groups.length}</dd></div>
+          <div><dt>Games</dt><dd>${byGame.size}</dd></div>
           <div>
             <dt>Players</dt><dd>${buddies + ghosts}</dd>
             <div class="imp-summary__note">
@@ -429,14 +449,22 @@
           </div>
         </dl>
         <ul class="imp-bygame">
-          ${groups.map((g) => `
-            <li><span>${escapeHtml(g.name)}</span><span>${g.plays.length}</span></li>
+          ${Array.from(byGame.values()).map((g) => `
+            <li><span>${escapeHtml(g.name)}</span><span>${g.plays}</span></li>
           `).join("")}
         </ul>
-        ${skipped ? `
+        ${gameless ? `
           <p class="imp-warn">
-            ${skipped} play${skipped === 1 ? "" : "s"} won't be imported — no game matched.
-            Go back to Games to match ${skipped === 1 ? "it" : "them"}.
+            ${gameless} play${gameless === 1 ? "" : "s"} won't be imported — no game matched.
+            Go back to Games to match ${gameless === 1 ? "it" : "them"}.
+          </p>
+        ` : ""}
+        ${seatless ? `
+          <p class="imp-warn">
+            ${seatless} play${seatless === 1 ? "" : "s"} won't be imported — nobody
+            at the table. A play needs at least one player, or it counts towards
+            nobody's record and no ghost can ever claim it. Go back to Plays to
+            check ${seatless === 1 ? "it" : "them"}.
           </p>
         ` : ""}
         <button class="imp-cta" type="button" ${importable ? "" : "disabled"}

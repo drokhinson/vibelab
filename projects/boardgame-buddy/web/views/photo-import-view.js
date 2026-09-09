@@ -477,10 +477,17 @@
       const shot = this._draft.current;
       if (!shot) return;
       const candidates = this._playerCandidates();
+      // Seated identity, not seated SPELLING. An account picked off the buddy
+      // list carries its display name and the same account found through
+      // "search all of BoardgameBuddy" can carry another, so a name-only set
+      // let one person be seated twice in one play — which migration 023's
+      // unique index now refuses outright, and which nobody should be able to
+      // ask for in the first place.
       const alreadySeated = new Set(shot.players.map((p) => p.name));
+      const seatedAccounts = new Set(shot.players.map((p) => p.userId).filter(Boolean));
       window.PlayerPickerSheet.open({
         candidates,
-        recent: this._recentCandidates(candidates, alreadySeated),
+        recent: this._recentCandidates(candidates, alreadySeated, seatedAccounts),
         seated: shot.players.length,
         title: "Who played?",
         sub: "Anyone without an account comes in as a ghost player, and can claim these plays later.",
@@ -494,7 +501,9 @@
           const next = shot.players.slice();
           for (const pick of picks || []) {
             if (!pick || !pick.name || alreadySeated.has(pick.name)) continue;
+            if (pick.user_id && seatedAccounts.has(pick.user_id)) continue;
             alreadySeated.add(pick.name);
+            if (pick.user_id) seatedAccounts.add(pick.user_id);
             next.push({ name: pick.name, userId: pick.user_id || null, isWinner: false });
           }
           this._draft.setPlayers(shot.id, next);
@@ -557,13 +566,19 @@
      * Gather screen hands the sheet, because it is the same sheet.
      * @param {any[]} candidates
      * @param {Set<string>} seated Names already on this shot.
+     * @param {Set<string>} seatedAccounts Account ids already on this shot.
      */
-    _recentCandidates(candidates, seated) {
+    _recentCandidates(candidates, seated, seatedAccounts) {
       const byUserId = new Map(candidates.filter((c) => c.user_id).map((c) => [c.user_id, c]));
       const taken = new Set(Array.from(seated).map((n) => String(n).toLowerCase()));
+      const accounts = seatedAccounts || new Set();
       const rows = [];
       for (const r of ((this._partners && this._partners.recent) || [])) {
         if (!r) continue;
+        // Offering somebody who is already at this table is offering a seat
+        // that cannot be taken — the confirm handler drops it, so the row
+        // would just do nothing.
+        if (r.user_id && accounts.has(r.user_id)) continue;
         const hit = byUserId.get(r.user_id);
         if (hit) { rows.push(hit); continue; }
         if (r.display_name && !taken.has(String(r.display_name).toLowerCase())) {
