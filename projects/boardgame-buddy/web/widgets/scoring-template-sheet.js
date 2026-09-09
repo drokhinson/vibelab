@@ -132,7 +132,17 @@
      *          onSkip: (shown: TemplateChapter[]) => void}} opts
      */
     offer(opts) {
-      this._templates = (opts.templates || []).slice(0, OFFER_MAX);
+      // Sorted here, not trusted. The pool arrives popularity-first from the
+      // backend and pendingTemplates only filters, so this is usually a no-op —
+      // but OFFER_MAX below throws the rest away, and "the three most players
+      // use" has to be true of the three that survive rather than of whatever
+      // order the caller happened to hand over (a cache seeded by an older
+      // response, a future caller that merges lists). Array#sort is stable, so
+      // ties keep the pool's own created_at DESC.
+      this._templates = (opts.templates || [])
+        .slice()
+        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
+        .slice(0, OFFER_MAX);
       this._activeId = null;
       this._onPick = opts.onAdopt;
       this._onSkip = opts.onSkip;
@@ -259,14 +269,25 @@
         const rows = (t.grid && t.grid.rows) || [];
         const pop = t.popularity || 0;
         const from = t.source_game_name ? ` · ${escapeHtml(t.source_game_name)}` : "";
-        const used = pop > 0 ? ` · in ${pop} guide${pop === 1 ? "" : "s"}` : "";
         const hidden = Math.max(0, rows.length - PREVIEW_ROWS);
+        // The count rides BESIDE the author rather than in the meta line under
+        // it, because between two grids for one game it is the tiebreaker: the
+        // author says whose, the count says which one the table usually uses,
+        // and the list is ordered by it. Absent at zero rather than shown as a
+        // "0" — a grid nobody keeps is not a fact worth a chip.
+        const popChip = pop > 0
+          ? `<span class="tmpl-offer__pop"
+                   title="In ${pop} player${pop === 1 ? "'s" : "s'"} reference guide${pop === 1 ? "" : "s"}">
+               <i data-icon="users" class="w-3.5 h-3.5"></i>${pop}
+             </span>`
+          : "";
         return `
           <div class="tmpl-offer__card">
             <div class="tmpl-offer__head">
               <span class="tmpl-offer__who">${escapeHtml(this._authorLabel(t))}</span>
-              <span class="tmpl-offer__meta">${rows.length} row${rows.length === 1 ? "" : "s"}${used}${from}</span>
+              ${popChip}
             </div>
+            <span class="tmpl-offer__meta">${rows.length} row${rows.length === 1 ? "" : "s"}${from}</span>
             <div class="tmpl-preview tmpl-offer__preview" aria-hidden="true">
               ${window.ScoringTemplateEditor.preview(rows.slice(0, PREVIEW_ROWS), `tmplOffer${i}`)}
               ${hidden ? `<span class="tmpl-offer__rest">+${hidden} more row${hidden === 1 ? "" : "s"}</span>` : ""}

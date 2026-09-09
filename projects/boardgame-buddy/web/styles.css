@@ -7664,12 +7664,33 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   background: oklch(var(--b3));
   border: 1px solid var(--sheet-line);
 }
+/* Author on the left, the count that ordered the list on the right. */
+.tmpl-offer__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .tmpl-offer__who {
-  display: block;
+  flex: 1; min-width: 0;
   font-size: 0.9rem;
   font-weight: 700;
   color: oklch(var(--bc) / 0.9);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* How many guides hold this grid — the key the cards are sorted by, so it sits
+   beside the name it is ranking rather than in the meta line under it. */
+.tmpl-offer__pop {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: var(--accent-quiet);
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .tmpl-offer__meta {
   display: block;
