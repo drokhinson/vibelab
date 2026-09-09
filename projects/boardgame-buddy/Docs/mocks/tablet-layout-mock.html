@@ -186,7 +186,6 @@ h1 {
   background: var(--nav-bg); border-top: 1px solid var(--line-strong); box-shadow: 0 -1px 12px rgba(0,0,0,.3);
   display: flex; align-items: stretch; z-index: 4;
 }
-.nav__brand, .nav__util { display: none; }
 .tab {
   flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   color: var(--ink-faint); font-size: 11px; font-weight: 600; position: relative;
@@ -196,6 +195,9 @@ h1 {
 .tab.on::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent); }
 .tab--play .tab__ico { width: 40px; height: 26px; border-radius: 8px; background: linear-gradient(180deg, #E8C868, #CDA23F); color: #2A1B0E; display: grid; place-items: center; }
 .tab .tdot { position: absolute; top: 12px; right: calc(50% - 16px); width: 8px; height: 8px; border-radius: 999px; background: #C0472F; border: 2px solid var(--nav-bg); }
+/* Phone and tablet: three tabs and nothing else — the bell and gear live in
+   the header there. (0,2,0) so this outranks .tab's display:flex. */
+.nav__brand, .tab.nav__util { display: none; }
 .screen[data-tier="wide"] .nav {
   top: 0; bottom: 0; right: auto; width: var(--rail-w); height: auto; flex-direction: column;
   border-top: 0; border-right: 1px solid var(--line-strong); box-shadow: 1px 0 12px rgba(0,0,0,.3);
@@ -205,8 +207,8 @@ h1 {
 .rail__logo { width: 40px; height: 40px; border-radius: 0.6rem; background: linear-gradient(135deg, #E8C868, #B9832C); display: grid; place-items: center; color: #2B1E06; }
 .screen[data-tier="wide"] .tab { flex: 0 0 auto; min-height: 64px; }
 .screen[data-tier="wide"] .tab.on::before { bottom: 0; top: 0; right: auto; width: 2px; height: auto; }
-.screen[data-tier="wide"] .nav__util { display: flex; }
-.screen[data-tier="wide"] .nav__util:first-of-type { margin-top: auto; }
+.screen[data-tier="wide"] .tab.nav__util { display: flex; }
+.screen[data-tier="wide"] .tab[data-tab] + .nav__util { margin-top: auto; }
 .screen[data-tier="wide"] .tab .tdot { right: 26px; }
 
 /* ── Feed ─────────────────────────────────────────────────────────────── */
