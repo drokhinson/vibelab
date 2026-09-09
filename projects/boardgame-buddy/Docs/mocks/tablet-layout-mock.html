@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Boardgame Buddy Layout Tiers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=JetBrains+Mono:wght@500;700&display=swap" />
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Design board — how Boardgame Buddy scales from a phone to an iPad to a
+   monitor. Board chrome is single-world (the pin-up wall); the SCREENS inside
+   the frames carry both BGB themes and switch with the toggle.
+
+   Three tiers, one attribute:  <html data-bgb-layout="phone|tablet|wide">
+     phone   < 768px    today's layout, untouched
+     tablet  768–1023   720px column, bottom bar stays
+     wide    ≥ 1024     left rail, header folded into it, 1040px column
+   Every frame below is drawn with the SAME CSS structure the app will use:
+   .screen[data-tier] plays the role of :root[data-bgb-layout].
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: dark;
+  --board-bg:    #140F0C;
+  --board-panel: #1C1511;
+  --board-line:  rgba(224, 169, 74, 0.16);
+  --board-ink:   #EFE5D6;
+  --board-dim:   #A2937F;
+  --board-faint: #756455;
+  --gold:        #E0A94A;
+  --terra:       #C8553D;
+  --sans:  'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --disp:  'Fraunces', Georgia, serif;
+  --mono:  'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(ellipse 120% 60% at 50% -8%, rgba(224,169,74,0.12), transparent 60%),
+    var(--board-bg);
+  color: var(--board-ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  padding: 0 0 6rem;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
+
+/* ── Board header ─────────────────────────────────────────────────────── */
+.board-head { padding: 3.5rem 0 1.5rem; display: flex; align-items: flex-end; gap: 2rem; flex-wrap: wrap; }
+.board-head__text { flex: 1; min-width: 300px; }
+.eyebrow {
+  font-size: 0.7rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--gold); display: flex; align-items: center; gap: 0.5rem;
+}
+.eyebrow::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, var(--board-line), transparent); }
+h1 {
+  font-family: var(--disp); font-weight: 700; font-size: clamp(2.1rem, 5vw, 3.1rem);
+  line-height: 1.02; margin: 0.7rem 0 0; letter-spacing: -0.01em; text-wrap: balance;
+}
+.board-head p { color: var(--board-dim); font-size: 0.98rem; line-height: 1.6; margin: 0.8rem 0 0; max-width: 64ch; }
+.theme-toggle { display: flex; gap: 0.3rem; background: var(--board-panel); border: 1px solid var(--board-line); border-radius: 999px; padding: 0.3rem; }
+.theme-toggle button {
+  font-family: var(--sans); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+  border: none; background: transparent; color: var(--board-dim); cursor: pointer;
+  padding: 0.5rem 1rem; border-radius: 999px; min-height: 40px; transition: background .16s, color .16s;
+}
+.theme-toggle button[aria-pressed="true"] { background: var(--gold); color: #2B1E06; }
+.theme-toggle button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ── Tier legend ──────────────────────────────────────────────────────── */
+.tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin: 1.5rem 0 3rem; }
+.tier {
+  background: var(--board-panel); border: 1px solid var(--board-line); border-radius: 12px; padding: 1rem 1.1rem;
+}
+.tier__name { font-family: var(--disp); font-size: 1.2rem; font-weight: 600; display: flex; align-items: baseline; gap: 0.6rem; }
+.tier__range { font-family: var(--mono); font-size: 0.72rem; color: var(--gold); }
+.tier__body { font-size: 0.82rem; color: var(--board-dim); line-height: 1.55; margin-top: 0.4rem; }
+.tier__body b { color: var(--board-ink); font-weight: 600; }
+
+/* ── Sections / artboards ─────────────────────────────────────────────── */
+.section { margin: 0 0 4rem; }
+.section__cap { display: flex; align-items: baseline; gap: 0.7rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
+.section__num {
+  font-family: var(--mono); font-size: 0.72rem; font-weight: 700; color: #2B1E06;
+  background: var(--gold); border-radius: 5px; padding: 0.15rem 0.4rem;
+}
+.section__title { font-family: var(--disp); font-size: 1.5rem; font-weight: 600; }
+.section__note { font-size: 0.86rem; color: var(--board-dim); line-height: 1.55; max-width: 78ch; margin: 0 0 1.2rem; }
+.section__note b { color: var(--board-ink); font-weight: 600; }
+.decide {
+  display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--terra); border: 1px solid color-mix(in srgb, var(--terra) 50%, transparent);
+  border-radius: 999px; padding: 0.2rem 0.6rem;
+}
+.row { display: flex; gap: 1.6rem; align-items: flex-start; overflow-x: auto; padding: 0.4rem 0.2rem 1.2rem; }
+.frame { flex: none; }
+.frame__cap { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.6rem; }
+.frame__tier { font-family: var(--mono); font-size: 0.7rem; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; }
+.frame__dims { font-family: var(--mono); font-size: 0.7rem; color: var(--board-faint); }
+.frame__note { font-size: 0.74rem; color: var(--board-dim); }
+
+/* Device shells */
+.device {
+  border-radius: 22px; padding: 9px;
+  background: linear-gradient(160deg, #3A2C22, #17110D 55%, #2A1F18);
+  box-shadow: 0 34px 70px -30px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.05);
+}
+.device--phone { width: 390px; border-radius: 40px; }
+.device--tablet { width: 820px; border-radius: 26px; }
+.device--wide { width: 1180px; border-radius: 12px; padding: 6px; }
+.device--phone .screen { border-radius: 32px; height: 760px; }
+.device--tablet .screen { border-radius: 18px; height: 640px; }
+.device--wide .screen { border-radius: 8px; height: 720px; }
+
+/* ═══ BGB THEME TOKENS — copied from projects/boardgame-buddy/web/styles.css ═══ */
+.screen {
+  overflow: hidden; position: relative; display: flex; flex-direction: column;
+  background: var(--bg-0); color: var(--ink); font-family: var(--font-sans); font-size: 14px;
+  --font-sans: 'Geist', -apple-system, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-score: 'JetBrains Mono', ui-monospace, monospace;
+  --bg-0: #1A1310; --bg-1: #251C16; --bg-2: #33261C;
+  --ink: #F0E7D8; --ink-muted: #B0A18E; --ink-faint: #847665;
+  --line: rgba(255,255,255,0.08); --line-strong: rgba(255,255,255,0.16);
+  --accent: #E0A94A; --accent-hover: #EFBC62; --accent-quiet: rgba(224,169,74,0.14);
+  --accent-fill: #E0A94A; --on-accent: #2B1E06;
+  --win: #C8553D; --ok: #6FC27B; --rust: #C8553D;
+  --paper: #F8F2E5; --paper-ink: #2B1D0A; --paper-muted: #7A6A55; --paper-line: rgba(80,60,30,0.14);
+  --accent-on-paper: #8A5F0B;
+  --card: #2A1F18; --card-ink: #F0E7D8; --card-muted: #B0A18E; --card-border: rgba(224,169,74,0.14);
+  --shadow-c: rgba(12,5,0,0.62);
+  --sh-2: 0 2px 10px -2px var(--shadow-c);
+  --sh-3: 0 10px 26px -12px var(--shadow-c), 0 2px 6px -2px var(--shadow-c);
+  --nav-bg: #241809;
+  --glow: radial-gradient(ellipse 130% 55% at 50% -6%, rgba(224,169,74,0.20), transparent 62%);
+  /* Layout tokens — the new ones this feature introduces. */
+  --col-max: 480px; --rail-w: 0px; --nav-h: 64px; --hdr-h: 53px;
+}
+.screen[data-bgb="light"] {
+  --bg-0: #F7F0E1; --bg-1: #FFFBF2; --bg-2: #FFFFFF;
+  --ink: #2A2016; --ink-muted: #6F6252; --ink-faint: #93856F;
+  --line: rgba(36,28,20,0.11); --line-strong: rgba(36,28,20,0.20);
+  --accent: #A87215; --accent-hover: #8E5F10; --accent-quiet: rgba(168,114,21,0.13);
+  --accent-fill: #8E5F10; --on-accent: #FFFFFF;
+  --win: #A8452F; --ok: #1B6029; --rust: #A8452F;
+  --card: #FFFFFF; --card-ink: #2A2016; --card-muted: #7C7263; --card-border: rgba(48,34,20,0.12);
+  --shadow-c: rgba(120,88,44,0.20);
+  --nav-bg: #FFFBF2;
+  --glow: radial-gradient(ellipse 130% 55% at 50% -6%, rgba(224,169,74,0.26), transparent 62%);
+}
+.screen[data-tier="tablet"] { --col-max: 720px; }
+.screen[data-tier="wide"]   { --col-max: 1040px; --rail-w: 88px; --nav-h: 0px; --hdr-h: 0px; }
+
+/* ── App chrome ───────────────────────────────────────────────────────── */
+.hdr {
+  height: 53px; flex: none; display: flex; align-items: center; gap: 0.6rem;
+  padding: 0 0.85rem; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-0) 95%, transparent);
+}
+.hdr__logo { width: 36px; height: 36px; border-radius: 0.5rem; background: linear-gradient(135deg, #E8C868, #B9832C); display: grid; place-items: center; color: #2B1E06; }
+.hdr__logo svg, .rail__logo svg { width: 22px; height: 22px; }
+.hdr__brand { font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; color: var(--accent); white-space: nowrap; }
+.hdr__util { margin-left: auto; display: flex; gap: 8px; }
+.ubtn {
+  width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--line); display: grid; place-items: center;
+  color: var(--accent); position: relative; background: transparent;
+}
+.ubtn svg { width: 20px; height: 20px; }
+.dot { position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 999px; background: #C0472F; border: 2px solid var(--bg-0); }
+.screen[data-tier="wide"] .hdr { display: none; }
+
+.body { flex: 1; display: flex; min-height: 0; }
+.screen[data-tier="wide"] .body { padding-left: var(--rail-w); }
+.main {
+  width: 100%; max-width: var(--col-max); margin-inline: auto; padding: 16px 16px calc(var(--nav-h) + 16px);
+  min-width: 0; overflow: hidden; background: var(--glow), var(--bg-0); position: relative;
+}
+.main--flush { padding-left: 0; padding-right: 0; }
+
+/* Bottom bar → left rail */
+.nav {
+  position: absolute; left: 0; right: 0; bottom: 0; height: var(--nav-h);
+  background: var(--nav-bg); border-top: 1px solid var(--line-strong); box-shadow: 0 -1px 12px rgba(0,0,0,.3);
+  display: flex; align-items: stretch; z-index: 4;
+}
+.nav__brand, .nav__util { display: none; }
+.tab {
+  flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  color: var(--ink-faint); font-size: 11px; font-weight: 600; position: relative;
+}
+.tab svg { width: 20px; height: 20px; }
+.tab.on { color: var(--accent); background: var(--accent-quiet); }
+.tab.on::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent); }
+.tab--play .tab__ico { width: 40px; height: 26px; border-radius: 8px; background: linear-gradient(180deg, #E8C868, #CDA23F); color: #2A1B0E; display: grid; place-items: center; }
+.tab .tdot { position: absolute; top: 12px; right: calc(50% - 16px); width: 8px; height: 8px; border-radius: 999px; background: #C0472F; border: 2px solid var(--nav-bg); }
+.screen[data-tier="wide"] .nav {
+  top: 0; bottom: 0; right: auto; width: var(--rail-w); height: auto; flex-direction: column;
+  border-top: 0; border-right: 1px solid var(--line-strong); box-shadow: 1px 0 12px rgba(0,0,0,.3);
+  padding: 12px 0 12px;
+}
+.screen[data-tier="wide"] .nav__brand { display: grid; place-items: center; height: 64px; margin-bottom: 8px; }
+.rail__logo { width: 40px; height: 40px; border-radius: 0.6rem; background: linear-gradient(135deg, #E8C868, #B9832C); display: grid; place-items: center; color: #2B1E06; }
+.screen[data-tier="wide"] .tab { flex: 0 0 auto; min-height: 64px; }
+.screen[data-tier="wide"] .tab.on::before { bottom: 0; top: 0; right: auto; width: 2px; height: auto; }
+.screen[data-tier="wide"] .nav__util { display: flex; }
+.screen[data-tier="wide"] .nav__util:first-of-type { margin-top: auto; }
+.screen[data-tier="wide"] .tab .tdot { right: 26px; }
+
+/* ── Feed ─────────────────────────────────────────────────────────────── */
+.feed { display: block; }
+.feed--split { display: grid; grid-template-columns: minmax(0, 1fr) 220px; column-gap: 16px; align-items: start; }
+.screen[data-tier="wide"] .feed--split { grid-template-columns: minmax(0, 560px) 300px; column-gap: 32px; justify-content: center; }
+.stream { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.aside { display: flex; flex-direction: column; gap: 1rem; position: sticky; top: 16px; }
+.day { font-family: var(--font-display); font-size: 0.95rem; font-weight: 600; color: var(--ink-muted); margin: 0.35rem 0.2rem -0.25rem; }
+
+.pc {
+  background: var(--paper); color: var(--paper-ink); border-radius: 6px; padding: 10px 10px 12px; box-shadow: var(--sh-3);
+  transform: rotate(-0.4deg);
+}
+.pc:nth-child(odd) { transform: rotate(0.35deg); }
+.pc__photo { aspect-ratio: 4 / 3; border-radius: 3px; position: relative; overflow: hidden; display: grid; place-items: end start; }
+.pc__photo--sm { aspect-ratio: 16 / 9; }
+.pc__photo span { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; color: rgba(255,250,235,0.92); padding: 10px 12px; text-shadow: 0 2px 10px rgba(0,0,0,.45); }
+.pc__cap { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.pc__title { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; flex: 1; }
+.pc__meta { font-family: var(--font-score); font-size: 0.68rem; color: var(--paper-muted); }
+.pc__foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.av { width: 26px; height: 26px; border-radius: 999px; background: #4A3524; color: #F0C662; display: grid; place-items: center; font-size: 0.62rem; font-weight: 800; border: 1.5px solid #E0A94A; margin-right: -6px; }
+.av--lg { width: 34px; height: 34px; font-size: 0.75rem; }
+.won { margin-left: 10px; font-size: 0.75rem; color: var(--paper-muted); }
+.won b { color: var(--win); }
+.g-wingspan { background: linear-gradient(135deg, #5C7E5A, #2F4B36 60%, #1E2F24); }
+.g-root     { background: linear-gradient(135deg, #B8583A, #6E2E1E 60%, #3E1A12); }
+.g-everdell { background: linear-gradient(135deg, #7C9A4F, #3E5A2C 60%, #22331A); }
+.g-azul     { background: linear-gradient(135deg, #3A6AA6, #1E3E6B 60%, #14294A); }
+.g-cascadia { background: linear-gradient(135deg, #5A8FA0, #2C5563 60%, #1B3740); }
+.g-catan    { background: linear-gradient(135deg, #C88B3A, #7E4F1C 60%, #4A2E10); }
+.g-terra    { background: linear-gradient(135deg, #9A5A9A, #5A2E5A 60%, #351A35); }
+
+.railcard { background: var(--card); color: var(--card-ink); border: 1px solid var(--card-border); border-radius: 14px; padding: 12px; box-shadow: var(--sh-2); }
+.railcard__t { font-family: var(--font-display); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.railcard__t svg { width: 14px; height: 14px; }
+.tiles { display: flex; gap: 8px; overflow: hidden; }
+.aside .tiles { flex-wrap: wrap; }
+.tile { flex: none; width: 96px; background: var(--paper); color: var(--paper-ink); border-radius: 4px; padding: 5px 5px 7px; box-shadow: var(--sh-2); }
+.tile__art { aspect-ratio: 1; border-radius: 2px; }
+.tile__n { font-family: var(--font-display); font-size: 0.68rem; font-weight: 700; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile__c { font-family: var(--font-score); font-size: 0.6rem; color: var(--paper-muted); }
+.aside .tile { width: calc(50% - 4px); }
+.btile { flex: none; width: 92px; background: var(--card); border: 1px solid var(--card-border); border-radius: 10px; padding: 8px 6px; display: grid; justify-items: center; gap: 4px; }
+.btile__n { font-size: 0.72rem; font-weight: 700; }
+.btile__why { font-size: 0.6rem; color: var(--card-muted); text-align: center; line-height: 1.2; }
+.btile__add { font-size: 0.62rem; font-weight: 800; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 8px; }
+.aside .btile { width: calc(50% - 4px); }
+
+/* ── Cascade (Gather → Play → Settle) ────────────────────────────────── */
+.cas { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 100px; position: relative; height: 100%; overflow: hidden; }
+.cas__head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 6px; margin-bottom: 4px; }
+.cas__circ { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--bg-1) 70%, transparent); display: grid; place-items: center; color: var(--ink); }
+.cas__circ svg { width: 18px; height: 18px; }
+.cas__title { text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.1; }
+.cas__step { display: block; text-align: center; font-family: var(--font-score); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.55; margin-top: 2px; }
+.gamebar { display: flex; align-items: center; gap: 10px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.gamebar__art { width: 40px; height: 40px; border-radius: 6px; flex: none; }
+.gamebar__n { font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
+.gamebar__s { font-size: 0.72rem; color: var(--ink-muted); }
+.gamebar__code { margin-left: auto; font-family: var(--font-score); font-weight: 700; letter-spacing: 0.14em; color: var(--accent); font-size: 0.95rem; }
+.cols { display: contents; }
+.col { display: contents; }
+.screen[data-tier="tablet"] .cols, .screen[data-tier="wide"] .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 38%); column-gap: 16px; align-items: start; }
+.screen[data-tier="tablet"] .col, .screen[data-tier="wide"] .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.screen[data-tier="tablet"] .col--aside, .screen[data-tier="wide"] .col--aside { position: sticky; top: 12px; }
+.ccard { background: var(--paper); color: var(--paper-ink); border-radius: 14px; border: 1px solid var(--paper-line); box-shadow: var(--sh-3); padding: 14px 14px 16px; }
+.ccard__l { display: flex; align-items: center; gap: 6px; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.02em; text-transform: uppercase; margin-bottom: 8px; }
+.ccard__l svg { width: 14px; height: 14px; }
+.ccard__l .r { margin-left: auto; font-family: var(--font-sans); font-size: 11px; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--accent-on-paper); }
+.cta {
+  /* In the app this is position:fixed, pinned to the content column. Here .main
+     IS the column, so the bar just hugs its inset edges. */
+  position: absolute; bottom: calc(var(--nav-h)); left: 0; right: 0;
+  padding: 12px 16px 28px; background: linear-gradient(to bottom, transparent, var(--bg-0) 46%); z-index: 3;
+}
+.screen[data-tier="tablet"] .cta, .screen[data-tier="wide"] .cta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 38%); column-gap: 16px; }
+.cta__btn { height: 52px; border-radius: 0.5rem; background: var(--accent-fill); color: var(--on-accent); font-family: var(--font-display); font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 10px 22px -8px color-mix(in srgb, var(--accent-fill) 55%, transparent); }
+.cta__btn svg { width: 16px; height: 16px; }
+/* scoring grid */
+.sgrid { border-collapse: separate; border-spacing: 0; width: 100%; font-family: var(--font-score); font-size: 13px; }
+.sgrid th { font-family: var(--font-sans); font-size: 11px; font-weight: 700; color: var(--paper-muted); text-align: center; padding: 4px 2px; }
+.sgrid th:first-child, .sgrid td:first-child { text-align: left; font-family: var(--font-sans); font-size: 11px; font-weight: 700; color: var(--paper-muted); width: 62px; }
+.sgrid td { text-align: center; padding: 3px 2px; }
+.cell { display: inline-grid; place-items: center; height: 32px; min-width: 44px; width: 100%; border-radius: 6px; background: rgba(255,255,255,0.7); border: 1px solid var(--paper-line); font-weight: 700; }
+.cell--empty { background: rgba(255,255,255,0.35); }
+.sgrid tr.tot td { border-top: 1px solid var(--paper-line); padding-top: 6px; font-weight: 700; font-size: 15px; }
+.sgrid tr.tot td:first-child { font-size: 11px; }
+.sgrid .lead { color: var(--win); }
+.addround { margin-top: 10px; font-size: 12px; font-weight: 700; color: var(--accent-on-paper); display: flex; align-items: center; gap: 6px; }
+.addround svg { width: 14px; height: 14px; }
+/* guide */
+.guide { background: linear-gradient(180deg, #F3E6C8, #EBDBB8); color: #2B1D0A; border-radius: 8px; padding: 12px 14px; box-shadow: inset 0 0 0 1px rgba(139,111,60,0.35); }
+.guide__sec { font-family: var(--font-display); font-weight: 700; font-size: 0.9rem; margin: 10px 0 4px; display: flex; align-items: center; gap: 6px; }
+.guide__sec:first-child { margin-top: 0; }
+.guide__dot { width: 8px; height: 8px; border-radius: 999px; background: #5C7E5A; box-shadow: 0 0 0 1px rgba(255,250,235,.85); }
+.guide p { margin: 0; font-size: 0.78rem; line-height: 1.5; color: #4A3A22; }
+.rulebook { display: inline-flex; align-items: center; gap: 6px; margin: 0 auto 10px; border: 1px solid var(--paper-line); border-radius: 0.5rem; padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--paper-ink); }
+.rulebook svg { width: 14px; height: 14px; }
+.center { display: flex; justify-content: center; }
+/* gather */
+.chip { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.55); border: 1px solid var(--paper-line); border-radius: 10px; padding: 8px; }
+.chip__art { width: 44px; height: 44px; border-radius: 6px; flex: none; }
+.chip__n { font-family: var(--font-display); font-weight: 700; }
+.chip__s { font-size: 11px; color: var(--paper-muted); }
+.chip .r { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--accent-on-paper); }
+.seg { display: flex; gap: 4px; padding: 4px; background: rgba(43,29,10,0.07); border: 1px solid var(--paper-line); border-radius: 10px; }
+.seg span { flex: 1; text-align: center; min-height: 40px; display: grid; place-items: center; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--paper-muted); }
+.seg span.on { background: var(--accent-fill); color: var(--on-accent); }
+.prow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; min-height: 48px; border-bottom: 1px solid var(--paper-line); font-size: 14px; font-weight: 600; }
+.prow:last-of-type { border-bottom: 0; }
+.prow .av { margin: 0; }
+.prow .h { color: var(--paper-muted); font-size: 11px; font-weight: 700; }
+.addp { margin-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--accent-on-paper); min-height: 44px; }
+.addp svg { width: 16px; height: 16px; }
+.exp { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 0; }
+.exp .sw { width: 8px; height: 8px; border-radius: 999px; }
+.exp .tg { margin-left: auto; width: 36px; height: 20px; border-radius: 999px; background: var(--accent-fill); position: relative; }
+.exp .tg::after { content: ""; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 999px; background: #fff; }
+.exp .tg.off { background: rgba(43,29,10,0.2); }
+.exp .tg.off::after { right: auto; left: 2px; }
+.field { display: flex; align-items: center; gap: 10px; border: 1px solid var(--paper-line); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,0.55); font-size: 14px; min-height: 48px; }
+.field .r { margin-left: auto; color: var(--paper-muted); font-size: 12px; }
+.field svg { width: 16px; height: 16px; color: var(--paper-muted); }
+.photo-drop { aspect-ratio: 4 / 3; border: 2px dashed var(--paper-line); border-radius: 10px; display: grid; place-items: center; color: var(--paper-muted); font-size: 13px; font-weight: 600; gap: 6px; text-align: center; }
+.photo-drop svg { width: 28px; height: 28px; }
+.notes { min-height: 90px; border: 1px solid var(--paper-line); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,0.55); font-size: 13px; color: var(--paper-muted); }
+
+/* ── Play tab (Let's play) ────────────────────────────────────────────── */
+.lp { display: block; }
+.screen[data-tier="tablet"] .lp, .screen[data-tier="wide"] .lp { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; align-content: start; }
+.lp__h { grid-column: 1 / -1; font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; margin: 4px 0 12px; }
+.lp__opts { display: flex; flex-direction: column; gap: 10px; }
+.opt { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 12px; background: var(--card); color: var(--card-ink); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px; min-height: 76px; box-shadow: var(--sh-2); }
+.opt--host { background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+.opt--live { border-color: color-mix(in srgb, var(--win) 60%, transparent); }
+.opt__ico { width: 44px; height: 44px; border-radius: 10px; background: var(--accent-quiet); color: var(--accent); display: grid; place-items: center; }
+.opt__ico svg { width: 22px; height: 22px; }
+.opt__t { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; }
+.opt__s { font-size: 0.78rem; color: var(--card-muted); }
+.opt__go { color: var(--accent); }
+.opt__go svg { width: 18px; height: 18px; }
+.lp__hr { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
+.screen[data-tier="tablet"] .lp__hr, .screen[data-tier="wide"] .lp__hr { display: none; }
+.lp__join h2 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 700; margin: 0 0 10px; }
+.code { display: flex; gap: 8px; }
+.code span { flex: 1; height: 52px; border-radius: 10px; background: var(--bg-1); border: 1px solid var(--line-strong); display: grid; place-items: center; font-family: var(--font-score); font-size: 1.3rem; font-weight: 700; color: var(--ink-muted); }
+.live { margin-top: 12px; display: grid; gap: 8px; }
+.live__row { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 12px; min-height: 56px; }
+.live__art { width: 36px; height: 36px; border-radius: 6px; }
+.live__n { font-weight: 700; font-size: 0.9rem; }
+.live__s { font-size: 0.72rem; color: var(--card-muted); }
+.live__tag { margin-left: auto; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--win); border: 1px solid color-mix(in srgb, var(--win) 60%, transparent); border-radius: 999px; padding: 3px 8px; }
+
+/* ── Settings ─────────────────────────────────────────────────────────── */
+.spoke-head { display: flex; align-items: center; gap: 10px; padding: 4px 0 10px; border-bottom: 1px solid var(--line); margin: 0 -16px 12px; padding-inline: 16px; }
+.spoke-head h1 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; margin: 0; flex: 1; }
+.setcard { background: var(--card); color: var(--card-ink); border: 1px solid var(--card-border); border-radius: 14px; margin-bottom: 12px; box-shadow: var(--sh-2); }
+.setrow { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px; padding: 12px 12px; min-height: 56px; }
+.setrow + .setrow { border-top: 1px solid var(--line); }
+.setrow svg { width: 18px; height: 18px; color: var(--accent); }
+.setrow__t { font-weight: 700; font-size: 0.95rem; }
+.setrow__s { font-size: 0.76rem; color: var(--card-muted); margin-top: 2px; }
+.setseg { display: flex; gap: 4px; padding: 4px; margin: 0 12px 12px; background: color-mix(in srgb, var(--card-ink) 7%, transparent); border: 1px solid var(--line); border-radius: 10px; }
+.setseg span { flex: 1; min-height: 44px; display: grid; place-items: center; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--card-muted); }
+.setseg span.on { background: var(--accent-fill); color: var(--on-accent); }
+.new { display: inline-block; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--win); border: 1px solid color-mix(in srgb, var(--win) 60%, transparent); border-radius: 999px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+
+/* ── Collection grid / game detail ────────────────────────────────────── */
+.ctrl { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.ctrl .pill { border: 1px solid var(--line-strong); border-radius: 999px; padding: 8px 12px; font-size: 12px; font-weight: 700; color: var(--ink-muted); display: flex; align-items: center; gap: 6px; }
+.ctrl .pill.on { color: var(--accent); border-color: var(--accent); background: var(--accent-quiet); }
+.ctrl .pill svg { width: 14px; height: 14px; }
+.ctrl .search { flex: 1; height: 40px; border-radius: 999px; background: var(--bg-1); border: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--ink-faint); font-size: 13px; }
+.ctrl .search svg { width: 16px; height: 16px; }
+.cgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.screen[data-tier="tablet"] .cgrid { grid-template-columns: repeat(4, 1fr); }
+.screen[data-tier="wide"] .cgrid { grid-template-columns: repeat(6, 1fr); }
+.cgrid .tile { width: auto; }
+.cgrid .tile__n { font-size: 0.78rem; }
+.detail { display: block; }
+.screen[data-tier="tablet"] .detail, .screen[data-tier="wide"] .detail { display: grid; grid-template-columns: 260px minmax(0, 1fr); column-gap: 24px; align-items: start; }
+.detail__cover { display: flex; justify-content: center; padding: 8px 0 12px; position: sticky; top: 0; }
+.polaroid { width: 220px; background: var(--paper); color: var(--paper-ink); padding: 12px 12px 0; border-radius: 4px; box-shadow: var(--sh-3); transform: rotate(-1.2deg); }
+.polaroid__art { aspect-ratio: 1; border-radius: 2px; }
+.polaroid__cap { font-family: var(--font-score); font-size: 11px; color: var(--paper-muted); padding: 10px 0 8px; display: flex; justify-content: space-between; align-items: center; }
+.status { font-family: var(--font-sans); font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--on-accent); background: var(--accent-fill); border-radius: 999px; padding: 3px 8px; }
+.detail__name { font-family: var(--font-display); font-size: 1.85rem; margin: 0; line-height: 1.1; color: #7C9A4F; }
+.meta { display: flex; gap: 0.6rem; font-size: 0.8rem; opacity: 0.75; margin: 0.35rem 0 0.75rem; flex-wrap: wrap; }
+.meta span { display: inline-flex; align-items: center; gap: 4px; }
+.meta svg { width: 14px; height: 14px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 0 14px; height: 40px; font-size: 13px; font-weight: 700; border: 1px solid var(--line-strong); color: var(--ink); }
+.btn--p { background: var(--accent-fill); color: var(--on-accent); border-color: transparent; }
+.btn svg { width: 16px; height: 16px; }
+.desc { font-size: 0.86rem; line-height: 1.55; color: var(--ink-muted); margin: 0 0 14px; }
+.sect { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; margin: 14px 0 8px; }
+.scroll { background: linear-gradient(180deg, #F3E6C8, #EBDBB8); color: #2B1D0A; border-radius: 8px; padding: 12px 14px; box-shadow: inset 0 0 0 1px rgba(139,111,60,0.35); font-size: 0.8rem; }
+.scroll b { font-family: var(--font-display); }
+
+/* ── Summary table ─────────────────────────────────────────────────────── */
+table.sum { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+table.sum th, table.sum td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--board-line); vertical-align: top; }
+table.sum th { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+table.sum td:first-child { font-weight: 600; color: var(--board-ink); white-space: nowrap; }
+table.sum td { color: var(--board-dim); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--board-line); border-radius: 12px; background: var(--board-panel); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="board-head">
+    <div class="board-head__text">
+      <div class="eyebrow">Boardgame Buddy · design board</div>
+      <h1>One app, three widths</h1>
+      <p>Every feature stays exactly where it is. What changes is how the same data is laid out once the screen stops being a phone: a wider column on an iPad held upright, and a left rail with room for two panes once it is turned sideways or opened on a monitor. Nothing below is a new screen; every frame is a screen the app already has.</p>
+    </div>
+    <div class="theme-toggle" role="group" aria-label="Screen theme">
+      <button type="button" data-mode="dark" aria-pressed="true">Dark</button>
+      <button type="button" data-mode="light" aria-pressed="false">Light</button>
+    </div>
+  </header>
+
+  <div class="tiers">
+    <div class="tier">
+      <div class="tier__name">Phone <span class="tier__range">&lt; 768px</span></div>
+      <div class="tier__body">Today's layout, byte for byte. <b>Bottom bar</b>, 480px column, rails inline in the feed.</div>
+    </div>
+    <div class="tier">
+      <div class="tier__name">Tablet <span class="tier__range">768 – 1023px</span></div>
+      <div class="tier__body">iPad held upright. Column widens to <b>720px</b>; the bottom bar stays because thumbs are still at the bottom. Screens that split do so here.</div>
+    </div>
+    <div class="tier">
+      <div class="tier__name">Wide <span class="tier__range">≥ 1024px</span></div>
+      <div class="tier__body">iPad sideways, laptop, monitor. The bar becomes an <b>88px left rail</b> carrying the logo, the three tabs, Alerts and Settings; the header folds into it. Column up to <b>1040px</b>.</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ 1. FEED ══════════════════ -->
+  <section class="section">
+    <div class="section__cap"><span class="section__num">01</span><span class="section__title">Feed</span> <span class="decide">decide: sidebar widths</span></div>
+    <p class="section__note">Play cards are photographs and should not stretch, so the stream keeps one column. The two rail cards — <b>Hot this week</b> and <b>Buddies you may know</b> — leave the stream and stand in a sticky sidebar where they are always in reach. Tablet gives the sidebar <b>220px</b> (the stream stays as wide as a phone's); wide gives it <b>300px</b> beside a 560px stream.</p>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">wide</span><span class="frame__dims">1180 × 720</span><span class="frame__note">rail on the left, header gone</span></div>
+        <div class="device device--wide"><div class="screen" data-tier="wide" data-bgb="dark">
+          <!--HDR--><!--BODY:FEED--><!--NAV:feed-->
+        </div></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">tablet</span><span class="frame__dims">820 × 640 (upright iPad, cropped)</span></div>
+        <div class="device device--tablet"><div class="screen" data-tier="tablet" data-bgb="dark">
+          <!--HDR--><!--BODY:FEED--><!--NAV:feed-->
+        </div></div>
+      </div>
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">phone</span><span class="frame__dims">390 × 760</span><span class="frame__note">unchanged</span></div>
+        <div class="device device--phone"><div class="screen" data-tier="phone" data-bgb="dark">
+          <!--HDR--><!--BODY:FEED--><!--NAV:feed-->
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ 2. PLAY STEP ══════════════════ -->
+  <section class="section">
+    <div class="section__cap"><span class="section__num">02</span><span class="section__title">Play step — the scoring table</span> <span class="decide">decide: guide pane at 38%</span></div>
+    <p class="section__note">The screen a tablet is actually propped up for. The scoring grid takes the left pane — six players fit without sideways scrolling — and the reference guide stands beside it in a sticky pane that scrolls on its own, so the host reads the end-of-game scoring while filling in the last round. <b>Wrap up</b> docks under the grid, exactly the width of the pane it belongs to. The spectator mirror gets the same split.</p>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">wide</span><span class="frame__dims">1180 × 720</span></div>
+        <div class="device device--wide"><div class="screen" data-tier="wide" data-bgb="dark">
+          <!--HDR--><!--BODY:PLAY--><!--NAV:play-->
+        </div></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">tablet</span><span class="frame__dims">820 × 640</span></div>
+        <div class="device device--tablet"><div class="screen" data-tier="tablet" data-bgb="dark">
+          <!--HDR--><!--BODY:PLAY--><!--NAV:play-->
+        </div></div>
+      </div>
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">phone</span><span class="frame__dims">390 × 760</span><span class="frame__note">unchanged — guide below the grid</span></div>
+        <div class="device device--phone"><div class="screen" data-tier="phone" data-bgb="dark">
+          <!--HDR--><!--BODY:PLAY--><!--NAV:play-->
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ 3. GATHER + SETTLE ══════════════════ -->
+  <section class="section">
+    <div class="section__cap"><span class="section__num">03</span><span class="section__title">Gather and Settle Up</span></div>
+    <p class="section__note">Same two-pane frame as the Play step so the cascade never changes shape between steps. Gather puts the session code, the game, the mode and the expansions on the left and the <b>players on the right</b>, where the roster can grow without pushing anything down. Settle Up keeps the date and place on the left and gives the <b>photo</b> the right pane; key-moment notes span the full width underneath.</p>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">tablet</span><span class="frame__dims">820 × 640</span><span class="frame__note">Gather</span></div>
+        <div class="device device--tablet"><div class="screen" data-tier="tablet" data-bgb="dark">
+          <!--HDR--><!--BODY:GATHER--><!--NAV:play-->
+        </div></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">tablet</span><span class="frame__dims">820 × 640</span><span class="frame__note">Settle Up</span></div>
+        <div class="device device--tablet"><div class="screen" data-tier="tablet" data-bgb="dark">
+          <!--HDR--><!--BODY:SETTLE--><!--NAV:play-->
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ 4. PLAY TAB ══════════════════ -->
+  <section class="section">
+    <div class="section__cap"><span class="section__num">04</span><span class="section__title">Play tab — Host beside Join</span></div>
+    <p class="section__note">The tab is already two halves. Side by side, hosting and joining read as the two ways into a game rather than one list scrolling into another, and the live-session list is visible without scrolling past the host cards.</p>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">tablet</span><span class="frame__dims">820 × 640</span></div>
+        <div class="device device--tablet"><div class="screen" data-tier="tablet" data-bgb="dark">
+          <!--HDR--><!--BODY:LP--><!--NAV:play-->
+        </div></div>
+      </div>
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">phone</span><span class="frame__dims">390 × 760</span><span class="frame__note">unchanged</span></div>
+        <div class="device device--phone"><div class="screen" data-tier="phone" data-bgb="dark">
+          <!--HDR--><!--BODY:LP--><!--NAV:play-->
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ 5. COLLECTION + GAME DETAIL ══════════════════ -->
+  <section class="section">
+    <div class="section__cap"><span class="section__num">05</span><span class="section__title">Collection grid and game detail</span></div>
+    <p class="section__note">Polaroid grids go from three columns to four on a tablet and six on a monitor; the tile itself never changes. Game detail puts the box-art polaroid, the status pill and the actions in a sticky left column and lets the description, expansions, reference scroll and recent plays run down the right.</p>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">wide</span><span class="frame__dims">1180 × 720</span><span class="frame__note">Collection, six columns</span></div>
+        <div class="device device--wide"><div class="screen" data-tier="wide" data-bgb="dark">
+          <!--HDR--><!--BODY:COLLECTION--><!--NAV:profile-->
+        </div></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">tablet</span><span class="frame__dims">820 × 640</span><span class="frame__note">Game detail</span></div>
+        <div class="device device--tablet"><div class="screen" data-tier="tablet" data-bgb="dark">
+          <!--HDR--><!--BODY:DETAIL--><!--NAV:profile-->
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ 6. SETTINGS ══════════════════ -->
+  <section class="section">
+    <div class="section__cap"><span class="section__num">06</span><span class="section__title">Settings — the Layout control</span></div>
+    <p class="section__note">The tier follows the screen width by default. A new <b>Layout</b> control sits directly under Theme and works the same way: Auto follows the device, Phone or Tablet pins it. A pinned Tablet never becomes the wide rail, and never applies below 600px, so a real phone cannot be pushed into two panes. Reading screens like this one keep a single 720px column even on a monitor.</p>
+    <div class="row">
+      <div class="frame">
+        <div class="frame__cap"><span class="frame__tier">tablet</span><span class="frame__dims">820 × 640</span></div>
+        <div class="device device--tablet"><div class="screen" data-tier="tablet" data-bgb="dark">
+          <!--HDR--><!--BODY:SETTINGS--><!--NAV:profile-->
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ 7. EVERY OTHER SCREEN ══════════════════ -->
+  <section class="section">
+    <div class="section__cap"><span class="section__num">07</span><span class="section__title">Everything else, in one table</span></div>
+    <p class="section__note">Screens not drawn above and what they do at each tier.</p>
+    <div class="tablewrap">
+      <table class="sum">
+        <thead><tr><th>Screen</th><th>Phone</th><th>Tablet (720)</th><th>Wide (1040 + rail)</th></tr></thead>
+        <tbody>
+          <tr><td>Profile hub</td><td>stacked cards</td><td>account + stats span; the four preview cards in a 2 × 2 grid</td><td>same</td></tr>
+          <tr><td>Stats</td><td>stacked blocks</td><td>podium and career strip span; the stat blocks in two columns</td><td>same</td></tr>
+          <tr><td>Game Explorer</td><td>3-column grid</td><td>4 columns, filters pinned</td><td>6 columns</td></tr>
+          <tr><td>Achievements</td><td>one rail per group</td><td>rails wrap into grids</td><td>same</td></tr>
+          <tr><td>Buddies, Plays log, Add games</td><td>rows</td><td>single 720 column</td><td>single 720 column, centred</td></tr>
+          <tr><td>Notifications, Settings, importers, admin, chapter editor</td><td>single column</td><td>single 720 column</td><td>single 720 column, centred</td></tr>
+          <tr><td>Bottom sheets and modals</td><td>as today</td><td>as today — already capped at 520px, centred</td><td>same</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- ═══ Templates for the repeated screen parts ═══ -->
+<template id="t-hdr">
+  <header class="hdr">
+    <span class="hdr__logo"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M192 32H64a32 32 0 0 0-32 32v128a32 32 0 0 0 32 32h128a32 32 0 0 0 32-32V64a32 32 0 0 0-32-32ZM84 100a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Z"/></svg></span>
+    <span class="hdr__brand">Boardgame Buddy</span>
+    <span class="hdr__util">
+      <span class="ubtn"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M221 175.5c-5.5-9.5-13-27-13-55.5a80 80 0 0 0-160 0c0 28.5-7.5 46-13 55.5A16 16 0 0 0 48.8 200H92a36 36 0 0 0 72 0h43.2a16 16 0 0 0 13.8-24.5ZM128 216a20 20 0 0 1-20-16h40a20 20 0 0 1-20 16Z"/></svg><span class="dot"></span></span>
+      <span class="ubtn"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M128 80a48 48 0 1 0 48 48 48 48 0 0 0-48-48Zm0 80a32 32 0 1 1 32-32 32 32 0 0 1-32 32Zm88-29.8v-4.4l14-17.5a8 8 0 0 0 1.5-7l-8.2-30.6a8 8 0 0 0-5-5.5L197 57.8l-3.1-3.1-7.4-21.3a8 8 0 0 0-5.5-5L150.4 20a8 8 0 0 0-7 1.5L126 35.5h-4.4L104 21.5a8 8 0 0 0-7-1.5L66.4 28.4a8 8 0 0 0-5.5 5L53.5 55l-3.1 3.1-21.3 7.4a8 8 0 0 0-5 5.5L16 101.4a8 8 0 0 0 1.5 7l14 17.5v4.4L17.5 148a8 8 0 0 0-1.5 7l8.2 30.6a8 8 0 0 0 5 5.5l21.3 7.4 3.1 3.1 7.4 21.3a8 8 0 0 0 5.5 5l30.6 8.2a8 8 0 0 0 7-1.5l17.5-14h4.4l17.5 14a8 8 0 0 0 7 1.5l30.6-8.2a8 8 0 0 0 5.5-5l7.4-21.3 3.1-3.1 21.3-7.4a8 8 0 0 0 5-5.5l8.2-30.6a8 8 0 0 0-1.5-7Z"/></svg></span>
+    </span>
+  </header>
+</template>
+
+<template id="t-nav">
+  <nav class="nav">
+    <span class="nav__brand"><span class="rail__logo"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M192 32H64a32 32 0 0 0-32 32v128a32 32 0 0 0 32 32h128a32 32 0 0 0 32-32V64a32 32 0 0 0-32-32ZM84 100a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Z"/></svg></span></span>
+    <span class="tab" data-tab="feed"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M218.8 103.7 133.7 26.4a16 16 0 0 0-21.4 0l-85.1 77.3A16 16 0 0 0 24 115.5V208a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16v-48h48v48a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16v-92.5a16 16 0 0 0-5.2-11.8Z"/></svg><span>Feed</span></span>
+    <span class="tab tab--play" data-tab="play"><span class="tab__ico"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M192 32H64a32 32 0 0 0-32 32v128a32 32 0 0 0 32 32h128a32 32 0 0 0 32-32V64a32 32 0 0 0-32-32ZM84 100a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Z"/></svg></span><span>Play</span></span>
+    <span class="tab" data-tab="profile"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M230.9 212a8 8 0 0 1-6.9 4H32a8 8 0 0 1-6.9-12c15.9-27.5 40.4-47.2 69-56.6a64 64 0 1 1 67.8 0c28.6 9.4 53.1 29.1 69 56.6a8 8 0 0 1 0 8Z"/></svg><span class="tdot"></span><span>Profile</span></span>
+    <span class="tab nav__util"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M221 175.5c-5.5-9.5-13-27-13-55.5a80 80 0 0 0-160 0c0 28.5-7.5 46-13 55.5A16 16 0 0 0 48.8 200H92a36 36 0 0 0 72 0h43.2a16 16 0 0 0 13.8-24.5ZM128 216a20 20 0 0 1-20-16h40a20 20 0 0 1-20 16Z"/></svg><span class="tdot"></span><span>Alerts</span></span>
+    <span class="tab nav__util"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M128 80a48 48 0 1 0 48 48 48 48 0 0 0-48-48Zm0 80a32 32 0 1 1 32-32 32 32 0 0 1-32 32Zm88-29.8v-4.4l14-17.5a8 8 0 0 0 1.5-7l-8.2-30.6a8 8 0 0 0-5-5.5L197 57.8l-3.1-3.1-7.4-21.3a8 8 0 0 0-5.5-5L150.4 20a8 8 0 0 0-7 1.5L126 35.5h-4.4L104 21.5a8 8 0 0 0-7-1.5L66.4 28.4a8 8 0 0 0-5.5 5L53.5 55l-3.1 3.1-21.3 7.4a8 8 0 0 0-5 5.5L16 101.4a8 8 0 0 0 1.5 7l14 17.5v4.4L17.5 148a8 8 0 0 0-1.5 7l8.2 30.6a8 8 0 0 0 5 5.5l21.3 7.4 3.1 3.1 7.4 21.3a8 8 0 0 0 5.5 5l30.6 8.2a8 8 0 0 0 7-1.5l17.5-14h4.4l17.5 14a8 8 0 0 0 7 1.5l30.6-8.2a8 8 0 0 0 5.5-5l7.4-21.3 3.1-3.1 21.3-7.4a8 8 0 0 0 5-5.5l8.2-30.6a8 8 0 0 0-1.5-7Z"/></svg><span>Settings</span></span>
+  </nav>
+</template>
+
+<template id="t-feed">
+  <div class="body"><main class="main"><div class="feed feed--split">
+    <div class="stream">
+      <h3 class="day">Today</h3>
+      <article class="pc">
+        <div class="pc__photo g-wingspan"><span>Wingspan</span></div>
+        <div class="pc__cap"><span class="pc__title">Wingspan</span><span class="pc__meta">4 players · 1h 40m</span></div>
+        <div class="pc__foot"><span class="av">AV</span><span class="av">SM</span><span class="av">LE</span><span class="av">KM</span><span class="won"><b>Ava</b> won with 87</span></div>
+      </article>
+      <article class="pc">
+        <div class="pc__photo pc__photo--sm g-root"><span>Root</span></div>
+        <div class="pc__cap"><span class="pc__title">Root</span><span class="pc__meta">3 players · 2h 05m</span></div>
+        <div class="pc__foot"><span class="av">LE</span><span class="av">MX</span><span class="av">ZO</span><span class="won"><b>Lee</b> won as the Marquise</span></div>
+      </article>
+      <h3 class="day">Yesterday</h3>
+      <article class="pc">
+        <div class="pc__photo pc__photo--sm g-azul"><span>Azul</span></div>
+        <div class="pc__cap"><span class="pc__title">Azul</span><span class="pc__meta">2 players · 35m</span></div>
+        <div class="pc__foot"><span class="av">AV</span><span class="av">SM</span><span class="won"><b>Sam</b> won with 71</span></div>
+      </article>
+    </div>
+    <aside class="aside">
+      <div class="railcard">
+        <div class="railcard__t"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M173.8 51.5a8 8 0 0 0-11.5 0l-10.1 10.1C142.5 42 133 28.5 120.2 20.3a8 8 0 0 0-12.3 6.6c0 26.6-18.3 40.6-37.7 55.4C50 98 32 111.8 32 144a96 96 0 0 0 192 0c0-38.2-24.6-66.8-50.2-92.5ZM128 216a40 40 0 0 1-40-40c0-25 27-33 40-48 13 15 40 23 40 48a40 40 0 0 1-40 40Z"/></svg>Hot this week</div>
+        <div class="tiles">
+          <div class="tile"><div class="tile__art g-catan"></div><div class="tile__n">Catan</div><div class="tile__c">14 plays</div></div>
+          <div class="tile"><div class="tile__art g-everdell"></div><div class="tile__n">Everdell</div><div class="tile__c">11 plays</div></div>
+          <div class="tile"><div class="tile__art g-cascadia"></div><div class="tile__n">Cascadia</div><div class="tile__c">9 plays</div></div>
+          <div class="tile"><div class="tile__art g-terra"></div><div class="tile__n">Terraforming Mars</div><div class="tile__c">8 plays</div></div>
+        </div>
+      </div>
+      <div class="railcard">
+        <div class="railcard__t"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M117.3 157.7a60 60 0 1 0-74.6 0A100 100 0 0 0 5 197.8a8 8 0 0 0 13.8 8 84 84 0 0 1 122.4 0 8 8 0 0 0 13.8-8 100 100 0 0 0-37.7-40.1Zm100.4 0a60 60 0 0 0-76.8-90 8 8 0 1 0 6.4 14.6 44 44 0 0 1 43.8 66.4 8 8 0 0 0 3.8 12.1 84 84 0 0 1 43.4 37 8 8 0 0 0 13.8-8 100 100 0 0 0-34.4-32.1Z"/></svg>Buddies you may know</div>
+        <div class="tiles">
+          <div class="btile"><span class="av av--lg">JO</span><span class="btile__n">Jo</span><span class="btile__why">Played together twice</span><span class="btile__add">Add</span></div>
+          <div class="btile"><span class="av av--lg">PR</span><span class="btile__n">Priya</span><span class="btile__why">Buddies with Sam</span><span class="btile__add">Add</span></div>
+        </div>
+      </div>
+    </aside>
+  </div></main></div>
+</template>
+
+<template id="t-play">
+  <div class="body"><main class="main main--flush"><div class="cas">
+    <div class="cas__head">
+      <span class="cas__circ"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M165.7 202.3a8 8 0 0 1-11.4 11.4l-80-80a8 8 0 0 1 0-11.4l80-80a8 8 0 0 1 11.4 11.4L91.3 128Z"/></svg></span>
+      <div><h1 class="cas__title">Play</h1><span class="cas__step">Step 2 of 3</span></div>
+      <span class="cas__circ"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M205.7 194.3a8 8 0 0 1-11.4 11.4L128 139.3l-66.3 66.4a8 8 0 0 1-11.4-11.4l66.4-66.3-66.4-66.3a8 8 0 0 1 11.4-11.4l66.3 66.4 66.3-66.4a8 8 0 0 1 11.4 11.4L139.3 128Z"/></svg></span>
+    </div>
+    <div class="gamebar"><span class="gamebar__art g-wingspan"></span><span><div class="gamebar__n">Wingspan</div><div class="gamebar__s">Now playing · with European Expansion</div></span><span class="gamebar__code">K7QZM</span></div>
+    <div class="cols">
+      <div class="col">
+        <section class="ccard">
+          <div class="ccard__l"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M216 40H40a16 16 0 0 0-16 16v144a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16ZM40 112h40v32H40Zm56 0h120v32H96Zm0-16V56h120v40ZM80 56v40H40V56Zm-40 104h40v40H40Zm56 40v-40h120v40Z"/></svg>Scoring<span class="r">Everdell-style grid · tap names</span></div>
+          <table class="sgrid">
+            <thead><tr><th>Round</th><th>Ava</th><th>Sam</th><th>Lee</th><th>Kim</th><th>Max</th><th>Zoe</th></tr></thead>
+            <tbody>
+              <tr><td>Birds</td><td><span class="cell">31</span></td><td><span class="cell">28</span></td><td><span class="cell">35</span></td><td><span class="cell">24</span></td><td><span class="cell">27</span></td><td><span class="cell">30</span></td></tr>
+              <tr><td>Bonus cards</td><td><span class="cell">12</span></td><td><span class="cell">9</span></td><td><span class="cell">7</span></td><td><span class="cell">14</span></td><td><span class="cell">6</span></td><td><span class="cell">10</span></td></tr>
+              <tr><td>Round goals</td><td><span class="cell">13</span></td><td><span class="cell">11</span></td><td><span class="cell">8</span></td><td><span class="cell">12</span></td><td><span class="cell">9</span></td><td><span class="cell">7</span></td></tr>
+              <tr><td>Eggs</td><td><span class="cell">18</span></td><td><span class="cell">15</span></td><td><span class="cell">17</span></td><td><span class="cell">13</span></td><td><span class="cell">20</span></td><td><span class="cell">16</span></td></tr>
+              <tr><td>Food on cards</td><td><span class="cell cell--empty"></span></td><td><span class="cell cell--empty"></span></td><td><span class="cell cell--empty"></span></td><td><span class="cell cell--empty"></span></td><td><span class="cell cell--empty"></span></td><td><span class="cell cell--empty"></span></td></tr>
+              <tr class="tot"><td>Total</td><td>74</td><td>63</td><td class="lead">67</td><td>63</td><td>62</td><td>63</td></tr>
+            </tbody>
+          </table>
+          <div class="addround"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224 128a8 8 0 0 1-8 8h-80v80a8 8 0 0 1-16 0v-80H40a8 8 0 0 1 0-16h80V40a8 8 0 0 1 16 0v80h80a8 8 0 0 1 8 8Z"/></svg>Add a row</div>
+        </section>
+      </div>
+      <div class="col col--aside">
+        <section class="ccard">
+          <div class="ccard__l"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224 48h-64a40 40 0 0 0-32 16 40 40 0 0 0-32-16H32a16 16 0 0 0-16 16v128a16 16 0 0 0 16 16h64a24 24 0 0 1 24 24 8 8 0 0 0 16 0 24 24 0 0 1 24-24h64a16 16 0 0 0 16-16V64a16 16 0 0 0-16-16Z"/></svg>Reference guide</div>
+          <div class="center"><span class="rulebook"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224 48h-64a40 40 0 0 0-32 16 40 40 0 0 0-32-16H32a16 16 0 0 0-16 16v128a16 16 0 0 0 16 16h64a24 24 0 0 1 24 24 8 8 0 0 0 16 0 24 24 0 0 1 24-24h64a16 16 0 0 0 16-16V64a16 16 0 0 0-16-16Z"/></svg>Rulebook</span></div>
+          <div class="guide">
+            <div class="guide__sec">End-of-game scoring</div>
+            <p>Score every bird's printed points, then the bonus cards you kept, then each round goal by rank. Eggs, cached food and tucked cards each score one point apiece.</p>
+            <div class="guide__sec"><span class="guide__dot"></span>European birds — extra end-of-round powers</div>
+            <p>Teal powers trigger once at the end of each round, before the round goal is scored. Resolve them in player order.</p>
+            <div class="guide__sec">Round goals</div>
+            <p>Ties share the higher rank and skip the next. In the green-side variant everyone scores one point per qualifying item instead.</p>
+            <div class="guide__sec">Tie-breaks</div>
+            <p>Most food tokens in the personal supply, then most eggs.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="cta"><span class="cta__btn">Wrap up<svg viewBox="0 0 256 256" fill="currentColor"><path d="m221.7 133.7-72 72a8 8 0 0 1-11.4-11.4L196.7 136H40a8 8 0 0 1 0-16h156.7l-58.4-58.3a8 8 0 0 1 11.4-11.4l72 72a8 8 0 0 1 0 11.4Z"/></svg></span></div>
+  </div></main></div>
+</template>
+
+<template id="t-gather">
+  <div class="body"><main class="main main--flush"><div class="cas">
+    <div class="cas__head">
+      <span class="cas__circ"></span>
+      <div><h1 class="cas__title">Gather</h1><span class="cas__step">Step 1 of 3</span></div>
+      <span class="cas__circ"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M205.7 194.3a8 8 0 0 1-11.4 11.4L128 139.3l-66.3 66.4a8 8 0 0 1-11.4-11.4l66.4-66.3-66.4-66.3a8 8 0 0 1 11.4-11.4l66.3 66.4 66.3-66.4a8 8 0 0 1 11.4 11.4L139.3 128Z"/></svg></span>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <section class="ccard">
+          <div class="ccard__l">Invite<span class="r">Share</span></div>
+          <div class="chip"><span style="font-family:var(--font-score);font-size:1.6rem;font-weight:700;letter-spacing:.18em;color:var(--accent-on-paper)">K7QZM</span><span class="r">Anyone with the code can join</span></div>
+        </section>
+        <section class="ccard">
+          <div class="ccard__l">Game<span class="r">Change</span></div>
+          <div class="chip"><span class="chip__art g-wingspan"></span><span><div class="chip__n">Wingspan</div><div class="chip__s">1–5 players · 40–70 min</div></span></div>
+        </section>
+        <section class="ccard">
+          <div class="ccard__l">Mode</div>
+          <div class="seg"><span class="on">Competitive</span><span>Teams</span><span>Co-op</span></div>
+        </section>
+        <section class="ccard">
+          <div class="ccard__l">Expansions<span class="r">2 of 3 on</span></div>
+          <div class="exp"><span class="sw" style="background:#5C7E5A"></span>European Expansion<span class="tg"></span></div>
+          <div class="exp"><span class="sw" style="background:#B8583A"></span>Oceania Expansion<span class="tg"></span></div>
+          <div class="exp"><span class="sw" style="background:#3A6AA6"></span>Asia<span class="tg off"></span></div>
+        </section>
+      </div>
+      <div class="col col--aside">
+        <section class="ccard">
+          <div class="ccard__l">Players<span class="r">6 at the table</span></div>
+          <div class="prow"><span class="av">AV</span>Ava <span class="h">host</span></div>
+          <div class="prow"><span class="av">SM</span>Sam <span class="h">joined</span></div>
+          <div class="prow"><span class="av">LE</span>Lee <span class="h">joined</span></div>
+          <div class="prow"><span class="av">KM</span>Kim <span class="h">buddy</span></div>
+          <div class="prow"><span class="av">MX</span>Max <span class="h">buddy</span></div>
+          <div class="prow"><span class="av">ZO</span>Zoe <span class="h">ghost</span></div>
+          <div class="addp"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224 128a8 8 0 0 1-8 8h-80v80a8 8 0 0 1-16 0v-80H40a8 8 0 0 1 0-16h80V40a8 8 0 0 1 16 0v80h80a8 8 0 0 1 8 8Z"/></svg>Add players…</div>
+        </section>
+      </div>
+    </div>
+    <div class="cta"><span class="cta__btn">Continue to Play<svg viewBox="0 0 256 256" fill="currentColor"><path d="m221.7 133.7-72 72a8 8 0 0 1-11.4-11.4L196.7 136H40a8 8 0 0 1 0-16h156.7l-58.4-58.3a8 8 0 0 1 11.4-11.4l72 72a8 8 0 0 1 0 11.4Z"/></svg></span></div>
+  </div></main></div>
+</template>
+
+<template id="t-settle">
+  <div class="body"><main class="main main--flush"><div class="cas">
+    <div class="cas__head">
+      <span class="cas__circ"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M165.7 202.3a8 8 0 0 1-11.4 11.4l-80-80a8 8 0 0 1 0-11.4l80-80a8 8 0 0 1 11.4 11.4L91.3 128Z"/></svg></span>
+      <div><h1 class="cas__title">Settle Up</h1><span class="cas__step">Step 3 of 3</span></div>
+      <span class="cas__circ"></span>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <section class="ccard">
+          <div class="ccard__l">When</div>
+          <div class="field"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M208 32h-24v-8a8 8 0 0 0-16 0v8H88v-8a8 8 0 0 0-16 0v8H48a16 16 0 0 0-16 16v160a16 16 0 0 0 16 16h160a16 16 0 0 0 16-16V48a16 16 0 0 0-16-16Zm0 176H48V96h160Z"/></svg>Tonight, 9 September<span class="r">Change</span></div>
+        </section>
+        <section class="ccard">
+          <div class="ccard__l">Where</div>
+          <div class="field"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M128 16a88.1 88.1 0 0 0-88 88c0 75.3 80 132.2 83.4 134.6a8 8 0 0 0 9.2 0C136 236.2 216 179.3 216 104a88.1 88.1 0 0 0-88-88Zm0 56a32 32 0 1 1-32 32 32 32 0 0 1 32-32Z"/></svg>United Kingdom<span class="r">From your timezone</span></div>
+        </section>
+        <section class="ccard">
+          <div class="ccard__l">Winner</div>
+          <div class="chip"><span class="av">AV</span><span><div class="chip__n">Ava · 74</div><div class="chip__s">Highest total on the grid</div></span><span class="r">Override</span></div>
+        </section>
+      </div>
+      <div class="col col--aside">
+        <section class="ccard">
+          <div class="ccard__l">Photo</div>
+          <div class="photo-drop"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M208 56h-27.7l-13.7-20.5A8 8 0 0 0 160 32H96a8 8 0 0 0-6.7 3.5L75.7 56H48a24 24 0 0 0-24 24v112a24 24 0 0 0 24 24h160a24 24 0 0 0 24-24V80a24 24 0 0 0-24-24Zm-80 120a36 36 0 1 1 36-36 36 36 0 0 1-36 36Z"/></svg>Add a photo of the table</div>
+        </section>
+      </div>
+    </div>
+    <section class="ccard">
+      <div class="ccard__l">Key moments</div>
+      <div class="notes">Lee's Marquise built three sawmills before anyone noticed…</div>
+    </section>
+    <div class="cta"><span class="cta__btn">Save play</span></div>
+  </div></main></div>
+</template>
+
+<template id="t-lp">
+  <div class="body"><main class="main"><div class="lp">
+    <h1 class="lp__h">Let's play</h1>
+    <div class="lp__opts">
+      <div class="opt opt--live"><span class="opt__ico"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M232.4 114.5 88.3 26.4A16 16 0 0 0 64 40v176a16 16 0 0 0 24.3 13.6l144.1-88.1a16 16 0 0 0 0-27Z"/></svg></span><span><div class="opt__t">Resume hosting</div><div class="opt__s">Wingspan · Play step · 6 at the table</div></span><span class="opt__go"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m181.7 133.7-80 80a8 8 0 0 1-11.4-11.4L164.7 128 90.3 53.7a8 8 0 0 1 11.4-11.4l80 80a8 8 0 0 1 0 11.4Z"/></svg></span></div>
+      <div class="opt opt--host"><span class="opt__ico"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M192 32H64a32 32 0 0 0-32 32v128a32 32 0 0 0 32 32h128a32 32 0 0 0 32-32V64a32 32 0 0 0-32-32ZM84 100a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Zm44 44a16 16 0 1 1 16-16 16 16 0 0 1-16 16Z"/></svg></span><span><div class="opt__t">Host a game</div><div class="opt__s">Pick a game, seat the table, keep score</div></span><span class="opt__go"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m181.7 133.7-80 80a8 8 0 0 1-11.4-11.4L164.7 128 90.3 53.7a8 8 0 0 1 11.4-11.4l80 80a8 8 0 0 1 0 11.4Z"/></svg></span></div>
+      <div class="opt"><span class="opt__ico"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M197.7 186.3a8 8 0 0 1-11.4 11.4L128 139.3l-58.3 58.4a8 8 0 0 1-11.4-11.4l58.4-58.3-58.4-58.3a8 8 0 0 1 11.4-11.4l58.3 58.4 58.3-58.4a8 8 0 0 1 11.4 11.4L139.3 128Z" opacity="0"/><path d="M128 24a104 104 0 1 0 104 104A104.1 104.1 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88 88.1 88.1 0 0 1-88 88Zm40-88a8 8 0 0 1-8 8h-24v24a8 8 0 0 1-16 0v-24H96a8 8 0 0 1 0-16h24V96a8 8 0 0 1 16 0v24h24a8 8 0 0 1 8 8Z"/></svg></span><span><div class="opt__t">Another round</div><div class="opt__s">Azul with Sam — same table as yesterday</div></span><span class="opt__go"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m181.7 133.7-80 80a8 8 0 0 1-11.4-11.4L164.7 128 90.3 53.7a8 8 0 0 1 11.4-11.4l80 80a8 8 0 0 1 0 11.4Z"/></svg></span></div>
+      <div class="opt"><span class="opt__ico"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M232 128a104 104 0 1 1-104-104 104.1 104.1 0 0 1 104 104Zm-64.6-36.7-56 24a8 8 0 0 0-4.1 4.1l-24 56a8 8 0 0 0 10.5 10.5l56-24a8 8 0 0 0 4.1-4.1l24-56a8 8 0 0 0-10.5-10.5Z"/></svg></span><span><div class="opt__t">Game Explorer</div><div class="opt__s">Filter by players, time and type</div></span><span class="opt__go"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m181.7 133.7-80 80a8 8 0 0 1-11.4-11.4L164.7 128 90.3 53.7a8 8 0 0 1 11.4-11.4l80 80a8 8 0 0 1 0 11.4Z"/></svg></span></div>
+    </div>
+    <hr class="lp__hr" />
+    <section class="lp__join">
+      <h2>Join a game</h2>
+      <div class="code"><span>K</span><span>7</span><span>Q</span><span>·</span><span>·</span></div>
+      <div class="live">
+        <div class="live__row"><span class="live__art g-root"></span><span><div class="live__n">Root</div><div class="live__s">Lee is hosting · Gather</div></span><span class="live__tag">Join</span></div>
+        <div class="live__row"><span class="live__art g-catan"></span><span><div class="live__n">Catan</div><div class="live__s">Priya is hosting · Play</div></span><span class="live__tag">Spectate</span></div>
+      </div>
+    </section>
+  </div></main></div>
+</template>
+
+<template id="t-collection">
+  <div class="body"><main class="main">
+    <div class="spoke-head"><span class="cas__circ"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M165.7 202.3a8 8 0 0 1-11.4 11.4l-80-80a8 8 0 0 1 0-11.4l80-80a8 8 0 0 1 11.4 11.4L91.3 128Z"/></svg></span><h1>Collection</h1><span class="btn">+ Add</span></div>
+    <div class="ctrl">
+      <span class="pill on">Owned · 38 <svg viewBox="0 0 256 256" fill="currentColor"><path d="m213.7 101.7-80 80a8 8 0 0 1-11.4 0l-80-80a8 8 0 0 1 11.4-11.4L128 164.7l74.3-74.4a8 8 0 0 1 11.4 11.4Z"/></svg></span>
+      <span class="search"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m229.7 218.3-43.3-43.2a92.1 92.1 0 1 0-11.3 11.3l43.2 43.3a8 8 0 0 0 11.4-11.4ZM40 112a72 72 0 1 1 72 72 72.1 72.1 0 0 1-72-72Z"/></svg>Search your shelf</span>
+      <span class="pill">Filters</span>
+    </div>
+    <div class="cgrid">
+      <div class="tile"><div class="tile__art g-wingspan"></div><div class="tile__n">Wingspan</div><div class="tile__c">23 plays</div></div>
+      <div class="tile"><div class="tile__art g-root"></div><div class="tile__n">Root</div><div class="tile__c">17 plays</div></div>
+      <div class="tile"><div class="tile__art g-everdell"></div><div class="tile__n">Everdell</div><div class="tile__c">12 plays</div></div>
+      <div class="tile"><div class="tile__art g-azul"></div><div class="tile__n">Azul</div><div class="tile__c">31 plays</div></div>
+      <div class="tile"><div class="tile__art g-cascadia"></div><div class="tile__n">Cascadia</div><div class="tile__c">9 plays</div></div>
+      <div class="tile"><div class="tile__art g-catan"></div><div class="tile__n">Catan</div><div class="tile__c">40 plays</div></div>
+      <div class="tile"><div class="tile__art g-terra"></div><div class="tile__n">Terraforming Mars</div><div class="tile__c">6 plays</div></div>
+      <div class="tile"><div class="tile__art g-wingspan"></div><div class="tile__n">Ark Nova</div><div class="tile__c">4 plays</div></div>
+      <div class="tile"><div class="tile__art g-azul"></div><div class="tile__n">Sagrada</div><div class="tile__c">11 plays</div></div>
+      <div class="tile"><div class="tile__art g-root"></div><div class="tile__n">Scythe</div><div class="tile__c">5 plays</div></div>
+      <div class="tile"><div class="tile__art g-everdell"></div><div class="tile__n">Parks</div><div class="tile__c">8 plays</div></div>
+      <div class="tile"><div class="tile__art g-cascadia"></div><div class="tile__n">Calico</div><div class="tile__c">7 plays</div></div>
+      <div class="tile"><div class="tile__art g-catan"></div><div class="tile__n">Ticket to Ride</div><div class="tile__c">19 plays</div></div>
+      <div class="tile"><div class="tile__art g-terra"></div><div class="tile__n">Dune: Imperium</div><div class="tile__c">3 plays</div></div>
+      <div class="tile"><div class="tile__art g-wingspan"></div><div class="tile__n">Spirit Island</div><div class="tile__c">2 plays</div></div>
+      <div class="tile"><div class="tile__art g-azul"></div><div class="tile__n">Splendor</div><div class="tile__c">15 plays</div></div>
+      <div class="tile"><div class="tile__art g-root"></div><div class="tile__n">Brass: Birmingham</div><div class="tile__c">4 plays</div></div>
+      <div class="tile"><div class="tile__art g-everdell"></div><div class="tile__n">Carcassonne</div><div class="tile__c">22 plays</div></div>
+    </div>
+  </main></div>
+</template>
+
+<template id="t-detail">
+  <div class="body"><main class="main"><div class="detail">
+    <div class="detail__cover">
+      <div class="polaroid"><div class="polaroid__art g-everdell"></div><div class="polaroid__cap"><span>2018</span><span class="status">Owned</span></div></div>
+    </div>
+    <div>
+      <h1 class="detail__name">Everdell</h1>
+      <div class="meta"><span><svg viewBox="0 0 256 256" fill="currentColor"><path d="M117.3 157.7a60 60 0 1 0-74.6 0A100 100 0 0 0 5 197.8a8 8 0 0 0 13.8 8 84 84 0 0 1 122.4 0 8 8 0 0 0 13.8-8 100 100 0 0 0-37.7-40.1Z"/></svg>1–4 players</span><span><svg viewBox="0 0 256 256" fill="currentColor"><path d="M128 24a104 104 0 1 0 104 104A104.1 104.1 0 0 0 128 24Zm40 112h-40a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h32a8 8 0 0 1 0 16Z"/></svg>40–80 min</span></div>
+      <div class="actions"><span class="btn btn--p">Log a play</span><span class="btn">BGG</span><span class="btn">Rulebook</span></div>
+      <p class="desc">Within the charming valley of Everdell, beneath the boughs of towering trees, a civilization of forest critters is thriving. Build a city of workers and constructions across four seasons, then score the prosperity you made.</p>
+      <div class="sect">Expansions</div>
+      <div class="exp" style="color:var(--ink)"><span class="sw" style="background:#7C9A4F"></span>Pearlbrook<span class="tg"></span></div>
+      <div class="exp" style="color:var(--ink)"><span class="sw" style="background:#5A8FA0"></span>Spirecrest<span class="tg off"></span></div>
+      <div class="sect">Reference guide</div>
+      <div class="scroll"><b>Season end</b> — prepare for the next season, then activate green production. <b>Journey</b> — discard cards for points once you reach autumn. <b>Tie-break</b> — most workers in the Basic Events.</div>
+      <div class="sect">Recent plays</div>
+      <div class="tiles"><div class="tile"><div class="tile__art g-everdell"></div><div class="tile__n">Sat · Ava won</div><div class="tile__c">4 players</div></div><div class="tile"><div class="tile__art g-everdell"></div><div class="tile__n">28 Aug · Lee</div><div class="tile__c">3 players</div></div><div class="tile"><div class="tile__art g-everdell"></div><div class="tile__n">14 Aug · Kim</div><div class="tile__c">4 players</div></div></div>
+    </div>
+  </div></main></div>
+</template>
+
+<template id="t-settings">
+  <div class="body"><main class="main">
+    <div class="spoke-head"><h1>Settings</h1><span class="cas__circ"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M205.7 194.3a8 8 0 0 1-11.4 11.4L128 139.3l-66.3 66.4a8 8 0 0 1-11.4-11.4l66.4-66.3-66.4-66.3a8 8 0 0 1 11.4-11.4l66.3 66.4 66.3-66.4a8 8 0 0 1 11.4 11.4L139.3 128Z"/></svg></span></div>
+    <div class="setcard">
+      <div class="setrow"><span class="av">AV</span><span><div class="setrow__t">Ava Okafor</div><div class="setrow__s">@ava · 212 plays</div></span><span class="btn">Edit</span></div>
+    </div>
+    <div class="setcard">
+      <div class="setrow"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M120 40V16a8 8 0 0 1 16 0v24a8 8 0 0 1-16 0Zm72 88a64 64 0 1 1-64-64 64.1 64.1 0 0 1 64 64Z"/></svg><span><div class="setrow__t">Theme</div><div class="setrow__s">Following your device — currently dark.</div></span></div>
+      <div class="setseg"><span class="on">Auto</span><span>Light</span><span>Dark</span></div>
+    </div>
+    <div class="setcard">
+      <div class="setrow"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M208 40H48a24 24 0 0 0-24 24v112a24 24 0 0 0 24 24h64v16H88a8 8 0 0 0 0 16h80a8 8 0 0 0 0-16h-24v-16h64a24 24 0 0 0 24-24V64a24 24 0 0 0-24-24Zm8 136a8 8 0 0 1-8 8H48a8 8 0 0 1-8-8v-8h176Z"/></svg><span><div class="setrow__t">Layout<span class="new">New</span></div><div class="setrow__s">Following your screen — currently tablet.</div></span></div>
+      <div class="setseg"><span class="on">Auto</span><span>Phone</span><span>Tablet</span></div>
+    </div>
+    <div class="setcard">
+      <div class="setrow"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M221 175.5c-5.5-9.5-13-27-13-55.5a80 80 0 0 0-160 0c0 28.5-7.5 46-13 55.5A16 16 0 0 0 48.8 200H92a36 36 0 0 0 72 0h43.2a16 16 0 0 0 13.8-24.5Z"/></svg><span><div class="setrow__t">Notifications</div><div class="setrow__s">Only the things that need you.</div></span></div>
+      <div class="setseg"><span>Off</span><span class="on">Needs you</span><span>Everything</span></div>
+    </div>
+    <div class="setcard">
+      <div class="setrow"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M240 128a8 8 0 0 1-8 8h-24v40a16 16 0 0 1-16 16H64a16 16 0 0 1-16-16v-40H24a8 8 0 0 1 0-16h24V80a16 16 0 0 1 16-16h128a16 16 0 0 1 16 16v40h24a8 8 0 0 1 8 8Z"/></svg><span><div class="setrow__t">Import plays</div><div class="setrow__s">From notes, or from photos</div></span><span class="opt__go"><svg viewBox="0 0 256 256" fill="currentColor"><path d="m181.7 133.7-80 80a8 8 0 0 1-11.4-11.4L164.7 128 90.3 53.7a8 8 0 0 1 11.4-11.4l80 80a8 8 0 0 1 0 11.4Z"/></svg></span></div>
+      <div class="setrow"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M128 24a104 104 0 1 0 104 104A104.1 104.1 0 0 0 128 24Z"/></svg><span><div class="setrow__t">BoardGameGeek</div><div class="setrow__s">Linked as avaplays · synced 2h ago</div></span><span class="btn">Sync</span></div>
+    </div>
+  </main></div>
+</template>
+
+<script>
+(function () {
+  // Stamp the repeated chrome + bodies into every frame from the templates,
+  // then light the right tab for each frame.
+  var parts = {
+    "HDR": "t-hdr", "FEED": "t-feed", "PLAY": "t-play", "GATHER": "t-gather", "SETTLE": "t-settle",
+    "LP": "t-lp", "COLLECTION": "t-collection", "DETAIL": "t-detail", "SETTINGS": "t-settings"
+  };
+  document.querySelectorAll(".screen").forEach(function (screen) {
+    var html = screen.innerHTML;
+    var nav = (html.match(/<!--NAV:(\w+)-->/) || [])[1] || "feed";
+    html = html.replace(/<!--HDR-->/, document.getElementById("t-hdr").innerHTML);
+    html = html.replace(/<!--BODY:(\w+)-->/, function (_, key) {
+      return document.getElementById(parts[key]).innerHTML;
+    });
+    html = html.replace(/<!--NAV:\w+-->/, document.getElementById("t-nav").innerHTML);
+    screen.innerHTML = html;
+    var tab = screen.querySelector('.tab[data-tab="' + nav + '"]');
+    if (tab) tab.classList.add("on");
+    // Phone feed keeps the rails inline (today's behaviour).
+    if (screen.dataset.tier === "phone") {
+      var feed = screen.querySelector(".feed--split");
+      if (feed) {
+        feed.classList.remove("feed--split");
+        var stream = feed.querySelector(".stream"), aside = feed.querySelector(".aside");
+        var cards = stream.querySelectorAll(".pc");
+        var rails = aside.querySelectorAll(".railcard");
+        if (cards[1] && rails[0]) cards[1].after(rails[0]);
+        if (cards[2] && rails[1]) cards[2].after(rails[1]);
+        aside.remove();
+      }
+    }
+  });
+
+  document.querySelectorAll(".theme-toggle button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var mode = b.dataset.mode;
+      document.querySelectorAll(".theme-toggle button").forEach(function (x) {
+        x.setAttribute("aria-pressed", String(x === b));
+      });
+      document.querySelectorAll(".screen").forEach(function (s) { s.dataset.bgb = mode; });
+    });
+  });
+})();
+</script>
+</body>
+</html>
