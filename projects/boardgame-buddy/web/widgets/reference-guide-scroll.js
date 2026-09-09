@@ -7,25 +7,10 @@
 // expansion.
 
 (function () {
-  // Which scoring-grid chapter ids this viewer has already turned down, per
-  // game: { "<gameId>": ["<chapterId>", …] }. Every access is wrapped, the way
-  // RoundGridSign / RoundGridNames wrap theirs — a browser that refuses
-  // localStorage should show the notice every time, not throw on the way to
-  // painting the guide.
-  const DISMISS_KEY = "bgb.guide.tmplNotice";
-
-  function readDismissed() {
-    try {
-      const raw = localStorage.getItem(DISMISS_KEY);
-      const parsed = raw ? JSON.parse(raw) : null;
-      return (parsed && typeof parsed === "object") ? parsed : {};
-    } catch (_) { return {}; }
-  }
-
-  function writeDismissed(map) {
-    try { localStorage.setItem(DISMISS_KEY, JSON.stringify(map)); } catch (_) {}
-  }
-
+  // Which scoring-grid chapters this viewer has already turned down lives in
+  // domain/chapter.js (Chapter.pendingTemplates / Chapter.dismissTemplates) —
+  // it used to be private to this widget, and moved out when the play cascade
+  // grew an offer of its own reading the same answer. See the note there.
 
   // A scoring grid is NOT a chapter of the guide, even though it is stored as
   // one. It is the shape of the scorepad: the host turns it on from the scoring
@@ -176,6 +161,7 @@
       if (cached) {
         this._templates = cached;
         this._paintNotice();
+        this._announceTemplates();
       }
       // Same bail as _fetch: offline there is nothing to revalidate against,
       // and a failed round trip only costs a paint.
@@ -193,7 +179,30 @@
         // worth showing anybody.
       }
       this._paintNotice();
+      this._announceTemplates();
     }
+
+    /**
+     * Hand the pool over, for the same reason _announceChapters exists: the
+     * play cascade wants this exact list (see play-flow-view's
+     * _maybeOfferTemplates) and mounts in the same frame for the same game, so
+     * fetching it there would double the request on every cold mount — and
+     * would have to reimplement the cache seed, the offline bail and the
+     * revalidation this method already rides.
+     */
+    _announceTemplates() {
+      document.dispatchEvent(new CustomEvent("guide-templates-loaded", {
+        detail: { gameId: this._baseGameId, templates: this._templates },
+      }));
+    }
+
+    /**
+     * Repaint the notice against the dismissal store, without re-fetching.
+     * Called by the play cascade after its own offer is answered: the same
+     * store backs both, so a grid turned down at the table must not still be
+     * offered by the notice two cards further down the same screen.
+     */
+    refreshTemplateNotice() { this._paintNotice(); }
 
     /**
      * The chapters this widget draws — everything the guide holds except the
@@ -208,10 +217,7 @@
 
     /** The templates this viewer has not adopted, minus any they dismissed. */
     _pendingTemplates() {
-      const unowned = (this._templates || []).filter((t) => !t.in_my_guide);
-      if (!unowned.length) return [];
-      const seen = readDismissed()[this._baseGameId] || [];
-      return unowned.filter((t) => seen.indexOf(t.id) < 0);
+      return window.Chapter.pendingTemplates(this._templates, this._baseGameId);
     }
 
     /**
@@ -264,18 +270,11 @@
       this._openAddChapter("scoring_grid");
     }
 
-    /**
-     * Hide the notice for the templates that exist RIGHT NOW, by id — not with
-     * a boolean. A game that gets a new scoring grid published next month
-     * should be able to say so once more, and a boolean could never tell that
-     * apart from the ones already turned down.
-     */
+    /** Hide the notice for the templates that exist RIGHT NOW, by id. */
     _dismissTemplates() {
-      const all = readDismissed();
-      const prev = all[this._baseGameId] || [];
-      const ids = this._pendingTemplates().map((t) => t.id);
-      all[this._baseGameId] = prev.concat(ids.filter((id) => prev.indexOf(id) < 0));
-      writeDismissed(all);
+      window.Chapter.dismissTemplates(
+        this._baseGameId, this._pendingTemplates().map((t) => t.id)
+      );
       this._paintNotice();
     }
 

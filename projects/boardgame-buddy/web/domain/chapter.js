@@ -21,6 +21,33 @@
   const CH_FRESH = 10 * 60 * 1000; // instant-seed (get) window
   const CH_STALE = 30 * 60 * 1000; // outer bound retained in storage
 
+  // Which scoring-grid chapter ids this viewer has already turned down, per
+  // game: { "<gameId>": ["<chapterId>", …] }.
+  //
+  // ONE store, two surfaces. The reference-guide scroll's "templates
+  // available" notice owned this privately until the play cascade grew an
+  // offer of its own (views/play-flow-view.js#_maybeOfferTemplates) — and two
+  // stores would have meant answering the same question twice: dismiss the
+  // notice in the guide, then get asked again at the table two taps later.
+  // Turning a grid down is turning it down, wherever the viewer was standing.
+  //
+  // Every access is wrapped, the way RoundGridSign / RoundGridNames wrap
+  // theirs — a browser that refuses localStorage should show the offer every
+  // time, not throw on the way to painting the guide.
+  const DISMISS_KEY = "bgb.guide.tmplNotice";
+
+  function readDismissed() {
+    try {
+      const raw = localStorage.getItem(DISMISS_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return (parsed && typeof parsed === "object") ? parsed : {};
+    } catch (_) { return {}; }
+  }
+
+  function writeDismissed(map) {
+    try { localStorage.setItem(DISMISS_KEY, JSON.stringify(map)); } catch (_) {}
+  }
+
   function chaptersKey(baseGameId, expansionIds) {
     const exp = (expansionIds || []).slice().sort().join(",");
     return exp ? `${baseGameId}|${exp}` : `${baseGameId}`;
@@ -127,6 +154,36 @@
         freshTtl: CH_FRESH,
         staleTtl: CH_STALE,
       });
+    },
+
+    /**
+     * The templates worth offering: the ones this viewer has not adopted,
+     * minus the ones they have already turned down for this game.
+     *
+     * @param {Array<any>} rows a chapter-pool response
+     * @param {string} gameId the BASE game the pool was fetched for — the same
+     *   key dismissTemplates writes under, so an expansion's grid is turned
+     *   down against the game it was offered beside, not against itself.
+     */
+    pendingTemplates(rows, gameId) {
+      const unowned = (rows || []).filter((t) => !t.in_my_guide);
+      if (!unowned.length) return [];
+      const seen = readDismissed()[gameId] || [];
+      return unowned.filter((t) => seen.indexOf(t.id) < 0);
+    },
+
+    /**
+     * Turn down the templates named by `ids`, by id — not with a boolean. A
+     * game that gets a new scoring grid published next month should be able to
+     * ask once more, and a boolean could never tell that apart from the ones
+     * already declined.
+     */
+    dismissTemplates(gameId, ids) {
+      if (!gameId || !ids || !ids.length) return;
+      const all = readDismissed();
+      const prev = all[gameId] || [];
+      all[gameId] = prev.concat(ids.filter((id) => prev.indexOf(id) < 0));
+      writeDismissed(all);
     },
     create(gameId, payload) {
       return window.api.post(`/games/${gameId}/chapters`, payload);

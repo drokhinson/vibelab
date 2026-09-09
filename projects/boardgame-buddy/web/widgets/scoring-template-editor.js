@@ -249,10 +249,16 @@
    *
    * Also used by the browse pool and the reference-guide scroll for the body of
    * an expanded scoring-grid chapter, where `renderMarkdown(content)` would
-   * otherwise show the generated bullet mirror.
+   * otherwise show the generated bullet mirror, and by the play cascade's
+   * template offer, which draws SEVERAL of these at once — hence `host`.
+   *
    * @param {Array<{label: string, color: string, note?: string}>} rows
+   * @param {string} [host] a name of this preview's own, unique on the screen.
+   *   The grid stamps it into data-round-grid and keys its scroll memory off
+   *   it, so two previews sharing one name would have the taller of them
+   *   scrolled to its last row by the other's paint.
    */
-  function preview(rows) {
+  function preview(rows, host) {
     const usable = (rows || []).filter((r) => (r.label || "").trim());
     if (!usable.length) {
       return `<p class="tmpl-rows__empty">Rows you add show up here.</p>`;
@@ -264,7 +270,7 @@
     // host is unused in read-only mode (no handlers are emitted), but the
     // renderer stamps it into data-round-grid for its scroll memory, so give it
     // a name of its own rather than borrowing a live grid's.
-    return window.renderRoundGrid(ghosts, "scoringTemplatePreview", {
+    return window.renderRoundGrid(ghosts, host || "scoringTemplatePreview", {
       editable: false,
       rowLabels: usable,
     });

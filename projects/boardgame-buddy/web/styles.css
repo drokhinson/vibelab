@@ -7643,6 +7643,121 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   outline-offset: -3px;
 }
 
+/* ── The Play step's "score on a shared grid?" offer ──────────────────────────
+   The same sheet object as the picker above (widgets/scoring-template-sheet.js
+   — one widget, two questions), so it inherits .tmpl-sheet's place in the theme
+   re-point list at the top of this file and needs no entry of its own.
+
+   Cards rather than rows, because "6 rows · Everdell" is not enough to choose a
+   scorepad by with your friends waiting: each candidate draws its real grid,
+   through the same ScoringTemplateEditor.preview the author's editor and the
+   reference guide use. The grid is paper in both themes and the sheet is not,
+   which is exactly what .tmpl-preview's own re-point block above is for — the
+   card keeps that class and overrides only its box.
+   ────────────────────────────────────────────────────────────────────────── */
+/* .bgb-sheet__list is already the flex column with the scrollport; cards need
+   room between them where rows sat flush. */
+.tmpl-offer { gap: 0.7rem; }
+.tmpl-offer__card {
+  padding: 0.6rem 0.65rem 0.65rem;
+  border-radius: 16px;
+  background: oklch(var(--b3));
+  border: 1px solid var(--sheet-line);
+}
+.tmpl-offer__who {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: oklch(var(--bc) / 0.9);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tmpl-offer__meta {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: oklch(var(--bc) / 0.6);
+  margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Doubled to out-specify .tmpl-preview.tmpl-preview above, whose (0,2,0) is
+   deliberate and must not be simplified — this only moves the box it draws in,
+   never the paper tokens it carries. */
+.tmpl-offer__preview.tmpl-offer__preview {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.5rem 0.4rem;
+  border-radius: 11px;
+}
+/* Small, as in fewer pixels per row — the grid's own type is in rem, so a
+   font-size on the wrapper would not reach it, and its row height comes from
+   the read-only cell rather than from the padding on the <td>. */
+.tmpl-offer__preview .scoring-table { font-size: 0.68rem; }
+.tmpl-offer__preview .scoring-table th,
+.tmpl-offer__preview .scoring-table td { padding: 0.15rem 0.3rem; }
+.tmpl-offer__preview .scoring-cell--read { min-height: 1.35rem; padding: 2px 5px; }
+/* The ghost-column header was the tallest row on the card — 50px of two
+   placeholder bubbles — because .scoring-head__toggle carries the 44px tap
+   floor. Nothing in this preview is tappable (the wrap is pointer-events:
+   none), so the floor is buying a target that does not exist. Both selectors
+   out-specify their base rule rather than leaning on source order: (0,4,2)
+   against the padding rule's :has(), (0,2,0) against the toggle's own. */
+.tmpl-offer__preview .scoring-table thead th:has(.scoring-head__badge) {
+  padding: 0.15rem 0.3rem;
+}
+.tmpl-offer__preview .scoring-head__toggle {
+  min-width: 0;
+  min-height: 0;
+  padding: 2px;
+}
+.tmpl-offer__preview .scoring-head__badge { width: 22px; height: 22px; }
+.tmpl-offer__preview .scoring-head__badge .user-badge__initials { font-size: 10px; }
+/* The totals row is the one part of the grid that says nothing about the rows,
+   which is the only thing being chosen here: two ghost columns of zeros, 38px
+   of it, on every card. The editor's own preview keeps it — there the author is
+   checking the whole table, not picking between four of them. */
+.tmpl-offer__preview .scoring-total-row { display: none; }
+/* The rows the slice left out (PREVIEW_ROWS). On paper, so it reads as part of
+   the picture rather than as chrome around it. */
+.tmpl-offer__rest {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--paper-muted);
+}
+/* 52px: this is the card's commit button (.claude/rules/mobile-web.md §5), and
+   with four cards stacked it is also the only tappable thing in each one. */
+.tmpl-offer__use {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 0.6rem;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tmpl-offer__use:active { transform: scale(0.99); }
+@media (hover: hover) {
+  .tmpl-offer__use:hover { background: var(--accent-hover); }
+}
+/* Inset, for the same scroller-clipping reason as the rows above. */
+.tmpl-offer__use:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.tmpl-offer__more {
+  padding: 0.2rem 0.2rem 0;
+  font-size: 0.75rem;
+  color: oklch(var(--bc) / 0.55);
+  text-align: center;
+}
+
 .scoring-cell-wrap {
   display: flex; align-items: center; gap: 0.25rem; min-width: 0;
 }

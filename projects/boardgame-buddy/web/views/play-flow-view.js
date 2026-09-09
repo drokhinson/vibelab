@@ -91,6 +91,14 @@
       this._lastTemplate = null;
       // Which game _templates / _lastTemplate were loaded for. See onMount.
       this._templatesGameId = null;
+      // The scoring grids that EXIST for this game, adopted or not — the
+      // chapter pool, handed over by the reference-guide scroll on the
+      // guide-templates-loaded event. Read only by _maybeOfferTemplates.
+      this._poolTemplates = [];
+      this._poolTemplatesGameId = null;
+      // The game the Play step has already put the offer to the host for, so
+      // it asks once per game per mount and not on every guide reload.
+      this._offeredForGame = null;
       this._liveScores = null;
       this._liveOff = null;
       this._error = null;
@@ -171,6 +179,15 @@
         this._templates = [];
         this._lastTemplate = null;
         this._templatesGameId = this._ps.gameId;
+        // The Play step's offer is keyed the same way, and for the same
+        // reason: a different game is a different question, while the same
+        // game — a refresh, another round — has already been asked it once,
+        // and an offer that comes back every time the screen remounts is a
+        // nag rather than an offer. Saying "Continue without" is what makes
+        // that answer outlive the tab (Chapter.dismissTemplates).
+        this._poolTemplates = [];
+        this._poolTemplatesGameId = null;
+        this._offeredForGame = null;
       }
       // Drop the previous run's lobby unless it still addresses the run we are
       // about to start. This view is a singleton, so without this a finished
@@ -250,6 +267,17 @@
         const d = (ev && ev.detail) || {};
         if (!d.gameId || d.gameId !== this._ps.gameId) return;
         this._onChaptersLoaded(d.chapters || []);
+      });
+
+      // And the pool behind it — what this game HAS, adopted or not — from the
+      // same widget's second fetch. Together the two answer the only question
+      // the offer asks: none of mine, some of theirs.
+      this.listenDom("guide-templates-loaded", (ev) => {
+        const d = (ev && ev.detail) || {};
+        if (!d.gameId || d.gameId !== this._ps.gameId) return;
+        this._poolTemplates = d.templates || [];
+        this._poolTemplatesGameId = d.gameId;
+        this._maybeOfferTemplates();
       });
 
       // The lobby poll skips its ticks while the tab is hidden — fire one
@@ -2093,6 +2121,10 @@
       this._syncLobbyPollToPhase();
       this.render();
       this._scrollToCurrentPhase();
+      // The guide usually loads during Gather, so by the time the host lands on
+      // the scorepad both halves of the offer's question are already answered
+      // and no announce is coming to re-ask it. See _maybeOfferTemplates.
+      if (next === "play") this._maybeOfferTemplates();
       this._pendingPhase++;
       try {
         // Gather is the only phase bgb_add_participant accepts a roster write
@@ -2488,7 +2520,111 @@
       // Exactly one adopted template auto-applies; two or more never do, because
       // guessing wrong reshapes the table the host is about to score on.
       if (next.length === 1) this._maybeAutoApplyTemplate(next[0]);
-      if (this._phase === "play") this._refreshScoringSection();
+      // None adopted is the third case, and the one the guide can answer: ask
+      // whether they want one of this game's (see _maybeOfferTemplates).
+      this._maybeOfferTemplates();
+      if (this._ps.phase === "play") this._refreshScoringSection();
+    }
+
+    /**
+     * The Play step's one-time offer: this game HAS scoring grids and the host
+     * has adopted none of them.
+     *
+     * Deliberately not on Gather. Gather is a roster, and a scorepad the host
+     * has not reached yet is not a question worth interrupting it with; by the
+     * Play step the game is on the table and the grid is the very thing they
+     * are looking at. It is also the last moment the offer is free — see the
+     * untouched-grid bar below.
+     *
+     * Every guard here is "the host has not already answered this", in one
+     * form or another:
+     *
+     *   * a grid already in their guide (`_templates`) means the scoring bar
+     *     has it and auto-apply handled it;
+     *   * a template on the draft, or the bar's switch deliberately off
+     *     (`scoringTemplateOff`), is a choice made — the same field
+     *     _maybeAutoApplyTemplate refuses to answer over;
+     *   * rounds or scores already on the table mean restructuring it now is
+     *     worse than never offering at all, exactly as it is for auto-apply;
+     *   * `_offeredForGame` is the once-per-mount latch, and
+     *     Chapter.pendingTemplates below is the durable one — a grid turned
+     *     down stays turned down, here and in the guide's own notice.
+     *
+     * Offline it does not run: the sheet's whole payload is an adoption the
+     * server has to accept, and the pool it reads may be a stale cache.
+     */
+    _maybeOfferTemplates() {
+      if (!window.session || !window.BgbScoringTemplateSheet) return;
+      const gameId = this._ps.gameId;
+      if (!gameId || this._ps.phase !== "play") return;
+      if (this._offeredForGame === gameId) return;
+      if (this._isOffline()) return;
+      // The pool having been announced for THIS game is what says the question
+      // is answerable at all — otherwise "none of mine" is just "the guide has
+      // not loaded yet". It carries the guide with it: the scroll announces its
+      // chapters first and only then fetches the pool (_fetch's finally), so a
+      // pool announce for this game means _templates is real rather than the
+      // empty array onMount seeds when the game changes.
+      if (this._templatesGameId !== gameId) return;
+      if (this._poolTemplatesGameId !== gameId) return;
+      if (this._templates.length) return;
+      if (this._ps.scoringTemplate || this._ps.scoringTemplateOff) return;
+      if (this._maxRoundCount() > 1 || this._gridHasScores()) return;
+      if (window.BgbScoringTemplateSheet.isOpen) return;
+
+      const pending = window.Chapter.pendingTemplates(this._poolTemplates, gameId)
+        .filter((t) => t.grid && Array.isArray(t.grid.rows) && t.grid.rows.length);
+      if (!pending.length) return;
+
+      // Latch BEFORE opening: the guide reloads itself after an adoption, and
+      // the announce that follows re-enters this method.
+      this._offeredForGame = gameId;
+      window.BgbScoringTemplateSheet.offer({
+        templates: pending,
+        onAdopt: (tpl) => this._adoptTemplate(tpl),
+        onSkip: (shown) => this._declineTemplates(shown),
+      });
+    }
+
+    /**
+     * Take one of the offered grids: onto the table now, into the guide for
+     * next time — which is the whole promise of the offer.
+     *
+     * The table first and without waiting. The draft carries a complete
+     * snapshot of the rows (see _applyTemplate), so the grid the host just
+     * chose is theirs for this play whatever the network does; the adoption is
+     * what makes it theirs for the NEXT one, and it is the half that can fail.
+     * So a failure says exactly that and nothing rolls back.
+     */
+    async _adoptTemplate(tpl) {
+      this._applyTemplate(tpl);
+      // Pool rows can come from an expansion, and a chapter is adopted against
+      // the game it belongs to — mirror reference-guide-add-view#_toggleInGuide.
+      const targetGameId = tpl.source_game_id || tpl.game_id || this._ps.gameId;
+      try {
+        await window.Chapter.add(targetGameId, tpl.id);
+        window.Chapter.invalidateChaptersCache();
+        document.dispatchEvent(new CustomEvent("chapters-changed", {
+          detail: { gameId: targetGameId },
+        }));
+        showToast("Added to your reference guide", "success");
+      } catch (e) {
+        showToast("Scoring on it now — but it didn't make it into your guide", "error");
+      }
+    }
+
+    /**
+     * "Continue without" — turn down the grids the host was actually SHOWN,
+     * by id. The ones the sample left out were never put to them, so they stay
+     * pending and the guide's notice keeps offering them.
+     */
+    _declineTemplates(shown) {
+      window.Chapter.dismissTemplates(this._ps.gameId, (shown || []).map((t) => t.id));
+      // One store, two surfaces (domain/chapter.js): the notice further down
+      // this same screen is reading the answer that just changed.
+      if (this._guideWidget && this._guideWidget.refreshTemplateNotice) {
+        this._guideWidget.refreshTemplateNotice();
+      }
     }
 
     /**
