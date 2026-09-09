@@ -4858,63 +4858,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* Pushes the all-toggle to the trailing edge whether or not the Loading… note
    is present, without giving the note its own margin rule. */
 .exp-tree__all { margin-left: auto; }
-.exp-tree__switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 44px;
-  padding: 0 0.2rem;
-  background: none;
-  border: none;
-  color: oklch(var(--bc) / 0.7);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.exp-tree__switch.is-on { color: oklch(var(--bc)); }
-/* On a 320px phone the row can hold the switch, the Loading… note AND
-   "Collapse all" only if something gives. The switch's label is the one thing
-   here that stays understandable when trimmed — the track already says what
-   the control is — so it shrinks and ellipses rather than pushing the toggle
-   past the gutter. min-width:0 on both, or a flex item refuses to shrink below
-   its content. */
-.exp-tree__switch { min-width: 0; }
-.exp-tree__switch > span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.exp-tree__switch-track {
-  flex: none;
-  box-sizing: border-box;
-  width: 40px;
-  height: 24px;
-  border-radius: 999px;
-  /* The off-state track sits on a cream page only a few percent lighter than
-     --b3, so it needs the border to read as a control at all. */
-  border: 1px solid oklch(var(--bc) / 0.18);
-  background: oklch(var(--b3));
-  padding: 2px;
-  display: flex;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-.exp-tree__switch.is-on .exp-tree__switch-track {
-  background: var(--accent-fill);
-  border-color: transparent;
-}
-.exp-tree__switch-knob {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  /* Pure white, not --b1: --b1 is the page ground, so the knob would vanish
-     into the track's own lightness at this size. */
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  transition: transform 0.15s ease;
-}
-.exp-tree__switch.is-on .exp-tree__switch-knob { transform: translateX(16px); }
-.exp-tree__switch:focus-visible .exp-tree__switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The row's on/off switch is the shared .bgb-switch family (ui/switch.js), far
+   below — including the min-width:0 + label ellipsis this row needs, which is
+   why nothing about it is restated here: on a 320px phone the switch, the
+   Loading… note and "Collapse all" fit only if the label is allowed to trim,
+   and the track already says what the control is. */
+
 .exp-tree__controls-note { font-size: 0.7rem; color: oklch(var(--bc) / 0.55); }
 /* Expand/collapse every group. Quieter than the switch beside it — that one
    changes what the tab is showing, this one only changes how much of it you
@@ -7577,10 +7526,10 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.5rem; margin-bottom: 0.35rem;
 }
-/* The line above the grid naming the scoring template in play (migration 018).
-   Absent entirely when the game has none adopted, so the scoring card is
-   untouched for every game that doesn't use one. Paper tokens, because it sits
-   inside the scorepad card. */
+/* The line above the grid naming this game's scoring template, with the switch
+   that puts it on the table (migration 018). Absent entirely when the game has
+   none adopted, so the scoring card is untouched for every game that doesn't use
+   one. Paper tokens, because it sits inside the scorepad card. */
 .scoring-tplbar {
   display: flex;
   align-items: center;
@@ -7616,6 +7565,22 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 /* 44x44 without inflating a two-word link inside a 0.74rem bar. */
 .scoring-tplbar__btn::before { content: ""; position: absolute; inset: -12px -10px; }
 .scoring-tplbar__btn:active { opacity: 0.65; }
+/* Change and the on/off switch, as one trailing cluster. The gap is wider than
+   the bar's own so the two don't read as one control — Change picks WHICH grid,
+   the switch decides WHETHER. */
+.scoring-tplbar__actions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+/* Switched off, the name is still the name of this game's template — it says
+   what the switch would turn on. Dimmed, because those rows are not what the
+   table is currently showing. */
+.scoring-tplbar--off .scoring-tplbar__name {
+  color: color-mix(in srgb, var(--polaroid-ink) 55%, transparent);
+  font-weight: 600;
+}
 
 /* ── The scoring-template picker sheet ────────────────────────────────────── */
 .tmpl-sheet__row {
@@ -10161,6 +10126,97 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--ink-muted);
   pointer-events: none;
 }
+
+/* ── The on/off switch ────────────────────────────────────────────────────
+   ui/switch.js owns the markup; this owns the look. One family for every
+   boolean the user flips and sees the result of — "Show all expansions" on the
+   collection's expansion tree, the scoring template on the play screen's
+   scorepad.
+
+   The knob's travel is derived from the track, not guessed: track width minus
+   its two 1px borders, minus 2×2px of padding, minus the knob (40 − 2 − 4 − 18
+   = 16). Change either size and the translate has to be redone with it, which
+   is the arithmetic that made a second hand-written copy of this a bad idea. */
+.bgb-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* The switch is usually the only thing in its row, so it carries the tap
+     target itself. --compact hands that job to a ::before instead. */
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 0.2rem;
+  background: none;
+  border: none;
+  color: oklch(var(--bc) / 0.7);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bgb-switch.is-on { color: oklch(var(--bc)); }
+.bgb-switch__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bgb-switch__track {
+  flex: none;
+  box-sizing: border-box;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  /* The off-state track sits on a cream page only a few percent lighter than
+     --b3, so it needs the border to read as a control at all. */
+  border: 1px solid oklch(var(--bc) / 0.18);
+  background: oklch(var(--b3));
+  padding: 2px;
+  display: flex;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.bgb-switch.is-on .bgb-switch__track {
+  background: var(--accent-fill);
+  border-color: transparent;
+}
+.bgb-switch__knob {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  /* Pure white, not --b1: --b1 is the page ground, so the knob would vanish
+     into the track's own lightness at this size. */
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.bgb-switch.is-on .bgb-switch__knob { transform: translateX(16px); }
+.bgb-switch:focus-visible .bgb-switch__track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Paper palette (.claude/rules/theming.md §6). Ground tokens invert on a
+   photo-paper surface — oklch(var(--b3)) is a dark box on cream — so the three
+   colours the control is made of re-point at the --polaroid-* family, which
+   the scorepad has already tuned for paper. Nothing else changes. */
+.bgb-switch--paper { color: color-mix(in srgb, var(--polaroid-ink) 62%, transparent); }
+.bgb-switch--paper.is-on { color: color-mix(in srgb, var(--polaroid-ink) 84%, transparent); }
+.bgb-switch--paper .bgb-switch__track {
+  border-color: color-mix(in srgb, var(--polaroid-ink) 22%, transparent);
+  background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+}
+.bgb-switch--paper.is-on .bgb-switch__track {
+  background: var(--polaroid-accent);
+  border-color: transparent;
+}
+.bgb-switch--paper:focus-visible .bgb-switch__track { outline-color: var(--accent-ink); }
+
+/* Compact: for a dense strip whose own type is smaller than the switch's, where
+   a 44px-tall control would set the height of the whole row. The target comes
+   back as an inset ::before, exactly as .scoring-tplbar__btn does it — 20 + 2×12
+   vertically, so the finger still gets its 44px. Travel: 34 − 2 − 4 − 16 = 12. */
+.bgb-switch--compact { min-height: 0; position: relative; padding: 0; }
+.bgb-switch--compact::before { content: ""; position: absolute; inset: -12px -10px; }
+.bgb-switch--compact .bgb-switch__track { width: 34px; height: 20px; }
+.bgb-switch--compact .bgb-switch__knob { width: 16px; height: 16px; }
+.bgb-switch--compact.is-on .bgb-switch__knob { transform: translateX(12px); }
+
 .import-exp-modal__body {
   max-height: min(52vh, 380px);
   overflow-y: auto;

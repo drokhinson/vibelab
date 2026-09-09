@@ -27,18 +27,29 @@
   }
 
 
-  // The body of an expanded chapter. A scoring grid's rows live in `grid`, not
-  // in `content` — `content` holds a generated bullet mirror of them, which is
-  // what keeps the pool's search and the moderation preview working — so show
-  // the real grid instead of the mirror. Falls through to markdown whenever the
-  // rows aren't there, which covers a cached row from before migration 018.
+  // A scoring grid is NOT a chapter of the guide, even though it is stored as
+  // one. It is the shape of the scorepad: the host turns it on from the scoring
+  // card's own bar (views/play-flow-view.js#_renderTemplateBar) and reads it
+  // there, in the table they are filling in — nobody opens a reference guide to
+  // look at their own score sheet's row labels. Rendered as a section it was a
+  // heading and a table duplicating the grid two cards up the same screen, and
+  // by migration 021's display_order it was the FIRST one, pushing the rules
+  // somebody did open the scroll for below it.
+  //
+  // So the rows still load (the play screen is fed from the same fetch, via
+  // `guide-chapters-loaded`) and are still adopted, edited, reported and
+  // dropped from the browse pool in reference-guide-add-view — they are simply
+  // not drawn here. Everything below reads _visibleChapters(), never
+  // _chapters, and the notice above is what still names a grid in this widget.
+  function isScoringGrid(c) {
+    return c.layout === "scoring_grid" || c.chapter_type === "scoring_grid";
+  }
+
+  // The body of an expanded chapter. Markdown and nothing else: the one layout
+  // that isn't markdown is the scoring grid, and this widget no longer draws
+  // one. (reference-guide-add-view keeps its own grid-aware version — the pool
+  // it browses is where a grid is still read and edited.)
   function chapterBodyHtml(c) {
-    const rows = c.layout === "scoring_grid" && c.grid && Array.isArray(c.grid.rows)
-      ? c.grid.rows
-      : null;
-    if (rows && rows.length && window.ScoringTemplateEditor) {
-      return window.ScoringTemplateEditor.preview(rows);
-    }
     return window.renderMarkdown(c.content || "");
   }
 
@@ -184,6 +195,17 @@
       this._paintNotice();
     }
 
+    /**
+     * The chapters this widget draws — everything the guide holds except the
+     * scoring grids, which belong to the scorepad rather than to the scroll
+     * (see isScoringGrid above). Derived on every paint rather than filtered
+     * once at fetch, because `_chapters` is also what _announceChapters hands
+     * the play screen, and that one wants the grids.
+     */
+    _visibleChapters() {
+      return (this._chapters || []).filter((c) => !isScoringGrid(c));
+    }
+
     /** The templates this viewer has not adopted, minus any they dismissed. */
     _pendingTemplates() {
       const unowned = (this._templates || []).filter((t) => !t.in_my_guide);
@@ -309,7 +331,8 @@
         `;
       }
 
-      const hasChapters = this._chapters.length > 0;
+      const visible = this._visibleChapters();
+      const hasChapters = visible.length > 0;
 
       // State B: signed in, zero chapters. Always open, no search.
       if (!this._loading && !hasChapters) {
@@ -336,10 +359,10 @@
       const rolledClass = open ? "" : "scroll-panel--rolled";
       const needle = (this._search || "").trim().toLowerCase();
       const filtered = needle
-        ? this._chapters.filter((c) =>
+        ? visible.filter((c) =>
             (c.title || "").toLowerCase().includes(needle) ||
             (c.content || "").toLowerCase().includes(needle))
-        : this._chapters;
+        : visible;
 
       const bodyInner = this._loading
         ? `<div class="scroll-panel__loading">${window.gameLoader({ image: this._gameImage, size: 72, label: "Loading guide…" })}</div>`

@@ -85,6 +85,12 @@
       // 018), handed over by the reference-guide scroll. Never fetched here —
       // see the guide-chapters-loaded listener in onMount.
       this._templates = [];
+      // The last template that was on the table, kept while the scoring bar's
+      // switch is off so flipping it back on restores that grid rather than a
+      // guess. Written by _applyTemplate in both directions.
+      this._lastTemplate = null;
+      // Which game _templates / _lastTemplate were loaded for. See onMount.
+      this._templatesGameId = null;
       this._liveScores = null;
       this._liveOff = null;
       this._error = null;
@@ -153,6 +159,19 @@
       // second render() once it lands.
       const existing = window.PlaySession.load();
       this._ps = existing || new window.PlaySession();
+      // Template state belongs to the game it was loaded for, and this view is
+      // a singleton: without this, a draft for a different game paints its
+      // first frame with the LAST game's scoring bar — naming a grid that has
+      // nothing to do with what is on the table, and offering to switch it on.
+      // The guide re-announces a frame or two later and corrects the list; the
+      // first paint is what this covers. Same game (a refresh, another round)
+      // keeps both, which is what lets round two put the template back with one
+      // tap.
+      if (this._templatesGameId !== this._ps.gameId) {
+        this._templates = [];
+        this._lastTemplate = null;
+        this._templatesGameId = this._ps.gameId;
+      }
       // Drop the previous run's lobby unless it still addresses the run we are
       // about to start. This view is a singleton, so without this a finished
       // session's code survives into the next one and _lobbyReady() short-
@@ -1714,33 +1733,58 @@
     }
 
     /**
-     * The line above the grid naming the template in play, when there is one to
-     * name. Silent in the common case: with no scoring-grid chapters adopted
-     * for this game there is nothing to say and no control to offer, and the
-     * scoring card looks exactly as it always has.
+     * The line above the grid: the template this game has, and a switch that
+     * puts it on the table or takes it off. Silent in the common case — with no
+     * scoring-grid chapter adopted for this game and none applied to the draft
+     * there is nothing to name and nothing to flip, and the scoring card looks
+     * exactly as it always has.
      *
-     * With exactly ONE adopted template it is a label, not a picker — the
-     * template auto-applied and the only other choice is plain rounds, which is
-     * what the Clear affordance is for. Two or more get the sheet.
+     * A SWITCH, NOT A "CLEAR". Clear was a one-way door in a bar that then went
+     * quiet: with one adopted template, clearing removed the only control on
+     * the strip, so the labels the host had just turned off could not be turned
+     * back on for the rest of the game — and a template that auto-apply had
+     * declined (a resumed draft with numbers already on it) rendered no bar at
+     * all, which is the same dead end reached from the other side. On/off is
+     * what the host is actually choosing between, it is reversible, and the
+     * switch says which way it currently sits without the bar having to spell
+     * out "Plain rounds".
+     *
+     * The name stays put across a flip. Off does not mean "no template" — it
+     * means this game's template, not in play — so naming it is what makes the
+     * switch's other position legible before you touch it.
      */
     _renderTemplateBar() {
       const tpl = this._ps.scoringTemplate;
       const many = this._templates.length > 1;
-      if (!tpl && !many) return "";
-      const name = tpl ? (tpl.title || "Custom rows") : "Plain rounds";
+      const cand = tpl || this._templateCandidate();
+      if (!cand) return "";
+      const on = !!tpl;
+      // A grid's title is derived by the backend from its game
+      // (services/chapter_grid.grid_title), so it is the same string for every
+      // grid this game has — which is fine here, where it names the ROW SHAPE
+      // in play; picking between two of them is the sheet's job, and that one
+      // leads with the author instead.
+      const name = cand.title || "Custom rows";
       return `
-        <div class="scoring-tplbar">
+        <div class="scoring-tplbar${on ? "" : " scoring-tplbar--off"}">
           <span class="scoring-tplbar__name" title="${escapeAttr(name)}">
             <i data-icon="table" class="w-3.5 h-3.5"></i>
             ${escapeHtml(name)}
           </span>
-          ${many
-            ? `<button type="button" class="scoring-tplbar__btn"
-                       onclick="window.playFlowView._openTemplateSheet(event)">Change</button>`
-            : (tpl
-                ? `<button type="button" class="scoring-tplbar__btn"
-                           onclick="window.playFlowView._confirmTemplateSwitch(null)">Clear</button>`
-                : "")}
+          <span class="scoring-tplbar__actions">
+            ${many
+              ? `<button type="button" class="scoring-tplbar__btn"
+                         onclick="window.playFlowView._openTemplateSheet(event)">Change</button>`
+              : ""}
+            ${window.BgbSwitch.render({
+              on,
+              paper: true,
+              compact: true,
+              ariaLabel: `Score on the ${name} rows`,
+              title: on ? "Turn the scoring template off" : "Turn the scoring template on",
+              onclick: "window.playFlowView._toggleTemplate(event)",
+            })}
+          </span>
         </div>
       `;
     }
@@ -2439,6 +2483,7 @@
       const changed = next.length !== this._templates.length
         || next.some((c, i) => c.id !== this._templates[i].id);
       this._templates = next;
+      this._templatesGameId = this._ps.gameId;
       if (!changed) return;
       // Exactly one adopted template auto-applies; two or more never do, because
       // guessing wrong reshapes the table the host is about to score on.
@@ -2454,12 +2499,50 @@
      * labelled rows above the numbers they already typed — is worse than never
      * offering the template at all. So the bar is "no template chosen yet AND
      * the grid is still empty".
+     *
+     * A host who has turned the switch OFF has chosen, and auto-apply must not
+     * answer for them again — which is why the off state is a persisted field
+     * of the draft rather than the absence of one. Without it, coming back to a
+     * still-empty grid re-applied the template the host had just taken off, and
+     * the switch appeared to flip itself back on.
      */
     _maybeAutoApplyTemplate(tpl) {
       if (this._ps.scoringTemplate) return;
+      if (this._ps.scoringTemplateOff) return;
       if (this._maxRoundCount() > 1) return;
       if (this._gridHasScores()) return;
       this._applyTemplate(tpl);
+    }
+
+    /**
+     * Which template a flip to ON would put on the table — and, with the switch
+     * off, what the bar names.
+     *
+     * Three sources, in order of how much they know about the host's intent:
+     * the one they had on a moment ago (kept through an off, so the flip back
+     * is exact even when the guide offers several), then the game's single
+     * adopted grid, and otherwise nothing — with two or more adopted and no
+     * history, picking for them would be the same guess auto-apply refuses to
+     * make, so _toggleTemplate opens the sheet instead.
+     *
+     * @returns {any|null} a scoring-grid chapter, or the draft's own snapshot.
+     */
+    _templateCandidate() {
+      if (this._lastTemplate) return this._lastTemplate;
+      return this._templates.length === 1 ? this._templates[0] : null;
+    }
+
+    /**
+     * The switch. Off is immediate and never asks — it takes the labels off and
+     * leaves every row and every score exactly where it was. On goes through
+     * the same confirm a Change does, because it is the same event for the host:
+     * rows they have already scored into get relabelled and the table can grow.
+     */
+    _toggleTemplate(event) {
+      if (this._ps.scoringTemplate) { this._applyTemplate(null); return; }
+      const back = this._templateCandidate();
+      if (back) { this._confirmTemplateSwitch(back); return; }
+      this._openTemplateSheet(event);
     }
 
     /** Open the picker. Only reachable when 2+ templates are adopted. */
@@ -2476,8 +2559,11 @@
     /**
      * Switching templates changes the row count, so a grid that already holds
      * numbers gets the project's one confirm surface first
-     * (.claude/rules/ui-object-design.md §3c). CLEARING never asks: it takes the
-     * labels off and leaves every row and every score exactly where it was.
+     * (.claude/rules/ui-object-design.md §3c). Turning the template OFF never
+     * asks — that is _toggleTemplate calling _applyTemplate(null) directly — and
+     * the `!tpl` branch here is the same statement for a caller that reaches it
+     * with nothing to apply: it takes the labels off and leaves every row and
+     * every score exactly where it was.
      */
     async _confirmTemplateSwitch(tpl) {
       if (!tpl || !this._gridHasScores()) { this._applyTemplate(tpl); return; }
@@ -2512,6 +2598,23 @@
     _applyTemplate(tpl) {
       const ps = this._ps;
       const before = this._maxRoundCount();
+      // Remember what is coming off, so the switch can put it straight back.
+      // Resolved against the adopted list first and rebuilt from the draft's
+      // own snapshot otherwise: a host who took the grid out of their guide
+      // mid-game, or whose guide has not answered yet, must still be able to
+      // flip a template they had on a second ago back on — the snapshot is a
+      // complete copy of the rows, which is the whole point of it being one.
+      if (!tpl && ps.scoringTemplate) {
+        const snap = ps.scoringTemplate;
+        this._lastTemplate = this._templates.find((t) => t.id === snap.chapter_id)
+          || { id: snap.chapter_id, title: snap.title, grid: { rows: snap.rows || [] } };
+      } else if (tpl) {
+        this._lastTemplate = tpl;
+      }
+      // The host's choice, not an absence of one: read by _maybeAutoApplyTemplate
+      // so a guide reload cannot answer it for them a second time. Persisted with
+      // the draft, so it survives a refresh mid-game.
+      ps.scoringTemplateOff = !tpl;
       ps.scoringTemplate = tpl
         ? {
             v: 1,
