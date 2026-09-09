@@ -637,6 +637,14 @@ MAX_SCORING_TEMPLATE_ROWS = 24
 # start off-screen on a 390px phone.
 MAX_SCORING_ROW_LABEL_CHARS = 24
 
-# Optional per-row hint ("3 pts each"). v1 renders it only into the row's
-# title= / aria-label — a 0.72rem header cell has no room for a second line.
-MAX_SCORING_ROW_NOTE_CHARS = 80
+# Optional per-row explanation of HOW the row is scored ("2 pts per card in
+# your city, 3 if it is unique"). Never rendered in the header cell itself — a
+# 0.72rem cell has no room for a second line — but behind an info button beside
+# the label, which opens the text in the project's one-button information modal
+# (widgets/round-score-grid.js -> PolaroidPopup.alert). That modal is why this
+# is 200 rather than the 80 a title= tooltip could carry: the field is an
+# explanation the author writes once for the table to read mid-game, not a
+# four-word hint. Nothing in SQL caps it — bgb_chapters_grid_shape counts rows,
+# not characters — so this constant and the editor's mirror of it are the
+# ceiling.
+MAX_SCORING_ROW_NOTE_CHARS = 200

@@ -1858,12 +1858,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+.tmpl-row__chip,
 .tmpl-row__move,
 .tmpl-row__del {
   flex: none;
   display: grid;
   place-items: center;
-  /* 30px visible, 44x44 hit area from the inset ::before below — four controls
+  /* 30px visible, 44x44 hit area from the inset ::before below — five controls
      at a full 44px each would leave no room for the label on a 390px screen
      (.claude/rules/mobile-web.md §5). */
   width: 30px;
@@ -1875,6 +1876,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: oklch(var(--bc) / 0.62);
   cursor: pointer;
 }
+.tmpl-row__chip::before,
 .tmpl-row__move::before,
 .tmpl-row__del::before { content: ""; position: absolute; inset: -7px; }
 .tmpl-row__move:disabled { opacity: 0.3; cursor: default; }
@@ -1885,6 +1887,122 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .tmpl-row__move:not(:disabled):active,
 .tmpl-row__del:active { transform: scale(0.94); }
+/* The COLLAPSED colour control: the row's current swatch, and the disclosure
+   that brings the ten-swatch picker back. It borrows the sizing and the 44px
+   hit area of the cluster above (it sits in the same flex row) and the disc
+   drawing of .tmpl-sw below (it is showing the same thing), so the chip and the
+   swatch the user picked are visibly one object.
+
+   The disc is drawn by ::after, because ::before is already spoken for by the
+   hit area — which is why this rule cannot simply extend .tmpl-sw. */
+.tmpl-row__chip {
+  border: none;
+  background: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.tmpl-row__chip::after {
+  content: "";
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--sw, transparent);
+  /* Same measured reason as .tmpl-sw::before: brown at 2.19:1 and yellow at
+     2.29:1 lose their silhouette against one of the two grounds without it. */
+  box-shadow: inset 0 0 0 1px oklch(var(--bc) / 0.22);
+}
+.tmpl-row__chip--none::after {
+  background: oklch(var(--b1));
+  box-shadow: inset 0 0 0 1.5px oklch(var(--bc) / 0.38);
+}
+/* Open reads as pressed, so the picker below is visibly attached to this chip
+   and not to the row in general. */
+.tmpl-row__chip--open::after {
+  box-shadow: inset 0 0 0 1px oklch(var(--bc) / 0.22),
+              0 0 0 2px oklch(var(--b2)),
+              0 0 0 4px oklch(var(--bc) / 0.75);
+}
+.tmpl-row__chip--none.tmpl-row__chip--open::after {
+  box-shadow: inset 0 0 0 1.5px oklch(var(--bc) / 0.38),
+              0 0 0 2px oklch(var(--b2)),
+              0 0 0 4px oklch(var(--bc) / 0.75);
+}
+.tmpl-row__chip:active::after { transform: scale(0.92); }
+.tmpl-row__chip:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* ── The optional per-row description ────────────────────────────────────
+   One line under the label, whatever state it is in: the invitation, the text
+   once written, or the field while it is being written. A row that never gets
+   one costs 28px, which is the whole reason the written state collapses back to
+   a line instead of staying a live textarea. */
+.tmpl-row__noteline {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: calc(100% - 24px);
+  min-height: 32px;
+  margin: 0.35rem 0 0 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: oklch(var(--bc) / 0.55);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+/* Written: full-strength ink, one line, ellipsised. The row is a summary — the
+   whole text is in the field this button reopens. */
+.tmpl-row__noteline--set { color: oklch(var(--bc) / 0.8); }
+.tmpl-row__noteline > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .tmpl-row__noteline:hover { background: oklch(var(--b3)); }
+}
+.tmpl-row__noteline:active { opacity: 0.65; }
+.tmpl-row__noteline:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tmpl-row__noteedit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0 24px;
+}
+.tmpl-row__notefield {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 1.5px solid oklch(var(--b3));
+  border-radius: 10px;
+  background: oklch(var(--b1));
+  color: oklch(var(--bc));
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  resize: vertical;
+}
+.tmpl-row__notefield:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.tmpl-row__notedone {
+  position: relative;
+  min-height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+/* 44px hit area without a 44px button — same idiom as the row cluster above. */
+.tmpl-row__notedone::before { content: ""; position: absolute; inset: -8px -6px; }
+.tmpl-row__notedone:active { opacity: 0.6; }
 /* Ten swatches at 26px + a 0.45rem gap want ~325px and the row card gives about
    311px, so this is a 5x2 grid rather than a strip. Grid also retires the
    negative-inset hit area the flex row used, which was a bug the six-colour
@@ -7304,11 +7422,26 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    column ended and the next began. The vertical hairline is deliberately
    LIGHTER than the row rule (the same --polaroid-line, thinned): the rows are
    what you read across, the columns only need to be separable, and a
-   full-strength grid on paper reads as a spreadsheet.
-   :not(:first-child) keeps the rule OFF the round-label column's left edge,
-   so the table still has no outer border of its own. */
-.scoring-table th:not(:first-child),
-.scoring-table td:not(:first-child) {
+   full-strength grid on paper reads as a spreadsheet. Nothing sits on the
+   table's own outer edges, so it has no border of its own.
+
+   EVERY BOUNDARY IS DRAWN ONCE, and which of the two cells draws it is not
+   arbitrary: the first boundary is the pinned round-label column's RIGHT edge
+   rather than column 2's left, because that column is sticky and the rule at
+   its edge has to travel with it — left on column 2 would slide away under it
+   and leave the pinned labels running straight into the digits. Hence
+   `nth-child(n + 3)` where this was `:not(:first-child)`; the pixels are
+   identical, the ownership is not.
+
+   A 40%-transparent border over an opaque cell blends with THAT CELL's own
+   background (background-clip is border-box), not with whatever is scrolling
+   under it, so the pinned rule reads the same in motion as at rest. */
+.scoring-table th:first-child,
+.scoring-table td:first-child {
+  border-right: 1px solid color-mix(in srgb, var(--polaroid-line) 60%, transparent);
+}
+.scoring-table th:nth-child(n + 3),
+.scoring-table td:nth-child(n + 3) {
   border-left: 1px solid color-mix(in srgb, var(--polaroid-line) 60%, transparent);
 }
 /* The column headers pin to the top of the scrollport above, so a 20-round
@@ -7329,9 +7462,38 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   white-space: nowrap;
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: 5;
   background: var(--polaroid-bg);
 }
+/* ── The pinned round-label column ────────────────────────────────────────
+   The other axis of the same problem the sticky header solves. A six-player
+   table is wider than a phone, so scrolling right to reach the last column
+   used to carry the round labels off the left edge — leaving a screen of bare
+   digits with nothing saying which row is Prosperity and which is Events, on
+   the one surface where getting that wrong silently mis-scores the game.
+
+   ONE Z LADDER for the whole table, because three of these cells are sticky on
+   two axes at once and equal-z cells settle on document order — which is the
+   wrong answer for every corner:
+
+     (auto)  score cells
+       2     the round-label column      sticky left
+       3     the totals band             sticky bottom
+       4     the totals band's label     sticky bottom + left
+       5     the column headers          sticky top
+       6     the corner cell             sticky top + left
+
+   Every pinned cell also has to be OPAQUE — the same requirement the header
+   row has, for the same reason — which is why `.scoring-table tbody th` moved
+   its 0.7 fade onto the ink rather than the whole cell (see there). */
+.scoring-round-th {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--polaroid-bg);
+}
+.scoring-table thead th:first-child { z-index: 6; left: 0; }
+.scoring-table tbody tr.scoring-total-row th { z-index: 4; left: 0; }
 /* Column-header bubble. Sized between user-badge `sm` (28/12) and `md`
    (40/16) so the player's initials are easily legible in a dense scoring
    grid without blowing out column widths in 4–6 player tables. The
@@ -7369,9 +7531,16 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 .scoring-head.is-named .scoring-head__bubble { display: none; }
 .scoring-head.is-named .scoring-head__name { display: inline-block; }
+/* NOT `opacity: 0.7`, which is what this carried until the round-label column
+   became sticky. A faded sticky cell lets the score columns ghost straight
+   through the label as they slide under it. The fade moves onto the ink, where
+   it was doing its work anyway — same 70% of the same colour, cell opaque.
+   The totals label and the tinted template row each used to restate exactly
+   this repair for themselves; now the base rule makes it and only the template
+   row still overrides, because it wants a stronger 88% over its own wash. */
 .scoring-table tbody th {
   font-weight: 600;
-  opacity: 0.7;
+  color: color-mix(in srgb, var(--polaroid-ink) 70%, transparent);
   text-align: left;
   font-size: 0.72rem;
 }
@@ -7563,21 +7732,8 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-total-row td {
   position: sticky;
   bottom: 0;
-  z-index: 2;
+  z-index: 3;
   background: color-mix(in srgb, var(--polaroid-line) 55%, var(--polaroid-bg));
-}
-/* The "Total" label is a tbody th, so it arrives carrying that rule's
-   opacity: 0.7 — which fades the sticky background with it and let the round
-   row underneath ghost straight through the word. The fade moves onto the ink,
-   where it was doing its work anyway: same 70% of the same colour, and the
-   cell itself stays opaque.
-
-   Selector matched to the one it is overriding: `.scoring-table tbody th` is
-   (0,1,2), so a bare `.scoring-total-row th` at (0,1,1) loses to it outright —
-   source order never gets a say. */
-.scoring-table tbody tr.scoring-total-row th {
-  opacity: 1;
-  color: color-mix(in srgb, var(--polaroid-ink) 70%, transparent);
 }
 .scoring-total {
   font-family: var(--font-score);
@@ -7643,24 +7799,51 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   background: color-mix(in srgb, var(--row-accent) 14%, var(--polaroid-bg));
   box-shadow: inset 3px 0 0 var(--row-accent);
 }
-/* `.scoring-table tbody th` is (0,1,2) and sets opacity: 0.7, which would fade
-   the tint along with the ink and let the row above ghost through. The fade
-   moves onto the colour instead — exactly the repair the totals row above makes
-   for the same reason, and matched to the same specificity so source order
-   never gets a say. */
+/* A tinted row wants a stronger ink than the base rule's 70%: it is read
+   against its own 14% wash rather than against bare paper. Matched to the
+   specificity of the rule it overrides — `.scoring-table tbody th` is (0,1,2),
+   so a bare `.scoring-round-th--tpl` at (0,1,0) would lose to it outright and
+   source order never gets a say. */
 .scoring-table tbody th.scoring-round-th--tpl {
-  opacity: 1;
   color: color-mix(in srgb, var(--polaroid-ink) 88%, transparent);
 }
-/* The label column is the first column of a horizontally-scrolling table, so a
-   long row name has to stop rather than push the score columns off a 390px
-   screen. The full text (plus the row's note, when it has one) is on the th's
-   title=. */
+/* The label column is the first column of a horizontally-scrolling table AND
+   the column that stays pinned while it scrolls, so a long row name has to stop
+   rather than eat the screen the score columns have left. The full text is on
+   the th's title=; a row's description, when it has one, is behind the info
+   button beside the label. */
 .scoring-round-text {
   display: inline-block;
   max-width: 7.5rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* A template row whose author wrote a description: the LABEL is the button that
+   opens it (widgets/round-score-grid.js explains why the whole cell is the
+   target rather than the glyph). Transparent and font-inherit, so the row still
+   reads as a row and not as a control parked in the label column — the info
+   mark and the press feedback are what say it is tappable. */
+.scoring-round-note {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  max-width: 100%;
+  margin: 0; padding: 0;
+  border: none; background: none;
+  font: inherit; color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* Muted paper ink, NOT the row's own --row-accent. The palette is tuned for a
+   3px inset rule and a 14% wash — at full strength on cream, `yellow` measures
+   about 2.2:1, which is fine for a bar the eye reads as a stripe and much too
+   weak for a 12px glyph that has to read as "there is something here to tap". */
+.scoring-round-note [data-icon-name] {
+  flex: none;
+  color: var(--polaroid-muted);
+}
+/* The glyph has to fit beside the label inside the same 7.5rem column, so the
+   text gives up its width rather than pushing the score columns off-screen. */
+.scoring-round-note .scoring-round-text { max-width: 6.2rem; }
+.scoring-round-note:active { opacity: 0.55; }
+.scoring-round-note:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; border-radius: 4px; }
 .scoring-round-remove {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.1rem; height: 1.1rem;

@@ -49,6 +49,14 @@
 //                     is not a shape. `color` is a palette SLUG resolved by the
 //                     stylesheet, never a hex — see .claude/rules/theming.md §10
 //                     and the .scoring-round-th--tpl block in styles.css.
+//                     `note` is the template author's optional explanation of
+//                     HOW the row is scored. It is never printed in the header
+//                     — the label column is 7.5rem wide on a phone and already
+//                     ellipsises — but a row that has one grows an info button
+//                     beside its label that opens the text (RoundGridNotes).
+//                     That button is the ONLY surface the note has: the
+//                     template's own listing never shows it, which is what
+//                     makes an explanation safe to write at length.
 //   headerNames     — DEFAULT for the column headers: true starts them on the
 //                     player's name, false on the colored bubble. The live
 //                     play screens (host + joiner mirror) pass true because
@@ -127,7 +135,7 @@
               <tr>
                 <th class="scoring-round-th${tpl ? " scoring-round-th--tpl" : ""}"
                     ${tpl ? `data-row-color="${escapeAttr(tpl.color || "neutral")}"` : ""}
-                    ${tpl ? `title="${escapeAttr(tpl.note ? `${tpl.label} — ${tpl.note}` : tpl.label)}"` : ""}>
+                    ${tpl ? `title="${escapeAttr(tpl.label)}"` : ""}>
                   <span class="scoring-round-label">
                     ${editable && !tpl ? `
                       <button class="scoring-round-remove" title="Remove round"
@@ -135,7 +143,7 @@
                         <i data-icon="x" class="w-3 h-3"></i>
                       </button>
                     ` : ""}
-                    <span class="scoring-round-text">${tpl ? escapeHtml(tpl.label) : `R${r + 1}`}</span>
+                    ${renderRowLabel(tpl, r)}
                   </span>
                 </th>
                 ${safePlayers.map((p, i) => `
@@ -162,6 +170,38 @@
         </div>
       ` : ""}
     `;
+  }
+
+  // The row's own label, and — on a template row whose author wrote a
+  // description — the info affordance that opens it. Absent otherwise, so the
+  // common grid is exactly the markup it always was.
+  //
+  // THE WHOLE LABEL IS THE BUTTON, rather than a separate icon beside it. A
+  // grid row is about 36px tall, so a control inside one cannot carry a 44px
+  // target without eating into the rows above and below it (the remove × next
+  // to it has the same problem and simply lives with a 17px one). The label
+  // cell is ~120px wide, so making the cell the target buys back everything
+  // width can give and leaves the height bounded by the row, which is the only
+  // dimension actually constrained. The `i` is then a marker, not a target.
+  //
+  // The text travels on data- attributes and the handler reads it back off the
+  // element rather than being interpolated into the onclick string: a row
+  // description is 200 characters of the author's prose, and prose in a JS
+  // string literal inside an HTML attribute has to survive two levels of
+  // quoting at once. An attribute survives one, which escapeAttr already does.
+  function renderRowLabel(tpl, r) {
+    const text = `<span class="scoring-round-text">${tpl ? escapeHtml(tpl.label) : `R${r + 1}`}</span>`;
+    const note = tpl && tpl.note ? String(tpl.note) : "";
+    if (!note) return text;
+    return `<button type="button" class="scoring-round-note"
+              aria-label="${escapeAttr(tpl.label)} — how to score this row"
+              title="${escapeAttr(note)}"
+              data-note-label="${escapeAttr(tpl.label || "")}"
+              data-note-body="${escapeAttr(note)}"
+              onclick="window.RoundGridNotes.show(this)">
+              ${text}
+              <i data-icon="info" class="w-3 h-3"></i>
+            </button>`;
   }
 
   // One editable cell: a sanitized text input (so a leading "-" survives —
@@ -493,6 +533,31 @@
     },
   };
 
+  // Opening one row's description. The project's one-button information modal
+  // rather than a popover: the header cell lives in a table with its own
+  // bounded scrollport (RoundGridScroll below), so anything positioned against
+  // it would be clipped by the pane it is anchored in — the same geometry
+  // argument .claude/rules/overlays.md §1 makes for sheets over dropdowns. A
+  // modal has no anchor to be clipped by, and PolaroidPopup.alert already
+  // handles the backdrop tap, the device back press and the focus.
+  const RoundGridNotes = {
+    /** @param {Element} el the info button that was tapped */
+    show(el) {
+      if (!el) return;
+      const body = el.getAttribute("data-note-body") || "";
+      if (!body) return;
+      const label = el.getAttribute("data-note-label") || "Scoring row";
+      if (window.PolaroidPopup && window.PolaroidPopup.alert) {
+        window.PolaroidPopup.alert({ title: label, body, label: "Got it" });
+      } else if (typeof showToast === "function") {
+        // The popup module is loaded on every screen that renders a grid, so
+        // this is the "it somehow wasn't" branch: the text still has to reach
+        // the reader, because the button promised it would.
+        showToast(body, "info");
+      }
+    },
+  };
+
   window.renderRoundGrid = renderRoundGrid;
   window.renderRoundGridTotalsCell = renderTotalsCell;
   window.roundGridRoundCount = roundGridRoundCount;
@@ -504,4 +569,5 @@
   window.RoundGridScroll = RoundGridScroll;
   window.RoundGridSign = RoundGridSign;
   window.RoundGridNames = RoundGridNames;
+  window.RoundGridNotes = RoundGridNotes;
 })();
