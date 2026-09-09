@@ -76,10 +76,8 @@
       ${s.typeRow}
 
       <p class="chapter-wiz__lede">
-        One row per thing you total at the end. Anyone who adds this grid gets
-        these rows on their scoring table — it needs no name of its own, since
-        it is filed under this game and players pick between grids by who wrote
-        them and how many people use them.
+        A custom scoring template. Create row heads with a custom colour, and
+        add an optional description to clarify the scoring instructions.
       </p>
 
       <div class="tmpl-rows" id="tmpl-rows-host">
