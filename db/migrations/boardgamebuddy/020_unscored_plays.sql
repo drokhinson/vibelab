@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 018 — Plays that recorded no outcome are not losses
+-- 020 — Plays that recorded no outcome are not losses
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A play logged without touching the scoring grid stores a roster where every
 -- seat has is_winner = false and score IS NULL. Nothing there says "nobody
