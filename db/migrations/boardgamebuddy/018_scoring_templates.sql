@@ -12,13 +12,17 @@
 -- reference guide already holds. So it is authored, shared, browsed and adopted
 -- through the chapter machinery that exists.
 --
--- WHY A LAYOUT AND NOT A 7TH CHAPTER TYPE. The scroll groups a user's guide by
+-- WHY A LAYOUT AND NOT A 7TH CHAPTER TYPE. **Superseded by 021, which adds the
+-- 7th type after all — read that file's header for the argument that stands.**
+-- What this migration argued, and shipped: the scroll groups a user's guide by
 -- chapter_type with one header per type, so a 7th type would split their
--- scoring material into two sections both called "scoring". And
+-- scoring material into two sections both called "scoring"; and
 -- services/chapter_ai.py keys its prompt on the type, so reusing 'scoring'
 -- leaves the AI path untouched. `layout` was declared as an extension point
 -- from the start (it has always been TEXT with a CHECK pinning it to one
--- value); this is that point being used.
+-- value); this is that point being used. 021 keeps `layout` exactly as this
+-- file defines it — every constraint, index and RPC below is untouched — and
+-- adds the type beside it.
 --
 -- WHY A TYPED `grid` COLUMN AND NOT JSON IN `content`. `content` is
 -- ILIKE-searched by the chapter pool, so a JSON document there would make

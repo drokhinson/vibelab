@@ -370,6 +370,16 @@ async def generate_chapter(
     user: CurrentUser = Depends(get_current_user),
 ) -> ChapterGenerateResponse:
     """Draft a chapter of the given type (optionally steered by a focus prompt) — returned for the user to review, not saved."""
+    # A scoring grid's body is rows in the typed `grid` column, not markdown, so
+    # there is nothing here for the model to draft and nowhere to put it if
+    # there were. The wizard skips its AI step for grids and so never asks; this
+    # is for everything else that can reach a public endpoint.
+    if body.chapter_type == chapter_grid.SCORING_GRID_CHAPTER_TYPE:
+        raise HTTPException(
+            status_code=400,
+            detail="Scoring grid templates are built row by row, not drafted.",
+        )
+
     sb = get_supabase()
 
     game = (

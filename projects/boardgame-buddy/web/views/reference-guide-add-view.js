@@ -1052,7 +1052,6 @@ components above.
         body = window.ChapterWizardSteps.type({
           types: this._types,
           formType: this._formType,
-          formLayout: this._formLayout,
           // Create-only, and only when expansions are in scope: the chapter's
           // pool is chosen here alongside its type, and the backend's PATCH
           // can't move a chapter between pools afterwards.
@@ -1216,7 +1215,14 @@ components above.
             </div>
           `;
         }
-        return `<div class="chapter-edit__typescroll">${this._types.map((t) => `
+        // Scoring Grid Template is left out of the scroller for the mirror
+        // reason: a chapter's layout is fixed at creation, so converting prose
+        // into a grid would silently throw the prose away (PATCH cannot clear a
+        // `grid` either, so the trip back does not exist). Authoring a grid is
+        // one tap from the guide; converting into one is not a thing.
+        return `<div class="chapter-edit__typescroll">${this._types
+          .filter((t) => t.id !== "scoring_grid")
+          .map((t) => `
              <button type="button"
                      class="chapter-edit__tpill ${t.id === this._formType ? "chapter-edit__tpill--on" : ""}"
                      onclick="window.referenceGuideAddView._pickType('${t.id}')">
@@ -1416,11 +1422,16 @@ components above.
 
     _pickType(id) {
       this._formType = id;
-      // Only `scoring` has two shapes, so leaving a stale scoring_grid on any
-      // other type would send a body the DB's bgb_chapters_grid_shape CHECK
-      // rejects — and the type/layout cross-check in the backend's
-      // services/chapter_grid.py would 400 first.
-      if (id !== "scoring") this._formLayout = "text";
+      // The layout is not a second question — it follows from the type, 1:1,
+      // and the backend's services/chapter_grid.py 400s the pair that disagrees
+      // (as does the DB's bgb_chapters_grid_shape CHECK). Deriving it here is
+      // what keeps the two in step without asking the user twice.
+      this._formLayout = id === "scoring_grid" ? "scoring_grid" : "text";
+      // Seed one empty row so the grid editor opens on something to fill in
+      // rather than on its own empty state.
+      if (this._formLayout === "scoring_grid" && !this._formRows.length) {
+        this._formRows = [window.ScoringTemplateEditor.blankRow()];
+      }
       this.render();
     }
 
@@ -1431,17 +1442,6 @@ components above.
     // its focus and caret (.claude/rules/overlays.md §6). _tmplSetLabel does
     // not repaint at all — the input already shows what was typed, and the
     // preview catches up on the next structural change.
-
-    _pickLayout(id) {
-      if (this._formLayout === id) return;
-      this._formLayout = id === "scoring_grid" ? "scoring_grid" : "text";
-      // Seed one empty row so the editor opens on something to fill in rather
-      // than on its own empty state.
-      if (this._formLayout === "scoring_grid" && !this._formRows.length) {
-        this._formRows = [window.ScoringTemplateEditor.blankRow()];
-      }
-      this.render();
-    }
 
     /** Repaint the row list in place, and the preview beside it. */
     _paintRows() {

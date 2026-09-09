@@ -1802,29 +1802,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   outline-offset: 2px;
 }
 
-/* The Scoring type's second question, revealed under the type list once
-   Scoring is picked. Reuses .chapter-wiz__type wholesale — same rows, same
-   metrics, same tick — because it IS the same control asking a narrower
-   question; only the heading and the second line are new. */
-.chapter-wiz__layout { margin-top: 0.9rem; }
-.chapter-wiz__layout-head {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: oklch(var(--bc) / 0.72);
-  margin: 0 0 0.4rem;
-}
-.chapter-wiz__type-hint {
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 500;
-  line-height: 1.25;
-  color: oklch(var(--bc) / 0.6);
-  margin-top: 2px;
-  /* The row is one line taller with a hint under it, so let the label wrap
-     rather than ellipsising a sentence that has to be read. */
-  white-space: normal;
-}
-
 /* ── Scoring-grid rows (migration 018) ───────────────────────────────────────
    The body of a layout='scoring_grid' chapter, in place of the markdown
    toolbar + textarea. One card per row: the label, its position controls, and

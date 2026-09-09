@@ -581,10 +581,13 @@ class ChapterLayout(StrEnum):
     """How a guide chapter's body is stored.
 
     Mirrors the CHECK on boardgamebuddy_guide_chapters.layout — the DB values
-    ARE these values. `scoring_grid` is a layout of the `scoring` chapter type,
-    not a type of its own: the guide scroll groups by chapter_type with one
-    header per type, so a 7th type would split a user's scoring material into
-    two sections both labelled "scoring".
+    ARE these values.
+
+    This is not the same axis as `chapter_type`, though the two are 1:1 for
+    grids. The type is an FK to a lookup table and says what the chapter is
+    ABOUT; the layout says what shape its body is stored in, and so is what the
+    grid-shape CHECK, the ?layout= pool filter and every renderer branch read.
+    services/chapter_grid.validate_layout_pairing keeps the pair honest.
     """
 
     TEXT = "text"                  # Markdown, rendered by web/ui/markdown.js

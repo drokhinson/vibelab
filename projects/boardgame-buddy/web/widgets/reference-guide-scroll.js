@@ -239,7 +239,7 @@
 
     _openTemplates(event) {
       if (event) event.stopPropagation();
-      this._openAddChapter("scoring");
+      this._openAddChapter("scoring_grid");
     }
 
     /**
