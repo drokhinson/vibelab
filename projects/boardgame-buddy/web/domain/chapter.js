@@ -106,7 +106,7 @@
 
     scoringTemplates(gameId, { expansionIds } = {}) {
       return this.pool(gameId, {
-        chapterType: "scoring",
+        chapterType: "scoring_grid",
         layout: "scoring_grid",
         expansionIds,
       });

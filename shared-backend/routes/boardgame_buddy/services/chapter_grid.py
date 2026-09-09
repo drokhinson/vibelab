@@ -26,18 +26,25 @@ from fastapi import HTTPException
 from ..constants import ChapterLayout
 from ..models import ScoringGrid
 
-# The chapter type a scoring grid must be filed under. It is a LAYOUT of the
-# existing type rather than a type of its own: the guide scroll groups by
-# chapter_type with one header per type, so a 7th type would split a user's
-# scoring material into two sections both labelled "scoring".
-SCORING_GRID_CHAPTER_TYPE = "scoring"
+# The chapter type a scoring grid must be filed under, seeded by migration 021
+# at display_order 5 so it sorts above every other type in both the authoring
+# picker and the guide scroll. The type and the layout are 1:1 and each holds
+# half the truth — the type says the chapter is a scoring grid, the layout says
+# its body is stored in `grid` rather than `content` — which is what the
+# cross-check below exists to keep from drifting.
+SCORING_GRID_CHAPTER_TYPE = "scoring_grid"
 
 
 def validate_layout_pairing(
     layout: ChapterLayout | str | None,
     chapter_type: str | None,
 ) -> None:
-    """Reject a scoring grid filed under any chapter type but `scoring`.
+    """Require layout and chapter type to agree, in BOTH directions.
+
+    `layout == 'scoring_grid'` if and only if `chapter_type == 'scoring_grid'`.
+    Rejecting only the first direction would leave the other half authorable:
+    a 'scoring_grid' chapter with a text body renders as an empty section under
+    a heading promising a table, because every renderer branches on the layout.
 
     Pydantic already ties `layout` to the presence of `grid` (ChapterCreate
     ._grid_matches_layout) and the DB ties it again (bgb_chapters_grid_shape).
@@ -46,13 +53,15 @@ def validate_layout_pairing(
     """
     if layout is None or chapter_type is None:
         return
-    if str(layout) != ChapterLayout.SCORING_GRID:
+    is_grid_layout = str(layout) == ChapterLayout.SCORING_GRID
+    is_grid_type = chapter_type == SCORING_GRID_CHAPTER_TYPE
+    if is_grid_layout == is_grid_type:
         return
-    if chapter_type != SCORING_GRID_CHAPTER_TYPE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"A scoring grid must be a '{SCORING_GRID_CHAPTER_TYPE}' chapter",
-        )
+    if is_grid_layout:
+        detail = f"A scoring grid must be a '{SCORING_GRID_CHAPTER_TYPE}' chapter"
+    else:
+        detail = f"A '{SCORING_GRID_CHAPTER_TYPE}' chapter must have a scoring grid"
+    raise HTTPException(status_code=400, detail=detail)
 
 
 def grid_to_content(grid: ScoringGrid) -> str:

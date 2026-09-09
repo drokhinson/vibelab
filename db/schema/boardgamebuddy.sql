@@ -100,7 +100,8 @@ GRANT SELECT ON public.boardgamebuddy_profiles TO boardgamebuddy_role;
 
 
 -- ── Chapter types ─────────────────────────────────────────────────────────────
--- Fixed vocabulary for guide chapters. Seeded in 002_seed.sql.
+-- Fixed vocabulary for guide chapters. Six seeded in 002_seed.sql; 'scoring_grid'
+-- (display_order 5, so it sorts first) seeded in 021_scoring_grid_chapter_type.sql.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_chapter_types (
   id TEXT NOT NULL,
   label TEXT NOT NULL,
