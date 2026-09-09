@@ -1,0 +1,56 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Gold Standard badge — Buddy holding up a scoring grid with five copies fanning out to other players">
+  <title>Gold Standard badge — Buddy holding up a scoring grid with five copies fanning out to other players</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold; a standalone badge like this one is gold.
+
+       FIVE copies fan out, one per adopter the badge asks for, so the picture
+       states the threshold. That fan is also what keeps this distinct from
+       Cited Source, which is Buddy passing ONE page to one other player: this
+       one is a grid everybody took. -->
+  <defs>
+    <linearGradient id="gold-standard-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="gold-standard-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="gold-standard-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#gold-standard-disc)"/>
+  <g clip-path="url(#gold-standard-clip)">
+    <!-- The five copies, fanned across the top. Each is a small cream page with
+         one tinted row, so they read as the same object as the big grid below. -->
+    <g opacity="0.95">
+      <g transform="translate(20 40) rotate(-20)"><rect x="0" y="0" width="17" height="22" rx="2" fill="#F8F2E5"/><rect x="2.6" y="4" width="3" height="4.4" rx="1" fill="#4A7A4A"/><rect x="6.4" y="4" width="8.2" height="4.4" fill="#4A7A4A" opacity="0.22"/><rect x="2.6" y="11" width="3" height="4.4" rx="1" fill="#C9922A"/><rect x="6.4" y="11" width="8.2" height="4.4" fill="#C9922A" opacity="0.22"/></g>
+      <g transform="translate(43 26) rotate(-11)"><rect x="0" y="0" width="17" height="22" rx="2" fill="#F8F2E5"/><rect x="2.6" y="4" width="3" height="4.4" rx="1" fill="#4A6F94"/><rect x="6.4" y="4" width="8.2" height="4.4" fill="#4A6F94" opacity="0.22"/><rect x="2.6" y="11" width="3" height="4.4" rx="1" fill="#B03028"/><rect x="6.4" y="11" width="8.2" height="4.4" fill="#B03028" opacity="0.22"/></g>
+      <g transform="translate(71 21)"><rect x="0" y="0" width="17" height="22" rx="2" fill="#F8F2E5"/><rect x="2.6" y="4" width="3" height="4.4" rx="1" fill="#C9922A"/><rect x="6.4" y="4" width="8.2" height="4.4" fill="#C9922A" opacity="0.22"/><rect x="2.6" y="11" width="3" height="4.4" rx="1" fill="#4A7A4A"/><rect x="6.4" y="11" width="8.2" height="4.4" fill="#4A7A4A" opacity="0.22"/></g>
+      <g transform="translate(99 26) rotate(11)"><rect x="0" y="0" width="17" height="22" rx="2" fill="#F8F2E5"/><rect x="2.6" y="4" width="3" height="4.4" rx="1" fill="#7A5293"/><rect x="6.4" y="4" width="8.2" height="4.4" fill="#7A5293" opacity="0.22"/><rect x="2.6" y="11" width="3" height="4.4" rx="1" fill="#4A6F94"/><rect x="6.4" y="11" width="8.2" height="4.4" fill="#4A6F94" opacity="0.22"/></g>
+      <g transform="translate(122 40) rotate(20)"><rect x="0" y="0" width="17" height="22" rx="2" fill="#F8F2E5"/><rect x="2.6" y="4" width="3" height="4.4" rx="1" fill="#B03028"/><rect x="6.4" y="4" width="8.2" height="4.4" fill="#B03028" opacity="0.22"/><rect x="2.6" y="11" width="3" height="4.4" rx="1" fill="#C9922A"/><rect x="6.4" y="11" width="8.2" height="4.4" fill="#C9922A" opacity="0.22"/></g>
+    </g>
+    <!-- Dotted arcs: the copies coming off the original. -->
+    <path d="M62 66 Q46 56 32 52" stroke="#F0C662" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-dasharray="3 5" opacity="0.7"/>
+    <path d="M70 62 Q62 50 54 42" stroke="#F0C662" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-dasharray="3 5" opacity="0.7"/>
+    <path d="M80 60 L80 46" stroke="#F0C662" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-dasharray="3 5" opacity="0.7"/>
+    <path d="M90 62 Q98 50 106 42" stroke="#F0C662" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-dasharray="3 5" opacity="0.7"/>
+    <path d="M98 66 Q114 56 128 52" stroke="#F0C662" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-dasharray="3 5" opacity="0.7"/>
+    <!-- The original, held up. -->
+    <g transform="translate(56 62)"><rect x="0" y="0" width="48" height="38" rx="4" fill="#F8F2E5"/><rect x="3.5" y="4.5" width="3.4" height="6.4" rx="1.2" fill="#4A7A4A"/><rect x="7.5" y="4.5" width="37" height="6.4" fill="#4A7A4A" opacity="0.2"/><rect x="3.5" y="14" width="3.4" height="6.4" rx="1.2" fill="#C9922A"/><rect x="7.5" y="14" width="37" height="6.4" fill="#C9922A" opacity="0.22"/><rect x="3.5" y="23.5" width="3.4" height="6.4" rx="1.2" fill="#4A6F94"/><rect x="7.5" y="23.5" width="37" height="6.4" fill="#4A6F94" opacity="0.2"/><rect x="31" y="0" width="1.4" height="38" fill="#1A0F0B" opacity="0.16"/></g>
+    <g transform="translate(29.00 66.40) scale(0.40)">
+    <path d="M84 152 L48 128" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><path d="M116 152 L152 128" stroke="#C9922A" stroke-width="15" fill="none" stroke-linecap="round"/><circle cx="100" cy="148" r="14" fill="url(#gold-standard-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#gold-standard-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#gold-standard-gold)"/>
+    <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M78 100 Q100 124 122 100" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g><path d="M120 96 Q121.4 101 126 102.4 Q121.4 103.8 120 108.8 Q118.6 103.8 114 102.4 Q118.6 101 120 96 Z" fill="#F0C662" opacity="0.92"/><path d="M38 100 Q39 103.4 42.4 104.4 Q39 105.4 38 108.8 Q37 105.4 33.6 104.4 Q37 103.4 38 100 Z" fill="#F0C662" opacity="0.75"/>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#E0A94A" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#E0A94A" stroke-width="1.4" opacity="0.34"/>
+</svg>

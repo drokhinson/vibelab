@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_achievements (
   display_order INTEGER NOT NULL,
   CONSTRAINT boardgamebuddy_achievements_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_achievements_group_id_fkey FOREIGN KEY (group_id) REFERENCES boardgamebuddy_achievement_groups(id),
-  CONSTRAINT bgb_achievements_metric_chk CHECK ((metric = ANY (ARRAY['plays_logged'::text, 'wins'::text, 'biggest_table'::text, 'two_player_games'::text, 'buddies'::text, 'guide_chapters'::text, 'chapters_borrowed'::text, 'plays_with_notes'::text, 'bgg_linked'::text, 'app_installed'::text, 'countries'::text, 'continents'::text]))),
+  CONSTRAINT bgb_achievements_metric_chk CHECK ((metric = ANY (ARRAY['plays_logged'::text, 'wins'::text, 'biggest_table'::text, 'two_player_games'::text, 'buddies'::text, 'guide_chapters'::text, 'chapters_borrowed'::text, 'plays_with_notes'::text, 'bgg_linked'::text, 'app_installed'::text, 'countries'::text, 'continents'::text, 'plays_with_grid'::text, 'grid_adopters'::text]))),
   CONSTRAINT boardgamebuddy_achievements_threshold_check CHECK ((threshold > 0))
 );
 ALTER TABLE public.boardgamebuddy_achievements ENABLE ROW LEVEL SECURITY;

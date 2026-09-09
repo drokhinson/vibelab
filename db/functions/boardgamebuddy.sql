@@ -1,6 +1,12 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 018_scoring_templates.sql (adds bgb_set_session_scoring, and
+-- Last updated: 019_scoring_grid_achievements.sql (re-emits
+--               bgb_sync_achievements with two more metrics — plays_with_grid
+--               and grid_adopters — behind the Ruled Lines and Gold Standard
+--               badges. Signature and return shape unchanged; the achievements
+--               screen is catalog-driven, so the badges themselves are seed
+--               rows rather than code.)
+--               Before that: 018_scoring_templates.sql (adds bgb_set_session_scoring, and
 --               re-emits bgb_log_play, bgb_session_bundle and bgb_plays_page
 --               so a play, a live lobby and the History page each carry the
 --               scoring-grid row labels the play was scored on. bgb_feed_plays
@@ -1013,15 +1019,22 @@
 --               (body replaced by 068_location_achievements.sql, which carries
 --                plays.country_code through the my_plays CTE and adds the
 --                countries / continents metrics)
+--   Last updated in: db/migrations/boardgamebuddy/019_scoring_grid_achievements.sql
+--               (adds the plays_with_grid and grid_adopters metrics behind the
+--                two scoring-grid badges. grid_adopters is a MAX over the
+--                user's own grids rather than a SUM — "gold standard" names one
+--                grid everybody uses — and excludes the author's own
+--                user_chapters row, which create_chapter writes automatically.)
 --   Called by:  shared-backend/routes/boardgame_buddy/achievement_routes.py
 --               (GET /achievements, POST /achievements/installed)
 --   Purpose:    Everything on the Achievements spoke (/profile/achievements) in
---               one call. Computes all twelve metrics behind the nineteen
+--               one call. Computes all fourteen metrics behind the twenty-one
 --               badges (plays logged, wins, biggest table, two-player-only
 --               games played, buddies, guide chapters, chapters of yours
 --               another player kept, plays you wrote notes on, whether BGG is
 --               linked, whether the PWA is installed, distinct countries and
---               distinct continents played in),
+--               distinct continents played in, plays you scored on a custom
+--               grid, and the adopter count of your most-kept scoring grid),
 --               inserts a boardgamebuddy_user_achievements row for anything
 --               newly earned, then joins the catalog to those rows and returns
 --               name / tagline / requirement / icon / threshold / progress /
