@@ -9043,6 +9043,54 @@ main[data-view="session-viewer"].hidden {
    that — three CTAs stacked on the same 92px strip is not a state worth
    leaving to inheritance. */
 .cascade-screen.is-locked .cascade-cta-wrap { display: none; }
+
+/* ── Cascade panes (tablet + wide) ──────────────────────────────────────────
+   Each step's cards sit in .cascade-cols > .cascade-col + .cascade-col--aside
+   (play-flow-view.js and session-viewer-view.js). On a phone both wrappers
+   are display:contents, so the cards remain direct flex items of
+   .cascade-screen and that layout is untouched. From the tablet tier up the
+   wrappers become a two-pane grid: the grid / the game / the date on the
+   left, and on the right the thing the host glances at rather than works in
+   — the reference guide, the roster, the photo — pinned in a sticky pane that
+   scrolls on its own, so a long guide never scrolls the grid away.
+
+   The docked CTA bar takes the SAME column template, so the button sits
+   exactly under the left pane rather than across both. The bar's inline
+   padding already matches the screen's, which is what lines the tracks up. */
+.cascade-cols,
+.cascade-col { display: contents; }
+
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+  column-gap: 16px;
+  align-items: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;   /* the scoring table scrolls inside its pane, not the page */
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-col--aside {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + 12px);
+  /* Everything between the header and the docked bar, minus the screen's own
+     12px top padding. --cascade-bottom-pad differs between the host and the
+     spectator's mirror, and this follows it either way. */
+  max-height: calc(100dvh - var(--bgb-header-height) - var(--bgb-nav-height)
+                   - env(safe-area-inset-bottom) - var(--cascade-bottom-pad) - 12px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-cta-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+  column-gap: 16px;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-cta-wrap .cascade-cta {
+  grid-column: 1;
+}
 /* The joiner's read-only mirror reuses .cascade-screen but renders no CTA
    (it auto-scrolls forward as the host advances the phase), so it has no
    bar to clear — just ordinary trailing breathing room above the nav. */
