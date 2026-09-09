@@ -22,6 +22,14 @@
 //     already holds with {duplicate: true}, so re-running a half-finished
 //     import lands the rest and re-writes nothing.
 //
+//   • THE SEATS ARE RESOLVED IN ONE PLACE — seats(). `play.players` stays the
+//     note as the model parsed it; what gets written, what the review list
+//     draws, and what the row and group keys are built from all come from
+//     seats(), which maps each name through the Players step and COLLAPSES two
+//     names that turned out to be one person. The Players step promises that in
+//     as many words; the write used not to keep the promise, which is how a
+//     note saying "Jas" and "Jasmine" imported a game with Jasmine in it twice.
+//
 //   • GROUPING HAPPENS AFTER THE ASSIGNMENTS, NEVER BEFORE. What collapses the
 //     review list is `rowKeyFor`: the CATALOG game, the day, the note, and the
 //     seats as the user resolved them (an account id wherever there is one).
@@ -468,7 +476,7 @@
      */
     rowKeyFor(play) {
       const game = this.playGame(play);
-      const seats = play.players.map((p) => this.seatKey(p)).sort();
+      const seats = this.seats(play).map((s) => this.seatKey(s)).sort();
       return [
         game ? `id:${game.id}` : `name:${key(play.gameName)}`,
         this.dateFor(play),
@@ -478,16 +486,68 @@
     }
 
     /**
-     * One seat's identity. The ACCOUNT when the name resolved to one, so two
-     * spellings of one buddy are one seat; the resolved ghost label otherwise,
-     * so two spellings kept as one ghost are too. Never the name the note
-     * wrote — that is the thing this step exists to translate.
-     * @param {DraftPlayer} player
+     * THE SEATS OF ONE PLAY, AS THEY WILL BE WRITTEN — resolved through the
+     * Players step and collapsed wherever two of the note's names turned out
+     * to be one person.
+     *
+     * The collapse is the whole reason this exists. The Players step's own
+     * help text promises it ("point them at the same buddy, or give them the
+     * same ghost name, and they'll land as one player"), and the review list
+     * has always honoured it, because rowKeyFor keys a seat on the ACCOUNT
+     * rather than on the spelling. The WRITE did not: it emitted one seat per
+     * name, so a note that said "Jas" on one line and "Jasmine" on the next
+     * imported a two-player game with Jasmine in it twice — once winning, once
+     * not. Migration 023's unique index now refuses that outright; this is what
+     * stops the user ever meeting the refusal.
+     *
+     * Merging a seat into one already taken keeps the fuller answer: winning on
+     * either spelling is winning, and the first score anybody wrote down is the
+     * score. A seat that names nobody at all is dropped rather than merged —
+     * the model can emit one from an unreadable line, and it would land as a
+     * blank row on the scoreboard.
+     *
+     * Everything downstream reads THIS, not play.players: the payload, the
+     * review row's identity, the feed group, and what the detail panel draws.
+     * play.players stays the note as parsed, which is what the mapping is for.
+     * @param {DraftPlay} play
+     * @returns {Array<{name: string, is_winner: boolean, score: number|null, user_id: string|null}>}
      */
-    seatKey(player) {
-      const m = this.playerMapping(player.name);
-      const who = m.userId ? `u:${m.userId}` : `g:${key(m.label || player.name)}`;
-      return `${who}#${player.isWinner ? "w" : ""}#${player.score == null ? "" : player.score}`;
+    seats(play) {
+      const out = [];
+      const byWho = new Map();
+      for (const pl of (play && play.players) || []) {
+        const m = this.playerMapping(pl.name);
+        const label = m.label || pl.name;
+        if (!m.userId && !key(label)) continue;
+        const who = m.userId ? `u:${m.userId}` : `g:${key(label)}`;
+        const taken = byWho.get(who);
+        if (taken) {
+          taken.is_winner = taken.is_winner || !!pl.isWinner;
+          if (taken.score == null && (pl.score === 0 || pl.score)) taken.score = pl.score;
+          continue;
+        }
+        const seat = {
+          name: label,
+          is_winner: !!pl.isWinner,
+          score: (pl.score === 0 || pl.score) ? pl.score : null,
+          user_id: m.userId || null,
+        };
+        byWho.set(who, seat);
+        out.push(seat);
+      }
+      return out;
+    }
+
+    /**
+     * One written seat's identity, for the row and group keys. The ACCOUNT
+     * when the name resolved to one; the resolved ghost label otherwise. Never
+     * the name the note wrote — that is the thing the Players step exists to
+     * translate.
+     * @param {{name: string, is_winner: boolean, score: number|null, user_id: string|null}} seat
+     */
+    seatKey(seat) {
+      const who = seat.user_id ? `u:${seat.user_id}` : `g:${key(seat.name)}`;
+      return `${who}#${seat.is_winner ? "w" : ""}#${seat.score == null ? "" : seat.score}`;
     }
 
     /**
@@ -512,9 +572,34 @@
 
     get liveCount() { return this.plays.filter((p) => !p.dropped).length; }
 
-    /** Plays that will actually be written — live, and with a resolved game. */
+    /**
+     * Plays that will actually be written — live, with a resolved game, and
+     * with somebody at the table.
+     *
+     * The roster clause is migration 023's invariant, checked here so the user
+     * meets it as a row the Import step counts out rather than as a play the
+     * server refuses. A note the model read a game and a date off but no names
+     * at all — a bare tally, a line it couldn't parse — used to import as a
+     * play with an empty scoreboard, counting towards nobody's record and
+     * leaving no ghost anyone could ever claim.
+     */
     importable() {
-      return this.plays.filter((p) => !p.dropped && !!this.playGame(p));
+      return this.plays.filter(
+        (p) => !p.dropped && !!this.playGame(p) && this.seats(p).length > 0,
+      );
+    }
+
+    /**
+     * Live plays whose game resolved but whose table is empty — what the
+     * Import step names as the second reason a play is being left behind.
+     * Counted separately from the unmatched-game plays because the two have
+     * different fixes, and "12 plays won't import" without saying which
+     * problem to go and solve is not a warning.
+     */
+    seatless() {
+      return this.plays.filter(
+        (p) => !p.dropped && !!this.playGame(p) && this.seats(p).length === 0,
+      );
     }
 
     /**
@@ -657,15 +742,10 @@
         game_id: game ? game.id : null,
         played_at: this.dateFor(play),
         notes: play.notes || null,
-        players: play.players.map((pl) => {
-          const mapping = this.playerMapping(pl.name);
-          return {
-            name: mapping.label || pl.name,
-            is_winner: !!pl.isWinner,
-            score: (pl.score === 0 || pl.score) ? pl.score : null,
-            user_id: mapping.kind === "buddy" ? mapping.userId : null,
-          };
-        }),
+        // Resolved and collapsed — see seats(). One account cannot be seated
+        // twice here, which is both what the Players step promised and what
+        // migration 023's unique index enforces at the other end.
+        players: this.seats(play),
         // The idempotency key. Stable across attempts by construction — it is
         // the draft play's own id — so a chunk re-sent after a lost response
         // comes back as duplicates rather than a second set of plays.

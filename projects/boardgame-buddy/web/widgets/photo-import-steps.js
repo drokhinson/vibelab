@@ -286,7 +286,7 @@
     const ready = draft.importable();
     const missing = draft.unassigned();
     const withPhoto = ready.filter((s) => s.file || s.photoUrl).length;
-    const seatless = ready.filter((s) => !s.players.length).length;
+    const seatless = draft.seatless().length;
     const games = {};
     for (const s of ready) games[s.game.name] = (games[s.game.name] || 0) + 1;
 
@@ -316,10 +316,11 @@
           </p>
         ` : ""}
         ${seatless ? `
-          <p class="imp-note">
-            ${seatless} play${seatless === 1 ? "" : "s"} ${seatless === 1 ? "has" : "have"} nobody at the table.
-            ${seatless === 1 ? "It still imports" : "They still import"} — but ${seatless === 1 ? "it won't" : "they won't"}
-            count towards anyone's record.
+          <p class="imp-warn">
+            ${seatless} photo${seatless === 1 ? "" : "s"} ${seatless === 1 ? "has" : "have"} a game but
+            nobody at the table, so ${seatless === 1 ? "it won't" : "they won't"} be imported — a play
+            with no players counts towards nobody's record and leaves no ghost
+            for anyone to claim. Go back and seat ${seatless === 1 ? "it" : "them"}.
           </p>
         ` : ""}
         <button class="imp-cta" type="button" ${ready.length ? "" : "disabled"}

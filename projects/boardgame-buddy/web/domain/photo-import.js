@@ -221,9 +221,10 @@
     }
 
     /**
-     * Take one seat off this table. Removing the last one is legitimate — a
-     * play with nobody at it still imports, and the last step says what that
-     * costs (it counts towards nobody's record).
+     * Take one seat off this table. Removing the last one is allowed while the
+     * user is still assigning — mis-tapped, about to re-pick — but a shot left
+     * with nobody at it is no longer importable (see importable), and both the
+     * assign step and the last step say so.
      */
     removeSeat(id, name) {
       const s = this.shotFor(id);
@@ -268,19 +269,84 @@
     // ── What can be written ──────────────────────────────────────────────────
 
     /**
-     * A shot is importable once it names a game — everything else is optional.
+     * THE SEATS OF ONE SHOT, AS THEY WILL BE WRITTEN — collapsed wherever two
+     * rows turned out to be the same person.
+     *
+     * The picker adds seats rather than replacing them, and dedupes what it
+     * adds by DISPLAY NAME, which is the one thing two rows of one account can
+     * differ in: the buddy list spells someone by their display name and the
+     * search-everyone results by whatever the search matched, so re-opening
+     * the sheet and picking the same person from the other list seated them
+     * twice. Migration 023's unique index refuses that outright now; this is
+     * what stops the user ever meeting the refusal. Ghost rows collapse on the
+     * name, case-insensitively, for the same reason and by the same rule the
+     * notes importer uses.
+     *
+     * Winning on either row is winning. A row that names nobody is dropped —
+     * it would land as a blank line on the scoreboard.
+     * @param {DraftShot} shot
+     * @returns {Array<{name: string, is_winner: boolean, score: null, user_id: string|null}>}
+     */
+    seats(shot) {
+      const out = [];
+      const byWho = new Map();
+      for (const p of (shot && shot.players) || []) {
+        if (!p) continue;
+        const name = String(p.name || "").trim();
+        if (!p.userId && !name) continue;
+        const who = p.userId ? `u:${p.userId}` : `g:${name.toLowerCase()}`;
+        const taken = byWho.get(who);
+        if (taken) {
+          taken.is_winner = taken.is_winner || !!p.isWinner;
+          continue;
+        }
+        const seat = {
+          name,
+          is_winner: !!p.isWinner,
+          score: null,
+          user_id: p.userId || null,
+        };
+        byWho.set(who, seat);
+        out.push(seat);
+      }
+      return out;
+    }
+
+    /**
+     * A shot is importable once it names a game AND seats somebody.
+     *
+     * The roster half is migration 023's invariant. It used to say "everything
+     * else is optional", and a play with nobody at it imported: an empty
+     * scoreboard on the card, a play counting towards nobody's record, and no
+     * ghost for anyone to claim later. The photo is right there and the seats
+     * are two taps, so this is a thing to go and fix rather than a thing to
+     * write down.
      *
      * There is no soft-dropped state here, unlike the notes importer: a photo
      * the user doesn't want is removed outright, because it is one thing they
      * are looking straight at rather than one of 58 rows a tally expanded into.
      */
     importable() {
-      return this.shots.filter((s) => s.game && s.game.id);
+      return this.shots.filter(
+        (s) => s.game && s.game.id && this.seats(s).length > 0,
+      );
     }
 
     /** Shots the user kept but never matched to a game. */
     unassigned() {
       return this.shots.filter((s) => !(s.game && s.game.id));
+    }
+
+    /**
+     * Shots that named a game but seated nobody. Counted apart from
+     * `unassigned` because the two have different fixes, and a warning that
+     * says how many plays are being left behind without saying which problem
+     * to go and solve is not a warning.
+     */
+    seatless() {
+      return this.shots.filter(
+        (s) => s.game && s.game.id && this.seats(s).length === 0,
+      );
     }
 
     /**
@@ -294,12 +360,9 @@
         played_at: shot.playedAt,
         notes: shot.notes || null,
         photo_url: shot.photoUrl || null,
-        players: shot.players.map((p) => ({
-          name: p.name,
-          is_winner: !!p.isWinner,
-          score: null,
-          user_id: p.userId || null,
-        })),
+        // Collapsed — see seats(). One account cannot be seated twice here,
+        // which is what migration 023's unique index enforces at the far end.
+        players: this.seats(shot),
         country_code: shot.countryCode || null,
         // The idempotency key, stable across attempts by construction.
         client_key: shot.id,

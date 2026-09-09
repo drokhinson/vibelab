@@ -15708,6 +15708,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-variant-numeric: tabular-nums;
 }
 .imp-play + .imp-play { border-top: 1px solid var(--polaroid-line); }
+/* A row whose note named nobody. It cannot be imported (a play needs at least
+   one player), so it is marked where the reader is scrolling rather than only
+   counted on the last step — a rule against the leading edge, which reads on
+   either ground because both colours are tokens. */
+.imp-play--seatless {
+  border-left: 3px solid var(--rust);
+  background: color-mix(in srgb, var(--rust) 7%, transparent);
+}
 .imp-play__head {
   display: flex;
   align-items: center;

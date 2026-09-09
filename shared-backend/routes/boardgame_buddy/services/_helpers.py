@@ -19,6 +19,13 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "code_allocation_failed": (503, "Could not allocate session code"),
     "forbidden": (403, "Only the host can finalize"),
     "game_not_found": (404, "Game not found"),
+    # Migration 023's roster gate. Both are 400 rather than 422: the request
+    # parsed fine, it is the play inside it that isn't one. bgb_import_plays
+    # reports either per play in `results` and lands the rest of the chunk, so
+    # these statuses are what a SINGLE write (POST /plays, a lobby finalize)
+    # sees — the importers filter both cases out before they send.
+    "no_players": (400, "A play needs at least one player"),
+    "duplicate_player": (400, "That play seats the same person twice"),
     # Migration 046's host writes. `host_only` is separate from `forbidden`
     # rather than a reuse: forbidden's detail is finalize-specific, and
     # widening it would change bgb_finalize_session's message for no reason.

@@ -482,6 +482,11 @@ ALTER TABLE public.boardgamebuddy_play_players ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_display_name_trgm ON public.boardgamebuddy_play_players USING gin (player_display_name extensions.gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_play ON public.boardgamebuddy_play_players USING btree (play_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_user_play ON public.boardgamebuddy_play_players USING btree (player_user_id, play_id) WHERE (player_user_id IS NOT NULL);
+-- One account, one seat, per play (migration 023). Ghost seats carry a NULL
+-- here and sit outside the predicate on purpose: two same-named ghosts at one
+-- table is a legitimate roster, where one ACCOUNT twice never is. The three
+-- importers each used to write it — see the migration header.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bgb_play_players_play_user ON public.boardgamebuddy_play_players USING btree (play_id, player_user_id) WHERE (player_user_id IS NOT NULL);
 -- The driving index for the notifications feed: the viewer's own seats, newest
 -- first. Partial on the same predicate as idx_bgb_play_players_user_play, which
 -- stays — that one serves point lookups by (user, play), this one the ordered
