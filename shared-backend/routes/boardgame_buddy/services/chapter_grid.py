@@ -64,6 +64,31 @@ def validate_layout_pairing(
     raise HTTPException(status_code=400, detail=detail)
 
 
+def grid_title(game_name: str | None) -> str:
+    """The title a scoring-grid chapter gets, DERIVED from the game it is for.
+
+    A grid has no name of its own and never asks for one. Naming it would be
+    asking the author to distinguish their grid from other people's, and that is
+    not the axis anyone picks along: a grid belongs to one game, a player keeps
+    at most one per game, and the pool already sorts by popularity and prints
+    the author under every row — which is what a reader actually chooses on. The
+    field only ever collected twenty synonyms for "Everdell scoring".
+
+    So the title joins `content` as something generated from the rows' context
+    rather than typed beside them. It still has to EXIST — the column is NOT
+    NULL, the pool ILIKE-searches it, the moderation queue heads a report with
+    it and the play snapshot carries it onto the scoring card — so it is the
+    game's name plus what the chapter is, which reads correctly in all four
+    places and, unlike a bare game name, still reads correctly out of context.
+
+    Regenerated on every write, so renaming a game re-titles its grids the next
+    time one is edited rather than leaving a title that names a game nobody can
+    find any more.
+    """
+    name = (game_name or "").strip()
+    return f"{name} scoring" if name else "Scoring grid"
+
+
 def grid_to_content(grid: ScoringGrid) -> str:
     """Render a grid's rows as the markdown bullet list stored in `content`.
 

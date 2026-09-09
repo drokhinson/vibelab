@@ -126,6 +126,9 @@ class ScoringRow(BaseModel):
 
     label: str = Field(..., min_length=1, max_length=MAX_SCORING_ROW_LABEL_CHARS)
     color: ScoringRowColor = ScoringRowColor.NEUTRAL
+    # Optional. How this row is scored, written by the template's author and
+    # read by whoever is scoring: it surfaces only on the grid itself, behind an
+    # info button beside the label, and never in the template's own listing.
     note: Optional[str] = Field(None, max_length=MAX_SCORING_ROW_NOTE_CHARS)
 
 
@@ -825,7 +828,12 @@ class ChapterTypeResponse(BaseModel):
 
 class ChapterCreate(BaseModel):
     chapter_type: str
-    title: str
+    # Optional for (and only for) layout='scoring_grid', whose title is DERIVED
+    # from the game rather than typed — see services/chapter_grid.grid_title.
+    # A text chapter still requires one, which the validator below enforces:
+    # widening the field would otherwise let a titleless prose chapter through
+    # to a NOT NULL column.
+    title: Optional[str] = None
     content: str
     layout: ChapterLayout = ChapterLayout.TEXT
     # Required for (and only for) layout='scoring_grid'. Mirrors the DB's
@@ -840,6 +848,8 @@ class ChapterCreate(BaseModel):
             raise ValueError("layout 'scoring_grid' requires a grid")
         if not wants_grid and self.grid is not None:
             raise ValueError("grid is only valid with layout 'scoring_grid'")
+        if not wants_grid and not (self.title or "").strip():
+            raise ValueError("title is required")
         return self
 
 
@@ -865,6 +875,9 @@ class ChapterGenerateResponse(BaseModel):
 
 class ChapterUpdate(BaseModel):
     chapter_type: Optional[str] = None
+    # None means "not supplied". A scoring grid's title is derived from its game
+    # on every write, so the editor sends none for one and anything a client
+    # does send for one is overwritten rather than honoured.
     title: Optional[str] = None
     content: Optional[str] = None
     layout: Optional[ChapterLayout] = None

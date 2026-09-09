@@ -181,7 +181,13 @@ components above.
       // original) or "scoring_grid" (labelled rows the play screen fills in).
       // Only the `scoring` type offers the choice; every other type is text.
       this._formLayout = "text";
-      this._formRows = [];           // [{label, color}] — only for scoring_grid
+      this._formRows = [];           // [{label, color, note}] — scoring_grid only
+      // Which row currently has its colour picker / description field open.
+      // Disclosure state, so it lives here rather than inside the row objects —
+      // those get posted to the server. One index each, not a per-row flag: a
+      // twenty-four-row grid with every picker open is a screenful of swatches.
+      this._tmplColorOpen = null;
+      this._tmplNoteOpen = null;
       // The wizard's optional focus prompt for the AI draft. Survives Back
       // from step 2 so tweak-and-regenerate is two taps, and dies with the
       // rest of the form buffer here.
@@ -928,8 +934,16 @@ components above.
       const rows = (c.grid && Array.isArray(c.grid.rows)) ? c.grid.rows : null;
       this._formLayout = c.layout === "scoring_grid" && rows ? "scoring_grid" : "text";
       this._formRows = rows
-        ? rows.map((r) => ({ label: r.label || "", color: r.color || "neutral" }))
+        ? rows.map((r) => ({
+            label: r.label || "",
+            color: r.color || "neutral",
+            note: r.note || "",
+          }))
         : [];
+      // Every row of a saved grid has already been given a colour, so they all
+      // open collapsed — the pickers are for rows still being decided.
+      this._tmplColorOpen = null;
+      this._tmplNoteOpen = null;
       this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
       this._centerTypeScrollOnNext = true;
     }
@@ -1178,16 +1192,19 @@ components above.
       return this._renderMarkdownStep(isEditing);
     }
 
-    // The scoring-grid body: a title and a row list, no markdown toolbar, no
-    // Write/Preview toggle and no Import — the row editor replaces all of it,
-    // and the preview it renders is the real scoring grid rather than a
-    // lookalike (widgets/scoring-template-editor.js).
+    // The scoring-grid body: a row list and nothing else — no title field, no
+    // markdown toolbar, no Write/Preview toggle and no Import. The row editor
+    // replaces all of it, the title is derived by the backend from the game
+    // (services/chapter_grid.grid_title), and the preview it renders is the
+    // real scoring grid rather than a lookalike
+    // (widgets/scoring-template-editor.js).
     _renderGridStep(isEditing) {
       return window.ScoringTemplateEditor.render({
-        title: this._formTitle,
         rows: this._formRows,
         typeRow: this._renderTypeRow(isEditing),
         error: this._error,
+        colorOpen: this._tmplColorOpen,
+        noteOpen: this._tmplNoteOpen,
       });
     }
 
@@ -1431,6 +1448,11 @@ components above.
       // rather than on its own empty state.
       if (this._formLayout === "scoring_grid" && !this._formRows.length) {
         this._formRows = [window.ScoringTemplateEditor.blankRow()];
+        // Open on the colour picker, same as a row added by hand: naming the
+        // row and tinting it are one action, and the picker folds away again
+        // the moment a swatch is tapped.
+        this._tmplColorOpen = 0;
+        this._tmplNoteOpen = null;
       }
       this.render();
     }
@@ -1447,7 +1469,10 @@ components above.
     _paintRows() {
       const host = this.container.querySelector("#tmpl-rows-host");
       if (!host) { this.render(); return; }
-      host.innerHTML = window.ScoringTemplateEditor.renderRowList(this._formRows);
+      host.innerHTML = window.ScoringTemplateEditor.renderRowList(this._formRows, {
+        colorOpen: this._tmplColorOpen,
+        noteOpen: this._tmplNoteOpen,
+      });
       const prev = this.container.querySelector(".tmpl-preview");
       if (prev) {
         prev.innerHTML = `<span class="tmpl-preview__label">Preview</span>`
@@ -1465,17 +1490,60 @@ components above.
       // picture and never costs the user their caret.
     }
 
+    /** Show or hide one row's swatch picker. At most one is open at a time. */
+    _tmplToggleColor(i) {
+      if (i < 0 || i >= this._formRows.length) return;
+      this._tmplColorOpen = this._tmplColorOpen === i ? null : i;
+      // Opening the picker closes any open description field: both are
+      // disclosures under the same row and stacking them pushes the row the
+      // user is working on off the screen.
+      if (this._tmplColorOpen != null) this._tmplNoteOpen = null;
+      this._paintRows();
+    }
+
+    // Picking a colour is the whole point of the picker, so it folds away
+    // again on the way out — the chosen swatch stays on the row's chip.
     _tmplSetColor(i, slug) {
       const row = this._formRows[i];
       if (!row) return;
       row.color = slug;
+      this._tmplColorOpen = null;
       this._paintRows();
+    }
+
+    /** Open or close one row's optional scoring description. */
+    _tmplToggleNote(i) {
+      if (i < 0 || i >= this._formRows.length) return;
+      const opening = this._tmplNoteOpen !== i;
+      this._tmplNoteOpen = opening ? i : null;
+      if (opening) this._tmplColorOpen = null;
+      this._paintRows();
+      if (!opening) return;
+      const el = this.container.querySelector(`#tmpl-row-note-${i}`);
+      if (el) {
+        el.focus();
+        const n = el.value.length;
+        try { el.setSelectionRange(n, n); } catch (_) {}
+      }
+    }
+
+    _tmplSetNote(i, value) {
+      const row = this._formRows[i];
+      if (!row) return;
+      row.note = value;
+      // No repaint, for the same reason _tmplSetLabel doesn't: the textarea
+      // already shows what was typed, and repainting it mid-sentence would take
+      // the caret with it.
     }
 
     _tmplAddRow() {
       if (this._formRows.length >= window.ScoringTemplateEditor.MAX_ROWS) return;
       this._formRows.push(window.ScoringTemplateEditor.blankRow());
       this._error = null;
+      // A new row has no colour yet, so it opens on the picker; the label field
+      // still takes the focus, because naming the row comes first.
+      this._tmplColorOpen = this._formRows.length - 1;
+      this._tmplNoteOpen = null;
       // The button's own label flips at the ceiling, so this one needs the
       // whole editor rather than just the row host.
       this.render();
@@ -1489,6 +1557,11 @@ components above.
       if (i < 0 || i >= this._formRows.length) return;
       this._formRows.splice(i, 1);
       this._error = null;
+      // Both disclosures are keyed by index, and every index at or after the
+      // removed one has just shifted — reopening one of them on whichever row
+      // slid into the slot would be worse than closing them.
+      this._tmplColorOpen = null;
+      this._tmplNoteOpen = null;
       // Same reason as _tmplAddRow: the add button may have come back off its
       // disabled state.
       this.render();
@@ -1500,7 +1573,18 @@ components above.
       if (j < 0 || j >= this._formRows.length) return;
       const [row] = this._formRows.splice(i, 1);
       this._formRows.splice(j, 0, row);
+      // The two rows swapped places, so an open disclosure follows the row it
+      // belongs to rather than staying on the slot number.
+      this._tmplColorOpen = this._tmplSwapIndex(this._tmplColorOpen, i, j);
+      this._tmplNoteOpen = this._tmplSwapIndex(this._tmplNoteOpen, i, j);
       this._paintRows();
+    }
+
+    /** @param {number|null} at @param {number} i @param {number} j */
+    _tmplSwapIndex(at, i, j) {
+      if (at === i) return j;
+      if (at === j) return i;
+      return at;
     }
 
     // Jump straight to a step — the "Change" affordance on step 2's type chip.
@@ -1866,16 +1950,28 @@ components above.
       let content = (this._formContent || "").trim();
       if (isGrid) {
         rows = (this._formRows || [])
-          .map((r) => ({ label: (r.label || "").trim(), color: r.color || "neutral" }))
+          .map((r) => {
+            const note = (r.note || "").trim()
+              .slice(0, window.ScoringTemplateEditor.MAX_NOTE);
+            const out = { label: (r.label || "").trim(), color: r.color || "neutral" };
+            // Absent rather than "": the column stores the document verbatim,
+            // and an empty string would read as "this row has a description"
+            // everywhere that tests for one — the grid's info button included.
+            if (note) out.note = note;
+            return out;
+          })
           .filter((r) => r.label);
-        if (!title || !rows.length) {
-          this._error = rows && rows.length
-            ? "Give the chapter a title."
-            : "Add at least one scoring row.";
+        if (!rows.length) {
+          this._error = "Add at least one scoring row.";
           this.render();
           return;
         }
-        content = rows.map((r) => `- ${r.label}`).join("\n");
+        // Mirrors services/chapter_grid.grid_to_content, which regenerates this
+        // server-side; the copy sent here is only so an offline reader of the
+        // cached row sees prose rather than an empty body.
+        content = rows
+          .map((r) => (r.note ? `- ${r.label} (${r.note})` : `- ${r.label}`))
+          .join("\n");
       } else if (!title || !content) {
         this._error = "Title and content are required.";
         this.render();
@@ -1887,6 +1983,10 @@ components above.
       // the moment it isn't.
       const layout = isGrid ? "scoring_grid" : "text";
       const grid = isGrid ? { v: 1, rows } : null;
+      // A grid has no title of its own: the backend derives one from the game
+      // (services/chapter_grid.grid_title) and overwrites whatever a client
+      // sends, so sending one would only invite the two to disagree.
+      const titleFields = isGrid ? {} : { title };
       this._saving = true;
       this.render();
       const isEditing = this._tab === "edit";
@@ -1896,7 +1996,7 @@ components above.
         if (isEditing) {
           await window.Chapter.update(this._editingChapterId, {
             chapter_type: this._formType,
-            title,
+            ...titleFields,
             content,
             layout,
             grid,
@@ -1905,7 +2005,7 @@ components above.
         } else {
           await window.Chapter.create(targetGameId, {
             chapter_type: this._formType,
-            title,
+            ...titleFields,
             content,
             layout,
             grid,

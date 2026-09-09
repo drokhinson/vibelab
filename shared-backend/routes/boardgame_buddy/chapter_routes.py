@@ -299,7 +299,7 @@ async def create_chapter(
 
     game = (
         sb.table("boardgamebuddy_games")
-        .select("id")
+        .select("id, name")
         .eq("id", game_id)
         .execute()
     )
@@ -309,13 +309,19 @@ async def create_chapter(
     _validate_chapter_type(sb, body.chapter_type)
     chapter_grid.validate_layout_pairing(body.layout, body.chapter_type)
 
-    # For a scoring grid the rows ARE the chapter, and `content` is a generated
-    # plain-text mirror of them rather than anything the author typed — see
-    # services/chapter_grid.py for why the rows do not live in `content`.
+    # For a scoring grid the rows ARE the chapter: both `content` and `title`
+    # are generated rather than anything the author typed — see
+    # services/chapter_grid.py for why neither is a field on the form.
+    is_grid = body.layout is ChapterLayout.SCORING_GRID and body.grid is not None
     content = (
         chapter_grid.grid_to_content(body.grid)
-        if body.layout is ChapterLayout.SCORING_GRID and body.grid
+        if is_grid
         else body.content
+    )
+    title = (
+        chapter_grid.grid_title(game.data[0].get("name"))
+        if is_grid
+        else body.title
     )
 
     insert = (
@@ -323,7 +329,7 @@ async def create_chapter(
         .insert({
             "game_id": game_id,
             "chapter_type": body.chapter_type,
-            "title": body.title,
+            "title": title,
             "content": content,
             "layout": str(body.layout),
             "grid": body.grid.model_dump(mode="json") if body.grid else None,
@@ -434,7 +440,7 @@ async def update_chapter(
 
     existing = (
         sb.table("boardgamebuddy_guide_chapters")
-        .select("id, created_by, layout, chapter_type")
+        .select("id, game_id, created_by, layout, chapter_type")
         .eq("id", chapter_id)
         .execute()
     )
@@ -448,8 +454,9 @@ async def update_chapter(
     # carries. A PATCH that only moves chapter_type to 'tips' names no layout at
     # all, so validating the body alone would happily strand a scoring grid
     # under a type the guide scroll files elsewhere.
+    layout = body.layout if body.layout is not None else row.get("layout")
     chapter_grid.validate_layout_pairing(
-        body.layout if body.layout is not None else row.get("layout"),
+        layout,
         body.chapter_type if body.chapter_type is not None else row.get("chapter_type"),
     )
 
@@ -463,6 +470,20 @@ async def update_chapter(
         updates["content"] = body.content
     if body.layout is not None:
         updates["layout"] = str(body.layout)
+    # A grid's title is derived, so it is rewritten on every edit whatever the
+    # body said — which is also how a grid authored before the title field was
+    # retired, or one whose game has since been renamed, picks up the current
+    # form. Costs one lookup, and only on a grid edit.
+    if str(layout) == str(ChapterLayout.SCORING_GRID):
+        game = (
+            sb.table("boardgamebuddy_games")
+            .select("name")
+            .eq("id", row["game_id"])
+            .execute()
+        )
+        updates["title"] = chapter_grid.grid_title(
+            game.data[0].get("name") if game.data else None
+        )
     # A None grid means "not supplied", so this endpoint cannot CLEAR one. That
     # is deliberate: a chapter never changes layout in practice, and the editor
     # sends layout and grid together or neither.

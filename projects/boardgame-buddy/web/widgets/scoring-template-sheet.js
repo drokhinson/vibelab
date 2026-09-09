@@ -25,6 +25,8 @@
    * @property {string} title
    * @property {{rows: Array<{label: string, color: string}>}} grid
    * @property {string} [source_game_name]
+   * @property {string} [created_by]
+   * @property {string} [created_by_name]
    */
 
   const LIST_SEL = "[data-tmpl-list]";
@@ -93,12 +95,22 @@
     }
 
     _renderPanel() {
+      // Every grid for one game carries the SAME derived title (the game's name
+      // plus "scoring" — services/chapter_grid.grid_title), because a grid is
+      // not named by its author. So the row leads with WHO wrote it, which is
+      // the thing that actually tells two of them apart, and the title never
+      // appears here at all.
+      const me = window.store && window.store.get && window.store.get("user");
       const rows = this._templates.map((t) => {
         const on = t.id === this._activeId;
         const n = ((t.grid && t.grid.rows) || []).length;
         const from = t.source_game_name
           ? ` · ${t.source_game_name}`
           : "";
+        const mine = !!(me && t.created_by && me.id === t.created_by);
+        const who = mine
+          ? "Your grid"
+          : (t.created_by_name ? `${t.created_by_name}'s grid` : "Community grid");
         return `
           <button type="button" role="option" aria-selected="${on ? "true" : "false"}"
                   class="tmpl-sheet__row ${on ? "tmpl-sheet__row--on" : ""}"
@@ -107,7 +119,7 @@
               <i data-icon="table" class="w-5 h-5"></i>
             </span>
             <span class="tmpl-sheet__text">
-              ${escapeHtml(t.title || "Untitled grid")}
+              ${escapeHtml(who)}
               <span class="tmpl-sheet__meta">${n} row${n === 1 ? "" : "s"}${escapeHtml(from)}</span>
             </span>
             <span class="tmpl-sheet__tick">
