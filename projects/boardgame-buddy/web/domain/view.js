@@ -97,9 +97,12 @@
   // init.js#toggleScreen is the other half. One list so the pair can never
   // drift into "the bell knows and the gear doesn't", which is exactly how the
   // gear's box ended up never lighting on the screen it opens.
+  // Selected by data-toggle rather than by class: each toggle exists twice,
+  // once in the header (phone, tablet) and once in the wide tier's nav rail,
+  // and both copies wear the screen's state.
   const HEADER_TOGGLES = [
-    [".bgb-global-header__bell", "notifications"],
-    [".bgb-global-header__settings", "settings"],
+    ['[data-toggle="notifications"]', "notifications"],
+    ['[data-toggle="settings"]', "settings"],
   ];
   // The screens half of that table, for init.js#toggleScreen — it has to know
   // that the OTHER header screen is currently open, and reading it from here
@@ -332,7 +335,7 @@
         el.classList.toggle("hidden", !authed);
       });
 
-      document.querySelectorAll(".bgb-nav button, .btm-nav button").forEach((btn) => {
+      document.querySelectorAll(".bgb-nav button[data-nav]").forEach((btn) => {
         const views = btn.dataset.navViews
           ? btn.dataset.navViews.split(",").map((s) => s.trim())
           : [btn.dataset.nav];
@@ -349,8 +352,9 @@
       // a deep link, a notification tapped through to a play — and every one of
       // them lands in this function.
       HEADER_TOGGLES.forEach(([selector, view]) => {
-        const btn = document.querySelector(selector);
-        if (btn) btn.setAttribute("aria-pressed", String(name === view));
+        document.querySelectorAll(selector).forEach((btn) => {
+          btn.setAttribute("aria-pressed", String(name === view));
+        });
       });
 
       this._current = next;

@@ -680,11 +680,17 @@
     _renderGather(s) {
       const participants = s.participants || [];
       const hostId = s.host_user_id;
+      // Same pane wrappers as the host's Gather (play-flow-view.js
+      // _renderGather): game and code left, the lobby right on the tablet and
+      // wide tiers; display:contents on a phone.
       return `
+        <div class="cascade-cols">
+        <div class="cascade-col">
         ${this._renderGameCard(s)}
 
         ${this._renderInviteCard(s)}
-
+        </div>
+        <div class="cascade-col cascade-col--aside">
         <section class="cascade-card">
           <label class="cascade-card__label">
             <i data-icon="users" class="w-3.5 h-3.5"></i>
@@ -696,6 +702,8 @@
                  ${participants.map((p) => this._renderParticipantRow(p, hostId)).join("")}
                </ul>`}
         </section>
+        </div>
+        </div>
       `;
     }
 
@@ -731,16 +739,23 @@
       // Scoring above the reference guide, mirroring the host's Play step
       // (play-flow-view.js _renderPlay) — a spectator is here to watch the
       // grid move, so it comes first and the guide is what they scroll to.
+      // Same pane wrappers as the host's Play step: grid left, guide right on
+      // the tablet and wide tiers; display:contents on a phone.
       return `
         ${this._renderGameInfoBar(s)}
 
+        <div class="cascade-cols">
+        <div class="cascade-col">
         ${this._renderViewerScoring(s)}
-
+        </div>
+        <div class="cascade-col cascade-col--aside">
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
           ${this._renderRulebookRow(s)}
           <div id="session-viewer-guide-mount" class="session-viewer__guide-mount"></div>
         </section>
+        </div>
+        </div>
       `;
     }
 

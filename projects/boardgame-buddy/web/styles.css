@@ -26,6 +26,23 @@
      a sub-pixel seam for list content to show through. */
   --bgb-spoke-head-height: 59px;
 
+  /* Layout tiers. <html data-bgb-layout="phone|tablet|wide"> is set before
+     first paint by the inline boot in index.html and owned after that by
+     domain/layout.js — the same lever shape as data-bgb for the theme. These
+     are the phone values; the two tier blocks below re-declare them.
+       --bgb-col-max     the content column: #app's width, and the width every
+                         docked bar pins to (they used to carry a literal 480).
+       --bgb-rail-width  the left nav rail; 0 on the bottom-bar tiers.
+       --bgb-col-center  the column's centre line for fixed chrome that pins
+                         with `left: … ; transform: translateX(-50%)`. Reads as
+                         `50%` on the phone; the rail shifts the column right
+                         by half its width on wide. The 50% resolves at the use
+                         site, against the viewport, which is what a fixed
+                         element measures itself against. */
+  --bgb-col-max: 480px;
+  --bgb-rail-width: 0px;
+  --bgb-col-center: calc(50% + var(--bgb-rail-width) / 2);
+
   /* The header is sticky, so an unpadded scroll-into-view drops its target
      underneath it. Callers: play-flow-view.js, game-explorer-view.js,
      session-viewer-view.js. */
@@ -82,6 +99,25 @@
      cream ink on a cream plate at 1.2:1. */
   --photo-plate: rgba(255, 251, 241, 0.9);
   --on-photo:    #211A12;
+}
+
+/* ── Layout tiers ──────────────────────────────────────────────────────────── */
+/* tablet: an iPad held upright. The column widens, the bottom bar stays —
+   thumbs are still at the bottom. Screens that split into two panes do so
+   from here (grep `data-bgb-layout="tablet"], :root[data-bgb-layout="wide"]`).
+   wide: an iPad on its side, a laptop, a monitor. The bottom bar becomes a
+   left rail carrying the header's logo, bell and gear, so the header itself
+   is hidden — and both height tokens go to 0px, which collapses #app's
+   bottom padding, every `bottom: calc(var(--bgb-nav-height) + …)` and every
+   sticky sub-header's `top:` without touching those rules. */
+:root[data-bgb-layout="tablet"] {
+  --bgb-col-max: 720px;
+}
+:root[data-bgb-layout="wide"] {
+  --bgb-col-max: 1040px;
+  --bgb-rail-width: 88px;
+  --bgb-nav-height: 0px;
+  --bgb-header-height: 0px;
 }
 
 /* ── Dark (default) ─────────────────────────────────────────────────────────── */
@@ -1250,11 +1286,11 @@ body {
 main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   position: fixed;
   top: var(--bgb-vv-top, 0px);
-  left: 0;
+  left: var(--bgb-rail-width);  /* clear of the wide tier's nav rail */
   right: 0;
   margin-inline: auto;          /* keeps the column centred on desktop */
-  width: 100%;
-  max-width: 480px;             /* matches #app's max-w-[480px] */
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max); /* matches #app's column */
   height: 100vh;                /* no-dvh fallback */
   height: 100dvh;               /* drops the retracted URL-bar strip */
   /* --bgb-vv-h drops the keyboard too, but it is only as fresh as the last
@@ -2434,7 +2470,12 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    collides with the tab bar. */
 .chapter-add__fab {
   position: fixed;
-  right: 18px;
+  /* 18px in from the CONTENT COLUMN's edge, not the viewport's: on a tablet
+     or a monitor the column is narrower than the window, and a FAB hugging
+     the window corner floats a screen-width away from the list it acts on.
+     The column's right edge sits (viewport - rail - column) / 2 in from the
+     right; on a phone that is negative and max() falls back to 18px. */
+  right: max(18px, calc(50% - var(--bgb-rail-width) / 2 - var(--bgb-col-max) / 2 + 18px));
   bottom: calc(var(--bgb-nav-height, 64px) + 18px);
   z-index: 25;
   display: inline-flex;
@@ -2462,7 +2503,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    ("Back to game details", etc.). */
 .chapter-add__fab-back {
   position: fixed;
-  left: 18px;
+  /* Mirror of .chapter-add__fab's right: the column's left edge is the rail
+     plus the same centring gap, so this also stays clear of the rail. */
+  left: max(calc(var(--bgb-rail-width) + 18px), calc(50% + var(--bgb-rail-width) / 2 - var(--bgb-col-max) / 2 + 18px));
   bottom: calc(var(--bgb-nav-height, 64px) + 18px);
   z-index: 25;
   display: inline-flex;
@@ -2605,6 +2648,19 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      height a second time. See the cascade block below. */
   min-height: 100dvh;
   padding-bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
+  /* The content column. Was Tailwind's max-w-[480px] mx-auto on the element;
+     it is a token now so the tablet and wide tiers can widen it, and so the
+     docked bars below can pin to the same number instead of repeating it. */
+  width: 100%;
+  max-width: var(--bgb-col-max);
+  margin-inline: auto;
+}
+/* The rail is position:fixed at the left edge (see .bgb-nav below), so the
+   page makes room for it here and #app centres in what is left. Only while
+   the rail is actually on screen: it is data-auth-only, and the splash and
+   auth screens would otherwise sit 88px off-centre with nothing beside them. */
+:root[data-bgb-layout="wide"] body:has(> .bgb-nav:not(.hidden)) {
+  padding-left: var(--bgb-rail-width);
 }
 
 /* Flat rectangular tab bar — square corners, edge-to-edge, nothing
@@ -2727,6 +2783,91 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-nav__tab--play:active .bgb-nav__ico { filter: brightness(0.94); }
 .bgb-nav__tab--play.active .bgb-nav__ico {
   box-shadow: 0 0 0 2px rgba(245, 220, 142, 0.35);
+}
+
+/* ── Left rail (wide tier) ──────────────────────────────────────────────────
+   Same element, stood on its end. On a screen wide enough (≥ 1024px, or
+   whatever data-bgb-layout="wide" resolves to — see the Layout tiers block at
+   the top of the file) the bar leaves the bottom edge for the left one, and
+   takes over the global header's job: the brand mark on top, the three tabs,
+   then the bell and the gear sunk to the bottom. The header itself is hidden
+   here, and --bgb-header-height is 0px with it.
+
+   The rail hugs the CONTENT COLUMN, not the window edge: #app centres in the
+   space right of the rail (body's padding-left, see #app above), so on a
+   monitor wider than rail + column the rail slides in to sit against the
+   column's left edge, where the eye already is. On a screen narrower than
+   that, max() pins it to the edge.
+
+   Everything hidden by data-auth-only stays hidden: .hidden is display:none
+   !important (the hiding contract at the top of the file), so none of the
+   display values below can leak the rail onto the splash or auth screen. */
+.bgb-nav__brand,
+.bgb-nav__tab--util { display: none; }
+
+:root[data-bgb-layout="wide"] .bgb-global-header { display: none; }
+
+:root[data-bgb-layout="wide"] .bgb-nav {
+  top: 0;
+  bottom: 0;
+  right: auto;
+  left: max(0px, calc(50% - (var(--bgb-col-max) + var(--bgb-rail-width)) / 2));
+  width: var(--bgb-rail-width);
+  height: auto;              /* --bgb-nav-height is 0px on this tier */
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+  border-top: 0;
+  border-right: 1px solid var(--line-strong);
+  box-shadow: 1px 0 12px rgba(0, 0, 0, 0.3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:root[data-bgb-layout="wide"] .bgb-nav__brand {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+:root[data-bgb-layout="wide"] .bgb-nav__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 0.6rem;
+  object-fit: cover;
+}
+:root[data-bgb-layout="wide"] .bgb-nav__tab {
+  flex: 0 0 auto;
+  min-height: 64px;
+}
+:root[data-bgb-layout="wide"] .bgb-nav__tab--util { display: flex; }
+/* The utilities sink to the bottom of the rail, under the tabs: the first
+   utility (the one directly after the last route tab) takes the slack. */
+:root[data-bgb-layout="wide"] .bgb-nav__tab[data-nav] + .bgb-nav__tab--util { margin-top: auto; }
+/* The active marker turns from a rule under the tab into a rule down its
+   leading edge. */
+:root[data-bgb-layout="wide"] .bgb-nav__tab.active::before {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: auto;
+  width: 2px;
+  height: auto;
+}
+/* A toggle wears its screen's state the way a tab wears its route's:
+   domain/view.js#go sets aria-pressed on every navigation. */
+.bgb-nav__tab--util[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-quiet);
+}
+:root[data-bgb-layout="wide"] .bgb-nav__tab--util[aria-pressed="true"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--accent, #CDA23F);
 }
 
 /* ── Tabs — warm gold active state ──────────────────────────────────────────── */
@@ -2899,18 +3040,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   .bgb-global-header__settings[aria-pressed="true"] { transform: none; }
 }
 
-/* DaisyUI's .btm-nav is position:fixed left:0 right:0 — fine on a phone but
-   on a desktop browser it stretches the full viewport while the app itself
-   is capped at 480px and centered. Pin the nav to the same column so it
-   visually belongs to the app instead of the browser chrome. */
-.btm-nav {
-  left: 50% !important;
-  right: auto !important;
-  transform: translateX(-50%);
-  max-width: 480px;
-  width: 100%;
-}
-
 /* ── OAuth buttons (per .claude/rules/auth-ui.md) ─────────────────────────── */
 .auth-oauth-btn {
   display: flex;
@@ -2960,6 +3089,167 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    would stack on top of that gap and float the heading between the two days
    it is meant to label. Zero them out here and let the gap do the spacing. */
 .feed-cards > .day-divider { margin: 0.35rem 0.2rem -0.25rem; }
+
+/* ── Feed sidebar (tablet + wide) ───────────────────────────────────────────
+   views/feed-view.js lifts the hot-games and suggested-buddies rails out of
+   the stream into <aside class="feed-aside"> from the tablet tier up, and
+   marks the shell --split. The stream keeps one column — a play card is a
+   photograph and does not stretch — so the extra width goes to the rails,
+   pinned in a sticky sidebar that scrolls on its own. Inside it a rail's
+   horizontal strip becomes a wrapping two-up grid of the same tiles. On a
+   phone the aside is never rendered and none of this applies. */
+.feed-stream { min-width: 0; }
+.feed-shell--split {
+  display: grid;
+  /* 220px at the tablet tier leaves the stream as wide as a phone's. */
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 30%);
+  column-gap: 16px;
+  align-items: start;
+}
+:root[data-bgb-layout="wide"] .feed-shell--split {
+  grid-template-columns: minmax(0, 560px) 300px;
+  column-gap: 32px;
+  justify-content: center;
+}
+.feed-shell--split > .alert { grid-column: 1 / -1; }
+.feed-aside {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + 16px);
+  max-height: calc(100dvh - var(--bgb-header-height) - var(--bgb-nav-height)
+                   - env(safe-area-inset-bottom) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+.feed-aside::-webkit-scrollbar { display: none; }
+
+/* ── Every other screen on the tablet and wide tiers ──────────────────────
+   The rest of the per-tier layout, in one place. The pattern throughout: a
+   screen's <main> or its root becomes a grid from the tablet tier up, every
+   child spans both columns by default, and the cards that read well side by
+   side opt back into a single column. Nothing here applies on a phone. */
+
+/* The Play tab: Host on the left, Join on the right, where the live-session
+   list is visible without scrolling past the host cards. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 24px;
+  align-content: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .cascade-chooser__header {
+  grid-column: 1 / -1;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .lp-divider { display: none; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .lp-join-section {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + 16px);
+  align-self: start;
+}
+
+/* Polaroid grids: the tile never changes, the column count does. The batch
+   and page sizes in collection-view.js and game-explorer-view.js are rows ×
+   these columns — change both together. */
+:root[data-bgb-layout="tablet"] :is(.profile-collection-grid, .lp-find-grid) { grid-template-columns: repeat(4, 1fr); }
+:root[data-bgb-layout="wide"]   :is(.profile-collection-grid, .lp-find-grid) { grid-template-columns: repeat(6, 1fr); }
+
+/* Game detail: the polaroid, status and actions in a sticky left column, the
+   description, expansions, guide scroll and recent plays down the right. The
+   back button is position:absolute and so takes no grid cell. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  column-gap: 24px;
+  align-items: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail__cover {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + 16px);
+  padding: 2.75rem 0 0.75rem;   /* room for the back button above the polaroid */
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail__body { padding-top: 0.75rem; }
+/* Its -1rem bleed is for the phone column's gutters; in the right-hand pane it
+   would run into the gap. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail__plays-scroll { margin: 0; padding-inline: 0; }
+
+/* Profile hubs (own and other): the account card, the stats block and any
+   back row span; the preview cards pair up two to a row. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 16px;
+  align-content: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > * {
+  grid-column: 1 / -1;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > .preview-card {
+  grid-column: auto;
+}
+
+/* Stats: the head, the podium and the career strip span; the stat cards pair
+   up. Loading, empty and error states render one child, which spans. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="stats"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 16px;
+  align-content: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="stats"] > * { grid-column: 1 / -1; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="stats"] > .preview-card { grid-column: auto; }
+
+/* Achievements: each group's horizontal rail wraps into a grid of the same
+   medallions, so a whole group is on screen at once. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .ach-rail {
+  flex-wrap: wrap;
+  overflow: visible;
+  scroll-snap-type: none;
+  margin-inline: 0;
+  padding-inline: 0;
+}
+
+/* Reading screens keep a single 720px column even on a monitor: a settings
+   list, a wizard or a log of rows does not want 1040px of line length. The
+   token is re-declared on the <main> so a docked bar inside it (the wizard
+   footers, the notification bar) pins to the same narrower column — fixed
+   descendants inherit custom properties from where they sit in the tree. */
+:root[data-bgb-layout="wide"] :is(
+  main[data-view="auth"], main[data-view="settings"], main[data-view="notifications"],
+  main[data-view="plays"], main[data-view="buddies"], main[data-view="add-games"],
+  main[data-view="import-plays"], main[data-view="photo-import"], main[data-view="bgg-sync"],
+  main[data-view="reference-guide-add"], main[data-view^="admin-"]) {
+  --bgb-col-max: 720px;
+  width: 100%;
+  max-width: var(--bgb-col-max);
+  margin-inline: auto;
+}
+
+.feed-aside .feed-rail__header,
+.feed-aside .feed-rail__scroll { padding-left: 0; padding-right: 0; }
+.feed-aside .feed-rail__scroll {
+  flex-wrap: wrap;
+  overflow: visible;
+  gap: 0.6rem;
+}
+/* Two tiles to a row, sized by the sidebar rather than by the strip's fixed
+   112px basis; the polaroid's photo scales with its tile. */
+.feed-aside .feed-rail__scroll > .game-polaroid--rail,
+.feed-aside .feed-rail__scroll > .buddy-tile {
+  /* Half the strip less half the gap, with a hair to spare for the strip's
+     own 2px side padding — at exactly half the second tile wrapped. */
+  flex: 1 1 calc(50% - 0.4rem);
+  max-width: calc(50% - 0.4rem);
+}
+/* (0,4,0): outranks the rail variant's own 112px height rule further down. */
+.feed-aside .game-polaroid.game-polaroid--rail :is(.game-polaroid__photo-img, .game-polaroid__photo-placeholder) {
+  height: auto;
+  width: 100%;
+  aspect-ratio: 1;
+}
 .feed-empty {
   text-align: center; padding: 2.5rem 1rem;
   background: oklch(var(--b2)); border-radius: 1rem;
@@ -4548,10 +4838,13 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgbnotif-bar {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
-  left: 50%;
+  /* Pinned to the content column, not the viewport — the same recipe as
+     .cascade-cta-wrap. On wide the rail shifts the column right, which is
+     what --bgb-col-center carries. */
+  left: var(--bgb-col-center);
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max);
   box-sizing: border-box;
   padding: 12px 16px 28px;
   z-index: 35;
@@ -5279,7 +5572,7 @@ html.bgb-ptr-armed body {
 .bgb-ptr {
   position: fixed;
   top: var(--bgb-header-height);
-  left: 50%;
+  left: var(--bgb-col-center);   /* the column's centre, not the viewport's */
   transform: translateX(-50%);
   z-index: 25;
   pointer-events: none;
@@ -6669,7 +6962,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .bgb-import-toasts {
   position: fixed;
   top: calc(var(--bgb-vv-top, 0px) + 10px);
-  left: 50%;
+  left: var(--bgb-col-center);   /* the column's centre, not the viewport's */
   transform: translateX(-50%);
   z-index: 111;
   width: min(calc(100vw - 20px), 460px);
@@ -8888,12 +9181,14 @@ main[data-view="session-viewer"].hidden {
 .cascade-cta-wrap {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
-  /* Pin to #app's 480px column rather than the viewport — .bgb-nav itself
-     is deliberately edge-to-edge, but the CTA belongs to the content column. */
-  left: 50%;
+  /* Pin to #app's content column rather than the viewport — .bgb-nav itself
+     is deliberately edge-to-edge, but the CTA belongs to the content column.
+     The column's width and centre are tokens (see the Layout tiers block at
+     the top of the file), so a wider tier and the left rail both move it. */
+  left: var(--bgb-col-center);
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max);
   box-sizing: border-box;    /* don't lean on preflight */
   padding: 12px 16px 28px;   /* sums to --cascade-cta-bar */
   z-index: 35;
@@ -8911,6 +9206,54 @@ main[data-view="session-viewer"].hidden {
    that — three CTAs stacked on the same 92px strip is not a state worth
    leaving to inheritance. */
 .cascade-screen.is-locked .cascade-cta-wrap { display: none; }
+
+/* ── Cascade panes (tablet + wide) ──────────────────────────────────────────
+   Each step's cards sit in .cascade-cols > .cascade-col + .cascade-col--aside
+   (play-flow-view.js and session-viewer-view.js). On a phone both wrappers
+   are display:contents, so the cards remain direct flex items of
+   .cascade-screen and that layout is untouched. From the tablet tier up the
+   wrappers become a two-pane grid: the grid / the game / the date on the
+   left, and on the right the thing the host glances at rather than works in
+   — the reference guide, the roster, the photo — pinned in a sticky pane that
+   scrolls on its own, so a long guide never scrolls the grid away.
+
+   The docked CTA bar takes the SAME column template, so the button sits
+   exactly under the left pane rather than across both. The bar's inline
+   padding already matches the screen's, which is what lines the tracks up. */
+.cascade-cols,
+.cascade-col { display: contents; }
+
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+  column-gap: 16px;
+  align-items: start;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;   /* the scoring table scrolls inside its pane, not the page */
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-col--aside {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + 12px);
+  /* Everything between the header and the docked bar, minus the screen's own
+     12px top padding. --cascade-bottom-pad differs between the host and the
+     spectator's mirror, and this follows it either way. */
+  max-height: calc(100dvh - var(--bgb-header-height) - var(--bgb-nav-height)
+                   - env(safe-area-inset-bottom) - var(--cascade-bottom-pad) - 12px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-cta-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+  column-gap: 16px;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-cta-wrap .cascade-cta {
+  grid-column: 1;
+}
 /* The joiner's read-only mirror reuses .cascade-screen but renders no CTA
    (it auto-scrolls forward as the host advances the phase), so it has no
    bar to clear — just ordinary trailing breathing room above the nav. */
@@ -8956,10 +9299,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
      the bar's top edge, which is 12px of bar padding above the button. */
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom) + var(--cascade-cta-bar));
-  left: 50%;
+  left: var(--bgb-col-center);
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max);
   box-sizing: border-box;
   padding: 0 16px;
   z-index: 36;
@@ -14817,7 +15160,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   flex-direction: column;
   padding: 4px 16px 0;
   /* The app's content column, not the viewport, on a tablet or desktop. */
-  max-width: 480px;
+  max-width: var(--bgb-col-max);
   margin-inline: auto;
   box-sizing: border-box;
 }
@@ -15561,10 +15904,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .imp-nav {
   position: fixed;
   bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
-  left: 50%;
+  /* Pinned to the content column, not the viewport — the same recipe as
+     .cascade-cta-wrap. On wide the rail shifts the column right, which is
+     what --bgb-col-center carries. */
+  left: var(--bgb-col-center);
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
+  width: calc(100% - var(--bgb-rail-width));
+  max-width: var(--bgb-col-max);
   box-sizing: border-box;
   padding: 12px 16px 28px;
   z-index: 35;

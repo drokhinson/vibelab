@@ -1541,7 +1541,15 @@
     _renderGather() {
       const ps = this._ps;
       const game = ps.gameSnapshot;
+      // .cascade-cols / .cascade-col are display:contents on a phone, so the
+      // cards stay direct children of the screen's flex column and nothing
+      // about that layout moves; on the tablet and wide tiers they become a
+      // two-pane grid with the players on the right (styles.css, "Cascade
+      // panes"). The spectator mirror (session-viewer-view.js) wraps its
+      // cards the same way.
       return `
+        <div class="cascade-cols">
+        <div class="cascade-col">
         ${this._renderInviteCard()}
 
         <section class="cascade-card">
@@ -1552,7 +1560,8 @@
         ${this._renderPlayModeSelector()}
 
         ${this._renderExpansionsPicker()}
-
+        </div>
+        <div class="cascade-col cascade-col--aside">
         <section class="cascade-card">
           <label class="cascade-card__label">Players</label>
           ${ps.players.length === 0 ? `<p class="text-sm opacity-60 mb-2">No players added yet.</p>` : ""}
@@ -1565,6 +1574,8 @@
             <span>${ps.players.length ? "Add players…" : "Add players to the table…"}</span>
           </button>
         </section>
+        </div>
+        </div>
       `;
     }
 
@@ -1712,14 +1723,23 @@
       // whose scroll can run long — is what you scroll down to. Same order in
       // the spectator mirror (session-viewer-view.js) and in native
       // (app/src/screens/PlayFlowScreen.js).
+      // On the tablet and wide tiers the guide stands beside the grid in a
+      // sticky pane of its own (styles.css, "Cascade panes"); on a phone the
+      // wrappers are display:contents and the order above is the layout.
       return `
         ${this._renderGameInfoBar()}
+        <div class="cascade-cols">
+        <div class="cascade-col">
         ${this._renderScoringSection()}
+        </div>
+        <div class="cascade-col cascade-col--aside">
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
           ${rulebookRow}
           <div id="play-flow-guide-mount"></div>
         </section>
+        </div>
+        </div>
       `;
     }
 
@@ -1956,7 +1976,13 @@
     _renderSettle() {
       const url = this._ps.photoPreviewUrl || this._ps.photoUrl;
       const ps = this._ps;
+      // Two panes on the tablet and wide tiers — date and place left, the photo
+      // right — with the notes spanning both underneath; on a phone the
+      // wrappers are display:contents and this is the stacked order it always
+      // was (styles.css, "Cascade panes").
       return `
+        <div class="cascade-cols">
+        <div class="cascade-col">
         <section class="cascade-card">
           <label class="cascade-card__label">Date played</label>
           <input type="date" class="input input-bordered w-full"
@@ -1965,8 +1991,11 @@
         </section>
 
         ${this._renderCountryCard()}
-
+        </div>
+        <div class="cascade-col cascade-col--aside">
         ${this._renderPhotoCard(url)}
+        </div>
+        </div>
 
         <section class="cascade-card">
           <label class="cascade-card__label">Key moments</label>

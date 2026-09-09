@@ -480,7 +480,8 @@ lands in the feed cannot disagree.
 The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§ App chrome & layering) and `.claude/rules/mobile-web.md`. The parts specific to this app:
 
 - **z-index ladder:** view content < 20 pinned spoke back-row < 30 global header < 35 docked footers (`.cascade-cta-wrap`, `.bgb-install`) < 36 `.cascade-error` < 40 `.bgb-nav` < 45 toasts < 100 `.polaroid-popup__backdrop` (every modal and sheet).
-- **Heights are tokens:** `--bgb-nav-height: 64px`, `--bgb-header-height: 53px`, with `:root { scroll-padding-top: calc(var(--bgb-header-height) + 8px) }` derived off the second so `scrollIntoView({block:"start"})` clears the sticky header.
+- **Heights are tokens:** `--bgb-nav-height: 64px`, `--bgb-header-height: 53px`, with `:root { scroll-padding-top: calc(var(--bgb-header-height) + 8px) }` derived off the second so `scrollIntoView({block:"start"})` clears the sticky header. Both are re-declared to `0px` on the wide layout tier (§4.6), where there is no bottom bar and no header — every offset derived from them collapses without those rules changing.
+- **Widths are tokens too:** `--bgb-col-max` is the content column (`#app`'s `max-width`, 480 / 720 / 1040px by tier), `--bgb-rail-width` the wide tier's nav rail (0 elsewhere), and `--bgb-col-center` the column's centre line. Docked chrome pins to the column with `left: var(--bgb-col-center); transform: translateX(-50%); width: calc(100% - var(--bgb-rail-width)); max-width: var(--bgb-col-max)` — never a literal width. A `<main>` that wants a narrower column on a monitor re-declares `--bgb-col-max` on itself, and the fixed bars inside it inherit the narrower value.
 - **The global header is sticky at `top: 0`; each spoke's back row is sticky at `top: var(--bgb-header-height)`**, sharing the header's treatment so the two read as one stack. Scoped to direct children of `<main data-view>` — the same class nested in a card must not pin.
 - **Settings closes, spokes go back.** Settings is reachable from the gear in the global header, i.e. from any screen, so it dismisses with a trailing-edge × calling `router.back('profile-self')`; the fallback only covers a cold `/settings` deep link. The five spokes are reachable only from the hub, so they carry a leading-edge ← .
 - **`body { overflow-x: clip }`, never `hidden`** — see the comment in `styles.css`; `hidden` made `<body>` a scroll container with no height and every `position: sticky` in the app rode off-screen.
@@ -490,6 +491,22 @@ The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§
 ### 4.5 Motion
 
 Two motion patterns are codified in `.claude/rules/web-frontend.md` ("Motion" section) and applied via the `.animate-fadeUp` class with `animation-delay: calc(var(--i) * 40ms)` for staggered entrance. `--ease` is the project's shared curve. The play card adds a flip animation managed inside `ui/play-card.js` (state Map keyed by `play_id`); sheets animate in and out on `sheetIn` / `sheetOut`, whose duration must stay in step with `CLOSE_MS` in `ui/bottom-sheet.js`. Press feedback is `:active` — the polaroid tilt animation was removed.
+
+### 4.6 Layout tiers
+
+The app is drawn for a phone and has to hold on an iPad and a monitor without a second codebase. Three tiers, one attribute, the same lever shape as the theme:
+
+| Tier | Viewport | Column | Nav | Header |
+|---|---|---|---|---|
+| `phone` | < 768px | 480px | bottom bar | sticky at top |
+| `tablet` | 768–1023px | 720px | bottom bar | sticky at top |
+| `wide` | ≥ 1024px | 1040px | 88px left rail, hugging the column | hidden — the rail carries its lockup, bell and gear |
+
+- **The lever is `<html data-bgb-layout="…">`.** An inline boot in `index.html` sets it before first paint (a stored pin, else the viewport); `domain/layout.js` (`window.BgbLayout`) owns it after that — two `MediaQueryList`s held at module scope for the breakpoints, a resync on `orientationchange` and every foreground event, and `store.set("layout", tier)` on each change so a view can `this.listen("layout", …)`. Per-tier CSS selects `:root[data-bgb-layout="tablet"]` / `"wide"` (usually as one `:root:is(…)` prefix); there are no `min-width` media queries, so a pin and the viewport go through the same rules.
+- **A pin is `phone` or `tablet`, never `wide`.** Settings → Layout is Auto / Phone / Tablet. The rail is what a wide screen gets on Auto and not something a 700px screen can hold; and a pinned `tablet` floors to `phone` under 600px, because a two-pane play cascade on a real phone is two panes nobody can read. Auto is the absence of the `bgb.layout` key, exactly like the theme.
+- **The rail is the same `nav.bgb-nav`,** restyled under the wide tier: fixed at the column's left edge (`left: max(0px, calc(50% - (col + rail) / 2))`), `body` padded by `--bgb-rail-width` so `#app` centres in what is left. Its brand link and its two utility buttons (`.bgb-nav__tab--util`, `data-toggle="notifications|settings"`) are `display: none` on the bar tiers. The header's bell and gear carry the same `data-toggle` names, and `view.js#go` and `init.js#syncHeaderDots` select by that attribute across every copy — so whichever copy is on screen lights and wears the dot.
+- **What each screen does with the width** — the cascade's `.cascade-cols > .cascade-col + .cascade-col--aside` wrappers (`display: contents` on a phone, a two-pane grid with a sticky aside from tablet up, and the docked CTA bar taking the same column template); the feed's JS partition of the rail cards into `<aside class="feed-aside">`; the Play tab's Host | Join grid; 4- then 6-column polaroid grids with the collection batch and explorer page sized in rows × columns; game detail's sticky cover column; the profile hubs' and Stats' paired cards; wrapping achievement rails; and a 720px cap for reading screens on wide — is all in one block of `styles.css` ("Every other screen on the tablet and wide tiers") plus the cascade and feed blocks beside their families. The design board is `Docs/mocks/tablet-layout-mock.html`.
+- **Sheets and modals do not change.** `.bgb-sheet__panel` is already capped at 520px and centred; the polaroid popups are centred already.
 
 ---
 
@@ -513,7 +530,7 @@ The router calls `mount(hostEl)` → `onMount()` → `render()` synchronously wh
 
 ### 5.2 The three "tab" routes
 
-The bottom nav has three slots — they are the user's home base.
+The bottom nav has three slots — they are the user's home base. On the wide layout tier the same nav is a left rail (§4.6); the slots and their routes are unchanged.
 
 ```
   Feed (home icon)     Play (gold disc)        Profile (user icon)
@@ -690,6 +707,7 @@ projects/boardgame-buddy/web/
 │   ├── store.js            ← Cross-cutting state with subscribe()
 │   ├── view.js             ← Base View class + Router
 │   ├── theme.js            ← light/dark controller (see §4.2a)
+│   ├── layout.js           ← phone/tablet/wide tier controller (see §4.6)
 │   ├── net.js, cache.js, outbox.js, bootstrap.js          ← Offline + caching
 │   ├── game.js, play.js, buddy.js, user.js, collection.js, profile.js, stats.js, achievements.js, …
 │   ├── geo.js + geo-data.js        ← device timezone → country, for a play logged live

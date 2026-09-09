@@ -11,7 +11,14 @@
 // semantics are unchanged by that move.
 
 (function () {
-  const PER_PAGE = 9;
+  // Three rows of the polaroid grid: 3-up on a phone, 4 on a tablet, 6 on a
+  // wide screen (styles.css .lp-find-grid). Keep COLS in step with the CSS.
+  const PAGE_ROWS = 3;
+  const COLS = { phone: 3, tablet: 4, wide: 6 };
+  function perPage() {
+    const tier = window.BgbLayout ? window.BgbLayout.current() : "phone";
+    return PAGE_ROWS * (COLS[tier] || COLS.phone);
+  }
 
   // Catalog pages: viewer-independent, changes only when a game is imported.
   const CATALOG_NS = "game.explorer";
@@ -97,6 +104,9 @@
       // Both of these fire for a single "+" tap (the status picker sets the
       // store slot AND dispatches the DOM event), so each one patches rather
       // than re-rendering — two full rebuilds for one tap was the old cost.
+      // A tier change changes the page size (rows × columns), so page 1 of
+      // the new size is the only page whose contents mean anything.
+      this.listen("layout", () => { this._page = 1; this._loadGames(); });
       this.listen("myCollectionMap", (m) => {
         this._collectionMap = m || {};
         this._paintCardStatuses();
@@ -141,7 +151,7 @@
     _queryString({ page = this._page } = {}) {
       const qs = new URLSearchParams();
       qs.set("page", String(page));
-      qs.set("per_page", String(PER_PAGE));
+      qs.set("per_page", String(perPage()));
       qs.set("exclude_expansions", "true");
       // The polaroid never renders expansion_count, and computing it costs the
       // endpoint a whole second round trip per page. Opt out.
@@ -261,7 +271,7 @@
       const filtered = window.ShelfFilter.filterShelf(
         this._sortedShelf(shelf), this._filterSpec(),
       );
-      const paged = window.ShelfFilter.pageOf(filtered, this._page, PER_PAGE);
+      const paged = window.ShelfFilter.pageOf(filtered, this._page, perPage());
       this._page = paged.page;
       this._games = paged.rows.map((it) => it.game);
       this._total = paged.total;
@@ -324,7 +334,7 @@
      * never surface.
      */
     _prefetchNextCatalogPage() {
-      const totalPages = Math.max(1, Math.ceil(this._total / PER_PAGE));
+      const totalPages = Math.max(1, Math.ceil(this._total / perPage()));
       if (this._page >= totalPages) return;
       const qs = this._queryString({ page: this._page + 1 });
       window.bgbCache.swr(
@@ -584,7 +594,7 @@
     }
 
     _renderPager() {
-      const totalPages = Math.max(1, Math.ceil(this._total / PER_PAGE));
+      const totalPages = Math.max(1, Math.ceil(this._total / perPage()));
       if (totalPages <= 1) return "";
       return `
         <nav class="lp-find-pager">

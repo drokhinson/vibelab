@@ -133,6 +133,7 @@
         // Same reasoning again: the painted theme isn't a session value, and
         // logout must not leave the key undefined for subscribers.
         theme: window.BgbTheme ? window.BgbTheme.current() : "dark",
+        layout: window.BgbLayout ? window.BgbLayout.current() : "phone",
         // Zeroed on purpose, unlike the two above: whoever signs in next has
         // their own graph, and a leftover dot would announce someone else's
         // requests on the new account's Profile tab.

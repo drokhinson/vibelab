@@ -70,6 +70,9 @@
         this._statusReady = false;
       }
       this.listen("feed", () => this.render());
+      // A tier change (rotation, a resized window, the Settings pin) moves the
+      // rail cards between the stream and the sidebar — see render().
+      this.listen("layout", () => this.render());
       // Connectivity coming back is the moment a failed first load is worth
       // repeating; _retryInitial no-ops unless we're actually still empty.
       this.listen("offline", (offline) => { if (!offline) this._retryInitial(); });
@@ -383,7 +386,18 @@
       // print the same heading twice. Keyed on the raw YYYY-MM-DD string, and
       // rebuilt on every render, so appending a page can't double-print either.
       const seenDays = new Set();
-      const body = cards.map((c) => {
+      // Tablet and wide tiers lift the two rail cards — hot games, suggested
+      // buddies — out of the stream into a sticky sidebar beside it (styles.css
+      // .feed-shell--split). A play card is a photograph and should not
+      // stretch to a wider column, so the stream stays one column and the
+      // rails are what the extra width goes to. On a phone everything stays
+      // in the one stream, in the server's order, exactly as before. The
+      // `layout` listener in onMount re-renders across a tier change.
+      const split = !!(window.BgbLayout && window.BgbLayout.current() !== "phone");
+      const isRail = (c) => c.kind === "hot_games" || c.kind === "suggested_buddies";
+      const stream = split ? cards.filter((c) => !isRail(c)) : cards;
+      const rails = split ? cards.filter(isRail) : [];
+      const body = stream.map((c) => {
         let heading = "";
         if (c.kind === "play_session" && c.played_at && !seenDays.has(c.played_at)) {
           seenDays.add(c.played_at);
@@ -394,13 +408,20 @@
       // Search pill + avatar moved into the global app header — feed now
       // jumps straight to the resume chip and the card timeline.
       const html = `
-        <div class="feed-shell">
+        <div class="feed-shell${split ? " feed-shell--split" : ""}">
           ${this._error ? `<div class="alert alert-error mb-3">${this._error}</div>` : ""}
-          <div class="feed-cards">
-            ${cards.length === 0 && !this._loading ? this._renderEmpty() : ""}
-            ${body}
+          <div class="feed-stream">
+            <div class="feed-cards">
+              ${stream.length === 0 && !this._loading ? this._renderEmpty() : ""}
+              ${body}
+            </div>
+            ${this._renderLoadMore()}
           </div>
-          ${this._renderLoadMore()}
+          ${rails.length
+            ? `<aside class="feed-aside" aria-label="Around your table">
+                 ${rails.map((c) => this._renderCard(c)).join("")}
+               </aside>`
+            : ""}
         </div>
       `;
       this.container.innerHTML = html;
