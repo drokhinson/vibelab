@@ -1,9 +1,16 @@
 // @ts-check
-// widgets/scoring-template-sheet.js — pick which scoring grid this play uses.
+// widgets/scoring-template-sheet.js — pick WHICH scoring grid this play uses.
 //
 // Only opens when the host has MORE THAN ONE scoring-grid chapter in their
 // guide for this game (Everdell base vs. Everdell + Pearlbrook). With exactly
 // one, play-flow-view applies it silently; with none, nothing here runs.
+//
+// Which one, and nothing else. Whether a template is on the table at all is the
+// switch on the scoring card's template bar — one control, one question, per
+// .claude/rules/ui-object-design.md §3b. This sheet used to carry a "Plain
+// rounds" row as a third option, which was the same action reachable two ways
+// and, once the bar grew a switch, a row that turned the switch off from inside
+// a sheet the host had opened to choose a grid.
 //
 // A sheet rather than a dropdown, per .claude/rules/overlays.md §1 — and this
 // one would have been a textbook case for the geometry that rule is about: the
@@ -51,7 +58,7 @@
     /**
      * @param {{templates: TemplateChapter[], activeId?: string|null,
      *          returnFocus?: Element|null,
-     *          onPick: (t: TemplateChapter|null) => void}} opts
+     *          onPick: (t: TemplateChapter) => void}} opts
      */
     open(opts) {
       this._templates = opts.templates || [];
@@ -84,9 +91,8 @@
     close() { this._sheet.close(); }
 
     _pick(id) {
-      const picked = id === "__none__"
-        ? null
-        : this._templates.find((t) => t.id === id) || null;
+      const picked = this._templates.find((t) => t.id === id) || null;
+      if (!picked) return;
       // Close first: the host's grid repaints behind the sheet, and applying a
       // template can change its row count, so the sheet coming down first is
       // what makes the change read as "the table I just chose".
@@ -129,25 +135,6 @@
         `;
       }).join("");
 
-      // "Plain rounds" is a real option, not a cancel: clearing a template is
-      // non-destructive (the rows and the scores stay, only the labels go), so
-      // it belongs in the list beside the templates rather than behind a
-      // separate control.
-      const none = `
-        <button type="button" role="option" aria-selected="${this._activeId ? "false" : "true"}"
-                class="tmpl-sheet__row ${this._activeId ? "" : "tmpl-sheet__row--on"}"
-                data-tmpl-id="__none__">
-          <span class="tmpl-sheet__mark"><i data-icon="list" class="w-5 h-5"></i></span>
-          <span class="tmpl-sheet__text">
-            Plain rounds
-            <span class="tmpl-sheet__meta">R1, R2, R3… — add rows as you go</span>
-          </span>
-          <span class="tmpl-sheet__tick">
-            ${this._activeId ? "" : `<i data-icon="check" class="w-4 h-4"></i>`}
-          </span>
-        </button>
-      `;
-
       return `
         <div class="bgb-sheet__panel">
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
@@ -155,7 +142,7 @@
           <p class="bgb-sheet__sub">From your reference guide for this game</p>
           <div class="bgb-sheet__list" role="listbox" aria-label="Scoring template"
                data-tmpl-list>
-            ${rows}${none}
+            ${rows}
           </div>
           <button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>
         </div>

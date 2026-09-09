@@ -292,6 +292,28 @@ control. It reads `--polaroid-*`, so it follows whichever surface it lands on �
 except on the parchment scroll, which is a paper island (§4.2b) and scopes the
 button to the parchment's own ink.
 
+### 4.3a-ii The on/off switch
+
+`ui/switch.js` is the third of the same family: **one control, many surfaces.**
+`BgbSwitch.render({on, onclick, label?, paper?, compact?})` emits the button and
+the `.bgb-switch` class family owns the look — a `role="switch"` +
+`aria-checked` button, because the effect is immediate and a checkbox would
+promise a form to submit.
+
+It was extracted at instance #2 (`.claude/rules/ui-object-design.md` §4): the
+collection's "Show all expansions" wrote the original markup, and the scoring
+card's template bar wanted the same control. The geometry is the reason a second
+hand-written copy was a bad idea — the knob's travel is *derived* from the track
+(width, minus its two borders, minus the padding, minus the knob), so a copy
+drifts on the first tweak to either.
+
+Two variants, and they are the two axes a switch actually differs on here:
+
+| Opt | For |
+|---|---|
+| `paper` | a photo-paper surface (§4.2a). Re-points the three colours the control is made of at `--polaroid-*`; ground tokens would render a dark box on cream. |
+| `compact` | a dense strip whose own type is smaller than a 44px control — the template bar is 0.74rem. Shrinks the track and buys the tap target back with an inset `::before`, the same move `.scoring-tplbar__btn` beside it makes. |
+
 ### 4.3b The BGG import log, and the polaroid field
 
 Two more extractions of the same shape, both landed when the first-run

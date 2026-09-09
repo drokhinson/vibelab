@@ -941,12 +941,11 @@
       const allLabel = anyOpen ? "Collapse all" : "Expand all";
       return `
         <div class="exp-tree__controls">
-          <button type="button" class="exp-tree__switch ${on ? "is-on" : ""}"
-                  role="switch" aria-checked="${on}"
-                  onclick="window.collectionView._toggleShowAll()">
-            <span class="exp-tree__switch-track"><span class="exp-tree__switch-knob"></span></span>
-            <span>Show all expansions</span>
-          </button>
+          ${window.BgbSwitch.render({
+            on,
+            label: "Show all expansions",
+            onclick: "window.collectionView._toggleShowAll()",
+          })}
           ${busy ? `<span class="exp-tree__controls-note">Loading…</span>` : ""}
           <button type="button" class="exp-tree__all" data-exp-toggle-all
                   aria-label="${allLabel} expansion groups" ${groups.length ? "" : "disabled"}>

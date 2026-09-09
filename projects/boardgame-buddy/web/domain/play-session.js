@@ -44,6 +44,16 @@
       // here: an author editing the chapter mid-game cannot move the labels
       // under the host's fingers.
       this.scoringTemplate = initial.scoringTemplate || null;
+      // Whether the host has turned the scoring template OFF for this play —
+      // the position of the switch on the scoring card's template bar, not the
+      // absence of a template. The two are different states and only one of
+      // them may be answered by auto-apply: `scoringTemplate === null` alone
+      // cannot tell "nothing has been chosen yet" from "the host took it off",
+      // and reading it as the first is how a guide reload used to put the grid
+      // back on a host who had just removed it. Local to the draft: the server
+      // stores the template a play WAS scored on, and a play scored on plain
+      // rounds is a null template there, with nothing more to say.
+      this.scoringTemplateOff = !!initial.scoringTemplateOff;
       // Where this is being played, ISO 3166-1 alpha-2 (migration 065). Seeded
       // from the device the moment the draft is born rather than read at Save:
       // Settle Up shows it and the host can correct it, so it has to be a real
@@ -102,6 +112,7 @@
         expansionIds: this.expansionIds,
         playMode: this.playMode,
         scoringTemplate: this.scoringTemplate,
+        scoringTemplateOff: this.scoringTemplateOff,
         countryCode: this.countryCode,
         code: this.code,
         sessionId: this.sessionId,
