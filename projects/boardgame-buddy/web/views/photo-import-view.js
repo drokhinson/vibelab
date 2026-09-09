@@ -292,7 +292,7 @@
           countryCode: country,
           countrySource: country ? "photo" : null,
           game: null,
-          players: [],
+          players: this._viewerSeat(),
           notes: null,
           photoUrl: null,
         });
@@ -476,7 +476,6 @@
     _openPlayerSheet() {
       const shot = this._draft.current;
       if (!shot) return;
-      const candidates = this._playerCandidates();
       // Seated identity, not seated SPELLING. An account picked off the buddy
       // list carries its display name and the same account found through
       // "search all of BoardgameBuddy" can carry another, so a name-only set
@@ -485,6 +484,17 @@
       // ask for in the first place.
       const alreadySeated = new Set(shot.players.map((p) => p.name));
       const seatedAccounts = new Set(shot.players.map((p) => p.userId).filter(Boolean));
+      // `candidates` is "everyone addable, already filtered of people in the
+      // roster by the caller" — the sheet's own contract, which this used to
+      // leave to the confirm handler, so a seated row was offered and then
+      // silently dropped. Now that the importer is seated by default, that row
+      // is YOU, on every single open.
+      const seatedNames = new Set(Array.from(alreadySeated).map((n) => String(n).toLowerCase()));
+      const candidates = this._playerCandidates().filter((c) => (
+        c.user_id
+          ? !seatedAccounts.has(c.user_id)
+          : !seatedNames.has(String(c.name).toLowerCase())
+      ));
       window.PlayerPickerSheet.open({
         candidates,
         recent: this._recentCandidates(candidates, alreadySeated, seatedAccounts),
@@ -528,8 +538,62 @@
     }
 
     /**
+     * The importer's own seat, as one photo starts with it.
+     *
+     * Every photo in a camera roll is a game the person holding the phone
+     * played — that is why the photo is in their camera roll — and since
+     * migration 023 a play with nobody at it cannot be written at all, so
+     * without this a run of thirty photos is thirty trips through the picker
+     * before anything imports.
+     *
+     * Seeded when the shot is CREATED and never again: a restore, or a photo
+     * somebody took themselves out of, must not put them back. The × in
+     * renderSeats already removes it, and copyFromPrevious carries whatever
+     * roster the last photo ended up with.
+     * @returns {Array<{name: string, userId: string, isWinner: boolean}>}
+     */
+    _viewerSeat() {
+      const me = window.store.get("user");
+      if (!me || !me.id) return [];
+      return [{
+        name: me.display_name || me.username || "You",
+        userId: me.id,
+        isWinner: false,
+      }];
+    }
+
+    /**
+     * The ghosts this run has already invented.
+     *
+     * A name typed into the picker on photo 1 goes into that shot's roster and
+     * nowhere else: it is not in the buddy bundle, and nothing reaches the
+     * database until the final "Import N plays" tap. So photo 2 offered no way
+     * to reach it but typing it again — and a second spelling is a second
+     * ghost holding half the plays, which is the mess /ghost-players/merge
+     * exists to clean up afterwards.
+     *
+     * Case-insensitive, first spelling wins: it is the one already written into
+     * a roster, and PhotoImport#seats() collapses on the same key.
+     */
+    _draftGhostCandidates() {
+      /** @type {Map<string, any>} */
+      const out = new Map();
+      for (const shot of this._draft.shots) {
+        for (const p of (shot.players || [])) {
+          if (!p || p.userId) continue;
+          const name = String(p.name || "").trim();
+          const k = name.toLowerCase();
+          if (!k || out.has(k)) continue;
+          out.set(k, { source: "ghost", user_id: null, name, username: null, avatar: null });
+        }
+      }
+      return Array.from(out.values());
+    }
+
+    /**
      * Everyone the picker can offer without a round trip: the viewer, their
-     * buddies, everyone they've shared a table with, and their own ghosts.
+     * buddies, everyone they've shared a table with, their own ghosts, and the
+     * ghosts this run invented on an earlier photo.
      *
      * YOU come first, for the same reason as in the notes importer:
      * /play-partners never returns the viewer, because every other caller has
@@ -542,7 +606,9 @@
         ...(me ? [{
           source: "account",
           user_id: me.id,
-          name: me.display_name || "You",
+          // The same expression _viewerSeat() spells the seeded seat with, so
+          // the row and the seat it would duplicate can never disagree.
+          name: me.display_name || me.username || "You",
           username: me.username || null,
           avatar: me.avatar || null,
           isViewer: true,
@@ -550,20 +616,38 @@
         ...window.Buddy.toPlayerCandidates(this._partners),
       ].filter((c) => c.name);
       const seenIds = new Set();
-      return rows.filter((c) => {
+      const out = rows.filter((c) => {
         if (!c.user_id) return true;
         if (seenIds.has(c.user_id)) return false;
         seenIds.add(c.user_id);
         return true;
       });
+      // This run's own ghosts, last and deduped BY NAME: toPlayerCandidates
+      // dedupes accounts by id and ghosts not at all, and the sheet keys every
+      // row on data-picker-name — two rows sharing one name would both resolve
+      // to whichever _find() reached first.
+      const seenNames = new Set(out.map((c) => String(c.name).toLowerCase()));
+      for (const g of this._draftGhostCandidates()) {
+        const k = g.name.toLowerCase();
+        if (seenNames.has(k)) continue;
+        seenNames.add(k);
+        out.push(g);
+      }
+      return out;
     }
 
     /**
-     * The empty-query list: people this account has actually played with, most
-     * frequent first (the server orders `recent` by play count). Cross-
-     * referenced against the candidates so the unified shape is kept and
-     * anyone already at this table is left out — the same shape play-flow's
-     * Gather screen hands the sheet, because it is the same sheet.
+     * The empty-query list: the people from the photos before this one, then
+     * everyone this account has actually played with, most frequent first (the
+     * server orders `recent` by play count). Cross-referenced against the
+     * candidates so the unified shape is kept and anyone already at this table
+     * is left out — the same shape play-flow's Gather screen hands the sheet,
+     * because it is the same sheet.
+     *
+     * This run's ghosts LEAD because this is the sheet's empty-query base, and
+     * on photo 2 the people from photo 1 are the likeliest answer — the same
+     * bet "Same as the last one" already makes. Reaching one by typing its name
+     * a second time is exactly the path that invents a second spelling.
      * @param {any[]} candidates
      * @param {Set<string>} seated Names already on this shot.
      * @param {Set<string>} seatedAccounts Account ids already on this shot.
@@ -573,6 +657,16 @@
       const taken = new Set(Array.from(seated).map((n) => String(n).toLowerCase()));
       const accounts = seatedAccounts || new Set();
       const rows = [];
+      // One `seen` across both passes: a ghost typed on an earlier photo and a
+      // `recent` account can carry the same display name, and the sheet keys
+      // its rows on that name.
+      const seen = new Set();
+      for (const g of this._draftGhostCandidates()) {
+        const k = g.name.toLowerCase();
+        if (taken.has(k) || seen.has(k)) continue;
+        seen.add(k);
+        rows.push(g);
+      }
       for (const r of ((this._partners && this._partners.recent) || [])) {
         if (!r) continue;
         // Offering somebody who is already at this table is offering a seat
@@ -580,16 +674,20 @@
         // would just do nothing.
         if (r.user_id && accounts.has(r.user_id)) continue;
         const hit = byUserId.get(r.user_id);
-        if (hit) { rows.push(hit); continue; }
-        if (r.display_name && !taken.has(String(r.display_name).toLowerCase())) {
-          rows.push({
-            source: "account",
-            user_id: r.user_id,
-            name: r.display_name,
-            username: null,
-            avatar: r.avatar || null,
-          });
-        }
+        const row = hit || ((r.display_name && !taken.has(String(r.display_name).toLowerCase()))
+          ? {
+              source: "account",
+              user_id: r.user_id,
+              name: r.display_name,
+              username: null,
+              avatar: r.avatar || null,
+            }
+          : null);
+        if (!row) continue;
+        const k = String(row.name).toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        rows.push(row);
       }
       return rows;
     }
