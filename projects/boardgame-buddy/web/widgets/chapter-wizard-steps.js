@@ -33,7 +33,29 @@
   // needs no scroll to see every option, and it leaves room for the type's
   // own description.
   //
-  // @param {{types: Array, formType: string, targetSelector: string}} s
+  // The Scoring type has two shapes, so it asks a second question — but only
+  // once it is picked, and only for that one type. A scoring GRID is a layout
+  // of the `scoring` chapter type rather than a seventh type of its own: the
+  // guide scroll groups a user's chapters by type with one header each, so a
+  // seventh would split their scoring material into two sections both saying
+  // "scoring", and services/chapter_ai.py keys its prompt on the type.
+  const LAYOUTS = [
+    {
+      id: "text",
+      icon: "book",
+      label: "Written notes",
+      hint: "Prose, tables and colour — the usual chapter.",
+    },
+    {
+      id: "scoring_grid",
+      icon: "table",
+      label: "Scoring grid",
+      hint: "Named rows that fill in the scoring table when you record a play.",
+    },
+  ];
+
+  // @param {{types: Array, formType: string, formLayout: string,
+  //          targetSelector: string}} s
   function renderTypeStep(s) {
     const rows = s.types.map((t) => {
       const on = t.id === s.formType;
@@ -52,6 +74,35 @@
       `;
     }).join("");
 
+    // Revealed only under the type it belongs to, so five of the six types are
+    // one tap as they always were.
+    const layoutRows = s.formType !== "scoring" ? "" : `
+      <div class="chapter-wiz__layout">
+        <p class="chapter-wiz__layout-head">How should this one be written?</p>
+        <div class="chapter-wiz__types" role="radiogroup" aria-label="Scoring chapter format">
+          ${LAYOUTS.map((l) => {
+            const on = l.id === (s.formLayout || "text");
+            return `
+              <button type="button" role="radio" aria-checked="${on ? "true" : "false"}"
+                      class="chapter-wiz__type ${on ? "chapter-wiz__type--on" : ""}"
+                      onclick="${call("_pickLayout", l.id)}">
+                <span class="chapter-wiz__type-mark">
+                  <i data-icon="${escapeAttr(l.icon)}" class="w-5 h-5"></i>
+                </span>
+                <span class="chapter-wiz__type-label">
+                  ${escapeHtml(l.label)}
+                  <span class="chapter-wiz__type-hint">${escapeHtml(l.hint)}</span>
+                </span>
+                <span class="chapter-wiz__type-tick">
+                  ${on ? `<i data-icon="check" class="w-4 h-4"></i>` : ""}
+                </span>
+              </button>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+
     // No types means the /chapter-types fetch failed (onMount swallows it to a
     // []). Saying so beats a step with a heading and nothing under it.
     const body = rows
@@ -66,6 +117,7 @@
         </p>
         ${s.targetSelector}
         ${body}
+        ${layoutRows}
       </div>
     `;
   }

@@ -271,13 +271,23 @@
     return "";
   }
 
-  // True when there's a multi-round score breakdown worth surfacing —
-  // single-round / no-round plays leave round_scores NULL on the backend
-  // and the grid stays hidden. Used by both view and edit modes.
-  function hasRoundGrid(players, key) {
+  // True when there's a score breakdown worth surfacing. Single-round /
+  // no-round plays leave round_scores NULL on the backend and the grid stays
+  // hidden — UNLESS the play carries a scoring template (migration 018), in
+  // which case even one row is a real breakdown, because the template says that
+  // row MEANS something. domain/play-session.js holds up the other end of the
+  // invariant: a non-null scoring_template implies non-null round_scores.
+  // Used by both view and edit modes.
+  function hasRoundGrid(players, key, template) {
     const k = key || "round_scores";
-    return Array.isArray(players)
-      && players.some((pl) => Array.isArray(pl[k]) && pl[k].length > 1);
+    if (!Array.isArray(players)) return false;
+    const min = templateRows(template).length ? 1 : 2;
+    return players.some((pl) => Array.isArray(pl[k]) && pl[k].length >= min);
+  }
+
+  /** A play's template rows, or [] — defensive against a row cached pre-018. */
+  function templateRows(template) {
+    return (template && Array.isArray(template.rows)) ? template.rows : [];
   }
 
   // What a scoreboard row does when tapped — a real player's profile, or the
@@ -406,7 +416,7 @@
               </ul>`}
         </section>
 
-        ${hasRoundGrid(p.players) ? `
+        ${hasRoundGrid(p.players, null, p.scoring_template) ? `
           <section class="play-detail__section play-detail__section--rounds">
             <h3 class="play-detail__section-title">
               <i data-icon="layers" class="w-4 h-4"></i> Rounds
@@ -420,7 +430,11 @@
                 roundScores: Array.isArray(pl.round_scores) ? pl.round_scores : [],
               })),
               "PlayDetailPopup",
-              { editable: false, playMode: p.play_mode || "competitive" }
+              {
+                editable: false,
+                playMode: p.play_mode || "competitive",
+                rowLabels: templateRows(p.scoring_template),
+              }
             )}
           </section>` : ""}
       </article>
@@ -473,6 +487,11 @@
       })),
       expansion_ids: (p.expansions || []).map((e) => e.expansion_game_id),
       play_mode: p.play_mode,
+      // Carried so the edit grid labels its rows the same way the view grid
+      // does. Never edited here, and never sent back: PUT /plays/{id} leaves
+      // scoring_template alone when the body omits it, which is exactly what an
+      // edit form that doesn't offer the field should do.
+      scoring_template: p.scoring_template || null,
       photoFile: null,
       photoPreviewUrl: null,
     };
@@ -516,7 +535,7 @@
 
         ${renderGameBubble(p, { editing: true })}
 
-        ${hasRoundGrid(d.players, "roundScores") ? `
+        ${hasRoundGrid(d.players, "roundScores", d.scoring_template) ? `
           <section class="play-detail__section play-detail__section--rounds">
             <div class="scoring-section__head">
               <h3 class="play-detail__section-title">
@@ -528,6 +547,10 @@
               editable: true,
               playMode: p.play_mode || "competitive",
               showSign: window.RoundGridSign.enabled(),
+              // The labels are frozen here on purpose: changing them is a
+              // CHAPTER edit, and this play's copy is its own record of how it
+              // was scored.
+              rowLabels: templateRows(d.scoring_template),
             })}
           </section>
         ` : ""}
@@ -540,7 +563,7 @@
             ${d.players.map((pl, i) => `
               <li class="play-detail__edit-player">
                 <span class="play-detail__edit-player-name">${escapeHtml(window.Buddy.nameFor(pl.user_id, pl.name))}</span>
-                ${hasRoundGrid(d.players, "roundScores")
+                ${hasRoundGrid(d.players, "roundScores", d.scoring_template)
                   ? `<span class="play-detail__edit-score-readout">${escapeHtml(playerTotal(pl, d.players))}</span>`
                   : `<input type="number" class="input input-bordered input-sm play-detail__edit-score"
                             id="play-popup-score-${i}"
@@ -577,7 +600,7 @@
             <button class="btn btn-primary btn-sm" type="button"
                     onclick="window.PlayDetailPopup._addPlayer()">Add</button>
           </div>
-          ${hasRoundGrid(d.players, "roundScores") ? "" : `
+          ${hasRoundGrid(d.players, "roundScores", d.scoring_template) ? "" : `
             <button class="btn btn-ghost btn-xs play-detail__init-rounds" type="button"
                     onclick="window.PlayDetailPopup._initRounds()">
               <i data-icon="layers" class="w-3.5 h-3.5"></i> Track per-round scores
@@ -726,12 +749,16 @@
     // lengths in the first place.
     const n = normalizeRounds(state.draft.players);
     if (!(r >= 0 && r < n)) return;
+    // A template's rows render no remove button, but this is a global inline
+    // handler a stale paint or the console can still reach — and a hole punched
+    // mid-grid leaves every label below it describing the wrong numbers.
+    if (r < templateRows(state.draft.scoring_template).length) return;
     for (const p of state.draft.players) p.roundScores.splice(r, 1);
     resyncScores(state.draft.players);
     // When the grid empties out (or drops to a single round), clear the
     // arrays entirely so the save path lands round_scores=NULL again and
     // the "Track per-round scores" affordance re-appears.
-    if (!hasRoundGrid(state.draft.players, "roundScores")) {
+    if (!hasRoundGrid(state.draft.players, "roundScores", state.draft.scoring_template)) {
       for (const p of state.draft.players) p.roundScores = [];
     }
     render();
@@ -978,7 +1005,12 @@
     // clean. When the grid IS active, each player's final `score` is
     // derived from the sum of their rounds, ignoring any stale value
     // left over from before the author opted into rounds.
-    const gridActive = hasRoundGrid(state.draft.players, "roundScores");
+    const gridActive = hasRoundGrid(
+      state.draft.players, "roundScores", state.draft.scoring_template
+    );
+    // With a template even one row is a real breakdown, and dropping it would
+    // leave the play's labels pointing at nothing.
+    const minRounds = templateRows(state.draft.scoring_template).length ? 1 : 2;
     // Square the columns up before serializing: `score` is summed over the
     // grid's round count, so `round_scores` has to be that long too or the
     // saved play would carry a total its own breakdown doesn't add up to.
@@ -991,7 +1023,7 @@
       play_mode: state.draft.play_mode || null,
       players: state.draft.players.map((p) => {
         const rs = Array.isArray(p.roundScores) ? p.roundScores : [];
-        const round_scores = gridActive && gridRounds > 1
+        const round_scores = gridActive && gridRounds >= minRounds
           ? rs.slice(0, gridRounds).map((v) => window.parseRoundScore(v))
           : null;
         const score = gridActive

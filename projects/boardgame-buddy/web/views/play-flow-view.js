@@ -81,6 +81,10 @@
       this._expansionsOpen = false;
       this._expansionQuery = "";
       this._guideWidget = null;
+      // Scoring-grid chapters in the host's guide for this game (migration
+      // 018), handed over by the reference-guide scroll. Never fetched here —
+      // see the guide-chapters-loaded listener in onMount.
+      this._templates = [];
       this._liveScores = null;
       this._liveOff = null;
       this._error = null;
@@ -217,6 +221,16 @@
 
       this.listenDom("chapters-changed", () => {
         if (this._guideWidget) this._guideWidget.refresh();
+      });
+
+      // The reference-guide scroll on this same screen loads my-chapters for
+      // exactly the gameIds this play uses, from a localStorage seed, with an
+      // offline bail and a revalidation. It hands the list over rather than
+      // making this view fetch the same thing in the same frame.
+      this.listenDom("guide-chapters-loaded", (ev) => {
+        const d = (ev && ev.detail) || {};
+        if (!d.gameId || d.gameId !== this._ps.gameId) return;
+        this._onChaptersLoaded(d.chapters || []);
       });
 
       // The lobby poll skips its ticks while the tab is hidden — fire one
@@ -1677,11 +1691,13 @@
       // before we render, so the grid's round count, the cells it paints and
       // the totals it sums are all the same size for every column.
       if (this._normalizeRoundArrays()) ps.persist();
+      const tpl = ps.scoringTemplate;
       const grid = window.renderRoundGrid(ps.players, "playFlowView", {
         editable: true,
         playMode: mode,
         headerNames: true,
         showSign: window.RoundGridSign.enabled(),
+        rowLabels: tpl ? tpl.rows : null,
         getCellValue: (p, r) => this._cellValue(p, r),
       });
       return `
@@ -1690,9 +1706,42 @@
             <label class="cascade-card__label">Scoring</label>
             ${window.RoundGridSign.renderToggle("playFlowView")}
           </div>
+          ${this._renderTemplateBar()}
           ${mode === "coop" ? this._renderCoopOutcome() : ""}
           ${grid}
         </section>
+      `;
+    }
+
+    /**
+     * The line above the grid naming the template in play, when there is one to
+     * name. Silent in the common case: with no scoring-grid chapters adopted
+     * for this game there is nothing to say and no control to offer, and the
+     * scoring card looks exactly as it always has.
+     *
+     * With exactly ONE adopted template it is a label, not a picker — the
+     * template auto-applied and the only other choice is plain rounds, which is
+     * what the Clear affordance is for. Two or more get the sheet.
+     */
+    _renderTemplateBar() {
+      const tpl = this._ps.scoringTemplate;
+      const many = this._templates.length > 1;
+      if (!tpl && !many) return "";
+      const name = tpl ? (tpl.title || "Custom rows") : "Plain rounds";
+      return `
+        <div class="scoring-tplbar">
+          <span class="scoring-tplbar__name" title="${escapeAttr(name)}">
+            <i data-icon="table" class="w-3.5 h-3.5"></i>
+            ${escapeHtml(name)}
+          </span>
+          ${many
+            ? `<button type="button" class="scoring-tplbar__btn"
+                       onclick="window.playFlowView._openTemplateSheet(event)">Change</button>`
+            : (tpl
+                ? `<button type="button" class="scoring-tplbar__btn"
+                           onclick="window.playFlowView._confirmTemplateSwitch(null)">Clear</button>`
+                : "")}
+        </div>
       `;
     }
 
@@ -2379,6 +2428,138 @@
       this._autoSelectWinners();
     }
 
+    // ── Scoring templates (migration 018) ───────────────────────────────────
+
+    /** The scoring-grid chapters this game's guide offers, newest list wins. */
+    _onChaptersLoaded(chapters) {
+      const next = (chapters || []).filter(
+        (c) => c.layout === "scoring_grid"
+            && c.grid && Array.isArray(c.grid.rows) && c.grid.rows.length
+      );
+      const changed = next.length !== this._templates.length
+        || next.some((c, i) => c.id !== this._templates[i].id);
+      this._templates = next;
+      if (!changed) return;
+      // Exactly one adopted template auto-applies; two or more never do, because
+      // guessing wrong reshapes the table the host is about to score on.
+      if (next.length === 1) this._maybeAutoApplyTemplate(next[0]);
+      if (this._phase === "play") this._refreshScoringSection();
+    }
+
+    /**
+     * Apply the one adopted template, but only onto a grid nobody has touched.
+     *
+     * A resumed draft is the case this is guarding: the host may be four rounds
+     * into a game, and restructuring the table under them — inserting five
+     * labelled rows above the numbers they already typed — is worse than never
+     * offering the template at all. So the bar is "no template chosen yet AND
+     * the grid is still empty".
+     */
+    _maybeAutoApplyTemplate(tpl) {
+      if (this._ps.scoringTemplate) return;
+      if (this._maxRoundCount() > 1) return;
+      if (this._gridHasScores()) return;
+      this._applyTemplate(tpl);
+    }
+
+    /** Open the picker. Only reachable when 2+ templates are adopted. */
+    _openTemplateSheet(event) {
+      if (!window.BgbScoringTemplateSheet) return;
+      window.BgbScoringTemplateSheet.open({
+        templates: this._templates,
+        activeId: (this._ps.scoringTemplate || {}).chapter_id || null,
+        returnFocus: (event && event.currentTarget) || null,
+        onPick: (tpl) => this._confirmTemplateSwitch(tpl),
+      });
+    }
+
+    /**
+     * Switching templates changes the row count, so a grid that already holds
+     * numbers gets the project's one confirm surface first
+     * (.claude/rules/ui-object-design.md §3c). CLEARING never asks: it takes the
+     * labels off and leaves every row and every score exactly where it was.
+     */
+    async _confirmTemplateSwitch(tpl) {
+      if (!tpl || !this._gridHasScores()) { this._applyTemplate(tpl); return; }
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Change the scoring rows?",
+        body: "The scores already on the table stay where they are, but the rows "
+            + "they sit in will be relabelled, and the table may get longer.",
+        confirmLabel: "Change rows",
+        cancelLabel: "Keep these rows",
+      });
+      if (ok) this._applyTemplate(tpl);
+    }
+
+    /** Has anybody put a number on this grid yet? */
+    _gridHasScores() {
+      const n = this._maxRoundCount();
+      return this._ps.players.some((p) => {
+        for (let r = 0; r < n; r++) if (this._resolvedScore(p, r) != null) return true;
+        return false;
+      });
+    }
+
+    /**
+     * Put a template's rows on the grid — or take them off with `null`.
+     *
+     * The rows are MATERIALIZED into every player's roundScores rather than
+     * left for the renderer to infer, because _maxRoundCount, _addRound and
+     * _removeRoundAt all read that array: a grid painting rows the model has
+     * never heard of is the disagreement this file's history is made of (see
+     * the notes at _normalizeRoundArrays and _playerTotal).
+     */
+    _applyTemplate(tpl) {
+      const ps = this._ps;
+      const before = this._maxRoundCount();
+      ps.scoringTemplate = tpl
+        ? {
+            v: 1,
+            chapter_id: tpl.id,
+            title: tpl.title || null,
+            rows: tpl.grid.rows.map((r) => ({
+              label: r.label,
+              color: r.color || "neutral",
+              ...(r.note ? { note: r.note } : {}),
+            })),
+          }
+        : null;
+      if (tpl) {
+        const need = tpl.grid.rows.length;
+        for (const p of ps.players) {
+          if (!Array.isArray(p.roundScores)) p.roundScores = [];
+          while (p.roundScores.length < need) p.roundScores.push(null);
+        }
+        this._normalizeRoundArrays();
+      }
+      ps.persist();
+      // Same null placeholder _addRound writes, for the same reason: a
+      // spectator's mirror is sized from the highest round_index in live
+      // scores, so rows nobody has typed into are invisible to them.
+      const after = this._maxRoundCount();
+      if (this._liveScores && after > before) {
+        const anchor = ps.players.find((p) => p.participant_id);
+        if (anchor) {
+          this._liveScores
+            .setAnyScore(anchor.participant_id, after - 1, null)
+            .catch(() => {});
+        }
+      }
+      // And the labels themselves, which live-scores has no room for.
+      if (ps.code) {
+        window.PlaySession.setScoringTemplate(ps.code, ps.scoringTemplate)
+          .catch(() => {});
+      }
+      this._autoSelectWinners();
+      this._refreshScoringSection();
+    }
+
+    /** How many leading rows the applied template owns, and so locks. */
+    _lockedRowCount() {
+      const t = this._ps.scoringTemplate;
+      return (t && Array.isArray(t.rows)) ? t.rows.length : 0;
+    }
+
     // ── Scoring rounds ──────────────────────────────────────────────────────
 
     _addRound() {
@@ -2439,6 +2620,11 @@
     _removeRoundAt(r) {
       const n = this._maxRoundCount();
       if (!(r >= 0 && r < n)) return;
+      // A template's rows have no remove button, but this is a global inline
+      // handler: a stale paint or the console can still reach it, and a hole
+      // punched in the middle of a labelled grid would leave every label below
+      // it describing the wrong numbers.
+      if (r < this._lockedRowCount()) return;
       this._normalizeRoundArrays();
       for (const p of this._ps.players) p.roundScores.splice(r, 1);
       this._ps.persist();

@@ -39,6 +39,16 @@
 //                     play-flow-view overlay live realtime scores when a
 //                     player has a real user_id. Defaults to reading from
 //                     player.roundScores.
+//   rowLabels       — optional [{label, color, note}], index-aligned to round
+//                     index. Row r takes rowLabels[r].label when one is present
+//                     and `R${r+1}` when it isn't, so a scoring template's rows
+//                     and the extras a scorer appends under them are ONE list of
+//                     rows, not two kinds of row. A labelled row also loses its
+//                     remove button: the template is the SHAPE of this play's
+//                     score sheet, and a shape the scorer can delete rows out of
+//                     is not a shape. `color` is a palette SLUG resolved by the
+//                     stylesheet, never a hex — see .claude/rules/theming.md §10
+//                     and the .scoring-round-th--tpl block in styles.css.
 //   headerNames     — DEFAULT for the column headers: true starts them on the
 //                     player's name, false on the colored bubble. The live
 //                     play screens (host + joiner mirror) pass true because
@@ -47,6 +57,23 @@
 //                     tapped a header once carries a stored preference
 //                     (RoundGridNames) that wins on every surface, and one tap
 //                     flips EVERY column, not just the one tapped.
+//
+// Two invariants `rowLabels` deliberately does NOT touch, both of which are the
+// same bug in different clothes — the model and the paint disagreeing about how
+// many rows exist:
+//
+//   * roundGridRoundCount does not floor on rowLabels.length. The HOST
+//     materializes a template's rows into every player's roundScores when it
+//     applies one, so the model stays authoritative and _maxRoundCount /
+//     _addRound / _removeRoundAt keep agreeing with what is on screen. A grid
+//     that invented rows its host had never heard of would put those three back
+//     into the disagreement the comments at play-flow-view.js:2401 and :1755 are
+//     a museum of. If a play ever arrives with more labels than round_scores the
+//     surplus labels simply don't render.
+//   * Extras keep ABSOLUTE numbering — R9, R10 under an 8-row template, not
+//     "Extra 1". The number a row shows is its round_index, which is the key the
+//     live-scores overlay and the spectator's mirror are both stored under; a
+//     second numbering scheme would be a second truth.
 //
 // There is deliberately NO total resolver. The Total row is ALWAYS the sum of
 // the very cells this render just emitted — same getCellValue, same round
@@ -68,6 +95,7 @@
     const headerNamesDefault = !!o.headerNames;
     const headerNames = RoundGridNames.enabled(headerNamesDefault);
     const getCell = o.getCellValue || defaultCellValue;
+    const rowLabels = Array.isArray(o.rowLabels) ? o.rowLabels : [];
     const safePlayers = Array.isArray(players) ? players : [];
     // Spectators size their grid from the live-scores round count, not from
     // each player's local roundScores array (which they don't have).
@@ -93,17 +121,21 @@
             </tr>
           </thead>
           <tbody>
-            ${Array.from({ length: roundCount }).map((_, r) => `
+            ${Array.from({ length: roundCount }).map((_, r) => {
+              const tpl = rowLabels[r] || null;
+              return `
               <tr>
-                <th class="scoring-round-th">
+                <th class="scoring-round-th${tpl ? " scoring-round-th--tpl" : ""}"
+                    ${tpl ? `data-row-color="${escapeAttr(tpl.color || "neutral")}"` : ""}
+                    ${tpl ? `title="${escapeAttr(tpl.note ? `${tpl.label} — ${tpl.note}` : tpl.label)}"` : ""}>
                   <span class="scoring-round-label">
-                    ${editable ? `
+                    ${editable && !tpl ? `
                       <button class="scoring-round-remove" title="Remove round"
                               onclick="window.${host}._removeRoundAt(${r})">
                         <i data-icon="x" class="w-3 h-3"></i>
                       </button>
                     ` : ""}
-                    R${r + 1}
+                    <span class="scoring-round-text">${tpl ? escapeHtml(tpl.label) : `R${r + 1}`}</span>
                   </span>
                 </th>
                 ${safePlayers.map((p, i) => `
@@ -113,8 +145,8 @@
                       : `<span class="scoring-cell--read" data-score-cell="${i}-${r}">${escapeHtml(getCell(p, r))}</span>`}
                   </td>
                 `).join("")}
-              </tr>
-            `).join("")}
+              </tr>`;
+            }).join("")}
             <tr class="scoring-total-row">
               <th>Total</th>
               ${safePlayers.map((p, i) => renderTotalsCell(p, i, mode, getTotal(p), host, editable)).join("")}

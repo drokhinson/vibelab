@@ -368,6 +368,7 @@
      .ghost-claim-sheet,
      .alias-sheet,
      .chapter-import-sheet,
+     .tmpl-sheet,
      .bgg-import-sheet,
      .export-sheet,
      .play-run-sheet,
@@ -417,6 +418,7 @@
      .ghost-claim-sheet,
      .alias-sheet,
      .chapter-import-sheet,
+     .tmpl-sheet,
      .bgg-import-sheet,
      .export-sheet,
      .play-run-sheet,
@@ -724,6 +726,64 @@ body {
   cursor: pointer;
 }
 .scroll-panel__hint:hover { color: #2B1D0A; }
+
+/* "Custom scoring grids are available — tap to add" (migration 018).
+   Two placements, one renderer: first in the always-visible peek (so it shows
+   with the scroll ROLLED UP, which is how the Play screen opens it) and again
+   inside the empty state, which renders no peek at all and is exactly the case
+   the nudge is most for.
+
+   Literal colours, like .scroll-panel__hint above and the rest of this family:
+   the scroll is a photograph of parchment, so it is light in both themes and
+   paints from literals rather than from the ground tokens
+   (.claude/rules/theming.md §6). */
+.scroll-panel__notice-host:empty { display: none; }
+.scroll-panel__notice {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  /* 44px floor: this is the whole affordance for adding a template
+     (.claude/rules/mobile-web.md §5). */
+  min-height: 44px;
+  margin-bottom: 0.45rem;
+  padding: 6px 8px 6px 10px;
+  text-align: left;
+  border: 1px solid rgba(107, 74, 26, 0.28);
+  border-radius: 10px;
+  background: rgba(201, 146, 42, 0.14);
+  color: #5C3F14;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+.scroll-panel__notice > [data-icon-name] { flex: none; color: #8A5F0B; }
+.scroll-panel__notice-text { flex: 1; min-width: 0; line-height: 1.25; }
+.scroll-panel__notice:active { background: rgba(201, 146, 42, 0.22); }
+@media (hover: hover) {
+  .scroll-panel__notice:hover { background: rgba(201, 146, 42, 0.2); }
+}
+.scroll-panel__notice:focus-visible {
+  outline: 2px solid #8A5F0B;
+  outline-offset: 2px;
+}
+.scroll-panel__notice-x {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px; height: 20px;
+  border-radius: 999px;
+  color: rgba(92, 63, 20, 0.65);
+  cursor: pointer;
+}
+/* 44x44 without inflating a 14px glyph inside a 44px row. */
+.scroll-panel__notice-x::before { content: ""; position: absolute; inset: -12px; }
+.scroll-panel__notice-x:active { color: #5C3F14; }
+/* Inside the empty state the notice is the only thing between the copy and the
+   Add button, so it gets air on both sides rather than just below. */
+.scroll-panel__empty .scroll-panel__notice { margin: 0.6rem 0; }
 
 /* Per-type section inside the guide. Header above its chapter list. */
 .scroll-section {
@@ -1740,6 +1800,256 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .chapter-wiz__type:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* The Scoring type's second question, revealed under the type list once
+   Scoring is picked. Reuses .chapter-wiz__type wholesale — same rows, same
+   metrics, same tick — because it IS the same control asking a narrower
+   question; only the heading and the second line are new. */
+.chapter-wiz__layout { margin-top: 0.9rem; }
+.chapter-wiz__layout-head {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.72);
+  margin: 0 0 0.4rem;
+}
+.chapter-wiz__type-hint {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: oklch(var(--bc) / 0.6);
+  margin-top: 2px;
+  /* The row is one line taller with a hint under it, so let the label wrap
+     rather than ellipsising a sentence that has to be read. */
+  white-space: normal;
+}
+
+/* ── Scoring-grid rows (migration 018) ───────────────────────────────────────
+   The body of a layout='scoring_grid' chapter, in place of the markdown
+   toolbar + textarea. One card per row: the label, its position controls, and
+   a swatch strip.
+
+   The swatches are an inline radiogroup rather than a sheet or a popover, and
+   that is not a violation of overlays.md §1 — that rule is about a list
+   ANCHORED to an input, which needs a fit pass and a flip and loses to the
+   software keyboard. Six chips laid out in normal flow have no such geometry,
+   and seeing all six at once is the entire point of choosing a colour. */
+.tmpl-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+.tmpl-rows__empty {
+  font-size: 0.82rem;
+  color: oklch(var(--bc) / 0.6);
+  padding: 0.6rem 0;
+}
+.tmpl-row {
+  border: 1.5px solid oklch(var(--b3));
+  border-radius: 14px;
+  background: oklch(var(--b2));
+  padding: 8px 10px 10px;
+}
+.tmpl-row__top {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.tmpl-row__num {
+  flex: none;
+  width: 20px;
+  font-family: var(--font-score);
+  font-size: 0.78rem;
+  color: oklch(var(--bc) / 0.55);
+  text-align: center;
+}
+.tmpl-row__label {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1.5px solid oklch(var(--b3));
+  border-radius: 10px;
+  background: oklch(var(--b1));
+  color: oklch(var(--bc));
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.tmpl-row__label:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.tmpl-row__move,
+.tmpl-row__del {
+  flex: none;
+  display: grid;
+  place-items: center;
+  /* 30px visible, 44x44 hit area from the inset ::before below — four controls
+     at a full 44px each would leave no room for the label on a 390px screen
+     (.claude/rules/mobile-web.md §5). */
+  width: 30px;
+  height: 30px;
+  position: relative;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: oklch(var(--bc) / 0.62);
+  cursor: pointer;
+}
+.tmpl-row__move::before,
+.tmpl-row__del::before { content: ""; position: absolute; inset: -7px; }
+.tmpl-row__move:disabled { opacity: 0.3; cursor: default; }
+.tmpl-row__del { color: var(--rust); }
+@media (hover: hover) {
+  .tmpl-row__move:not(:disabled):hover,
+  .tmpl-row__del:hover { background: oklch(var(--b3)); }
+}
+.tmpl-row__move:not(:disabled):active,
+.tmpl-row__del:active { transform: scale(0.94); }
+/* Ten swatches at 26px + a 0.45rem gap want ~325px and the row card gives about
+   311px, so this is a 5x2 grid rather than a strip. Grid also retires the
+   negative-inset hit area the flex row used, which was a bug the six-colour
+   version was quietly carrying: a 26px swatch on a 33px pitch with a 44px hit
+   area meant ADJACENT HIT ZONES OVERLAPPED by ~11px, so a tap near a swatch's
+   right edge selected its neighbour. Here the CELL is the target — ~60px wide,
+   nothing overlaps, and the >= 8px clear space in mobile-web.md §5 holds by
+   construction.
+
+   repeat(5, …) rather than auto-fit: the palette is a deliberate fixed set of
+   ten, and two tidy rows of five read better than the 7+3 auto-fit lands on. */
+.tmpl-row__colors {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  /* 8px, not 4: the whole 61x44 cell is clickable, so the gap IS the clear
+     space between adjacent hit zones and mobile-web.md §5 wants >= 8px of it. */
+  gap: 8px;
+  justify-items: center;
+  margin: 0.5rem 0 0 24px;
+}
+/* The BUTTON is the tap target and fills its grid cell (~60x44); the disc is
+   drawn by ::before inside it. Doing it this way rather than growing a 26px
+   button with a negative-inset pseudo is what actually keeps the targets apart:
+   the earlier version measured 58x42 with ~12px of VERTICAL overlap between the
+   two rows and only 6.8px of horizontal clearance, both of which the ">= 44px,
+   >= 8px apart" rule in mobile-web.md §5 rules out. */
+.tmpl-sw {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.tmpl-sw::before {
+  content: "";
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--sw, transparent);
+  /* Every disc gets an edge. Measured: as a filled disc `brown` is only 2.19:1
+     against the dark card and `yellow` 2.29:1 against the light one — under the
+     3:1 at which a shape reads as distinct from its ground, so the darkest and
+     lightest swatches lost their silhouette without this. */
+  box-shadow: inset 0 0 0 1px oklch(var(--bc) / 0.22);
+}
+/* "No colour" needs to look like an absence rather than like a missing swatch,
+   so it is an outlined ring instead of a filled disc, heavier than the base
+   ring above. The ring is drawn in INK at low alpha rather than in --b3: --b3
+   is a ground step, so in dark it is nearly the card it sits on and the swatch
+   read as a hole rather than as an option. */
+.tmpl-sw--none::before {
+  background: oklch(var(--b1));
+  box-shadow: inset 0 0 0 1.5px oklch(var(--bc) / 0.38);
+}
+/* box-shadow does not cascade per-layer, so each state restates the ring it
+   sits on top of: hairline, a 2px gap in the card's own colour, then the ink
+   ring that says "picked". */
+.tmpl-sw--on::before {
+  box-shadow: inset 0 0 0 1px oklch(var(--bc) / 0.22),
+              0 0 0 2px oklch(var(--b2)),
+              0 0 0 4px oklch(var(--bc) / 0.75);
+}
+.tmpl-sw--none.tmpl-sw--on::before {
+  box-shadow: inset 0 0 0 1.5px oklch(var(--bc) / 0.38),
+              0 0 0 2px oklch(var(--b2)),
+              0 0 0 4px oklch(var(--bc) / 0.75);
+}
+.tmpl-sw:active::before { transform: scale(0.92); }
+.tmpl-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 12px; }
+.tmpl-addrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0.55rem;
+  border: 1.5px dashed oklch(var(--b3));
+  border-radius: 12px;
+  background: transparent;
+  color: oklch(var(--bc) / 0.8);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tmpl-addrow:disabled { opacity: 0.5; cursor: default; }
+@media (hover: hover) {
+  .tmpl-addrow:not(:disabled):hover { background: oklch(var(--b2)); border-style: solid; }
+}
+.tmpl-addrow:not(:disabled):active { transform: scale(0.99); }
+/* A PAPER ISLAND, exactly like .cascade-card--scoring above — same reasoning,
+   same doubled selector, and it must stay that way.
+
+   The preview is the REAL scoring grid (ui-object-design.md §2), so it paints
+   from the --polaroid-* family. On the chapter editor's own screen that already
+   resolves to paper (main[data-view="reference-guide-add"] is deliberately
+   outside the re-point — see the note above .chapter-wiz__step), which is what
+   made this look fine and be wrong: ScoringTemplateEditor.preview() is ALSO the
+   body of an expanded scoring-grid chapter in the reference-guide scroll, and
+   that scroll is mounted on [data-view="play-flow"] and [data-view="log-play"],
+   both of which ARE re-pointed. Without the restore below, opening a scoring
+   grid in the guide mid-game drew espresso row headers inside a cream box.
+
+   Doubled to (0,4,0) so it beats the dark re-point's (0,3,0) outright rather
+   than on source order. Do not simplify it back. */
+.tmpl-preview.tmpl-preview {
+  margin-top: 1rem;
+  padding: 0.7rem;
+  border-radius: 14px;
+  background: var(--paper);
+
+  --polaroid-bg:       var(--paper);
+  --polaroid-bg-soft:  color-mix(in srgb, var(--paper) 92%, var(--paper-line));
+  --polaroid-ink:      var(--paper-ink);
+  --polaroid-ink-soft: color-mix(in srgb, var(--paper-ink) 78%, var(--paper));
+  --polaroid-muted:    var(--paper-muted);
+  --polaroid-line:     var(--paper-line);
+  --polaroid-accent:   var(--win);
+
+  --accent-ink:        var(--accent-on-paper);
+  --ghost-ink:         var(--ghost-ink-paper);
+
+  /* A well cut into cream paper is not the espresso ground. */
+  --well:              var(--polaroid-bg);
+}
+.tmpl-preview__label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-muted);
+  margin-bottom: 0.4rem;
+}
+/* The preview is a picture, not a control: it must not steal a tap meant for
+   the row editor above it, and its own scrollport would fight the editor's. */
+.tmpl-preview .scoring-table-wrap {
+  pointer-events: none;
+  max-height: none;
 }
 
 /* ── Step 2: the head start ──────────────────────────────────────────────── */
@@ -7121,6 +7431,107 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.5rem; margin-bottom: 0.35rem;
 }
+/* The line above the grid naming the scoring template in play (migration 018).
+   Absent entirely when the game has none adopted, so the scoring card is
+   untouched for every game that doesn't use one. Paper tokens, because it sits
+   inside the scorepad card. */
+.scoring-tplbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--polaroid-line) 40%, transparent);
+}
+.scoring-tplbar__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--polaroid-ink) 82%, transparent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scoring-tplbar__btn {
+  flex: none;
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 0 0.2rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--polaroid-accent);
+  cursor: pointer;
+}
+/* 44x44 without inflating a two-word link inside a 0.74rem bar. */
+.scoring-tplbar__btn::before { content: ""; position: absolute; inset: -12px -10px; }
+.scoring-tplbar__btn:active { opacity: 0.65; }
+
+/* ── The scoring-template picker sheet ────────────────────────────────────── */
+.tmpl-sheet__row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  /* 56px: sheet rows sit flush, so a slightly-off thumb lands on the
+     neighbour (.claude/rules/mobile-web.md §5). */
+  min-height: 56px;
+  padding: 8px 12px;
+  text-align: left;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: oklch(var(--bc) / 0.9);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tmpl-sheet__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px; height: 34px;
+  border-radius: 11px;
+  background: oklch(var(--b3));
+  color: oklch(var(--bc) / 0.7);
+}
+.tmpl-sheet__text { flex: 1; min-width: 0; }
+.tmpl-sheet__meta {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: oklch(var(--bc) / 0.6);
+  margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Reserved whether or not the row is picked, so picking doesn't reflow the
+   label beside it (.claude/rules/overlays.md §6). */
+.tmpl-sheet__tick {
+  flex: none; width: 20px;
+  display: grid; place-items: center;
+  color: var(--accent);
+}
+.tmpl-sheet__row--on { background: var(--accent-quiet); }
+.tmpl-sheet__row--on .tmpl-sheet__mark {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+@media (hover: hover) {
+  .tmpl-sheet__row:hover { background: oklch(var(--b3)); }
+  .tmpl-sheet__row--on:hover { background: var(--accent-quiet); }
+}
+.tmpl-sheet__row:active { transform: scale(0.995); }
+/* Inset, because the list is a scroller and an outset ring gets clipped
+   (.claude/rules/overlays.md §3). */
+.tmpl-sheet__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
 .scoring-cell-wrap {
   display: flex; align-items: center; gap: 0.25rem; min-width: 0;
 }
@@ -7200,6 +7611,78 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-round-th { white-space: nowrap; }
 .scoring-round-label {
   display: inline-flex; align-items: center; gap: 0.3rem;
+}
+/* ── Scoring-template rows (migration 018) ──────────────────────────────────
+   A row of a custom scoring grid — Everdell's "Prosperity", an Arboretum
+   species — instead of a bare R1..Rn. The chapter stores a palette SLUG, never
+   a hex: this grid lands on the scorepad, which is PAPER and therefore light in
+   BOTH themes (theming.md §6), so the stylesheet has to own the ink or an
+   author could pick a yellow nobody can read.
+
+   Five (gold, green, blue, rust, purple) are the chapter editor's own
+   COLOR_SWATCHES, already tuned for parchment. The other four were picked
+   against those five by measurement rather than by eye: every pair is at least
+   dE 23 apart at FULL strength, which is what matters because the 3px inset
+   rule below is what identifies a row — the 14% wash behind the label is
+   deliberately too subtle to carry it. The close pairs are yellow/gold (dE 25),
+   rust/brown (23) and neutral/brown (23); there are only so many warm hues on a
+   cream ground, and those are the ones to re-check first if the palette is ever
+   retuned. Label contrast at the wash stays >= 9.2:1 on both themes' paper. */
+:root {
+  --row-red:    #B03028;
+  --row-pink:   #C2557E;
+  --row-rust:   #A65D2C;
+  --row-brown:  #6B4423;
+  --row-gold:   #C9922A;
+  --row-yellow: #B5A800;
+  --row-green:  #4A7A4A;
+  --row-blue:   #4A6F94;
+  --row-purple: #7A5293;
+}
+/* The slug arrives from a database column, so the set is open and an unknown
+   name has to render as something rather than as nothing (web-frontend.md, the
+   same rule the icon map follows). This declaration is that fallback AND the
+   `neutral` case — and it lives on the element rather than in :root above so
+   `--polaroid-muted` resolves against the SURFACE the row is on: a var() inside
+   a custom property is substituted on the element that declares it, so a
+   :root-level `--row-neutral: var(--polaroid-muted)` would freeze the root's
+   value and miss the scorepad island's own. */
+.scoring-round-th--tpl { --row-accent: var(--polaroid-muted); }
+.scoring-round-th--tpl[data-row-color="red"]    { --row-accent: var(--row-red); }
+.scoring-round-th--tpl[data-row-color="pink"]   { --row-accent: var(--row-pink); }
+.scoring-round-th--tpl[data-row-color="rust"]   { --row-accent: var(--row-rust); }
+.scoring-round-th--tpl[data-row-color="brown"]  { --row-accent: var(--row-brown); }
+.scoring-round-th--tpl[data-row-color="gold"]   { --row-accent: var(--row-gold); }
+.scoring-round-th--tpl[data-row-color="yellow"] { --row-accent: var(--row-yellow); }
+.scoring-round-th--tpl[data-row-color="green"]  { --row-accent: var(--row-green); }
+.scoring-round-th--tpl[data-row-color="blue"]   { --row-accent: var(--row-blue); }
+.scoring-round-th--tpl[data-row-color="purple"] { --row-accent: var(--row-purple); }
+/* The tint MIXES INTO THE SURFACE's own ground rather than being a literal, so
+   the rule works unchanged wherever the grid is rendered — the live scorepad,
+   the play-detail popup, the author's preview — and follows the surface if one
+   of them is ever re-pointed. The 3px inset rule does the identifying work, so
+   the wash only has to be noticeable, not strong. */
+.scoring-round-th--tpl {
+  background: color-mix(in srgb, var(--row-accent) 14%, var(--polaroid-bg));
+  box-shadow: inset 3px 0 0 var(--row-accent);
+}
+/* `.scoring-table tbody th` is (0,1,2) and sets opacity: 0.7, which would fade
+   the tint along with the ink and let the row above ghost through. The fade
+   moves onto the colour instead — exactly the repair the totals row above makes
+   for the same reason, and matched to the same specificity so source order
+   never gets a say. */
+.scoring-table tbody th.scoring-round-th--tpl {
+  opacity: 1;
+  color: color-mix(in srgb, var(--polaroid-ink) 88%, transparent);
+}
+/* The label column is the first column of a horizontally-scrolling table, so a
+   long row name has to stop rather than push the score columns off a 390px
+   screen. The full text (plus the row's note, when it has one) is on the th's
+   title=. */
+.scoring-round-text {
+  display: inline-block;
+  max-width: 7.5rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .scoring-round-remove {
   display: inline-flex; align-items: center; justify-content: center;

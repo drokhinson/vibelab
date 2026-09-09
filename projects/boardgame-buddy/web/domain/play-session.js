@@ -37,6 +37,13 @@
       this.notes        = initial.notes || "";
       this.expansionIds = initial.expansionIds || [];
       this.playMode     = initial.playMode || null;
+      // The scoring grid this play is being scored on (migration 018), or null
+      // for the plain R1..Rn grid. A SNAPSHOT of the chapter's rows, not a
+      // reference to it — see the COMMENT ON boardgamebuddy_plays
+      // .scoring_template. Holding a copy on the draft has a second payoff
+      // here: an author editing the chapter mid-game cannot move the labels
+      // under the host's fingers.
+      this.scoringTemplate = initial.scoringTemplate || null;
       // Where this is being played, ISO 3166-1 alpha-2 (migration 065). Seeded
       // from the device the moment the draft is born rather than read at Save:
       // Settle Up shows it and the host can correct it, so it has to be a real
@@ -94,6 +101,7 @@
         notes: this.notes,
         expansionIds: this.expansionIds,
         playMode: this.playMode,
+        scoringTemplate: this.scoringTemplate,
         countryCode: this.countryCode,
         code: this.code,
         sessionId: this.sessionId,
@@ -309,6 +317,17 @@
         .then((r) => { if (window.Play) window.Play.invalidateDeps(); return r; });
     }
 
+    // Host-only. Publish the scoring grid the lobby is scored on, so every
+    // spectator's mirror labels the same rows. Fire-and-forget at every call
+    // site: the host's own grid is already painted from the local draft, and a
+    // failed publish costs the spectators their labels for one poll, not the
+    // host their scoring.
+    static setScoringTemplate(code, template) {
+      return window.api.patch(`/sessions/${code}/scoring-template`, {
+        template: template || null,
+      });
+    }
+
     // Host-only. Move the lobby through gather → play → settle, or abandon.
     static advancePhase(code, phase) {
       return window.api.patch(`/sessions/${code}/phase`, { phase });
@@ -333,12 +352,16 @@
           is_winner: !!p.is_winner,
           score: rollupScore(p),
           user_id: p.user_id || null,
-          round_scores: persistableRounds(p),
+          round_scores: persistableRounds(p, !!this.scoringTemplate),
         })),
         notes: this.notes || null,
         photo_url: this.photoUrl || null,
         expansion_ids: this.expansionIds,
         play_mode: this.playMode || null,
+        // Rides through the lobby finalize too — that endpoint takes the same
+        // PlayCreate body and bgb_finalize_session hands it to bgb_log_play
+        // verbatim.
+        scoring_template: this.scoringTemplate || null,
         // Absent (not "") when unknown: the backend reads a missing country as
         // "we don't know", and an empty string as a malformed code — a 422 on
         // the Save the host just tapped.
@@ -373,12 +396,23 @@
     return p && p.score != null ? p.score : null;
   }
 
-  // Only persist the per-round breakdown when there were more than one
-  // round. Single-round / no-round plays stay on the simple-score path
-  // and leave the backend column NULL.
-  function persistableRounds(p) {
+  // Only persist the per-round breakdown when there was more than one round.
+  // Single-round / no-round plays stay on the simple-score path and leave the
+  // backend column NULL.
+  //
+  // …UNLESS a scoring template is applied, and then even ONE row is a real
+  // breakdown: the template says that row MEANS something. Without the second
+  // argument a one-row template would save its labels onto a play with no
+  // round_scores to label, and widgets/play-detail-popup.js gates its whole
+  // Rounds section on `some(round_scores.length > 1)` — so the play would come
+  // back looking as if it had never had a grid at all.
+  //
+  // The invariant to keep, in both directions: a non-null scoring_template
+  // implies non-null round_scores. The popup's gate is widened to match.
+  function persistableRounds(p, hasTemplate) {
     const rs = p && p.roundScores;
-    if (!Array.isArray(rs) || rs.length <= 1) return null;
+    if (!Array.isArray(rs) || rs.length === 0) return null;
+    if (rs.length <= 1 && !hasTemplate) return null;
     // Cells may be sanitized strings ("-5") incl. a transient "-" — coerce to
     // int, treating empty / lone-minus as null. Negative scores persist fine.
     return rs.map((v) => {

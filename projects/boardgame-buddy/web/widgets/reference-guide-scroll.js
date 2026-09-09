@@ -7,6 +7,40 @@
 // expansion.
 
 (function () {
+  // Which scoring-grid chapter ids this viewer has already turned down, per
+  // game: { "<gameId>": ["<chapterId>", …] }. Every access is wrapped, the way
+  // RoundGridSign / RoundGridNames wrap theirs — a browser that refuses
+  // localStorage should show the notice every time, not throw on the way to
+  // painting the guide.
+  const DISMISS_KEY = "bgb.guide.tmplNotice";
+
+  function readDismissed() {
+    try {
+      const raw = localStorage.getItem(DISMISS_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return (parsed && typeof parsed === "object") ? parsed : {};
+    } catch (_) { return {}; }
+  }
+
+  function writeDismissed(map) {
+    try { localStorage.setItem(DISMISS_KEY, JSON.stringify(map)); } catch (_) {}
+  }
+
+
+  // The body of an expanded chapter. A scoring grid's rows live in `grid`, not
+  // in `content` — `content` holds a generated bullet mirror of them, which is
+  // what keeps the pool's search and the moderation preview working — so show
+  // the real grid instead of the mirror. Falls through to markdown whenever the
+  // rows aren't there, which covers a cached row from before migration 018.
+  function chapterBodyHtml(c) {
+    const rows = c.layout === "scoring_grid" && c.grid && Array.isArray(c.grid.rows)
+      ? c.grid.rows
+      : null;
+    if (rows && rows.length && window.ScoringTemplateEditor) {
+      return window.ScoringTemplateEditor.preview(rows);
+    }
+    return window.renderMarkdown(c.content || "");
+  }
 
   class ReferenceGuideScroll {
     constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = true, gameImage = null } = {}) {
@@ -22,6 +56,9 @@
       this._chapters = [];
       this._loading = false;
       this._search = "";
+      // Scoring-grid chapters that EXIST for this game, adopted or not
+      // (migration 018). Drives the "templates available" notice.
+      this._templates = [];
       // Bind once so the global window.referenceGuideScroll handle stays
       // pointed at the active widget for inline `onclick` handlers.
       window.referenceGuideScroll = this;
@@ -80,6 +117,7 @@
         this._chapters = cached;
         this._loading = false;
         seeded = true;
+        this._announceChapters();
       } else {
         this._loading = true;
       }
@@ -90,7 +128,11 @@
       // the same list one failed round trip later.
       if (window.BgbNet && window.BgbNet.isOffline()) {
         this._loading = false;
+        this._announceChapters();
         this._render();
+        // Seeds the notice from the cache and bails before the request, same
+        // as this branch does.
+        this._fetchTemplates();
         return;
       }
       try {
@@ -103,8 +145,131 @@
         if (!seeded) this._chapters = [];
       } finally {
         this._loading = false;
+        this._announceChapters();
         this._render();
+        // Deliberately after the guide's own paint, and deliberately not
+        // awaited: the notice is a nudge and must never hold up the chapters
+        // somebody opened the scroll to read.
+        this._fetchTemplates();
       }
+    }
+
+    // ── "Scoring templates available" notice (migration 018) ────────────────
+
+    async _fetchTemplates() {
+      if (!this._baseGameId || !window.session) return;
+      const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
+      const cached = window.Chapter && window.Chapter.cachedScoringTemplates
+        ? window.Chapter.cachedScoringTemplates(this._baseGameId, expansionIds)
+        : null;
+      if (cached) {
+        this._templates = cached;
+        this._paintNotice();
+      }
+      // Same bail as _fetch: offline there is nothing to revalidate against,
+      // and a failed round trip only costs a paint.
+      if (window.BgbNet && window.BgbNet.isOffline()) return;
+      try {
+        const rows = await window.Chapter.scoringTemplates(
+          this._baseGameId, { expansionIds }
+        ) || [];
+        this._templates = rows;
+        if (window.Chapter.cacheScoringTemplates) {
+          window.Chapter.cacheScoringTemplates(this._baseGameId, expansionIds, rows);
+        }
+      } catch (_) {
+        // Leave whatever the cache seeded; a missing nudge is not an error
+        // worth showing anybody.
+      }
+      this._paintNotice();
+    }
+
+    /** The templates this viewer has not adopted, minus any they dismissed. */
+    _pendingTemplates() {
+      const unowned = (this._templates || []).filter((t) => !t.in_my_guide);
+      if (!unowned.length) return [];
+      const seen = readDismissed()[this._baseGameId] || [];
+      return unowned.filter((t) => seen.indexOf(t.id) < 0);
+    }
+
+    /**
+     * Patch the notice in place rather than re-rendering.
+     *
+     * _render() replaces the whole panel, which would destroy the search field
+     * mid-keystroke along with its focus and caret — _onSearch only gets away
+     * with that because it deliberately restores both afterwards.
+     */
+    _paintNotice() {
+      if (!this._container) return;
+      const host = this._container.querySelector("[data-notice-host]");
+      const html = this._renderTemplateNotice();
+      if (!host) {
+        // No host in the DOM: the scroll was in a state that renders none
+        // (anonymous), or the notice had nothing to say when this paint ran and
+        // now does. A full render is right in the second case and harmless in
+        // the first — and neither can be mid-keystroke, because the search
+        // field only exists in a state that already has a host.
+        if (html) this._render();
+        return;
+      }
+      host.innerHTML = html;
+      window.BgbIcons.render(host);
+    }
+
+    _renderTemplateNotice() {
+      const pending = this._pendingTemplates();
+      if (!pending.length) return "";
+      const n = pending.length;
+      return `
+        <button class="scroll-panel__notice" type="button"
+                onclick="window.referenceGuideScroll._openTemplates(event)">
+          <i data-icon="table" class="w-4 h-4"></i>
+          <span class="scroll-panel__notice-text">
+            ${n === 1 ? "A custom scoring grid is" : `${n} custom scoring grids are`}
+            available — tap to add
+          </span>
+          <span class="scroll-panel__notice-x" role="button" tabindex="0"
+                aria-label="Dismiss"
+                onclick="event.stopPropagation();window.referenceGuideScroll._dismissTemplates()">
+            <i data-icon="x" class="w-3.5 h-3.5"></i>
+          </span>
+        </button>
+      `;
+    }
+
+    _openTemplates(event) {
+      if (event) event.stopPropagation();
+      this._openAddChapter("scoring");
+    }
+
+    /**
+     * Hide the notice for the templates that exist RIGHT NOW, by id — not with
+     * a boolean. A game that gets a new scoring grid published next month
+     * should be able to say so once more, and a boolean could never tell that
+     * apart from the ones already turned down.
+     */
+    _dismissTemplates() {
+      const all = readDismissed();
+      const prev = all[this._baseGameId] || [];
+      const ids = this._pendingTemplates().map((t) => t.id);
+      all[this._baseGameId] = prev.concat(ids.filter((id) => prev.indexOf(id) < 0));
+      writeDismissed(all);
+      this._paintNotice();
+    }
+
+    // Hand the loaded chapter list to anyone else on the screen that needs it.
+    //
+    // The only listener today is play-flow-view, which wants the scoring-grid
+    // chapters (migration 018) to know whether to pre-fill the scoring table.
+    // It listens rather than fetching because the two mount in the SAME frame
+    // for the same gameIds: calling Chapter.myChapters itself would double the
+    // request on every cold mount, and this widget has already done it — with a
+    // localStorage seed, an offline bail and a revalidation the other one would
+    // have to reimplement.
+    _announceChapters() {
+      document.dispatchEvent(new CustomEvent("guide-chapters-loaded", {
+        detail: { gameId: this._baseGameId, chapters: this._chapters },
+      }));
     }
 
     _render() {
@@ -153,6 +318,9 @@
             <div class="scroll-panel__body">
               <div class="scroll-panel__empty">
                 <p>Add chapters for quick rule lookup and clarification.</p>
+                <div class="scroll-panel__notice-host" data-notice-host>
+                  ${this._renderTemplateNotice()}
+                </div>
                 <button class="scroll-panel__add"
                         onclick="window.referenceGuideScroll._openAddChapter()">
                   <i data-icon="plus" class="w-4 h-4"></i> Add a chapter
@@ -194,6 +362,13 @@
                   aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
                   onclick="window.referenceGuideScroll._toggleScroll()"></button>
           <div class="scroll-panel__peek">
+            <!-- First in the peek, which is the strip that stays visible when
+                 the scroll is rolled up — and rolled up is how the Play screen
+                 opens it. State B (signed in, zero chapters) renders no peek at
+                 all, so it carries its own copy of the same host above. -->
+            <div class="scroll-panel__notice-host" data-notice-host>
+              ${this._renderTemplateNotice()}
+            </div>
             <div class="scroll-panel__search-row" data-search-host>
               <i data-icon="search" class="w-4 h-4 scroll-panel__search-icon"></i>
               <input class="scroll-panel__search"
@@ -287,7 +462,7 @@
               <span class="scroll-chapter__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
               <span class="scroll-chapter__title">${escapeHtml(c.title)}</span>
             </summary>
-            <div class="scroll-chapter__content">${window.renderMarkdown(c.content || "")}</div>
+            <div class="scroll-chapter__content">${chapterBodyHtml(c)}</div>
             <div class="scroll-chapter__actions">
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._removeChapter('${c.id}', '${c.source_game_id || c.game_id}', event)">
@@ -339,14 +514,22 @@
       if (el) { el.focus(); el.setSelectionRange(this._search.length, this._search.length); }
     }
 
-    _openAddChapter() {
+    /**
+     * The one route to the add screen. Both affordances go through it — the
+     * scroll's own "Add a chapter" and the templates notice — so the two cannot
+     * land anywhere different (.claude/rules/ui-object-design.md §3b).
+     * @param {string} [filter] pre-set the browse tab's chapter-type filter.
+     */
+    _openAddChapter(filter) {
       const baseName = (this._expansionMeta[this._baseGameId] || {}).name || "";
       const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
-      window.router.go("reference-guide-add", {
+      const params = {
         gameId: this._baseGameId,
         gameName: baseName,
         expansionIds: expansionIds.join(","),
-      });
+      };
+      if (filter) params.filter = filter;
+      window.router.go("reference-guide-add", params);
     }
 
     async _removeChapter(chapterId, sourceGameId, event) {

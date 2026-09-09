@@ -22,6 +22,7 @@ from .dependencies import (
     get_current_user,
     maybe_supabase_user,
 )
+from .constants import ChapterLayout
 from .models import (
     AddChapterRequest,
     ChapterCreate,
@@ -36,13 +37,13 @@ from .models import (
     MessageResponse,
     MyGuideChapterResponse,
 )
-from .services import chapter_ai
+from .services import chapter_ai, chapter_grid
 
 logger = logging.getLogger(__name__)
 
 
 _CHAPTER_SELECT = (
-    "id, game_id, chapter_type, title, layout, content,"
+    "id, game_id, chapter_type, title, layout, content, grid,"
     " created_by, updated_at, created_at,"
     " boardgamebuddy_chapter_types(label, icon, display_order),"
     " boardgamebuddy_profiles(display_name)"
@@ -126,6 +127,10 @@ def _chapter_row_to_response(
         title=row["title"],
         layout=row.get("layout", "text"),
         content=row["content"],
+        # Stale client caches and rows written before 018 can carry a layout
+        # with no grid; every reader treats that as plain text rather than
+        # throwing, so `grid` is read defensively here too.
+        grid=row.get("grid"),
         created_by=row.get("created_by"),
         created_by_name=created_by_name,
         updated_at=row["updated_at"],
@@ -191,6 +196,15 @@ async def browse_chapter_pool(
     game_id: str = Path(..., description="Game UUID"),
     q: Optional[str] = Query(None, description="Keyword search across title + content"),
     chapter_type: Optional[str] = Query(None, description="Optional chapter-type filter"),
+    layout: Optional[ChapterLayout] = Query(
+        None,
+        description=(
+            "Optional body-layout filter. `scoring_grid` is how the reference"
+            " guide asks 'does this game have scoring templates?' — each row"
+            " already carries in_my_guide, so the client needs no other"
+            " endpoint to answer '…that I haven't added'."
+        ),
+    ),
     expansion_ids: Optional[str] = Query(
         None,
         description=(
@@ -217,6 +231,8 @@ async def browse_chapter_pool(
     pool_q = pool_q.in_("game_id", all_game_ids) if exp_ids else pool_q.eq("game_id", game_id)
     if chapter_type:
         pool_q = pool_q.eq("chapter_type", chapter_type)
+    if layout:
+        pool_q = pool_q.eq("layout", str(layout))
     if q:
         # PostgREST's `or` filter combines two ILIKE matches into one query.
         needle = f"%{q}%"
@@ -291,6 +307,16 @@ async def create_chapter(
         raise HTTPException(status_code=404, detail="Game not found")
 
     _validate_chapter_type(sb, body.chapter_type)
+    chapter_grid.validate_layout_pairing(body.layout, body.chapter_type)
+
+    # For a scoring grid the rows ARE the chapter, and `content` is a generated
+    # plain-text mirror of them rather than anything the author typed — see
+    # services/chapter_grid.py for why the rows do not live in `content`.
+    content = (
+        chapter_grid.grid_to_content(body.grid)
+        if body.layout is ChapterLayout.SCORING_GRID and body.grid
+        else body.content
+    )
 
     insert = (
         sb.table("boardgamebuddy_guide_chapters")
@@ -298,8 +324,9 @@ async def create_chapter(
             "game_id": game_id,
             "chapter_type": body.chapter_type,
             "title": body.title,
-            "content": body.content,
-            "layout": body.layout,
+            "content": content,
+            "layout": str(body.layout),
+            "grid": body.grid.model_dump(mode="json") if body.grid else None,
             "created_by": user.user_id,
         })
         .execute()
@@ -397,14 +424,24 @@ async def update_chapter(
 
     existing = (
         sb.table("boardgamebuddy_guide_chapters")
-        .select("id, created_by")
+        .select("id, created_by, layout, chapter_type")
         .eq("id", chapter_id)
         .execute()
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Chapter not found")
-    if existing.data[0]["created_by"] != user.user_id:
+    row = existing.data[0]
+    if row["created_by"] != user.user_id:
         raise HTTPException(status_code=403, detail="You can only edit chapters you created")
+
+    # Check the pairing the edit would LEAVE BEHIND, not just the fields it
+    # carries. A PATCH that only moves chapter_type to 'tips' names no layout at
+    # all, so validating the body alone would happily strand a scoring grid
+    # under a type the guide scroll files elsewhere.
+    chapter_grid.validate_layout_pairing(
+        body.layout if body.layout is not None else row.get("layout"),
+        body.chapter_type if body.chapter_type is not None else row.get("chapter_type"),
+    )
 
     updates: dict[str, Any] = {"updated_at": "now()"}
     if body.chapter_type is not None:
@@ -415,7 +452,15 @@ async def update_chapter(
     if body.content is not None:
         updates["content"] = body.content
     if body.layout is not None:
-        updates["layout"] = body.layout
+        updates["layout"] = str(body.layout)
+    # A None grid means "not supplied", so this endpoint cannot CLEAR one. That
+    # is deliberate: a chapter never changes layout in practice, and the editor
+    # sends layout and grid together or neither.
+    if body.grid is not None:
+        updates["grid"] = body.grid.model_dump(mode="json")
+        # Keep the derived mirror in step with the rows it mirrors, whether or
+        # not the caller also sent `content`.
+        updates["content"] = chapter_grid.grid_to_content(body.grid)
 
     sb.table("boardgamebuddy_guide_chapters").update(updates).eq("id", chapter_id).execute()
 
@@ -676,6 +721,10 @@ async def list_chapter_reports(
         type_obj = chapter.get("boardgamebuddy_chapter_types") or {}
         game_obj = chapter.get("boardgamebuddy_games") or {}
         reporter = r.get("reporter") or {}
+        # Safe for a scoring-grid chapter too, and only because `content` holds
+        # a generated plain-text mirror of its rows (services/chapter_grid.py).
+        # Do not "fix" this to read `grid` — the whole point of the mirror is
+        # that this line, and the pool's ILIKE search, need no branch.
         content = chapter.get("content") or ""
         preview = content[:240] + ("…" if len(content) > 240 else "")
         out.append(ChapterReportResponse(

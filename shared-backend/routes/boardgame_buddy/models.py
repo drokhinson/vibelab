@@ -18,6 +18,9 @@ from .constants import (
     MAX_IMPORT_CHARS,
     MAX_IMPORT_HINT_CHARS,
     MAX_IMPORT_IMAGES,
+    MAX_SCORING_ROW_LABEL_CHARS,
+    MAX_SCORING_ROW_NOTE_CHARS,
+    MAX_SCORING_TEMPLATE_ROWS,
     BggAuthState,
     BggCheckPhase,
     BggCheckState,
@@ -26,6 +29,7 @@ from .constants import (
     BggPushChange,
     BggUnpushableReason,
     BuddySuggestionSource,
+    ChapterLayout,
     CollectionStatus,
     ExportDataset,
     FeedCardKind,
@@ -34,6 +38,7 @@ from .constants import (
     PlayMode,
     PlaySessionStatus,
     PushTier,
+    ScoringRowColor,
     SessionPhase,
 )
 
@@ -108,6 +113,46 @@ class RefreshDescriptionsResponse(BaseModel):
     updated: int
     failed: int = 0
     remaining: int = 0
+
+
+# ── Scoring grids (migration 018) ─────────────────────────────────────────────
+# Defined up here rather than with the chapters that author them, because a
+# play and a live session each carry a snapshot of one and both are declared
+# further up the file than the chapter block.
+
+class ScoringRow(BaseModel):
+    """One labelled row of a scoring grid — an Everdell "Prosperity", an
+    Arboretum species."""
+
+    label: str = Field(..., min_length=1, max_length=MAX_SCORING_ROW_LABEL_CHARS)
+    color: ScoringRowColor = ScoringRowColor.NEUTRAL
+    note: Optional[str] = Field(None, max_length=MAX_SCORING_ROW_NOTE_CHARS)
+
+
+class ScoringGrid(BaseModel):
+    """The body of a layout='scoring_grid' chapter.
+
+    `v` is here from the start so the document is migratable later (a subtotal
+    row kind, a per-row cap): free to add now, impossible to retrofit.
+    """
+
+    v: int = 1
+    rows: list[ScoringRow] = Field(
+        ..., min_length=1, max_length=MAX_SCORING_TEMPLATE_ROWS
+    )
+
+
+class PlayScoringTemplate(ScoringGrid):
+    """The snapshot a play or a live session keeps of the grid it was scored on.
+
+    `chapter_id` is provenance only — nothing joins on it and it is allowed to
+    dangle, because the chapter it names is community-owned and may be edited or
+    deleted long after the play. See the COMMENT ON boardgamebuddy_plays
+    .scoring_template for the full argument.
+    """
+
+    chapter_id: Optional[str] = None
+    title: Optional[str] = None
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────
@@ -654,6 +699,11 @@ class PlayCreate(BaseModel):
     # deletions could never say it, because an import also writes one-offs that
     # carry no group at all. imported_at is stamped server-side from this.
     import_batch_id: Optional[UUID4] = None
+    # Migration 018. Snapshot of the scoring-grid chapter this play was scored
+    # on, or None for the plain R1..Rn grid. A snapshot rather than a chapter
+    # id because the chapter is community-owned and may later be edited or
+    # deleted; see the COMMENT ON boardgamebuddy_plays.scoring_template.
+    scoring_template: Optional[PlayScoringTemplate] = None
 
 
 class PlayUpdate(BaseModel):
@@ -669,6 +719,11 @@ class PlayUpdate(BaseModel):
     # an edit form that doesn't offer the field must not silently wipe the
     # country the play was logged with.
     country_code: Optional[CountryCode] = None
+    # Migration 018, and only written when supplied, for exactly the reason
+    # above: the play-detail popup's edit mode round-trips the snapshot it was
+    # given and never offers a way to change it (editing row labels is a
+    # chapter edit — this play's copy is deliberately frozen).
+    scoring_template: Optional[PlayScoringTemplate] = None
 
 
 class PlayPhotoResponse(BaseModel):
@@ -719,6 +774,11 @@ class PlayResponse(BaseModel):
     # every play logged before 060 and for any client that couldn't resolve
     # one, so every reader has to handle its absence.
     country_code: Optional[str] = None
+    # The scoring grid this play was scored on (migration 018), or None for the
+    # plain R1..Rn grid. Defaulting to None matters: bgb_feed_plays is not
+    # re-emitted by 018, so rows it feeds validate unchanged and simply arrive
+    # without labels until the popup revalidates through GET /plays/{id}.
+    scoring_template: Optional[PlayScoringTemplate] = None
     # Logger metadata — lets the FE distinguish own logs from shared plays
     # (where the current user appears via a linked buddy).
     logged_by_id: str
@@ -767,7 +827,20 @@ class ChapterCreate(BaseModel):
     chapter_type: str
     title: str
     content: str
-    layout: str = "text"
+    layout: ChapterLayout = ChapterLayout.TEXT
+    # Required for (and only for) layout='scoring_grid'. Mirrors the DB's
+    # bgb_chapters_grid_shape CHECK so a mismatched pair is a 422 here rather
+    # than a constraint violation from Postgres.
+    grid: Optional[ScoringGrid] = None
+
+    @model_validator(mode="after")
+    def _grid_matches_layout(self) -> "ChapterCreate":
+        wants_grid = self.layout is ChapterLayout.SCORING_GRID
+        if wants_grid and self.grid is None:
+            raise ValueError("layout 'scoring_grid' requires a grid")
+        if not wants_grid and self.grid is not None:
+            raise ValueError("grid is only valid with layout 'scoring_grid'")
+        return self
 
 
 class ChapterGenerateRequest(BaseModel):
@@ -794,7 +867,11 @@ class ChapterUpdate(BaseModel):
     chapter_type: Optional[str] = None
     title: Optional[str] = None
     content: Optional[str] = None
-    layout: Optional[str] = None
+    layout: Optional[ChapterLayout] = None
+    # None means "not supplied", so this shape cannot CLEAR a grid. That is
+    # correct: a chapter never changes layout in practice, and the editor sends
+    # layout + grid together or neither.
+    grid: Optional[ScoringGrid] = None
 
 
 class ChapterResponse(BaseModel):
@@ -807,6 +884,9 @@ class ChapterResponse(BaseModel):
     title: str
     layout: str
     content: str
+    # Present only for layout='scoring_grid'. Inherited by ChapterPoolItem and
+    # MyGuideChapterResponse, which is every surface that renders a chapter.
+    grid: Optional[ScoringGrid] = None
     created_by: Optional[str] = None
     created_by_name: Optional[str] = None
     updated_at: datetime
@@ -1398,10 +1478,24 @@ class SessionResponse(BaseModel):
     created_at: datetime
     expires_at: datetime
     finalized_play_id: Optional[str] = None
+    # The scoring grid the host applied to this lobby (migration 018). This is
+    # the only way the labels reach a spectator: their mirror holds no local
+    # draft and sizes itself from `scores` above.
+    scoring_template: Optional[PlayScoringTemplate] = None
 
 
 class SessionCreate(BaseModel):
     game_id: Optional[str] = None
+
+
+class SessionScoringTemplateUpdate(BaseModel):
+    """Body for PATCH /sessions/{code}/scoring-template.
+
+    null clears the template, which is non-destructive — the rows and their
+    scores stay, only the labels go.
+    """
+
+    template: Optional[PlayScoringTemplate] = None
 
 
 class SessionUpdateBody(BaseModel):
