@@ -3087,6 +3087,65 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    would stack on top of that gap and float the heading between the two days
    it is meant to label. Zero them out here and let the gap do the spacing. */
 .feed-cards > .day-divider { margin: 0.35rem 0.2rem -0.25rem; }
+
+/* ── Feed sidebar (tablet + wide) ───────────────────────────────────────────
+   views/feed-view.js lifts the hot-games and suggested-buddies rails out of
+   the stream into <aside class="feed-aside"> from the tablet tier up, and
+   marks the shell --split. The stream keeps one column — a play card is a
+   photograph and does not stretch — so the extra width goes to the rails,
+   pinned in a sticky sidebar that scrolls on its own. Inside it a rail's
+   horizontal strip becomes a wrapping two-up grid of the same tiles. On a
+   phone the aside is never rendered and none of this applies. */
+.feed-stream { min-width: 0; }
+.feed-shell--split {
+  display: grid;
+  /* 220px at the tablet tier leaves the stream as wide as a phone's. */
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 30%);
+  column-gap: 16px;
+  align-items: start;
+}
+:root[data-bgb-layout="wide"] .feed-shell--split {
+  grid-template-columns: minmax(0, 560px) 300px;
+  column-gap: 32px;
+  justify-content: center;
+}
+.feed-shell--split > .alert { grid-column: 1 / -1; }
+.feed-aside {
+  position: sticky;
+  top: calc(var(--bgb-header-height) + 16px);
+  max-height: calc(100dvh - var(--bgb-header-height) - var(--bgb-nav-height)
+                   - env(safe-area-inset-bottom) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+.feed-aside::-webkit-scrollbar { display: none; }
+.feed-aside .feed-rail__header,
+.feed-aside .feed-rail__scroll { padding-left: 0; padding-right: 0; }
+.feed-aside .feed-rail__scroll {
+  flex-wrap: wrap;
+  overflow: visible;
+  gap: 0.6rem;
+}
+/* Two tiles to a row, sized by the sidebar rather than by the strip's fixed
+   112px basis; the polaroid's photo scales with its tile. */
+.feed-aside .feed-rail__scroll > .game-polaroid--rail,
+.feed-aside .feed-rail__scroll > .buddy-tile {
+  /* Half the strip less half the gap, with a hair to spare for the strip's
+     own 2px side padding — at exactly half the second tile wrapped. */
+  flex: 1 1 calc(50% - 0.4rem);
+  max-width: calc(50% - 0.4rem);
+}
+/* (0,4,0): outranks the rail variant's own 112px height rule further down. */
+.feed-aside .game-polaroid.game-polaroid--rail :is(.game-polaroid__photo-img, .game-polaroid__photo-placeholder) {
+  height: auto;
+  width: 100%;
+  aspect-ratio: 1;
+}
 .feed-empty {
   text-align: center; padding: 2.5rem 1rem;
   background: oklch(var(--b2)); border-radius: 1rem;
