@@ -332,10 +332,7 @@
       window.router.go("feed");
     }
     reportBootTiming(landedOn);
-    warmGameBundlesWhenIdle();
-    warmOwnedShelfWhenIdle();
-    warmGhostSuggestionsWhenIdle();
-    warmAdminReviewWhenIdle();
+    warmWhenIdle();
   }
 
   // How long the user actually stared at the splash, and which leg was to
@@ -388,67 +385,41 @@
   let _bootstrapMs = null;
   let _bootedFromCache = false;
 
-  // The per-owned-game detail bundles are no longer part of /bootstrap (they're
-  // an N+1 in SQL and nothing on the first screen reads them). Pull them once
-  // the user is looking at something, so opening a game is still instant.
-  function warmGameBundlesWhenIdle() {
-    if (!window.Bootstrap || !window.Bootstrap.warmGameBundles) return;
-    const kick = () => window.Bootstrap.warmGameBundles().catch(() => {});
-    if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 3000 });
-    else setTimeout(kick, 0);
-  }
-
-  // The Collection spoke pages entirely off one cached shelf, so warming it
-  // here makes even the session's FIRST visit zero-network. Rides the same
-  // idle slot as the game bundles; no-ops inside the cache's fresh window.
-  function warmOwnedShelfWhenIdle() {
-    if (!window.Collection || !window.Collection.shelf) return;
+  // Warm what the first screen does not read, once the user is looking at
+  // it. One idle slot for all four rather than four contending callbacks;
+  // each is independent, so one failing does not stop the rest.
+  //
+  //   * game bundles — no longer part of /bootstrap (an N+1 in SQL, and
+  //     nothing on the first screen reads them); warm so opening a game is
+  //     still instant.
+  //   * the owned shelf — the Collection spoke pages entirely off one cached
+  //     shelf, so even the session's first visit is zero-network. No-ops
+  //     inside the cache's fresh window.
+  //   * "Is this you?" suggestions → the Profile tab's dot. The only signal
+  //     on that dot with nowhere else to come from, and deliberately not on
+  //     the bundle: bgb_ghost_claim_suggestions scans every buddy's plays and
+  //     runs trigram similarity over the lot, and the bundle rides /bootstrap
+  //     and every tab-focus warmRefresh. Failure leaves the count where it
+  //     was; the Buddies screen republishes on its next visit.
+  //   * admin review queues → the Settings gear's dot. AdminReview.load()
+  //     no-ops for non-admins: no request, no 403.
+  function warmWhenIdle() {
     const kick = () => {
       const me = window.store.get("user");
-      if (!me || !me.id) return;
-      window.Collection.shelf(me.id, "owned").catch(() => {});
+      if (!me) return;
+      const jobs = [];
+      if (window.Bootstrap && window.Bootstrap.warmGameBundles) {
+        jobs.push(window.Bootstrap.warmGameBundles());
+      }
+      if (window.Collection && window.Collection.shelf && me.id) {
+        jobs.push(window.Collection.shelf(me.id, "owned"));
+      }
+      if (window.GhostClaim && window.GhostClaim.suggestions) {
+        jobs.push(window.GhostClaim.suggestions().then((list) => window.GhostClaim.setSuggestions(list)));
+      }
+      if (window.AdminReview) jobs.push(Promise.resolve().then(() => window.AdminReview.load()));
+      Promise.allSettled(jobs);
     };
-    if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 5000 });
-    else setTimeout(kick, 0);
-  }
-
-  // "Is this you?" → the Profile tab's dot, one call per page load.
-  //
-  // This is the only signal on that dot with nowhere else to come from: buddy
-  // requests and incoming claims ride the profile bundle, and unseen badges are
-  // read off this device's own receipts. bgb_ghost_claim_suggestions could join
-  // the bundle, and deliberately does not — it scans every accepted buddy's
-  // plays and play_players, groups by normalized name and runs trigram
-  // similarity over the lot, and the bundle is on /bootstrap AND on every
-  // tab-focus warmRefresh. That is the app's two hottest paths, paying for one
-  // integer. Once, on idle, after the first screen is up, is the right price.
-  //
-  // Unlike /achievements — a write as well as a read, which is why boot reads
-  // its cache instead of fetching — this RPC is STABLE, so firing it to light a
-  // dot costs nothing but time. Failure leaves the count where it was: the
-  // Buddies screen republishes on its own next visit.
-  function warmGhostSuggestionsWhenIdle() {
-    if (!window.GhostClaim || !window.GhostClaim.suggestions) return;
-    const kick = () => {
-      if (!window.store.get("user")) return;
-      window.GhostClaim.suggestions()
-        .then((list) => window.GhostClaim.setSuggestions(list))
-        .catch(() => {});
-    };
-    if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 5000 });
-    else setTimeout(kick, 0);
-  }
-
-  // Admin review queues → the Settings gear's dot. Rides the same idle slot as
-  // the warms above, and for the same reason: it lights a dot, so it can wait
-  // until the first screen is up.
-  //
-  // AdminReview.load() no-ops for non-admins, so this costs ordinary users
-  // nothing — no request, no 403. Failure leaves the counts where they were:
-  // the Settings screen re-reads on its own next visit.
-  function warmAdminReviewWhenIdle() {
-    if (!window.AdminReview) return;
-    const kick = () => window.AdminReview.load();
     if (window.requestIdleCallback) window.requestIdleCallback(kick, { timeout: 5000 });
     else setTimeout(kick, 0);
   }

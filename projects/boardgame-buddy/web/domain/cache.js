@@ -128,10 +128,11 @@
     } catch (_) { /* meta is best-effort */ }
   }
 
-  // Estimate bytes for budget tracking. JSON.stringify is the rough proxy
-  // localStorage actually uses (UTF-16, but order-of-magnitude is what we need).
-  function _bytesOf(entry) {
-    try { return JSON.stringify(entry).length; } catch (_) { return 0; }
+  // Bytes for budget tracking: the serialized length, which is the rough
+  // proxy localStorage uses (UTF-16, but order-of-magnitude is what we need).
+  // Serialized once per write, and the same string is what gets persisted.
+  function _serialize(entry) {
+    try { return JSON.stringify(entry); } catch (_) { return null; }
   }
 
   function _totalBytes() {
@@ -163,16 +164,17 @@
     }
   }
 
-  function _persistEntry(ns, key, entry) {
-    if (!_persist || !_boundUid) return;
+  /** Write one entry through; `json` is its serialization from _serialize. */
+  function _persistEntry(ns, key, json) {
+    if (!_persist || !_boundUid || json == null) return;
     try {
-      localStorage.setItem(_storageKey(ns, key), JSON.stringify(entry));
+      localStorage.setItem(_storageKey(ns, key), json);
     } catch (e) {
       // Most browsers throw QuotaExceededError when localStorage is full.
       // Evict 25%, retry once, then downgrade to memory-only.
       _evictOldest(SIZE_BUDGET_BYTES * (1 - EVICT_FRACTION));
       try {
-        localStorage.setItem(_storageKey(ns, key), JSON.stringify(entry));
+        localStorage.setItem(_storageKey(ns, key), json);
       } catch (_) {
         console.warn("bgbCache: localStorage full, downgrading to memory-only");
         _persist = false;
@@ -190,7 +192,8 @@
       if (!k || !k.startsWith(prefix)) continue;
       if (k.endsWith(":" + META_SUFFIX)) continue;
       let entry;
-      try { entry = JSON.parse(localStorage.getItem(k)); } catch (_) { drop.push(k); continue; }
+      const raw = localStorage.getItem(k);
+      try { entry = JSON.parse(raw); } catch (_) { drop.push(k); continue; }
       if (!entry || entry.ver !== SCHEMA_VERSION) { drop.push(k); continue; }
       // Skip entries already past their stale window — no point hydrating.
       if (entry.storedAt + entry.staleTtl <= Date.now()) { drop.push(k); continue; }
@@ -199,7 +202,8 @@
       if (colon < 0) continue;
       const ns = rest.slice(0, colon);
       const key = rest.slice(colon + 1);
-      entry.bytes = entry.bytes || _bytesOf(entry);
+      // The stored string is the size — no re-serialization on the boot path.
+      entry.bytes = raw.length;
       _bucket(ns).set(key, entry);
     }
     for (const k of drop) {
@@ -343,9 +347,10 @@
         staleTtl,
         ver: SCHEMA_VERSION,
       };
-      entry.bytes = _bytesOf(entry);
+      const json = _serialize(entry);
+      entry.bytes = json ? json.length : 0;
       _bucket(ns).set(key, entry);
-      _persistEntry(ns, key, entry);
+      _persistEntry(ns, key, json);
       _counters.set++;
       if (_totalBytes() > SIZE_BUDGET_BYTES) {
         _evictOldest(SIZE_BUDGET_BYTES);
@@ -410,8 +415,9 @@
       const b = _store.get(ns);
       const entry = b && b.get(key);
       if (!entry) return;
-      entry.bytes = _bytesOf(entry);
-      _persistEntry(ns, key, entry);
+      const json = _serialize(entry);
+      entry.bytes = json ? json.length : 0;
+      _persistEntry(ns, key, json);
     },
 
     /** Drop a single key. Silent no-op when missing. */

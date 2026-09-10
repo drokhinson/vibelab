@@ -170,8 +170,9 @@
     railFitQueued = true;
     requestAnimationFrame(() => {
       railFitQueued = false;
+      // Hidden views stay in the DOM; their rails have no width to fit to.
       document
-        .querySelectorAll(".game-polaroid--rail .game-polaroid__name")
+        .querySelectorAll("[data-view]:not(.hidden) .game-polaroid--rail .game-polaroid__name")
         .forEach(fitRailTitle);
     });
   }
