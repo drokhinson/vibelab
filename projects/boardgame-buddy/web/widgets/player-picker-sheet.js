@@ -240,7 +240,7 @@
             <span class="player-picker__name">${escapeHtml(shown)}</span>
             ${meta}
           </span>
-          ${c.isViewer ? `<span class="player-picker__pill player-picker__pill--you">You</span>`
+          ${c.isViewer ? `<span class="player-picker__pill">You</span>`
             : (ghost ? `<span class="player-picker__pill">Guest</span>` : "")}
           <span class="player-picker__tick" aria-hidden="true">
             ${on ? `<i data-icon="check" class="w-4 h-4"></i>` : ""}

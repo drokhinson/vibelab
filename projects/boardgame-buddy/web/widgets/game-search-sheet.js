@@ -8,12 +8,11 @@
 // working exactly as they do inline — the sheet only changes where they are
 // drawn.
 //
-// Why: on Gather the finder's dropdown is position:absolute, so it has to be
-// measured and clamped by ui/dropdown-fit.js against whatever space happens to
-// be below the input. Mounted here with `inlineDropdown`, the results are an
-// ordinary block inside a panel that is already sized off --bgb-vv-h, so the
-// list is as tall as the screen allows, the keyboard shrinks it correctly, and
-// there is no fit pass and no flip.
+// Why: an absolutely-positioned dropdown on Gather had to be measured and
+// clamped against whatever space happened to be below the input. Here the
+// results are an ordinary block inside a panel already sized off --bgb-vv-h,
+// so the list is as tall as the screen allows, the keyboard shrinks it
+// correctly, and there is no fit pass and no flip.
 //
 // The shell is ui/bottom-sheet.js and the panel chrome is the shared
 // .bgb-sheet__* family.
@@ -63,7 +62,6 @@
           this._finder = new window.GameFinder({
             placeholder: opts.placeholder || "Search for a game…",
             includeRecentlyPlayed: true,
-            inlineDropdown: true,
             onError: opts.onError,
             onPick: async (game, ctx) => {
               const res = await opts.onPick(game, ctx);

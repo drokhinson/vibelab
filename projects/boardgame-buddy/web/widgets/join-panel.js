@@ -261,7 +261,7 @@
               <span class="cascade-join__row-code">${escapeHtml(s.code)}</span>
             </div>
             <div class="cascade-join__row-bottom">
-              <span class="cascade-join__row-game">${escapeHtml(gameName)}</span>
+              <span>${escapeHtml(gameName)}</span>
               <span class="cascade-join__row-count">
                 <i data-icon="users" class="w-3 h-3"></i>
                 ${s.participant_count}

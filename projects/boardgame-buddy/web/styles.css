@@ -7523,11 +7523,6 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   background: transparent;
   box-shadow: none;
 }
-/* The flip has nothing to flip against once the list is in the flow. */
-.game-finder--inline .game-finder-dropdown.is-flipped {
-  top: auto;
-  bottom: auto;
-}
 
 /* Status-tag positioning inside the standard tile shapes ─ pin top-right. */
 .collection-tile { position: relative; }
@@ -10344,12 +10339,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-}
-/* Set by ui/dropdown-fit.js when there is more room above the input than
-   below it — anchor to the input's top edge instead of its bottom. */
-.game-finder-dropdown.is-flipped {
-  top: auto;
-  bottom: calc(100% + 4px);
 }
 .game-finder-dropdown__header {
   padding: 6px 10px 4px;

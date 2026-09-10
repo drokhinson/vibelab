@@ -313,7 +313,7 @@
                   ${window.BgbBadge.render({ avatar: r.other_avatar, displayName: r.other_display_name, size: "sm", extraClass: "buddies-row__avatar" })}
                   <div class="buddies-row__body">
                     <div class="buddies-row__name">${escapeHtml(r.other_display_name)}</div>
-                    <div class="buddies-row__when">Requested ${formatDate(r.created_at)}</div>
+                    <div class="buddies-row__when">Requested ${formatMonthYear(r.created_at)}</div>
                   </div>
                   ${this._relationControl(r.other_user_id, this._incomingActions(r))}
                 </li>
@@ -362,7 +362,7 @@
                 const plays = playCountByUser[b.other_user_id] || 0;
                 const sub = [
                   plays ? `${plays} ${plays === 1 ? "play" : "plays"} together` : null,
-                  b.accepted_at ? "buddies since " + formatDate(b.accepted_at) : null,
+                  b.accepted_at ? "buddies since " + formatMonthYear(b.accepted_at) : null,
                 ].filter(Boolean).join(" · ");
                 // An alias is the NAME here, not a decoration on it — that is
                 // the whole point of setting one. The real name drops to its
@@ -606,14 +606,14 @@
 
     _renderGhostRow(g) {
       return `
-        <li class="buddies-row buddies-row--ghost">
+        <li class="buddies-row">
           ${window.BgbBadge.render({ avatar: null, displayName: g.display_name, size: "sm", isGhost: true, extraClass: "buddies-row__avatar buddies-row__avatar--ghost" })}
           <div class="buddies-row__body">
             <div class="buddies-row__name">
               ${escapeHtml(g.display_name)}
               <span class="player-type-chip player-type-chip--custom">Custom</span>
             </div>
-            <div class="buddies-row__when">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}${g.last_played_at ? " · last " + formatDate(g.last_played_at) : ""}</div>
+            <div class="buddies-row__when">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}${g.last_played_at ? " · last " + formatMonthYear(g.last_played_at) : ""}</div>
           </div>
           <button class="btn btn-ghost btn-xs" onclick="${escapeAttr(`window.buddiesView._openLinkSheet('${jsStr(g.display_name)}')`)}">
             Link
@@ -1841,12 +1841,8 @@
     return Math.min(Math.max(1, n), totalPages(count));
   }
 
-  function initials(name) {
-    const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
-    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return (parts[0] || "?").slice(0, 2).toUpperCase();
-  }
-  function formatDate(iso) {
+  // Month and year only — a buddy's "since" reads as a season, not a day.
+  function formatMonthYear(iso) {
     if (!iso) return "";
     return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric" });
   }

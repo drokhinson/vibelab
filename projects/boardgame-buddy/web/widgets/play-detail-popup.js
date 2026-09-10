@@ -223,7 +223,7 @@
   function renderFooter(p) {
     if (state.editing) {
       return `
-        <div class="play-detail-popup__footer play-detail-popup__footer--edit">
+        <div class="play-detail-popup__footer">
           <button class="btn btn-ghost play-detail__delete-btn" type="button"
                   ${state.saving ? "disabled" : ""}
                   onclick="window.PlayDetailPopup._deletePlay()">
@@ -417,7 +417,7 @@
         </section>
 
         ${hasRoundGrid(p.players, null, p.scoring_template) ? `
-          <section class="play-detail__section play-detail__section--rounds">
+          <section class="play-detail__section">
             <h3 class="play-detail__section-title">
               <i data-icon="layers" class="w-4 h-4"></i> Rounds
             </h3>
@@ -536,7 +536,7 @@
         ${renderGameBubble(p, { editing: true })}
 
         ${hasRoundGrid(d.players, "roundScores", d.scoring_template) ? `
-          <section class="play-detail__section play-detail__section--rounds">
+          <section class="play-detail__section">
             <div class="scoring-section__head">
               <h3 class="play-detail__section-title">
                 <i data-icon="layers" class="w-4 h-4"></i> Rounds
@@ -1061,10 +1061,6 @@
     }
   }
 
-  function formatDate(iso) {
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  }
 
   /**
    * Rename a buddy from a player row, without leaving the play.

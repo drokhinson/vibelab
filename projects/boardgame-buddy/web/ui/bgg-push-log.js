@@ -120,7 +120,7 @@
         <div class="bgg-log__bar"><div class="bgg-log__bar-fill" style="width:${pct}%"></div></div>
         <div class="bgg-log__meta"><span>${done} of ${total} sent${
           errored ? ` · ${errored} failed` : ""}</span></div>
-        ${names.length ? `<ul class="bgg-log__names">${
+        ${names.length ? `<ul>${
           names.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>` : ""}`;
       let headline;
       if (!finished) {

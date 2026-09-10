@@ -228,7 +228,7 @@
     if (variant === "card") {
       const inSync = diff.in_sync_count || 0;
       if (!allRows.length && !unpushable.length) {
-        return `<div class="bgg-diff bgg-diff--card">
+        return `<div class="bgg-diff">
           <p class="bgg-diff__headline bgg-diff__headline--ok">
             <i data-icon="check" class="w-4 h-4"></i>
             Everything matches — ${inSync} ${inSync === 1 ? "game" : "games"} in sync.
@@ -245,7 +245,7 @@
         ? `<p class="bgg-diff__note">…and ${hidden} more. Either sync button below lists
             every game before it commits.</p>`
         : "";
-      return `<div class="bgg-diff bgg-diff--card">
+      return `<div class="bgg-diff">
         <p class="bgg-diff__headline">${total} ${total === 1 ? "difference" : "differences"}
           <span class="bgg-diff__insync">${inSync} already in sync</span></p>
         <div class="bgg-cmp__scroll">${table(shown, { direction: null })}</div>

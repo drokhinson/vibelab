@@ -463,10 +463,10 @@
       const url = g.rulebookUrl();
       if (url) {
         const adminAttrs = isAdmin
-          ? ` onpointerdown="window.gameDetailView._rulebookHoldStart(event)"
-              onpointerup="window.gameDetailView._rulebookHoldEnd(event)"
-              onpointercancel="window.gameDetailView._rulebookHoldEnd(event)"
-              onpointerleave="window.gameDetailView._rulebookHoldEnd(event)"
+          ? ` onpointerdown="window.gameDetailView._rulebookHoldStart()"
+              onpointerup="window.gameDetailView._rulebookHoldEnd()"
+              onpointercancel="window.gameDetailView._rulebookHoldEnd()"
+              onpointerleave="window.gameDetailView._rulebookHoldEnd()"
               onclick="if(window.gameDetailView._rulebookSuppressClick(event)){return false;}"
               title="Long-press to delete rulebook (admin)"`
           : "";
@@ -536,14 +536,14 @@
     // Long-press detector. Starts a 600ms timer on pointerdown; if it fires
     // before pointerup, the delete prompt opens and a "suppress next click"
     // flag is raised so the link doesn't ALSO navigate to the rulebook PDF.
-    _rulebookHoldStart(event) {
+    _rulebookHoldStart() {
       this._rulebookHoldTimer = setTimeout(() => {
         this._rulebookHoldTimer = null;
         this._rulebookSuppressNextClick = true;
         this._promptDeleteRulebook();
       }, 600);
     }
-    _rulebookHoldEnd(event) {
+    _rulebookHoldEnd() {
       if (this._rulebookHoldTimer) {
         clearTimeout(this._rulebookHoldTimer);
         this._rulebookHoldTimer = null;
@@ -603,10 +603,6 @@
     }
   }
 
-  function formatDate(iso) {
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  }
   // Render a stored description as escaped paragraphs.
   //
   // The column holds plain text (bgg_client.bgg_description_text strips tags

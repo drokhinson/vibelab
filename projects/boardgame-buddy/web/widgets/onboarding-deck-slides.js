@@ -436,7 +436,7 @@
           wishlist and play history. We use your password once to sign in, then
           store it encrypted so later syncs run on their own.
         </p>
-        <form class="ob-bgg__form" novalidate>
+        <form novalidate>
           <div class="polaroid-field ob-field">
             <label class="polaroid-field__label" for="ob-bgg-user">BGG username</label>
             <input id="ob-bgg-user" type="text" name="username" autocomplete="username"

@@ -34,7 +34,7 @@
       sheet.open({
         returnFocus: opts.returnFocus || null,
         html: `
-          <div class="bgb-sheet__panel chapter-import-sheet__panel">
+          <div class="bgb-sheet__panel">
             <div class="bgb-sheet__grip" aria-hidden="true"></div>
             <h3 class="bgb-sheet__title">Import a file</h3>
             <p class="bgb-sheet__sub">

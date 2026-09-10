@@ -103,11 +103,6 @@
       return this.screen === "checking" || this.screen === "running";
     }
 
-    /** True when the user is reviewing a 500-row table that must not repaint. */
-    isStatic() {
-      return this.screen === "confirm";
-    }
-
     // ── The check ────────────────────────────────────────────────────────────
 
     /**

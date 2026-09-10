@@ -1078,3 +1078,29 @@ option; when that option goes, the file goes with it. Its header says so.
 `_escHandler` / singleton-by-id. `import-expansions-modal.js` was touched here
 for a stale comment only, which is not the substantive touch that rule says
 should trigger the extraction.
+
+## Cleanup log — Pass 11 (review sweep), 2026-09-10
+
+**Deleted:** `ui/dropdown-fit.js`, the `inlineDropdown` option on `GameFinder`
+(the sheet is its only host, so inline is the only mode), and both
+`.game-finder-dropdown.is-flipped` rules. Pass 10 said the file would go with
+the option; this is that.
+
+**Deleted, never called:** `User.refreshStats` / `fetchCollection` /
+`initials`, `BuddyNetworkIndex.countFor` and its `window` export,
+`BggSyncFlow.isStatic`, `PlayImportDraft.restorePlays`, `window.Api` (only
+`window.api` is consumed), `window.ghostClaimSuggestionKey`, and four local
+copies of the initials helper (`play-flow-view`, `feed-view`,
+`profile-self-view`, `buddies-view`) plus two local `formatDate`s
+(`game-detail-view`, `play-detail-popup`) that shadowed `helpers.js`.
+`buddies-view`'s month-and-year variant is renamed `formatMonthYear` so it no
+longer shares a name with a global that formats differently.
+`BgbIcons.PHOSPHOR_NAMES` is a comment now; it was a lookup nothing read,
+shipped inside the JS budget.
+
+**Inert class hooks removed from markup** (no rule in `styles.css`, no JS
+selector): `bgg-log__names`, `bgg-diff--card`, `alias-sheet__foot`,
+`chapter-import-sheet__panel`, `cascade-join__row-game`, `ob-bgg__form`,
+`play-detail-popup__footer--edit`, `play-detail__section--rounds`,
+`player-picker__pill--you`, `buddies-row--ghost`, and the three
+`admin-reports__*` spans in `admin-backfill-panel`.

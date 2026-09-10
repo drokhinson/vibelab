@@ -391,6 +391,5 @@
     }
   }
 
-  window.Api = Api;
   window.api = new Api();
 })();

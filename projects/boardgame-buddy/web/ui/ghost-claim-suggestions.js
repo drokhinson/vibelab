@@ -121,7 +121,7 @@
           ${list.map((s) => {
             const key = suggestionKey(s);
             return `
-            <li class="buddies-row buddies-row--ghost ghost-claim-row" data-claim-key="${escapeAttr(key)}">
+            <li class="buddies-row ghost-claim-row" data-claim-key="${escapeAttr(key)}">
               ${window.BgbBadge.render({
                 avatar: null,
                 displayName: s.ghost_display_name,
@@ -242,7 +242,7 @@
         <h3>Link requests sent</h3>
         <ul class="buddies-list">
           ${list.map((r) => `
-            <li class="buddies-row buddies-row--ghost ghost-claim-row" data-claim-id="${escapeAttr(r.id)}">
+            <li class="buddies-row ghost-claim-row" data-claim-id="${escapeAttr(r.id)}">
               ${window.BgbBadge.render({
                 avatar: null,
                 displayName: r.ghost_display_name,
@@ -300,5 +300,4 @@
   window.renderGhostClaimRequests = renderGhostClaimRequests;
   window.renderGhostClaimsSent = renderGhostClaimsSent;
   window.patchGhostClaimRow = patchGhostClaimRow;
-  window.ghostClaimSuggestionKey = suggestionKey;
 })();
