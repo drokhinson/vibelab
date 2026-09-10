@@ -352,10 +352,12 @@
 
     _panelFootnote(g, isCoop, noScores, decided, undecided) {
       const last = g.last_played_at ? ` Last played ${formatDate(g.last_played_at)}.` : "";
-      // The Plays fact counts every play; the ring counts only the ones that
-      // recorded a result. Say so, or the two numbers look like a bug.
+      // The Plays fact counts every play; the ring counts only the ones the
+      // viewer sat in AND that recorded a result (migration 020's `decided`).
+      // Both halves of the gap have to be named, or the sentence libels a play
+      // that has a winner and simply wasn't one of theirs.
       const blanks = undecided
-        ? ` ${undecided} of ${g.plays} ${g.plays === 1 ? "play" : "plays"} recorded no result and ${undecided === 1 ? "is" : "are"} left out of the win rate.`
+        ? ` ${undecided} of ${g.plays} ${g.plays === 1 ? "play" : "plays"} ${undecided === 1 ? "is" : "are"} left out of the win rate — no result recorded, or logged without you at the table.`
         : "";
       if (!decided) {
         return escapeHtml(
