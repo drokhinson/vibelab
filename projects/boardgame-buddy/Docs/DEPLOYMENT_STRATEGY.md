@@ -290,6 +290,11 @@ The reasoning in three lines:
 
 ### Phasing
 
+> Step-by-step execution of these phases — file manifests, workflow diffs, cutover
+> order, acceptance criteria and rollback per stage — is in
+> [`MIGRATION_PLAN.md`](./MIGRATION_PLAN.md), written to be pasted one stage at a
+> time into a fresh session. Its Appendix D covers what full Hetzner would take.
+
 **Phase 0 — Extract the repo (§6). No cost change.** Do this first; every later
 phase is easier from a standalone repo.
 
