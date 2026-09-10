@@ -1,5 +1,6 @@
 """User profile endpoints."""
 
+import asyncio
 from typing import Any
 
 from fastapi import Depends, HTTPException, Query, Path
@@ -38,11 +39,8 @@ async def get_profile(
     bouncing back to auth on a 404.
     """
     sb = get_supabase()
-    result = (
-        sb.table("boardgamebuddy_profiles")
-        .select("*")
-        .eq("id", user.user_id)
-        .execute()
+    result = await asyncio.to_thread(
+        sb.table("boardgamebuddy_profiles").select("*").eq("id", user.user_id).execute
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -90,11 +88,8 @@ async def update_profile(
     if identity_touched:
         patch["needs_setup"] = False
     sb = get_supabase()
-    result = (
-        sb.table("boardgamebuddy_profiles")
-        .update(patch)
-        .eq("id", user.user_id)
-        .execute()
+    result = await asyncio.to_thread(
+        sb.table("boardgamebuddy_profiles").update(patch).eq("id", user.user_id).execute
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -119,11 +114,11 @@ async def become_admin(
     if not ADMIN_API_KEY or body.admin_key != ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
     sb = get_supabase()
-    result = (
+    result = await asyncio.to_thread(
         sb.table("boardgamebuddy_profiles")
         .update({"is_admin": True})
         .eq("id", su_user.sub)
-        .execute()
+        .execute
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -152,14 +147,14 @@ async def search_profiles(
     # `username` column makes the lower-vs-upper distinction moot for
     # itself, but using `ilike` keeps the two predicates symmetrical.
     needle = q.replace(",", "").replace("(", "").replace(")", "")
-    rows = (
+    rows = await asyncio.to_thread(
         sb.table("boardgamebuddy_profiles")
         .select("id, display_name, username, avatar")
         .or_(f"display_name.ilike.%{needle}%,username.ilike.%{needle}%")
         .neq("id", user.user_id)
         .order("display_name")
         .limit(20)
-        .execute()
+        .execute
     )
     return [
         ProfileSearchResult(
@@ -183,7 +178,9 @@ async def get_public_profile(
     viewer: CurrentUser = Depends(get_current_user),
 ) -> PublicProfileResponse:
     """Profiles are fully public — anyone signed in can see anyone else's profile."""
-    return profile_service.fetch_public_profile(get_supabase(), viewer.user_id, user_id)
+    return await asyncio.to_thread(
+        profile_service.fetch_public_profile, get_supabase(), viewer.user_id, user_id
+    )
 
 
 @router.get(
@@ -220,15 +217,17 @@ async def get_profile_bundle(
     """
     sb = get_supabase()
     target = target_user_id or viewer.user_id
-    result = sb.rpc(
-        "bgb_profile_bundle",
-        {
-            "viewer": viewer.user_id,
-            "target": target,
-            "col_per_page": col_per_page,
-            "plays_per_page": plays_per_page,
-        },
-    ).execute()
+    result = await asyncio.to_thread(
+        sb.rpc(
+            "bgb_profile_bundle",
+            {
+                "viewer": viewer.user_id,
+                "target": target,
+                "col_per_page": col_per_page,
+                "plays_per_page": plays_per_page,
+            },
+        ).execute
+    )
     return result.data or {}
 
 
@@ -246,7 +245,9 @@ async def delete_profile(
     # Deleting the profile cascades via ON DELETE CASCADE to collections, plays,
     # buddies, user_chapters, chapter_reports. Guide chapters the user authored
     # have created_by set to NULL (ON DELETE SET NULL).
-    sb.table("boardgamebuddy_profiles").delete().eq("id", su_user.sub).execute()
+    await asyncio.to_thread(
+        sb.table("boardgamebuddy_profiles").delete().eq("id", su_user.sub).execute
+    )
     # The row is gone; a cached CurrentUser for it would keep a deleted account
     # authenticating for up to a TTL on this worker.
     invalidate_current_user(su_user.sub)

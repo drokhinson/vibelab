@@ -9,6 +9,8 @@ suggestion live in buddy_suggestion_routes.py, which is imported ahead of this
 module so its literal `/buddies/suggested…` paths are declared first.
 """
 
+import asyncio
+
 from fastapi import BackgroundTasks, Depends, Path
 
 from db import get_supabase
@@ -56,7 +58,9 @@ async def list_buddies_v2(
     user: CurrentUser = Depends(get_current_user),
 ) -> list[BuddyEdgeResponse]:
     """Accepted mutual edges for the current user."""
-    return buddy_service.list_accepted_buddies(get_supabase(), user.user_id)
+    return await asyncio.to_thread(
+        buddy_service.list_accepted_buddies, get_supabase(), user.user_id
+    )
 
 
 @router.get(
@@ -69,7 +73,7 @@ async def list_buddy_requests(
     user: CurrentUser = Depends(get_current_user),
 ) -> BuddyRequestsResponse:
     """Pending buddy requests for the current user, split incoming / outgoing."""
-    return buddy_service.list_requests(get_supabase(), user.user_id)
+    return await asyncio.to_thread(buddy_service.list_requests, get_supabase(), user.user_id)
 
 
 @router.post(
@@ -85,7 +89,9 @@ async def send_buddy_request(
 ) -> BuddyRequestResponse:
     """Send a request to another user. Auto-accepts if a reverse request exists."""
     sb = get_supabase()
-    result = buddy_service.send_request(sb, user.user_id, body.target_user_id)
+    result = await asyncio.to_thread(
+        buddy_service.send_request, sb, user.user_id, body.target_user_id
+    )
     push_notify.buddy_request_outcome(background_tasks, sb, user, result)
     return result
 
@@ -109,8 +115,8 @@ async def send_buddy_requests_bulk(
     gone) come back in `failed` while the rest are sent, so 200 is correct
     even when some did not land."""
     sb = get_supabase()
-    result, outcomes = buddy_service.send_requests_bulk(
-        sb, user.user_id, body.target_user_ids
+    result, outcomes = await asyncio.to_thread(
+        buddy_service.send_requests_bulk, sb, user.user_id, body.target_user_ids
     )
     # One push per target that actually landed, through the same branch the
     # single-request path uses — a bulk send auto-accepts too, whenever one of
@@ -156,7 +162,9 @@ async def peek_buddy_qr(
     "Buddy up" calls with the same token.
     """
     issuer_id = buddy_qr_service.issuer_from_qr_token(body.token)
-    return buddy_qr_service.peek_qr_issuer(get_supabase(), user.user_id, issuer_id)
+    return await asyncio.to_thread(
+        buddy_qr_service.peek_qr_issuer, get_supabase(), user.user_id, issuer_id
+    )
 
 
 @router.post(
@@ -173,7 +181,9 @@ async def add_buddy_by_qr(
     """Redeem a scanned QR token — both users become buddies immediately."""
     sb = get_supabase()
     issuer_id = buddy_qr_service.issuer_from_qr_token(body.token)
-    edge, created = buddy_qr_service.add_buddy_mutually(sb, user.user_id, issuer_id)
+    edge, created = await asyncio.to_thread(
+        buddy_qr_service.add_buddy_mutually, sb, user.user_id, issuer_id
+    )
     # Only on a NEW edge. Re-scanning a code you have already used is a no-op,
     # and telling the issuer about it a second time would be announcing nothing.
     #
@@ -198,7 +208,7 @@ async def accept_buddy_request(
 ) -> BuddyEdgeResponse:
     """Accept an incoming request and return the resulting accepted edge."""
     sb = get_supabase()
-    edge = buddy_service.accept_request(sb, user.user_id, request_id)
+    edge = await asyncio.to_thread(buddy_service.accept_request, sb, user.user_id, request_id)
     push_notify.buddy_accepted(background_tasks, sb, user, edge.other_user_id)
     return edge
 
@@ -215,7 +225,7 @@ async def reject_buddy_request(
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
     """Reject (delete) an incoming pending request."""
-    buddy_service.reject_request(get_supabase(), user.user_id, request_id)
+    await asyncio.to_thread(buddy_service.reject_request, get_supabase(), user.user_id, request_id)
     return MessageResponse(message="Request rejected")
 
 
@@ -231,7 +241,7 @@ async def cancel_buddy_request(
 ) -> MessageResponse:
     """Withdraw a pending request the current user sent. Sender only —
     the recipient declines instead."""
-    buddy_service.cancel_request(get_supabase(), user.user_id, request_id)
+    await asyncio.to_thread(buddy_service.cancel_request, get_supabase(), user.user_id, request_id)
     return MessageResponse(message="Request cancelled")
 
 
@@ -251,8 +261,8 @@ async def set_buddy_alias(
     The alias is stored on the caller's side of the edge and is never returned
     to the person it names — see boardgamebuddy_buddy_edges.alias_by_a/b.
     """
-    return buddy_service.set_alias(
-        get_supabase(), user.user_id, edge_id, body.alias
+    return await asyncio.to_thread(
+        buddy_service.set_alias, get_supabase(), user.user_id, edge_id, body.alias
     )
 
 
@@ -267,7 +277,7 @@ async def delete_buddy_edge(
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
     """Remove an accepted mutual edge. Either party can call this."""
-    buddy_service.unfriend(get_supabase(), user.user_id, edge_id)
+    await asyncio.to_thread(buddy_service.unfriend, get_supabase(), user.user_id, edge_id)
     return MessageResponse(message="Unfriended")
 
 
@@ -285,7 +295,9 @@ async def list_play_partners(
     The picker used to open all three of the endpoints below in parallel:
     three requests, twelve DB round trips, three profile lookups for auth.
     """
-    return played_with_service.fetch_play_partners(get_supabase(), user.user_id)
+    return await asyncio.to_thread(
+        played_with_service.fetch_play_partners, get_supabase(), user.user_id
+    )
 
 
 @router.get(
@@ -299,7 +311,9 @@ async def list_played_with(
 ) -> list[PlayedWithUser]:
     """Played-with discovery: anyone whose account appears in the viewer's
     plays (either as the logger or via player_user_id)."""
-    return played_with_service.fetch_played_with(get_supabase(), user.user_id)
+    return await asyncio.to_thread(
+        played_with_service.fetch_played_with, get_supabase(), user.user_id
+    )
 
 
 @router.get(
@@ -313,7 +327,9 @@ async def list_ghost_players(
 ) -> list[GhostPlayer]:
     """Nicknames the viewer logged for players without accounts. Grouped by
     name with a play count and last-played date for context."""
-    return played_with_service.fetch_ghost_players(get_supabase(), user.user_id)
+    return await asyncio.to_thread(
+        played_with_service.fetch_ghost_players, get_supabase(), user.user_id
+    )
 
 
 @router.post(
@@ -331,8 +347,8 @@ async def link_ghost_player(
     Subsequent reads of those plays surface the real account's display
     name and the play counts toward the played-with leaderboard."""
     sb = get_supabase()
-    n = played_with_service.link_ghost(
-        sb, user.user_id, body.display_name, body.target_user_id
+    n = await asyncio.to_thread(
+        played_with_service.link_ghost, sb, user.user_id, body.display_name, body.target_user_id
     )
     push_notify.ghost_linked(background_tasks, sb, user, body.target_user_id, n)
     return GhostLinkResponse(rows_updated=n)
@@ -351,7 +367,8 @@ async def merge_ghost_players(
     """Rename every viewer-logged ghost row matching `source_display_name`
     (case-insensitive) to `target_display_name`. Useful when the same
     friend was typed under different spellings across plays."""
-    n = played_with_service.merge_ghosts(
+    n = await asyncio.to_thread(
+        played_with_service.merge_ghosts,
         get_supabase(),
         user.user_id,
         body.source_display_name,

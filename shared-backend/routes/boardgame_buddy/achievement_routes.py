@@ -5,6 +5,8 @@ off the Profile hub, which is the viewer's own screen, and "you have not linked
 BGG yet" is not something a stranger should be able to pull about someone.
 """
 
+import asyncio
+
 from fastapi import Depends
 
 from db import get_supabase
@@ -25,7 +27,9 @@ async def get_achievements(
     user: CurrentUser = Depends(get_current_user),
 ) -> AchievementsResponse:
     """Return the caller's badges, unlocking any that are newly earned."""
-    return achievement_service.fetch_achievements(get_supabase(), user.user_id)
+    return await asyncio.to_thread(
+        achievement_service.fetch_achievements, get_supabase(), user.user_id
+    )
 
 
 @router.post(
@@ -44,4 +48,6 @@ async def mark_app_installed(
     column is still NULL, so every later launch is a no-op that simply returns
     the current payload.
     """
-    return achievement_service.mark_installed(get_supabase(), user.user_id)
+    return await asyncio.to_thread(
+        achievement_service.mark_installed, get_supabase(), user.user_id
+    )

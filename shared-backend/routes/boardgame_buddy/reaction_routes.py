@@ -11,6 +11,8 @@ come back on the feed payload (bgb_feed_plays, migration 016), not from here, so
 there is no GET: reacting never costs the client a read.
 """
 
+import asyncio
+
 from fastapi import Depends
 
 from db import get_supabase
@@ -34,7 +36,9 @@ async def add_reactions(
     """React to the given plays; returns the ones actually affected."""
     # 200 rather than 201: the write is idempotent, so a second tap creates
     # nothing and "Created" would be a lie half the time.
-    ids, group_id = reaction_service.add(get_supabase(), user.user_id, payload.play_ids)
+    ids, group_id = await asyncio.to_thread(
+        reaction_service.add, get_supabase(), user.user_id, payload.play_ids
+    )
     # `ids` can be shorter than what was sent — the caller's own plays are
     # dropped — so the client reconciles against this rather than assuming its
     # optimistic patch covered everything.
@@ -52,5 +56,7 @@ async def remove_reactions(
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayReactionResponse:
     """Remove the caller's reactions from the given plays."""
-    ids = reaction_service.remove(get_supabase(), user.user_id, payload.play_ids)
+    ids = await asyncio.to_thread(
+        reaction_service.remove, get_supabase(), user.user_id, payload.play_ids
+    )
     return PlayReactionResponse(play_ids=ids, reacted=False, reaction_group_id=None)

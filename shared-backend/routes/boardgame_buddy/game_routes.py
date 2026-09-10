@@ -141,6 +141,20 @@ async def health() -> HealthResponse:
     return HealthResponse(project="boardgame-buddy", status="ok")
 
 
+def _list_games_bgg_ids_sync(sb: Client, ids: list[int]) -> list[GameSummary]:
+    rows = (
+        sb.table("boardgamebuddy_games")
+        .select(game_select_clause())
+        .in_("bgg_id", ids)
+        .execute()
+        .data
+        or []
+    )
+    games = [GameSummary(**g) for g in rows]
+    _attach_expansion_counts(sb, games)
+    return games
+
+
 @router.get(
     "/games",
     response_model=GameListResponse,
@@ -208,16 +222,7 @@ async def list_games(
             return GameListResponse(games=[], total=0, page=page, per_page=per_page)
         if not ids:
             return GameListResponse(games=[], total=0, page=page, per_page=per_page)
-        rows = (
-            sb.table("boardgamebuddy_games")
-            .select(game_select_clause())
-            .in_("bgg_id", ids)
-            .execute()
-            .data
-            or []
-        )
-        games = [GameSummary(**g) for g in rows]
-        _attach_expansion_counts(sb, games)
+        games = await asyncio.to_thread(_list_games_bgg_ids_sync, sb, ids)
         return GameListResponse(games=games, total=len(games), page=1, per_page=len(games) or 1)
 
     owned_ids: Optional[list[str]] = None
@@ -225,12 +230,12 @@ async def list_games(
         su_user = await maybe_supabase_user(authorization)
         if su_user is None:
             return GameListResponse(games=[], total=0, page=page, per_page=per_page)
-        col = (
+        col = await asyncio.to_thread(
             sb.table("boardgamebuddy_collections")
             .select("game_id")
             .eq("user_id", su_user.sub)
             .eq("status", "owned")
-            .execute()
+            .execute
         )
         owned_ids = [row["game_id"] for row in (col.data or [])]
         if not owned_ids:
@@ -334,28 +339,7 @@ async def recently_played_games(
     return game_service.recently_played(get_supabase(), user.user_id, limit)
 
 
-@router.get(
-    "/games/{game_id}",
-    response_model=GameDetail,
-    status_code=200,
-    summary="Game detail",
-)
-async def get_game(
-    game_id: str = Path(..., description="Game UUID"),
-) -> GameDetail:
-    """Get full details for a single game.
-
-    The games row + the base-game lookup are cached for 1h (game data is
-    immutable post-import; admin paths bust the cache via
-    `_invalidate_game_caches`). Saves 1–2 DB round-trips per Game Detail
-    open on repeat visits.
-    """
-    sb = get_supabase()
-
-    cached = cache.get(_CACHE_GAME, game_id)
-    if cached is not None:
-        return GameDetail(**cached["row"], base_game_id=cached.get("base_game_id"), base_game_name=cached.get("base_game_name"))
-
+def _get_game_sync(sb: Client, game_id: str) -> GameDetail:
     result = (
         sb.table("boardgamebuddy_games")
         .select("*")
@@ -397,6 +381,30 @@ async def get_game(
 
 
 @router.get(
+    "/games/{game_id}",
+    response_model=GameDetail,
+    status_code=200,
+    summary="Game detail",
+)
+async def get_game(
+    game_id: str = Path(..., description="Game UUID"),
+) -> GameDetail:
+    """Get full details for a single game.
+
+    The games row + the base-game lookup are cached for 1h (game data is
+    immutable post-import; admin paths bust the cache via
+    `_invalidate_game_caches`). Saves 1–2 DB round-trips per Game Detail
+    open on repeat visits.
+    """
+    sb = get_supabase()
+
+    cached = cache.get(_CACHE_GAME, game_id)
+    if cached is not None:
+        return GameDetail(**cached["row"], base_game_id=cached.get("base_game_id"), base_game_name=cached.get("base_game_name"))
+    return await asyncio.to_thread(_get_game_sync, sb, game_id)
+
+
+@router.get(
     "/games/{game_id}/bundle",
     response_model=dict,
     status_code=200,
@@ -414,14 +422,16 @@ async def get_game_detail_bundle(
     and /games/{id}/expansions.
     """
     sb = get_supabase()
-    result = sb.rpc(
-        "bgb_game_detail_bundle",
-        {
-            "game_uuid": game_id,
-            "viewer": viewer.user_id,
-            "plays_limit": plays_limit,
-        },
-    ).execute()
+    result = await asyncio.to_thread(
+        sb.rpc(
+            "bgb_game_detail_bundle",
+            {
+                "game_uuid": game_id,
+                "viewer": viewer.user_id,
+                "plays_limit": plays_limit,
+            },
+        ).execute
+    )
     if not result.data:
         raise HTTPException(status_code=404, detail="Game not found")
     return result.data

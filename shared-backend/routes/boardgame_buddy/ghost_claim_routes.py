@@ -11,6 +11,8 @@ declared before anything matching /ghost-claims/{claim_id}, or FastAPI would
 match "suggestions" as a claim id.
 """
 
+import asyncio
+
 from fastapi import BackgroundTasks, Depends, Path, Query
 
 from db import get_supabase
@@ -41,7 +43,9 @@ async def list_ghost_claim_suggestions(
     user: CurrentUser = Depends(get_current_user),
 ) -> GhostClaimSuggestionsResponse:
     """The "Is this you?" list. Empty is the normal case, not an error."""
-    return ghost_claim_service.fetch_suggestions(get_supabase(), user.user_id, limit)
+    return await asyncio.to_thread(
+        ghost_claim_service.fetch_suggestions, get_supabase(), user.user_id, limit
+    )
 
 
 @router.get(
@@ -62,8 +66,8 @@ async def lookup_ghost_claim(
     comes back as can_claim=false plus a blocked_reason, so the sheet can say
     why rather than offering a button that fails.
     """
-    return ghost_claim_service.fetch_detail(
-        get_supabase(), user.user_id, play_id, display_name
+    return await asyncio.to_thread(
+        ghost_claim_service.fetch_detail, get_supabase(), user.user_id, play_id, display_name
     )
 
 
@@ -77,7 +81,7 @@ async def list_ghost_claims(
     user: CurrentUser = Depends(get_current_user),
 ) -> GhostClaimsResponse:
     """Incoming = people asking to claim YOUR ghosts. Outgoing = your asks."""
-    return ghost_claim_service.list_claims(get_supabase(), user.user_id)
+    return await asyncio.to_thread(ghost_claim_service.list_claims, get_supabase(), user.user_id)
 
 
 @router.post(
@@ -99,8 +103,8 @@ async def create_ghost_claim(
     gone.
     """
     sb = get_supabase()
-    claim = ghost_claim_service.create_claim(
-        sb, user.user_id, body.owner_user_id, body.display_name
+    claim = await asyncio.to_thread(
+        ghost_claim_service.create_claim, sb, user.user_id, body.owner_user_id, body.display_name
     )
     push_notify.ghost_claim(
         background_tasks, sb, user, body.owner_user_id, body.display_name
@@ -119,8 +123,12 @@ async def dismiss_ghost_claim(
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
     """Suppress a suggestion. The ghost's owner is never told."""
-    ghost_claim_service.dismiss_suggestion(
-        get_supabase(), user.user_id, body.owner_user_id, body.display_name
+    await asyncio.to_thread(
+        ghost_claim_service.dismiss_suggestion,
+        get_supabase(),
+        user.user_id,
+        body.owner_user_id,
+        body.display_name,
     )
     return MessageResponse(message="Suggestion dismissed")
 
@@ -137,7 +145,9 @@ async def accept_ghost_claim(
 ) -> GhostClaimAcceptResponse:
     """Approve. This rewrites the ghost's rows on YOUR plays to the claimant,
     and returns how many moved."""
-    return ghost_claim_service.accept_claim(get_supabase(), user.user_id, claim_id)
+    return await asyncio.to_thread(
+        ghost_claim_service.accept_claim, get_supabase(), user.user_id, claim_id
+    )
 
 
 @router.post(
@@ -151,7 +161,7 @@ async def reject_ghost_claim(
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
     """Decline. The claimant may ask once more; a second decline is final."""
-    ghost_claim_service.reject_claim(get_supabase(), user.user_id, claim_id)
+    await asyncio.to_thread(ghost_claim_service.reject_claim, get_supabase(), user.user_id, claim_id)
     return MessageResponse(message="Claim declined")
 
 
@@ -167,5 +177,5 @@ async def cancel_ghost_claim(
 ) -> MessageResponse:
     """Withdraw your own ask. Unlike a decline this leaves no trace and costs
     no strike against the two-ask limit."""
-    ghost_claim_service.cancel_claim(get_supabase(), user.user_id, claim_id)
+    await asyncio.to_thread(ghost_claim_service.cancel_claim, get_supabase(), user.user_id, claim_id)
     return MessageResponse(message="Claim withdrawn")

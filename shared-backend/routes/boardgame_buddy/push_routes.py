@@ -12,6 +12,8 @@ publish the key more widely than that. It is safe to hand out regardless: the
 VAPID public key IS the thing browsers subscribe with.
 """
 
+import asyncio
+
 from fastapi import Depends
 
 from db import get_supabase
@@ -62,7 +64,7 @@ async def create_push_subscription(
     #
     # user_id is in the payload for exactly that reason — it is a field that
     # can legitimately change on conflict.
-    sb.table("boardgamebuddy_push_subscriptions").upsert(
+    upsert = sb.table("boardgamebuddy_push_subscriptions").upsert(
         {
             "user_id": user.user_id,
             "endpoint": body.endpoint,
@@ -74,7 +76,8 @@ async def create_push_subscription(
             "failure_count": 0,
         },
         on_conflict="endpoint",
-    ).execute()
+    )
+    await asyncio.to_thread(upsert.execute)
     return MessageResponse(message="Subscribed")
 
 
@@ -94,11 +97,11 @@ async def delete_push_subscription(
     # enough to find the row, but it travels in a request body and treating
     # possession of it as authority to delete somebody else's device is a rule
     # worth not writing down anywhere.
-    (
+    delete = (
         sb.table("boardgamebuddy_push_subscriptions")
         .delete()
         .eq("user_id", user.user_id)
         .eq("endpoint", body.endpoint)
-        .execute()
     )
+    await asyncio.to_thread(delete.execute)
     return MessageResponse(message="Unsubscribed")

@@ -12,6 +12,7 @@ fetching the three list endpoints would be worse still — those return full
 GameSummary rows (hundreds of them, mid-backfill) to arrive at an integer.
 """
 
+import asyncio
 from typing import Any
 
 from fastapi import Depends
@@ -31,18 +32,7 @@ def _count_query(sb: Client, table: str) -> Any:
     return sb.table(table).select("id", count="exact")
 
 
-@router.get(
-    "/admin/review-counts",
-    response_model=AdminReviewCounts,
-    status_code=200,
-    summary="Counts of everything awaiting admin review (admin)",
-)
-async def get_admin_review_counts(
-    _admin: CurrentUser = Depends(get_current_admin),
-) -> AdminReviewCounts:
-    """Admin-only: how many items each admin tool currently has to act on."""
-    sb = get_supabase()
-
+def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
     # limit(1) rather than fetching the rows: the count rides PostgREST's
     # Content-Range header, so the body is one row we throw away instead of
     # the whole table.
@@ -70,3 +60,16 @@ async def get_admin_review_counts(
         missing_images=missing_images.count or 0,
         missing_descriptions=missing_descriptions.count or 0,
     )
+
+
+@router.get(
+    "/admin/review-counts",
+    response_model=AdminReviewCounts,
+    status_code=200,
+    summary="Counts of everything awaiting admin review (admin)",
+)
+async def get_admin_review_counts(
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> AdminReviewCounts:
+    """Admin-only: how many items each admin tool currently has to act on."""
+    return await asyncio.to_thread(_get_admin_review_counts_sync, get_supabase())
