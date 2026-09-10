@@ -187,6 +187,7 @@ async def _owner_counts_within_budget(bgg_ids: list[int]) -> dict[int, int]:
 )
 async def list_available_expansions(
     base_id: str = Path(..., description="Base game UUID"),
+    _user: CurrentUser = Depends(get_current_user),
 ) -> list[BggExpansionCandidate]:
     """Read the base game's BGG record and return every expansion BgB is missing.
 
@@ -271,6 +272,7 @@ async def list_available_expansions(
 async def import_expansion(
     base_id: str = Path(..., description="Base game UUID"),
     bgg_id: int = Path(..., description="BoardGameGeek ID of the expansion to import"),
+    _user: CurrentUser = Depends(get_current_user),
 ) -> ExpansionListItem:
     """Pull one expansion into the catalog and pin it to this base game.
 

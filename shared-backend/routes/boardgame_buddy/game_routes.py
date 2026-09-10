@@ -526,6 +526,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
 )
 async def import_bgg_game(
     bgg_id: int = Path(..., description="BoardGameGeek game ID"),
+    _user: CurrentUser = Depends(get_current_user),
 ) -> GameSummary:
     """Fetch a game from BGG API and add it to our database."""
     sb = get_supabase()

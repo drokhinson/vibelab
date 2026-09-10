@@ -500,6 +500,11 @@ async def collection_grid(
     status_value = status.value
     mode_value = play_mode.value if play_mode else None
 
+    # A wishlist is private to its owner, the same gate bgb_collection_shelf
+    # applies (migration 003_rpcs). Owned and played shelves are public.
+    if status == CollectionStatus.WISHLIST and target_user_id != user.user_id:
+        return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
+
     if status == CollectionStatus.PLAYED:
         # Played-not-owned shelf: every game the user has a play for — logged
         # by them or by someone who listed them as a player — that doesn't
