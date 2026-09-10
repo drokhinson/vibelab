@@ -1262,11 +1262,12 @@
       // patch that many cells per player — a per-player length would leave a
       // short column's live cells frozen at whatever they last rendered as.
       const n = this._maxRoundCount();
+      const cells = window.BgbCascade.scoreCells(this.container);
       for (let i = 0; i < players.length; i++) {
         const p = players[i];
         for (let r = 0; r < n; r++) {
-          const input = this.container.querySelector(`input[data-score-cell="${i}-${r}"]`);
-          if (!input || input === focused) continue;
+          const input = cells.get(`${i}-${r}`);
+          if (!input || input === focused || input.tagName !== "INPUT") continue;
           const v = this._resolvedScore(p, r);
           const text = v == null ? "" : String(v);
           // Programmatic .value assignment does not fire `oninput`, so the
@@ -1447,15 +1448,7 @@
     }
 
     _scrollToCurrentPhase() {
-      const phase = this._ps.phase || "gather";
-      let target = "screen-gather";
-      if (phase === "play") target = "screen-play";
-      else if (phase === "settle") target = "screen-settle";
-      // Defer one tick so the new innerHTML is laid out first.
-      requestAnimationFrame(() => {
-        const el = document.getElementById(target);
-        if (el) el.scrollIntoView({ block: "start" });
-      });
+      window.BgbCascade.scrollToPhase(this._ps.phase || "gather");
     }
 
     // Back-arrow handler. Rolls the live session phase one step backward
@@ -1704,19 +1697,9 @@
         return `<section class="cascade-card"><p class="text-sm opacity-70">Pick a game on the Gather step first.</p></section>`;
       }
       const game = this._ps.gameSnapshot || {};
-      const rulebookUrl = game.rulebook_url;
-      // No rulebook for this game → omit the button (and its row) entirely;
-      // the reference scroll below still carries user-authored chapters.
-      const rulebookRow = rulebookUrl
-        ? `<div class="cascade-rulebook-row">
-             <a href="${escapeAttr(rulebookUrl)}" target="_blank" rel="noopener"
-                class="btn btn-outline btn-sm cascade-rulebook-cta">
-               <i data-icon="book-open" class="w-4 h-4"></i>
-               <span>Rulebook</span>
-               <i data-icon="external-link" class="w-3.5 h-3.5"></i>
-             </a>
-           </div>`
-        : "";
+      // Without a rulebook the reference scroll below still carries
+      // user-authored chapters.
+      const rulebookRow = window.BgbCascade.rulebookRow(game.rulebook_url);
       // Scoring sits directly under the game-info strip and the reference guide
       // below it: the grid is what the host touches every round, so it stays
       // above the fold, and the guide — a reach-for-it-occasionally reference

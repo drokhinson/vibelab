@@ -386,9 +386,10 @@
     _patchScoringCells() {
       if (!this._session) return;
       const participants = this._session.participants || [];
+      const cells = window.BgbCascade.scoreCells(this.container);
       participants.forEach((p, i) => {
         for (let r = 0; r < this._renderedRounds; r++) {
-          const el = this.container.querySelector(`.scoring-table [data-score-cell="${i}-${r}"]`);
+          const el = cells.get(`${i}-${r}`);
           if (!el) continue;
           const text = this._cellValue({ participant_id: p.id }, r);
           if (el.textContent !== text) el.textContent = text;
@@ -595,13 +596,7 @@
     }
 
     _scrollToCurrentPhase(phase) {
-      let id = "screen-gather";
-      if (phase === "play") id = "screen-play";
-      else if (phase === "settle" || phase === "finalized") id = "screen-settle";
-      requestAnimationFrame(() => {
-        const el = document.getElementById(id);
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      window.BgbCascade.scrollToPhase(phase, { behavior: "smooth" });
     }
 
     // ── Section: Gather (read-only) ─────────────────────────────────────────
@@ -670,25 +665,6 @@
         game: (s && s.game) || null,
         code: (s && s.code) || this._code || null,
       });
-    }
-
-    // Same rulebook CTA the host gets on their Play step (play-flow-view's
-    // _renderPlay). The session bundle carries rulebook_url on its game, so
-    // there was never a data reason for the spectator to go without it. No
-    // rulebook on this game → no row at all, exactly as on the host side.
-    _renderRulebookRow(s) {
-      const url = s && s.game && s.game.rulebook_url;
-      if (!url) return "";
-      return `
-        <div class="cascade-rulebook-row">
-          <a href="${escapeAttr(url)}" target="_blank" rel="noopener"
-             class="btn btn-outline btn-sm cascade-rulebook-cta">
-            <i data-icon="book-open" class="w-4 h-4"></i>
-            <span>Rulebook</span>
-            <i data-icon="external-link" class="w-3.5 h-3.5"></i>
-          </a>
-        </div>
-      `;
     }
 
     _renderGather(s) {
@@ -765,7 +741,7 @@
         <div class="cascade-col cascade-col--aside">
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
-          ${this._renderRulebookRow(s)}
+          ${window.BgbCascade.rulebookRow(s && s.game && s.game.rulebook_url)}
           <div id="session-viewer-guide-mount" class="session-viewer__guide-mount"></div>
         </section>
         </div>
