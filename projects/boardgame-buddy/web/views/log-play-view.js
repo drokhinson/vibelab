@@ -182,6 +182,11 @@
       `;
     }
 
+    // Sits between Host and Game Explorer — a repeat of last night's game is
+    // the more likely tap than browsing for a new one. Only rendered when
+    // there IS a last play. The 44px mark carries the game's box art;
+    // renderGamePolaroid() is deliberately not reused here, it's a full grid
+    // tile (big photo + caption + status badge), not an avatar-sized mark.
     _renderAnotherRoundCard() {
       const p = this._lastPlay;
       if (!p || !p.game_id) return "";
@@ -279,11 +284,6 @@
       this._patchChooserCards();
     }
 
-    // Repaint just the three host cards. render() rebuilds the entire
-    // container via innerHTML, so using it here would tear down and re-mount
-    // the join panel below (and blow away a half-typed code) the moment a late
-    // last-play landed. With the seed in place this path is rare; when it does
-    // run, nothing outside the card row moves.
     /**
      * Repaint just the option list — resume card included, since it now lives
      * in the same list. Re-reading _resumableSession() is a localStorage hit,
@@ -300,13 +300,6 @@
       el.innerHTML = this._renderChooserCards();
       this.refreshIcons(el);
     }
-
-    // Sits between Host and Game Explorer — a repeat of last night's game is
-    // the more likely tap than browsing for a new one. Only rendered when
-    // there IS a last play, so a brand-new account sees just Host and Game
-    // Explorer, adjacent. The 44px mark carries the game's box art;
-    // renderGamePolaroid() is deliberately not reused here, it's a full grid
-    // tile (big photo + caption + status badge), not an avatar-sized mark.
 
     // Stages the previous game + roster into a fresh draft and drops the
     // user on Gather, exactly like the wrap-up card's "Another round?".

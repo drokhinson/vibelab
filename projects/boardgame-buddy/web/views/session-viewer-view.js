@@ -17,7 +17,7 @@
 // the lobby so a missed Realtime event doesn't leave the joiner stuck.
 
 (function () {
-  // Polling cadence matches the host's lobby poll (play-flow-view.js:124).
+  // Polling cadence matches the host's lobby poll (play-flow-view.js#_startLobbyPoll).
   // Realtime covers phase changes and live scores, but participant joins /
   // leaves and the host's roster edits are poll-only, so 2s is the minimum
   // freshness an authenticated joiner can expect for the player list during
@@ -521,10 +521,10 @@
 
       const phase = s.phase || "gather";
       // Lock every non-active screen to height: 0 (.is-locked) so the cascade
-      // snaps to one screen at a time — mirrors the host's PlayFlowView
-      // (play-flow-view.js:348-350). Previously only the Play/Settle screens
-      // locked, so during Play both Gather (step 1) and Play (step 2) were
-      // visible and the joiner scrolled between them.
+      // snaps to one screen at a time — mirrors the host's render() lock in
+      // play-flow-view.js. Previously only the Play/Settle screens locked, so
+      // during Play both Gather (step 1) and Play (step 2) were visible and
+      // the joiner scrolled between them.
       const lockGather = phase !== "gather";
       const lockPlay = phase !== "play";
       const lockSettle = phase !== "settle" && phase !== "finalized";

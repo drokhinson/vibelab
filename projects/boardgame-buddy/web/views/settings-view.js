@@ -31,13 +31,8 @@
       // must not be left unsure whether it happened.
       this._deleting = false;
 
-      // The comparison, both syncs and everything they narrate live in
-      // domain/bgg-sync-flow.js now — they outlive this screen, which is what
-      // lets a sync keep running once the user closes the flow. This card
-      // reads the flow's snapshot and shows one row (see _renderBggSyncStrip).
-
-      // True while a manual outbox flush is in flight — drives the Upload now
-      // button's disabled/"Uploading…" state.
+      // The BGG comparison and syncs live in domain/bgg-sync-flow.js: they
+      // outlive this screen, so a sync keeps running once the flow is closed.
 
       // Past imports (migration 007). null = not loaded yet, so the section is
       // absent rather than flashing an empty card on the first paint.
@@ -209,7 +204,6 @@
       `;
     }
 
-    // ── Admin tools card ──────────────────────────────────────────────────────
     // ── Appearance ────────────────────────────────────────────────────────────
     // A three-way segmented control rather than a sun/moon switch: "Auto" is a
     // real state (follow the OS) and a two-position toggle can't express it.

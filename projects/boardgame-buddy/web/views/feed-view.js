@@ -291,6 +291,7 @@
       // already fetched the same page, and a needless repaint would cost the
       // user their scroll position for no new content. This is also what makes
       // a pull that finds nothing new a no-op rather than a jump to the top.
+      // (cardsSig is a join of ids and counts — cheap even on a long feed.)
       if (cardsSig(nextCards) === cardsSig(this._page.cards)) return;
 
       this._page = {

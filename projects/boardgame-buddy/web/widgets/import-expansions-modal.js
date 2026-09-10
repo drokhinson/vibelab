@@ -16,9 +16,8 @@
 // them on. Never re-sort client-side: _renderRows filters, which preserves
 // order, and the owners chip is what makes that order legible.
 //
-// Opened from the expansion section on both surfaces that own expansions:
-//   - views/game-detail-view.js (boardgame page)
-//   - views/play-flow-view.js   (host Gather screen)
+// Opened from every surface that owns an expansion list — grep
+// ImportExpansionsModal rather than trusting a list here.
 //
 // Since expansions are hidden from game search, this is the only path by
 // which one enters the catalog. Import is catalog-only — it never touches

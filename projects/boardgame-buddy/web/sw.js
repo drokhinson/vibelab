@@ -84,6 +84,8 @@ self.addEventListener("fetch", (event) => {
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
   // The API and Supabase are never cached, and never served from cache.
+  // (Two independent version axes: this worker's cache name follows the build
+  // id; bgbCache's SCHEMA_VERSION follows the shape of what the API returns.)
   //
   // Load-bearing, not conservative: a cached GET /feed or GET /sessions/{code}
   // would hand the app data that looks live and isn't, and the app has no way
@@ -253,8 +255,9 @@ async function navigationResponse(req) {
  * lands in a fresh cache and activate() deletes the old one. Re-fetching it can
  * only ever return what we already hold.
  *
- * That made it free to skip and expensive to keep: the shell is ~120 files, so
- * every warm load fired ~120 background requests that could not change
+ * That made it free to skip and expensive to keep: the shell is every file
+ * index.html names (precache() derives the list), so every warm load fired
+ * that many background requests that could not change
  * anything, over the same radio the boot's own /bootstrap was waiting on. The
  * CDN entries are the genuinely different case — cached opportunistically on a
  * first online load, possibly from an error response, and not versioned by
@@ -340,8 +343,8 @@ async function precache() {
 /**
  * Run `fn` over `items` a few at a time instead of all at once.
  *
- * The shell is ~60 files and every one is fetched with `cache: "reload"`, so
- * an unbounded Promise.all is a 60-request burst — issued, on a first-ever
+ * Every shell file is fetched with `cache: "reload"`, so an unbounded
+ * Promise.all is a burst of the whole list — issued, on a first-ever
  * install, at the same moment the page it belongs to is fetching /bootstrap
  * and the feed over the same radio. The user is staring at a loader while the
  * app races itself for bandwidth. Nothing here is urgent (the precache only

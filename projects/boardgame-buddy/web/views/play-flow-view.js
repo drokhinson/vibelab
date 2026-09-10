@@ -131,9 +131,6 @@
       // tick so it can't clobber this._lobby (incl. a stale phase) mid
       // transition. Mirrors _pendingDeletes.
       this._pendingPhase = 0;
-      // GameFinder widget instance, lazily constructed in render() when the
-      // Gather screen needs the picker. Lives across the 2s lobby-poll
-      // re-renders — mount() is idempotent.
       // Lobby row already fetched by onMount's deep-link host-vs-joiner
       // check. _ensureLobbyOpen consumes (and clears) it so the same code
       // isn't fetched twice back-to-back on a deep-link entry.
@@ -2467,9 +2464,6 @@
       this._ps.persist();
     }
 
-    // Lookup helper used by the buddy autocomplete dropdown: resolves the
-    // buddy row from this._buddies (so we keep their avatar) and forwards
-    // to _addPlayer.
     _removePlayer(i) {
       const removed = this._ps.players[i];
       this._ps.players.splice(i, 1);
