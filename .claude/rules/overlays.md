@@ -179,6 +179,11 @@ if (list) list.style.setProperty("--sheet-list-min", list.clientHeight + "px");
 
 Stability while typing matters less than staying on screen.
 
+In boardgame-buddy the shell does this: pass `search: { listSel, onQuery }`
+to `BgbBottomSheet.open()` and it binds the field, pins the list and layers
+Escape over the query (§5). The sheet keeps only the list patch — what a
+keystroke repaints is the sheet's own business.
+
 ## 5. Focus and Escape
 
 **Escape is layered.** The sheet gets first refusal via `onEscape` returning
@@ -262,14 +267,17 @@ for visual consistency; they do not share the shell.
   everywhere — see `.claude/rules/web-frontend.md` and
   `.claude/rules/ui-object-design.md` §3c. A bottom sheet is a legitimate choice
   of that surface, as long as it is the only one.
-- **Known consolidation debt in boardgame-buddy:** `widgets/play-detail-popup.js`,
-  `widgets/outbox-modal.js` and `widgets/import-expansions-modal.js` each
-  re-implement `_previousFocus`, `_escHandler` and singleton-by-id. That is a
-  lifecycle the sheet shell already solves. `widgets/add-game-modal.js` was the
-  fourth and is gone — the BoardGameGeek import it hosted is a real sheet now
-  (`widgets/bgg-import-sheet.js`), which is the other way out of this debt:
-  where the popup's content is a list, it was never a modal. Extract a modal
-  shell the next time one of the remaining three is touched substantively.
+- **The modal shell** in boardgame-buddy is `ui/modal-shell.js` (`BgbModal`),
+  the centred-card sibling of the sheet shell with the same contract: `open()`
+  with `html`, `onClick`, `onEscape`, `canDismiss` (a card mid-save refuses the
+  outside tap, Escape and back), `onOpen`, `onClose`. It owns the four exits,
+  the scroll lock and focus return; each card keeps its own markup. It was
+  extracted once four cards (play detail, outbox, import expansions, add
+  buddies) had each grown their own copy and drifted — one bound Escape in the
+  bubble phase, three never locked scroll. Where a popup's content is a list,
+  it was never a modal: the BoardGameGeek import became a sheet instead.
+  `ui/polaroid-popup.js` (wrap-up, confirm, alert, prompt, avatar) stays its
+  own family; it is a singleton with an in-place `update()` path.
 
 ## 8. Dismissal — four ways out, one meaning
 

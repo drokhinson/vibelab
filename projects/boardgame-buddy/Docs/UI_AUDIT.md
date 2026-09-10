@@ -1104,3 +1104,17 @@ selector): `bgg-log__names`, `bgg-diff--card`, `alias-sheet__foot`,
 `play-detail-popup__footer--edit`, `play-detail__section--rounds`,
 `player-picker__pill--you`, `buddies-row--ghost`, and the three
 `admin-reports__*` spans in `admin-backfill-panel`.
+
+**Extracted, not copied:** `ui/preview-card.js` (the profile hub card, its
+cover strip and its play row — the hub and another user's profile had each
+carried the set, one of them labelled byte-for-byte the other's);
+`ui/modal-shell.js` (`BgbModal`, the centred-card sibling of the sheet shell,
+now hosting the play-detail popup, the outbox, the expansion importer and the
+add-buddies card — the debt `overlays.md` §7 had recorded); the `search` opt
+on `BgbBottomSheet.open()` (the field binding, list pin and layered Escape the
+four picker sheets had each written); `widgets/cascade-shared.js` (the rulebook
+row, the scroll-to-phase and the score-cell lookup the host cascade and the
+spectator mirror both drew); and in `helpers.js`, `gameDetailJs`,
+`captureFocus`/`restoreFocus`, `formatDateShort` and `parseDate`.
+`PolaroidPopup.prompt()` joins `confirm()` and `alert()` so no screen reaches
+for `window.prompt` again.
