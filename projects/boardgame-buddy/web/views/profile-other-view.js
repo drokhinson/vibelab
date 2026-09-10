@@ -509,13 +509,13 @@
       const count = (b && b.owned_total) || 0;
       // Games only — matches the self hub (profile-self-view.js).
       const subtitle = `${count} game${count === 1 ? "" : "s"}`;
-      return this._previewCard({
+      return window.BgbPreviewCard.render({
         icon: "library-big",
         title: "Collection",
         sub: subtitle,
         seeAllJs: "window.profileOtherView._goCollection()",
         body: items.length
-          ? `<div class="preview-card__covers">${items.slice(0, PREVIEW_COVERS).map((it) => this._cover(it)).join("")}</div>`
+          ? `<div class="preview-card__covers">${items.slice(0, PREVIEW_COVERS).map((it) => window.BgbPreviewCard.cover(it)).join("")}</div>`
           : `<div class="preview-card__empty">${escapeHtml(this._profile.display_name || "They")} doesn't own any games yet.</div>`,
       });
     }
@@ -544,10 +544,10 @@
         const total = s.total || 0;
         sub = `${total} total`;
         body = plays.length
-          ? `<ul class="preview-card__plays">${plays.slice(0, PREVIEW_PLAYS).map((p) => this._playRow(p)).join("")}</ul>`
+          ? `<ul class="preview-card__plays">${plays.slice(0, PREVIEW_PLAYS).map((p) => window.BgbPreviewCard.playRow(p)).join("")}</ul>`
           : `<div class="preview-card__empty">You and ${escapeHtml(them)} haven't played together yet.</div>`;
       }
-      return this._previewCard({
+      return window.BgbPreviewCard.render({
         icon: "dices",
         title: "Shared plays",
         sub,
@@ -561,76 +561,12 @@
     // card previews, so "See all" widens the list rather than changing it.
     _goSharedPlays() { window.router.go("plays", { userId: this._userId(), shared: "1" }); }
 
-    _previewCard({ icon, title, sub, seeAllJs, body }) {
-      return `
-        <section class="preview-card">
-          <header class="preview-card__head">
-            <span class="preview-card__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
-            <h3 class="preview-card__title font-display">${escapeHtml(title)}</h3>
-            <span class="preview-card__sub">${escapeHtml(sub)}</span>
-            <button class="preview-card__seeall" onclick="${seeAllJs}">
-              See all <i data-icon="chevron-right" class="w-3 h-3"></i>
-            </button>
-          </header>
-          <div class="preview-card__body">${body}</div>
-        </section>
-      `;
-    }
-
-    _cover(item) {
-      const g = item.game || {};
-      const click = `onclick="${escapeAttr(gameDetailJs(g.id, g.name))}"`;
-      // owned_page carries prev_owned rows while owned_total counts only what
-      // they still have, so a game they sold can take a slot in this strip.
-      // Dimmed, matching the Collection grid and Profile Self — no stamp,
-      // which is unreadable at this size. Same rule as profile-self-view.js.
-      const parted = item.status === "prev_owned" ? " is-prev-owned" : "";
-      return `
-        <div class="preview-card__cover${parted}" ${click} title="${escapeAttr(g.name || "")}">
-          ${gameArtImg(g, "card", { alt: g.name || "" })
-            || `<div class="preview-card__cover-fallback">${escapeHtml((g.name || "?").slice(0, 14))}</div>`}
-        </div>
-      `;
-    }
-
-    // Byte-for-byte the hub's row (profile-self-view.js#_playRow), because it
-    // is the same object on the same card. The "Won" tag earns its place here
-    // now that every row is a play the viewer sat in — it was meaningless on
-    // the old card, which listed plays they had nothing to do with.
-    _playRow(p) {
-      const me = window.store.get("user");
-      const winners = (p.players || []).filter((pl) => pl.is_winner);
-      // Match on user_id first, fall back to display_name (older plays may not
-      // carry user_id on every player row).
-      const youWon = winners.some((w) =>
-        (w.user_id && me && w.user_id === me.id) ||
-        (me && (w.name || "") === (me.display_name || ""))
-      );
-      const playerCount = (p.players || []).length;
-      const gameNav = escapeAttr(gameDetailJs(p.game_id, p.game_name, { stop: true }));
-      return `
-        <li class="preview-card__play" onclick="window.PlayDetailPopup.show('${p.id}')">
-          ${p.game_thumbnail
-            ? `<img class="preview-card__play-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" onclick="${gameNav}" />`
-            : `<div class="preview-card__play-thumb preview-card__play-thumb--placeholder"><i data-icon="dice-6" class="w-4 h-4"></i></div>`}
-          <div class="preview-card__play-info">
-            <div class="preview-card__play-name">
-              ${escapeHtml(p.game_name || "")}
-              ${youWon ? `<span class="preview-card__play-won"><i data-icon="trophy" class="w-3 h-3"></i> Won</span>` : ""}
-            </div>
-            ${playerCount > 0 ? `<div class="preview-card__play-meta">${playerCount} ${playerCount === 1 ? "player" : "players"}</div>` : ""}
-          </div>
-          <div class="preview-card__play-date">${formatDateShort(p.played_at)}</div>
-        </li>
-      `;
-    }
 
     // "Ada Lovelace" → "Ada", for the legend and the sentence above it.
     _firstName(name) {
       return String(name || "They").trim().split(/\s+/)[0] || "They";
     }
   }
-
 
   window.ProfileOtherView = ProfileOtherView;
 })();

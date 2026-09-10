@@ -638,7 +638,7 @@
   // deliberately ONE dot for all of them. A tab of chrome is the wrong place
   // to read a figure or to distinguish kinds of news; the dot says "there is
   // something here", and the hub's cards, one tap away, carry the counts
-  // (profile-self-view.js#_countBadge).
+  // (ui/preview-card.js#countBadge).
   //
   // Which slot belongs to which tab is domain/notifications.js's table, not
   // this function's: it walks every tab in the bar and asks. A tab with no
