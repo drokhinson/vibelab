@@ -529,6 +529,62 @@
   }
 
   /**
+   * One-field text dialog — the project's replacement for window.prompt,
+   * which some installed-PWA contexts block outright. Resolves with the
+   * typed string on confirm, or null on cancel / backdrop / back.
+   * @param {{title:string, body?:string, value?:string, placeholder?:string,
+   *          confirmLabel?:string, cancelLabel?:string}} opts
+   * @returns {Promise<string|null>}
+   */
+  function prompt({
+    title,
+    body,
+    value = "",
+    placeholder = "",
+    confirmLabel = "OK",
+    cancelLabel = "Cancel",
+  }) {
+    return new Promise((resolve) => {
+      dismiss();
+      const root = document.createElement("div");
+      root.id = BACKDROP_ID;
+      root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--confirm";
+      root.innerHTML = `
+        <div class="polaroid-popup__card polaroid-popup__card--confirm"
+             role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}">
+          <div class="polaroid-popup__title">${escapeHtml(title)}</div>
+          ${body ? `<p class="polaroid-popup__body">${escapeHtml(body)}</p>` : ""}
+          <form class="polaroid-field polaroid-popup__prompt">
+            <input type="text" class="polaroid-field__input polaroid-popup__prompt-input"
+                   value="${escapeAttr(value)}" placeholder="${escapeAttr(placeholder)}"
+                   aria-label="${escapeAttr(title)}" autocomplete="off" />
+          </form>
+          <div class="polaroid-popup__actions">
+            <button type="button" class="btn btn-ghost btn-sm polaroid-popup__cancel">${escapeHtml(cancelLabel)}</button>
+            <button type="button" class="btn btn-primary btn-sm polaroid-popup__confirm">${escapeHtml(confirmLabel)}</button>
+          </div>
+        </div>
+      `;
+      const input = /** @type {HTMLInputElement} */ (root.querySelector(".polaroid-popup__prompt-input"));
+      const cancel = () => { dismiss(); resolve(null); };
+      const ok = () => { const v = input.value; dismiss(); resolve(v); };
+      root.addEventListener("click", (ev) => {
+        if (isOutsideCard(ev.target)) cancel();
+      });
+      root.querySelector("form").addEventListener("submit", (ev) => { ev.preventDefault(); ok(); });
+      mount(root);
+      armBack(root, cancel);
+      window.BgbIcons.render(root);
+      root.querySelector(".polaroid-popup__cancel").addEventListener("click", cancel);
+      root.querySelector(".polaroid-popup__confirm").addEventListener("click", ok);
+      // The one overlay that exists to be typed into: the field IS the content
+      // (.claude/rules/overlays.md §5 is about lists the keyboard would bury).
+      input.focus();
+      input.select();
+    });
+  }
+
+  /**
    * Avatar customizer modal. Reuses the polaroid card chrome (cream bg,
    * close button, backdrop blur) and the confirm-style footer for the
    * Save / Cancel buttons. Resolves with the chosen avatar config (plus
@@ -703,6 +759,6 @@
 
 
   window.PolaroidPopup = {
-    show, update, dismiss, isOpen, achievement, confirm, alert, avatarCustomizer,
+    show, update, dismiss, isOpen, achievement, confirm, alert, prompt, avatarCustomizer,
   };
 })();

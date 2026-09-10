@@ -570,10 +570,11 @@
 
     async _reportChapter(chapterId, event) {
       if (event) event.preventDefault();
-      const reason = window.prompt(
-        "Why are you reporting this chapter? (optional)",
-        ""
-      );
+      const reason = await window.PolaroidPopup.prompt({
+        title: "Report this chapter",
+        body: "Why are you reporting it? (optional)",
+        confirmLabel: "Report",
+      });
       if (reason === null) return;
       try {
         await window.Chapter.report(chapterId, reason.trim() || null);

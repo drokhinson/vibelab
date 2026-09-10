@@ -25,7 +25,7 @@
      * @param {string}   opts.emptyText    shown when nothing is missing
      * @param {string}   opts.bulkLabel    label for the bulk button
      * @param {string}   opts.busyLabel    label while a refresh is running
-     * @param {(n:number)=>string} opts.bulkConfirm   window.confirm copy
+     * @param {(n:number)=>string} opts.bulkConfirm   the confirm dialog's title
      * @param {(g:Object)=>string} opts.rowStatus     per-row "what's missing" label
      * @param {()=>Promise<Object[]>}  opts.list
      * @param {(id:string)=>Promise<any>} opts.refreshOne
@@ -78,7 +78,10 @@
 
     async refreshAll() {
       const count = this._rows.length;
-      if (!window.confirm(this.opts.bulkConfirm(count))) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: this.opts.bulkConfirm(count), confirmLabel: "Refresh all", cancelLabel: "Cancel",
+      });
+      if (!ok) return;
       this._bulk = true;
       this._bulkNote = "";
       this.opts.render();

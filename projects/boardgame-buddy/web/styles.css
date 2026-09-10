@@ -13158,6 +13158,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
    Callers keep their own layout class alongside (.avatar-cust__name), and
    their own JS hook class on the input; nothing positional lives here. */
+.polaroid-popup__prompt { margin: 12px 0 4px; }
 .polaroid-field {
   display: flex;
   flex-direction: column;

@@ -1180,7 +1180,12 @@
     }
 
     async _unlinkBgg() {
-      if (!confirm("Unlink your BoardGameGeek account? Already-imported games stay in your collection.")) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Unlink your BoardGameGeek account?",
+        body: "Already-imported games stay in your collection.",
+        confirmLabel: "Unlink", cancelLabel: "Keep it", destructive: true,
+      });
+      if (!ok) return;
       try { await window.Bgg.unlink(); } catch (_) {}
       this._bggSyncResult = null;
       await this._loadBggStatus();

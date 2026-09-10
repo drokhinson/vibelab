@@ -517,12 +517,14 @@
     }
 
     async _promptAddRulebook() {
-      const url = window.prompt("Rulebook URL", "https://");
+      const url = await window.PolaroidPopup.prompt({
+        title: "Rulebook URL", value: "https://", confirmLabel: "Save",
+      });
       if (url == null) return;                    // user hit Cancel
       const trimmed = url.trim();
       if (!trimmed) return;
       if (!/^https?:\/\//i.test(trimmed)) {
-        alert("Rulebook URL must start with http:// or https://");
+        await window.PolaroidPopup.alert({ title: "Rulebook URL must start with http:// or https://" });
         return;
       }
       try {
@@ -530,12 +532,19 @@
         await this._reload();
       } catch (e) {
         const status = e && e.status ? ` (HTTP ${e.status})` : "";
-        alert(`Failed to set rulebook URL${status}: ${(e && e.message) || e}`);
+        await window.PolaroidPopup.alert({
+          title: "Couldn't set the rulebook URL",
+          body: `${status ? status.trim() + " " : ""}${(e && e.message) || e}`,
+        });
       }
     }
 
     async _promptDeleteRulebook() {
-      if (!confirm("Delete the rulebook URL for this game?")) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Delete the rulebook URL for this game?",
+        confirmLabel: "Delete", cancelLabel: "Keep it", destructive: true,
+      });
+      if (!ok) return;
       try {
         await window.Game.adminSetRulebookUrl(this._game.id, null);
         await this._reload();
@@ -550,7 +559,10 @@
           return;
         }
         const status = e && e.status ? ` (HTTP ${e.status})` : "";
-        alert(`Failed to delete rulebook URL${status}: ${(e && e.message) || e}`);
+        await window.PolaroidPopup.alert({
+          title: "Couldn't delete the rulebook URL",
+          body: `${status ? status.trim() + " " : ""}${(e && e.message) || e}`,
+        });
       }
     }
 
