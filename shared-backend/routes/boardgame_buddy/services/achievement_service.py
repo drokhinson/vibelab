@@ -1,4 +1,3 @@
-from supabase import Client
 """Achievements — wraps the bgb_sync_achievements RPC.
 
 Thin by design, exactly like stats_service: the RPC composes every metric,
@@ -6,6 +5,7 @@ writes the unlock rows that are newly due, and returns the screen's whole
 payload, so there is nothing to reshape here.
 """
 
+from supabase import Client
 from ..models import AchievementsResponse
 
 

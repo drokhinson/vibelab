@@ -582,8 +582,11 @@ async def refresh_game_images(
             updated += 1
         except Exception:
             logger.warning("refresh-images: bgg_id=%s skipped", game["bgg_id"], exc_info=True)
-        # BGG's rate limit is per session; every other sweep here paces itself.
-        await asyncio.sleep(BGG_THROTTLE_SECONDS)
+        finally:
+            # BGG's rate limit is per session; every other sweep here paces
+            # itself. In `finally` so a game that returns no <item> — a
+            # `continue` out of the try — still waits its turn.
+            await asyncio.sleep(BGG_THROTTLE_SECONDS)
     if updated:
         _invalidate_game_caches()
     return RefreshImagesResponse(updated=updated)

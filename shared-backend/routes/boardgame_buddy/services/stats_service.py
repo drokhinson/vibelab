@@ -1,6 +1,6 @@
-from supabase import Client
 """Per-user stats — wraps the bgb_user_stats RPC."""
 
+from supabase import Client
 from ..models import FavoriteGame, StatsResponse
 
 
