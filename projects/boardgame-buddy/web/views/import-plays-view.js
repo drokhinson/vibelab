@@ -66,9 +66,11 @@
       this._shownGroups = GROUP_BATCH;
       // Monotonic guards. Captured before every await, checked in both the
       // success and the error path, so a slow parse that the user has already
-      // navigated away from can't paint over whatever they moved on to.
-      this._parseSeq = 0;
-      this._importSeq = 0;
+      // navigated away from can't paint over whatever they moved on to. They
+      // advance on reset rather than restart, so a parse still in flight from
+      // the previous mount never matches again.
+      this._parseSeq = (this._parseSeq || 0) + 1;
+      this._importSeq = (this._importSeq || 0) + 1;
       /** The parsed name the player sheet is currently asking about. */
       this._sheetName = null;
     }

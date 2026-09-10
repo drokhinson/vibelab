@@ -102,8 +102,9 @@
       this._writing = new Set();
       if (this._syncFrame != null) cancelAnimationFrame(this._syncFrame);
       this._syncFrame = null;
-      // Monotonic: a page resolving after a newer search must not write back.
-      this._loadSeq = 0;
+      // Monotonic: a page resolving after a newer search — or from the previous
+      // mount — must not write back.
+      this._loadSeq = (this._loadSeq || 0) + 1;
       clearTimeout(this._searchTimer);
       this._searchTimer = null;
     }

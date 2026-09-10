@@ -65,10 +65,14 @@
       this._error = null;
       this._loading = true;
       this.render();
+      // Expansion → base game is two taps on this screen; a slower earlier
+      // bundle must not paint over the later one (or an unmounted view).
+      const stale = () => !this._mounted || (this.params && this.params.gameId) !== id;
       try {
         // Single round trip via /games/{id}/bundle (Phase 3) — replaces the
         // serial Game.fetch + parallel status/plays/expansions fan-out.
         const bundle = await window.Game.detailBundle(id, { playsLimit: 5 });
+        if (stale()) return;
         if (!bundle || !bundle.game) {
           throw new Error("Game not found");
         }
@@ -91,10 +95,13 @@
           this._status = "played";
         }
       } catch (e) {
+        if (stale()) return;
         this._error = e.message || "Failed to load game";
       } finally {
-        this._loading = false;
-        this.render();
+        if (!stale()) {
+          this._loading = false;
+          this.render();
+        }
       }
     }
 

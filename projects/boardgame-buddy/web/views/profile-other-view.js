@@ -80,8 +80,11 @@
       this._error = null;
       this._resetShared();
       this.render();
+      // Two player names tapped in a row: only the latest user's data lands.
+      const stale = () => this._userId() !== userId;
       const profilePromise = window.User.fetch(userId)
         .then((p) => {
+          if (stale()) return;
           this._profile = p;
           this.render();
           // Only once the FRESH relation says buddy. The bundle's is_buddy can
@@ -89,10 +92,19 @@
           // stranger — a request we know will fail is one not worth making.
           if (p && p.is_buddy) this._loadShared();
         })
-        .catch((e) => { this._error = e.message || "Failed to load profile"; this.render(); });
+        .catch((e) => {
+          if (stale()) return;
+          this._error = e.message || "Failed to load profile";
+          this.render();
+        });
       const bundlePromise = window.Profile
         .bundle(userId, { colPerPage: PREVIEW_COVERS, playsPerPage: PREVIEW_PLAYS })
-        .then((b) => { this._bundle = b; this._seedViewerMaps(b); this.render(); })
+        .then((b) => {
+          if (stale()) return;
+          this._bundle = b;
+          this._seedViewerMaps(b);
+          this.render();
+        })
         .catch((e) => {
           if (window.console) console.warn("profile bundle failed", e);
         });

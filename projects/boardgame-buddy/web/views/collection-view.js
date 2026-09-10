@@ -332,8 +332,13 @@
         this._hydrateStatusMap();
         this._hydrateFromCache();
         this.render();
-        window.User.fetch(this._targetUserId)
-          .then((p) => { this._targetProfile = p; this.render(); })
+        const target = this._targetUserId;
+        window.User.fetch(target)
+          .then((p) => {
+            if (!this._mounted || this._targetUserId !== target) return;
+            this._targetProfile = p;
+            this.render();
+          })
           .catch(() => {});
         await this._loadActiveShelf();
         // Viewer maps still apply — overlay "you own this" pills on

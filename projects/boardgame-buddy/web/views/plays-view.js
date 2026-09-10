@@ -25,7 +25,14 @@
   class PlaysView extends window.View {
     constructor() {
       super("plays");
+      // Survives _resetState on purpose: a load still in flight from the
+      // previous target must find the counter moved on, not reset to zero.
+      this._loadSeq = 0;
       this._resetState();
+    }
+
+    onUnmount() {
+      clearTimeout(this._searchTimer);
     }
 
     _resetState() {
@@ -36,7 +43,9 @@
       this._loaded = false;
       this._error = null;
       this._query = "";
+      clearTimeout(this._searchTimer);
       this._searchTimer = null;
+      this._loadSeq++;
       // The VIEWER's own game -> status map. Every row's status tag reads it,
       // on this user's plays and on anyone else's — the tag is your
       // relationship to the game, never the log's owner's.
@@ -99,8 +108,13 @@
         // first paint — otherwise an empty hydrate paints the empty state.
         this._loading = true;
         this.render();
-        window.User.fetch(this._targetUserId)
-          .then((p) => { this._targetProfile = p; this.render(); })
+        const target = this._targetUserId;
+        window.User.fetch(target)
+          .then((p) => {
+            if (!this._mounted || this._targetUserId !== target) return;
+            this._targetProfile = p;
+            this.render();
+          })
           .catch(() => {});
         // Their plays and your collection, in parallel: the rows come from
         // them, the status tags on those rows come from you.
@@ -381,31 +395,40 @@
     }
 
     async _load({ reset = false } = {}) {
+      const seq = ++this._loadSeq;
+      // The page only advances once its rows are in — a failed "Load more"
+      // otherwise skipped that page for good on the next tap.
+      const page = reset ? 1 : this._page + 1;
       this._loading = true;
       this._error = null;
       if (reset) { this._page = 1; this._plays = []; }
       this.render();
       try {
         const data = await window.Play.list({
-          page: this._page,
+          page,
           perPage: PER_PAGE,
           search: this._query || null,
           userId: this._isOther() ? this._targetUserId : undefined,
           buddyId: this._buddyId(),
         });
+        if (seq !== this._loadSeq) return;
         const fresh = (data && data.plays) || [];
         this._total = (data && data.total) || 0;
         this._plays = reset ? fresh : [...this._plays, ...fresh];
+        this._page = page;
       } catch (e) {
+        if (seq !== this._loadSeq) return;
         this._error = e.message || "Failed to load";
       } finally {
-        this._loading = false;
-        this._loaded = true;
-        this.render();
+        if (seq === this._loadSeq) {
+          this._loading = false;
+          this._loaded = true;
+          this.render();
+        }
       }
     }
 
-    _loadMore() { this._page += 1; this._load({ reset: false }); }
+    _loadMore() { this._load({ reset: false }); }
 
     _onSearchInput(value) {
       this._query = value;

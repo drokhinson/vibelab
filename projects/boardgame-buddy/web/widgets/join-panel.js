@@ -30,6 +30,8 @@
       this._joining = false;
       this._joinCode = "";
       this._pollHandle = null;
+      // Shared by _load and _pollTick: whichever request was sent last wins.
+      this._loadSeq = 0;
       this._onVisibility = () => {
         if (!document.hidden) this._pollTick();
       };
@@ -92,15 +94,20 @@
       this._loading = true;
       this._error = null;
       this.render();
+      const seq = ++this._loadSeq;
       try {
         const resp = await window.PlaySession.listJoinable();
+        if (seq !== this._loadSeq) return;
         this._sessions = (resp && resp.sessions) || [];
       } catch (e) {
+        if (seq !== this._loadSeq) return;
         this._error = e.message || "Failed to load active sessions";
         this._sessions = this._sessions || [];
       } finally {
-        this._loading = false;
-        this.render();
+        if (seq === this._loadSeq) {
+          this._loading = false;
+          this.render();
+        }
       }
     }
 
@@ -117,8 +124,10 @@
       // it throw six times a minute) also keeps BgbNet's failure counter
       // measuring real user-driven requests instead of its own background noise.
       if (window.BgbNet && window.BgbNet.isOffline()) return;
+      const seq = ++this._loadSeq;
       try {
         const resp = await window.PlaySession.listJoinable();
+        if (seq !== this._loadSeq) return;
         const next = (resp && resp.sessions) || [];
         if (this._shouldRerender(next)) {
           this._sessions = next;
