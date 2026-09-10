@@ -71,6 +71,10 @@
    * @property {PlayerCandidate[]} [recent]    Shown first while the search box
    *   is empty. Falls back to `candidates`.
    * @property {number} [seated]               Players already at the table.
+   * @property {string[]} [seatedNames]        Their names. A caller that
+   *   filters seated people out of `candidates` leaves the guest row unable
+   *   to see them, so a differently-cased spelling of someone already at the
+   *   table would be offered back as a new guest — and seat them twice.
    * @property {(picks: PlayerCandidate[]) => void} onConfirm  In tick order.
    * @property {Element|null} [returnFocus]
    * @property {boolean} [singleSelect]        One answer, not a set: a tap
@@ -123,6 +127,7 @@
       /** Tick order — the seating order the roster will take. @type {PlayerCandidate[]} */
       this._picked = [];
       this._seated = 0;
+      this._seatedNames = new Set();
       this._onConfirm = /** @type {any} */ (null);
       this._query = "";
       this._single = false;
@@ -269,6 +274,7 @@
       if (!this._single
           && (this._candidates.some(
                 (c) => key(c.name) === key(q) || (c.alias && key(c.alias) === key(q)))
+              || this._seatedNames.has(key(q))
               || this._isPicked(q))) {
         return "";
       }
@@ -491,6 +497,7 @@
       this._candidates = Array.isArray(opts.candidates) ? opts.candidates : [];
       this._recent = Array.isArray(opts.recent) ? opts.recent : [];
       this._seated = opts.seated || 0;
+      this._seatedNames = new Set((opts.seatedNames || []).map(key));
       this._onConfirm = opts.onConfirm;
       this._picked = [];
       this._single = !!opts.singleSelect;
@@ -543,6 +550,7 @@
         },
         onClose: () => {
           this._candidates = [];
+          this._seatedNames = new Set();
           this._recent = [];
           this._picked = [];
           this._onConfirm = null;

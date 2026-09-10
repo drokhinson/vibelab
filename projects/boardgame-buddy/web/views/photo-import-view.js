@@ -497,6 +497,9 @@
       ));
       window.PlayerPickerSheet.open({
         candidates,
+        // The names filtered out above, so the guest row can't offer one of
+        // them back under a different spelling.
+        seatedNames: Array.from(alreadySeated),
         recent: this._recentCandidates(candidates, alreadySeated, seatedAccounts),
         seated: shot.players.length,
         title: "Who played?",
