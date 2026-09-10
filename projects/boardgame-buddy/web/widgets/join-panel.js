@@ -160,11 +160,8 @@
       const el = this._host;
       if (!el) return;
       const sessions = this._sessions || [];
-      // A poll tick can land mid-typing. Nothing above survives innerHTML, so
-      // snapshot the caret and put it back once the new markup is in.
-      const active = document.activeElement;
-      const hadFocus = !!(active && active.id === "join-code-input");
-      const caret = hadFocus ? active.selectionStart : null;
+      // A poll tick can land mid-typing.
+      const focus = captureFocus();
 
       const offline = !!(window.BgbNet && window.BgbNet.isOffline());
 
@@ -220,13 +217,7 @@
       `;
       window.BgbIcons.render(el);
 
-      if (hadFocus) {
-        const input = document.getElementById("join-code-input");
-        if (input) {
-          input.focus();
-          try { input.setSelectionRange(caret, caret); } catch (_) {}
-        }
-      }
+      restoreFocus(focus);
     }
 
     _renderEmpty() {

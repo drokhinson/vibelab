@@ -147,13 +147,7 @@
     // draft a no-op instead of a full rebuild.
     if (html === _lastHtml) return;
 
-    const active = document.activeElement;
-    const activeId = active && active.id;
-    // Reads as null on <input type=number> (the flat Score field) — that type
-    // doesn't support selection, so the `caret != null` guard below skips the
-    // restore for it. Only setSelectionRange throws there, and it is already
-    // wrapped.
-    const caret = active && active.selectionStart;
+    const focus = captureFocus();
 
     root.innerHTML = html;
     _lastHtml = html;
@@ -162,15 +156,7 @@
     const closeBtn = root.querySelector(".play-detail-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", dismiss);
 
-    if (activeId) {
-      const el = document.getElementById(activeId);
-      if (el && el.focus) {
-        el.focus();
-        if (caret != null && el.setSelectionRange) {
-          try { el.setSelectionRange(caret, caret); } catch (_) {}
-        }
-      }
-    }
+    restoreFocus(focus);
   }
 
   function renderCard() {

@@ -459,9 +459,7 @@
     }
 
     _renderShell() {
-      const active = document.activeElement;
-      const activeId = active && active.id;
-      const caret = active && active.selectionStart;
+      const focus = captureFocus();
 
       const tree = this._mode === MODE_EXPANSIONS;
 
@@ -499,15 +497,7 @@
       this.refreshIcons();
       this._armInfinite();
 
-      if (activeId) {
-        const el = document.getElementById(activeId);
-        if (el && el.focus) {
-          el.focus();
-          if (caret != null && el.setSelectionRange) {
-            try { el.setSelectionRange(caret, caret); } catch (_) {}
-          }
-        }
-      }
+      restoreFocus(focus);
     }
 
     /** The reveal-a-batch path: two subtree writes, no shell teardown. */

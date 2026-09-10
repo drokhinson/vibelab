@@ -471,7 +471,7 @@
         let heading = "";
         if (c.kind === "play_session" && c.played_at && !seenDays.has(c.played_at)) {
           seenDays.add(c.played_at);
-          heading = `<h3 class="day-divider">${escapeHtml(formatSessionDate(c.played_at))}</h3>`;
+          heading = `<h3 class="day-divider">${escapeHtml(formatRelativeDay(c.played_at, formatDateShort))}</h3>`;
         }
         return heading + this._renderCard(c);
       }).join("");
@@ -1207,25 +1207,6 @@
     return `<a class="play-session__name" onclick="event.stopPropagation(); ${route}">${escapeHtml(label)}</a>`;
   }
 
-  function formatSessionDate(iso) {
-    if (!iso) return "";
-    // Match play-card.js's formatPlayedAt — parse Y-M-D as local so
-    // Today/Yesterday doesn't drift across UTC boundaries.
-    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    const d = m
-      ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10))
-      : new Date(iso);
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-    const sameDay = (a, b) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-    if (sameDay(d, today)) return "Today";
-    if (sameDay(d, yesterday)) return "Yesterday";
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
 
   window.FeedView = FeedView;
 })();

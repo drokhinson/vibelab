@@ -237,12 +237,8 @@
     }
 
     render() {
-      // Capture focus + caret so a re-render mid-typing doesn't yank the
-      // user out of an input. One field on this screen keystroke-refreshes:
-      // the ghost-link picker.
-      const active = document.activeElement;
-      const activeId = active && active.id;
-      const caret = active && active.selectionStart;
+      // One field on this screen keystroke-refreshes: the ghost-link picker.
+      const focus = captureFocus();
 
       // Cold load — show the bgb logo loader instead of flashing every
       // empty section. We're loading AND nothing is on screen yet.
@@ -414,16 +410,7 @@
       `;
       this.refreshIcons();
 
-      // Restore focus + caret for the input that was active before re-render.
-      if (activeId) {
-        const el = document.getElementById(activeId);
-        if (el && el.focus) {
-          el.focus();
-          if (caret != null && el.setSelectionRange) {
-            try { el.setSelectionRange(caret, caret); } catch (_) {}
-          }
-        }
-      }
+      restoreFocus(focus);
     }
 
     /**

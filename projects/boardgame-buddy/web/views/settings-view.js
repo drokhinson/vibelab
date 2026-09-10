@@ -121,9 +121,7 @@
         this.container.innerHTML = `<div class="p-6 text-center">Not signed in.</div>`;
         return;
       }
-      const active = document.activeElement;
-      const activeId = active && active.id;
-      const caret = active && active.selectionStart;
+      const focus = captureFocus();
 
       this.container.innerHTML = `
         ${this._renderHead()}
@@ -154,15 +152,7 @@
       `;
       this.refreshIcons();
 
-      if (activeId) {
-        const el = document.getElementById(activeId);
-        if (el && el.focus) {
-          el.focus();
-          if (caret != null && el.setSelectionRange) {
-            try { el.setSelectionRange(caret, caret); } catch (_) {}
-          }
-        }
-      }
+      restoreFocus(focus);
     }
 
     // No close ×, same as the notifications screen. Settings is reachable from

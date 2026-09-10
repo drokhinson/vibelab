@@ -203,9 +203,7 @@
     }
 
     render() {
-      const active = document.activeElement;
-      const activeId = active && active.id;
-      const caret = active && active.selectionStart;
+      const focus = captureFocus();
 
       // Cold load — nothing on screen yet. Show only the header + bgb logo
       // loader instead of flashing the search bar and the "No plays logged
@@ -233,15 +231,7 @@
       `;
       this.refreshIcons();
 
-      if (activeId) {
-        const el = document.getElementById(activeId);
-        if (el && el.focus) {
-          el.focus();
-          if (caret != null && el.setSelectionRange) {
-            try { el.setSelectionRange(caret, caret); } catch (_) {}
-          }
-        }
-      }
+      restoreFocus(focus);
     }
 
     _renderHead() {

@@ -23,18 +23,6 @@
 
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
-  function initialsOf(name) {
-    return (window.BgbBadge && window.BgbBadge.initialsOf)
-      ? window.BgbBadge.initialsOf(name)
-      : (String(name || "?").trim().slice(0, 2).toUpperCase() || "?");
-  }
-
-  function escapeHtml(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
-      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-    ));
-  }
-
   /**
    * Mount the picker into `host`, replacing its contents.
    *
@@ -106,7 +94,7 @@
       slot.className = "avatar-cust__slot";
       slot.dataset.i = String(i);
       slot.innerHTML = it.key === "initials"
-        ? `<span class="avatar-cust__ini">${escapeHtml(initialsOf(state.displayName))}</span>`
+        ? `<span class="avatar-cust__ini">${escapeHtml(computeInitials(state.displayName))}</span>`
         : `<svg viewBox="0 0 24 24">${window.BgbBadge.ICONS[it.key]}</svg>`;
       slot.addEventListener("click", () => { state.index = i; rerender(); });
       track.appendChild(slot);
@@ -211,7 +199,7 @@
       setDisplayName(name) {
         state.displayName = String(name || "");
         const slot = track.querySelector(".avatar-cust__ini");
-        if (slot) slot.textContent = initialsOf(state.displayName);
+        if (slot) slot.textContent = computeInitials(state.displayName);
       },
       /**
        * Re-run the reel maths. Call after the host becomes visible or changes

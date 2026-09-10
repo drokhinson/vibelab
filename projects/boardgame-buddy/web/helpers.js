@@ -132,11 +132,24 @@ function gameArtImg(game, size, { cls = "", alt = "", width = null, height = nul
   return `<img ${a.join(" ")} />`;
 }
 
+// A bare YYYY-MM-DD (a play's date) is a calendar day, not an instant: the
+// Date constructor would read it as UTC midnight, which is the previous
+// evening anywhere west of Greenwich. Parse it as local instead.
+function parseDate(dateStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr));
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(dateStr);
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  return parseDate(dateStr).toLocaleDateString("en-US", {
     month: "short", day: "numeric", year: "numeric",
   });
+}
+
+function formatDateShort(dateStr) {
+  if (!dateStr) return "";
+  return parseDate(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 // "Today" / "Yesterday" / "Aug 12, 2019" — the header a list of events reads
@@ -147,20 +160,38 @@ function formatDate(dateStr) {
 // looking at it would call it. Rounding the midnight-to-midnight difference
 // rather than flooring it is what keeps the 23- and 25-hour days either side of
 // a DST change from shifting every label by one.
-function formatRelativeDay(dateStr) {
+function formatRelativeDay(dateStr, fallback = formatDate) {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
+  const d = parseDate(dateStr);
   if (isNaN(d.getTime())) return "";
   const midnight = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((midnight(new Date()) - midnight(d)) / 86400000);
   if (days === 0) return "Today";
   if (days === 1) return "Yesterday";
-  return formatDate(dateStr);
+  return fallback(dateStr);
+}
+
+// A repaint that swaps innerHTML drops the field the user is typing in.
+// Snapshot before the swap, restore after — by id, so a field without one
+// cannot be found again (give every focusable field a stable id).
+function captureFocus() {
+  const el = document.activeElement;
+  // selectionStart reads null on <input type=number>; the restore skips it.
+  return el && el.id ? { id: el.id, caret: el.selectionStart } : null;
+}
+
+function restoreFocus(snap) {
+  if (!snap) return;
+  const el = document.getElementById(snap.id);
+  if (!el || !el.focus) return;
+  el.focus();
+  if (snap.caret != null && el.setSelectionRange) {
+    try { el.setSelectionRange(snap.caret, snap.caret); } catch (_) {}
+  }
 }
 
 // HTML-escape for any untrusted text interpolated into a template literal.
-// Every module used to carry its own copy of this; they all delegate here now
-// so the escaping rules live in exactly one place.
+// The one copy: a module that wants its own is one more place the rules drift.
 const ESCAPE_MAP = {
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 };
@@ -209,15 +240,12 @@ function gameDetailJs(gameId, gameName, { stop = false, before = "" } = {}) {
 // bounce + head bob), so this is just a sized <img> wrapper that
 // centres the mark and optionally captions it.
 function buddyLoader({ size = 96, label = null, padded = true } = {}) {
-  const safe = String(label || "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  }[c]));
   return `
     <div class="buddy-loader ${padded ? "buddy-loader--padded" : ""}">
       <img src="assets/illustrations/bgb-loading.svg" alt="Loading"
            class="buddy-loader__mark"
            style="width:${size}px;height:${size}px;" />
-      ${label ? `<div class="buddy-loader__label">${safe}</div>` : ""}
+      ${label ? `<div class="buddy-loader__label">${escapeHtml(label)}</div>` : ""}
     </div>
   `;
 }
@@ -228,16 +256,12 @@ function buddyLoader({ size = 96, label = null, padded = true } = {}) {
 // buddy when no image is available (e.g. a game with no art).
 function gameLoader({ image, size = 96, label = null, padded = true } = {}) {
   if (!image) return buddyLoader({ size, label, padded });
-  const safeLabel = String(label || "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  }[c]));
-  const safeSrc = String(image).replace(/"/g, "&quot;");
   return `
     <div class="buddy-loader game-loader ${padded ? "buddy-loader--padded" : ""}">
-      <img src="${safeSrc}" alt="Loading"
+      <img src="${escapeAttr(image)}" alt="Loading"
            class="game-loader__mark"
            style="width:${size}px;height:${size}px;" />
-      ${label ? `<div class="buddy-loader__label">${safeLabel}</div>` : ""}
+      ${label ? `<div class="buddy-loader__label">${escapeHtml(label)}</div>` : ""}
     </div>
   `;
 }
