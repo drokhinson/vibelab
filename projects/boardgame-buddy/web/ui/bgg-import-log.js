@@ -1,11 +1,8 @@
 // @ts-check
 // ui/bgg-import-log.js — the live readout of a BoardGameGeek import.
 //
-// One canonical renderer for the "what is my BGG sync doing right now" step
-// log, shared by every surface that can start one:
-//
-//   • views/settings-view.js        — the Connections card's Sync button
-//   • widgets/onboarding-deck-slides.js — the first-run deck's BGG slide
+// The one renderer for the "what is my BGG sync doing right now" step log,
+// hosted by widgets/bgg-sync-screens.js.
 //
 // It reads a sync's two payloads and nothing else: the POST /bgg/sync summary
 // (what landed immediately, how much was queued) and the GET /bgg/sync/status

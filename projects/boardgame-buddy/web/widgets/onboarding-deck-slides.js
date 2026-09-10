@@ -27,12 +27,6 @@
 // answer is a ledger line on the finale, not a spinner.
 
 (function () {
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
-      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-    ));
-  }
-
   function slideEl(className, html) {
     const el = document.createElement("div");
     el.className = "ob-slide " + className;
@@ -59,7 +53,7 @@
           <label class="polaroid-field__label" for="ob-name">Display name</label>
           <input id="ob-name" type="text" maxlength="${nameMax}" autocomplete="off"
                  class="input input-bordered input-sm polaroid-field__input"
-                 placeholder="Your name" value="${esc(seeded)}" />
+                 placeholder="Your name" value="${escapeHtml(seeded)}" />
           <div class="polaroid-field__count ob-field__count"></div>
           <div class="polaroid-field__error ob-field__error text-error text-xs" hidden></div>
         </div>
@@ -436,7 +430,7 @@
           wishlist and play history. We use your password once to sign in, then
           store it encrypted so later syncs run on their own.
         </p>
-        <form class="ob-bgg__form" novalidate>
+        <form novalidate>
           <div class="polaroid-field ob-field">
             <label class="polaroid-field__label" for="ob-bgg-user">BGG username</label>
             <input id="ob-bgg-user" type="text" name="username" autocomplete="username"
@@ -585,13 +579,13 @@
           : j.status === "failed"
             // Names the step's permanent home, because this line is the last
             // time the user will be told.
-            ? `Didn't go through — try again from Settings${j.error ? ` (${esc(j.error)})` : ""}`
+            ? `Didn't go through — try again from Settings${j.error ? ` (${escapeHtml(j.error)})` : ""}`
             : "Running — carry on, it keeps going";
         return `
           <div class="ob-job ob-job--${j.status}">
             <i data-icon="${icon}" class="w-4 h-4 ob-job__mark"></i>
             <div>
-              <div class="ob-job__label">${esc(j.label)}</div>
+              <div class="ob-job__label">${escapeHtml(j.label)}</div>
               <div class="ob-job__meta">${detail}</div>
             </div>
           </div>`;

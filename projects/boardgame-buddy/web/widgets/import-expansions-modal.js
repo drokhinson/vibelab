@@ -16,9 +16,8 @@
 // them on. Never re-sort client-side: _renderRows filters, which preserves
 // order, and the owners chip is what makes that order legible.
 //
-// Opened from the expansion section on both surfaces that own expansions:
-//   - views/game-detail-view.js (boardgame page)
-//   - views/play-flow-view.js   (host Gather screen)
+// Opened from every surface that owns an expansion list — grep
+// ImportExpansionsModal rather than trusting a list here.
 //
 // Since expansions are hidden from game search, this is the only path by
 // which one enters the catalog. Import is catalog-only — it never touches
@@ -51,17 +50,14 @@
    *   successful import with the new ExpansionListItem.
    */
 
-  let _previousFocus = null;
-  let _escHandler = null;
+  const _modal = new window.BgbModal({ id: BACKDROP_ID, label: "Import expansions" });
   let _opts = null;
-  // Device-back guard token — see ui/back-guard.js.
-  let _back = 0;
   /** @type {ExpansionCandidate[]} Everything loaded, minus what's been imported. */
   let _candidates = [];
   let _query = "";
 
   function _root() {
-    return document.getElementById(BACKDROP_ID);
+    return _modal.el;
   }
 
   function _body() {
@@ -291,17 +287,11 @@
     if (!opts || !opts.gameId) {
       throw new Error("ImportExpansionsModal.open: gameId is required");
     }
-    dismiss(); // singleton — never stack two
-
     _opts = opts;
-    _previousFocus = document.activeElement;
-
-    const root = document.createElement("div");
-    root.id = BACKDROP_ID;
-    root.className = "polaroid-popup__backdrop";
-    root.innerHTML = `
-      <div class="polaroid-popup__card polaroid-popup__card--confirm import-exp-modal"
-           role="dialog" aria-modal="true" aria-label="Import expansions">
+    _modal.open({
+      returnFocus: document.activeElement,
+      html: `
+      <div class="polaroid-popup__card polaroid-popup__card--confirm import-exp-modal">
         <button class="polaroid-popup__close" aria-label="Close">
           <i data-icon="x" class="w-4 h-4"></i>
         </button>
@@ -321,26 +311,10 @@
         </div>
         <div class="import-exp-modal__body"></div>
       </div>
-    `;
-    root.addEventListener("click", (ev) => {
-      if (ev.target === root) dismiss();
-    });
-    document.body.appendChild(root);
-    window.BgbIcons.render(root);
-    // Back closes this modal instead of the game page behind it, dismissing
-    // the filter keyboard first (ui/back-guard.js).
-    _back = window.BgbBackGuard
-      ? window.BgbBackGuard.arm({ root: root, close: dismiss })
-      : 0;
-
-    const closeBtn = root.querySelector(".polaroid-popup__close");
-    if (closeBtn) closeBtn.addEventListener("click", () => dismiss());
-
-    // One delegated listener on the card — rows are re-rendered repeatedly,
-    // so per-row handlers would need re-binding on every paint.
-    const card = root.querySelector(".import-exp-modal");
-    if (card) {
-      card.addEventListener("click", (ev) => {
+      `,
+      // Rows are re-rendered repeatedly, so the shell's delegated click is
+      // the one binding rather than per-row handlers.
+      onClick: (ev) => {
         const target = /** @type {Element|null} */ (ev.target);
         const hit = target && target.closest("[data-exp-action]");
         if (!hit) return;
@@ -351,54 +325,37 @@
         } else if (action === "import") {
           _import(Number(hit.getAttribute("data-exp-bgg-id")), hit);
         }
-      });
-    }
-
-    // Filtering is local to the loaded list, so this runs straight off the
-    // keystroke — no debounce, no request.
-    const input = _searchInput();
-    if (input) {
-      input.addEventListener("input", (ev) => {
-        _setQuery(/** @type {HTMLInputElement} */ (ev.target).value);
-      });
-    }
-
-    _escHandler = (e) => {
-      if (e.key !== "Escape") return;
-      // Layered, mirroring the GameFinder/sheet pairing: the first
-      // Escape backs out of the filter, the next closes the popup.
-      const el = _searchInput();
-      if (el && el.value) {
-        e.preventDefault();
-        e.stopPropagation();
-        // Same path the × takes — BgbSearchField empties the box and
-        // dispatches the `input` event _setQuery already listens for.
+      },
+      // Layered: the first Escape backs out of the filter, the next closes.
+      // Same path the × takes — BgbSearchField empties the box and dispatches
+      // the `input` event _setQuery already listens for.
+      onEscape: () => {
+        const el = _searchInput();
+        if (!el || !el.value) return false;
         window.BgbSearchField.clearInput(el);
-        return;
-      }
-      dismiss();
-    };
-    document.addEventListener("keydown", _escHandler, true);
-
-    _load();
+        return true;
+      },
+      onOpen: () => {
+        // Filtering is local to the loaded list, so this runs straight off
+        // the keystroke — no debounce, no request.
+        const input = _searchInput();
+        if (input) {
+          input.addEventListener("input", (ev) => {
+            _setQuery(/** @type {HTMLInputElement} */ (ev.target).value);
+          });
+        }
+        _load();
+      },
+      onClose: () => {
+        _opts = null;
+        _candidates = [];
+        _query = "";
+      },
+    });
   }
 
   function dismiss() {
-    if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
-    _back = 0;
-    if (_escHandler) {
-      document.removeEventListener("keydown", _escHandler, true);
-      _escHandler = null;
-    }
-    const existing = _root();
-    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
-    _opts = null;
-    _candidates = [];
-    _query = "";
-    if (_previousFocus && typeof _previousFocus.focus === "function") {
-      try { _previousFocus.focus(); } catch (_) {}
-    }
-    _previousFocus = null;
+    _modal.close();
   }
 
   window.ImportExpansionsModal = { open, dismiss };

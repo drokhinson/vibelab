@@ -52,6 +52,10 @@ const RUNTIME_ORIGINS = [
 // cached shell. Short on purpose: a dead-zone request can hang for 30s, and
 // the whole point is that the host reaches Gather immediately.
 const NAV_TIMEOUT_MS = 3000;
+// Precache fetches happen inside install's waitUntil: one that never settles
+// is a worker that never activates. Runtime misses get the same protection.
+const PRECACHE_TIMEOUT_MS = 15000;
+const RUNTIME_TIMEOUT_MS = 10000;
 
 self.addEventListener("install", (event) => {
   if (IS_DEV) { self.skipWaiting(); return; }
@@ -80,6 +84,8 @@ self.addEventListener("fetch", (event) => {
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
   // The API and Supabase are never cached, and never served from cache.
+  // (Two independent version axes: this worker's cache name follows the build
+  // id; bgbCache's SCHEMA_VERSION follows the shape of what the API returns.)
   //
   // Load-bearing, not conservative: a cached GET /feed or GET /sessions/{code}
   // would hand the app data that looks live and isn't, and the app has no way
@@ -226,7 +232,7 @@ function isBackend(url) {
 async function navigationResponse(req) {
   const cache = await caches.open(CACHE);
   try {
-    const res = await withTimeout(fetch(req), NAV_TIMEOUT_MS);
+    const res = await fetchWithDeadline(req, NAV_TIMEOUT_MS);
     if (res && res.ok) {
       cache.put("/index.html", res.clone()).catch(() => {});
       return res;
@@ -249,8 +255,9 @@ async function navigationResponse(req) {
  * lands in a fresh cache and activate() deletes the old one. Re-fetching it can
  * only ever return what we already hold.
  *
- * That made it free to skip and expensive to keep: the shell is ~120 files, so
- * every warm load fired ~120 background requests that could not change
+ * That made it free to skip and expensive to keep: the shell is every file
+ * index.html names (precache() derives the list), so every warm load fired
+ * that many background requests that could not change
  * anything, over the same radio the boot's own /bootstrap was waiting on. The
  * CDN entries are the genuinely different case — cached opportunistically on a
  * first online load, possibly from an error response, and not versioned by
@@ -261,13 +268,13 @@ async function cacheFirst(req, revalidate) {
   const cached = await cache.match(req);
   if (cached) {
     if (revalidate) {
-      fetch(req)
+      fetchWithDeadline(req, RUNTIME_TIMEOUT_MS)
         .then((res) => { if (isCacheable(res)) cache.put(req, res.clone()); })
         .catch(() => {});
     }
     return cached;
   }
-  const res = await fetch(req);
+  const res = await fetchWithDeadline(req, RUNTIME_TIMEOUT_MS);
   if (isCacheable(res)) cache.put(req, res.clone()).catch(() => {});
   return res;
 }
@@ -282,14 +289,10 @@ function isCacheable(res) {
   return !!res && (res.ok || res.type === "opaque");
 }
 
-function withTimeout(promise, ms) {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("timeout")), ms);
-    promise.then(
-      (v) => { clearTimeout(t); resolve(v); },
-      (e) => { clearTimeout(t); reject(e); }
-    );
-  });
+// A stalled connection never rejects on its own, so every fetch here has a
+// deadline — and the deadline cancels the request rather than orphaning it.
+function fetchWithDeadline(req, ms, init) {
+  return fetch(req, Object.assign({}, init, { signal: AbortSignal.timeout(ms) }));
 }
 
 // ── Install-time precache ─────────────────────────────────────────────────────
@@ -299,7 +302,7 @@ async function precache() {
 
   // `reload` so a stale HTTP-cache copy of the shell can't seed the new build's
   // cache with the previous build's script list.
-  const shellRes = await fetch("/index.html", { cache: "reload" });
+  const shellRes = await fetchWithDeadline("/index.html", PRECACHE_TIMEOUT_MS, { cache: "reload" });
   if (!shellRes.ok) throw new Error(`sw: shell fetch failed (${shellRes.status})`);
   const shellHtml = await shellRes.text();
 
@@ -340,8 +343,8 @@ async function precache() {
 /**
  * Run `fn` over `items` a few at a time instead of all at once.
  *
- * The shell is ~60 files and every one is fetched with `cache: "reload"`, so
- * an unbounded Promise.all is a 60-request burst — issued, on a first-ever
+ * Every shell file is fetched with `cache: "reload"`, so an unbounded
+ * Promise.all is a burst of the whole list — issued, on a first-ever
  * install, at the same moment the page it belongs to is fetching /bootstrap
  * and the feed over the same radio. The user is staring at a loader while the
  * app races itself for bandwidth. Nothing here is urgent (the precache only
@@ -388,7 +391,7 @@ async function precacheOne(cache, url) {
   // manifest.json, the icons) a normal fetch goes through the browser's own
   // freshness rules, which is at worst the same request `reload` would have
   // made and at best a 304 with no body.
-  const res = await fetch(url);
+  const res = await fetchWithDeadline(url, PRECACHE_TIMEOUT_MS);
   if (!res.ok) throw new Error(`sw: precache ${url} failed (${res.status})`);
   const type = res.headers.get("content-type") || "";
   if (type.includes("text/html") && !/\.html$/.test(new URL(url, self.location.origin).pathname)) {
@@ -434,7 +437,7 @@ function extractStylesheetHrefs(html) {
 async function extractCssRefs(cssUrl) {
   const out = [];
   try {
-    const res = await fetch(cssUrl, { cache: "reload" });
+    const res = await fetchWithDeadline(cssUrl, PRECACHE_TIMEOUT_MS, { cache: "reload" });
     if (!res.ok) return out;
     const css = await res.text();
     const re = /url\(\s*["']?([^"')]+)["']?\s*\)/gi;

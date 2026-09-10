@@ -14,6 +14,7 @@ from db import get_supabase
 from shared_models import HealthResponse
 
 from . import router
+from .bgg_collection_read import BGG_THROTTLE_SECONDS
 from .bgg_client import (
     BGG_USER_AGENT,
     bgg_description_text,
@@ -21,6 +22,7 @@ from .bgg_client import (
     invalidate_bgg_thing_cache,
     normalize_image_url,
     parse_bgg_xml,
+    thing_item_basics,
 )
 from .constants import EXPANSION_COLOR_PALETTE, CatalogSort, PlayMode, derive_play_mode
 from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
@@ -33,39 +35,30 @@ from .models import (
     RulebookUrlUpdate,
 )
 from .services import game_service
-from .services._helpers import game_select_clause
+from .services._helpers import chunked, game_select_clause, page_all, parse_csv_param
 
 
 # Cache namespaces for game-side reads. Both invalidate on admin writes
 # (refresh-images, expansion-color override) and on a fresh BGG import.
 #
-# TODO (Redis upgrade): shared-backend/cache.py is per-worker today. Moving
-# it to Redis (see the migration TODO in that module's docstring) makes
-# game.detail and game.mechanics cluster-wide:
-#   • a popular game's row is fetched from Postgres exactly once per hour
-#     across the whole fleet instead of once per worker per hour
-#   • new BGG imports + admin image refreshes invalidate cluster-wide via
-#     a single Redis DEL, removing the "have to nuke the whole namespace"
-#     compromise in _invalidate_game_caches
-#   • we can publish a Redis pub/sub event on invalidation so the FE
-#     bundle caches (Phase 5) can subscribe for instant cross-tab refresh
+# shared-backend/cache.py is per-worker; a Redis-backed cache (see that
+# module's TODO) would make this cluster-wide and let invalidation target one
+# key instead of the whole namespace.
+# The admin worklists are a page of work, not an inventory — /admin/review
+# carries the counts. Explicit, where PostgREST would otherwise cap silently.
+_ADMIN_LIST_LIMIT = 500
 _CACHE_GAME = "game.detail"          # game_id (str) → boardgamebuddy_games row dict
-_CACHE_MECHANICS = "game.mechanics"  # sentinel key → sorted list[str]
 _CACHE_GAME_TTL_S = 60 * 60          # games are immutable post-import; 1h is plenty
-_CACHE_MECHANICS_TTL_S = 60 * 60
-_MECHANICS_KEY = "all"               # single-entry namespace; constant key
 
 cache.configure(_CACHE_GAME, max_entries=2000)
-cache.configure(_CACHE_MECHANICS, max_entries=1)
 
 
-def _invalidate_game_caches(bgg_id: Optional[int] = None) -> None:
+def _invalidate_game_caches() -> None:
     """One-shot bust called from every admin path that mutates games (and from
-    import). Clears the in-process game row cache, the mechanics list, and the
-    BGG /thing XML cache so a subsequent read sees fresh data.
+    import). Clears the in-process game row cache and the BGG /thing XML cache
+    so a subsequent read sees fresh data.
     """
     cache.clear(_CACHE_GAME)
-    cache.clear(_CACHE_MECHANICS)
     invalidate_bgg_thing_cache()
 
 logger = logging.getLogger(__name__)
@@ -148,6 +141,20 @@ async def health() -> HealthResponse:
     return HealthResponse(project="boardgame-buddy", status="ok")
 
 
+def _list_games_bgg_ids_sync(sb: Client, ids: list[int]) -> list[GameSummary]:
+    rows = (
+        sb.table("boardgamebuddy_games")
+        .select(game_select_clause())
+        .in_("bgg_id", ids)
+        .execute()
+        .data
+        or []
+    )
+    games = [GameSummary(**g) for g in rows]
+    _attach_expansion_counts(sb, games)
+    return games
+
+
 @router.get(
     "/games",
     response_model=GameListResponse,
@@ -210,21 +217,12 @@ async def list_games(
     # reliably retrieve the games they listed.
     if bgg_ids:
         try:
-            ids = [int(p) for p in bgg_ids.split(",") if p.strip()]
+            ids = [int(p) for p in parse_csv_param(bgg_ids)]
         except ValueError:
             return GameListResponse(games=[], total=0, page=page, per_page=per_page)
         if not ids:
             return GameListResponse(games=[], total=0, page=page, per_page=per_page)
-        rows = (
-            sb.table("boardgamebuddy_games")
-            .select(game_select_clause())
-            .in_("bgg_id", ids)
-            .execute()
-            .data
-            or []
-        )
-        games = [GameSummary(**g) for g in rows]
-        _attach_expansion_counts(sb, games)
+        games = await asyncio.to_thread(_list_games_bgg_ids_sync, sb, ids)
         return GameListResponse(games=games, total=len(games), page=1, per_page=len(games) or 1)
 
     owned_ids: Optional[list[str]] = None
@@ -232,12 +230,12 @@ async def list_games(
         su_user = await maybe_supabase_user(authorization)
         if su_user is None:
             return GameListResponse(games=[], total=0, page=page, per_page=per_page)
-        col = (
+        col = await asyncio.to_thread(
             sb.table("boardgamebuddy_collections")
             .select("game_id")
             .eq("user_id", su_user.sub)
             .eq("status", "owned")
-            .execute()
+            .execute
         )
         owned_ids = [row["game_id"] for row in (col.data or [])]
         if not owned_ids:
@@ -341,28 +339,7 @@ async def recently_played_games(
     return game_service.recently_played(get_supabase(), user.user_id, limit)
 
 
-@router.get(
-    "/games/{game_id}",
-    response_model=GameDetail,
-    status_code=200,
-    summary="Game detail",
-)
-async def get_game(
-    game_id: str = Path(..., description="Game UUID"),
-) -> GameDetail:
-    """Get full details for a single game.
-
-    The games row + the base-game lookup are cached for 1h (game data is
-    immutable post-import; admin paths bust the cache via
-    `_invalidate_game_caches`). Saves 1–2 DB round-trips per Game Detail
-    open on repeat visits.
-    """
-    sb = get_supabase()
-
-    cached = cache.get(_CACHE_GAME, game_id)
-    if cached is not None:
-        return GameDetail(**cached["row"], base_game_id=cached.get("base_game_id"), base_game_name=cached.get("base_game_name"))
-
+def _get_game_sync(sb: Client, game_id: str) -> GameDetail:
     result = (
         sb.table("boardgamebuddy_games")
         .select("*")
@@ -404,6 +381,30 @@ async def get_game(
 
 
 @router.get(
+    "/games/{game_id}",
+    response_model=GameDetail,
+    status_code=200,
+    summary="Game detail",
+)
+async def get_game(
+    game_id: str = Path(..., description="Game UUID"),
+) -> GameDetail:
+    """Get full details for a single game.
+
+    The games row + the base-game lookup are cached for 1h (game data is
+    immutable post-import; admin paths bust the cache via
+    `_invalidate_game_caches`). Saves 1–2 DB round-trips per Game Detail
+    open on repeat visits.
+    """
+    sb = get_supabase()
+
+    cached = cache.get(_CACHE_GAME, game_id)
+    if cached is not None:
+        return GameDetail(**cached["row"], base_game_id=cached.get("base_game_id"), base_game_name=cached.get("base_game_name"))
+    return await asyncio.to_thread(_get_game_sync, sb, game_id)
+
+
+@router.get(
     "/games/{game_id}/bundle",
     response_model=dict,
     status_code=200,
@@ -421,14 +422,16 @@ async def get_game_detail_bundle(
     and /games/{id}/expansions.
     """
     sb = get_supabase()
-    result = sb.rpc(
-        "bgb_game_detail_bundle",
-        {
-            "game_uuid": game_id,
-            "viewer": viewer.user_id,
-            "plays_limit": plays_limit,
-        },
-    ).execute()
+    result = await asyncio.to_thread(
+        sb.rpc(
+            "bgb_game_detail_bundle",
+            {
+                "game_uuid": game_id,
+                "viewer": viewer.user_id,
+                "plays_limit": plays_limit,
+            },
+        ).execute
+    )
     if not result.data:
         raise HTTPException(status_code=404, detail="Game not found")
     return result.data
@@ -462,10 +465,9 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
     if item is None:
         raise HTTPException(status_code=404, detail="Game not found on BGG")
 
-    name_el = item.find("name[@type='primary']")
-    name = name_el.get("value", "") if name_el is not None else "Unknown"
+    basics = thing_item_basics(item)
+    name = basics["name"] or "Unknown"
 
-    year_el = item.find("yearpublished")
     min_el = item.find("minplayers")
     max_el = item.find("maxplayers")
     time_el = item.find("playingtime")
@@ -487,7 +489,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
     game_data = {
         "bgg_id": bgg_id,
         "name": name,
-        "year_published": int(year_el.get("value", "0")) if year_el is not None else None,
+        "year_published": basics["year_published"],
         "min_players": int(min_el.get("value", "0")) if min_el is not None else None,
         "max_players": int(max_el.get("value", "0")) if max_el is not None else None,
         "playing_time": int(time_el.get("value", "0")) if time_el is not None else None,
@@ -514,7 +516,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
     # New game added — mechanics list might expand and the catalog grew, so
     # bust the read-side caches. BGG /thing for THIS game is now stale (we
     # just persisted it; further /thing fetches should hit our DB instead).
-    _invalidate_game_caches(bgg_id=bgg_id)
+    _invalidate_game_caches()
     return result.data[0]
 
 
@@ -526,6 +528,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
 )
 async def import_bgg_game(
     bgg_id: int = Path(..., description="BoardGameGeek game ID"),
+    _user: CurrentUser = Depends(get_current_user),
 ) -> GameSummary:
     """Fetch a game from BGG API and add it to our database."""
     sb = get_supabase()
@@ -544,9 +547,15 @@ async def refresh_game_images(
 ) -> RefreshImagesResponse:
     """Admin-only: re-host images in Supabase Storage for games with missing or BGG-hosted image URLs."""
     sb = get_supabase()
-    result = sb.table("boardgamebuddy_games").select("id, bgg_id, image_url, thumbnail_url").execute()
+    # Paged: a catalog past PostgREST's 1000-row cap would silently leave the
+    # tail unrefreshed while reporting success.
+    rows = await asyncio.to_thread(
+        page_all,
+        lambda: sb.table("boardgamebuddy_games").select("id, bgg_id, image_url, thumbnail_url"),
+        "id", label="refresh images",
+    )
     updated = 0
-    for game in result.data or []:
+    for game in rows:
         needs_update = (
             not game["image_url"]
             or "geekdo-images.com" in (game["image_url"] or "")
@@ -572,7 +581,12 @@ async def refresh_game_images(
             _sync_denormalized_game_fields(sb, game["id"])
             updated += 1
         except Exception:
-            continue
+            logger.warning("refresh-images: bgg_id=%s skipped", game["bgg_id"], exc_info=True)
+        finally:
+            # BGG's rate limit is per session; every other sweep here paces
+            # itself. In `finally` so a game that returns no <item> — a
+            # `continue` out of the try — still waits its turn.
+            await asyncio.sleep(BGG_THROTTLE_SECONDS)
     if updated:
         _invalidate_game_caches()
     return RefreshImagesResponse(updated=updated)
@@ -668,7 +682,7 @@ async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Non
         "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
     }).eq("id", game_id).execute()
     _sync_denormalized_game_fields(sb, game_id)
-    _invalidate_game_caches(bgg_id=bgg_id)
+    _invalidate_game_caches()
 
 
 @router.get(
@@ -687,6 +701,7 @@ async def list_games_missing_images(
         .select(game_select_clause())
         .or_("image_url.is.null,thumbnail_url.is.null")
         .order("name")
+        .limit(_ADMIN_LIST_LIMIT)
         .execute()
     )
     return [GameSummary(**g) for g in (result.data or [])]
@@ -799,7 +814,7 @@ async def _hydrate_description_from_bgg(sb: Client, game_id: str, bgg_id: int) -
     sb.table("boardgamebuddy_games").update(
         {"description": description}
     ).eq("id", game_id).execute()
-    _invalidate_game_caches(bgg_id=bgg_id)
+    _invalidate_game_caches()
     return description
 
 
@@ -819,6 +834,7 @@ async def list_games_missing_descriptions(
         .select(game_select_clause())
         .is_("description", "null")
         .order("name")
+        .limit(_ADMIN_LIST_LIMIT)
         .execute()
     )
     return [GameSummary(**g) for g in (result.data or [])]
@@ -877,15 +893,17 @@ async def backfill_game_descriptions(
     """Admin-only: fill in descriptions for games that have none, oldest first."""
     sb = get_supabase()
 
-    missing = (
-        sb.table("boardgamebuddy_games")
+    # Paged, so `remaining` counts the whole catalog rather than the first
+    # 1000 rows PostgREST would return. Ordered by id: a page boundary needs a
+    # total order, and name is not one.
+    rows = await asyncio.to_thread(
+        page_all,
+        lambda: sb.table("boardgamebuddy_games")
         .select("id, bgg_id")
         .is_("description", "null")
-        .not_.is_("bgg_id", "null")
-        .order("name")
-        .execute()
+        .not_.is_("bgg_id", "null"),
+        "id", label="backfill descriptions",
     )
-    rows = missing.data or []
     total_missing = len(rows)
     batch = rows[:limit]
 
@@ -896,10 +914,7 @@ async def backfill_game_descriptions(
     # this module has no rate-limit guard and _map_bgg_status turns BGG's 429
     # into an exception, so parallel batches would trip it for every user.
     by_bgg_id = {int(r["bgg_id"]): r["id"] for r in batch}
-    chunks = [
-        batch[i:i + _DESC_CHUNK_SIZE]
-        for i in range(0, len(batch), _DESC_CHUNK_SIZE)
-    ]
+    chunks = list(chunked(batch, _DESC_CHUNK_SIZE))
 
     updated = 0
     failed = 0

@@ -291,6 +291,7 @@
       // already fetched the same page, and a needless repaint would cost the
       // user their scroll position for no new content. This is also what makes
       // a pull that finds nothing new a no-op rather than a jump to the top.
+      // (cardsSig is a join of ids and counts — cheap even on a long feed.)
       if (cardsSig(nextCards) === cardsSig(this._page.cards)) return;
 
       this._page = {
@@ -471,7 +472,7 @@
         let heading = "";
         if (c.kind === "play_session" && c.played_at && !seenDays.has(c.played_at)) {
           seenDays.add(c.played_at);
-          heading = `<h3 class="day-divider">${escapeHtml(formatSessionDate(c.played_at))}</h3>`;
+          heading = `<h3 class="day-divider">${escapeHtml(formatRelativeDay(c.played_at, formatDateShort))}</h3>`;
         }
         return heading + this._renderCard(c);
       }).join("");
@@ -479,7 +480,7 @@
       // jumps straight to the resume chip and the card timeline.
       const html = `
         <div class="feed-shell${split ? " feed-shell--split" : ""}">
-          ${this._error ? `<div class="alert alert-error mb-3">${this._error}</div>` : ""}
+          ${this._error ? `<div class="alert alert-error mb-3">${escapeHtml(this._error)}</div>` : ""}
           <div class="feed-stream">
             <div class="feed-cards">
               ${stream.length === 0 && !this._loading ? this._renderEmpty() : ""}
@@ -836,7 +837,7 @@
           pending: !this._statusReady,
           meta: meta(entry),
           badgeHtml: window.renderExpansionBadge(expCount),
-          clickHandler: `window.router.go('game-detail',{gameId:'${game.id}',gameName:'${jsStr(game.name || "")}'})`,
+          clickHandler: gameDetailJs(game.id, game.name),
         });
       }).join("");
       return `
@@ -1207,30 +1208,6 @@
     return `<a class="play-session__name" onclick="event.stopPropagation(); ${route}">${escapeHtml(label)}</a>`;
   }
 
-  function formatSessionDate(iso) {
-    if (!iso) return "";
-    // Match play-card.js's formatPlayedAt — parse Y-M-D as local so
-    // Today/Yesterday doesn't drift across UTC boundaries.
-    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    const d = m
-      ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10))
-      : new Date(iso);
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-    const sameDay = (a, b) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-    if (sameDay(d, today)) return "Today";
-    if (sameDay(d, yesterday)) return "Yesterday";
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
 
-  function initialsOf(name) {
-    const parts = (name || "").trim().split(/[\s.]+/).filter(Boolean);
-    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return (parts[0] || "?").slice(0, 2).toUpperCase();
-  }
   window.FeedView = FeedView;
 })();

@@ -152,25 +152,8 @@
           const row = e.target.closest("[data-picker-game-id]");
           if (row) this._pick(row.dataset.pickerGameId);
         },
-        // Layered, mirroring import-expansions-modal: the
-        // first Escape backs out of the search, the next closes the sheet.
-        onEscape: () => {
-          if (!this._query) return false;
-          this._clear();
-          return true;
-        },
+        search: { listSel: LIST_SEL, onQuery: (v) => this._setQuery(v) },
         onOpen: (root) => {
-          const input = /** @type {HTMLInputElement|null} */ (root.querySelector(".game-finder__input"));
-          if (input) input.addEventListener("input", () => this._setQuery(input.value));
-          // Pin the list at the height it opened with. Without this the panel
-          // is sized by its content, so the sheet jumps down the screen on
-          // every keystroke that narrows the results and back up on every
-          // backspace — with the row under your thumb moving as it goes.
-          const list = /** @type {HTMLElement|null} */ (root.querySelector(LIST_SEL));
-          // Written as a custom property, not min-height, so the stylesheet can
-          // drop the pin when the software keyboard shrinks the sheet — an
-          // inline min-height would out-specify any rule trying to.
-          if (list) list.style.setProperty("--bgb-sheet-list-min", list.clientHeight + "px");
           // Focus the current pick, not the search box: opening the sheet
           // shouldn't throw a software keyboard over the list the user came
           // to read. Tapping the field is the opt-in.
@@ -205,16 +188,6 @@
         host.scrollTop = 0;
         window.BgbIcons.render(/** @type {HTMLElement} */ (host));
       }
-    }
-
-    /**
-     * Escape's first press backs out of the search. The × does the same thing
-     * through the shared field's own click path — both land back in _setQuery
-     * via the `input` event BgbSearchField dispatches, so "empty the box and
-     * repaint the list" is written once, in ui/search-field.js.
-     */
-    _clear() {
-      window.BgbSearchField.clear(this._sheet.el);
     }
 
     // ── Pick ────────────────────────────────────────────────────────────────

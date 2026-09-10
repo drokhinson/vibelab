@@ -39,32 +39,6 @@
       return new User(raw);
     }
 
-    async refreshStats() {
-      const path = this._isSelf() ? "/users/me/stats" : `/users/${this.id}/stats`;
-      const stats = await window.api.get(path);
-      this.stats = stats;
-      return stats;
-    }
-
-    async fetchCollection() {
-      // Self is the only path the existing /collection endpoint supports. For
-      // "other" users we'd need a public-collection route — wired later.
-      if (!this._isSelf()) {
-        return { items: [], total: 0 };
-      }
-      return window.api.get("/collection", { per_page: 50, page: 1 });
-    }
-
-    _isSelf() {
-      const me = window.store.get("user");
-      return me && this.id === me.id;
-    }
-
-    initials() {
-      const parts = (this.display_name || "").trim().split(/[\s.]+/).filter(Boolean);
-      if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-      return (parts[0] || "?").slice(0, 2).toUpperCase();
-    }
   }
 
   /**

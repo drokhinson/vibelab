@@ -92,12 +92,6 @@
     return map[gameId] || null;
   }
 
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-
   /**
    * Tiny chip surfaced bottom-right on a game tile's ART to call out how many
    * expansions are associated with it. The semantics depend on caller
@@ -152,8 +146,8 @@
     // Values land inside a single-quoted JS string inside an HTML attribute.
     // jsStr backslash-escapes the quote, esc then neutralises the HTML layer
     // (a bare " in a game name would otherwise close the onclick attribute).
-    const gid = esc(jsStr(gameId));
-    const name = esc(jsStr(opts.gameName || ""));
+    const gid = escapeHtml(jsStr(gameId));
+    const name = escapeHtml(jsStr(opts.gameName || ""));
     const isStatus = !!LABEL[status];
     if (isStatus) {
       // title/aria-label are computed ONCE, above the branch, so the corner
@@ -198,7 +192,7 @@
     // relationship and the neutral chip for any relationship — one bit, which
     // is all a tile carries now.
     const addLabel = opts.addLabel && !opts.corner
-      ? `<span class="status-tag__label">${esc(opts.addLabel)}</span>`
+      ? `<span class="status-tag__label">${escapeHtml(opts.addLabel)}</span>`
       : "";
     return `
       <button class="status-tag status-tag--add${sizeCls}${cornerCls}"
@@ -276,7 +270,7 @@
           </button>`);
       }
 
-      const heading = this._gameName ? esc(this._gameName) : "Collection status";
+      const heading = this._gameName ? escapeHtml(this._gameName) : "Collection status";
       return `
         <div class="status-sheet__panel" role="radiogroup" aria-label="Collection status">
           <div class="status-sheet__grip" aria-hidden="true"></div>

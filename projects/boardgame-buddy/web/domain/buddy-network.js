@@ -44,12 +44,6 @@
     /** True when there is nothing to promote from, whatever gets ticked. */
     get isEmpty() { return this._byVia.size === 0; }
 
-    /** Who the index can introduce, for a caller that wants to count first. */
-    countFor(viaUserId) {
-      const rows = this._byVia.get(viaUserId);
-      return rows ? rows.length : 0;
-    }
-
     /**
      * The rows earned by ticking `viaUserId`, minus anyone already on screen
      * and anyone this index has issued before. Records what it returns, so
@@ -104,5 +98,4 @@
   };
 
   window.BuddyNetwork = BuddyNetwork;
-  window.BuddyNetworkIndex = BuddyNetworkIndex;
 })();

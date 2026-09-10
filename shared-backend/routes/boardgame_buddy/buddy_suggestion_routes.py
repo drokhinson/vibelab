@@ -11,6 +11,8 @@ with one there today — `/buddies/suggested/{user_id}` has three segments and
 the literal-before-parameter rule is cheaper to keep than to rediscover.
 """
 
+import asyncio
+
 from fastapi import Depends, Path, Query
 
 from db import get_supabase
@@ -39,8 +41,8 @@ async def list_suggested_buddies(
 
     Shared as a standalone endpoint so the Buddies page can show the rail
     without pulling a whole feed page."""
-    return feed_service.fetch_suggested_buddies(
-        get_supabase(), user.user_id, limit=limit
+    return await asyncio.to_thread(
+        feed_service.fetch_suggested_buddies, get_supabase(), user.user_id, limit=limit
     )
 
 
@@ -66,8 +68,11 @@ async def list_onboarding_buddy_suggestions(
     Carries `network` as well: the buddies of each candidate it returns, so
     the onboarding deck can promote them into the grid the moment the user
     ticks that candidate, without a round trip (migration 072)."""
-    return feed_service.fetch_onboarding_buddy_suggestions(
-        get_supabase(), user.user_id, limit=limit
+    return await asyncio.to_thread(
+        feed_service.fetch_onboarding_buddy_suggestions,
+        get_supabase(),
+        user.user_id,
+        limit=limit,
     )
 
 
@@ -96,5 +101,7 @@ async def dismiss_buddy_suggestion(
     a dropped response does not 409 at a screen whose tile is already gone.
     400 for yourself · 404 if the account is gone.
     """
-    buddy_suggestion_service.dismiss(get_supabase(), user.user_id, user_id)
+    await asyncio.to_thread(
+        buddy_suggestion_service.dismiss, get_supabase(), user.user_id, user_id
+    )
     return MessageResponse(message="Suggestion removed")

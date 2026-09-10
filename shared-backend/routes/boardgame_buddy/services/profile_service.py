@@ -6,12 +6,13 @@ not enforced here.
 """
 
 from fastapi import HTTPException
+from supabase import Client
 
 from ..models import PublicProfileResponse
 from . import buddy_service
 
 
-def fetch_public_profile(sb, viewer_id: str, target_id: str) -> PublicProfileResponse:
+def fetch_public_profile(sb: Client, viewer_id: str, target_id: str) -> PublicProfileResponse:
     rows = (
         sb.table("boardgamebuddy_profiles")
         .select("id, display_name, username, avatar, created_at")

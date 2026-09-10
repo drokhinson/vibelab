@@ -16,11 +16,12 @@ both directions; if that is ever wanted it belongs there, not here.
 """
 
 from fastapi import HTTPException
+from supabase import Client
 
 _TABLE = "boardgamebuddy_buddy_suggestion_dismissals"
 
 
-def dismiss(sb, viewer_id: str, target_user_id: str) -> None:
+def dismiss(sb: Client, viewer_id: str, target_user_id: str) -> None:
     """Stop suggesting `target_user_id` to `viewer_id`.
 
     Idempotent — a second dismissal of the same person is the same row, not a
@@ -46,7 +47,7 @@ def dismiss(sb, viewer_id: str, target_user_id: str) -> None:
     ).execute()
 
 
-def clear(sb, viewer_id: str, target_user_id: str) -> None:
+def clear(sb: Client, viewer_id: str, target_user_id: str) -> None:
     """Undo a dismissal, if there is one.
 
     Called when the viewer sends that person a buddy request: asking to be

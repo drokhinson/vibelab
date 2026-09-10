@@ -11,7 +11,6 @@ buddies also ships as GET /buddies/suggested (buddy_routes.py) so the Buddies
 screen can render the same rail without pulling a feed page.
 """
 
-from typing import Optional
 
 from fastapi import Depends, Query
 
@@ -30,7 +29,7 @@ from .services import feed_service
     summary="Strava-style chronological feed",
 )
 async def get_feed(
-    cursor: Optional[str] = Query(
+    cursor: str | None = Query(
         None,
         description="Composite \"played_at|created_at\" cursor returned by the previous page",
     ),

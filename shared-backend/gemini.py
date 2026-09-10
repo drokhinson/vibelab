@@ -69,10 +69,6 @@ _ENDPOINT_TEMPLATE = (
     "{model}:generateContent"
 )
 
-# The default model's endpoint, kept as a module constant because it is what
-# nearly every caller uses and what the api_logs rows have always recorded.
-_ENDPOINT = _ENDPOINT_TEMPLATE.format(model=GEMINI_MODEL)
-
 # What may ride along as an inline image part. Gemini accepts more than this;
 # the list is deliberately the formats a browser can produce from a canvas plus
 # the two a phone hands over directly, so a caller cannot forward an arbitrary

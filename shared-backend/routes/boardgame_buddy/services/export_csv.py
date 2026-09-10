@@ -3,7 +3,7 @@
 Deliberately free of Supabase and FastAPI imports: everything here is a pure
 function over rows the caller has already read, which is what makes the export's
 formatting decisions — the BOM, the formula guard, how a JSONB column becomes a
-cell — testable without a database (see tests/test_export_csv.py).
+cell — testable without a database (see tests/test_export.py).
 
 services/export_service.py owns the reads and the dataset definitions.
 """

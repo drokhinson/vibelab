@@ -17,7 +17,7 @@
 // the lobby so a missed Realtime event doesn't leave the joiner stuck.
 
 (function () {
-  // Polling cadence matches the host's lobby poll (play-flow-view.js:124).
+  // Polling cadence matches the host's lobby poll (play-flow-view.js#_startLobbyPoll).
   // Realtime covers phase changes and live scores, but participant joins /
   // leaves and the host's roster edits are poll-only, so 2s is the minimum
   // freshness an authenticated joiner can expect for the player list during
@@ -50,8 +50,7 @@
 
     async onMount() {
       this._code = this._extractCode(this.params);
-      this._popupShown = false;
-      this._feedRefreshed = false;
+      this._resetSession();
       if (!this._code) {
         this._error = "No session code provided";
         this.render();
@@ -79,9 +78,7 @@
       }
       await this._teardown();
       this._code = next;
-      this._session = null;
-      this._popupShown = false;
-      this._feedRefreshed = false;
+      this._resetSession();
       await this._load();
       this._scrollToCurrentPhase(this._session && this._session.phase);
       this._startPolling();
@@ -112,6 +109,18 @@
         Promise.resolve().then(() => live.stop()).catch(() => {});
       }
       this._liveScores = null;
+    }
+
+    // Singleton view: everything the previous session left behind, or its
+    // cascade paints under the next code until the load lands.
+    _resetSession() {
+      this._session = null;
+      this._error = null;
+      this._popupShown = false;
+      this._feedRefreshed = false;
+      this._pollTick = 0;
+      this._lastRealtimeAt = 0;
+      this._renderedRounds = 0;
     }
 
     _extractCode(params) {
@@ -377,9 +386,10 @@
     _patchScoringCells() {
       if (!this._session) return;
       const participants = this._session.participants || [];
+      const cells = window.BgbCascade.scoreCells(this.container);
       participants.forEach((p, i) => {
         for (let r = 0; r < this._renderedRounds; r++) {
-          const el = this.container.querySelector(`.scoring-table [data-score-cell="${i}-${r}"]`);
+          const el = cells.get(`${i}-${r}`);
           if (!el) continue;
           const text = this._cellValue({ participant_id: p.id }, r);
           if (el.textContent !== text) el.textContent = text;
@@ -404,7 +414,12 @@
     async _maybeStopLiveScores() {
       if (this._liveOff) this._liveOff();
       this._liveOff = null;
-      if (this._liveScores) { try { await this._liveScores.stop(); } catch (_) {} }
+      // Fire-and-forget, as _teardown does: stop() awaits an unsubscribe ack a
+      // never-READY socket never sends, and this runs inside the poll tick.
+      if (this._liveScores) {
+        const live = this._liveScores;
+        Promise.resolve().then(() => live.stop()).catch(() => {});
+      }
       this._liveScores = null;
     }
 
@@ -506,10 +521,10 @@
 
       const phase = s.phase || "gather";
       // Lock every non-active screen to height: 0 (.is-locked) so the cascade
-      // snaps to one screen at a time — mirrors the host's PlayFlowView
-      // (play-flow-view.js:348-350). Previously only the Play/Settle screens
-      // locked, so during Play both Gather (step 1) and Play (step 2) were
-      // visible and the joiner scrolled between them.
+      // snaps to one screen at a time — mirrors the host's render() lock in
+      // play-flow-view.js. Previously only the Play/Settle screens locked, so
+      // during Play both Gather (step 1) and Play (step 2) were visible and
+      // the joiner scrolled between them.
       const lockGather = phase !== "gather";
       const lockPlay = phase !== "play";
       const lockSettle = phase !== "settle" && phase !== "finalized";
@@ -581,13 +596,7 @@
     }
 
     _scrollToCurrentPhase(phase) {
-      let id = "screen-gather";
-      if (phase === "play") id = "screen-play";
-      else if (phase === "settle" || phase === "finalized") id = "screen-settle";
-      requestAnimationFrame(() => {
-        const el = document.getElementById(id);
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      window.BgbCascade.scrollToPhase(phase, { behavior: "smooth" });
     }
 
     // ── Section: Gather (read-only) ─────────────────────────────────────────
@@ -656,25 +665,6 @@
         game: (s && s.game) || null,
         code: (s && s.code) || this._code || null,
       });
-    }
-
-    // Same rulebook CTA the host gets on their Play step (play-flow-view's
-    // _renderPlay). The session bundle carries rulebook_url on its game, so
-    // there was never a data reason for the spectator to go without it. No
-    // rulebook on this game → no row at all, exactly as on the host side.
-    _renderRulebookRow(s) {
-      const url = s && s.game && s.game.rulebook_url;
-      if (!url) return "";
-      return `
-        <div class="cascade-rulebook-row">
-          <a href="${escapeAttr(url)}" target="_blank" rel="noopener"
-             class="btn btn-outline btn-sm cascade-rulebook-cta">
-            <i data-icon="book-open" class="w-4 h-4"></i>
-            <span>Rulebook</span>
-            <i data-icon="external-link" class="w-3.5 h-3.5"></i>
-          </a>
-        </div>
-      `;
     }
 
     _renderGather(s) {
@@ -751,7 +741,7 @@
         <div class="cascade-col cascade-col--aside">
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
-          ${this._renderRulebookRow(s)}
+          ${window.BgbCascade.rulebookRow(s && s.game && s.game.rulebook_url)}
           <div id="session-viewer-guide-mount" class="session-viewer__guide-mount"></div>
         </section>
         </div>

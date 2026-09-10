@@ -2,6 +2,7 @@
 // + expansions list (base game → expansions, expansion → base game).
 
 (function () {
+  const EXPANSION_CHECK = `<span class="expansion-polaroid__check"><i data-icon="check" class="w-3.5 h-3.5"></i></span>`;
   class GameDetailView extends window.View {
     constructor() {
       super("game-detail");
@@ -19,15 +20,13 @@
       this._statusMap = {};
       this.listen("myCollectionMap", (m) => {
         this._statusMap = m || {};
-        this.render();
+        this._paintStatuses();
       });
       this.listenDom("status-changed", (e) => {
         const { gameId, status } = e.detail || {};
         if (gameId) this._statusMap[gameId] = status;
-        // If the game on this page just changed, also refresh the action
-        // button at the top so it tracks the new status.
         if (this._game && gameId === this._game.id) this._status = status;
-        this.render();
+        this._paintStatuses();
       });
       this.listenDom("chapters-changed", (e) => {
         // The widget may not exist yet during the initial _load, and a
@@ -36,7 +35,7 @@
         if (this._guide) this._guide.refresh();
       });
       window.Collection.myStatusMap()
-        .then((m) => { this._statusMap = m || {}; this.render(); })
+        .then((m) => { if (!this._mounted) return; this._statusMap = m || {}; this.render(); })
         .catch(() => {});
       await this._load();
     }
@@ -65,10 +64,14 @@
       this._error = null;
       this._loading = true;
       this.render();
+      // Expansion → base game is two taps on this screen; a slower earlier
+      // bundle must not paint over the later one (or an unmounted view).
+      const stale = () => !this._mounted || (this.params && this.params.gameId) !== id;
       try {
         // Single round trip via /games/{id}/bundle (Phase 3) — replaces the
         // serial Game.fetch + parallel status/plays/expansions fan-out.
         const bundle = await window.Game.detailBundle(id, { playsLimit: 5 });
+        if (stale()) return;
         if (!bundle || !bundle.game) {
           throw new Error("Game not found");
         }
@@ -91,10 +94,13 @@
           this._status = "played";
         }
       } catch (e) {
+        if (stale()) return;
         this._error = e.message || "Failed to load game";
       } finally {
-        this._loading = false;
-        this.render();
+        if (!stale()) {
+          this._loading = false;
+          this.render();
+        }
       }
     }
 
@@ -117,7 +123,6 @@
       }
       const g = this._game;
       const accent = g.accentColor();
-      const status = this._status;
 
       const heroSrc = gameArtSrc(g, "card");
       this.container.innerHTML = `
@@ -131,9 +136,7 @@
                 ${gameArtImg(g, "card", { eager: true }) || `<i data-icon="dice-6" class="w-10 h-10"></i>`}
               </div>
               ${g.year_published ? `<div class="game-detail__polaroid-cap">${g.year_published}</div>` : `<div class="game-detail__polaroid-cap">&nbsp;</div>`}
-              <span class="game-detail__polaroid-status">
-                ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add", gameName: g.name })}
-              </span>
+              <span class="game-detail__polaroid-status">${this._renderHeroStatus()}</span>
             </div>
           </header>
           <div class="game-detail__body">
@@ -267,12 +270,49 @@
       };
     }
 
+    _renderHeroStatus() {
+      const g = this._game;
+      return window.renderStatusTag(g.id, this._status, { size: "lg", addLabel: "Add", gameName: g.name });
+    }
+
+    // prev_owned is deliberately absent: the check means "you have this one",
+    // and an expansion you sold is the one case where having a collection row
+    // does not mean you have it. Same call the owned-expansion counts make.
+    _ownsExpansion(expansionGameId) {
+      const status = (this._statusMap || {})[expansionGameId] || null;
+      return status === "owned" || status === "played" || status === "wishlist";
+    }
+
+    // A status change — the viewer's tap, or the store catching up — repaints
+    // the hero tag and the expansion checks in place. The tap fires both the
+    // store write and the DOM event, so a full render here ran twice per tap.
+    _paintStatuses() {
+      const article = this._game && this.container.querySelector(".game-detail");
+      if (!article) { this.render(); return; }
+      const tag = article.querySelector(".game-detail__polaroid-status");
+      if (tag) {
+        tag.innerHTML = this._renderHeroStatus();
+        this.refreshIcons(tag);
+      }
+      for (const el of article.querySelectorAll(".expansion-polaroid[data-expansion-id]")) {
+        const photo = el.querySelector(".expansion-polaroid__photo");
+        const check = photo && photo.querySelector(".expansion-polaroid__check");
+        const owned = this._ownsExpansion(el.dataset.expansionId);
+        if (owned && photo && !check) {
+          photo.insertAdjacentHTML("beforeend", EXPANSION_CHECK);
+          this.refreshIcons(photo);
+        } else if (!owned && check) {
+          check.remove();
+        }
+      }
+    }
+
     _renderBaseGameLink(g) {
       // Expansion → base game banner. The GameDetail Pydantic shape carries
       // base_game_id + base_game_name when the game is an expansion.
       if (!g.is_expansion || !g.base_game_id) return "";
       return `
-        <a class="game-detail__base-link" onclick="window.router.go('game-detail',{gameId:'${g.base_game_id}',gameName:'${jsStr(g.base_game_name || '')}'})">
+        <a class="game-detail__base-link" onclick="${escapeAttr(gameDetailJs(g.base_game_id, g.base_game_name))}">
           <i data-icon="corner-up-left" class="w-3.5 h-3.5"></i>
           <span>Expansion of <strong>${escapeHtml(g.base_game_name || "base game")}</strong></span>
         </a>
@@ -312,12 +352,6 @@
           </h3>
           <div class="expansion-reel">
             ${list.map((e) => {
-              const status = (this._statusMap || {})[e.expansion_game_id] || null;
-              // prev_owned is deliberately absent: this check means "you have
-              // this one", and an expansion you sold is the one case where
-              // having a collection row does not mean you have it. Same call
-              // the owned-expansion counts make.
-              const owned = status === "owned" || status === "played" || status === "wishlist";
               // The page title already says the base game, so the caption drops
               // it — the cap is 2-line clamped and the prefix ate one of them.
               // Navigation still carries the full name: it seeds the
@@ -325,11 +359,12 @@
               const label = stripBaseGameName(e.name, g.name);
               return `
                 <article class="expansion-polaroid" title="${escapeAttr(e.name || '')}"
-                         onclick="window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || '')}'})">
+                         data-expansion-id="${escapeAttr(e.expansion_game_id)}"
+                         onclick="${escapeAttr(gameDetailJs(e.expansion_game_id, e.name))}">
                   <div class="expansion-polaroid__photo">
                     ${gameArtImg(e, "card", { width: 132, height: 110 })
                       || `<div class="expansion-polaroid__placeholder"><i data-icon="dice-6"></i></div>`}
-                    ${owned ? `<span class="expansion-polaroid__check"><i data-icon="check" class="w-3.5 h-3.5"></i></span>` : ""}
+                    ${this._ownsExpansion(e.expansion_game_id) ? EXPANSION_CHECK : ""}
                   </div>
                   <div class="expansion-polaroid__cap">${escapeHtml(label)}</div>
                 </article>
@@ -456,10 +491,10 @@
       const url = g.rulebookUrl();
       if (url) {
         const adminAttrs = isAdmin
-          ? ` onpointerdown="window.gameDetailView._rulebookHoldStart(event)"
-              onpointerup="window.gameDetailView._rulebookHoldEnd(event)"
-              onpointercancel="window.gameDetailView._rulebookHoldEnd(event)"
-              onpointerleave="window.gameDetailView._rulebookHoldEnd(event)"
+          ? ` onpointerdown="window.gameDetailView._rulebookHoldStart()"
+              onpointerup="window.gameDetailView._rulebookHoldEnd()"
+              onpointercancel="window.gameDetailView._rulebookHoldEnd()"
+              onpointerleave="window.gameDetailView._rulebookHoldEnd()"
               onclick="if(window.gameDetailView._rulebookSuppressClick(event)){return false;}"
               title="Long-press to delete rulebook (admin)"`
           : "";
@@ -482,12 +517,14 @@
     }
 
     async _promptAddRulebook() {
-      const url = window.prompt("Rulebook URL", "https://");
+      const url = await window.PolaroidPopup.prompt({
+        title: "Rulebook URL", value: "https://", confirmLabel: "Save",
+      });
       if (url == null) return;                    // user hit Cancel
       const trimmed = url.trim();
       if (!trimmed) return;
       if (!/^https?:\/\//i.test(trimmed)) {
-        alert("Rulebook URL must start with http:// or https://");
+        await window.PolaroidPopup.alert({ title: "Rulebook URL must start with http:// or https://" });
         return;
       }
       try {
@@ -495,12 +532,19 @@
         await this._reload();
       } catch (e) {
         const status = e && e.status ? ` (HTTP ${e.status})` : "";
-        alert(`Failed to set rulebook URL${status}: ${(e && e.message) || e}`);
+        await window.PolaroidPopup.alert({
+          title: "Couldn't set the rulebook URL",
+          body: `${status ? status.trim() + " " : ""}${(e && e.message) || e}`,
+        });
       }
     }
 
     async _promptDeleteRulebook() {
-      if (!confirm("Delete the rulebook URL for this game?")) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Delete the rulebook URL for this game?",
+        confirmLabel: "Delete", cancelLabel: "Keep it", destructive: true,
+      });
+      if (!ok) return;
       try {
         await window.Game.adminSetRulebookUrl(this._game.id, null);
         await this._reload();
@@ -515,7 +559,10 @@
           return;
         }
         const status = e && e.status ? ` (HTTP ${e.status})` : "";
-        alert(`Failed to delete rulebook URL${status}: ${(e && e.message) || e}`);
+        await window.PolaroidPopup.alert({
+          title: "Couldn't delete the rulebook URL",
+          body: `${status ? status.trim() + " " : ""}${(e && e.message) || e}`,
+        });
       }
     }
 
@@ -529,14 +576,14 @@
     // Long-press detector. Starts a 600ms timer on pointerdown; if it fires
     // before pointerup, the delete prompt opens and a "suppress next click"
     // flag is raised so the link doesn't ALSO navigate to the rulebook PDF.
-    _rulebookHoldStart(event) {
+    _rulebookHoldStart() {
       this._rulebookHoldTimer = setTimeout(() => {
         this._rulebookHoldTimer = null;
         this._rulebookSuppressNextClick = true;
         this._promptDeleteRulebook();
       }, 600);
     }
-    _rulebookHoldEnd(event) {
+    _rulebookHoldEnd() {
       if (this._rulebookHoldTimer) {
         clearTimeout(this._rulebookHoldTimer);
         this._rulebookHoldTimer = null;
@@ -596,10 +643,6 @@
     }
   }
 
-  function formatDate(iso) {
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  }
   // Render a stored description as escaped paragraphs.
   //
   // The column holds plain text (bgg_client.bgg_description_text strips tags

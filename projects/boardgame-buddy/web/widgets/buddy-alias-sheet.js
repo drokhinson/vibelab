@@ -77,7 +77,7 @@
           </p>
         </div>
 
-        <div class="bgb-sheet__foot alias-sheet__foot">
+        <div class="bgb-sheet__foot">
           <button class="bgb-sheet__confirm" type="button" data-alias-action="save">
             Save
           </button>

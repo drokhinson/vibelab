@@ -11,7 +11,7 @@ tier. Uses the shared caller in shared-backend/gemini.py.
 """
 
 import re
-from typing import Optional
+
 
 from gemini import GeminiError, generate_json
 
@@ -98,9 +98,9 @@ def _banner(n: int, title: str) -> str:
 def _build_prompt(
     *,
     game_name: str,
-    game_year: Optional[int],
+    game_year: int | None,
     chapter_type_label: str,
-    focus: Optional[str] = None,
+    focus: str | None = None,
 ) -> str:
     """Four numbered sections, in a fixed order: what to write, what formatting
     the app supports, the player's own steer, and the shape of the reply.
@@ -197,10 +197,10 @@ def _coerce(data: dict) -> tuple[str, str]:
 async def generate_chapter(
     *,
     game_name: str,
-    game_year: Optional[int],
+    game_year: int | None,
     chapter_type_id: str,
     chapter_type_label: str,
-    focus: Optional[str] = None,
+    focus: str | None = None,
 ) -> tuple[str, str]:
     """Draft one chapter. Returns (title, markdown content).
 

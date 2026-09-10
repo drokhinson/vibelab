@@ -21,6 +21,7 @@ response shaping here.
 from typing import Any
 
 from fastapi import HTTPException
+from supabase import Client
 
 from ..constants import GhostClaimStatus
 from ..models import (
@@ -35,7 +36,7 @@ from ._helpers import raise_for_rpc_error
 
 
 def fetch_suggestions(
-    sb,
+    sb: Client,
     viewer_id: str,
     limit: int = 10,
 ) -> GhostClaimSuggestionsResponse:
@@ -61,7 +62,7 @@ def fetch_suggestions(
 
 
 def fetch_detail(
-    sb,
+    sb: Client,
     viewer_id: str,
     play_id: str,
     display_name: str,
@@ -90,7 +91,7 @@ def fetch_detail(
     return GhostClaimDetail.model_validate(data)
 
 
-def list_claims(sb, viewer_id: str) -> GhostClaimsResponse:
+def list_claims(sb: Client, viewer_id: str) -> GhostClaimsResponse:
     """Both sides of the viewer's pending claims, mirroring /buddies/requests."""
     data = sb.rpc("bgb_ghost_claims", {"p_viewer": viewer_id}).execute().data or {}
     return GhostClaimsResponse(
@@ -104,7 +105,7 @@ def list_claims(sb, viewer_id: str) -> GhostClaimsResponse:
 
 
 def create_claim(
-    sb,
+    sb: Client,
     viewer_id: str,
     owner_user_id: str,
     display_name: str,
@@ -129,7 +130,7 @@ def create_claim(
     return GhostClaimResponse.model_validate(data)
 
 
-def accept_claim(sb, viewer_id: str, claim_id: str) -> GhostClaimAcceptResponse:
+def accept_claim(sb: Client, viewer_id: str, claim_id: str) -> GhostClaimAcceptResponse:
     """Approve a claim and merge the ghost's rows into the claimant's account.
 
     One transaction inside the RPC, which is what lets it re-check the
@@ -155,7 +156,7 @@ def accept_claim(sb, viewer_id: str, claim_id: str) -> GhostClaimAcceptResponse:
     )
 
 
-def reject_claim(sb, viewer_id: str, claim_id: str) -> None:
+def reject_claim(sb: Client, viewer_id: str, claim_id: str) -> None:
     """Decline a claim, and record the strike.
 
     An RPC rather than a PostgREST update because reject_count has to be
@@ -173,7 +174,7 @@ def reject_claim(sb, viewer_id: str, claim_id: str) -> None:
     raise_for_rpc_error(data, "ghost claim reject")
 
 
-def cancel_claim(sb, viewer_id: str, claim_id: str) -> None:
+def cancel_claim(sb: Client, viewer_id: str, claim_id: str) -> None:
     """Withdraw a claim the viewer sent.
 
     The mirror of reject_claim, and the one operation here that is a plain
@@ -204,7 +205,7 @@ def cancel_claim(sb, viewer_id: str, claim_id: str) -> None:
 
 
 def dismiss_suggestion(
-    sb,
+    sb: Client,
     viewer_id: str,
     owner_user_id: str,
     display_name: str,

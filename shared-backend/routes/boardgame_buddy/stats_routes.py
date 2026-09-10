@@ -13,6 +13,7 @@ them. Profiles staying otherwise public is unaffected — /users/{id}/stats is
 still open.
 """
 
+import asyncio
 from typing import Any
 
 from fastapi import Depends, Path
@@ -35,7 +36,7 @@ async def get_my_stats(
     user: CurrentUser = Depends(get_current_user),
 ) -> StatsResponse:
     """Aggregate play stats for the current viewer."""
-    return stats_service.fetch_stats(get_supabase(), user.user_id)
+    return await asyncio.to_thread(stats_service.fetch_stats, get_supabase(), user.user_id)
 
 
 @router.get(
@@ -54,7 +55,9 @@ async def get_my_stats_detail(
     single source of truth, and a second declaration of eleven nested blocks in
     models.py would only be one more thing to drift.
     """
-    return stats_service.fetch_stats_detail(get_supabase(), user.user_id)
+    return await asyncio.to_thread(
+        stats_service.fetch_stats_detail, get_supabase(), user.user_id
+    )
 
 
 @router.get(
@@ -68,4 +71,4 @@ async def get_user_stats(
     _viewer: CurrentUser = Depends(get_current_user),
 ) -> StatsResponse:
     """Profiles are fully public so this is unguarded beyond auth."""
-    return stats_service.fetch_stats(get_supabase(), user_id)
+    return await asyncio.to_thread(stats_service.fetch_stats, get_supabase(), user_id)

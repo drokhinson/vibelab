@@ -102,8 +102,9 @@
       this._writing = new Set();
       if (this._syncFrame != null) cancelAnimationFrame(this._syncFrame);
       this._syncFrame = null;
-      // Monotonic: a page resolving after a newer search must not write back.
-      this._loadSeq = 0;
+      // Monotonic: a page resolving after a newer search — or from the previous
+      // mount — must not write back.
+      this._loadSeq = (this._loadSeq || 0) + 1;
       clearTimeout(this._searchTimer);
       this._searchTimer = null;
     }
@@ -557,10 +558,7 @@
           ${window.renderGamePolaroid(game, {
             variant: "row",
             showStatus: false,
-            // jsStr escapes the JS-string layer, escapeAttr the HTML one — a
-            // bare " in a game name would otherwise close the onclick attribute
-            // (mirrors ui/status-tag.js).
-            clickHandler: escapeAttr(`window.router.go('game-detail',{gameId:'${jsStr(id)}',gameName:'${jsStr(game.name || "")}'})`),
+            clickHandler: gameDetailJs(id, game.name),
           })}
           <span class="catalog-row__slot" data-catalog-slot="${escapeAttr(id)}"
                 data-state="${escapeAttr(this._rowState(id))}">${this._renderSlot(game)}</span>

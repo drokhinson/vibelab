@@ -30,9 +30,11 @@
 // .claude/rules/ui-object-design.md §2.
 
 (function () {
-  const BACKDROP_ID = "bgb-add-buddies";
-  // Must match the .is-closing animation duration in styles.css.
-  const CLOSE_MS = 200;
+  const _modal = new window.BgbModal({
+    id: "bgb-add-buddies",
+    className: "polaroid-popup__backdrop--confirm",
+    label: "Add buddies",
+  });
   // The same 300ms the ghost-link picker on the Buddies screen uses. Both are
   // typing straight at /profiles/search, and a shared feel matters more than
   // shaving 80ms off one of them.
@@ -46,24 +48,6 @@
     outgoing: "Request sent",
     incoming: "Wants to buddy up",
   };
-
-  let _closeTimer = null;
-
-  function teardown() {
-    if (_closeTimer) { clearTimeout(_closeTimer); _closeTimer = null; }
-    const stale = document.getElementById(BACKDROP_ID);
-    if (stale) stale.remove();
-    // First-run runs three of these polaroid cards back to back, and a
-    // teardown fires 200ms after its own card resolved — by which time the
-    // NEXT card may already have locked the scroll. Only the last overlay out
-    // restores it, or the closing card silently unlocks the page behind the
-    // one that replaced it. The same guard covers the QR sheet, which carries
-    // .polaroid-popup__backdrop too, and covers teardown()'s other caller —
-    // the top of open(), which would otherwise unlock on the way IN.
-    if (!document.querySelector(".polaroid-popup__backdrop")) {
-      document.body.style.overflow = "";
-    }
-  }
 
   // A /profiles/search hit wearing the suggestion tile's shape. `id` becomes
   // `user_id` and that is nearly the whole of it — the search endpoint carries
@@ -119,8 +103,6 @@
   function open(opts) {
     const o = opts || {};
     return new Promise((resolve) => {
-      teardown();
-
       // `let`, not `const`: promotions append to it, so a full repaint (the
       // search query being cleared) reproduces the grid the user built.
       let list = o.suggestions || [];
@@ -155,12 +137,9 @@
       let searchTimer = null;
       let searchSeq = 0;
 
-      const root = document.createElement("div");
-      root.id = BACKDROP_ID;
-      root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--confirm";
-      root.innerHTML = `
-        <div class="polaroid-popup__card polaroid-popup__card--confirm add-buddies"
-             role="dialog" aria-modal="true" aria-label="Add buddies" tabindex="-1">
+      _modal.open({
+        html: `
+        <div class="polaroid-popup__card polaroid-popup__card--confirm add-buddies" tabindex="-1">
           <button class="polaroid-popup__close" aria-label="${escapeAttr(dismissAriaLabel)}" data-act="skip">
             <i data-icon="x" class="w-4 h-4"></i>
           </button>
@@ -194,21 +173,32 @@
             </div>
           </div>
         </div>
-      `;
-      document.body.appendChild(root);
-      // The grid can outrun the viewport; stop the page behind it scrolling
-      // with it. teardown() releases it, but only once no other polaroid
-      // backdrop is left — see the note there.
-      document.body.style.overflow = "hidden";
-      window.BgbIcons.render(root);
-
-      // The phone's back gesture closes THIS card, not the screen under it —
-      // and with the search field focused, dismisses the keyboard first
-      // (ui/back-guard.js). Backing out this way is the Skip path, the same
-      // one the backdrop tap and Escape take.
-      const backToken = window.BgbBackGuard
-        ? window.BgbBackGuard.arm({ root: root, close: skip })
-        : 0;
+        `,
+        onClick: (ev) => {
+          const act = ev.target.closest("[data-act]");
+          if (act) {
+            if (act.getAttribute("data-act") === "send") send();
+            else skip();
+            return;
+          }
+          const tile = ev.target.closest(".buddy-tile--select");
+          if (tile && grid.contains(tile)) toggle(tile);
+        },
+        // Layered Escape (.claude/rules/overlays.md §5): the first backs out
+        // of the search, the second out of the card. It does NOT unwind ticks
+        // — the dismiss button is what that is for.
+        onEscape: () => {
+          if (!query) return false;
+          window.BgbSearchField.clearInput(searchInput);
+          return true;
+        },
+        // A send in flight must not strand its requests. Backing out is
+        // otherwise non-destructive — every suggestion is still one tap away
+        // on the Buddies screen — so it needs no confirm.
+        canDismiss: () => !sending,
+        onClose: skip,
+      });
+      const root = _modal.el;
 
       const grid = root.querySelector(".add-buddies__grid");
       const sendBtn = root.querySelector(".add-buddies__send");
@@ -219,14 +209,11 @@
       function finish(result) {
         if (settled) return;
         settled = true;
-        document.removeEventListener("keydown", onKeydown, true);
-        if (window.BgbBackGuard) window.BgbBackGuard.release(backToken);
         // A pending debounce would otherwise fire 300ms from now against a
         // detached grid, and its response 400ms after that.
         clearTimeout(searchTimer);
         searchSeq++;
-        root.classList.add("is-closing");
-        _closeTimer = setTimeout(teardown, CLOSE_MS);
+        _modal.close();
         resolve(result);
       }
 
@@ -472,20 +459,6 @@
       }
 
       // ── Wiring ────────────────────────────────────────────────────────────
-      root.addEventListener("click", (ev) => {
-        const act = ev.target.closest("[data-act]");
-        if (act) {
-          if (act.getAttribute("data-act") === "send") send();
-          else skip();
-          return;
-        }
-        const tile = ev.target.closest(".buddy-tile--select");
-        if (tile && grid.contains(tile)) { toggle(tile); return; }
-        // Backdrop tap. Backing out is non-destructive and every suggestion is
-        // still one tap away on the Buddies screen, so this needs no confirm.
-        if (ev.target === root) skip();
-      });
-
       // Delegated on root rather than bound to the input, and rather than an
       // inline oninput: this widget is a closure with no global to address.
       // It costs nothing either way, because BgbSearchField's × does not call
@@ -496,18 +469,6 @@
         const t = ev.target;
         if (t && t.id === SEARCH_INPUT_ID) onQueryInput(t.value);
       });
-
-      function onKeydown(ev) {
-        if (ev.key !== "Escape") return;
-        ev.stopPropagation();
-        ev.preventDefault();
-        // Layered Escape (.claude/rules/overlays.md §5): the first backs out of
-        // the search, the second out of the card. It does NOT unwind ticks —
-        // the dismiss button is what that is for.
-        if (query) { window.BgbSearchField.clearInput(searchInput); return; }
-        skip();
-      }
-      document.addEventListener("keydown", onKeydown, true);
 
       paintGrid();
       syncFooter();

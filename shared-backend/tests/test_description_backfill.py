@@ -50,6 +50,10 @@ class _Query:
     def order(self, *_a, **_k):
         return self
 
+    def range(self, lo, hi):
+        self._range = (lo, hi)
+        return self
+
     def update(self, payload):
         self._payload = payload
         return self
@@ -58,7 +62,11 @@ class _Query:
         if self._payload is not None:
             self.log.append((self._eq[1], self._payload))
             return type("R", (), {"data": [{}]})()
-        return type("R", (), {"data": self.rows})()
+        rows = self.rows
+        if getattr(self, "_range", None):
+            lo, hi = self._range
+            rows = rows[lo:hi + 1]
+        return type("R", (), {"data": rows})()
 
 
 class _SB:

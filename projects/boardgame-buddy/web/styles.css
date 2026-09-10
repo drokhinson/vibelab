@@ -5846,6 +5846,8 @@ html.bgb-ptr-armed body {
   to   { transform: translateY(100%); }
 }
 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+/* Every ui/modal-shell.js card leaves the same way (CLOSE_MS there). */
+.polaroid-popup__backdrop.bgb-modal.is-closing { animation: fadeOut 200ms ease-out both; }
 
 .status-sheet__grip {
   width: 44px; height: 4px; border-radius: 4px;
@@ -7522,11 +7524,6 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-}
-/* The flip has nothing to flip against once the list is in the flow. */
-.game-finder--inline .game-finder-dropdown.is-flipped {
-  top: auto;
-  bottom: auto;
 }
 
 /* Status-tag positioning inside the standard tile shapes ─ pin top-right. */
@@ -10345,12 +10342,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
-/* Set by ui/dropdown-fit.js when there is more room above the input than
-   below it — anchor to the input's top edge instead of its bottom. */
-.game-finder-dropdown.is-flipped {
-  top: auto;
-  bottom: calc(100% + 4px);
-}
 .game-finder-dropdown__header {
   padding: 6px 10px 4px;
   font-family: var(--font-polaroid);
@@ -13167,6 +13158,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
    Callers keep their own layout class alongside (.avatar-cust__name), and
    their own JS hook class on the input; nothing positional lives here. */
+.polaroid-popup__prompt { margin: 12px 0 4px; }
 .polaroid-field {
   display: flex;
   flex-direction: column;

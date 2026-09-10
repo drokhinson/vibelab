@@ -3,15 +3,16 @@
 import asyncio
 import logging
 import re
-from typing import Any, Optional
+from supabase import Client
+from typing import Any
 
 from ..models import (
     BggSearchResult,
     UnifiedSearchHit,
     UnifiedSearchResponse,
 )
-from ..bgg_client import fetch_bgg, parse_bgg_xml
-from ._helpers import game_summary_from_row, game_select_clause
+from ..bgg_client import fetch_bgg, parse_bgg_xml, thing_item_basics
+from ._helpers import chunked, game_summary_from_row, game_select_clause
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ _BGG_URL_RE = re.compile(
 _BGG_BARE_ID_RE = re.compile(r"^(\d{1,8})(?!\d)$")
 
 
-def _parse_bgg_id(query: str) -> tuple[Optional[int], bool]:
+def _parse_bgg_id(query: str) -> tuple[int | None, bool]:
     """(bgg_id, came_from_a_url) for a query that names one game outright.
 
     The url flag is what decides whether the name search still runs alongside
@@ -108,7 +109,7 @@ def _rank_key(q: str, row: dict[str, Any]) -> tuple:
     )
 
 
-async def _bgg_thing_row(bgg_id: int, *, include_expansions: bool) -> Optional[dict[str, Any]]:
+async def _bgg_thing_row(bgg_id: int, *, include_expansions: bool) -> dict[str, Any] | None:
     """One /thing lookup, in the same raw shape _bgg_hits builds from /search.
 
     Returns None rather than raising for every "that is not a game you can
@@ -130,37 +131,23 @@ async def _bgg_thing_row(bgg_id: int, *, include_expansions: bool) -> Optional[d
     item_type = item.get("type") or ""
     if item_type not in ("boardgame", "boardgameexpansion"):
         return None
-    is_expansion = item_type == "boardgameexpansion"
+    basics = thing_item_basics(item)
+    is_expansion = basics["is_expansion"]
     if is_expansion and not include_expansions:
         return None
-
-    # The primary name, not the first one: /thing lists every localized title,
-    # and for a widely translated game the first is often not English.
-    name_el = item.find("name[@type='primary']")
-    if name_el is None:
-        name_el = item.find("name")
-    name = name_el.get("value", "") if name_el is not None else ""
-    if not name:
+    if not basics["name"]:
         return None
-
-    year = None
-    year_el = item.find("yearpublished")
-    if year_el is not None:
-        try:
-            year = int(year_el.get("value", "0")) or None
-        except (TypeError, ValueError):
-            year = None
 
     return {
         "bgg_id": bgg_id,
-        "name": name,
-        "year_published": year,
+        "name": basics["name"],
+        "year_published": basics["year_published"],
         "is_expansion": is_expansion,
     }
 
 
 def _collection_hits(
-    sb,
+    sb: Client,
     viewer_id: str,
     query: str,
     limit: int,
@@ -203,7 +190,7 @@ def _collection_hits(
 
 
 def _db_hits(
-    sb,
+    sb: Client,
     query: str,
     limit: int,
     *,
@@ -217,6 +204,8 @@ def _db_hits(
     )
     if not include_expansions:
         q = q.eq("is_expansion", False)
+    # Over-fetch by the excluded count so the post-filter can still fill
+    # `limit`; more exclusions than that among the matches under-deliver.
     rows = (
         q.order("name")
         .limit(limit + len(exclude_game_ids))
@@ -235,7 +224,7 @@ def _db_hits(
 
 
 def _rpc_hits(
-    sb,
+    sb: Client,
     viewer_id: str,
     query: str,
     limit: int,
@@ -276,7 +265,7 @@ def _rpc_hits(
 
 
 async def _bgg_hits(
-    sb,
+    sb: Client,
     query: str,
     *,
     include_expansions: bool,
@@ -368,7 +357,7 @@ async def _bgg_hits(
     )
 
 
-def _as_results(sb, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
+def _as_results(sb: Client, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
     """Stamp already_in_db across the whole batch in one query.
 
     Its own function because the id lookup can return before the name search
@@ -385,11 +374,11 @@ def _as_results(sb, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
     have: set[int] = set()
     # Chunked: PostgREST carries the id set in the query string, and the whole
     # list can now be hundreds long.
-    for i in range(0, len(ids), _EXISTS_CHUNK):
+    for chunk in chunked(ids, _EXISTS_CHUNK):
         existing = (
             sb.table("boardgamebuddy_games")
             .select("bgg_id")
-            .in_("bgg_id", ids[i:i + _EXISTS_CHUNK])
+            .in_("bgg_id", chunk)
             .execute()
             .data
             or []
@@ -408,7 +397,7 @@ def _as_results(sb, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
 
 
 def _catalog_hits(
-    sb,
+    sb: Client,
     viewer_id: str,
     query: str,
     limit: int,
@@ -450,7 +439,7 @@ def _catalog_hits(
 
 
 async def unified_search(
-    sb,
+    sb: Client,
     viewer_id: str,
     query: str,
     *,

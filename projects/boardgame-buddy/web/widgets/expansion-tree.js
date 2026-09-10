@@ -81,7 +81,7 @@
           variant: "row",
           showStatus: false,
           meta: "",
-          clickHandler: `window.router.go('game-detail',{gameId:'${jsStr(g.id || "")}',gameName:'${jsStr(g.name || "")}'})`,
+          clickHandler: gameDetailJs(g.id, g.name),
         })}
         ${add}
       </li>`;

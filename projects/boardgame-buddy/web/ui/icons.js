@@ -16,7 +16,7 @@
 // across every view AND stored in the database (boardgamebuddy_chapter_types
 // .icon is free text, seeded with Lucide names in 001_baseline). Re-spelling
 // them would mean a data migration for no user-visible gain. The glyphs behind
-// the names are Phosphor — see PHOSPHOR_NAMES for the mapping.
+// the names are Phosphor — the comment above PATHS maps one to the other.
 //
 // Because that column is free text, the name set is open: a chapter type added
 // later can carry a name this file has never heard of. Unknown names fall back
@@ -112,91 +112,89 @@
   /** Rendered for a name not in PATHS — see the note on free-text icon names. */
   const FALLBACK = "book";
 
-  /** For reference: markup name -> upstream Phosphor icon name. */
-  const PHOSPHOR_NAMES = {
-      "alert-triangle": "warning",
-      "archive": "archive",
-      "arrow-down": "arrow-down",
-      "arrow-left": "arrow-left",
-      "arrow-up-right": "arrow-up-right",
-      "at-sign": "at",
-      "bell": "bell",
-      "book": "book",
-      "book-minus": "book-bookmark",
-      "book-open": "book-open",
-      "box": "package",
-      "camera": "camera",
-      "check": "check",
-      "check-circle": "check-circle",
-      "chevron-down": "caret-down",
-      "chevron-left": "caret-left",
-      "chevron-right": "caret-right",
-      "chevron-up": "caret-up",
-      "circle": "circle",
-      "clock": "clock",
-      "cloud-off": "cloud-slash",
-      "cloud-upload": "cloud-arrow-up",
-      "corner-up-left": "arrow-u-up-left",
-      "copy": "copy",
-      "crown": "crown",
-      "dice-6": "dice-six",
-      "dices": "dice-five",
-      "download": "download-simple",
-      "external-link": "arrow-square-out",
-      "eye": "eye",
-      "flag": "flag",
-      "flame": "flame",
-      "gamepad-2": "game-controller",
-      "gear": "gear",
-      "ghost": "ghost",
-      "git-fork": "git-fork",
-      "grip-vertical": "dots-six-vertical",
-      "handshake": "handshake",
-      "history": "clock-counter-clockwise",
-      "home": "house",
-      "hourglass": "hourglass",
-      "image-off": "image-broken",
-      "image-plus": "image-square",
-      "info": "info",
-      "key-round": "key",
-      "layers": "stack",
-      "library-big": "books",
-      "lightbulb": "lightbulb",
-      "link": "link",
-      "list": "list",
-      "loader-2": "spinner",
-      "log-out": "sign-out",
-      "maximize-2": "arrows-out-simple",
-      "moon": "moon",
-      "more-horizontal": "dots-three",
-      "palette": "palette",
-      "pencil": "pencil-simple",
-      "play": "play",
-      "plus": "plus",
-      "puzzle": "puzzle-piece",
-      "qr-code": "qr-code",
-      "refresh-cw": "arrows-clockwise",
-      "rotate-ccw": "arrow-counter-clockwise",
-      "scroll-text": "scroll",
-      "search": "magnifying-glass",
-      "shuffle": "shuffle",
-      "sliders-horizontal": "sliders-horizontal",
-      "sparkles": "sparkle",
-      "star": "star",
-      "sticky-note": "note",
-      "sun-moon": "circle-half",
-      "table": "table",
-      "trash-2": "trash",
-      "trophy": "trophy",
-      "upload": "upload-simple",
-      "user": "user",
-      "user-check": "user-check",
-      "user-plus": "user-plus",
-      "users": "users",
-      "wifi-off": "wifi-slash",
-      "x": "x",
-      "x-circle": "x-circle"
-  };
+  // Markup name -> upstream Phosphor icon name, for anyone re-tracing a glyph:
+  //   alert-triangle -> warning
+  //   archive -> archive
+  //   arrow-down -> arrow-down
+  //   arrow-left -> arrow-left
+  //   arrow-up-right -> arrow-up-right
+  //   at-sign -> at
+  //   bell -> bell
+  //   book -> book
+  //   book-minus -> book-bookmark
+  //   book-open -> book-open
+  //   box -> package
+  //   camera -> camera
+  //   check -> check
+  //   check-circle -> check-circle
+  //   chevron-down -> caret-down
+  //   chevron-left -> caret-left
+  //   chevron-right -> caret-right
+  //   chevron-up -> caret-up
+  //   circle -> circle
+  //   clock -> clock
+  //   cloud-off -> cloud-slash
+  //   cloud-upload -> cloud-arrow-up
+  //   corner-up-left -> arrow-u-up-left
+  //   copy -> copy
+  //   crown -> crown
+  //   dice-6 -> dice-six
+  //   dices -> dice-five
+  //   download -> download-simple
+  //   external-link -> arrow-square-out
+  //   eye -> eye
+  //   flag -> flag
+  //   flame -> flame
+  //   gamepad-2 -> game-controller
+  //   gear -> gear
+  //   ghost -> ghost
+  //   git-fork -> git-fork
+  //   grip-vertical -> dots-six-vertical
+  //   handshake -> handshake
+  //   history -> clock-counter-clockwise
+  //   home -> house
+  //   hourglass -> hourglass
+  //   image-off -> image-broken
+  //   image-plus -> image-square
+  //   info -> info
+  //   key-round -> key
+  //   layers -> stack
+  //   library-big -> books
+  //   lightbulb -> lightbulb
+  //   link -> link
+  //   list -> list
+  //   loader-2 -> spinner
+  //   log-out -> sign-out
+  //   maximize-2 -> arrows-out-simple
+  //   moon -> moon
+  //   more-horizontal -> dots-three
+  //   palette -> palette
+  //   pencil -> pencil-simple
+  //   play -> play
+  //   plus -> plus
+  //   puzzle -> puzzle-piece
+  //   qr-code -> qr-code
+  //   refresh-cw -> arrows-clockwise
+  //   rotate-ccw -> arrow-counter-clockwise
+  //   scroll-text -> scroll
+  //   search -> magnifying-glass
+  //   shuffle -> shuffle
+  //   sliders-horizontal -> sliders-horizontal
+  //   sparkles -> sparkle
+  //   star -> star
+  //   sticky-note -> note
+  //   sun-moon -> circle-half
+  //   table -> table
+  //   trash-2 -> trash
+  //   trophy -> trophy
+  //   upload -> upload-simple
+  //   user -> user
+  //   user-check -> user-check
+  //   user-plus -> user-plus
+  //   users -> users
+  //   wifi-off -> wifi-slash
+  //   x -> x
+  //   x-circle -> x-circle
 
   const SVG_NS = "http://www.w3.org/2000/svg";
   const parser = typeof DOMParser !== "undefined" ? new DOMParser() : null;
@@ -289,5 +287,5 @@
     }
   }
 
-  window.BgbIcons = { render, PATHS, PHOSPHOR_NAMES, FALLBACK };
+  window.BgbIcons = { render, PATHS, FALLBACK };
 })();

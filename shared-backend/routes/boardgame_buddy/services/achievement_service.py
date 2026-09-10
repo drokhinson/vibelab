@@ -5,16 +5,17 @@ writes the unlock rows that are newly due, and returns the screen's whole
 payload, so there is nothing to reshape here.
 """
 
+from supabase import Client
 from ..models import AchievementsResponse
 
 
-def fetch_achievements(sb, user_id: str) -> AchievementsResponse:
+def fetch_achievements(sb: Client, user_id: str) -> AchievementsResponse:
     """Recompute every badge for one user and return the whole spoke."""
     payload = sb.rpc("bgb_sync_achievements", {"uid": user_id}).execute().data or {}
     return AchievementsResponse(**payload)
 
 
-def mark_installed(sb, user_id: str) -> AchievementsResponse:
+def mark_installed(sb: Client, user_id: str) -> AchievementsResponse:
     """Stamp the first time this account was seen as an installed PWA.
 
     Guarded on the column still being NULL so re-launching the installed app

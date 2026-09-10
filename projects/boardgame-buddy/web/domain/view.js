@@ -263,6 +263,22 @@
       window.store.set("currentRoute", { name: stateName, params: stateParams });
     }
 
+    // The view containers, the auth-only chrome, the nav tabs and the header
+    // toggles are static shell markup (index.html), so they are queried once
+    // rather than five document walks per navigation.
+    _shell() {
+      if (!this._shellNodes) {
+        const all = (sel) => Array.from(document.querySelectorAll(sel));
+        this._shellNodes = {
+          views: all("[data-view]"),
+          authOnly: all("[data-auth-only]"),
+          navButtons: all(".bgb-nav button[data-nav]"),
+          toggles: HEADER_TOGGLES.map(([sel, view]) => [all(sel), view]),
+        };
+      }
+      return this._shellNodes;
+    }
+
     async go(name, params, { skipPush = false, fromPopstate = false } = {}) {
       const next = this._views.get(name);
       if (!next) {
@@ -273,10 +289,6 @@
       // Push the *previous* view onto the back-stack only when this is a
       // forward navigation (i.e. not an unconscious popstate / boot replay).
       // splash is transient and never a meaningful back destination — drop it.
-      if (prev && prev !== next && !skipPush && !fromPopstate && prev.name !== "splash") {
-        this._stack.push({ name: prev.name, params: prev.params || {} });
-        if (this._stack.length > this._maxStack) this._stack.shift();
-      }
 
       // History.pushState mirrors _stack: every forward navigation lands a
       // new history entry whose state lets popstate replay the route. On
@@ -287,6 +299,11 @@
       if (!skipPush && !fromPopstate) {
         const url = this.pathFor(name, params);
         if (url) {
+          // Only here, so the stack never holds an entry history does not.
+          if (prev && prev !== next && prev.name !== "splash") {
+            this._stack.push({ name: prev.name, params: prev.params || {} });
+            if (this._stack.length > this._maxStack) this._stack.shift();
+          }
           const current = window.location.pathname + window.location.search;
           try {
             if (current === url) {
@@ -307,7 +324,8 @@
       window.store.set("currentRoute", { name, params: params || {} });
       window.store.set("currentView", name);
 
-      document.querySelectorAll("[data-view]").forEach((el) => {
+      const shell = this._shell();
+      shell.views.forEach((el) => {
         el.classList.toggle("hidden", el.dataset.view !== name);
       });
 
@@ -331,11 +349,11 @@
       }
 
       const authed = !!window.store.get("user");
-      document.querySelectorAll("[data-auth-only]").forEach((el) => {
+      shell.authOnly.forEach((el) => {
         el.classList.toggle("hidden", !authed);
       });
 
-      document.querySelectorAll(".bgb-nav button[data-nav]").forEach((btn) => {
+      shell.navButtons.forEach((btn) => {
         const views = btn.dataset.navViews
           ? btn.dataset.navViews.split(",").map((s) => s.trim())
           : [btn.dataset.nav];
@@ -351,10 +369,8 @@
       // plenty of ways those handlers never hear about — the device back button,
       // a deep link, a notification tapped through to a play — and every one of
       // them lands in this function.
-      HEADER_TOGGLES.forEach(([selector, view]) => {
-        document.querySelectorAll(selector).forEach((btn) => {
-          btn.setAttribute("aria-pressed", String(name === view));
-        });
+      shell.toggles.forEach(([buttons, view]) => {
+        buttons.forEach((btn) => btn.setAttribute("aria-pressed", String(name === view)));
       });
 
       this._current = next;

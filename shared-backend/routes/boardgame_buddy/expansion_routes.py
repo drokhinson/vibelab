@@ -10,6 +10,9 @@ catalog. It exposes:
 - importing one of those under this base game,
 - toggling one on/off per-user (read by the game-detail bundle RPC and the
   native GameDetailScreen; the chapter system does not consume it).
+
+Every handler runs its Supabase round trips through `asyncio.to_thread`; the
+`_<handler>_sync` helper directly above a route is that blocking half.
 """
 
 import asyncio
@@ -18,6 +21,7 @@ import re
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Path, Query
+from supabase import Client
 
 from db import get_supabase
 
@@ -67,23 +71,9 @@ def _strip_base_prefix(name: str, base_name: str) -> str:
     return stripped or raw
 
 
-@router.get(
-    "/games/{base_id}/expansions",
-    response_model=list[ExpansionListItem],
-    status_code=200,
-    summary="List expansions linked to a base game",
-)
-async def list_expansions(
-    base_id: str = Path(..., description="Base game UUID"),
-    authorization: Optional[str] = Header(None),
+def _list_expansions_sync(
+    sb: Client, base_id: str, viewer_id: Optional[str]
 ) -> list[ExpansionListItem]:
-    """List every expansion whose `base_game_bgg_id` equals this base game's bgg_id.
-
-    For authenticated callers, `is_enabled` reflects the caller's own toggle
-    state. Anon callers always see `is_enabled=false`.
-    """
-    sb = get_supabase()
-    su_user = await maybe_supabase_user(authorization)
     base = (
         sb.table("boardgamebuddy_games")
         .select("bgg_id")
@@ -111,11 +101,11 @@ async def list_expansions(
     exp_ids = [r["id"] for r in rows]
 
     enabled_ids: set[str] = set()
-    if su_user is not None:
+    if viewer_id is not None:
         enabled = (
             sb.table("boardgamebuddy_user_expansions")
             .select("expansion_game_id")
-            .eq("user_id", su_user.sub)
+            .eq("user_id", viewer_id)
             .in_("expansion_game_id", exp_ids)
             .execute()
         )
@@ -134,6 +124,28 @@ async def list_expansions(
         )
         for r in rows
     ]
+
+
+@router.get(
+    "/games/{base_id}/expansions",
+    response_model=list[ExpansionListItem],
+    status_code=200,
+    summary="List expansions linked to a base game",
+)
+async def list_expansions(
+    base_id: str = Path(..., description="Base game UUID"),
+    authorization: Optional[str] = Header(None),
+) -> list[ExpansionListItem]:
+    """List every expansion whose `base_game_bgg_id` equals this base game's bgg_id.
+
+    For authenticated callers, `is_enabled` reflects the caller's own toggle
+    state. Anon callers always see `is_enabled=false`.
+    """
+    sb = get_supabase()
+    su_user = await maybe_supabase_user(authorization)
+    return await asyncio.to_thread(
+        _list_expansions_sync, sb, base_id, su_user.sub if su_user is not None else None
+    )
 
 
 def _load_base_game(base_id: str) -> dict:
@@ -187,6 +199,7 @@ async def _owner_counts_within_budget(bgg_ids: list[int]) -> dict[int, int]:
 )
 async def list_available_expansions(
     base_id: str = Path(..., description="Base game UUID"),
+    _user: CurrentUser = Depends(get_current_user),
 ) -> list[BggExpansionCandidate]:
     """Read the base game's BGG record and return every expansion BgB is missing.
 
@@ -200,7 +213,7 @@ async def list_available_expansions(
     is no local popularity signal to sort on. Names break ties, which also makes
     a failed stats lookup degrade cleanly to plain alphabetical order.
     """
-    base = _load_base_game(base_id)
+    base = await asyncio.to_thread(_load_base_game, base_id)
     base_bgg_id = base.get("bgg_id")
     if not base_bgg_id:
         return []
@@ -228,11 +241,11 @@ async def list_available_expansions(
         return []
 
     sb = get_supabase()
-    existing = (
+    existing = await asyncio.to_thread(
         sb.table("boardgamebuddy_games")
         .select("bgg_id")
         .in_("bgg_id", list(candidates))
-        .execute()
+        .execute
     )
     already_imported = {r["bgg_id"] for r in (existing.data or [])}
 
@@ -262,35 +275,8 @@ async def list_available_expansions(
     return results
 
 
-@router.post(
-    "/games/{base_id}/expansions/import/{bgg_id}",
-    response_model=ExpansionListItem,
-    status_code=201,
-    summary="Import a BGG expansion and link it to this base game",
-)
-async def import_expansion(
-    base_id: str = Path(..., description="Base game UUID"),
-    bgg_id: int = Path(..., description="BoardGameGeek ID of the expansion to import"),
-) -> ExpansionListItem:
-    """Pull one expansion into the catalog and pin it to this base game.
-
-    Idempotent via `import_game_from_bgg`. The import derives `is_expansion` /
-    `base_game_bgg_id` from the expansion's own BGG record, which keeps only
-    the *first* inbound link — so an expansion that extends several base games
-    can land pointing at a different one and never surface here. This re-pins
-    it to the base game the caller imported it from.
-    """
-    base = _load_base_game(base_id)
-    base_bgg_id = base.get("bgg_id")
-    if not base_bgg_id:
-        raise HTTPException(
-            status_code=400,
-            detail="This game has no BoardGameGeek ID, so its expansions can't be looked up.",
-        )
-
-    sb = get_supabase()
-    row = await import_game_from_bgg(sb, bgg_id)
-
+def _import_expansion_after_sync(sb: Client, row: dict, base_bgg_id: int) -> ExpansionListItem:
+    """Re-pin an imported row to this base game and fan its metadata out."""
     if not row.get("is_expansion") or row.get("base_game_bgg_id") != base_bgg_id:
         patch: dict = {"is_expansion": True, "base_game_bgg_id": base_bgg_id}
         if not row.get("expansion_color"):
@@ -322,28 +308,39 @@ async def import_expansion(
     )
 
 
-@router.get(
-    "/collection/expansion-catalog",
-    response_model=ExpansionCatalogResponse,
-    status_code=200,
-    summary="Every catalog expansion for the base games a user owns",
+@router.post(
+    "/games/{base_id}/expansions/import/{bgg_id}",
+    response_model=ExpansionListItem,
+    status_code=201,
+    summary="Import a BGG expansion and link it to this base game",
 )
-async def collection_expansion_catalog(
-    user_id: Optional[str] = Query(
-        None, description="Target user (profiles are public); defaults to the viewer."
-    ),
-    user: CurrentUser = Depends(get_current_user),
-) -> ExpansionCatalogResponse:
-    """List every expansion BgB has for every base game on this user's owned shelf.
+async def import_expansion(
+    base_id: str = Path(..., description="Base game UUID"),
+    bgg_id: int = Path(..., description="BoardGameGeek ID of the expansion to import"),
+    _user: CurrentUser = Depends(get_current_user),
+) -> ExpansionListItem:
+    """Pull one expansion into the catalog and pin it to this base game.
 
-    Backs the Expansions tree's "show all" toggle, which greys out the ones the
-    user doesn't own yet. Two bounded queries rather than one
-    /games/{id}/expansions call per base game — a 40-game shelf would otherwise
-    be 40 requests to paint one screen.
+    Idempotent via `import_game_from_bgg`. The import derives `is_expansion` /
+    `base_game_bgg_id` from the expansion's own BGG record, which keeps only
+    the *first* inbound link — so an expansion that extends several base games
+    can land pointing at a different one and never surface here. This re-pins
+    it to the base game the caller imported it from.
     """
-    sb = get_supabase()
-    target = user_id or user.user_id
+    base = await asyncio.to_thread(_load_base_game, base_id)
+    base_bgg_id = base.get("bgg_id")
+    if not base_bgg_id:
+        raise HTTPException(
+            status_code=400,
+            detail="This game has no BoardGameGeek ID, so its expansions can't be looked up.",
+        )
 
+    sb = get_supabase()
+    row = await import_game_from_bgg(sb, bgg_id)
+    return await asyncio.to_thread(_import_expansion_after_sync, sb, row, base_bgg_id)
+
+
+def _collection_expansion_catalog_sync(sb: Client, target: str) -> ExpansionCatalogResponse:
     owned = (
         sb.table("boardgamebuddy_collections")
         .select("game_bgg_id")
@@ -388,21 +385,37 @@ async def collection_expansion_catalog(
     ])
 
 
-@router.post(
-    "/games/{base_id}/expansions/{expansion_id}/toggle",
-    response_model=MessageResponse,
+@router.get(
+    "/collection/expansion-catalog",
+    response_model=ExpansionCatalogResponse,
     status_code=200,
-    summary="Enable or disable an expansion for the current user",
+    summary="Every catalog expansion for the base games a user owns",
 )
-async def toggle_expansion(
-    body: ExpansionToggleRequest,
-    base_id: str = Path(..., description="Base game UUID"),
-    expansion_id: str = Path(..., description="Expansion game UUID"),
+async def collection_expansion_catalog(
+    user_id: Optional[str] = Query(
+        None, description="Target user (profiles are public); defaults to the viewer."
+    ),
     user: CurrentUser = Depends(get_current_user),
-) -> MessageResponse:
-    """Per-user enable/disable. Insert or delete one row in boardgamebuddy_user_expansions."""
-    sb = get_supabase()
+) -> ExpansionCatalogResponse:
+    """List every expansion BgB has for every base game on this user's owned shelf.
 
+    Backs the Expansions tree's "show all" toggle, which greys out the ones the
+    user doesn't own yet. Two bounded queries rather than one
+    /games/{id}/expansions call per base game — a 40-game shelf would otherwise
+    be 40 requests to paint one screen.
+    """
+    sb = get_supabase()
+    target = user_id or user.user_id
+    return await asyncio.to_thread(_collection_expansion_catalog_sync, sb, target)
+
+
+def _toggle_expansion_sync(
+    sb: Client,
+    base_id: str,
+    expansion_id: str,
+    user_id: str,
+    body: ExpansionToggleRequest,
+) -> MessageResponse:
     # Confirm the expansion exists and is genuinely linked to this base.
     base = (
         sb.table("boardgamebuddy_games")
@@ -435,20 +448,39 @@ async def toggle_expansion(
         existing = (
             sb.table("boardgamebuddy_user_expansions")
             .select("user_id")
-            .eq("user_id", user.user_id)
+            .eq("user_id", user_id)
             .eq("expansion_game_id", expansion_id)
             .execute()
         )
         if not existing.data:
             sb.table("boardgamebuddy_user_expansions").insert({
-                "user_id": user.user_id,
+                "user_id": user_id,
                 "expansion_game_id": expansion_id,
             }).execute()
         return MessageResponse(message="Expansion enabled")
 
     sb.table("boardgamebuddy_user_expansions").delete().eq(
-        "user_id", user.user_id
+        "user_id", user_id
     ).eq("expansion_game_id", expansion_id).execute()
     return MessageResponse(message="Expansion disabled")
+
+
+@router.post(
+    "/games/{base_id}/expansions/{expansion_id}/toggle",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Enable or disable an expansion for the current user",
+)
+async def toggle_expansion(
+    body: ExpansionToggleRequest,
+    base_id: str = Path(..., description="Base game UUID"),
+    expansion_id: str = Path(..., description="Expansion game UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Per-user enable/disable. Insert or delete one row in boardgamebuddy_user_expansions."""
+    sb = get_supabase()
+    return await asyncio.to_thread(
+        _toggle_expansion_sync, sb, base_id, expansion_id, user.user_id, body
+    )
 
 

@@ -91,7 +91,7 @@
       // it always did. A list of Accept and Remove-me buttons is not a place to
       // paint something old.
       const warm = window.NotificationFeed.peekConfirmed();
-      if (warm) this._takePage(warm, { initial: true });
+      if (warm) this._takePage(warm);
       this.render();
 
       if (warm) {
@@ -135,7 +135,7 @@
       try {
         const data = await window.NotificationFeed.list({ limit: PAGE });
         if (seq !== this._seq) return;          // a newer load owns the screen
-        this._takePage(data, { initial: true });
+        this._takePage(data);
       } catch (e) {
         if (seq !== this._seq) return;
         // Its own branch, not an empty state: "nothing has happened" next to a
@@ -182,15 +182,14 @@
      * _firstPageLen drifts out of step with _items.
      *
      * @param {Object} data
-     * @param {{initial?: boolean}} [opts]
      */
-    _takePage(data, opts) {
+    _takePage(data) {
       this._items = data.items || [];
       this._firstPageLen = this._items.length;
       this._takeCursor(data);
       this._loaded = true;
+      this._error = null;
       window.NotificationFeed.setUnread(data.unread || 0);
-      if (opts && opts.initial) this._error = null;
     }
 
     /**

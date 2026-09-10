@@ -31,13 +31,8 @@
       // must not be left unsure whether it happened.
       this._deleting = false;
 
-      // The comparison, both syncs and everything they narrate live in
-      // domain/bgg-sync-flow.js now — they outlive this screen, which is what
-      // lets a sync keep running once the user closes the flow. This card
-      // reads the flow's snapshot and shows one row (see _renderBggSyncStrip).
-
-      // True while a manual outbox flush is in flight — drives the Upload now
-      // button's disabled/"Uploading…" state.
+      // The BGG comparison and syncs live in domain/bgg-sync-flow.js: they
+      // outlive this screen, so a sync keeps running once the flow is closed.
 
       // Past imports (migration 007). null = not loaded yet, so the section is
       // absent rather than flashing an empty card on the first paint.
@@ -59,15 +54,16 @@
       // A background flush (boot, `online`, tab focus) can drain the queue
       // while this screen is open; connectivity returning also swaps the
       // section's copy and reveals the Upload now button.
-      this.listen("outboxCount", () => this.render());
+      this.listen("outboxCount", () => this._patchHost("set-outbox-host", this._renderPendingUploadsSection()));
       this.listen("offline", () => this.render());
       // Auto mode can flip while this screen is open (the OS appearance changed
       // in Settings, or the sunset switch landed) — the Appearance card's
       // "currently light/dark" subtext has to follow. See domain/theme.js.
       this.listen("theme", () => this.render());
       // The BGG flow's progress strip. The flow owns its own polling and
-      // outlives this view, so all this screen does is repaint on its ticks.
-      this.listen("bggSync", () => this.render());
+      // outlives this view; its ticks arrive every second or two for the
+      // length of a sync, so only that card repaints on them.
+      this.listen("bggSync", () => this._patchHost("set-bgg-host", this._renderBggCard()));
       // Its poll skips ticks while the tab is hidden; fire one catch-up when
       // it comes back. Auto-removed on unmount via listenDom.
       this.listenDom("visibilitychange", () => {
@@ -121,9 +117,7 @@
         this.container.innerHTML = `<div class="p-6 text-center">Not signed in.</div>`;
         return;
       }
-      const active = document.activeElement;
-      const activeId = active && active.id;
-      const caret = active && active.selectionStart;
+      const focus = captureFocus();
 
       this.container.innerHTML = `
         ${this._renderHead()}
@@ -140,11 +134,11 @@
         <div class="set-card-label">Notifications</div>
         ${this._renderNotificationsCard()}
         <div class="set-card-label">Connections</div>
-        ${this._renderBggCard()}
+        <div id="set-bgg-host">${this._renderBggCard()}</div>
         <div class="set-card-label">Import</div>
         ${this._renderImportCard()}
         ${this._renderPastImportsSection()}
-        ${this._renderPendingUploadsSection()}
+        <div id="set-outbox-host">${this._renderPendingUploadsSection()}</div>
         <div class="set-card-label">Data management</div>
         ${this._renderExportCard()}
         ${this._renderCacheCard()}
@@ -154,15 +148,15 @@
       `;
       this.refreshIcons();
 
-      if (activeId) {
-        const el = document.getElementById(activeId);
-        if (el && el.focus) {
-          el.focus();
-          if (caret != null && el.setSelectionRange) {
-            try { el.setSelectionRange(caret, caret); } catch (_) {}
-          }
-        }
-      }
+      restoreFocus(focus);
+    }
+
+    /** Repaint one card's host, or the screen when the host isn't up yet. */
+    _patchHost(id, html) {
+      const host = this.container.querySelector("#" + id);
+      if (!host) { this.render(); return; }
+      host.innerHTML = html;
+      this.refreshIcons(host);
     }
 
     // No close ×, same as the notifications screen. Settings is reachable from
@@ -210,7 +204,6 @@
       `;
     }
 
-    // ── Admin tools card ──────────────────────────────────────────────────────
     // ── Appearance ────────────────────────────────────────────────────────────
     // A three-way segmented control rather than a sun/moon switch: "Auto" is a
     // real state (follow the OS) and a two-position toggle can't express it.
@@ -1181,7 +1174,12 @@
     }
 
     async _unlinkBgg() {
-      if (!confirm("Unlink your BoardGameGeek account? Already-imported games stay in your collection.")) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Unlink your BoardGameGeek account?",
+        body: "Already-imported games stay in your collection.",
+        confirmLabel: "Unlink", cancelLabel: "Keep it", destructive: true,
+      });
+      if (!ok) return;
       try { await window.Bgg.unlink(); } catch (_) {}
       this._bggSyncResult = null;
       await this._loadBggStatus();

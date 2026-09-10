@@ -5,12 +5,17 @@ chapters one at a time. Two ways to add: create a new chapter (type +
 title + markdown), or browse the pool of existing chapters for that
 game and add the ones they want. No curated defaults, no review queue
 — moderation is reactive via per-chapter reports.
+
+Every handler runs its Supabase round trips through `asyncio.to_thread`; the
+`_<handler>_sync` helper directly above a route is that blocking half.
 """
 
+import asyncio
 import logging
 from typing import Any, Optional
 
 from fastapi import Depends, Header, HTTPException, Path, Query, Response
+from supabase import Client
 
 from db import get_supabase
 from gemini import GeminiError
@@ -38,6 +43,7 @@ from .models import (
     MyGuideChapterResponse,
 )
 from .services import chapter_ai, chapter_grid
+from .services._helpers import parse_csv_param
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +54,6 @@ _CHAPTER_SELECT = (
     " boardgamebuddy_chapter_types(label, icon, display_order),"
     " boardgamebuddy_profiles(display_name)"
 )
-
-
-def _parse_expansion_ids(raw: Optional[str]) -> list[str]:
-    """Parse comma-separated ?expansion_ids=a,b,c into a list (empty if blank)."""
-    if not raw:
-        return []
-    return [s for s in (p.strip() for p in raw.split(",")) if s]
 
 
 def _build_source_map(sb, game_ids: list[str]) -> dict[str, dict[str, Any]]:
@@ -177,13 +176,84 @@ def _chapter_type_label(sb, chapter_type: str) -> str:
 async def list_chapter_types() -> list[ChapterTypeResponse]:
     """Return the six fixed chapter-type lookup rows."""
     sb = get_supabase()
-    result = (
+    result = await asyncio.to_thread(
         sb.table("boardgamebuddy_chapter_types")
         .select("id, label, icon, display_order")
         .order("display_order")
-        .execute()
+        .execute
     )
     return [ChapterTypeResponse(**r) for r in (result.data or [])]
+
+
+def _browse_chapter_pool_sync(
+    sb: Client,
+    game_id: str,
+    viewer_id: Optional[str],
+    *,
+    q: Optional[str],
+    chapter_type: Optional[str],
+    layout: Optional[ChapterLayout],
+    expansion_ids: Optional[str],
+) -> list[ChapterPoolItem]:
+    exp_ids = parse_csv_param(expansion_ids)
+    all_game_ids = [game_id, *exp_ids]
+
+    pool_q = sb.table("boardgamebuddy_guide_chapters").select(_CHAPTER_SELECT)
+    pool_q = pool_q.in_("game_id", all_game_ids) if exp_ids else pool_q.eq("game_id", game_id)
+    if chapter_type:
+        pool_q = pool_q.eq("chapter_type", chapter_type)
+    if layout:
+        pool_q = pool_q.eq("layout", str(layout))
+    if q:
+        # PostgREST's `or` filter combines two ILIKE matches into one query.
+        needle = f"%{q}%"
+        pool_q = pool_q.or_(f"title.ilike.{needle},content.ilike.{needle}")
+    pool_rows = pool_q.limit(1000).execute().data or []
+
+    if not pool_rows:
+        return []
+
+    chapter_ids = [r["id"] for r in pool_rows]
+    source_map = _build_source_map(sb, all_game_ids) if exp_ids else {}
+
+    # Popularity: count user_chapters rows per chapter in one round trip.
+    # Bounded at 1000 adopter rows until the tally moves to an RPC GROUP BY.
+    popularity: dict[str, int] = {cid: 0 for cid in chapter_ids}
+    pop_rows = (
+        sb.table("boardgamebuddy_user_chapters")
+        .select("chapter_id")
+        .in_("chapter_id", chapter_ids)
+        .limit(1000)
+        .execute()
+    ).data or []
+    for r in pop_rows:
+        popularity[r["chapter_id"]] = popularity.get(r["chapter_id"], 0) + 1
+
+    in_my_guide: set[str] = set()
+    if viewer_id is not None:
+        mine = (
+            sb.table("boardgamebuddy_user_chapters")
+            .select("chapter_id")
+            .eq("user_id", viewer_id)
+            .in_("chapter_id", chapter_ids)
+            .execute()
+        ).data or []
+        in_my_guide = {r["chapter_id"] for r in mine}
+
+    # Two-pass stable sort: secondary key (created_at desc) first, then
+    # primary (popularity desc). Python's sort is stable, so popularity
+    # ties resolve by created_at desc.
+    pool_rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+    pool_rows.sort(key=lambda r: popularity.get(r["id"], 0), reverse=True)
+
+    return [
+        ChapterPoolItem(
+            **_chapter_row_to_response(row, source_map if exp_ids else None).model_dump(),
+            popularity=popularity.get(row["id"], 0),
+            in_my_guide=row["id"] in in_my_guide,
+        )
+        for row in pool_rows
+    ]
 
 
 @router.get(
@@ -223,80 +293,21 @@ async def browse_chapter_pool(
     """
     sb = get_supabase()
     su_user = await maybe_supabase_user(authorization)
-
-    exp_ids = _parse_expansion_ids(expansion_ids)
-    all_game_ids = [game_id, *exp_ids]
-
-    pool_q = sb.table("boardgamebuddy_guide_chapters").select(_CHAPTER_SELECT)
-    pool_q = pool_q.in_("game_id", all_game_ids) if exp_ids else pool_q.eq("game_id", game_id)
-    if chapter_type:
-        pool_q = pool_q.eq("chapter_type", chapter_type)
-    if layout:
-        pool_q = pool_q.eq("layout", str(layout))
-    if q:
-        # PostgREST's `or` filter combines two ILIKE matches into one query.
-        needle = f"%{q}%"
-        pool_q = pool_q.or_(f"title.ilike.{needle},content.ilike.{needle}")
-    pool_rows = pool_q.execute().data or []
-
-    if not pool_rows:
-        return []
-
-    chapter_ids = [r["id"] for r in pool_rows]
-    source_map = _build_source_map(sb, all_game_ids) if exp_ids else {}
-
-    # Popularity: count user_chapters rows per chapter in one round trip.
-    popularity: dict[str, int] = {cid: 0 for cid in chapter_ids}
-    pop_rows = (
-        sb.table("boardgamebuddy_user_chapters")
-        .select("chapter_id")
-        .in_("chapter_id", chapter_ids)
-        .execute()
-    ).data or []
-    for r in pop_rows:
-        popularity[r["chapter_id"]] = popularity.get(r["chapter_id"], 0) + 1
-
-    in_my_guide: set[str] = set()
-    if su_user is not None:
-        mine = (
-            sb.table("boardgamebuddy_user_chapters")
-            .select("chapter_id")
-            .eq("user_id", su_user.sub)
-            .in_("chapter_id", chapter_ids)
-            .execute()
-        ).data or []
-        in_my_guide = {r["chapter_id"] for r in mine}
-
-    # Two-pass stable sort: secondary key (created_at desc) first, then
-    # primary (popularity desc). Python's sort is stable, so popularity
-    # ties resolve by created_at desc.
-    pool_rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
-    pool_rows.sort(key=lambda r: popularity.get(r["id"], 0), reverse=True)
-
-    return [
-        ChapterPoolItem(
-            **_chapter_row_to_response(row, source_map if exp_ids else None).model_dump(),
-            popularity=popularity.get(row["id"], 0),
-            in_my_guide=row["id"] in in_my_guide,
-        )
-        for row in pool_rows
-    ]
+    return await asyncio.to_thread(
+        _browse_chapter_pool_sync,
+        sb,
+        game_id,
+        su_user.sub if su_user is not None else None,
+        q=q,
+        chapter_type=chapter_type,
+        layout=layout,
+        expansion_ids=expansion_ids,
+    )
 
 
-@router.post(
-    "/games/{game_id}/chapters",
-    response_model=MyGuideChapterResponse,
-    status_code=201,
-    summary="Create a chapter and add it to my guide",
-)
-async def create_chapter(
-    body: ChapterCreate,
-    game_id: str = Path(..., description="Game UUID"),
-    user: CurrentUser = Depends(get_current_user),
+def _create_chapter_sync(
+    sb: Client, game_id: str, body: ChapterCreate, user_id: str
 ) -> MyGuideChapterResponse:
-    """Create a new chapter attached to a game and immediately add it to the creator's guide."""
-    sb = get_supabase()
-
     game = (
         sb.table("boardgamebuddy_games")
         .select("id, name")
@@ -333,17 +344,19 @@ async def create_chapter(
             "content": content,
             "layout": str(body.layout),
             "grid": body.grid.model_dump(mode="json") if body.grid else None,
-            "created_by": user.user_id,
+            "created_by": user_id,
         })
         .execute()
     )
+    if not insert.data:
+        raise HTTPException(status_code=500, detail="Chapter insert returned no row")
     new_id = insert.data[0]["id"]
 
     # Auto-add to creator's guide.
     sel = (
         sb.table("boardgamebuddy_user_chapters")
         .insert({
-            "user_id": user.user_id,
+            "user_id": user_id,
             "game_id": game_id,
             "chapter_id": new_id,
         })
@@ -362,6 +375,40 @@ async def create_chapter(
         **base.model_dump(),
         added_at=added_at or base.updated_at,
     )
+
+
+@router.post(
+    "/games/{game_id}/chapters",
+    response_model=MyGuideChapterResponse,
+    status_code=201,
+    summary="Create a chapter and add it to my guide",
+)
+async def create_chapter(
+    body: ChapterCreate,
+    game_id: str = Path(..., description="Game UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MyGuideChapterResponse:
+    """Create a new chapter attached to a game and immediately add it to the creator's guide."""
+    sb = get_supabase()
+    return await asyncio.to_thread(_create_chapter_sync, sb, game_id, body, user.user_id)
+
+
+def _generate_chapter_before_sync(
+    sb: Client, game_id: str, chapter_type: str
+) -> tuple[dict[str, Any], str]:
+    """The game row and the chapter type's label — the two lookups the prompt needs."""
+    game = (
+        sb.table("boardgamebuddy_games")
+        .select("id, name, year_published")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not game.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    row = game.data[0]
+
+    label = _chapter_type_label(sb, chapter_type)
+    return row, label
 
 
 @router.post(
@@ -387,18 +434,9 @@ async def generate_chapter(
         )
 
     sb = get_supabase()
-
-    game = (
-        sb.table("boardgamebuddy_games")
-        .select("id, name, year_published")
-        .eq("id", game_id)
-        .execute()
+    row, label = await asyncio.to_thread(
+        _generate_chapter_before_sync, sb, game_id, body.chapter_type
     )
-    if not game.data:
-        raise HTTPException(status_code=404, detail="Game not found")
-    row = game.data[0]
-
-    label = _chapter_type_label(sb, body.chapter_type)
 
     try:
         title, content = await chapter_ai.generate_chapter(
@@ -424,20 +462,9 @@ async def generate_chapter(
     )
 
 
-@router.patch(
-    "/chapters/{chapter_id}",
-    response_model=ChapterResponse,
-    status_code=200,
-    summary="Edit a chapter",
-)
-async def update_chapter(
-    body: ChapterUpdate,
-    chapter_id: str = Path(..., description="Chapter UUID"),
-    user: CurrentUser = Depends(get_current_user),
+def _update_chapter_sync(
+    sb: Client, chapter_id: str, body: ChapterUpdate, user_id: str
 ) -> ChapterResponse:
-    """Edit an existing chapter. Creator-only (admins can edit by deleting + recreating)."""
-    sb = get_supabase()
-
     existing = (
         sb.table("boardgamebuddy_guide_chapters")
         .select("id, game_id, created_by, layout, chapter_type")
@@ -447,7 +474,7 @@ async def update_chapter(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Chapter not found")
     row = existing.data[0]
-    if row["created_by"] != user.user_id:
+    if row["created_by"] != user_id:
         raise HTTPException(status_code=403, detail="You can only edit chapters you created")
 
     # Check the pairing the edit would LEAVE BEHIND, not just the fields it
@@ -501,22 +528,28 @@ async def update_chapter(
         .eq("id", chapter_id)
         .execute()
     )
+    if not fetched.data:
+        raise HTTPException(status_code=404, detail="Chapter not found")
     return _chapter_row_to_response(fetched.data[0])
 
 
-@router.delete(
+@router.patch(
     "/chapters/{chapter_id}",
-    response_model=MessageResponse,
+    response_model=ChapterResponse,
     status_code=200,
-    summary="Delete a chapter from the pool",
+    summary="Edit a chapter",
 )
-async def delete_chapter(
+async def update_chapter(
+    body: ChapterUpdate,
     chapter_id: str = Path(..., description="Chapter UUID"),
     user: CurrentUser = Depends(get_current_user),
-) -> MessageResponse:
-    """Delete a chapter from the pool. Creator or admin only. Cascades to user_chapters + reports."""
+) -> ChapterResponse:
+    """Edit an existing chapter. Creator-only (admins can edit by deleting + recreating)."""
     sb = get_supabase()
+    return await asyncio.to_thread(_update_chapter_sync, sb, chapter_id, body, user.user_id)
 
+
+def _delete_chapter_sync(sb: Client, chapter_id: str, user: CurrentUser) -> MessageResponse:
     existing = (
         sb.table("boardgamebuddy_guide_chapters")
         .select("id, created_by")
@@ -532,20 +565,24 @@ async def delete_chapter(
     return MessageResponse(message="Chapter deleted")
 
 
-@router.post(
-    "/chapters/{chapter_id}/report",
+@router.delete(
+    "/chapters/{chapter_id}",
     response_model=MessageResponse,
-    status_code=201,
-    summary="Report a chapter for admin review",
+    status_code=200,
+    summary="Delete a chapter from the pool",
 )
-async def report_chapter(
-    body: ChapterReportCreate,
+async def delete_chapter(
     chapter_id: str = Path(..., description="Chapter UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
-    """Flag a chapter for admin moderation. Idempotent per (chapter, reporter)."""
+    """Delete a chapter from the pool. Creator or admin only. Cascades to user_chapters + reports."""
     sb = get_supabase()
+    return await asyncio.to_thread(_delete_chapter_sync, sb, chapter_id, user)
 
+
+def _report_chapter_sync(
+    sb: Client, chapter_id: str, body: ChapterReportCreate, user_id: str
+) -> MessageResponse:
     chapter = (
         sb.table("boardgamebuddy_guide_chapters")
         .select("id")
@@ -559,7 +596,7 @@ async def report_chapter(
         sb.table("boardgamebuddy_chapter_reports")
         .select("id, status")
         .eq("chapter_id", chapter_id)
-        .eq("reporter_id", user.user_id)
+        .eq("reporter_id", user_id)
         .execute()
     )
     if existing.data:
@@ -567,41 +604,38 @@ async def report_chapter(
 
     sb.table("boardgamebuddy_chapter_reports").insert({
         "chapter_id": chapter_id,
-        "reporter_id": user.user_id,
+        "reporter_id": user_id,
         "reason": body.reason,
     }).execute()
     return MessageResponse(message="Reported — an admin will review shortly")
 
 
-@router.get(
-    "/games/{game_id}/my-chapters",
-    response_model=list[MyGuideChapterResponse],
-    status_code=200,
-    summary="My reference guide for a game",
+@router.post(
+    "/chapters/{chapter_id}/report",
+    response_model=MessageResponse,
+    status_code=201,
+    summary="Report a chapter for admin review",
 )
-async def get_my_chapters(
-    game_id: str = Path(..., description="Game UUID"),
-    expansion_ids: Optional[str] = Query(
-        None,
-        description=(
-            "Comma-separated expansion game UUIDs to also include. When set,"
-            " the response merges the caller's chapters across the base game"
-            " and these expansions, each tagged with source_game_id/source_color."
-        ),
-    ),
+async def report_chapter(
+    body: ChapterReportCreate,
+    chapter_id: str = Path(..., description="Chapter UUID"),
     user: CurrentUser = Depends(get_current_user),
-) -> list[MyGuideChapterResponse]:
-    """Return the chapters the caller has added to their guide for this game
-    (and optionally for the listed expansions, merged into one response)."""
+) -> MessageResponse:
+    """Flag a chapter for admin moderation. Idempotent per (chapter, reporter)."""
     sb = get_supabase()
+    return await asyncio.to_thread(_report_chapter_sync, sb, chapter_id, body, user.user_id)
 
-    exp_ids = _parse_expansion_ids(expansion_ids)
+
+def _get_my_chapters_sync(
+    sb: Client, game_id: str, expansion_ids: Optional[str], user_id: str
+) -> list[MyGuideChapterResponse]:
+    exp_ids = parse_csv_param(expansion_ids)
     all_game_ids = [game_id, *exp_ids]
 
     sel_q = (
         sb.table("boardgamebuddy_user_chapters")
         .select("chapter_id, game_id, created_at")
-        .eq("user_id", user.user_id)
+        .eq("user_id", user_id)
         .order("created_at")
     )
     sel_q = sel_q.in_("game_id", all_game_ids) if exp_ids else sel_q.eq("game_id", game_id)
@@ -636,20 +670,35 @@ async def get_my_chapters(
     return out
 
 
-@router.post(
+@router.get(
     "/games/{game_id}/my-chapters",
-    response_model=MyGuideChapterResponse,
-    status_code=201,
-    summary="Add an existing chapter to my guide",
+    response_model=list[MyGuideChapterResponse],
+    status_code=200,
+    summary="My reference guide for a game",
 )
-async def add_chapter_to_my_guide(
-    body: AddChapterRequest,
+async def get_my_chapters(
     game_id: str = Path(..., description="Game UUID"),
+    expansion_ids: Optional[str] = Query(
+        None,
+        description=(
+            "Comma-separated expansion game UUIDs to also include. When set,"
+            " the response merges the caller's chapters across the base game"
+            " and these expansions, each tagged with source_game_id/source_color."
+        ),
+    ),
     user: CurrentUser = Depends(get_current_user),
-) -> MyGuideChapterResponse:
-    """Add a chapter from the pool to the caller's guide. Idempotent."""
+) -> list[MyGuideChapterResponse]:
+    """Return the chapters the caller has added to their guide for this game
+    (and optionally for the listed expansions, merged into one response)."""
     sb = get_supabase()
+    return await asyncio.to_thread(
+        _get_my_chapters_sync, sb, game_id, expansion_ids, user.user_id
+    )
 
+
+def _add_chapter_to_my_guide_sync(
+    sb: Client, game_id: str, body: AddChapterRequest, user_id: str
+) -> MyGuideChapterResponse:
     chapter = (
         sb.table("boardgamebuddy_guide_chapters")
         .select(_CHAPTER_SELECT)
@@ -663,7 +712,7 @@ async def add_chapter_to_my_guide(
     existing = (
         sb.table("boardgamebuddy_user_chapters")
         .select("created_at")
-        .eq("user_id", user.user_id)
+        .eq("user_id", user_id)
         .eq("chapter_id", body.chapter_id)
         .execute()
     )
@@ -673,7 +722,7 @@ async def add_chapter_to_my_guide(
         ins = (
             sb.table("boardgamebuddy_user_chapters")
             .insert({
-                "user_id": user.user_id,
+                "user_id": user_id,
                 "game_id": game_id,
                 "chapter_id": body.chapter_id,
             })
@@ -685,6 +734,24 @@ async def add_chapter_to_my_guide(
     return MyGuideChapterResponse(
         **base.model_dump(),
         added_at=added_at or base.updated_at,
+    )
+
+
+@router.post(
+    "/games/{game_id}/my-chapters",
+    response_model=MyGuideChapterResponse,
+    status_code=201,
+    summary="Add an existing chapter to my guide",
+)
+async def add_chapter_to_my_guide(
+    body: AddChapterRequest,
+    game_id: str = Path(..., description="Game UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MyGuideChapterResponse:
+    """Add a chapter from the pool to the caller's guide. Idempotent."""
+    sb = get_supabase()
+    return await asyncio.to_thread(
+        _add_chapter_to_my_guide_sync, sb, game_id, body, user.user_id
     )
 
 
@@ -700,13 +767,13 @@ async def remove_chapter_from_my_guide(
 ) -> Response:
     """Drop a chapter from the caller's guide. Does NOT delete the chapter itself. Idempotent."""
     sb = get_supabase()
-    (
+    await asyncio.to_thread(
         sb.table("boardgamebuddy_user_chapters")
         .delete()
         .eq("user_id", user.user_id)
         .eq("game_id", game_id)
         .eq("chapter_id", chapter_id)
-        .execute()
+        .execute
     )
     return Response(status_code=204)
 
@@ -728,7 +795,7 @@ async def list_chapter_reports(
         raise HTTPException(status_code=400, detail="status must be 'open' or 'resolved'")
     sb = get_supabase()
 
-    rows = (
+    rows_q = (
         sb.table("boardgamebuddy_chapter_reports")
         .select(
             "id, chapter_id, reporter_id, reason, status, created_at, resolved_at,"
@@ -743,8 +810,8 @@ async def list_chapter_reports(
         )
         .eq("status", status)
         .order("created_at", desc=False)
-        .execute()
-    ).data or []
+    )
+    rows = (await asyncio.to_thread(rows_q.execute)).data or []
 
     out: list[ChapterReportResponse] = []
     for r in rows:
@@ -777,18 +844,7 @@ async def list_chapter_reports(
     return out
 
 
-@router.post(
-    "/admin/chapter-reports/{report_id}/resolve",
-    response_model=MessageResponse,
-    status_code=200,
-    summary="Resolve a chapter report without deleting the chapter (admin)",
-)
-async def resolve_chapter_report(
-    report_id: str = Path(..., description="Report UUID"),
-    admin: CurrentUser = Depends(get_current_admin),
-) -> MessageResponse:
-    """Admin-only: mark a report as resolved with no further action."""
-    sb = get_supabase()
+def _resolve_chapter_report_sync(sb: Client, report_id: str, admin_id: str) -> MessageResponse:
     existing = (
         sb.table("boardgamebuddy_chapter_reports")
         .select("id, status")
@@ -802,7 +858,24 @@ async def resolve_chapter_report(
 
     sb.table("boardgamebuddy_chapter_reports").update({
         "status": "resolved",
-        "resolved_by": admin.user_id,
+        "resolved_by": admin_id,
         "resolved_at": "now()",
     }).eq("id", report_id).execute()
     return MessageResponse(message="Report resolved")
+
+
+@router.post(
+    "/admin/chapter-reports/{report_id}/resolve",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Resolve a chapter report without deleting the chapter (admin)",
+)
+async def resolve_chapter_report(
+    report_id: str = Path(..., description="Report UUID"),
+    admin: CurrentUser = Depends(get_current_admin),
+) -> MessageResponse:
+    """Admin-only: mark a report as resolved with no further action."""
+    sb = get_supabase()
+    return await asyncio.to_thread(
+        _resolve_chapter_report_sync, sb, report_id, admin.user_id
+    )

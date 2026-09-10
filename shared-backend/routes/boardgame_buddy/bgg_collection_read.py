@@ -5,28 +5,20 @@ consumer. The import (bgg_link_routes) and the BgB→BGG comparison
 (bgg_push_routes) both need the same eight throttled requests; only what they
 keep from each `<item>` differs.
 
-Two layers, and the lower one is the only place BGG's XML is actually parsed:
-
-  * `_parse_collection_items` / `_fetch_collection_items` — FULL fidelity.
-    Every `<status>` attribute verbatim, plus `collid` and `<name>`, plus items
-    whose derived status is None. The push needs all of it: the raw flags to
-    echo back untouched, the collid to edit the right row rather than create a
-    second one, and the name to label a game that has no local row at all.
-  * `_parse_collection` / `_fetch_collection_batched` — the historical
-    (bgg_id, status, private) contract, now two-line adapters over the above.
-    Their signatures and return shapes are unchanged, so `_run_sync` and
-    `_merge_collection_row` are untouched by the split.
-
-The adapters exist rather than a widened tuple because five call sites unpack
-that tuple positionally, and every one of them would fail at RUNTIME inside a
-BackgroundTask rather than at import.
+`_parse_collection_items` / `_fetch_collection_items` are the only place BGG's
+XML is actually parsed, at FULL fidelity: every `<status>` attribute verbatim,
+plus `collid` and `<name>`, plus items whose derived status is None. The push
+needs all of it — the raw flags to echo back untouched, the collid to edit the
+right row rather than create a second one, and the name to label a game that
+has no local row at all. `_fetch_collection_batched` is the import's
+(bgg_id, status, private) adapter over the same read.
 """
 
 import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+
 
 from .bgg_client import BggWarmUpError, fetch_bgg_as_user, parse_bgg_xml
 from .constants import BggCheckPhase
@@ -70,7 +62,7 @@ _SUBTYPE_LABEL = {"boardgame": "Board games", "boardgameexpansion": "Expansions"
 BGG_THROTTLE_SECONDS = float(os.getenv("BGG_THROTTLE_SECONDS", "1.5"))
 
 
-def _derive_collection_status(item) -> Optional[str]:
+def _derive_collection_status(item) -> str | None:
     """Map a BGG <item><status .../></item> to our collection status, or None."""
     status_el = item.find("status")
     if status_el is None:
@@ -88,7 +80,7 @@ def _derive_collection_status(item) -> Optional[str]:
     return None
 
 
-def _parse_private_info(item) -> Optional[dict]:
+def _parse_private_info(item) -> dict | None:
     """Extract <privateinfo .../> attributes (only present with showprivate=1).
 
     Returns None when the element is absent — callers should treat that as
@@ -98,7 +90,7 @@ def _parse_private_info(item) -> Optional[dict]:
     if pi is None:
         return None
 
-    def _num(name: str) -> Optional[float]:
+    def _num(name: str) -> float | None:
         val = pi.get(name)
         if val in (None, "", "0", "0.0", "0.00"):
             return None
@@ -107,7 +99,7 @@ def _parse_private_info(item) -> Optional[dict]:
         except ValueError:
             return None
 
-    def _int(name: str) -> Optional[int]:
+    def _int(name: str) -> int | None:
         val = pi.get(name)
         if val in (None, "", "0"):
             return None
@@ -148,26 +140,6 @@ def _status_priority(status: str) -> int:
     return {"owned": 3, "prev_owned": 2, "wishlist": 1}.get(status, 0)
 
 
-def _merge_collection_row(
-    existing: tuple[int, str, Optional[dict]],
-    incoming: tuple[int, str, Optional[dict]],
-) -> tuple[int, str, Optional[dict]]:
-    bgg_id, ex_status, ex_private = existing
-    _, in_status, in_private = incoming
-    if _status_priority(in_status) > _status_priority(ex_status):
-        ex_status = in_status
-    if in_private is not None:
-        if ex_private is None:
-            ex_private = in_private
-        else:
-            merged = dict(ex_private)
-            for key, value in in_private.items():
-                if value is not None:
-                    merged[key] = value
-            ex_private = merged
-    return (bgg_id, ex_status, ex_private)
-
-
 @dataclass(frozen=True)
 class BggCollectionItem:
     """One `<item>` from /collection, with nothing thrown away.
@@ -178,18 +150,18 @@ class BggCollectionItem:
     collection row exists before it decides whether to create one.
     """
     bgg_id: int
-    collid: Optional[int]
-    name: Optional[str]
-    subtype: Optional[str]
-    status: Optional[str]
+    collid: int | None
+    name: str | None
+    subtype: str | None
+    status: str | None
     # dict(status_el.attrib), verbatim. Not an enumerated set of keys: a flag
     # BGG adds next year has to survive the round trip rather than be silently
     # dropped by a push that echoes only what we knew about today.
     raw_status: dict = field(default_factory=dict)
-    private: Optional[dict] = None
+    private: dict | None = None
 
 
-def _int_or_none(raw: Optional[str]) -> Optional[int]:
+def _int_or_none(raw: str | None) -> int | None:
     try:
         return int(raw) if raw else None
     except (TypeError, ValueError):
@@ -223,7 +195,7 @@ def _merge_collection_item(
 ) -> BggCollectionItem:
     """Merge two sightings of the same game across the (subtype, flag) sweep.
 
-    Mirrors _merge_collection_row's rules — highest-priority status wins,
+    Highest-priority status wins (owned > prev_owned > wishlist),
     non-None private wins — and adds: prefer whichever sighting carried a
     collid, and take raw_status from that same one. The `<status>` element
     should be identical across batches since it is the same collection row, but
@@ -246,7 +218,7 @@ def _merge_collection_item(
 
 async def _fetch_collection_items(
     user_id: str, username: str,
-    *, progress: Optional[BggCheckProgress] = None,
+    *, progress: BggCheckProgress | None = None,
 ) -> tuple[list[BggCollectionItem], bool]:
     """Sweep the linked user's collection at full fidelity.
 
@@ -319,27 +291,9 @@ async def _fetch_collection_items(
 # _run_sync and the bulk writers in bgg_link_routes are untouched.
 
 
-def _parse_collection(body: str, *, username: str) -> list[tuple[int, str, Optional[dict]]]:
-    """Parse a BGG /collection?showprivate=1 response.
-
-    Returns a list of (bgg_id, status, private_fields_or_None). The third
-    element is None for items that don't carry a <privateinfo> block (the
-    response was unauthenticated or the user has no private data on them).
-
-    Items carrying none of the flags BgB tracks are dropped here — the import
-    has nothing to do with them. The push keeps them; see
-    _parse_collection_items.
-    """
-    return [
-        (it.bgg_id, it.status, it.private)
-        for it in _parse_collection_items(body, username=username)
-        if it.status is not None
-    ]
-
-
 def collection_rows_from_items(
     items: list[BggCollectionItem],
-) -> list[tuple[int, str, Optional[dict]]]:
+) -> list[tuple[int, str, dict | None]]:
     """Reduce full-fidelity items to the (bgg_id, status, private) import rows.
 
     Named and exported because the import no longer always does its own sweep:
@@ -356,7 +310,7 @@ def collection_rows_from_items(
 
 async def _fetch_collection_batched(
     user_id: str, username: str,
-) -> tuple[list[tuple[int, str, Optional[dict]]], bool]:
+) -> tuple[list[tuple[int, str, dict | None]], bool]:
     """Pull the linked user's collection as N small (subtype, status) requests.
 
     The import's view of the sweep: same eight requests, same warm-up handling,

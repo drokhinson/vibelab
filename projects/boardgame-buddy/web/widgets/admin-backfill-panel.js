@@ -25,7 +25,7 @@
      * @param {string}   opts.emptyText    shown when nothing is missing
      * @param {string}   opts.bulkLabel    label for the bulk button
      * @param {string}   opts.busyLabel    label while a refresh is running
-     * @param {(n:number)=>string} opts.bulkConfirm   window.confirm copy
+     * @param {(n:number)=>string} opts.bulkConfirm   the confirm dialog's title
      * @param {(g:Object)=>string} opts.rowStatus     per-row "what's missing" label
      * @param {()=>Promise<Object[]>}  opts.list
      * @param {(id:string)=>Promise<any>} opts.refreshOne
@@ -78,7 +78,10 @@
 
     async refreshAll() {
       const count = this._rows.length;
-      if (!window.confirm(this.opts.bulkConfirm(count))) return;
+      const ok = await window.PolaroidPopup.confirm({
+        title: this.opts.bulkConfirm(count), confirmLabel: "Refresh all", cancelLabel: "Cancel",
+      });
+      if (!ok) return;
       this._bulk = true;
       this._bulkNote = "";
       this.opts.render();
@@ -158,13 +161,13 @@
           <div class="admin-reports__meta">
             <span class="admin-reports__game">${escapeHtml(g.name)}</span>
             ${g.bgg_id
-              ? `<span class="admin-reports__type">BGG ${g.bgg_id}</span>`
-              : `<span class="admin-reports__type">no bgg_id</span>`}
-            ${g.year_published ? `<span class="admin-reports__date">${g.year_published}</span>` : ""}
+              ? `<span>BGG ${g.bgg_id}</span>`
+              : `<span>no bgg_id</span>`}
+            ${g.year_published ? `<span>${g.year_published}</span>` : ""}
           </div>
           <div class="admin-reports__preview">${escapeHtml(this.opts.rowStatus(g))}</div>
           <div class="admin-reports__footer">
-            <span class="admin-reports__reporter">${g.bgg_id ? "" : "No BGG id — refresh disabled."}</span>
+            <span>${g.bgg_id ? "" : "No BGG id — refresh disabled."}</span>
             <div class="admin-reports__actions">
               <button class="btn btn-xs ${disabled ? "btn-ghost" : "btn-primary"}"
                       ${disabled ? "disabled" : ""}

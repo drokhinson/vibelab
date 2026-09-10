@@ -30,6 +30,8 @@
       this._joining = false;
       this._joinCode = "";
       this._pollHandle = null;
+      // Shared by _load and _pollTick: whichever request was sent last wins.
+      this._loadSeq = 0;
       this._onVisibility = () => {
         if (!document.hidden) this._pollTick();
       };
@@ -92,15 +94,20 @@
       this._loading = true;
       this._error = null;
       this.render();
+      const seq = ++this._loadSeq;
       try {
         const resp = await window.PlaySession.listJoinable();
+        if (seq !== this._loadSeq) return;
         this._sessions = (resp && resp.sessions) || [];
       } catch (e) {
+        if (seq !== this._loadSeq) return;
         this._error = e.message || "Failed to load active sessions";
         this._sessions = this._sessions || [];
       } finally {
-        this._loading = false;
-        this.render();
+        if (seq === this._loadSeq) {
+          this._loading = false;
+          this.render();
+        }
       }
     }
 
@@ -117,8 +124,10 @@
       // it throw six times a minute) also keeps BgbNet's failure counter
       // measuring real user-driven requests instead of its own background noise.
       if (window.BgbNet && window.BgbNet.isOffline()) return;
+      const seq = ++this._loadSeq;
       try {
         const resp = await window.PlaySession.listJoinable();
+        if (seq !== this._loadSeq) return;
         const next = (resp && resp.sessions) || [];
         if (this._shouldRerender(next)) {
           this._sessions = next;
@@ -151,11 +160,8 @@
       const el = this._host;
       if (!el) return;
       const sessions = this._sessions || [];
-      // A poll tick can land mid-typing. Nothing above survives innerHTML, so
-      // snapshot the caret and put it back once the new markup is in.
-      const active = document.activeElement;
-      const hadFocus = !!(active && active.id === "join-code-input");
-      const caret = hadFocus ? active.selectionStart : null;
+      // A poll tick can land mid-typing.
+      const focus = captureFocus();
 
       const offline = !!(window.BgbNet && window.BgbNet.isOffline());
 
@@ -211,13 +217,7 @@
       `;
       window.BgbIcons.render(el);
 
-      if (hadFocus) {
-        const input = document.getElementById("join-code-input");
-        if (input) {
-          input.focus();
-          try { input.setSelectionRange(caret, caret); } catch (_) {}
-        }
-      }
+      restoreFocus(focus);
     }
 
     _renderEmpty() {
@@ -252,7 +252,7 @@
               <span class="cascade-join__row-code">${escapeHtml(s.code)}</span>
             </div>
             <div class="cascade-join__row-bottom">
-              <span class="cascade-join__row-game">${escapeHtml(gameName)}</span>
+              <span>${escapeHtml(gameName)}</span>
               <span class="cascade-join__row-count">
                 <i data-icon="users" class="w-3 h-3"></i>
                 ${s.participant_count}

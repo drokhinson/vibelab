@@ -54,12 +54,15 @@
 
   function _drain() {
     _stop();
-    if (_showing || !_queue.length) return;
+    if (_showing) return;
+    // An empty queue clears the wait clock, so the next badge — maybe an hour
+    // from now — starts its own wait rather than inheriting a spent one.
+    if (!_queue.length) { _waitingSince = 0; return; }
 
-    if (_onAchievementsScreen()) { _queue = []; return; }
+    if (_onAchievementsScreen()) { _queue = []; _waitingSince = 0; return; }
 
     if (_screenBusy()) {
-      if (Date.now() - _waitingSince > GIVE_UP_MS) { _queue = []; return; }
+      if (Date.now() - _waitingSince > GIVE_UP_MS) { _queue = []; _waitingSince = 0; return; }
       _timer = setTimeout(_drain, RETRY_MS);
       return;
     }

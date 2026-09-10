@@ -43,7 +43,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Optional
+
 
 import httpx
 from fastapi import HTTPException
@@ -76,7 +76,7 @@ _DROPPED_ATTRS: frozenset[str] = frozenset({"lastmodified"})
 # reads as `wishlist` here. Setting `wishlist=1` on it would be a write caused
 # purely by that lossy import — the comparison treats wanttoplay as already
 # satisfying a BgB wishlist, so such a game never reaches this table at all.
-_TARGET_FLAGS: dict[Optional[str], dict[str, str]] = {
+_TARGET_FLAGS: dict[str | None, dict[str, str]] = {
     "owned":      {"own": "1", "prevowned": "0", "wishlist": "0"},
     "prev_owned": {"own": "0", "prevowned": "1", "wishlist": "0"},
     "wishlist":   {"own": "0", "prevowned": "0", "wishlist": "1"},
@@ -92,8 +92,8 @@ def dry_run_enabled() -> bool:
 def build_status_form(
     *,
     bgg_id: int,
-    collid: Optional[int],
-    target_status: Optional[str],
+    collid: int | None,
+    target_status: str | None,
     raw_status: dict[str, str],
 ) -> dict[str, str]:
     """THE payload shape. If BGG's form changes, this is the only thing to fix.
@@ -191,8 +191,8 @@ async def push_collection_status(
     username: str,
     *,
     bgg_id: int,
-    collid: Optional[int],
-    target_status: Optional[str],
+    collid: int | None,
+    target_status: str | None,
     raw_status: dict[str, str],
 ) -> None:
     """Set one game's BgB-owned status flags on the user's BGG collection.

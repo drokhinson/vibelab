@@ -25,7 +25,14 @@
   class PlaysView extends window.View {
     constructor() {
       super("plays");
+      // Survives _resetState on purpose: a load still in flight from the
+      // previous target must find the counter moved on, not reset to zero.
+      this._loadSeq = 0;
       this._resetState();
+    }
+
+    onUnmount() {
+      clearTimeout(this._searchTimer);
     }
 
     _resetState() {
@@ -36,7 +43,9 @@
       this._loaded = false;
       this._error = null;
       this._query = "";
+      clearTimeout(this._searchTimer);
       this._searchTimer = null;
+      this._loadSeq++;
       // The VIEWER's own game -> status map. Every row's status tag reads it,
       // on this user's plays and on anyone else's — the tag is your
       // relationship to the game, never the log's owner's.
@@ -99,8 +108,13 @@
         // first paint — otherwise an empty hydrate paints the empty state.
         this._loading = true;
         this.render();
-        window.User.fetch(this._targetUserId)
-          .then((p) => { this._targetProfile = p; this.render(); })
+        const target = this._targetUserId;
+        window.User.fetch(target)
+          .then((p) => {
+            if (!this._mounted || this._targetUserId !== target) return;
+            this._targetProfile = p;
+            this.render();
+          })
           .catch(() => {});
         // Their plays and your collection, in parallel: the rows come from
         // them, the status tags on those rows come from you.
@@ -189,9 +203,7 @@
     }
 
     render() {
-      const active = document.activeElement;
-      const activeId = active && active.id;
-      const caret = active && active.selectionStart;
+      const focus = captureFocus();
 
       // Cold load — nothing on screen yet. Show only the header + bgb logo
       // loader instead of flashing the search bar and the "No plays logged
@@ -219,15 +231,7 @@
       `;
       this.refreshIcons();
 
-      if (activeId) {
-        const el = document.getElementById(activeId);
-        if (el && el.focus) {
-          el.focus();
-          if (caret != null && el.setSelectionRange) {
-            try { el.setSelectionRange(caret, caret); } catch (_) {}
-          }
-        }
-      }
+      restoreFocus(focus);
     }
 
     _renderHead() {
@@ -330,7 +334,7 @@
       if (isRun) subParts.push(`<span class="plays-list__run">${n} plays</span>`);
       if (winnerLabel) subParts.push(`<span class="plays-list__winner"><i data-icon="trophy" class="w-3 h-3"></i> ${winnerLabel}</span>`);
       if (playerCount > 0) subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
-      const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
+      const gameNav = escapeAttr(gameDetailJs(p.game_id, p.game_name, { stop: true }));
       // Always the viewer's own relationship to the game, even on someone
       // else's log — that is what the tag's sheet reads and writes. Hidden
       // rather than guessed while the map is still in flight.
@@ -381,31 +385,40 @@
     }
 
     async _load({ reset = false } = {}) {
+      const seq = ++this._loadSeq;
+      // The page only advances once its rows are in — a failed "Load more"
+      // otherwise skipped that page for good on the next tap.
+      const page = reset ? 1 : this._page + 1;
       this._loading = true;
       this._error = null;
       if (reset) { this._page = 1; this._plays = []; }
       this.render();
       try {
         const data = await window.Play.list({
-          page: this._page,
+          page,
           perPage: PER_PAGE,
           search: this._query || null,
           userId: this._isOther() ? this._targetUserId : undefined,
           buddyId: this._buddyId(),
         });
+        if (seq !== this._loadSeq) return;
         const fresh = (data && data.plays) || [];
         this._total = (data && data.total) || 0;
         this._plays = reset ? fresh : [...this._plays, ...fresh];
+        this._page = page;
       } catch (e) {
+        if (seq !== this._loadSeq) return;
         this._error = e.message || "Failed to load";
       } finally {
-        this._loading = false;
-        this._loaded = true;
-        this.render();
+        if (seq === this._loadSeq) {
+          this._loading = false;
+          this._loaded = true;
+          this.render();
+        }
       }
     }
 
-    _loadMore() { this._page += 1; this._load({ reset: false }); }
+    _loadMore() { this._load({ reset: false }); }
 
     _onSearchInput(value) {
       this._query = value;

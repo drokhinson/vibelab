@@ -24,6 +24,8 @@ from jwt import PyJWKClient
 from fastapi import HTTPException, Header, Request
 from pydantic import BaseModel
 
+from auth import extract_bearer_token
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 _JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json" if SUPABASE_URL else ""
 
@@ -70,14 +72,7 @@ async def get_current_supabase_user(
         if cached is not None:
             return cached
 
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header required")
-
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Authorization must be: Bearer <token>")
-
-    token = parts[1]
+    token = extract_bearer_token(authorization)
 
     if not _jwks_client:
         raise HTTPException(status_code=500, detail="SUPABASE_URL not configured")

@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException
+from supabase import Client
 
 from auth import create_token, decode_token
 
@@ -32,12 +33,19 @@ from ..models import BuddyEdgeResponse, BuddyQrPeekResponse
 from ._helpers import canonical_edge_pair, edge_response, fetch_profiles_by_ids
 
 
+def _require_secret() -> str:
+    if not BGB_QR_SECRET:
+        raise HTTPException(status_code=503, detail="Buddy QR codes aren't set up on this server yet.")
+    return BGB_QR_SECRET
+
+
 def mint_qr_token(viewer_id: str) -> tuple[str, datetime]:
     """Sign a short-lived token naming the viewer as the code's owner."""
+    secret = _require_secret()
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=QR_TOKEN_TTL_SECONDS)
     token = create_token(
         {"u": viewer_id, "exp": int(expires_at.timestamp())},
-        BGB_QR_SECRET,
+        secret,
         QR_TOKEN_ALGORITHM,
     )
     return token, expires_at
@@ -53,8 +61,9 @@ def issuer_from_qr_token(token: str) -> str:
     reports an expired play session. Expired and forged are deliberately
     indistinguishable to the caller.
     """
+    secret = _require_secret()
     try:
-        payload = decode_token(token, BGB_QR_SECRET, QR_TOKEN_ALGORITHM)
+        payload = decode_token(token, secret, QR_TOKEN_ALGORITHM)
     except HTTPException:
         raise HTTPException(
             status_code=410,
@@ -66,7 +75,7 @@ def issuer_from_qr_token(token: str) -> str:
     return issuer_id
 
 
-def peek_qr_issuer(sb, viewer_id: str, other_id: str) -> BuddyQrPeekResponse:
+def peek_qr_issuer(sb: Client, viewer_id: str, other_id: str) -> BuddyQrPeekResponse:
     """Name the person behind a scanned code, and say where the viewer stands.
 
     The read half of add_buddy_mutually below, and it exists because that
@@ -119,7 +128,7 @@ def peek_qr_issuer(sb, viewer_id: str, other_id: str) -> BuddyQrPeekResponse:
     )
 
 
-def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResponse, bool]:
+def add_buddy_mutually(sb: Client, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResponse, bool]:
     """Create — or promote — an ACCEPTED edge with no consent step.
 
     The only legitimate caller is the QR redeem route, which has already
@@ -204,7 +213,7 @@ def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResp
 
 
 def _resolve_existing(
-    sb,
+    sb: Client,
     edge: dict[str, Any],
     viewer_id: str,
     profiles: dict[str, dict],

@@ -14,6 +14,7 @@ notebook is scaffolding for one call, and keeping it would mean deciding later
 who deletes it and when.
 """
 
+import asyncio
 import base64
 import binascii
 import logging
@@ -120,10 +121,13 @@ async def parse_import(
 
     sb = get_supabase()
     game_names = play_import_service.distinct_game_names(plays)
+    games = await asyncio.to_thread(
+        play_import_service.match_games, sb, user.user_id, game_names
+    )
     return PlayImportParseResponse(
         plays=plays,
         players=play_import_service.distinct_player_names(plays),
-        games=play_import_service.match_games(sb, user.user_id, game_names),
+        games=games,
         total_plays=sum(p.count for p in plays),
         warnings=warnings,
     )
@@ -140,7 +144,9 @@ async def import_plays(
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayImportResponse:
     """Write one chunk of reviewed plays; each play's client_key makes a retry safe."""
-    return play_import_service.import_plays(get_supabase(), user.user_id, body.plays)
+    return await asyncio.to_thread(
+        play_import_service.import_plays, get_supabase(), user.user_id, body.plays
+    )
 
 
 @router.get(
@@ -153,7 +159,7 @@ async def list_imports(
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayImportListResponse:
     """Every import this user has run, newest first — what Settings lists to undo one."""
-    return play_import_service.list_imports(get_supabase(), user.user_id)
+    return await asyncio.to_thread(play_import_service.list_imports, get_supabase(), user.user_id)
 
 
 @router.delete(
@@ -167,8 +173,8 @@ async def delete_import_group(
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayImportDeleteResponse:
     """Remove every play in one imported run; players and expansions cascade."""
-    deleted = play_import_service.delete_import_group(
-        get_supabase(), user.user_id, group_id
+    deleted = await asyncio.to_thread(
+        play_import_service.delete_import_group, get_supabase(), user.user_id, group_id
     )
     return PlayImportDeleteResponse(deleted=deleted)
 
@@ -189,7 +195,7 @@ async def delete_import_batch(
     not this user's: the RPC is owner-scoped, and distinguishing "not yours"
     from "not there" would tell a caller that somebody else's batch exists.
     """
-    deleted = play_import_service.delete_import_batch(
-        get_supabase(), user.user_id, batch_id
+    deleted = await asyncio.to_thread(
+        play_import_service.delete_import_batch, get_supabase(), user.user_id, batch_id
     )
     return PlayImportDeleteResponse(deleted=deleted)

@@ -39,7 +39,7 @@ class _Q:
             rows = [r for r in rows if r.get("bgg_id") in self.ids]
         elif self.hi is not None:
             # PostgREST caps a page server-side; mimic that exactly.
-            rows = rows[self.lo:self.hi + 1][:S._PAGE]
+            rows = rows[self.lo:self.hi + 1][:K.DB_PAGE_SIZE]
         return type("R", (), {"data": rows})()
 
 
@@ -94,9 +94,9 @@ def test_a_shelf_larger_than_one_page_is_read_in_full(monkeypatch):
 
 
 def test_paging_stops_on_a_short_page(monkeypatch):
-    local = [_row(1000 + i, "owned") for i in range(S._PAGE)]
+    local = [_row(1000 + i, "owned") for i in range(K.DB_PAGE_SIZE)]
     plan = _plan(monkeypatch, local=local, remote=[])
-    assert plan.local_total == S._PAGE
+    assert plan.local_total == K.DB_PAGE_SIZE
 
 
 # ── Push classification ─────────────────────────────────────────────────────

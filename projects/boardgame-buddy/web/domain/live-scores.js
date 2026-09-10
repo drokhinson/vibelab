@@ -23,6 +23,9 @@
 // @ts-check
 
 (function () {
+  // Every PostgREST call here is awaited by the write queue; one that never
+  // settles wedges its cell for the session, so each carries a deadline.
+  const DB_TIMEOUT_MS = 10000;
   /**
    * @typedef {Object} ScoreRow
    * @property {string}  session_id
@@ -123,7 +126,8 @@
         const { data, error } = await window.supabaseClient
           .from("boardgamebuddy_play_session_scores")
           .select("session_id, participant_id, round_index, score")
-          .eq("session_id", this.sessionId);
+          .eq("session_id", this.sessionId)
+          .abortSignal(AbortSignal.timeout(DB_TIMEOUT_MS));
         // A failed read leaves the cached map alone — better a slightly stale
         // grid than an empty one.
         if (error) throw error;
@@ -263,7 +267,8 @@
           .from("boardgamebuddy_play_session_scores")
           .delete()
           .eq("session_id", this.sessionId)
-          .gte("round_index", idx);
+          .gte("round_index", idx)
+          .abortSignal(AbortSignal.timeout(DB_TIMEOUT_MS));
         if (del && del.error) throw del.error;
         const rows = [];
         for (const [participantId, m] of this._byPlayer) {
@@ -422,6 +427,7 @@
           rows.map((r) => Object.assign({ session_id: this.sessionId }, r)),
           { onConflict: "session_id,participant_id,round_index" }
         )
+        .abortSignal(AbortSignal.timeout(DB_TIMEOUT_MS))
         .then((res) => {
           if (res && res.error) throw res.error;
           return res;

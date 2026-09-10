@@ -2,13 +2,18 @@
 
 Game-buddy endpoints used to live here under the legacy one-way model. The
 new mutual graph lives in buddy_routes.py.
+
+Every handler runs its Supabase round trips through `asyncio.to_thread`; the
+`_<handler>_sync` helper directly above a route is that blocking half.
 """
 
+import asyncio
 import logging
 import uuid
 from typing import Optional
 
 from fastapi import BackgroundTasks, Depends, Path, Query, HTTPException, UploadFile, File
+from supabase import Client
 
 from db import get_supabase
 
@@ -276,36 +281,23 @@ def _write_play_expansions(sb, play_id: str, expansion_ids: list[str]) -> None:
         sb.table("boardgamebuddy_play_expansions").insert(rows).execute()
 
 
-@router.get(
-    "/plays",
-    response_model=PlayListResponse,
-    status_code=200,
-    summary="List play history (own + shared)",
-)
-async def list_plays(
-    page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
-    game_id: Optional[str] = Query(None, description="Filter by game UUID"),
-    buddy_id: Optional[str] = Query(None, description="Filter by buddy participant UUID"),
-    search: Optional[str] = Query(
-        None,
-        description="Free-text filter: matches game name OR any player's display name",
-    ),
-    user_id: Optional[str] = Query(
-        None,
-        description="Target user (buddies only); defaults to the viewer",
-    ),
-    user: CurrentUser = Depends(get_current_user),
+def _list_plays_sync(
+    sb: Client,
+    viewer_id: str,
+    target_user_id: str,
+    *,
+    page: int,
+    per_page: int,
+    game_id: Optional[str],
+    buddy_id: Optional[str],
+    search: Optional[str],
 ) -> PlayListResponse:
-    """List plays the target user logged + participated in (paginated, latest first)."""
-    sb = get_supabase()
-    target_user_id = user_id or user.user_id
     # Someone else's play log is buddies-only, matching what /profile/bundle
     # will hand back for the same pair. Profiles stay public — a stranger still
     # gets the collection and the four headline stats — but the log of who
     # played what, with whom, and when is not part of that.
-    if target_user_id != user.user_id and not buddy_service.relation_to(
-        sb, user.user_id, target_user_id
+    if target_user_id != viewer_id and not buddy_service.relation_to(
+        sb, viewer_id, target_user_id
     )["is_buddy"]:
         raise HTTPException(
             status_code=403, detail="Only buddies can see this user's plays"
@@ -336,6 +328,64 @@ async def list_plays(
     )
 
 
+@router.get(
+    "/plays",
+    response_model=PlayListResponse,
+    status_code=200,
+    summary="List play history (own + shared)",
+)
+async def list_plays(
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
+    game_id: Optional[str] = Query(None, description="Filter by game UUID"),
+    buddy_id: Optional[str] = Query(None, description="Filter by buddy participant UUID"),
+    search: Optional[str] = Query(
+        None,
+        description="Free-text filter: matches game name OR any player's display name",
+    ),
+    user_id: Optional[str] = Query(
+        None,
+        description="Target user (buddies only); defaults to the viewer",
+    ),
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayListResponse:
+    """List plays the target user logged + participated in (paginated, latest first)."""
+    sb = get_supabase()
+    target_user_id = user_id or user.user_id
+    return await asyncio.to_thread(
+        _list_plays_sync,
+        sb,
+        user.user_id,
+        target_user_id,
+        page=page,
+        per_page=per_page,
+        game_id=game_id,
+        buddy_id=buddy_id,
+        search=search,
+    )
+
+
+def _log_play_sync(sb: Client, user_id: str, body: PlayCreate) -> tuple[PlayResponse, bool]:
+    """Run bgb_log_play; returns (play, duplicate) so the caller can skip the push."""
+    data = (
+        sb.rpc("bgb_log_play", {
+            "p_user": user_id,
+            "p_payload": body.model_dump(mode="json"),
+        })
+        .execute()
+        .data
+    )
+    raise_for_rpc_error(data, "Log play")
+    # A client_key we already hold a play for (migration 048) — an offline
+    # outbox retry after a lost response. The RPC wrote nothing and handed
+    # back the original row's id; answer with the play that actually exists
+    # rather than the payload this attempt carried. Still 201: from the
+    # client's side the play is recorded either way.
+    if isinstance(data, dict) and data.get("duplicate"):
+        return load_play_response(sb, data["id"], user_id), True
+    return PlayResponse.model_validate(data), False
+
+
 @router.post(
     "/plays",
     response_model=PlayResponse,
@@ -359,27 +409,13 @@ async def log_play(
     That is what makes the offline outbox safe to retry after a lost response.
     """
     sb = get_supabase()
-    data = (
-        sb.rpc("bgb_log_play", {
-            "p_user": user.user_id,
-            "p_payload": body.model_dump(mode="json"),
-        })
-        .execute()
-        .data
-    )
-    raise_for_rpc_error(data, "Log play")
-    # A client_key we already hold a play for (migration 048) — an offline
-    # outbox retry after a lost response. The RPC wrote nothing and handed
-    # back the original row's id; answer with the play that actually exists
-    # rather than the payload this attempt carried. Still 201: from the
-    # client's side the play is recorded either way.
-    if isinstance(data, dict) and data.get("duplicate"):
+    play, duplicate = await asyncio.to_thread(_log_play_sync, sb, user.user_id, body)
+    if duplicate:
         # No push on this branch. The RPC wrote nothing — this is an offline
         # outbox retry after a lost response, so everyone seated was already
         # told when the original landed, and notifying again would turn one
         # flaky connection into a second buzz for six people.
-        return load_play_response(sb, data["id"], user.user_id)
-    play = PlayResponse.model_validate(data)
+        return play
     push_notify.play_logged(background_tasks, sb, user, play)
     return play
 
@@ -399,23 +435,10 @@ async def get_play(
     # play even when the viewer wasn't a participant, and tapping through
     # should succeed. Writes/deletes stay owner-only (gated inline in
     # update_play / delete_play); `is_own` tells the frontend which is which.
-    return load_play_response(get_supabase(), play_id, user.user_id)
+    return await asyncio.to_thread(load_play_response, get_supabase(), play_id, user.user_id)
 
 
-@router.put(
-    "/plays/{play_id}",
-    response_model=PlayResponse,
-    status_code=200,
-    summary="Update a play",
-)
-async def update_play(
-    body: PlayUpdate,
-    play_id: str = Path(..., description="Play UUID"),
-    user: CurrentUser = Depends(get_current_user),
-) -> PlayResponse:
-    """Replace a play's top-level fields and its players/expansions lists (owner only)."""
-    sb = get_supabase()
-
+def _update_play_sync(sb: Client, play_id: str, user_id: str, body: PlayUpdate) -> PlayResponse:
     existing = (
         sb.table("boardgamebuddy_plays")
         .select("id, user_id, game_id")
@@ -424,7 +447,7 @@ async def update_play(
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Play not found")
-    if existing.data[0]["user_id"] != user.user_id:
+    if existing.data[0]["user_id"] != user_id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     # Update the top-level row. play_mode and country_code are only written
@@ -472,6 +495,8 @@ async def update_play(
         .eq("id", play_id)
         .execute()
     )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Play not found")
     row = res.data[0]
     players_by_play = _fetch_players(sb, [play_id])
     expansions_by_play = _fetch_play_expansions(sb, [play_id])
@@ -481,6 +506,35 @@ async def update_play(
         players_by_play=players_by_play,
         expansions_by_play=expansions_by_play,
     )
+
+
+@router.put(
+    "/plays/{play_id}",
+    response_model=PlayResponse,
+    status_code=200,
+    summary="Update a play",
+)
+async def update_play(
+    body: PlayUpdate,
+    play_id: str = Path(..., description="Play UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayResponse:
+    """Replace a play's top-level fields and its players/expansions lists (owner only)."""
+    sb = get_supabase()
+    return await asyncio.to_thread(_update_play_sync, sb, play_id, user.user_id, body)
+
+
+def _upload_play_photo_sync(
+    sb: Client, path: str, data: bytes, content_type: str
+) -> PlayPhotoResponse:
+    try:
+        sb.storage.from_(PLAYS_BUCKET).upload(
+            path, data, {"content-type": content_type, "upsert": "true"}
+        )
+    except Exception as exc:  # storage SDK raises a custom exception type
+        logger.warning("Play photo upload failed %s: %s", path, exc)
+        raise HTTPException(status_code=502, detail="Upload failed")
+    return PlayPhotoResponse(photo_url=sb.storage.from_(PLAYS_BUCKET).get_public_url(path))
 
 
 @router.post(
@@ -510,16 +564,9 @@ async def upload_play_photo(
         "image/gif": "gif",
     }.get(content_type, "jpg")
     path = f"{user.user_id}/{uuid.uuid4().hex}.{ext}"
-
-    sb = get_supabase()
-    try:
-        sb.storage.from_(PLAYS_BUCKET).upload(
-            path, data, {"content-type": content_type, "upsert": "true"}
-        )
-    except Exception as exc:  # storage SDK raises a custom exception type
-        logger.warning("Play photo upload failed %s: %s", path, exc)
-        raise HTTPException(status_code=502, detail="Upload failed")
-    return PlayPhotoResponse(photo_url=sb.storage.from_(PLAYS_BUCKET).get_public_url(path))
+    return await asyncio.to_thread(
+        _upload_play_photo_sync, get_supabase(), path, data, content_type
+    )
 
 
 @router.patch(
@@ -545,13 +592,13 @@ async def attach_play_photo(
     missing or belongs to someone else. Both are reported as 404 so the
     endpoint doesn't confirm the existence of other users' plays.
     """
-    res = (
+    res = await asyncio.to_thread(
         get_supabase()
         .table("boardgamebuddy_plays")
         .update({"photo_url": body.photo_url})
         .eq("id", play_id)
         .eq("user_id", user.user_id)
-        .execute()
+        .execute
     )
     if not res.data:
         raise HTTPException(status_code=404, detail="Play not found")
@@ -579,18 +626,39 @@ async def delete_play(
     endpoint still answered 200. RLS is not a backstop here; the backend holds
     the service-role key.
     """
-    res = (
+    res = await asyncio.to_thread(
         get_supabase()
         .table("boardgamebuddy_plays")
         .delete()
         .eq("id", play_id)
         .eq("user_id", user.user_id)
-        .execute()
+        .execute
     )
     if not res.data:
         raise HTTPException(status_code=404, detail="Play not found")
 
     return MessageResponse(message="Play deleted")
+
+
+def _leave_play_sync(sb: Client, play_id: str, user_id: str) -> PlayLeaveResponse:
+    existing = (
+        sb.table("boardgamebuddy_plays")
+        .select("id, user_id")
+        .eq("id", play_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Play not found")
+    if existing.data[0]["user_id"] == user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="You logged this play — edit or delete it instead.",
+        )
+
+    n = played_with_service.ghost_out_of_play(sb, user_id, play_id)
+    if n == 0:
+        raise HTTPException(status_code=404, detail="You are not a player in this play")
+    return PlayLeaveResponse(rows_updated=n)
 
 
 @router.post(
@@ -607,24 +675,6 @@ async def leave_play(
     into a ghost (nulls player_user_id, keeps the name) instead of deleting the
     play. The owner keeps the play; you drop out of your own history."""
     sb = get_supabase()
-
-    existing = (
-        sb.table("boardgamebuddy_plays")
-        .select("id, user_id")
-        .eq("id", play_id)
-        .execute()
-    )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Play not found")
-    if existing.data[0]["user_id"] == user.user_id:
-        raise HTTPException(
-            status_code=400,
-            detail="You logged this play — edit or delete it instead.",
-        )
-
-    n = played_with_service.ghost_out_of_play(sb, user.user_id, play_id)
-    if n == 0:
-        raise HTTPException(status_code=404, detail="You are not a player in this play")
-    return PlayLeaveResponse(rows_updated=n)
+    return await asyncio.to_thread(_leave_play_sync, sb, play_id, user.user_id)
 
 

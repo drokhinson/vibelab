@@ -15,9 +15,10 @@ JSONB, or {"error": "<code>"} for gate failures, which raise_for_rpc_error
 maps to the same HTTPExceptions the routes have always raised.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import HTTPException
+from supabase import Client
 
 from ..constants import (
     ALLOWED_PHASE_TRANSITIONS,
@@ -47,11 +48,11 @@ def _bundle_to_response(data: Any) -> SessionResponse:
 
 
 def create_session(
-    sb,
+    sb: Client,
     host_user_id: str,
     host_display_name: str,
     *,
-    game_id: Optional[str] = None,
+    game_id: str | None = None,
 ) -> SessionResponse:
     """Allocate a short code and seat the host as participant #1.
 
@@ -71,19 +72,19 @@ def create_session(
     return _bundle_to_response(data)
 
 
-def get_session(sb, code: str) -> SessionResponse:
+def get_session(sb: Client, code: str) -> SessionResponse:
     """The 2s poll target — one RPC instead of four round trips."""
     data = sb.rpc("bgb_get_session", {"p_code": code}).execute().data
     return _bundle_to_response(data)
 
 
 def join_session(
-    sb,
+    sb: Client,
     code: str,
     *,
-    user_id: Optional[str],
-    user_display_name: Optional[str],
-    guest_display_name: Optional[str],
+    user_id: str | None,
+    user_display_name: str | None,
+    guest_display_name: str | None,
 ) -> SessionResponse:
     """Idempotent join. Authed callers join as a real account; anon callers as a guest.
 
@@ -108,11 +109,11 @@ def join_session(
 
 
 def add_participant(
-    sb,
+    sb: Client,
     *,
     viewer_id: str,
     code: str,
-    user_id: Optional[str],
+    user_id: str | None,
     display_name: str,
 ) -> SessionResponse:
     """Host-only: add a buddy or ghost to the lobby roster.
@@ -141,7 +142,7 @@ def add_participant(
 
 
 def reorder_participants(
-    sb,
+    sb: Client,
     *,
     viewer_id: str,
     code: str,
@@ -173,7 +174,7 @@ def reorder_participants(
 
 
 def remove_participant(
-    sb,
+    sb: Client,
     *,
     viewer_id: str,
     code: str,
@@ -198,11 +199,11 @@ def remove_participant(
 
 
 def update_session_game(
-    sb,
+    sb: Client,
     *,
     viewer_id: str,
     code: str,
-    game_id: Optional[str],
+    game_id: str | None,
 ) -> SessionResponse:
     """Host-only: change the game on an open lobby (or clear it).
 
@@ -223,7 +224,7 @@ def update_session_game(
     return _bundle_to_response(data)
 
 
-def abandon_session(sb, viewer_id: str, code: str) -> None:
+def abandon_session(sb: Client, viewer_id: str, code: str) -> None:
     """Host-only: close an open lobby. One RPC (migration 046)."""
     data = (
         sb.rpc("bgb_abandon_session", {"p_host": viewer_id, "p_code": code})
@@ -234,7 +235,7 @@ def abandon_session(sb, viewer_id: str, code: str) -> None:
     raise_for_rpc_error(data, "Session")
 
 
-def finalize_session(sb, *, host_user_id: str, code: str, payload: dict[str, Any]) -> PlayResponse:
+def finalize_session(sb: Client, *, host_user_id: str, code: str, payload: dict[str, Any]) -> PlayResponse:
     """Turn an open lobby into a play row in ONE round trip.
 
     bgb_finalize_session (migration 042) does the open/expiry/host gating,
@@ -285,11 +286,11 @@ def _transitions_payload() -> dict[str, list[str]]:
 
 
 def set_scoring_template(
-    sb,
+    sb: Client,
     *,
     viewer_id: str,
     code: str,
-    template: Optional[PlayScoringTemplate],
+    template: PlayScoringTemplate | None,
 ) -> SessionResponse:
     """Host-only: publish (or clear) the scoring grid the lobby is scored on.
 
@@ -314,7 +315,7 @@ def set_scoring_template(
 
 
 def update_phase(
-    sb,
+    sb: Client,
     *,
     viewer_id: str,
     code: str,
@@ -348,7 +349,7 @@ def update_phase(
     return _bundle_to_response(data)
 
 
-def list_joinable(sb, viewer_id: str) -> list[JoinableSession]:
+def list_joinable(sb: Client, viewer_id: str) -> list[JoinableSession]:
     """Open sessions the viewer can land on from the Join chooser.
 
     Includes any open in-progress session (phase ∈ gather/play/settle)

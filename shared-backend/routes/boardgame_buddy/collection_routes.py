@@ -1,5 +1,10 @@
-"""User collection endpoints — closet / played / wishlist."""
+"""User collection endpoints — closet / played / wishlist.
 
+Every handler runs its Supabase round trips through `asyncio.to_thread`; the
+`_<handler>_sync` helper directly above a route is that blocking half.
+"""
+
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -33,108 +38,6 @@ from .game_routes import (
     collection_denormalized_from_game,
 )
 from .services._helpers import game_select_clause
-
-
-# Deliberately narrower than game_select_clause(): /collection renders plain
-# tiles, so it skips the expansion and rulebook columns the grid and detail
-# surfaces need. image_url IS carried: the tiles crop square with object-fit,
-# which upscales BGG's ~200px thumbnail on any modern DPR.
-#
-# The web client no longer reads this endpoint at all — it derives its status
-# map and expansion counts from /collection/status-map, which is one bounded
-# round trip instead of three unbounded ones. What remains here serves the
-# native app, whose only consumer (app/src/store/AppContext.js:262) reads
-# `status` and `game_id`.
-_TILE_GAME_FIELDS = (
-    "id, bgg_id, name, year_published, min_players, max_players, "
-    "playing_time, thumbnail_url, image_url, theme_color"
-)
-
-
-@router.get(
-    "/collection",
-    response_model=list[CollectionItem],
-    status_code=200,
-    summary="Get user collection",
-)
-async def get_collection(
-    status: Optional[CollectionStatus] = Query(None, description="Filter by status"),
-    user: CurrentUser = Depends(get_current_user),
-) -> list[CollectionItem]:
-    """List all games in the current user's collection."""
-    sb = get_supabase()
-
-    query = (
-        sb.table("boardgamebuddy_collections")
-        .select(f"id, game_id, status, added_at, boardgamebuddy_games({_TILE_GAME_FIELDS})")
-        .eq("user_id", user.user_id)
-        .order("added_at", desc=True)
-    )
-
-    if status:
-        query = query.eq("status", status.value)
-
-    result = query.execute()
-
-    # When the caller only wants owned/wishlist, we don't need the full
-    # cross-user play visibility map — just stats for the games already on
-    # the shelf, so we can populate last_played_at / play_count on each tile.
-    shelf_game_ids: set[str] = {row["game_id"] for row in (result.data or [])}
-    if status is None or status == CollectionStatus.PLAYED:
-        last_played_by_game, play_counts = _play_stats(sb, user.user_id)
-    else:
-        last_played_by_game, play_counts = _play_stats(
-            sb, user.user_id, list(shelf_game_ids)
-        )
-
-    items: list[CollectionItem] = []
-    owned_game_ids: set[str] = set()
-    for row in result.data or []:
-        game_data = row.get("boardgamebuddy_games", {})
-        if game_data:
-            items.append(CollectionItem(
-                id=row["id"],
-                game_id=row["game_id"],
-                status=row["status"],
-                added_at=row["added_at"],
-                last_played_at=last_played_by_game.get(row["game_id"]),
-                play_count=play_counts.get(row["game_id"], 0),
-                game=GameSummary(**game_data),
-            ))
-            # prev_owned counts here too: this set suppresses the synthetic
-            # "played" row below, and the test it stands for is "does this game
-            # already have a collection row", not "do you still own it". A sold
-            # game with plays would otherwise appear twice in one response.
-            if row["status"] in OWNED_SHELF_STATUSES:
-                owned_game_ids.add(row["game_id"])
-
-    # Derive a synthetic "played" row for every game the user has a play for —
-    # logged by them or by someone who listed them as a player — and does NOT
-    # own. Played is no longer a user-selectable status; it's computed from
-    # play history. Wishlist-ed games with plays still get a derived played
-    # row (they'll show up in both tabs).
-    if status is None or status == CollectionStatus.PLAYED:
-        missing_ids = [gid for gid in last_played_by_game if gid not in owned_game_ids]
-        if missing_ids:
-            games = (
-                sb.table("boardgamebuddy_games")
-                .select(_TILE_GAME_FIELDS)
-                .in_("id", missing_ids)
-                .execute()
-            )
-            for g in games.data or []:
-                last_played = last_played_by_game[g["id"]]
-                items.append(CollectionItem(
-                    id=f"derived-{g['id']}",
-                    game_id=g["id"],
-                    status=CollectionStatus.PLAYED.value,
-                    added_at=f"{last_played}T00:00:00+00:00",
-                    last_played_at=last_played,
-                    play_count=play_counts.get(g["id"], 0),
-                    game=GameSummary(**g),
-                ))
-
-    return items
 
 
 def _play_stats(
@@ -205,7 +108,9 @@ async def add_to_collection(
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
     """Add a game to the user's collection."""
-    _upsert_collection(get_supabase(), user.user_id, body.game_id, body.status.value)
+    await asyncio.to_thread(
+        _upsert_collection, get_supabase(), user.user_id, body.game_id, body.status.value
+    )
     return MessageResponse(message=f"Game added as {body.status.value}")
 
 
@@ -221,7 +126,9 @@ async def update_collection(
     user: CurrentUser = Depends(get_current_user),
 ) -> MessageResponse:
     """Change the status of a game in the user's collection."""
-    _upsert_collection(get_supabase(), user.user_id, game_id, body.status.value)
+    await asyncio.to_thread(
+        _upsert_collection, get_supabase(), user.user_id, game_id, body.status.value
+    )
     return MessageResponse(message=f"Status updated to {body.status.value}")
 
 
@@ -246,14 +153,14 @@ async def set_played_before(
     # as Owned in the status map, on its detail page and in every play count.
     # The only consumer is the 'shelf' block of bgb_user_stats_detail.
     stamp = datetime.now(timezone.utc).isoformat() if body.played_before else None
-    result = (
+    result = await asyncio.to_thread(
         get_supabase()
         .table("boardgamebuddy_collections")
         .update({"played_before_at": stamp})
         .eq("user_id", user.user_id)
         .eq("game_id", game_id)
         .eq("status", "owned")
-        .execute()
+        .execute
     )
 
     if not result.data:
@@ -279,9 +186,13 @@ async def remove_from_collection(
     """Remove a game from the user's collection."""
     sb = get_supabase()
 
-    sb.table("boardgamebuddy_collections").delete().eq(
-        "user_id", user.user_id
-    ).eq("game_id", game_id).execute()
+    await asyncio.to_thread(
+        sb.table("boardgamebuddy_collections")
+        .delete()
+        .eq("user_id", user.user_id)
+        .eq("game_id", game_id)
+        .execute
+    )
 
     return MessageResponse(message="Game removed from collection")
 
@@ -354,17 +265,14 @@ async def collection_status_map(
 ) -> CollectionStatusMapResponse:
     """The status pills and expansion badges, in one DB round trip.
 
-    The web client used to derive these from GET /collection, which costs three
-    unbounded round trips — the whole collection with a games join, play stats
-    over the viewer's entire visible history, then an IN-query to hydrate
-    played-not-owned games — and then threw away everything except these two
-    dicts. That read re-fires roughly once a minute of active navigation.
-
-    GET /collection is unchanged: the native app consumes its row shape.
+    Replaced a flat collection read that cost three unbounded round trips to
+    produce two dicts. This read re-fires roughly once a minute of active
+    navigation.
     """
-    data = get_supabase().rpc(
-        "bgb_collection_status_map", {"p_viewer": user.user_id}
-    ).execute().data or {}
+    result = await asyncio.to_thread(
+        get_supabase().rpc("bgb_collection_status_map", {"p_viewer": user.user_id}).execute
+    )
+    data = result.data or {}
     return CollectionStatusMapResponse(
         status_map=data.get("status_map") or {},
         expansion_counts={str(k): int(v) for k, v in (data.get("expansion_counts") or {}).items()},
@@ -378,8 +286,8 @@ async def collection_status_map(
 # derives every page, filter and search locally. One DB round trip, down from
 # the grid's two (owned/wishlist) or three (played).
 #
-# /collection/grid is deliberately left untouched: the native app
-# (app/src/api/client.js) and the game explorer still page against it.
+# /collection/grid stays as the paginated, server-filtered path the game
+# explorer pages against.
 
 _SHELF_DEFAULT_LIMIT = 1000
 _SHELF_MAX_LIMIT = 5000
@@ -429,16 +337,18 @@ async def collection_shelf(
     would multiply the client's cache keys, and every filter the grid applies
     is a pure function of fields already on each returned row.
     """
-    result = get_supabase().rpc(
-        "bgb_collection_shelf",
-        {
-            "viewer": user.user_id,
-            "target": user_id or user.user_id,
-            "p_status": status.value,
-            "p_exclude_expansions": exclude_expansions,
-            "p_limit": limit,
-        },
-    ).execute()
+    result = await asyncio.to_thread(
+        get_supabase().rpc(
+            "bgb_collection_shelf",
+            {
+                "viewer": user.user_id,
+                "target": user_id or user.user_id,
+                "p_status": status.value,
+                "p_exclude_expansions": exclude_expansions,
+                "p_limit": limit,
+            },
+        ).execute
+    )
 
     data = result.data or {}
     return CollectionShelfResponse(
@@ -450,55 +360,30 @@ async def collection_shelf(
     )
 
 
-@router.get(
-    "/collection/grid",
-    response_model=CollectionPageResponse,
-    status_code=200,
-    summary="Paginated collection grid (owned default; wishlist / played also supported)",
-)
-async def collection_grid(
-    page: int = Query(1, ge=1, description="Page number"),
-    per_page: int = Query(12, ge=1, le=100, description="Tiles per page"),
-    status: CollectionStatus = Query(
-        CollectionStatus.OWNED,
-        description=(
-            "Which shelf to return — owned (default), wishlist, or played "
-            "(games the user has plays for — logged by them or by someone who "
-            "listed them as a player — but does not currently own / wishlist)."
-        ),
-    ),
-    search: Optional[str] = Query(None, description="Case-insensitive game-name match"),
-    players: Optional[int] = Query(None, ge=1, le=20),
-    playtime_min: Optional[int] = Query(None, ge=1),
-    playtime_max: Optional[int] = Query(None, ge=1),
-    play_mode: Optional[PlayMode] = Query(None, description="competitive / coop / team"),
-    exclude_expansions: bool = Query(
-        True,
-        description="When true (default) expansions are hidden — surfaced separately on the Profile.",
-    ),
-    sort: CollectionSort = Query(
-        CollectionSort.LAST_PLAYED,
-        description="Sort order — last_played (default), added_at, or alphabetical.",
-    ),
-    prioritize_exact_players: bool = Query(
-        False,
-        description=(
-            "When true AND players is set, surface games whose max_players "
-            "exactly equals players above wider-range games. Off by default "
-            "so the chosen sort stays consistent across pages."
-        ),
-    ),
-    user_id: Optional[str] = Query(
-        None,
-        description="Target user (profiles are public); defaults to the viewer.",
-    ),
-    user: CurrentUser = Depends(get_current_user),
+def _collection_grid_sync(
+    sb: Client,
+    viewer_id: str,
+    target_user_id: str,
+    *,
+    page: int,
+    per_page: int,
+    status: CollectionStatus,
+    search: Optional[str],
+    players: Optional[int],
+    playtime_min: Optional[int],
+    playtime_max: Optional[int],
+    play_mode: Optional[PlayMode],
+    exclude_expansions: bool,
+    sort: CollectionSort,
+    prioritize_exact_players: bool,
 ) -> CollectionPageResponse:
-    """Collection shelf sorted by `sort` (default last_played DESC NULLS LAST, then added_at DESC)."""
-    sb = get_supabase()
-    target_user_id = user_id or user.user_id
     status_value = status.value
     mode_value = play_mode.value if play_mode else None
+
+    # A wishlist is private to its owner, the same gate bgb_collection_shelf
+    # applies (migration 003_rpcs). Owned and played shelves are public.
+    if status == CollectionStatus.WISHLIST and target_user_id != viewer_id:
+        return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
 
     if status == CollectionStatus.PLAYED:
         # Played-not-owned shelf: every game the user has a play for — logged
@@ -682,4 +567,70 @@ async def collection_grid(
         parted_total=parted_total,
         page=page,
         per_page=per_page,
+    )
+
+
+@router.get(
+    "/collection/grid",
+    response_model=CollectionPageResponse,
+    status_code=200,
+    summary="Paginated collection grid (owned default; wishlist / played also supported)",
+)
+async def collection_grid(
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(12, ge=1, le=100, description="Tiles per page"),
+    status: CollectionStatus = Query(
+        CollectionStatus.OWNED,
+        description=(
+            "Which shelf to return — owned (default), wishlist, or played "
+            "(games the user has plays for — logged by them or by someone who "
+            "listed them as a player — but does not currently own / wishlist)."
+        ),
+    ),
+    search: Optional[str] = Query(None, description="Case-insensitive game-name match"),
+    players: Optional[int] = Query(None, ge=1, le=20),
+    playtime_min: Optional[int] = Query(None, ge=1),
+    playtime_max: Optional[int] = Query(None, ge=1),
+    play_mode: Optional[PlayMode] = Query(None, description="competitive / coop / team"),
+    exclude_expansions: bool = Query(
+        True,
+        description="When true (default) expansions are hidden — surfaced separately on the Profile.",
+    ),
+    sort: CollectionSort = Query(
+        CollectionSort.LAST_PLAYED,
+        description="Sort order — last_played (default), added_at, or alphabetical.",
+    ),
+    prioritize_exact_players: bool = Query(
+        False,
+        description=(
+            "When true AND players is set, surface games whose max_players "
+            "exactly equals players above wider-range games. Off by default "
+            "so the chosen sort stays consistent across pages."
+        ),
+    ),
+    user_id: Optional[str] = Query(
+        None,
+        description="Target user (profiles are public); defaults to the viewer.",
+    ),
+    user: CurrentUser = Depends(get_current_user),
+) -> CollectionPageResponse:
+    """Collection shelf sorted by `sort` (default last_played DESC NULLS LAST, then added_at DESC)."""
+    sb = get_supabase()
+    target_user_id = user_id or user.user_id
+    return await asyncio.to_thread(
+        _collection_grid_sync,
+        sb,
+        user.user_id,
+        target_user_id,
+        page=page,
+        per_page=per_page,
+        status=status,
+        search=search,
+        players=players,
+        playtime_min=playtime_min,
+        playtime_max=playtime_max,
+        play_mode=play_mode,
+        exclude_expansions=exclude_expansions,
+        sort=sort,
+        prioritize_exact_players=prioritize_exact_players,
     )

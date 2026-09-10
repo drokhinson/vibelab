@@ -13,7 +13,11 @@
 // @ts-check
 
 (function () {
-  const BACKDROP_ID = "bgb-play-detail-popup";
+  const _modal = new window.BgbModal({
+    id: "bgb-play-detail-popup",
+    className: "play-detail-popup__backdrop",
+    label: "Play details",
+  });
 
   // Module-scoped singleton state. The popup is a transient sheet and
   // never renders more than once at a time, so a single state bag keeps
@@ -28,9 +32,6 @@
     draft: null,        // working copy while editing
     buddies: [],        // buddy datalist for the add-player input
   };
-
-  // Device-back guard token — see ui/back-guard.js.
-  let _back = 0;
 
   // The card markup currently painted into the backdrop. render() compares
   // against it and returns without touching the DOM when the new markup is
@@ -96,13 +97,12 @@
   }
 
   function dismiss() {
-    if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
-    _back = 0;
+    _modal.close();
+    resetState();
+  }
+
+  function resetState() {
     _lastHtml = null;
-    const existing = document.getElementById(BACKDROP_ID);
-    if (existing && existing.parentNode) {
-      existing.parentNode.removeChild(existing);
-    }
     if (state.draft) clearPendingPhoto(state.draft);
     Object.assign(state, {
       playId: null,
@@ -116,28 +116,18 @@
     });
   }
 
+  // Every exit — ×, outside tap, Escape, back — discards an edit draft; the
+  // shell routes them all through onClose.
   function mountBackdrop() {
     _lastHtml = null;
-    const root = document.createElement("div");
-    root.id = BACKDROP_ID;
-    root.className = "polaroid-popup__backdrop play-detail-popup__backdrop";
-    root.addEventListener("click", (ev) => {
-      if (ev.target === root) dismiss();
-    });
-    document.body.appendChild(root);
-    // Back closes the card, not the screen it was opened from — the same exit
-    // the corner X takes (ui/back-guard.js). In edit mode that discards the
-    // draft, which is what the X does too.
-    _back = window.BgbBackGuard
-      ? window.BgbBackGuard.arm({ root: root, close: dismiss })
-      : 0;
+    _modal.open({ html: "", onClose: resetState });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
   // Preserve focus + caret across the innerHTML replace so the edit-form's
   // text inputs don't lose them on every keystroke.
   function render() {
-    const root = document.getElementById(BACKDROP_ID);
+    const root = _modal.el;
     if (!root) return;
     const html = renderCard();
     // Nothing about the card changed — leave the DOM alone. This is what a
@@ -147,13 +137,7 @@
     // draft a no-op instead of a full rebuild.
     if (html === _lastHtml) return;
 
-    const active = document.activeElement;
-    const activeId = active && active.id;
-    // Reads as null on <input type=number> (the flat Score field) — that type
-    // doesn't support selection, so the `caret != null` guard below skips the
-    // restore for it. Only setSelectionRange throws there, and it is already
-    // wrapped.
-    const caret = active && active.selectionStart;
+    const focus = captureFocus();
 
     root.innerHTML = html;
     _lastHtml = html;
@@ -162,15 +146,7 @@
     const closeBtn = root.querySelector(".play-detail-popup__close");
     if (closeBtn) closeBtn.addEventListener("click", dismiss);
 
-    if (activeId) {
-      const el = document.getElementById(activeId);
-      if (el && el.focus) {
-        el.focus();
-        if (caret != null && el.setSelectionRange) {
-          try { el.setSelectionRange(caret, caret); } catch (_) {}
-        }
-      }
-    }
+    restoreFocus(focus);
   }
 
   function renderCard() {
@@ -223,7 +199,7 @@
   function renderFooter(p) {
     if (state.editing) {
       return `
-        <div class="play-detail-popup__footer play-detail-popup__footer--edit">
+        <div class="play-detail-popup__footer">
           <button class="btn btn-ghost play-detail__delete-btn" type="button"
                   ${state.saving ? "disabled" : ""}
                   onclick="window.PlayDetailPopup._deletePlay()">
@@ -340,7 +316,7 @@
             </h3>
             <ul class="play-detail__expansions">
               ${(p.expansions || []).map((e) => `
-                <li onclick="window.PlayDetailPopup.dismiss();window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || "")}'})"
+                <li onclick="${escapeAttr(gameDetailJs(e.expansion_game_id, e.name, { before: "window.PlayDetailPopup.dismiss();" }))}"
                     title="${escapeAttr(e.name || "")}"
                     style="${e.color ? `--exp-color:${escapeAttr(e.color)}` : ""}">
                   <span class="play-detail__expansion-dot"></span>
@@ -417,7 +393,7 @@
         </section>
 
         ${hasRoundGrid(p.players, null, p.scoring_template) ? `
-          <section class="play-detail__section play-detail__section--rounds">
+          <section class="play-detail__section">
             <h3 class="play-detail__section-title">
               <i data-icon="layers" class="w-4 h-4"></i> Rounds
             </h3>
@@ -456,7 +432,7 @@
   function enterEditWithPhotoPicker() {
     enterEdit();
     setTimeout(() => {
-      const root = document.getElementById(BACKDROP_ID);
+      const root = _modal.el;
       const fileInput = root && root.querySelector(".play-detail-popup__photo-file");
       if (fileInput && fileInput.click) fileInput.click();
     }, 0);
@@ -536,7 +512,7 @@
         ${renderGameBubble(p, { editing: true })}
 
         ${hasRoundGrid(d.players, "roundScores", d.scoring_template) ? `
-          <section class="play-detail__section play-detail__section--rounds">
+          <section class="play-detail__section">
             <div class="scoring-section__head">
               <h3 class="play-detail__section-title">
                 <i data-icon="layers" class="w-4 h-4"></i> Rounds
@@ -649,9 +625,9 @@
   // feed uses for winners), and the right side hosts a Go-to-game-detail
   // arrow that dismisses the popup before routing.
   function renderGameBubble(p, { editing }) {
-    const gameNav = `event.stopPropagation();
-      window.PlayDetailPopup.dismiss();
-      window.router.go('game-detail',{gameId:'${jsStr(p.game_id || "")}',gameName:'${jsStr(p.game_name || "")}'})`;
+    const gameNav = escapeAttr(gameDetailJs(p.game_id, p.game_name, {
+      stop: true, before: "window.PlayDetailPopup.dismiss();",
+    }));
     const subline = editing
       ? `<input id="play-popup-date" type="date" class="input input-bordered input-sm"
                 value="${escapeAttr(state.draft.played_at)}"
@@ -927,7 +903,7 @@
     state.saving = true;
     state.editError = null;
     // Re-mount because PolaroidPopup.confirm dismissed our backdrop.
-    if (!document.getElementById(BACKDROP_ID)) mountBackdrop();
+    if (!_modal.isOpen) mountBackdrop();
     render();
     try {
       await window.Play.remove(state.play.id);
@@ -957,7 +933,7 @@
     state.saving = true;
     state.editError = null;
     // Re-mount because PolaroidPopup.confirm dismissed our backdrop.
-    if (!document.getElementById(BACKDROP_ID)) mountBackdrop();
+    if (!_modal.isOpen) mountBackdrop();
     render();
     try {
       await window.Play.leave(state.play.id);
@@ -1061,10 +1037,6 @@
     }
   }
 
-  function formatDate(iso) {
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  }
 
   /**
    * Rename a buddy from a player row, without leaving the play.

@@ -71,6 +71,10 @@
    * @property {PlayerCandidate[]} [recent]    Shown first while the search box
    *   is empty. Falls back to `candidates`.
    * @property {number} [seated]               Players already at the table.
+   * @property {string[]} [seatedNames]        Their names. A caller that
+   *   filters seated people out of `candidates` leaves the guest row unable
+   *   to see them, so a differently-cased spelling of someone already at the
+   *   table would be offered back as a new guest — and seat them twice.
    * @property {(picks: PlayerCandidate[]) => void} onConfirm  In tick order.
    * @property {Element|null} [returnFocus]
    * @property {boolean} [singleSelect]        One answer, not a set: a tap
@@ -123,6 +127,7 @@
       /** Tick order — the seating order the roster will take. @type {PlayerCandidate[]} */
       this._picked = [];
       this._seated = 0;
+      this._seatedNames = new Set();
       this._onConfirm = /** @type {any} */ (null);
       this._query = "";
       this._single = false;
@@ -240,7 +245,7 @@
             <span class="player-picker__name">${escapeHtml(shown)}</span>
             ${meta}
           </span>
-          ${c.isViewer ? `<span class="player-picker__pill player-picker__pill--you">You</span>`
+          ${c.isViewer ? `<span class="player-picker__pill">You</span>`
             : (ghost ? `<span class="player-picker__pill">Guest</span>` : "")}
           <span class="player-picker__tick" aria-hidden="true">
             ${on ? `<i data-icon="check" class="w-4 h-4"></i>` : ""}
@@ -269,6 +274,7 @@
       if (!this._single
           && (this._candidates.some(
                 (c) => key(c.name) === key(q) || (c.alias && key(c.alias) === key(q)))
+              || this._seatedNames.has(key(q))
               || this._isPicked(q))) {
         return "";
       }
@@ -491,6 +497,7 @@
       this._candidates = Array.isArray(opts.candidates) ? opts.candidates : [];
       this._recent = Array.isArray(opts.recent) ? opts.recent : [];
       this._seated = opts.seated || 0;
+      this._seatedNames = new Set((opts.seatedNames || []).map(key));
       this._onConfirm = opts.onConfirm;
       this._picked = [];
       this._single = !!opts.singleSelect;
@@ -519,18 +526,10 @@
           const row = e.target.closest("[data-picker-name]");
           if (row) this._toggle(row.dataset.pickerName);
         },
-        // Layered, as import-expansions-modal: the first
-        // Escape backs out of the search, the next closes the sheet. Ticks are
-        // deliberately NOT unwound by Escape — that is what Cancel is for.
-        onEscape: () => {
-          if (!this._query) return false;
-          this._clear();
-          return true;
-        },
+        search: { listSel: LIST_SEL, inputSel: `#${INPUT_ID}`, onQuery: (v) => this._setQuery(v) },
         onOpen: (root) => {
           const input = /** @type {HTMLInputElement|null} */ (root.querySelector(`#${INPUT_ID}`));
           if (input) {
-            input.addEventListener("input", () => this._setQuery(input.value));
             // Enter ticks the typed name — the same key that added one from the
             // old combo — and leaves the sheet open for the next person.
             input.addEventListener("keydown", (e) => {
@@ -539,11 +538,6 @@
               this._submitTyped();
             });
           }
-          const list = /** @type {HTMLElement|null} */ (root.querySelector(LIST_SEL));
-          // Written as a custom property, not min-height, so the stylesheet can
-          // drop the pin when the software keyboard shrinks the sheet — an
-          // inline min-height would out-specify any rule trying to.
-          if (list) list.style.setProperty("--bgb-sheet-list-min", list.clientHeight + "px");
           // Focus the first buddy, not the search box: opening the sheet must
           // not raise a software keyboard over the list of people it is
           // offering (.claude/rules/overlays.md §5). Typing a name is still one
@@ -556,6 +550,7 @@
         },
         onClose: () => {
           this._candidates = [];
+          this._seatedNames = new Set();
           this._recent = [];
           this._picked = [];
           this._onConfirm = null;
@@ -684,12 +679,8 @@
       if (foot) foot.innerHTML = this._renderConfirm();
     }
 
-    /**
-     * Escape's first press backs out of the search. The × does the same thing
-     * through the shared field's own click path — both land back in _setQuery
-     * via the `input` event BgbSearchField dispatches, so "empty the box and
-     * repaint the list" is written once, in ui/search-field.js.
-     */
+    /** Empties the box through the shared field's own path — the `input`
+     *  event it dispatches lands back in _setQuery. */
     _clear() {
       window.BgbSearchField.clear(this._sheet.el);
     }

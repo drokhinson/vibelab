@@ -12,13 +12,20 @@ from enum import StrEnum
 # token validates here. Rotating this value is also the revocation lever — it
 # invalidates every outstanding code at once, which is why the tokens
 # themselves carry no server-side state.
-BGB_QR_SECRET = os.environ.get("BGB_QR_SECRET", "dev-secret-change-me")
+# No fallback: unset, QR codes refuse to mint or redeem (503) rather than sign
+# with a secret anyone can read out of this file.
+BGB_QR_SECRET = os.environ.get("BGB_QR_SECRET") or None
 QR_TOKEN_ALGORITHM = "HS256"
 # Three minutes. Long enough for three people around a table to each get their
 # phone out; short enough that a screenshot or a shoulder-surfed photo is worth
 # nothing by the time anyone acts on it. The frontend re-mints at 150s so a
 # sheet left open never shows a dead code.
 QR_TOKEN_TTL_SECONDS = 180
+
+
+class ChapterReportStatus(StrEnum):
+    OPEN = "open"
+    RESOLVED = "resolved"
 
 
 class CollectionStatus(StrEnum):
@@ -341,6 +348,15 @@ class BggAuthState(StrEnum):
     RELINK_REQUIRED = "relink_required"  # Username only (legacy public link)
 
 
+def auth_state_from(status: dict) -> BggAuthState:
+    """The state a bgb_bgg_*_status RPC row implies."""
+    if not status.get("bgg_username"):
+        return BggAuthState.UNLINKED
+    if status.get("has_credentials"):
+        return BggAuthState.LINKED
+    return BggAuthState.RELINK_REQUIRED
+
+
 class BggPushChange(StrEnum):
     """What one planned BgB -> BGG change does, as the user reads it.
 
@@ -556,16 +572,16 @@ class ExportDataset(StrEnum):
     GUIDES = "guides"
 
 
-# Rows per page when the export walks a table. PostgREST caps an unbounded
-# select at 1000, and an export that silently stops at row 1000 is worse than
-# one that fails — the file looks complete. Same reasoning (and the same
-# safety bound below) as services/bgg_compare_service.py._load_local_collection.
-EXPORT_PAGE_SIZE = 1000
+# Rows per page when a read walks a whole table (services/_helpers.page_all).
+# PostgREST caps an unbounded select at 1000, and a read that silently stops
+# at row 1000 is worse than one that fails — the export looks complete, the
+# BGG push clears games the user still owns.
+DB_PAGE_SIZE = 1000
 
 # Refuse to page forever if a filter ever stops narrowing. No account is
-# anywhere near this; it exists so a bug cannot turn one download into an
-# unbounded read of the table.
-EXPORT_MAX_ROWS = 200_000
+# anywhere near this; it exists so a bug cannot turn one read into an
+# unbounded walk of the table.
+DB_PAGE_MAX_ROWS = 200_000
 
 # Ids per `.in_()` filter when the export reads child rows for a set of plays.
 # UUIDs are 36 characters and PostgREST puts the whole list in the query

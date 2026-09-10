@@ -12,6 +12,7 @@ count them in a dict.
 """
 
 from fastapi import HTTPException
+from supabase import Client
 
 from ..models import (
     BuddyEdgeResponse,
@@ -21,7 +22,7 @@ from ..models import (
 )
 
 
-def fetch_play_partners(sb, viewer_id: str) -> PlayPartnersResponse:
+def fetch_play_partners(sb: Client, viewer_id: str) -> PlayPartnersResponse:
     """Everything the Gather player picker needs, in ONE round trip.
 
     bgb_play_partners (migration 047) does the buddy edges, the ghost roll-up
@@ -38,13 +39,13 @@ def fetch_play_partners(sb, viewer_id: str) -> PlayPartnersResponse:
     )
 
 
-def fetch_played_with(sb, viewer_id: str) -> list[PlayedWithUser]:
+def fetch_played_with(sb: Client, viewer_id: str) -> list[PlayedWithUser]:
     """Real-account players who appear in plays the viewer is involved in
     (either logged it or appears as a participant), ranked by play count."""
     return fetch_play_partners(sb, viewer_id).recent
 
 
-def fetch_ghost_players(sb, viewer_id: str) -> list[GhostPlayer]:
+def fetch_ghost_players(sb: Client, viewer_id: str) -> list[GhostPlayer]:
     """Free-text ghost players the viewer recorded in their own plays.
 
     Grouped by case-sensitive display_name; carries play_count and the most
@@ -54,7 +55,7 @@ def fetch_ghost_players(sb, viewer_id: str) -> list[GhostPlayer]:
 
 
 def link_ghost(
-    sb,
+    sb: Client,
     viewer_id: str,
     display_name: str,
     target_user_id: str,
@@ -82,7 +83,7 @@ def link_ghost(
 
 
 def ghost_out_of_plays(
-    sb,
+    sb: Client,
     viewer_id: str,
     play_ids: list[str] | None = None,
     group_ids: list[str] | None = None,
@@ -126,7 +127,7 @@ def ghost_out_of_plays(
     return int(res.data or 0)
 
 
-def ghost_out_of_play(sb, viewer_id: str, play_id: str) -> int:
+def ghost_out_of_play(sb: Client, viewer_id: str, play_id: str) -> int:
     """Single-play wrapper over `ghost_out_of_plays`, for POST /plays/{id}/leave.
 
     Kept as its own name because the route around it has a different error
@@ -137,7 +138,7 @@ def ghost_out_of_play(sb, viewer_id: str, play_id: str) -> int:
 
 
 def merge_ghosts(
-    sb,
+    sb: Client,
     viewer_id: str,
     source_display_name: str,
     target_display_name: str,

@@ -12,7 +12,12 @@ fetching the three list endpoints would be worse still — those return full
 GameSummary rows (hundreds of them, mid-backfill) to arrive at an integer.
 """
 
+import asyncio
+from typing import Any
+
 from fastapi import Depends
+
+from supabase import Client
 
 from db import get_supabase
 
@@ -21,12 +26,40 @@ from .dependencies import CurrentUser, get_current_admin
 from .models import AdminReviewCounts
 
 
-def _count(sb, table: str) -> int:
-    """Row count via PostgREST's exact-count header, not a fetched list.
-
-    Returns a builder the caller narrows further; see call sites below.
-    """
+def _count_query(sb: Client, table: str) -> Any:
+    """A builder for PostgREST's exact-count header; the caller narrows it and
+    reads `.count` off the result instead of a fetched list."""
     return sb.table(table).select("id", count="exact")
+
+
+def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
+    # limit(1) rather than fetching the rows: the count rides PostgREST's
+    # Content-Range header, so the body is one row we throw away instead of
+    # the whole table.
+    reports = (
+        _count_query(sb, "boardgamebuddy_chapter_reports")
+        .eq("status", "open")
+        .limit(1)
+        .execute()
+    )
+    missing_images = (
+        _count_query(sb, "boardgamebuddy_games")
+        .or_("image_url.is.null,thumbnail_url.is.null")
+        .limit(1)
+        .execute()
+    )
+    missing_descriptions = (
+        _count_query(sb, "boardgamebuddy_games")
+        .is_("description", "null")
+        .limit(1)
+        .execute()
+    )
+
+    return AdminReviewCounts(
+        chapter_reports=reports.count or 0,
+        missing_images=missing_images.count or 0,
+        missing_descriptions=missing_descriptions.count or 0,
+    )
 
 
 @router.get(
@@ -39,32 +72,4 @@ async def get_admin_review_counts(
     _admin: CurrentUser = Depends(get_current_admin),
 ) -> AdminReviewCounts:
     """Admin-only: how many items each admin tool currently has to act on."""
-    sb = get_supabase()
-
-    # limit(1) rather than fetching the rows: the count rides PostgREST's
-    # Content-Range header, so the body is one row we throw away instead of
-    # the whole table.
-    reports = (
-        _count(sb, "boardgamebuddy_chapter_reports")
-        .eq("status", "open")
-        .limit(1)
-        .execute()
-    )
-    missing_images = (
-        _count(sb, "boardgamebuddy_games")
-        .or_("image_url.is.null,thumbnail_url.is.null")
-        .limit(1)
-        .execute()
-    )
-    missing_descriptions = (
-        _count(sb, "boardgamebuddy_games")
-        .is_("description", "null")
-        .limit(1)
-        .execute()
-    )
-
-    return AdminReviewCounts(
-        chapter_reports=reports.count or 0,
-        missing_images=missing_images.count or 0,
-        missing_descriptions=missing_descriptions.count or 0,
-    )
+    return await asyncio.to_thread(_get_admin_review_counts_sync, get_supabase())

@@ -23,7 +23,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable
 
 import httpx
 from fastapi import HTTPException
@@ -32,6 +32,8 @@ from supabase import Client
 import cache
 from api_logger import log_external_call
 from db import get_supabase
+
+from .services._helpers import chunked
 
 from .bgg_credentials import (
     BggSession,
@@ -111,7 +113,7 @@ class BggRefusedError(HTTPException):
     piece of evidence BGG staff ask for.
     """
 
-    def __init__(self, detail: str, *, ray_id: Optional[str] = None) -> None:
+    def __init__(self, detail: str, *, ray_id: str | None = None) -> None:
         super().__init__(status_code=502, detail=detail)
         self.ray_id = ray_id
 
@@ -129,7 +131,7 @@ _CF_BODY_MARKERS = (
 )
 
 
-def _cloudflare_block(resp: httpx.Response) -> Optional[str]:
+def _cloudflare_block(resp: httpx.Response) -> str | None:
     """The Cloudflare ray id if this response is an edge block, else None.
 
     Returns "" rather than None for a block with no ray id, so callers can tell
@@ -173,7 +175,7 @@ async def _fetch_with_warmup_retry(
     params: dict,
     attempts: int = 3,
     delays: tuple[float, ...] = (5.0, 10.0, 20.0),
-    on_warm_up: Optional[Callable[[int, int, float], None]] = None,
+    on_warm_up: Callable[[int, int, float], None] | None = None,
 ) -> httpx.Response:
     """Call do_get() with retries when BGG signals it's still computing the result.
 
@@ -371,10 +373,7 @@ async def fetch_owner_counts(bgg_ids: list[int]) -> dict[int, int]:
         return counts
 
     misses.sort()
-    chunks = [
-        misses[i:i + _OWNED_CHUNK_SIZE]
-        for i in range(0, len(misses), _OWNED_CHUNK_SIZE)
-    ][:_OWNED_MAX_CHUNKS]
+    chunks = list(chunked(misses, _OWNED_CHUNK_SIZE))[:_OWNED_MAX_CHUNKS]
 
     for chunk in chunks:
         try:
@@ -398,7 +397,7 @@ async def fetch_owner_counts(bgg_ids: list[int]) -> dict[int, int]:
     return counts
 
 
-def _cache_key_for(path: str, params: dict) -> Optional[tuple[str, ...]]:
+def _cache_key_for(path: str, params: dict) -> tuple[str, ...] | None:
     """Return a stable cache key for cacheable paths, or None to bypass.
 
     Tuple of sorted (k, str(v)) pairs so the key is hashable and order-stable
@@ -409,7 +408,7 @@ def _cache_key_for(path: str, params: dict) -> Optional[tuple[str, ...]]:
     return tuple(sorted((k, str(v)) for k, v in params.items()))
 
 
-def _get_cached_response(path: str, key: tuple[str, ...]) -> Optional[str]:
+def _get_cached_response(path: str, key: tuple[str, ...]) -> str | None:
     ns = _BGG_CACHE_THING if path == "/thing" else _BGG_CACHE_SEARCH
     return cache.get(ns, key)
 
@@ -472,6 +471,11 @@ def _load_profile_session(sb: Client, user_id: str) -> dict:
     return row
 
 
+def linked_bgg_username(sb: Client, user_id: str) -> str:
+    """The linked BGG handle — 400 with none linked, 409 when it needs a re-link."""
+    return _load_profile_session(sb, user_id)["bgg_username"]
+
+
 def _persist_session(sb: Client, user_id: str, session: BggSession) -> None:
     sb.table("boardgamebuddy_profiles").update({
         "bgg_session_id": session.session_id,
@@ -526,7 +530,7 @@ async def _run_as_user(
     *,
     attempt: Callable[[dict[str, str]], Awaitable[httpx.Response]],
     context: str,
-    signed_out: Optional[Callable[[httpx.Response], bool]] = None,
+    signed_out: Callable[[httpx.Response], bool] | None = None,
 ) -> httpx.Response:
     """Run `attempt` with the user's BGG cookies, refreshing the session as needed.
 
@@ -608,7 +612,7 @@ async def _run_as_user(
 
 
 def _refused(
-    resp: httpx.Response, *, context: str, ray_id: Optional[str], relogged_in: bool,
+    resp: httpx.Response, *, context: str, ray_id: str | None, relogged_in: bool,
 ) -> BggRefusedError:
     """Build the honest error for a 401/403 no valid session can fix."""
     logger.warning(
@@ -640,7 +644,7 @@ async def fetch_bgg_as_user(
     params: dict,
     *,
     timeout: float,
-    on_warm_up: Optional[Callable[[int, int, float], None]] = None,
+    on_warm_up: Callable[[int, int, float], None] | None = None,
 ) -> str:
     """GET a BGG xmlapi2 path authenticated AS the linked user.
 
@@ -756,7 +760,7 @@ async def post_bgg_form_as_user(
     form: dict[str, str],
     *,
     timeout: float,
-    signed_out: Optional[Callable[[httpx.Response], bool]] = None,
+    signed_out: Callable[[httpx.Response], bool] | None = None,
 ) -> httpx.Response:
     """POST a form-encoded body to a BGG web endpoint AS the linked user.
 
@@ -825,9 +829,6 @@ def store_user_credentials(
     }).eq("id", user_id).execute()
 
 
-
-
-
 def parse_bgg_xml(body: str, *, context: str) -> ET.Element:
     """Parse a BGG XML payload; map parse errors to a 502."""
     try:
@@ -876,7 +877,32 @@ _BLANK_LINES_RE = re.compile(r"\n{3,}")
 _INLINE_WS_RE = re.compile(r"[ \t]{2,}")
 
 
-def bgg_description_text(item: ET.Element) -> Optional[str]:
+def thing_item_basics(item: ET.Element) -> dict:
+    """Name, year and kind off one /thing <item>.
+
+    The primary name, not the first one: /thing lists every localized title,
+    and for a widely translated game the first is often not English. `name`
+    is "" when the item carries none.
+    """
+    name_el = item.find("name[@type='primary']")
+    if name_el is None:
+        name_el = item.find("name")
+    name = name_el.get("value", "") if name_el is not None else ""
+    year = None
+    year_el = item.find("yearpublished")
+    if year_el is not None:
+        try:
+            year = int(year_el.get("value", "0")) or None
+        except (TypeError, ValueError):
+            year = None
+    return {
+        "name": name,
+        "year_published": year,
+        "is_expansion": (item.get("type") or "") == "boardgameexpansion",
+    }
+
+
+def bgg_description_text(item: ET.Element) -> str | None:
     """Extract a BGG /thing item's description as normalized plain text.
 
     Returns None (never "") when BGG has no description, so the column stays

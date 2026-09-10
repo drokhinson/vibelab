@@ -27,7 +27,6 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import BackgroundTasks, Depends, HTTPException
 from supabase import Client
@@ -35,10 +34,9 @@ from supabase import Client
 from db import get_supabase
 
 from . import router
-from .bgg_link_routes import _require_linked_username
-from .bgg_client import BggRefusedError
+from .bgg_client import BggRefusedError, linked_bgg_username
 from .bgg_write import push_collection_status
-from .constants import BggAuthState, BggCheckPhase, BggPushChange
+from .constants import BggCheckPhase, BggPushChange, auth_state_from
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     BggCheckProgressResponse,
@@ -53,6 +51,7 @@ from .models import (
 )
 from .services.bgg_compare_service import ComparePlan, build_plan
 from .services import bgg_check_cache, bgg_progress
+from .services._helpers import chunked, reject_if_import_running, reject_if_push_running
 
 logger = logging.getLogger(__name__)
 
@@ -67,31 +66,6 @@ _PUSH_MAX_BACKOFFS = 5
 # The item lists are for a review sheet, not a data export. The push itself is
 # uncapped — it re-plans server-side — so this only bounds the payload.
 _MAX_LIST_ITEMS = 500
-
-
-# ── Shared guards ────────────────────────────────────────────────────────────
-
-
-def _pending_count(sb: Client, rpc: str, user_id: str) -> int:
-    data = sb.rpc(rpc, {"p_user": user_id}).execute().data or {}
-    return int(data.get("pending_count") or 0)
-
-
-async def _reject_if_import_running(sb: Client, user_id: str) -> None:
-    """Both workers drive the same BGG session; a plan built mid-import is junk."""
-    if await asyncio.to_thread(_pending_count, sb, "bgb_bgg_sync_status", user_id):
-        raise HTTPException(
-            status_code=409,
-            detail="A BoardGameGeek import is still running. Wait for it to finish, then try again.",
-        )
-
-
-async def _reject_if_push_running(sb: Client, user_id: str) -> None:
-    if await asyncio.to_thread(_pending_count, sb, "bgb_bgg_push_status", user_id):
-        raise HTTPException(
-            status_code=409,
-            detail="A BoardGameGeek push is still running. Wait for it to finish, then try again.",
-        )
 
 
 def _queue_catalog_imports(sb: Client, user_id: str, bgg_ids: list[int]) -> None:
@@ -181,9 +155,9 @@ async def check_bgg(
     progress = bgg_progress.BggCheckProgress(user.user_id)
     try:
         progress.begin(BggCheckPhase.GUARDS)
-        username = _require_linked_username(sb, user.user_id)
-        await _reject_if_import_running(sb, user.user_id)
-        await _reject_if_push_running(sb, user.user_id)
+        username = linked_bgg_username(sb, user.user_id)
+        await reject_if_import_running(sb, user.user_id)
+        await reject_if_push_running(sb, user.user_id)
         # Anchors the catalog-fill counters this check is about to create. The
         # rows land in the same queue an import uses, so without a separate
         # stamp they would be counted into the last IMPORT's session window —
@@ -262,9 +236,9 @@ async def push_bgg(
 ) -> BggPushSummary:
     """Queue every change in the reviewed comparison and drain it in the background."""
     sb = get_supabase()
-    username = _require_linked_username(sb, user.user_id)
-    await _reject_if_import_running(sb, user.user_id)
-    await _reject_if_push_running(sb, user.user_id)
+    username = linked_bgg_username(sb, user.user_id)
+    await reject_if_import_running(sb, user.user_id)
+    await reject_if_push_running(sb, user.user_id)
 
     # The plan the user reviewed, when the server still holds it and the client
     # can name it. NOT the client's list — the client sends a timestamp and
@@ -317,18 +291,8 @@ async def push_bgg(
         updates=counts[BggPushChange.UPDATE],
         clears=counts[BggPushChange.CLEAR],
         unpushable=len(plan.unpushable),
-        plan_changed=_plan_moved(body.checked_at, plan),
         reused_comparison=reused,
     )
-
-
-def _plan_moved(checked_at: Optional[datetime], plan: ComparePlan) -> bool:
-    """Whether anything changed between the user's review and this re-plan.
-
-    Only a hint for the FE's wording — the freshly-computed plan is what runs
-    either way.
-    """
-    return checked_at is not None and bool(plan.warm_up_failed)
 
 
 def _stamp_and_queue(
@@ -367,9 +331,9 @@ def _stamp_and_queue(
         "attempts": 0,
     } for p in plan.push]
 
-    for i in range(0, len(rows), 500):
+    for chunk in chunked(rows, 500):
         sb.table("boardgamebuddy_bgg_push_queue").upsert(
-            rows[i:i + 500], on_conflict="user_id,bgg_id",
+            chunk, on_conflict="user_id,bgg_id",
         ).execute()
 
 
@@ -387,12 +351,7 @@ async def get_push_status(
     data = sb.rpc("bgb_bgg_push_status", {"p_user": user.user_id}).execute().data or {}
 
     bgg_username = data.get("bgg_username")
-    if not bgg_username:
-        auth_state = BggAuthState.UNLINKED
-    elif data.get("has_credentials"):
-        auth_state = BggAuthState.LINKED
-    else:
-        auth_state = BggAuthState.RELINK_REQUIRED
+    auth_state = auth_state_from(data)
 
     return BggPushStatus(
         bgg_username=bgg_username,

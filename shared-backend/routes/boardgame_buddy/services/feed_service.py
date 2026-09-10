@@ -2,8 +2,9 @@
 Hits the RPCs added in migration 012."""
 
 import asyncio
+from supabase import Client
 from datetime import date, datetime
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from ..models import (
     FeedCard,
@@ -89,7 +90,7 @@ def _encode_cursor(played_at: date, created_at: datetime) -> str:
     return f"{played_at.isoformat()}|{created_at.isoformat()}"
 
 
-def _decode_cursor(cursor: Optional[str]) -> Tuple[Optional[date], Optional[datetime]]:
+def _decode_cursor(cursor: str | None) -> tuple[date | None, datetime | None]:
     if not cursor:
         return None, None
     if "|" not in cursor:
@@ -111,12 +112,12 @@ def _decode_cursor(cursor: Optional[str]) -> Tuple[Optional[date], Optional[date
 
 
 def fetch_feed_plays(
-    sb,
+    sb: Client,
     viewer_id: str,
     *,
-    cursor: Optional[str] = None,
+    cursor: str | None = None,
     limit: int = 20,
-) -> tuple[list[FeedPlayCard], Optional[str]]:
+) -> tuple[list[FeedPlayCard], str | None]:
     """Returns (cards, next_cursor). next_cursor is "played_at|created_at"
     of the last row; None means no more pages."""
     before_played, before_created = _decode_cursor(cursor)
@@ -127,14 +128,14 @@ def fetch_feed_plays(
         params["before_created_at"] = before_created.isoformat()
     rows = sb.rpc("bgb_feed_plays", params).execute().data or []
     cards = [_play_card_from_rpc_row(r) for r in rows]
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
     if len(rows) == limit and rows:
         last = cards[-1]
         next_cursor = _encode_cursor(last.played_at, last.created_at)
     return cards, next_cursor
 
 
-def fetch_hot_games(sb, *, window_days: int = 7, limit: int = 10) -> HotGamesResponse:
+def fetch_hot_games(sb: Client, *, window_days: int = 7, limit: int = 10) -> HotGamesResponse:
     """Top-N games by plays in the window, for the Feed's "Hot this week" rail.
 
     play_count counts LIVE-LOGGED plays only: bgb_hot_games (migration 013)
@@ -163,8 +164,8 @@ def _suggestion_from_row(
     row: dict,
     profiles: dict,
     *,
-    source: Optional[BuddySuggestionSource] = None,
-) -> Optional[FeedSuggestedBuddy]:
+    source: BuddySuggestionSource | None = None,
+) -> FeedSuggestedBuddy | None:
     """Shape one suggestion row against an already-fetched profile map.
 
     Returns None when the candidate has no profile row — both RPCs inner-join
@@ -192,7 +193,7 @@ def _suggestion_from_row(
     )
 
 
-def fetch_suggested_buddies(sb, viewer_id: str, *, limit: int = 5) -> SuggestedBuddiesResponse:
+def fetch_suggested_buddies(sb: Client, viewer_id: str, *, limit: int = 5) -> SuggestedBuddiesResponse:
     """Candidates the viewer has played with, then friends-of-friends.
 
     Every suggestion shares at least one play, one accepted buddy, or one
@@ -224,7 +225,7 @@ def _suggestion_profile_ids(*row_groups: list[dict]) -> list[str]:
 
 
 def fetch_onboarding_buddy_suggestions(
-    sb, viewer_id: str, *, limit: int = 12
+    sb: Client, viewer_id: str, *, limit: int = 12
 ) -> OnboardingSuggestionsResponse:
     """Candidates for the onboarding "Add buddies" step.
 
@@ -293,9 +294,9 @@ def fetch_onboarding_buddy_suggestions(
 
 def _compose_page(
     play_cards: list[FeedPlayCard],
-    next_cursor: Optional[str],
-    hot: Optional[HotGamesResponse],
-    sug: Optional[SuggestedBuddiesResponse],
+    next_cursor: str | None,
+    hot: HotGamesResponse | None,
+    sug: SuggestedBuddiesResponse | None,
 ) -> FeedPageResponse:
     """Interleave the three already-fetched blocks into one page.
 
@@ -313,7 +314,7 @@ def _compose_page(
     # Interleave suggestions roughly through the page so the feed never feels
     # like a wall of identical units — the order is:
     #   play 1 → suggested-buddies → play 2 → ...
-    suggestions_card: Optional[FeedSuggestedBuddiesCard] = None
+    suggestions_card: FeedSuggestedBuddiesCard | None = None
     if sug and sug.suggestions:
         suggestions_card = FeedSuggestedBuddiesCard(suggestions=sug.suggestions)
 
@@ -331,10 +332,10 @@ def _compose_page(
 
 
 async def build_feed_page(
-    sb,
+    sb: Client,
     viewer_id: str,
     *,
-    cursor: Optional[str] = None,
+    cursor: str | None = None,
     limit: int = 20,
 ) -> FeedPageResponse:
     """Assemble a single page of mixed feed cards.

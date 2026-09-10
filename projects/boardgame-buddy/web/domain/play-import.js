@@ -657,11 +657,6 @@
       for (const p of this.plays) if (set.has(p.id)) p.dropped = true;
     }
 
-    restorePlays(ids) {
-      const set = new Set(ids);
-      for (const p of this.plays) if (set.has(p.id)) p.dropped = false;
-    }
-
     // ── The write ────────────────────────────────────────────────────────────
 
     /**

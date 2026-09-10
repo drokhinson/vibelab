@@ -37,8 +37,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+
 
 import cache
 
@@ -76,7 +76,7 @@ def store(user_id: str, *, checked_at: datetime, plan: ComparePlan) -> None:
     cache.set(_NS, user_id, CachedCheck(checked_at=checked_at, plan=plan), _TTL_SECONDS)
 
 
-def peek(user_id: str) -> Optional[CachedCheck]:
+def peek(user_id: str) -> CachedCheck | None:
     """The stored comparison without consuming it. For logging and tests."""
     return cache.get(_NS, user_id)
 
@@ -86,19 +86,22 @@ def invalidate(user_id: str) -> None:
     cache.delete(_NS, user_id)
 
 
-def pop_plan(user_id: str, *, checked_at: Optional[datetime]) -> Optional[ComparePlan]:
+def pop_plan(user_id: str, *, checked_at: datetime | None) -> ComparePlan | None:
     """The plan the user reviewed, or None if we cannot prove it is that one.
 
     None means "go and sweep": no stored plan, or one whose stamp does not
     match what the client says it reviewed. Never a guess — a mismatched stamp
     is the case where re-planning is exactly the right answer.
     """
-    entry: Optional[CachedCheck] = cache.get(_NS, user_id)
+    entry: CachedCheck | None = cache.get(_NS, user_id)
     if entry is None:
         return None
     if checked_at is None:
         logger.info("BGG push: client named no comparison for user=%s; re-planning", user_id)
         return None
+    # A client may echo the stamp without its offset; it was minted in UTC.
+    if checked_at.tzinfo is None:
+        checked_at = checked_at.replace(tzinfo=timezone.utc)
     if abs(entry.checked_at - checked_at) > _STAMP_TOLERANCE:
         logger.info(
             "BGG push: stored comparison %s is not the reviewed one %s for user=%s; re-planning",
@@ -109,14 +112,14 @@ def pop_plan(user_id: str, *, checked_at: Optional[datetime]) -> Optional[Compar
     return entry.plan
 
 
-def pop_sweep(user_id: str) -> Optional[list[BggCollectionItem]]:
+def pop_sweep(user_id: str) -> list[BggCollectionItem] | None:
     """The collection items the last check read, or None to go and read them.
 
     A sweep that ran out of warm-up retries is never handed back: it returned
     ZERO items for at least one batch, which an import would write as a
     collection that has shrunk.
     """
-    entry: Optional[CachedCheck] = cache.get(_NS, user_id)
+    entry: CachedCheck | None = cache.get(_NS, user_id)
     if entry is None:
         return None
     if entry.plan.warm_up_failed:

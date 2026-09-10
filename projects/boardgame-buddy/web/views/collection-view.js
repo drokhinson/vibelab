@@ -332,8 +332,13 @@
         this._hydrateStatusMap();
         this._hydrateFromCache();
         this.render();
-        window.User.fetch(this._targetUserId)
-          .then((p) => { this._targetProfile = p; this.render(); })
+        const target = this._targetUserId;
+        window.User.fetch(target)
+          .then((p) => {
+            if (!this._mounted || this._targetUserId !== target) return;
+            this._targetProfile = p;
+            this.render();
+          })
           .catch(() => {});
         await this._loadActiveShelf();
         // Viewer maps still apply — overlay "you own this" pills on
@@ -454,9 +459,7 @@
     }
 
     _renderShell() {
-      const active = document.activeElement;
-      const activeId = active && active.id;
-      const caret = active && active.selectionStart;
+      const focus = captureFocus();
 
       const tree = this._mode === MODE_EXPANSIONS;
 
@@ -494,15 +497,7 @@
       this.refreshIcons();
       this._armInfinite();
 
-      if (activeId) {
-        const el = document.getElementById(activeId);
-        if (el && el.focus) {
-          el.focus();
-          if (caret != null && el.setSelectionRange) {
-            try { el.setSelectionRange(caret, caret); } catch (_) {}
-          }
-        }
-      }
+      restoreFocus(focus);
     }
 
     /** The reveal-a-batch path: two subtree writes, no shell teardown. */
@@ -840,7 +835,7 @@
         ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`
         : "";
       return `
-        <div class="collection-tile${parted ? " is-prev-owned" : ""}" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})">
+        <div class="collection-tile${parted ? " is-prev-owned" : ""}" onclick="${escapeAttr(gameDetailJs(g.id, g.name))}">
           ${window.renderStatusTag(g.id, status, { corner: true, pending, gameName: g.name })}
           <div class="collection-tile__art">
             ${gameArtImg(g, "card")

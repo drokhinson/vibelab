@@ -6,8 +6,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#1a0f0b",
-  "theme_color": "#1a0f0b",
+  "background_color": "#1A1310",
+  "theme_color": "#1A1310",
   "icons": [
     {
       "src": "/assets/brand/bgb-icon-192.png",

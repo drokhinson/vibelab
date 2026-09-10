@@ -129,9 +129,12 @@
     }
 
     async _deleteChapter(chapterId, reportId) {
-      if (!window.confirm("Delete this chapter? This removes it from the pool and from every user's guide. The report will be cleared.")) {
-        return;
-      }
+      const ok = await window.PolaroidPopup.confirm({
+        title: "Delete this chapter?",
+        body: "This removes it from the pool and from every user's guide. The report will be cleared.",
+        confirmLabel: "Delete", cancelLabel: "Keep it", destructive: true,
+      });
+      if (!ok) return;
       try {
         await window.Chapter.delete(chapterId);
         showToast("Chapter deleted", "success");

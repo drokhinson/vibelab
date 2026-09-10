@@ -14,55 +14,15 @@ services/export_csv.py owns the formatting.
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 from supabase import Client
 
-from ..constants import EXPORT_IN_CHUNK, EXPORT_MAX_ROWS, EXPORT_PAGE_SIZE
+from ..constants import EXPORT_IN_CHUNK
+from ._helpers import chunked, page_all
 from .export_csv import CsvFile
 
 logger = logging.getLogger("vibelab")
-
-
-# ── Paging ────────────────────────────────────────────────────────────────────
-
-def page_all(build_query, order_by: str, *, label: str) -> list[dict[str, Any]]:
-    """Read every row a query matches, in explicit pages.
-
-    THIS PAGINATION IS LOAD-BEARING, for the same reason it is in
-    services/bgg_compare_service.py: PostgREST caps an unbounded select at 1000
-    rows and a truncated read does not fail. There it silently un-owned games;
-    here it silently ships an export that looks complete and is missing the
-    user's last decade of plays — which is worse, because nothing downstream
-    ever notices.
-
-    `build_query` is a zero-arg callable rather than a query object because a
-    PostgREST builder cannot be re-ranged: each page needs a fresh one.
-    `order_by` must be unique enough to totally order the rows, or a page
-    boundary repeats and skips.
-    """
-    rows: list[dict[str, Any]] = []
-    offset = 0
-    while True:
-        page = (
-            build_query()
-            .order(order_by)
-            .range(offset, offset + EXPORT_PAGE_SIZE - 1)
-            .execute()
-        ).data or []
-        rows.extend(page)
-        if len(page) < EXPORT_PAGE_SIZE:
-            return rows
-        offset += EXPORT_PAGE_SIZE
-        if offset > EXPORT_MAX_ROWS:
-            logger.error("Export: paging bound hit for %s at %d rows", label, len(rows))
-            raise RuntimeError(f"export paging did not terminate for {label}")
-
-
-def chunks(values: list[str]) -> Iterable[list[str]]:
-    """Split ids into `.in_()`-sized batches (see EXPORT_IN_CHUNK)."""
-    for i in range(0, len(values), EXPORT_IN_CHUNK):
-        yield values[i:i + EXPORT_IN_CHUNK]
 
 
 def embedded(row: dict[str, Any], table: str) -> dict[str, Any]:
@@ -92,7 +52,7 @@ def profile_names(sb: Client, user_ids: Iterable[str]) -> dict[str, dict[str, An
     if not ids:
         return {}
     out: dict[str, dict[str, Any]] = {}
-    for chunk in chunks(ids):
+    for chunk in chunked(ids, EXPORT_IN_CHUNK):
         rows = (
             sb.table("boardgamebuddy_profiles")
             .select("id, display_name, username")
@@ -251,13 +211,13 @@ def build_guides(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile
     return [CsvFile("guide_chapters.csv", header, out)]
 
 
-def _game_names(sb: Client, game_ids: Iterable[Optional[str]]) -> dict[str, dict[str, Any]]:
+def _game_names(sb: Client, game_ids: Iterable[str | None]) -> dict[str, dict[str, Any]]:
     """Resolve game UUIDs to {id: {name, bgg_id}}."""
     ids = sorted({gid for gid in game_ids if gid})
     if not ids:
         return {}
     out: dict[str, dict[str, Any]] = {}
-    for chunk in chunks(ids):
+    for chunk in chunked(ids, EXPORT_IN_CHUNK):
         rows = (
             sb.table("boardgamebuddy_games")
             .select("id, name, bgg_id")

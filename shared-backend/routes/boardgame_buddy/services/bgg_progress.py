@@ -31,7 +31,7 @@ this namespace to that TODO's list when you do it.
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+
 
 import cache
 
@@ -72,7 +72,7 @@ class BggCheckProgress:
         self.started_at = _now()
         self.state = BggCheckState.RUNNING
         self.warm_up_failed = False
-        self.error: Optional[str] = None
+        self.error: str | None = None
         # Seeded with every phase up front — see BggCheckPhase's docstring.
         self._steps: dict[str, dict] = {
             phase.value: {
@@ -93,8 +93,8 @@ class BggCheckProgress:
         self,
         phase: BggCheckPhase,
         *,
-        total: Optional[int] = None,
-        detail: Optional[str] = None,
+        total: int | None = None,
+        detail: str | None = None,
     ) -> None:
         """Mark `phase` active, and everything before it done.
 
@@ -122,7 +122,7 @@ class BggCheckProgress:
         self._flush()
 
     def tick(
-        self, phase: BggCheckPhase, done: int, *, detail: Optional[str] = None
+        self, phase: BggCheckPhase, done: int, *, detail: str | None = None
     ) -> None:
         """Advance the counter on an active phase."""
         step = self._steps[phase.value]
@@ -151,7 +151,7 @@ class BggCheckProgress:
         }
         self._flush()
 
-    def skip(self, phase: BggCheckPhase, *, detail: Optional[str] = None) -> None:
+    def skip(self, phase: BggCheckPhase, *, detail: str | None = None) -> None:
         """This phase was not needed — a shelf with nothing to add skips COLLIDS."""
         step = self._steps[phase.value]
         step["state"] = BggCheckStepState.SKIPPED.value
@@ -228,10 +228,7 @@ class NullProgress(BggCheckProgress):
     def _flush(self) -> None: return None
 
 
-def read(user_id: str) -> Optional[dict]:
+def read(user_id: str) -> dict | None:
     """The latest snapshot for a user, or None when there is no record."""
     return cache.get(_NS, user_id)
 
-
-def clear(user_id: str) -> None:
-    cache.delete(_NS, user_id)

@@ -75,6 +75,16 @@
    * @param {PolaroidPopupOptions} opts
    * @returns {number} the card's id, for guarded update() calls.
    */
+  let _prevOverflow = null;
+
+  // The same lock ui/bottom-sheet.js takes: a touch drag on the backdrop must
+  // not scroll the page behind the card. Every card mounts through here.
+  function mount(root) {
+    if (_prevOverflow === null) _prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.body.appendChild(root);
+  }
+
   function show(opts) {
     dismiss(); // singleton — never stack two
     const root = document.createElement("div");
@@ -94,7 +104,7 @@
       if (live && live.saving) return;
       handleDismiss(live);
     });
-    document.body.appendChild(root);
+    mount(root);
     // Back takes the backdrop's exit — including its refusal to dismiss a card
     // whose save is still in flight, which re-arms the guard rather than
     // spending the press on the screen underneath.
@@ -216,6 +226,10 @@
     const existing = document.getElementById(BACKDROP_ID);
     if (existing && existing.parentNode) {
       existing.parentNode.removeChild(existing);
+    }
+    if (_prevOverflow !== null) {
+      document.body.style.overflow = _prevOverflow;
+      _prevOverflow = null;
     }
     const hook = _orphanHook;
     _orphanHook = null;
@@ -417,7 +431,7 @@
         if (typeof opts.onView === "function") opts.onView();
       }
     });
-    document.body.appendChild(root);
+    mount(root);
     armBack(root, close);
     window.BgbIcons.render(root);
   }
@@ -465,7 +479,7 @@
       root.addEventListener("click", (ev) => {
         if (isOutsideCard(ev.target)) { dismiss(); resolve(false); }
       });
-      document.body.appendChild(root);
+      mount(root);
       // Back cancels — the same answer a backdrop tap gives, and the safe one
       // for a dialog whose other button is destructive.
       armBack(root, () => { dismiss(); resolve(false); });
@@ -506,11 +520,67 @@
       root.addEventListener("click", (ev) => {
         if (isOutsideCard(ev.target)) { dismiss(); resolve(); }
       });
-      document.body.appendChild(root);
+      mount(root);
       armBack(root, () => { dismiss(); resolve(); });
       window.BgbIcons.render(root);
       const okBtn = root.querySelector(".polaroid-popup__confirm");
       if (okBtn) okBtn.addEventListener("click", () => { dismiss(); resolve(); });
+    });
+  }
+
+  /**
+   * One-field text dialog — the project's replacement for window.prompt,
+   * which some installed-PWA contexts block outright. Resolves with the
+   * typed string on confirm, or null on cancel / backdrop / back.
+   * @param {{title:string, body?:string, value?:string, placeholder?:string,
+   *          confirmLabel?:string, cancelLabel?:string}} opts
+   * @returns {Promise<string|null>}
+   */
+  function prompt({
+    title,
+    body,
+    value = "",
+    placeholder = "",
+    confirmLabel = "OK",
+    cancelLabel = "Cancel",
+  }) {
+    return new Promise((resolve) => {
+      dismiss();
+      const root = document.createElement("div");
+      root.id = BACKDROP_ID;
+      root.className = "polaroid-popup__backdrop polaroid-popup__backdrop--confirm";
+      root.innerHTML = `
+        <div class="polaroid-popup__card polaroid-popup__card--confirm"
+             role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}">
+          <div class="polaroid-popup__title">${escapeHtml(title)}</div>
+          ${body ? `<p class="polaroid-popup__body">${escapeHtml(body)}</p>` : ""}
+          <form class="polaroid-field polaroid-popup__prompt">
+            <input type="text" class="polaroid-field__input polaroid-popup__prompt-input"
+                   value="${escapeAttr(value)}" placeholder="${escapeAttr(placeholder)}"
+                   aria-label="${escapeAttr(title)}" autocomplete="off" />
+          </form>
+          <div class="polaroid-popup__actions">
+            <button type="button" class="btn btn-ghost btn-sm polaroid-popup__cancel">${escapeHtml(cancelLabel)}</button>
+            <button type="button" class="btn btn-primary btn-sm polaroid-popup__confirm">${escapeHtml(confirmLabel)}</button>
+          </div>
+        </div>
+      `;
+      const input = /** @type {HTMLInputElement} */ (root.querySelector(".polaroid-popup__prompt-input"));
+      const cancel = () => { dismiss(); resolve(null); };
+      const ok = () => { const v = input.value; dismiss(); resolve(v); };
+      root.addEventListener("click", (ev) => {
+        if (isOutsideCard(ev.target)) cancel();
+      });
+      root.querySelector("form").addEventListener("submit", (ev) => { ev.preventDefault(); ok(); });
+      mount(root);
+      armBack(root, cancel);
+      window.BgbIcons.render(root);
+      root.querySelector(".polaroid-popup__cancel").addEventListener("click", cancel);
+      root.querySelector(".polaroid-popup__confirm").addEventListener("click", ok);
+      // The one overlay that exists to be typed into: the field IS the content
+      // (.claude/rules/overlays.md §5 is about lists the keyboard would bury).
+      input.focus();
+      input.select();
     });
   }
 
@@ -589,7 +659,7 @@
           </div>
         </div>
       `;
-      document.body.appendChild(root);
+      mount(root);
 
       // The carousel, the colour toggle and the swatch grid all live in
       // ui/avatar-picker.js — this card and the onboarding deck's first slide
@@ -689,6 +759,6 @@
 
 
   window.PolaroidPopup = {
-    show, update, dismiss, isOpen, achievement, confirm, alert, avatarCustomizer,
+    show, update, dismiss, isOpen, achievement, confirm, alert, prompt, avatarCustomizer,
   };
 })();

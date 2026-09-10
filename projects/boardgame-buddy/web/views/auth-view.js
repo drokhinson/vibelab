@@ -38,7 +38,7 @@
         onApple: "window.authView.oauth('apple')",
       });
       const errLine = this._error
-        ? `<div class="text-error text-sm mb-3">${this._error}</div>` : "";
+        ? `<div class="text-error text-sm mb-3">${escapeHtml(this._error)}</div>` : "";
       const offline = !!(window.BgbNet && window.BgbNet.isOffline());
       const offlineBanner = offline
         ? `<div class="alert alert-warning mb-4 text-sm">
@@ -66,7 +66,7 @@
               </div>
               <form onsubmit="window.authView.submit(event)">
                 <div class="form-control mb-3">
-                  <input type="email" id="auth-email" placeholder="Email" class="input input-bordered w-full" value="${this._email || ""}" required />
+                  <input type="email" id="auth-email" placeholder="Email" class="input input-bordered w-full" value="${escapeAttr(this._email || "")}" required />
                 </div>
                 <div class="form-control mb-4">
                   <input type="password" id="auth-password" placeholder="Password" class="input input-bordered w-full" required minlength="6" />
