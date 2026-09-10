@@ -13,7 +13,11 @@
 // @ts-check
 
 (function () {
-  const BACKDROP_ID = "bgb-play-detail-popup";
+  const _modal = new window.BgbModal({
+    id: "bgb-play-detail-popup",
+    className: "play-detail-popup__backdrop",
+    label: "Play details",
+  });
 
   // Module-scoped singleton state. The popup is a transient sheet and
   // never renders more than once at a time, so a single state bag keeps
@@ -28,9 +32,6 @@
     draft: null,        // working copy while editing
     buddies: [],        // buddy datalist for the add-player input
   };
-
-  // Device-back guard token — see ui/back-guard.js.
-  let _back = 0;
 
   // The card markup currently painted into the backdrop. render() compares
   // against it and returns without touching the DOM when the new markup is
@@ -96,13 +97,12 @@
   }
 
   function dismiss() {
-    if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
-    _back = 0;
+    _modal.close();
+    resetState();
+  }
+
+  function resetState() {
     _lastHtml = null;
-    const existing = document.getElementById(BACKDROP_ID);
-    if (existing && existing.parentNode) {
-      existing.parentNode.removeChild(existing);
-    }
     if (state.draft) clearPendingPhoto(state.draft);
     Object.assign(state, {
       playId: null,
@@ -116,28 +116,18 @@
     });
   }
 
+  // Every exit — ×, outside tap, Escape, back — discards an edit draft; the
+  // shell routes them all through onClose.
   function mountBackdrop() {
     _lastHtml = null;
-    const root = document.createElement("div");
-    root.id = BACKDROP_ID;
-    root.className = "polaroid-popup__backdrop play-detail-popup__backdrop";
-    root.addEventListener("click", (ev) => {
-      if (ev.target === root) dismiss();
-    });
-    document.body.appendChild(root);
-    // Back closes the card, not the screen it was opened from — the same exit
-    // the corner X takes (ui/back-guard.js). In edit mode that discards the
-    // draft, which is what the X does too.
-    _back = window.BgbBackGuard
-      ? window.BgbBackGuard.arm({ root: root, close: dismiss })
-      : 0;
+    _modal.open({ html: "", onClose: resetState });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
   // Preserve focus + caret across the innerHTML replace so the edit-form's
   // text inputs don't lose them on every keystroke.
   function render() {
-    const root = document.getElementById(BACKDROP_ID);
+    const root = _modal.el;
     if (!root) return;
     const html = renderCard();
     // Nothing about the card changed — leave the DOM alone. This is what a
@@ -442,7 +432,7 @@
   function enterEditWithPhotoPicker() {
     enterEdit();
     setTimeout(() => {
-      const root = document.getElementById(BACKDROP_ID);
+      const root = _modal.el;
       const fileInput = root && root.querySelector(".play-detail-popup__photo-file");
       if (fileInput && fileInput.click) fileInput.click();
     }, 0);
@@ -913,7 +903,7 @@
     state.saving = true;
     state.editError = null;
     // Re-mount because PolaroidPopup.confirm dismissed our backdrop.
-    if (!document.getElementById(BACKDROP_ID)) mountBackdrop();
+    if (!_modal.isOpen) mountBackdrop();
     render();
     try {
       await window.Play.remove(state.play.id);
@@ -943,7 +933,7 @@
     state.saving = true;
     state.editError = null;
     // Re-mount because PolaroidPopup.confirm dismissed our backdrop.
-    if (!document.getElementById(BACKDROP_ID)) mountBackdrop();
+    if (!_modal.isOpen) mountBackdrop();
     render();
     try {
       await window.Play.leave(state.play.id);

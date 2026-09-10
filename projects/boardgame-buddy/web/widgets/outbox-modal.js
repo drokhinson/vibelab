@@ -14,32 +14,13 @@
 // gear's dot (the `outboxCount` row in domain/notifications.js).
 
 (function () {
-  const BACKDROP_ID = "bgb-outbox-modal";
+  const _modal = new window.BgbModal({ id: "bgb-outbox-modal", label: "Waiting to upload" });
 
-  let _previousFocus = null;
-  let _escHandler = null;
   let _busy = false;
   let _unsub = null;
-  // Device-back guard token — see ui/back-guard.js.
-  let _back = 0;
 
   function dismiss() {
-    if (window.BgbBackGuard) window.BgbBackGuard.release(_back);
-    _back = 0;
-    const el = document.getElementById(BACKDROP_ID);
-    if (el) el.remove();
-    if (_escHandler) {
-      document.removeEventListener("keydown", _escHandler);
-      _escHandler = null;
-    }
-    if (_unsub) {
-      _unsub();
-      _unsub = null;
-    }
-    if (_previousFocus && _previousFocus.focus) {
-      try { _previousFocus.focus(); } catch (_) {}
-    }
-    _previousFocus = null;
+    _modal.close();
   }
 
   function fmtWhen(entry) {
@@ -114,7 +95,7 @@
   }
 
   function repaint() {
-    const root = document.getElementById(BACKDROP_ID);
+    const root = _modal.el;
     if (!root) return;
     const body = root.querySelector(".outbox-modal__list");
     if (body) body.innerHTML = renderBody();
@@ -137,16 +118,11 @@
   }
 
   function open() {
-    dismiss(); // singleton — never stack two
-    _previousFocus = document.activeElement;
     const offline = !!(window.BgbNet && window.BgbNet.isOffline());
-
-    const root = document.createElement("div");
-    root.id = BACKDROP_ID;
-    root.className = "polaroid-popup__backdrop";
-    root.innerHTML = `
-      <div class="polaroid-popup__card polaroid-popup__card--confirm outbox-modal"
-           role="dialog" aria-modal="true" aria-label="Waiting to upload">
+    _modal.open({
+      returnFocus: document.activeElement,
+      html: `
+      <div class="polaroid-popup__card polaroid-popup__card--confirm outbox-modal">
         <button class="polaroid-popup__close" aria-label="Close">
           <i data-icon="x" class="w-4 h-4"></i>
         </button>
@@ -157,30 +133,21 @@
         <div class="outbox-modal__list">${renderBody()}</div>
         <div class="outbox-modal__actions">${renderActions()}</div>
       </div>
-    `;
-    root.addEventListener("click", (ev) => {
-      if (ev.target === root) dismiss();
+      `,
+      onOpen: () => {
+        // outboxCount only fires on a net change, and a queued→failed flip
+        // leaves the total identical — so repaint off the store AND after
+        // every action.
+        if (window.store) {
+          const a = window.store.subscribe("outboxCount", repaint);
+          const b = window.store.subscribe("offline", repaint);
+          _unsub = () => { a && a(); b && b(); };
+        }
+      },
+      onClose: () => {
+        if (_unsub) { _unsub(); _unsub = null; }
+      },
     });
-    document.body.appendChild(root);
-    window.BgbIcons.render(root);
-    // Back closes the queue card, not the screen underneath it.
-    _back = window.BgbBackGuard
-      ? window.BgbBackGuard.arm({ root: root, close: dismiss })
-      : 0;
-
-    const closeBtn = root.querySelector(".polaroid-popup__close");
-    if (closeBtn) closeBtn.addEventListener("click", () => dismiss());
-
-    _escHandler = (ev) => { if (ev.key === "Escape") dismiss(); };
-    document.addEventListener("keydown", _escHandler);
-
-    // outboxCount only fires on a net change, and a queued→failed flip leaves
-    // the total identical — so repaint off the store AND after every action.
-    if (window.store) {
-      const a = window.store.subscribe("outboxCount", repaint);
-      const b = window.store.subscribe("offline", repaint);
-      _unsub = () => { a && a(); b && b(); };
-    }
   }
 
   async function _upload() {

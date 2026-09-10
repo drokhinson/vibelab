@@ -5846,6 +5846,8 @@ html.bgb-ptr-armed body {
   to   { transform: translateY(100%); }
 }
 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+/* Every ui/modal-shell.js card leaves the same way (CLOSE_MS there). */
+.polaroid-popup__backdrop.bgb-modal.is-closing { animation: fadeOut 200ms ease-out both; }
 
 .status-sheet__grip {
   width: 44px; height: 4px; border-radius: 4px;
