@@ -10,7 +10,9 @@ import jwt
 from fastapi import HTTPException
 from typing import Optional
 
-ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "dev-admin-key")
+# No fallback: an unset key rejects every admin call rather than accepting a
+# public one (ENV.md).
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY") or None
 
 
 def hash_password(password: str) -> str:
@@ -48,10 +50,6 @@ def extract_bearer_token(authorization: Optional[str]) -> str:
 
 def require_admin(authorization: Optional[str]) -> None:
     """Validate Bearer token matches ADMIN_API_KEY. Raises 401/403."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization required")
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Invalid authorization format")
-    if parts[1] != ADMIN_API_KEY:
+    token = extract_bearer_token(authorization)
+    if not ADMIN_API_KEY or token != ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")

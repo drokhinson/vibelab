@@ -116,7 +116,7 @@ async def become_admin(
     su_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> ProfileResponse:
     """Exchange the shared admin API key for the is_admin flag on this user's profile."""
-    if body.admin_key != ADMIN_API_KEY:
+    if not ADMIN_API_KEY or body.admin_key != ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
     sb = get_supabase()
     result = (

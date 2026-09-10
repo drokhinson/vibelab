@@ -32,12 +32,19 @@ from ..models import BuddyEdgeResponse, BuddyQrPeekResponse
 from ._helpers import canonical_edge_pair, edge_response, fetch_profiles_by_ids
 
 
+def _require_secret() -> str:
+    if not BGB_QR_SECRET:
+        raise HTTPException(status_code=503, detail="Buddy QR codes aren't set up on this server yet.")
+    return BGB_QR_SECRET
+
+
 def mint_qr_token(viewer_id: str) -> tuple[str, datetime]:
     """Sign a short-lived token naming the viewer as the code's owner."""
+    secret = _require_secret()
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=QR_TOKEN_TTL_SECONDS)
     token = create_token(
         {"u": viewer_id, "exp": int(expires_at.timestamp())},
-        BGB_QR_SECRET,
+        secret,
         QR_TOKEN_ALGORITHM,
     )
     return token, expires_at
@@ -53,8 +60,9 @@ def issuer_from_qr_token(token: str) -> str:
     reports an expired play session. Expired and forged are deliberately
     indistinguishable to the caller.
     """
+    secret = _require_secret()
     try:
-        payload = decode_token(token, BGB_QR_SECRET, QR_TOKEN_ALGORITHM)
+        payload = decode_token(token, secret, QR_TOKEN_ALGORITHM)
     except HTTPException:
         raise HTTPException(
             status_code=410,

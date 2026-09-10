@@ -12,7 +12,9 @@ from enum import StrEnum
 # token validates here. Rotating this value is also the revocation lever — it
 # invalidates every outstanding code at once, which is why the tokens
 # themselves carry no server-side state.
-BGB_QR_SECRET = os.environ.get("BGB_QR_SECRET", "dev-secret-change-me")
+# No fallback: unset, QR codes refuse to mint or redeem (503) rather than sign
+# with a secret anyone can read out of this file.
+BGB_QR_SECRET = os.environ.get("BGB_QR_SECRET") or None
 QR_TOKEN_ALGORITHM = "HS256"
 # Three minutes. Long enough for three people around a table to each get their
 # phone out; short enough that a screenshot or a shoulder-surfed photo is worth
