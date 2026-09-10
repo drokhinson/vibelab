@@ -41,6 +41,9 @@
   // flush would wedge the queue behind it, so it's parked as "failed" and
   // surfaced in Settings for the user to delete.
   const TERMINAL_STATUSES = new Set([400, 403, 404, 409, 410, 422]);
+  // A play that fails this many times on non-terminal errors is parked the
+  // same way, so a server that keeps choking on it stops costing every flush.
+  const MAX_ATTEMPTS = 5;
 
   let _flushing = null;
 
@@ -200,6 +203,7 @@
       if (!entry) return;
       entry.state = "queued";
       entry.lastError = null;
+      entry.attempts = 0;
       _write(all);
       _publish();
     }
@@ -266,6 +270,14 @@
           const row = cur.find((x) => x.clientKey === entry.clientKey);
           if (row) {
             row.lastError = (e && e.message) || "Upload failed";
+            if (row.attempts >= MAX_ATTEMPTS) {
+              row.state = "failed";
+              row.lastError = `Gave up after ${MAX_ATTEMPTS} tries — ${row.lastError}`;
+              _write(cur);
+              failed++;
+              _publish();
+              continue;
+            }
             _write(cur);
           }
           break;

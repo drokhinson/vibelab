@@ -47,6 +47,10 @@
       for (const slot of window.BgbNotifications.slots()) {
         this.listen(slot, () => this.render());
       }
+      await this._loadBundle();
+    }
+
+    async _loadBundle() {
       this._loading = true;
       this._ach = window.Achievements.cached();
       this.render();
@@ -168,7 +172,7 @@
         const me = window.store.get("user");
         if (me) window.Profile.invalidate(me.id);
       }
-      await this.onMount();
+      await this._loadBundle();
     }
 
     async _openEditProfile() {

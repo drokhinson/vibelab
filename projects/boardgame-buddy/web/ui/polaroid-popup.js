@@ -75,6 +75,16 @@
    * @param {PolaroidPopupOptions} opts
    * @returns {number} the card's id, for guarded update() calls.
    */
+  let _prevOverflow = null;
+
+  // The same lock ui/bottom-sheet.js takes: a touch drag on the backdrop must
+  // not scroll the page behind the card. Every card mounts through here.
+  function mount(root) {
+    if (_prevOverflow === null) _prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.body.appendChild(root);
+  }
+
   function show(opts) {
     dismiss(); // singleton — never stack two
     const root = document.createElement("div");
@@ -94,7 +104,7 @@
       if (live && live.saving) return;
       handleDismiss(live);
     });
-    document.body.appendChild(root);
+    mount(root);
     // Back takes the backdrop's exit — including its refusal to dismiss a card
     // whose save is still in flight, which re-arms the guard rather than
     // spending the press on the screen underneath.
@@ -216,6 +226,10 @@
     const existing = document.getElementById(BACKDROP_ID);
     if (existing && existing.parentNode) {
       existing.parentNode.removeChild(existing);
+    }
+    if (_prevOverflow !== null) {
+      document.body.style.overflow = _prevOverflow;
+      _prevOverflow = null;
     }
     const hook = _orphanHook;
     _orphanHook = null;
@@ -417,7 +431,7 @@
         if (typeof opts.onView === "function") opts.onView();
       }
     });
-    document.body.appendChild(root);
+    mount(root);
     armBack(root, close);
     window.BgbIcons.render(root);
   }
@@ -465,7 +479,7 @@
       root.addEventListener("click", (ev) => {
         if (isOutsideCard(ev.target)) { dismiss(); resolve(false); }
       });
-      document.body.appendChild(root);
+      mount(root);
       // Back cancels — the same answer a backdrop tap gives, and the safe one
       // for a dialog whose other button is destructive.
       armBack(root, () => { dismiss(); resolve(false); });
@@ -506,7 +520,7 @@
       root.addEventListener("click", (ev) => {
         if (isOutsideCard(ev.target)) { dismiss(); resolve(); }
       });
-      document.body.appendChild(root);
+      mount(root);
       armBack(root, () => { dismiss(); resolve(); });
       window.BgbIcons.render(root);
       const okBtn = root.querySelector(".polaroid-popup__confirm");
@@ -589,7 +603,7 @@
           </div>
         </div>
       `;
-      document.body.appendChild(root);
+      mount(root);
 
       // The carousel, the colour toggle and the swatch grid all live in
       // ui/avatar-picker.js — this card and the onboarding deck's first slide

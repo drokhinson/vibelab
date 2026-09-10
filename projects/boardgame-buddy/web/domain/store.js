@@ -22,6 +22,7 @@
         offline: false,       // BgbNet.isOffline() — see domain/net.js
         outboxCount: 0,       // plays queued for upload — see domain/outbox.js
         theme: "dark",        // "light" | "dark" — see domain/theme.js
+        layout: "phone",      // "phone" | "tablet" | "wide" — see domain/layout.js
         // The BGG comparison / sync run, published by domain/bgg-sync-flow.js.
         // Lives here rather than on either surface because the flow's screen
         // and the Settings progress strip are never mounted at the same time.

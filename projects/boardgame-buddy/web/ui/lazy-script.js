@@ -41,9 +41,8 @@
       if (pending) return pending;
 
       const p = new Promise((resolve, reject) => {
-        // A previous call may have inserted the tag and then been dropped from
-        // the map by a rejection; reuse the element rather than stacking a
-        // second copy of a 258 KB file into the document.
+        // A tag can outlive its map entry (the promise settled, the tag stays);
+        // reuse it rather than stack a second copy of a 258 KB file.
         const existing = /** @type {HTMLScriptElement|null} */ (
           document.querySelector('script[data-lazy-src="' + src + '"]')
         );
@@ -54,7 +53,11 @@
           el.dataset.lazySrc = src;
         }
         el.addEventListener("load", () => resolve(), { once: true });
-        el.addEventListener("error", () => reject(new Error("lazy-script: " + src)), { once: true });
+        el.addEventListener("error", () => {
+          // A finished tag never fires again; drop it so a retry gets a fresh one.
+          el.remove();
+          reject(new Error("lazy-script: " + src));
+        }, { once: true });
         if (!existing) document.head.appendChild(el);
       }).catch((err) => {
         inflight.delete(src);

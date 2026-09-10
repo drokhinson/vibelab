@@ -50,8 +50,7 @@
 
     async onMount() {
       this._code = this._extractCode(this.params);
-      this._popupShown = false;
-      this._feedRefreshed = false;
+      this._resetSession();
       if (!this._code) {
         this._error = "No session code provided";
         this.render();
@@ -79,9 +78,7 @@
       }
       await this._teardown();
       this._code = next;
-      this._session = null;
-      this._popupShown = false;
-      this._feedRefreshed = false;
+      this._resetSession();
       await this._load();
       this._scrollToCurrentPhase(this._session && this._session.phase);
       this._startPolling();
@@ -112,6 +109,18 @@
         Promise.resolve().then(() => live.stop()).catch(() => {});
       }
       this._liveScores = null;
+    }
+
+    // Singleton view: everything the previous session left behind, or its
+    // cascade paints under the next code until the load lands.
+    _resetSession() {
+      this._session = null;
+      this._error = null;
+      this._popupShown = false;
+      this._feedRefreshed = false;
+      this._pollTick = 0;
+      this._lastRealtimeAt = 0;
+      this._renderedRounds = 0;
     }
 
     _extractCode(params) {
@@ -404,7 +413,12 @@
     async _maybeStopLiveScores() {
       if (this._liveOff) this._liveOff();
       this._liveOff = null;
-      if (this._liveScores) { try { await this._liveScores.stop(); } catch (_) {} }
+      // Fire-and-forget, as _teardown does: stop() awaits an unsubscribe ack a
+      // never-READY socket never sends, and this runs inside the poll tick.
+      if (this._liveScores) {
+        const live = this._liveScores;
+        Promise.resolve().then(() => live.stop()).catch(() => {});
+      }
       this._liveScores = null;
     }
 

@@ -37,6 +37,7 @@
     renderLoading() {
       // Synchronous, before onMount. restore() runs there and may land on any
       // screen, so painting the checklist here would flash the wrong one.
+      this._lastScreen = null;
       const el = this.container;
       if (el) el.innerHTML = this._chrome(`
         <div class="bgg-flow__step bgg-flow__step--center">
@@ -97,7 +98,7 @@
         case "review":
           return `<div class="bgg-flow__nav">
             <button class="bgg-flow__nav-back" type="button"
-                    onclick="window.bggSyncView.close()">Close</button>
+                    onclick="window.bggSyncView.back()">Close</button>
           </div>`;
         case "confirm": {
           const { label, actionable } = window.BggSyncScreens.commitLabel(snap);
@@ -111,7 +112,7 @@
         case "running":
           return `<div class="bgg-flow__nav">
             <button class="bgg-flow__nav-back" type="button"
-                    onclick="window.bggSyncView.close()">Close</button>
+                    onclick="window.bggSyncView.back()">Close</button>
           </div>`;
         case "done":
           return `<div class="bgg-flow__nav">
@@ -121,7 +122,7 @@
         case "error":
           return `<div class="bgg-flow__nav">
             <button class="bgg-flow__nav-back" type="button"
-                    onclick="window.bggSyncView.close()">Close</button>
+                    onclick="window.bggSyncView.back()">Close</button>
             <button class="bgg-flow__nav-next" type="button"
                     onclick="window.bggSyncView.recheck()">Try again</button>
           </div>`;
@@ -160,11 +161,9 @@
 
     recheck() { this.flow.start(); }
 
-    /** The back arrow: leave, keep whatever is running running. */
+    /** Back and Close: leave, keep whatever is running running — the flow's
+     *  save() on unmount keeps the comparison. */
     back() { window.router.up("settings"); }
-
-    /** Close: same, and the flow's save() on unmount keeps the comparison. */
-    close() { window.router.up("settings"); }
 
     /** Done on a finished run: the comparison is spent, so clear it out. */
     finish() {
