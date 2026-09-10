@@ -110,16 +110,13 @@
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
           <h3 class="bgb-sheet__title">${escapeHtml(title)}</h3>
           <p class="bgb-sheet__sub">Country level data used for game popularity analytics</p>
-          <div class="game-finder bgb-sheet__search">
+          <div class="game-finder bgb-sheet__search" data-search-host>
             <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
             <input type="text" id="country-picker-search"
                    class="input input-bordered game-finder__input"
                    placeholder="Search countries…" aria-label="Search countries"
                    autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
-            <button type="button" class="field-clear-btn" data-country-action="clear"
-                    aria-label="Clear search" hidden>
-              <i data-icon="x" class="w-4 h-4"></i>
-            </button>
+            ${window.BgbSearchField.clearButton()}
           </div>
           <div class="bgb-sheet__list" role="listbox" aria-label="${escapeAttr(title)}"
                data-country-list>${this._renderList()}</div>
@@ -148,28 +145,11 @@
         label: title,
         returnFocus: opts.returnFocus || null,
         onClick: (e) => {
-          if (e.target.closest('[data-country-action="clear"]')) { this._clear(); return; }
           const row = e.target.closest("[data-country-code]");
           if (row) this._pick(row.dataset.countryCode);
         },
-        // Layered, as in game-picker-sheet: the first Escape backs out of the
-        // search, the next closes the sheet.
-        onEscape: () => {
-          if (!this._query) return false;
-          this._clear();
-          return true;
-        },
+        search: { listSel: LIST_SEL, onQuery: (v) => this._setQuery(v) },
         onOpen: (root) => {
-          const input = /** @type {HTMLInputElement|null} */ (
-            root.querySelector(".game-finder__input")
-          );
-          if (input) input.addEventListener("input", () => this._setQuery(input.value));
-          // Pin the list at its opening height so the sheet doesn't walk up
-          // and down the screen as the query narrows it. A custom property,
-          // not min-height, so the stylesheet can drop the pin when the
-          // keyboard shrinks the panel (.claude/rules/overlays.md §4).
-          const list = /** @type {HTMLElement|null} */ (root.querySelector(LIST_SEL));
-          if (list) list.style.setProperty("--bgb-sheet-list-min", list.clientHeight + "px");
           // Focus the current pick rather than the search box — opening the
           // sheet shouldn't throw a keyboard over the list, and with the right
           // country almost always already selected, the common interaction
@@ -212,19 +192,6 @@
         host.scrollTop = 0;
         window.BgbIcons.render(/** @type {HTMLElement} */ (host));
       }
-      const clear = /** @type {HTMLElement|null} */ (
-        root.querySelector('[data-country-action="clear"]')
-      );
-      if (clear) clear.hidden = !this._query;
-    }
-
-    _clear() {
-      const root = this._sheet.el;
-      const input = root
-        ? /** @type {HTMLInputElement|null} */ (root.querySelector(".game-finder__input"))
-        : null;
-      if (input) { input.value = ""; input.focus(); }
-      this._setQuery("");
     }
 
     // ── Pick ────────────────────────────────────────────────────────────────

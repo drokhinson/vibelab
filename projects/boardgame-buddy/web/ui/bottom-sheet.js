@@ -15,10 +15,7 @@
 // (.claude/rules/ui-object-design.md §4: fix the root cause rather than ship a
 // second copy).
 //
-// Used by: ui/status-tag.js, widgets/game-picker-sheet.js,
-// widgets/player-picker-sheet.js, widgets/game-search-sheet.js,
-// widgets/country-picker-sheet.js, widgets/chapter-import-sheet.js,
-// widgets/bgg-import-sheet.js.
+// Grep `BgbBottomSheet` for the consumers — a list here drifted twice.
 //
 // A new sheet also needs its class added by name to the theme re-point list in
 // styles.css — a body-level sheet lands outside the screen that opened it and
@@ -52,6 +49,18 @@
    * @property {(root: HTMLElement) => void} [onOpen]  Runs after the sheet is
    *   in the DOM and its icons are hydrated — focus a control here.
    * @property {() => void} [onClose]
+   * @property {SheetSearch} [search]  A search field that narrows the list.
+   */
+
+  /**
+   * The lifecycle every searchable sheet had grown its own copy of: bind the
+   * field, pin the list at its opening height, and give Escape first refusal
+   * to clearing the query. The list patch itself stays with the sheet —
+   * what a keystroke repaints (rows, tabs, a footer count) is the sheet's.
+   * @typedef {Object} SheetSearch
+   * @property {string} listSel                 The list host to pin.
+   * @property {(value: string) => void} onQuery  Every keystroke, and the ×.
+   * @property {string} [inputSel]              Default ".game-finder__input".
    */
 
   class BottomSheet {
@@ -75,14 +84,21 @@
         if (e.key !== "Escape" || !this._el) return;
         // The sheet gets first refusal: a sheet with a search field wants the
         // first Escape to clear the query and only the second to close.
-        const handler = this._opts && this._opts.onEscape;
-        if (handler && handler()) {
-          e.preventDefault();
-          e.stopPropagation();
-          return;
-        }
         e.preventDefault();
         e.stopPropagation();
+        const handler = this._opts && this._opts.onEscape;
+        if (handler && handler()) return;
+        // Layered: with a query up, Escape backs out of the search and only
+        // the next press closes. The × takes the same path — BgbSearchField
+        // empties the box and dispatches the `input` event onQuery listens
+        // for, so "clear and repaint" is written once. Ticks are never
+        // unwound by Escape; that is what Cancel is for.
+        const search = this._opts && this._opts.search;
+        const input = search && this._el.querySelector(search.inputSel || ".game-finder__input");
+        if (input && /** @type {HTMLInputElement} */ (input).value) {
+          window.BgbSearchField.clear(this._el);
+          return;
+        }
         this.close();
       };
     }
@@ -140,7 +156,21 @@
         ? window.BgbBackGuard.arm({ root: root, close: () => this.close() })
         : 0;
 
+      if (opts.search) this._bindSearch(root, opts.search);
       if (opts.onOpen) opts.onOpen(root);
+    }
+
+    /** @param {HTMLElement} root @param {SheetSearch} search */
+    _bindSearch(root, search) {
+      const input = root.querySelector(search.inputSel || ".game-finder__input");
+      if (input) input.addEventListener("input", () => search.onQuery(/** @type {HTMLInputElement} */ (input).value));
+      // Pin the list at the height it opened with, so the panel doesn't walk
+      // up and down the screen on every keystroke that narrows the results.
+      // A custom property, not min-height: the stylesheet drops the pin when
+      // the keyboard shrinks the sheet, and an inline min-height would
+      // out-specify it (.claude/rules/overlays.md §4).
+      const list = /** @type {HTMLElement|null} */ (root.querySelector(search.listSel));
+      if (list) list.style.setProperty("--bgb-sheet-list-min", list.clientHeight + "px");
     }
 
     close() {

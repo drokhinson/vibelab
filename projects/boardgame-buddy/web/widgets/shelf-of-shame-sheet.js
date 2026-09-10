@@ -231,23 +231,8 @@
           const row = e.target.closest("[data-shelf-game-id]");
           if (row) this._toggle(row.dataset.shelfGameId);
         },
-        // Layered, as the game picker: the first Escape backs out of the
-        // search, the next closes the sheet.
-        onEscape: () => {
-          if (!this._query) return false;
-          this._clear();
-          return true;
-        },
+        search: { listSel: LIST_SEL, onQuery: (v) => this._setQuery(v) },
         onOpen: (root) => {
-          const input = /** @type {HTMLInputElement|null} */ (root.querySelector(".game-finder__input"));
-          if (input) input.addEventListener("input", () => this._setQuery(input.value));
-          // Pin the list at the height it opened with, so the panel doesn't
-          // walk up and down the screen on every keystroke that narrows the
-          // results. A custom property, never an inline min-height — the
-          // stylesheet has to be able to drop the pin when the keyboard
-          // shrinks the sheet, and an inline style would out-specify it.
-          const list = /** @type {HTMLElement|null} */ (root.querySelector(LIST_SEL));
-          if (list) list.style.setProperty("--bgb-sheet-list-min", list.clientHeight + "px");
           // Focus the first row, not the search box: this is a sheet you open
           // to read a list of 63 games, and throwing a software keyboard over
           // it is the wrong default. Tapping the field is the opt-in.
@@ -278,16 +263,6 @@
       // The list alone — re-rendering the panel would blow away the input the
       // user is typing into, along with its focus and caret.
       this._patchList(root, { keepScroll: false });
-    }
-
-    /**
-     * Escape's first press backs out of the search. The × does the same thing
-     * through the shared field's own click path — both land back in
-     * _setQuery via the `input` event BgbSearchField dispatches, so there is
-     * no second copy of "empty the box and repaint the list" here.
-     */
-    _clear() {
-      window.BgbSearchField.clear(this._sheet.el);
     }
 
     /** @param {string} tab */
