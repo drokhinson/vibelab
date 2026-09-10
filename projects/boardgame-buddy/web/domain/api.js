@@ -167,6 +167,8 @@
      * @returns {Promise<[Response, () => void]>} the response and its release fn
      */
     _send(url, init, timeoutMs, callerSignal) {
+      // Composed by hand rather than AbortSignal.any(): that is Safari 17.4+,
+      // and this app runs as an installed PWA on older iOS.
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), timeoutMs);
       let onCallerAbort = null;
@@ -187,15 +189,27 @@
       );
     }
 
-    async _request(method, path, opts = {}) {
-      const { body, query, headers, raw, signal, timeoutMs, _retried, _stalled } = opts;
+    /**
+     * Arrays repeat the parameter (?dataset=plays&dataset=buddies) rather
+     * than joining — that is what FastAPI parses into a list. Empty values
+     * are dropped.
+     * @param {string} path
+     * @param {Object<string, any>} [query]
+     */
+    _buildUrl(path, query) {
       const url = new URL(this.base + this.prefix + path);
-      if (query) {
-        for (const [k, v] of Object.entries(query)) {
-          if (v === undefined || v === null || v === "") continue;
-          url.searchParams.set(k, v);
+      for (const [k, v] of Object.entries(query || {})) {
+        for (const one of (Array.isArray(v) ? v : [v])) {
+          if (one === undefined || one === null || one === "") continue;
+          url.searchParams.append(k, one);
         }
       }
+      return url.toString();
+    }
+
+    async _request(method, path, opts = {}) {
+      const { body, query, headers, raw, signal, timeoutMs, _retried, _stalled } = opts;
+      const url = this._buildUrl(path, query);
       const init = {
         method,
         headers: { ...this._authHeader(), ...(headers || {}) },
@@ -210,7 +224,7 @@
       let res, release;
       try {
         [res, release] = await this._send(
-          url.toString(), init, timeoutMs || REQUEST_TIMEOUT_MS, signal,
+          url, init, timeoutMs || REQUEST_TIMEOUT_MS, signal,
         );
       } catch (e) {
         // A stalled socket does not heal itself — the same request on a new
@@ -299,18 +313,9 @@
      * @returns {Promise<{blob: Blob, filename: string}>}
      */
     async download(path, query, opts = {}) {
-      const url = new URL(this.base + this.prefix + path);
-      for (const [k, v] of Object.entries(query || {})) {
-        // Arrays repeat the parameter (?dataset=plays&dataset=buddies) rather
-        // than joining — that is what FastAPI parses into a list.
-        const values = Array.isArray(v) ? v : [v];
-        for (const one of values) {
-          if (one === undefined || one === null || one === "") continue;
-          url.searchParams.append(k, one);
-        }
-      }
+      const url = this._buildUrl(path, query);
       const [res, release] = await this._send(
-        url.toString(),
+        url,
         { method: "GET", headers: { ...this._authHeader() } },
         opts.timeoutMs || DOWNLOAD_TIMEOUT_MS,
       );

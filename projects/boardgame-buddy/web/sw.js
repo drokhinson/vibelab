@@ -52,6 +52,10 @@ const RUNTIME_ORIGINS = [
 // cached shell. Short on purpose: a dead-zone request can hang for 30s, and
 // the whole point is that the host reaches Gather immediately.
 const NAV_TIMEOUT_MS = 3000;
+// Precache fetches happen inside install's waitUntil: one that never settles
+// is a worker that never activates. Runtime misses get the same protection.
+const PRECACHE_TIMEOUT_MS = 15000;
+const RUNTIME_TIMEOUT_MS = 10000;
 
 self.addEventListener("install", (event) => {
   if (IS_DEV) { self.skipWaiting(); return; }
@@ -226,7 +230,7 @@ function isBackend(url) {
 async function navigationResponse(req) {
   const cache = await caches.open(CACHE);
   try {
-    const res = await withTimeout(fetch(req), NAV_TIMEOUT_MS);
+    const res = await fetchWithDeadline(req, NAV_TIMEOUT_MS);
     if (res && res.ok) {
       cache.put("/index.html", res.clone()).catch(() => {});
       return res;
@@ -261,13 +265,13 @@ async function cacheFirst(req, revalidate) {
   const cached = await cache.match(req);
   if (cached) {
     if (revalidate) {
-      fetch(req)
+      fetchWithDeadline(req, RUNTIME_TIMEOUT_MS)
         .then((res) => { if (isCacheable(res)) cache.put(req, res.clone()); })
         .catch(() => {});
     }
     return cached;
   }
-  const res = await fetch(req);
+  const res = await fetchWithDeadline(req, RUNTIME_TIMEOUT_MS);
   if (isCacheable(res)) cache.put(req, res.clone()).catch(() => {});
   return res;
 }
@@ -282,14 +286,10 @@ function isCacheable(res) {
   return !!res && (res.ok || res.type === "opaque");
 }
 
-function withTimeout(promise, ms) {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("timeout")), ms);
-    promise.then(
-      (v) => { clearTimeout(t); resolve(v); },
-      (e) => { clearTimeout(t); reject(e); }
-    );
-  });
+// A stalled connection never rejects on its own, so every fetch here has a
+// deadline — and the deadline cancels the request rather than orphaning it.
+function fetchWithDeadline(req, ms, init) {
+  return fetch(req, Object.assign({}, init, { signal: AbortSignal.timeout(ms) }));
 }
 
 // ── Install-time precache ─────────────────────────────────────────────────────
@@ -299,7 +299,7 @@ async function precache() {
 
   // `reload` so a stale HTTP-cache copy of the shell can't seed the new build's
   // cache with the previous build's script list.
-  const shellRes = await fetch("/index.html", { cache: "reload" });
+  const shellRes = await fetchWithDeadline("/index.html", PRECACHE_TIMEOUT_MS, { cache: "reload" });
   if (!shellRes.ok) throw new Error(`sw: shell fetch failed (${shellRes.status})`);
   const shellHtml = await shellRes.text();
 
@@ -388,7 +388,7 @@ async function precacheOne(cache, url) {
   // manifest.json, the icons) a normal fetch goes through the browser's own
   // freshness rules, which is at worst the same request `reload` would have
   // made and at best a 304 with no body.
-  const res = await fetch(url);
+  const res = await fetchWithDeadline(url, PRECACHE_TIMEOUT_MS);
   if (!res.ok) throw new Error(`sw: precache ${url} failed (${res.status})`);
   const type = res.headers.get("content-type") || "";
   if (type.includes("text/html") && !/\.html$/.test(new URL(url, self.location.origin).pathname)) {
@@ -434,7 +434,7 @@ function extractStylesheetHrefs(html) {
 async function extractCssRefs(cssUrl) {
   const out = [];
   try {
-    const res = await fetch(cssUrl, { cache: "reload" });
+    const res = await fetchWithDeadline(cssUrl, PRECACHE_TIMEOUT_MS, { cache: "reload" });
     if (!res.ok) return out;
     const css = await res.text();
     const re = /url\(\s*["']?([^"')]+)["']?\s*\)/gi;
