@@ -15,7 +15,8 @@ and the plays table:
 """
 
 import logging
-from typing import Any, Optional
+from supabase import Client
+from typing import Any
 
 from ..constants import IMPORT_GAME_CANDIDATES
 from ..models import (
@@ -36,7 +37,7 @@ def _match_key(name: str) -> str:
     return " ".join(str(name or "").split()).lower()
 
 
-def match_games(sb, viewer_id: str, names: list[str]) -> list[ParsedGameRef]:
+def match_games(sb: Client, viewer_id: str, names: list[str]) -> list[ParsedGameRef]:
     """Resolve each distinct game name against the catalog.
 
     One boardgamebuddy_search_games call per NAME, never per play: a note
@@ -85,7 +86,7 @@ def match_games(sb, viewer_id: str, names: list[str]) -> list[ParsedGameRef]:
     return refs
 
 
-def import_plays(sb, user_id: str, plays: list[PlayCreate]) -> PlayImportResponse:
+def import_plays(sb: Client, user_id: str, plays: list[PlayCreate]) -> PlayImportResponse:
     """Write one chunk of an import. One bgb_import_plays call.
 
     Per-play outcomes come back rather than a single success flag: a chunk
@@ -144,7 +145,7 @@ def distinct_game_names(plays: list[Any]) -> list[str]:
     return list(seen.values())
 
 
-def list_imports(sb, user_id: str) -> PlayImportListResponse:
+def list_imports(sb: Client, user_id: str) -> PlayImportListResponse:
     """Past imports for the Settings list, newest first."""
     rows = sb.rpc("bgb_list_imports", {"p_user": user_id}).execute().data or []
     return PlayImportListResponse(
@@ -156,7 +157,7 @@ def _deleted_count(data: Any) -> int:
     return int((data or {}).get("deleted") or 0) if isinstance(data, dict) else 0
 
 
-def delete_import_group(sb, user_id: str, group_id: str) -> int:
+def delete_import_group(sb: Client, user_id: str, group_id: str) -> int:
     """Delete one run of identical imported plays. Returns rows removed."""
     data = (
         sb.rpc("bgb_delete_import_group", {"p_user": user_id, "p_group": group_id})
@@ -166,7 +167,7 @@ def delete_import_group(sb, user_id: str, group_id: str) -> int:
     return _deleted_count(data)
 
 
-def delete_import_batch(sb, user_id: str, batch_id: str) -> int:
+def delete_import_batch(sb: Client, user_id: str, batch_id: str) -> int:
     """Delete everything one import wrote. Returns rows removed."""
     data = (
         sb.rpc("bgb_delete_import_batch", {"p_user": user_id, "p_batch": batch_id})

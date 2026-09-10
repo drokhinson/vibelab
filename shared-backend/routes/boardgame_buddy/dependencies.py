@@ -2,12 +2,13 @@
 
 import asyncio
 import re
-from typing import Optional
+
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
 import cache
+from supabase import Client
 from api_logger import set_request_user
 from jwt_auth import SupabaseUser, get_current_supabase_user
 from db import get_supabase
@@ -34,7 +35,7 @@ def invalidate_current_user(user_id: str) -> None:
 _USERNAME_RE = re.compile(r"[^a-z0-9_]")
 
 
-def _derive_username(sb, email: Optional[str], user_id: str) -> str:
+def _derive_username(sb: Client, email: str | None, user_id: str) -> str:
     """Pick an unused username handle for a new profile.
 
     Mirrors migration 017's backfill: lower-case the email local-part,
@@ -190,7 +191,7 @@ async def get_current_admin(
     return user
 
 
-async def maybe_supabase_user(authorization: Optional[str]) -> Optional[SupabaseUser]:
+async def maybe_supabase_user(authorization: str | None) -> SupabaseUser | None:
     """Decode the bearer token if present; return None when missing or invalid.
 
     For anon-friendly endpoints that surface a richer per-user view to signed-in

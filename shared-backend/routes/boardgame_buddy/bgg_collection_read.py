@@ -18,7 +18,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+
 
 from .bgg_client import BggWarmUpError, fetch_bgg_as_user, parse_bgg_xml
 from .constants import BggCheckPhase
@@ -62,7 +62,7 @@ _SUBTYPE_LABEL = {"boardgame": "Board games", "boardgameexpansion": "Expansions"
 BGG_THROTTLE_SECONDS = float(os.getenv("BGG_THROTTLE_SECONDS", "1.5"))
 
 
-def _derive_collection_status(item) -> Optional[str]:
+def _derive_collection_status(item) -> str | None:
     """Map a BGG <item><status .../></item> to our collection status, or None."""
     status_el = item.find("status")
     if status_el is None:
@@ -80,7 +80,7 @@ def _derive_collection_status(item) -> Optional[str]:
     return None
 
 
-def _parse_private_info(item) -> Optional[dict]:
+def _parse_private_info(item) -> dict | None:
     """Extract <privateinfo .../> attributes (only present with showprivate=1).
 
     Returns None when the element is absent — callers should treat that as
@@ -90,7 +90,7 @@ def _parse_private_info(item) -> Optional[dict]:
     if pi is None:
         return None
 
-    def _num(name: str) -> Optional[float]:
+    def _num(name: str) -> float | None:
         val = pi.get(name)
         if val in (None, "", "0", "0.0", "0.00"):
             return None
@@ -99,7 +99,7 @@ def _parse_private_info(item) -> Optional[dict]:
         except ValueError:
             return None
 
-    def _int(name: str) -> Optional[int]:
+    def _int(name: str) -> int | None:
         val = pi.get(name)
         if val in (None, "", "0"):
             return None
@@ -150,18 +150,18 @@ class BggCollectionItem:
     collection row exists before it decides whether to create one.
     """
     bgg_id: int
-    collid: Optional[int]
-    name: Optional[str]
-    subtype: Optional[str]
-    status: Optional[str]
+    collid: int | None
+    name: str | None
+    subtype: str | None
+    status: str | None
     # dict(status_el.attrib), verbatim. Not an enumerated set of keys: a flag
     # BGG adds next year has to survive the round trip rather than be silently
     # dropped by a push that echoes only what we knew about today.
     raw_status: dict = field(default_factory=dict)
-    private: Optional[dict] = None
+    private: dict | None = None
 
 
-def _int_or_none(raw: Optional[str]) -> Optional[int]:
+def _int_or_none(raw: str | None) -> int | None:
     try:
         return int(raw) if raw else None
     except (TypeError, ValueError):
@@ -218,7 +218,7 @@ def _merge_collection_item(
 
 async def _fetch_collection_items(
     user_id: str, username: str,
-    *, progress: Optional[BggCheckProgress] = None,
+    *, progress: BggCheckProgress | None = None,
 ) -> tuple[list[BggCollectionItem], bool]:
     """Sweep the linked user's collection at full fidelity.
 
@@ -293,7 +293,7 @@ async def _fetch_collection_items(
 
 def collection_rows_from_items(
     items: list[BggCollectionItem],
-) -> list[tuple[int, str, Optional[dict]]]:
+) -> list[tuple[int, str, dict | None]]:
     """Reduce full-fidelity items to the (bgg_id, status, private) import rows.
 
     Named and exported because the import no longer always does its own sweep:
@@ -310,7 +310,7 @@ def collection_rows_from_items(
 
 async def _fetch_collection_batched(
     user_id: str, username: str,
-) -> tuple[list[tuple[int, str, Optional[dict]]], bool]:
+) -> tuple[list[tuple[int, str, dict | None]], bool]:
     """Pull the linked user's collection as N small (subtype, status) requests.
 
     The import's view of the sweep: same eight requests, same warm-up handling,

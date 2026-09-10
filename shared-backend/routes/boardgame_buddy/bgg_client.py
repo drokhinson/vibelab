@@ -23,7 +23,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable
 
 import httpx
 from fastapi import HTTPException
@@ -113,7 +113,7 @@ class BggRefusedError(HTTPException):
     piece of evidence BGG staff ask for.
     """
 
-    def __init__(self, detail: str, *, ray_id: Optional[str] = None) -> None:
+    def __init__(self, detail: str, *, ray_id: str | None = None) -> None:
         super().__init__(status_code=502, detail=detail)
         self.ray_id = ray_id
 
@@ -131,7 +131,7 @@ _CF_BODY_MARKERS = (
 )
 
 
-def _cloudflare_block(resp: httpx.Response) -> Optional[str]:
+def _cloudflare_block(resp: httpx.Response) -> str | None:
     """The Cloudflare ray id if this response is an edge block, else None.
 
     Returns "" rather than None for a block with no ray id, so callers can tell
@@ -175,7 +175,7 @@ async def _fetch_with_warmup_retry(
     params: dict,
     attempts: int = 3,
     delays: tuple[float, ...] = (5.0, 10.0, 20.0),
-    on_warm_up: Optional[Callable[[int, int, float], None]] = None,
+    on_warm_up: Callable[[int, int, float], None] | None = None,
 ) -> httpx.Response:
     """Call do_get() with retries when BGG signals it's still computing the result.
 
@@ -397,7 +397,7 @@ async def fetch_owner_counts(bgg_ids: list[int]) -> dict[int, int]:
     return counts
 
 
-def _cache_key_for(path: str, params: dict) -> Optional[tuple[str, ...]]:
+def _cache_key_for(path: str, params: dict) -> tuple[str, ...] | None:
     """Return a stable cache key for cacheable paths, or None to bypass.
 
     Tuple of sorted (k, str(v)) pairs so the key is hashable and order-stable
@@ -408,7 +408,7 @@ def _cache_key_for(path: str, params: dict) -> Optional[tuple[str, ...]]:
     return tuple(sorted((k, str(v)) for k, v in params.items()))
 
 
-def _get_cached_response(path: str, key: tuple[str, ...]) -> Optional[str]:
+def _get_cached_response(path: str, key: tuple[str, ...]) -> str | None:
     ns = _BGG_CACHE_THING if path == "/thing" else _BGG_CACHE_SEARCH
     return cache.get(ns, key)
 
@@ -530,7 +530,7 @@ async def _run_as_user(
     *,
     attempt: Callable[[dict[str, str]], Awaitable[httpx.Response]],
     context: str,
-    signed_out: Optional[Callable[[httpx.Response], bool]] = None,
+    signed_out: Callable[[httpx.Response], bool] | None = None,
 ) -> httpx.Response:
     """Run `attempt` with the user's BGG cookies, refreshing the session as needed.
 
@@ -612,7 +612,7 @@ async def _run_as_user(
 
 
 def _refused(
-    resp: httpx.Response, *, context: str, ray_id: Optional[str], relogged_in: bool,
+    resp: httpx.Response, *, context: str, ray_id: str | None, relogged_in: bool,
 ) -> BggRefusedError:
     """Build the honest error for a 401/403 no valid session can fix."""
     logger.warning(
@@ -644,7 +644,7 @@ async def fetch_bgg_as_user(
     params: dict,
     *,
     timeout: float,
-    on_warm_up: Optional[Callable[[int, int, float], None]] = None,
+    on_warm_up: Callable[[int, int, float], None] | None = None,
 ) -> str:
     """GET a BGG xmlapi2 path authenticated AS the linked user.
 
@@ -760,7 +760,7 @@ async def post_bgg_form_as_user(
     form: dict[str, str],
     *,
     timeout: float,
-    signed_out: Optional[Callable[[httpx.Response], bool]] = None,
+    signed_out: Callable[[httpx.Response], bool] | None = None,
 ) -> httpx.Response:
     """POST a form-encoded body to a BGG web endpoint AS the linked user.
 
@@ -827,9 +827,6 @@ def store_user_credentials(
         "bgg_session_pass_cookie": session.pass_cookie,
         "bgg_last_login_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", user_id).execute()
-
-
-
 
 
 def parse_bgg_xml(body: str, *, context: str) -> ET.Element:
@@ -905,7 +902,7 @@ def thing_item_basics(item: ET.Element) -> dict:
     }
 
 
-def bgg_description_text(item: ET.Element) -> Optional[str]:
+def bgg_description_text(item: ET.Element) -> str | None:
     """Extract a BGG /thing item's description as normalized plain text.
 
     Returns None (never "") when BGG has no description, so the column stays

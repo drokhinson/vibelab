@@ -14,7 +14,7 @@ services/export_csv.py owns the formatting.
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 from supabase import Client
 
@@ -23,8 +23,6 @@ from ._helpers import chunked, page_all
 from .export_csv import CsvFile
 
 logger = logging.getLogger("vibelab")
-
-
 
 
 def embedded(row: dict[str, Any], table: str) -> dict[str, Any]:
@@ -213,7 +211,7 @@ def build_guides(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile
     return [CsvFile("guide_chapters.csv", header, out)]
 
 
-def _game_names(sb: Client, game_ids: Iterable[Optional[str]]) -> dict[str, dict[str, Any]]:
+def _game_names(sb: Client, game_ids: Iterable[str | None]) -> dict[str, dict[str, Any]]:
     """Resolve game UUIDs to {id: {name, bgg_id}}."""
     ids = sorted({gid for gid in game_ids if gid})
     if not ids:

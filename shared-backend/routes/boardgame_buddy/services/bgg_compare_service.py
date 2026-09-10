@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
+
 
 from supabase import Client
 
@@ -49,13 +49,13 @@ _COLLID_MAX_CHUNKS = 8
 @dataclass
 class PlannedPush:
     bgg_id: int
-    game_id: Optional[str]
+    game_id: str | None
     game_name: str
-    thumbnail_url: Optional[str]
+    thumbnail_url: str | None
     change: BggPushChange
-    local_status: Optional[str]
-    remote_status: Optional[str]
-    collid: Optional[int]
+    local_status: str | None
+    remote_status: str | None
+    collid: int | None
     raw_status: dict
     newly_catalogued: bool = False
 
@@ -65,8 +65,8 @@ class PlannedPull:
     bgg_id: int
     game_name: str
     change: BggPullChange
-    local_status: Optional[str]
-    remote_status: Optional[str]
+    local_status: str | None
+    remote_status: str | None
 
 
 @dataclass
@@ -99,7 +99,7 @@ def _load_local_collection(sb: Client, user_id: str) -> list[dict]:
 
 async def _resolve_collids(
     user_id: str, username: str, bgg_ids: list[int],
-    *, progress: Optional[BggCheckProgress] = None,
+    *, progress: BggCheckProgress | None = None,
 ) -> dict[int, BggCollectionItem]:
     """Look up BGG collection rows for games the status sweep could not see.
 
@@ -164,7 +164,7 @@ def _classify_pull(local_status: str, remote_status: str) -> BggPullChange:
 
 async def build_plan(
     sb: Client, user_id: str, username: str,
-    *, progress: Optional[BggCheckProgress] = None,
+    *, progress: BggCheckProgress | None = None,
 ) -> ComparePlan:
     """Sweep BGG, read the shelf, and classify every game in both directions.
 

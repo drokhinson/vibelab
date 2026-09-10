@@ -68,8 +68,6 @@ _PUSH_MAX_BACKOFFS = 5
 _MAX_LIST_ITEMS = 500
 
 
-
-
 def _queue_catalog_imports(sb: Client, user_id: str, bgg_ids: list[int]) -> None:
     """Queue games BgB's catalog has never seen for a catalog-ONLY import.
 

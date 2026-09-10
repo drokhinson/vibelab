@@ -3,7 +3,8 @@
 import asyncio
 import logging
 import re
-from typing import Any, Optional
+from supabase import Client
+from typing import Any
 
 from ..models import (
     BggSearchResult,
@@ -31,7 +32,7 @@ _BGG_URL_RE = re.compile(
 _BGG_BARE_ID_RE = re.compile(r"^(\d{1,8})(?!\d)$")
 
 
-def _parse_bgg_id(query: str) -> tuple[Optional[int], bool]:
+def _parse_bgg_id(query: str) -> tuple[int | None, bool]:
     """(bgg_id, came_from_a_url) for a query that names one game outright.
 
     The url flag is what decides whether the name search still runs alongside
@@ -108,7 +109,7 @@ def _rank_key(q: str, row: dict[str, Any]) -> tuple:
     )
 
 
-async def _bgg_thing_row(bgg_id: int, *, include_expansions: bool) -> Optional[dict[str, Any]]:
+async def _bgg_thing_row(bgg_id: int, *, include_expansions: bool) -> dict[str, Any] | None:
     """One /thing lookup, in the same raw shape _bgg_hits builds from /search.
 
     Returns None rather than raising for every "that is not a game you can
@@ -146,7 +147,7 @@ async def _bgg_thing_row(bgg_id: int, *, include_expansions: bool) -> Optional[d
 
 
 def _collection_hits(
-    sb,
+    sb: Client,
     viewer_id: str,
     query: str,
     limit: int,
@@ -189,7 +190,7 @@ def _collection_hits(
 
 
 def _db_hits(
-    sb,
+    sb: Client,
     query: str,
     limit: int,
     *,
@@ -223,7 +224,7 @@ def _db_hits(
 
 
 def _rpc_hits(
-    sb,
+    sb: Client,
     viewer_id: str,
     query: str,
     limit: int,
@@ -264,7 +265,7 @@ def _rpc_hits(
 
 
 async def _bgg_hits(
-    sb,
+    sb: Client,
     query: str,
     *,
     include_expansions: bool,
@@ -356,7 +357,7 @@ async def _bgg_hits(
     )
 
 
-def _as_results(sb, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
+def _as_results(sb: Client, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
     """Stamp already_in_db across the whole batch in one query.
 
     Its own function because the id lookup can return before the name search
@@ -396,7 +397,7 @@ def _as_results(sb, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
 
 
 def _catalog_hits(
-    sb,
+    sb: Client,
     viewer_id: str,
     query: str,
     limit: int,
@@ -438,7 +439,7 @@ def _catalog_hits(
 
 
 async def unified_search(
-    sb,
+    sb: Client,
     viewer_id: str,
     query: str,
     *,

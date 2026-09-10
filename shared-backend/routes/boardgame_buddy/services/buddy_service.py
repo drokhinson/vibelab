@@ -6,9 +6,10 @@ around only to record free-text ghost players inside a single user's plays.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import HTTPException
+from supabase import Client
 
 from ..constants import MAX_BUDDY_ALIAS_CHARS, BuddyEdgeStatus
 from ..models import (
@@ -40,7 +41,7 @@ def _request_response(
     )
 
 
-def list_accepted_buddies(sb, viewer_id: str) -> list[BuddyEdgeResponse]:
+def list_accepted_buddies(sb: Client, viewer_id: str) -> list[BuddyEdgeResponse]:
     """All accepted mutual edges for the viewer."""
     rows = (
         sb.table("boardgamebuddy_buddy_edges")
@@ -63,7 +64,7 @@ def list_accepted_buddies(sb, viewer_id: str) -> list[BuddyEdgeResponse]:
     return out
 
 
-def list_requests(sb, viewer_id: str) -> BuddyRequestsResponse:
+def list_requests(sb: Client, viewer_id: str) -> BuddyRequestsResponse:
     """Pending buddy requests (both directions) for the viewer."""
     rows = (
         sb.table("boardgamebuddy_buddy_edges")
@@ -83,7 +84,7 @@ def list_requests(sb, viewer_id: str) -> BuddyRequestsResponse:
     return BuddyRequestsResponse(incoming=incoming, outgoing=outgoing)
 
 
-def send_request(sb, viewer_id: str, target_user_id: str) -> BuddyRequestResponse:
+def send_request(sb: Client, viewer_id: str, target_user_id: str) -> BuddyRequestResponse:
     """Send a buddy request to another user. Idempotent for outgoing pending."""
     if target_user_id == viewer_id:
         raise HTTPException(status_code=400, detail="Cannot add yourself")
@@ -143,7 +144,7 @@ def send_request(sb, viewer_id: str, target_user_id: str) -> BuddyRequestRespons
 
 
 def send_requests_bulk(
-    sb, viewer_id: str, target_user_ids: list[str]
+    sb: Client, viewer_id: str, target_user_ids: list[str]
 ) -> tuple[BulkBuddyRequestResponse, list[BuddyRequestResponse]]:
     """Send requests to several users at once, reporting per-target outcomes.
 
@@ -183,7 +184,7 @@ def send_requests_bulk(
     return result, outcomes
 
 
-def _accept_edge(sb, edge: dict[str, Any], viewer_id: str) -> BuddyRequestResponse:
+def _accept_edge(sb: Client, edge: dict[str, Any], viewer_id: str) -> BuddyRequestResponse:
     """Promote a pending edge to accepted. Returns the request shape so the
     caller can decide whether to re-fetch the accepted list."""
     now = datetime.now(timezone.utc).isoformat()
@@ -214,12 +215,12 @@ _EDGE_COLUMNS = (
 
 
 def _load_edge(
-    sb,
+    sb: Client,
     viewer_id: str,
     edge_id: str,
     *,
     not_found: str,
-    require_status: Optional[BuddyEdgeStatus] = None,
+    require_status: BuddyEdgeStatus | None = None,
     wrong_status: str = "Request is not pending",
 ) -> dict[str, Any]:
     """The edge the viewer is a party to, or 404.
@@ -244,7 +245,7 @@ def _load_edge(
     return edge
 
 
-def accept_request(sb, viewer_id: str, request_id: str) -> BuddyEdgeResponse:
+def accept_request(sb: Client, viewer_id: str, request_id: str) -> BuddyEdgeResponse:
     """Accept an incoming buddy request. 400 if the viewer sent it."""
     edge = _load_edge(
         sb, viewer_id, request_id,
@@ -265,7 +266,7 @@ def accept_request(sb, viewer_id: str, request_id: str) -> BuddyEdgeResponse:
     return edge_response((refreshed.data or [edge])[0], viewer_id, profiles)
 
 
-def reject_request(sb, viewer_id: str, request_id: str) -> None:
+def reject_request(sb: Client, viewer_id: str, request_id: str) -> None:
     """Delete a pending request the viewer is a party to."""
     _load_edge(
         sb, viewer_id, request_id,
@@ -274,7 +275,7 @@ def reject_request(sb, viewer_id: str, request_id: str) -> None:
     sb.table("boardgamebuddy_buddy_edges").delete().eq("id", request_id).execute()
 
 
-def cancel_request(sb, viewer_id: str, request_id: str) -> None:
+def cancel_request(sb: Client, viewer_id: str, request_id: str) -> None:
     """Withdraw a pending request the viewer sent.
 
     The mirror of reject_request: same edge, opposite party. Only the sender
@@ -292,16 +293,14 @@ def cancel_request(sb, viewer_id: str, request_id: str) -> None:
     sb.table("boardgamebuddy_buddy_edges").delete().eq("id", request_id).execute()
 
 
-def unfriend(sb, viewer_id: str, edge_id: str) -> None:
+def unfriend(sb: Client, viewer_id: str, edge_id: str) -> None:
     """Delete an accepted edge. Either party can do this."""
     _load_edge(sb, viewer_id, edge_id, not_found="Buddy edge not found")
     sb.table("boardgamebuddy_buddy_edges").delete().eq("id", edge_id).execute()
 
 
-
-
 def set_alias(
-    sb, viewer_id: str, edge_id: str, alias: Optional[str]
+    sb: Client, viewer_id: str, edge_id: str, alias: str | None
 ) -> BuddyEdgeResponse:
     """Set or clear the viewer's private alias for the buddy on this edge.
 
@@ -338,7 +337,7 @@ def set_alias(
     return edge_response(row, viewer_id, profiles)
 
 
-def relation_to(sb, viewer_id: str, other_id: str) -> dict[str, Any]:
+def relation_to(sb: Client, viewer_id: str, other_id: str) -> dict[str, Any]:
     """Return relationship metadata for a public profile view.
 
     Output keys: is_buddy (bool), has_pending_request (bool),

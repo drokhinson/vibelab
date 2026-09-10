@@ -23,6 +23,11 @@ QR_TOKEN_ALGORITHM = "HS256"
 QR_TOKEN_TTL_SECONDS = 180
 
 
+class ChapterReportStatus(StrEnum):
+    OPEN = "open"
+    RESOLVED = "resolved"
+
+
 class CollectionStatus(StrEnum):
     OWNED = "owned"
     # Legacy synthetic shelf — derived from boardgamebuddy_plays, never written

@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException
+from supabase import Client
 
 from auth import create_token, decode_token
 
@@ -74,7 +75,7 @@ def issuer_from_qr_token(token: str) -> str:
     return issuer_id
 
 
-def peek_qr_issuer(sb, viewer_id: str, other_id: str) -> BuddyQrPeekResponse:
+def peek_qr_issuer(sb: Client, viewer_id: str, other_id: str) -> BuddyQrPeekResponse:
     """Name the person behind a scanned code, and say where the viewer stands.
 
     The read half of add_buddy_mutually below, and it exists because that
@@ -127,7 +128,7 @@ def peek_qr_issuer(sb, viewer_id: str, other_id: str) -> BuddyQrPeekResponse:
     )
 
 
-def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResponse, bool]:
+def add_buddy_mutually(sb: Client, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResponse, bool]:
     """Create — or promote — an ACCEPTED edge with no consent step.
 
     The only legitimate caller is the QR redeem route, which has already
@@ -212,7 +213,7 @@ def add_buddy_mutually(sb, viewer_id: str, other_id: str) -> tuple[BuddyEdgeResp
 
 
 def _resolve_existing(
-    sb,
+    sb: Client,
     edge: dict[str, Any],
     viewer_id: str,
     profiles: dict[str, dict],

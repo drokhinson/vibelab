@@ -24,7 +24,7 @@ Idempotent: collection rows upsert on (user_id, game_id); plays dedup on
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+
 
 from fastapi import BackgroundTasks, Depends, HTTPException
 from supabase import Client
@@ -137,7 +137,7 @@ def _upsert_collection_row(
     user_id: str,
     game: dict,
     status: str,
-    private: Optional[dict] = None,
+    private: dict | None = None,
 ) -> None:
     """Upsert one collection row using the existing (user_id, game_id) UNIQUE.
 
@@ -174,7 +174,7 @@ def _collection_payload(
     user_id: str,
     game: dict,
     status: str,
-    private: Optional[dict] = None,
+    private: dict | None = None,
 ) -> dict:
     """The row _upsert_collection_row writes. Shared with the batch path."""
     payload: dict = {
@@ -201,7 +201,7 @@ def _materialize_play(
     user_id: str,
     game: dict,
     play_payload: dict,
-    owner_name: Optional[str] = None,
+    owner_name: str | None = None,
 ) -> None:
     """Insert a play + its play_players from a BGG-derived payload.
 
@@ -476,8 +476,6 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
 # ── BGG XML parsing ──────────────────────────────────────────────────────────
 
 
-
-
 def _parse_plays(body: str, *, username: str) -> tuple[list[dict], int]:
     """Parse a BGG /plays page into (rows, total).
 
@@ -662,8 +660,6 @@ async def _process_pending_imports(user_id: str) -> None:
 # ── Sync core ────────────────────────────────────────────────────────────────
 
 
-
-
 async def _fetch_all_plays(user_id: str, username: str) -> list[dict]:
     """Pull every page of /plays for a user (BGG returns 100 per page).
 
@@ -696,7 +692,7 @@ async def _run_sync(
     user_id: str,
     username: str,
     *,
-    swept_items: Optional[list[BggCollectionItem]] = None,
+    swept_items: list[BggCollectionItem] | None = None,
 ) -> BggSyncSummary:
     """Pull collection + plays from BGG, materialize knowns, queue unknowns.
 
@@ -855,8 +851,6 @@ async def unlink_bgg(
     return BggLinkResponse(bgg_username=None)
 
 
-
-
 @router.post(
     "/bgg/sync",
     response_model=BggSyncSummary,
@@ -896,8 +890,6 @@ async def sync_bgg(
     background_tasks.add_task(_process_pending_imports, user.user_id)
 
     return summary
-
-
 
 
 @router.get(

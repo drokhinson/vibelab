@@ -38,7 +38,7 @@ counting the marks themselves.
 
 import logging
 from datetime import date
-from typing import Any, Optional
+from typing import Any
 
 from gemini import GEMINI_MODEL_STRONG, GeminiError, generate_json
 
@@ -167,7 +167,7 @@ Lachie, and Lachie beating Jasmine and Marco. No scores, no dates. "Jas" stays
 "Jas" if that is what a row says."""
 
 
-def _build_prompt(*, text: str, hint: Optional[str], image_count: int = 0) -> str:
+def _build_prompt(*, text: str, hint: str | None, image_count: int = 0) -> str:
     lines: list[str] = []
     if hint and hint.strip():
         # The user's own description of their shorthand. It goes ABOVE the
@@ -203,14 +203,14 @@ def _build_prompt(*, text: str, hint: Optional[str], image_count: int = 0) -> st
     return "\n".join(lines)
 
 
-def _clean_name(value: Any) -> Optional[str]:
+def _clean_name(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
     name = " ".join(value.split())[:MAX_IMPORT_NAME_CHARS].strip()
     return name or None
 
 
-def _coerce_score(value: Any) -> Optional[int]:
+def _coerce_score(value: Any) -> int | None:
     if isinstance(value, bool) or value is None:
         return None
     if isinstance(value, int):
@@ -225,7 +225,7 @@ def _coerce_score(value: Any) -> Optional[int]:
     return None
 
 
-def _coerce_date(value: Any) -> Optional[date]:
+def _coerce_date(value: Any) -> date | None:
     """A date the note gave, or None. A future date is a hallucination."""
     if not isinstance(value, str):
         return None
@@ -313,8 +313,8 @@ def _coerce(data: dict) -> tuple[list[ParsedPlay], list[str]]:
 async def parse_plays(
     *,
     text: str,
-    hint: Optional[str],
-    images: Optional[list[tuple[str, str]]] = None,
+    hint: str | None,
+    images: list[tuple[str, str]] | None = None,
 ) -> tuple[list[ParsedPlay], list[str]]:
     """Read a note into draft plays. Returns (plays, warnings).
 

@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Callable, Iterator, Optional, Sequence, TypeVar
+from typing import Any, Callable, Iterator, Sequence, TypeVar
 
 from fastapi import HTTPException
 from supabase import Client
@@ -60,7 +60,7 @@ def page_all(
             raise RuntimeError(f"paging did not terminate for {label}")
 
 
-def parse_csv_param(raw: Optional[str]) -> list[str]:
+def parse_csv_param(raw: str | None) -> list[str]:
     """?ids=a,b,c → ["a", "b", "c"]; blank or missing → []."""
     if not raw:
         return []
@@ -180,7 +180,7 @@ def game_summary_from_row(row: dict[str, Any]) -> GameSummary:
     )
 
 
-def fetch_games_by_ids(sb, game_ids: list[str]) -> dict[str, GameSummary]:
+def fetch_games_by_ids(sb: Client, game_ids: list[str]) -> dict[str, GameSummary]:
     """Bulk-fetch GameSummary rows keyed by id. Returns {} on empty input."""
     if not game_ids:
         return {}
@@ -194,7 +194,7 @@ def fetch_games_by_ids(sb, game_ids: list[str]) -> dict[str, GameSummary]:
     return {r["id"]: game_summary_from_row(r) for r in (rows.data or [])}
 
 
-def fetch_profiles_by_ids(sb, user_ids: list[str]) -> dict[str, dict[str, Any]]:
+def fetch_profiles_by_ids(sb: Client, user_ids: list[str]) -> dict[str, dict[str, Any]]:
     """Bulk-fetch profile rows keyed by id. Returns {} on empty input."""
     if not user_ids:
         return {}

@@ -23,7 +23,7 @@ app and it lives on the feed card that earned it — no bell row, no push.
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable
+from typing import Iterable
 
 from fastapi import BackgroundTasks
 from supabase import Client

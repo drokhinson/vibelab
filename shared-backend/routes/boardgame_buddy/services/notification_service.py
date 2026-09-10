@@ -24,6 +24,7 @@ underivable).
 """
 
 import asyncio
+from supabase import Client
 from datetime import datetime
 
 from ..models import (
@@ -34,7 +35,7 @@ from ..models import (
 
 
 async def list_notifications(
-    sb,
+    sb: Client,
     viewer_id: str,
     limit: int = 20,
     before: datetime | None = None,
@@ -78,7 +79,7 @@ async def list_notifications(
 
 
 def fetch_page(
-    sb,
+    sb: Client,
     viewer_id: str,
     limit: int = 20,
     before: datetime | None = None,
@@ -101,14 +102,14 @@ def fetch_page(
     )
 
 
-def unread_count(sb, viewer_id: str) -> int:
+def unread_count(sb: Client, viewer_id: str) -> int:
     """Everything unread across all three kinds. Counts play ENTRIES, not plays."""
     res = sb.rpc("bgb_notifications_unread", {"p_viewer": viewer_id}).execute()
     return int(res.data or 0)
 
 
 def mark_seen(
-    sb, viewer_id: str, through: datetime | None = None
+    sb: Client, viewer_id: str, through: datetime | None = None
 ) -> NotificationsSeenResponse:
     """Advance the watermark to `through` (default now), monotonically.
 

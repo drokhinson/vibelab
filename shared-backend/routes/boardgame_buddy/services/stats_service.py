@@ -1,9 +1,10 @@
+from supabase import Client
 """Per-user stats — wraps the bgb_user_stats RPC."""
 
 from ..models import FavoriteGame, StatsResponse
 
 
-def fetch_stats(sb, user_id: str) -> StatsResponse:
+def fetch_stats(sb: Client, user_id: str) -> StatsResponse:
     """Return Strava-style aggregate stats for a single user."""
     rows = sb.rpc("bgb_user_stats", {"uid": user_id}).execute().data or []
     if not rows:
@@ -30,7 +31,7 @@ def fetch_stats(sb, user_id: str) -> StatsResponse:
     )
 
 
-def fetch_stats_detail(sb, user_id: str) -> dict:
+def fetch_stats_detail(sb: Client, user_id: str) -> dict:
     """Return the whole Stats spoke payload in one call.
 
     Thin by design: `bgb_user_stats_detail` composes every block server-side
