@@ -195,6 +195,15 @@ function jsStr(s) {
     .replace(/\n/g, "\\n");
 }
 
+// The inline handler that opens a game's detail page — the one navigation
+// every game surface shares. Returns JS, not an attribute value: wrap it in
+// escapeAttr() at the attribute boundary, as above. `before` is JS to run
+// first (dismiss a popup); `stop` stops the tap reaching the row behind.
+function gameDetailJs(gameId, gameName, { stop = false, before = "" } = {}) {
+  return `${stop ? "event.stopPropagation();" : ""}${before}` +
+    `window.router.go('game-detail',{gameId:'${jsStr(gameId || "")}',gameName:'${jsStr(gameName || "")}'})`;
+}
+
 // Bouncing-buddy loader. Returns an HTML fragment views can drop into
 // any "Loading…" slot. The SVG already animates itself (transform-based
 // bounce + head bob), so this is just a sized <img> wrapper that

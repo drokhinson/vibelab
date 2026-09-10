@@ -557,10 +557,7 @@
           ${window.renderGamePolaroid(game, {
             variant: "row",
             showStatus: false,
-            // jsStr escapes the JS-string layer, escapeAttr the HTML one — a
-            // bare " in a game name would otherwise close the onclick attribute
-            // (mirrors ui/status-tag.js).
-            clickHandler: escapeAttr(`window.router.go('game-detail',{gameId:'${jsStr(id)}',gameName:'${jsStr(game.name || "")}'})`),
+            clickHandler: gameDetailJs(id, game.name),
           })}
           <span class="catalog-row__slot" data-catalog-slot="${escapeAttr(id)}"
                 data-state="${escapeAttr(this._rowState(id))}">${this._renderSlot(game)}</span>

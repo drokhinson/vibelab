@@ -330,7 +330,7 @@
       if (isRun) subParts.push(`<span class="plays-list__run">${n} plays</span>`);
       if (winnerLabel) subParts.push(`<span class="plays-list__winner"><i data-icon="trophy" class="w-3 h-3"></i> ${winnerLabel}</span>`);
       if (playerCount > 0) subParts.push(`${playerCount} ${playerCount === 1 ? "player" : "players"}`);
-      const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
+      const gameNav = escapeAttr(gameDetailJs(p.game_id, p.game_name, { stop: true }));
       // Always the viewer's own relationship to the game, even on someone
       // else's log — that is what the tag's sheet reads and writes. Hidden
       // rather than guessed while the map is still in flight.

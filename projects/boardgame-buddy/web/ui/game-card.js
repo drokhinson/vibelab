@@ -20,7 +20,7 @@
   /**
    * @param {any} game
    * @param {Object} [opts]
-   * @param {string} [opts.clickHandler] Raw JS run on tap.
+   * @param {string} [opts.clickHandler] Raw JS run on tap (escaped here).
    * @param {string|null} [opts.collectionStatus] owned / prev_owned / wishlist / played / null.
    * @param {"polaroid"|"rail"|"row"} [opts.variant] Surface preset. Default "polaroid".
    * @param {boolean} [opts.showStatus] Render the corner status pill. The
@@ -121,7 +121,7 @@
                data-game-id="${escapeHtml(game.id || "")}"
                data-game-name="${escapeHtml(game.name || "")}"
                data-status="${escapeHtml(collectionStatus || "")}"
-               ${interactive ? `onclick="${clickHandler}"` : ""}>
+               ${interactive ? `onclick="${escapeAttr(clickHandler)}"` : ""}>
         <div class="game-polaroid__photo">
           ${gameArtImg(game, "card", { cls: "game-polaroid__photo-img", eager })
             || `<div class="game-polaroid__photo-placeholder"><i data-icon="dice-6"></i></div>`}

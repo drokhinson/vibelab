@@ -61,6 +61,7 @@
         .catch(() => { /* the card falls back to its cached copy, or hides */ });
       try {
         const me = window.store.get("user");
+        if (!me) throw new Error("Not signed in");
         const bundle = await window.Profile.bundle(me.id);
         this._bundle = bundle;
         // Stash for the spokes so hub → spoke paints from cache before
@@ -431,7 +432,7 @@
 
     _cover(item) {
       const g = item.game || {};
-      const click = `onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})"`;
+      const click = `onclick="${escapeAttr(gameDetailJs(g.id, g.name))}"`;
       // owned_page carries prev_owned rows while owned_total counts only what
       // you still have, so a sold game can take a slot in this strip. Dimmed,
       // matching the Collection grid — no stamp, which is unreadable at this
@@ -455,7 +456,7 @@
         (me && (w.name || "") === (me.display_name || ""))
       );
       const playerCount = (p.players || []).length;
-      const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
+      const gameNav = escapeAttr(gameDetailJs(p.game_id, p.game_name, { stop: true }));
       return `
         <li class="preview-card__play" onclick="window.PlayDetailPopup.show('${p.id}')">
           ${p.game_thumbnail

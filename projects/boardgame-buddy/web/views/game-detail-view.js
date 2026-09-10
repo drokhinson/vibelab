@@ -36,7 +36,7 @@
         if (this._guide) this._guide.refresh();
       });
       window.Collection.myStatusMap()
-        .then((m) => { this._statusMap = m || {}; this.render(); })
+        .then((m) => { if (!this._mounted) return; this._statusMap = m || {}; this.render(); })
         .catch(() => {});
       await this._load();
     }
@@ -272,7 +272,7 @@
       // base_game_id + base_game_name when the game is an expansion.
       if (!g.is_expansion || !g.base_game_id) return "";
       return `
-        <a class="game-detail__base-link" onclick="window.router.go('game-detail',{gameId:'${g.base_game_id}',gameName:'${jsStr(g.base_game_name || '')}'})">
+        <a class="game-detail__base-link" onclick="${escapeAttr(gameDetailJs(g.base_game_id, g.base_game_name))}">
           <i data-icon="corner-up-left" class="w-3.5 h-3.5"></i>
           <span>Expansion of <strong>${escapeHtml(g.base_game_name || "base game")}</strong></span>
         </a>
@@ -325,7 +325,7 @@
               const label = stripBaseGameName(e.name, g.name);
               return `
                 <article class="expansion-polaroid" title="${escapeAttr(e.name || '')}"
-                         onclick="window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || '')}'})">
+                         onclick="${escapeAttr(gameDetailJs(e.expansion_game_id, e.name))}">
                   <div class="expansion-polaroid__photo">
                     ${gameArtImg(e, "card", { width: 132, height: 110 })
                       || `<div class="expansion-polaroid__placeholder"><i data-icon="dice-6"></i></div>`}

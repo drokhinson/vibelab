@@ -198,7 +198,7 @@
     const n = card.group_count || 1;
     const me = window.store && window.store.get && window.store.get("user");
     const gameName = escapeHtml(g.name || "Unknown game");
-    const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${escapeAttr(jsStr(g.name || ""))}'})`;
+    const gameNav = escapeAttr(gameDetailJs(g.id, g.name, { stop: true }));
     const thumb = g.thumbnail_url || g.image_url || "";
     return `
       <div class="play-card__photo play-card__photo--stack">
@@ -257,7 +257,7 @@
     const g = card.game || {};
     const me = window.store && window.store.get && window.store.get("user");
     const gameName = escapeHtml(g.name || "Unknown game");
-    const gameNav = `event.stopPropagation(); window.router.go('game-detail',{gameId:'${escapeAttr(g.id || "")}',gameName:'${escapeAttr(jsStr(g.name || ""))}'})`;
+    const gameNav = escapeAttr(gameDetailJs(g.id, g.name, { stop: true }));
     // Same expand affordance the back face carries, mirrored onto the front
     // so the play details are one tap away instead of flip-then-tap. The
     // popup fetches the full play itself, so the front needs no hydration.

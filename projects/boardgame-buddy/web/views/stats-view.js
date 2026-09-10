@@ -193,7 +193,7 @@
     _plinth(row, rank) {
       const name = row.name || "";
       const art = gameArtImg(row, "chip", { alt: name });
-      const nav = `window.router.go('game-detail',{gameId:'${row.game_id}',gameName:'${jsStr(name)}'})`;
+      const nav = escapeAttr(gameDetailJs(row.game_id, name));
       return `
         <button class="stats-plinth ${MEDALS[rank]}" type="button" onclick="${nav}"
                 aria-label="${escapeAttr(`${name}, number ${rank}, ${row.plays} plays`)}">

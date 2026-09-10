@@ -376,7 +376,7 @@
       const fav = stats.favorite_game || null;
       const favName = fav ? fav.name : "—";
       const favClick = fav
-        ? `onclick="window.router.go('game-detail',{gameId:'${fav.game_id}',gameName:'${jsStr(fav.name || "")}'})"`
+        ? `onclick="${escapeAttr(gameDetailJs(fav.game_id, fav.name))}"`
         : "";
       return `
         <section class="profile-hub__stats">
@@ -481,7 +481,7 @@
       );
       return `
         <button class="profile-topgames__item"
-                onclick="window.router.go('game-detail',{gameId:'${g.game_id}',gameName:'${jsStr(g.name || "")}'})">
+                onclick="${escapeAttr(gameDetailJs(g.game_id, g.name))}">
           <span class="profile-topgames__art">
             ${art || `<span class="preview-card__cover-fallback">${escapeHtml((g.name || "?").slice(0, 14))}</span>`}
           </span>
@@ -567,7 +567,7 @@
 
     _cover(item) {
       const g = item.game || {};
-      const click = `onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})"`;
+      const click = `onclick="${escapeAttr(gameDetailJs(g.id, g.name))}"`;
       // owned_page carries prev_owned rows while owned_total counts only what
       // they still have, so a game they sold can take a slot in this strip.
       // Dimmed, matching the Collection grid and Profile Self — no stamp,
@@ -595,7 +595,7 @@
         (me && (w.name || "") === (me.display_name || ""))
       );
       const playerCount = (p.players || []).length;
-      const gameNav = `event.stopPropagation();window.router.go('game-detail',{gameId:'${p.game_id}',gameName:'${jsStr(p.game_name || "")}'})`;
+      const gameNav = escapeAttr(gameDetailJs(p.game_id, p.game_name, { stop: true }));
       return `
         <li class="preview-card__play" onclick="window.PlayDetailPopup.show('${p.id}')">
           ${p.game_thumbnail

@@ -479,7 +479,7 @@
       // jumps straight to the resume chip and the card timeline.
       const html = `
         <div class="feed-shell${split ? " feed-shell--split" : ""}">
-          ${this._error ? `<div class="alert alert-error mb-3">${this._error}</div>` : ""}
+          ${this._error ? `<div class="alert alert-error mb-3">${escapeHtml(this._error)}</div>` : ""}
           <div class="feed-stream">
             <div class="feed-cards">
               ${stream.length === 0 && !this._loading ? this._renderEmpty() : ""}
@@ -836,7 +836,7 @@
           pending: !this._statusReady,
           meta: meta(entry),
           badgeHtml: window.renderExpansionBadge(expCount),
-          clickHandler: `window.router.go('game-detail',{gameId:'${game.id}',gameName:'${jsStr(game.name || "")}'})`,
+          clickHandler: gameDetailJs(game.id, game.name),
         });
       }).join("");
       return `

@@ -840,7 +840,7 @@
         ? `<div class="collection-tile__stamp" aria-hidden="true">Prev. owned</div>`
         : "";
       return `
-        <div class="collection-tile${parted ? " is-prev-owned" : ""}" onclick="window.router.go('game-detail',{gameId:'${g.id}',gameName:'${jsStr(g.name || "")}'})">
+        <div class="collection-tile${parted ? " is-prev-owned" : ""}" onclick="${escapeAttr(gameDetailJs(g.id, g.name))}">
           ${window.renderStatusTag(g.id, status, { corner: true, pending, gameName: g.name })}
           <div class="collection-tile__art">
             ${gameArtImg(g, "card")

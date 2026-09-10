@@ -340,7 +340,7 @@
             </h3>
             <ul class="play-detail__expansions">
               ${(p.expansions || []).map((e) => `
-                <li onclick="window.PlayDetailPopup.dismiss();window.router.go('game-detail',{gameId:'${e.expansion_game_id}',gameName:'${jsStr(e.name || "")}'})"
+                <li onclick="${escapeAttr(gameDetailJs(e.expansion_game_id, e.name, { before: "window.PlayDetailPopup.dismiss();" }))}"
                     title="${escapeAttr(e.name || "")}"
                     style="${e.color ? `--exp-color:${escapeAttr(e.color)}` : ""}">
                   <span class="play-detail__expansion-dot"></span>
@@ -649,9 +649,9 @@
   // feed uses for winners), and the right side hosts a Go-to-game-detail
   // arrow that dismisses the popup before routing.
   function renderGameBubble(p, { editing }) {
-    const gameNav = `event.stopPropagation();
-      window.PlayDetailPopup.dismiss();
-      window.router.go('game-detail',{gameId:'${jsStr(p.game_id || "")}',gameName:'${jsStr(p.game_name || "")}'})`;
+    const gameNav = escapeAttr(gameDetailJs(p.game_id, p.game_name, {
+      stop: true, before: "window.PlayDetailPopup.dismiss();",
+    }));
     const subline = editing
       ? `<input id="play-popup-date" type="date" class="input input-bordered input-sm"
                 value="${escapeAttr(state.draft.played_at)}"
