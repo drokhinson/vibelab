@@ -18,6 +18,11 @@
 // scoring grid's column order (widgets/round-score-grid.js maps it straight to
 // columns), so ticking Marcus then Priya seats them in that order.
 //
+// Ticked people ride at the top under "Selected", in that order, and leave the
+// body list — so the sheet always shows what it is about to do, empty search
+// box included. A query filters that section like every other row: a pick that
+// doesn't match what you typed is not an answer to what you typed.
+//
 // Two behaviours the dropdown couldn't offer, both from being able to afford
 // the height:
 //   - no 8-row cap (the dropdown capped because it was a keyhole);
@@ -171,20 +176,30 @@
         ? this._recent
         : this._candidates;
       if (!q) return base;
-      return this._candidates.filter((c) => {
-        const name = (c.name || "").toLowerCase();
-        const alias = (c.alias || "").toLowerCase();
-        const username = (c.username || "").toLowerCase();
-        // BOTH names match. A private alias is a second handle on a person, not
-        // a replacement for the one their account carries: someone who types
-        // the real name is looking for the person they renamed, and a picker
-        // that cannot find them is worse than one that never offered the
-        // rename. It also keeps the guest-row collision test below honest —
-        // typing the real name of a listed buddy must not offer to add them as
-        // a same-named ghost.
-        return name.includes(q) || (alias && alias.includes(q))
-            || (username && username.includes(q));
-      });
+      return this._candidates.filter((c) => this._hits(c, q));
+    }
+
+    /**
+     * One row against one query — the predicate _matches() filters with, lifted
+     * out because _pickedSection() has to ask it of rows that were never IN
+     * `candidates`: a guest _pickGuest() fabricated lives only in `_picked`.
+     *
+     * BOTH names match. A private alias is a second handle on a person, not a
+     * replacement for the one their account carries: someone who types the real
+     * name is looking for the person they renamed, and a picker that cannot
+     * find them is worse than one that never offered the rename. It also keeps
+     * the guest-row collision test honest — typing the real name of a listed
+     * buddy must not offer to add them as a same-named ghost.
+     * @param {PlayerCandidate} c
+     * @param {string} q Already trimmed and lowercased.
+     */
+    _hits(c, q) {
+      if (!q) return true;
+      const name = (c.name || "").toLowerCase();
+      const alias = (c.alias || "").toLowerCase();
+      const username = (c.username || "").toLowerCase();
+      return name.includes(q) || (alias && alias.includes(q))
+          || (username && username.includes(q));
     }
 
     /** @param {string} name */
@@ -275,14 +290,24 @@
     }
 
     /**
-     * Ticked people ride at the top while a query is active. Without this,
-     * searching for your second player scrolls your first one out of sight and
-     * the sheet stops showing what it is about to do.
+     * WHAT THE SHEET IS ABOUT TO DO, at the top, always. Ticked people render
+     * here and nowhere else — _renderList() takes them out of the body — so
+     * clearing the search box can no longer scatter the four people you just
+     * ticked back through a list of forty buddies.
+     *
+     * A query filters this section by the same predicate as everything else:
+     * a pick that doesn't answer what you typed is not an answer, and leaving
+     * it pinned would fill the top of a filtered list with rows that don't
+     * match. It comes back the moment the box empties, because `_picked` is
+     * the state — this is only where it is painted.
      */
     _pickedSection() {
-      if (!this._picked.length || !this._query.trim()) return "";
+      if (this._single || !this._picked.length) return "";
+      const q = this._query.trim().toLowerCase();
+      const rows = this._picked.filter((c) => this._hits(c, q));
+      if (!rows.length) return "";
       return `<div class="bgb-sheet__sec">Selected</div>`
-        + this._picked.map((c) => this._row(c)).join("");
+        + rows.map((c) => this._row(c)).join("");
     }
 
     /** A section heading. @param {string} text */
@@ -346,19 +371,29 @@
      * without one it is either the caller's ranking (closest first, everyone
      * else underneath) or the old recent-first behaviour.
      * @param {string} q
+     * @param {PlayerCandidate[]} sugg  The caller's ranking, already stripped of
+     *   anything ticked — those rows belong to the Selected section, and a row
+     *   painted in both places is one person the sheet appears to seat twice.
      * @param {PlayerCandidate[]} local
      */
-    _localSections(q, local) {
-      if (q || !this._suggestions.length) {
-        const header = !q && this._recent.length ? this._sec("Recently played with") : "";
+    _localSections(q, sugg, local) {
+      if (q || !sugg.length) {
+        // The header describes the BASE _matches() chose, so it asks the same
+        // question _matches() did — otherwise a caller with suggestions gets
+        // "Recently played with" over its full candidate list. `local` can be
+        // empty here with the Selected section holding everyone, and a heading
+        // over nothing is a section the user cannot find.
+        const header = !q && !this._suggestions.length && this._recent.length && local.length
+          ? this._sec("Recently played with")
+          : "";
         return header + local.map((c) => this._row(c)).join("");
       }
       // Both lists are already in memory, so "search my whole buddy list" is
       // scrolling rather than typing — the suggestions do not hide anyone.
-      const shown = new Set(this._suggestions.map((c) => key(c.name)));
+      const shown = new Set(sugg.map((c) => key(c.name)));
       const rest = local.filter((c) => !shown.has(key(c.name)));
       return this._sec(this._suggestionsLabel || "Closest matches")
-        + this._suggestions.map((c) => this._row(c)).join("")
+        + sugg.map((c) => this._row(c)).join("")
         + (rest.length
             ? this._sec(this._restLabel || "Everyone else") + rest.map((c) => this._row(c)).join("")
             : "");
@@ -368,8 +403,11 @@
       const q = this._query.trim();
       const guest = this._guestRow();
       const pickedFirst = this._pickedSection();
-      const local = this._matches().filter((c) => !(q && this._isPicked(c.name)));
-      const hasLocal = local.length || (!q && this._suggestions.length);
+      // Ticked rows live in the Selected section and nowhere else, whether or
+      // not a query is on — painting one in both places reads as two people.
+      const local = this._matches().filter((c) => !this._isPicked(c.name));
+      const sugg = q ? [] : this._suggestions.filter((c) => !this._isPicked(c.name));
+      const hasLocal = local.length || sugg.length;
       const tail = this._globalSection() + this._globalRow();
 
       if (!hasLocal && !pickedFirst) {
@@ -400,7 +438,7 @@
       // "add somebody new" one — and it is offered even when a buddy of the
       // same name is listed, so "Not in your buddies?" would be a lie there.
       const guestSec = this._single ? "Or" : "Not in your buddies?";
-      return pickedFirst + this._localSections(q, local) + tail
+      return pickedFirst + this._localSections(q, sugg, local) + tail
         + (guest ? this._sec(guestSec) + guest : "");
     }
 
