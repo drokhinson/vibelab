@@ -5,21 +5,13 @@ consumer. The import (bgg_link_routes) and the BgB→BGG comparison
 (bgg_push_routes) both need the same eight throttled requests; only what they
 keep from each `<item>` differs.
 
-Two layers, and the lower one is the only place BGG's XML is actually parsed:
-
-  * `_parse_collection_items` / `_fetch_collection_items` — FULL fidelity.
-    Every `<status>` attribute verbatim, plus `collid` and `<name>`, plus items
-    whose derived status is None. The push needs all of it: the raw flags to
-    echo back untouched, the collid to edit the right row rather than create a
-    second one, and the name to label a game that has no local row at all.
-  * `_parse_collection` / `_fetch_collection_batched` — the historical
-    (bgg_id, status, private) contract, now two-line adapters over the above.
-    Their signatures and return shapes are unchanged, so `_run_sync` and
-    `_merge_collection_row` are untouched by the split.
-
-The adapters exist rather than a widened tuple because five call sites unpack
-that tuple positionally, and every one of them would fail at RUNTIME inside a
-BackgroundTask rather than at import.
+`_parse_collection_items` / `_fetch_collection_items` are the only place BGG's
+XML is actually parsed, at FULL fidelity: every `<status>` attribute verbatim,
+plus `collid` and `<name>`, plus items whose derived status is None. The push
+needs all of it — the raw flags to echo back untouched, the collid to edit the
+right row rather than create a second one, and the name to label a game that
+has no local row at all. `_fetch_collection_batched` is the import's
+(bgg_id, status, private) adapter over the same read.
 """
 
 import asyncio
@@ -148,26 +140,6 @@ def _status_priority(status: str) -> int:
     return {"owned": 3, "prev_owned": 2, "wishlist": 1}.get(status, 0)
 
 
-def _merge_collection_row(
-    existing: tuple[int, str, Optional[dict]],
-    incoming: tuple[int, str, Optional[dict]],
-) -> tuple[int, str, Optional[dict]]:
-    bgg_id, ex_status, ex_private = existing
-    _, in_status, in_private = incoming
-    if _status_priority(in_status) > _status_priority(ex_status):
-        ex_status = in_status
-    if in_private is not None:
-        if ex_private is None:
-            ex_private = in_private
-        else:
-            merged = dict(ex_private)
-            for key, value in in_private.items():
-                if value is not None:
-                    merged[key] = value
-            ex_private = merged
-    return (bgg_id, ex_status, ex_private)
-
-
 @dataclass(frozen=True)
 class BggCollectionItem:
     """One `<item>` from /collection, with nothing thrown away.
@@ -223,7 +195,7 @@ def _merge_collection_item(
 ) -> BggCollectionItem:
     """Merge two sightings of the same game across the (subtype, flag) sweep.
 
-    Mirrors _merge_collection_row's rules — highest-priority status wins,
+    Highest-priority status wins (owned > prev_owned > wishlist),
     non-None private wins — and adds: prefer whichever sighting carried a
     collid, and take raw_status from that same one. The `<status>` element
     should be identical across batches since it is the same collection row, but
@@ -317,24 +289,6 @@ async def _fetch_collection_items(
 # Both of these are adapters over the full-fidelity layer above. Their
 # signatures and return shapes are exactly what they were before the split, so
 # _run_sync and the bulk writers in bgg_link_routes are untouched.
-
-
-def _parse_collection(body: str, *, username: str) -> list[tuple[int, str, Optional[dict]]]:
-    """Parse a BGG /collection?showprivate=1 response.
-
-    Returns a list of (bgg_id, status, private_fields_or_None). The third
-    element is None for items that don't carry a <privateinfo> block (the
-    response was unauthenticated or the user has no private data on them).
-
-    Items carrying none of the flags BgB tracks are dropped here — the import
-    has nothing to do with them. The push keeps them; see
-    _parse_collection_items.
-    """
-    return [
-        (it.bgg_id, it.status, it.private)
-        for it in _parse_collection_items(body, username=username)
-        if it.status is not None
-    ]
 
 
 def collection_rows_from_items(

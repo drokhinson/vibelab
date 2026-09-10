@@ -39,33 +39,21 @@ from .services._helpers import game_select_clause
 # Cache namespaces for game-side reads. Both invalidate on admin writes
 # (refresh-images, expansion-color override) and on a fresh BGG import.
 #
-# TODO (Redis upgrade): shared-backend/cache.py is per-worker today. Moving
-# it to Redis (see the migration TODO in that module's docstring) makes
-# game.detail and game.mechanics cluster-wide:
-#   • a popular game's row is fetched from Postgres exactly once per hour
-#     across the whole fleet instead of once per worker per hour
-#   • new BGG imports + admin image refreshes invalidate cluster-wide via
-#     a single Redis DEL, removing the "have to nuke the whole namespace"
-#     compromise in _invalidate_game_caches
-#   • we can publish a Redis pub/sub event on invalidation so the FE
-#     bundle caches (Phase 5) can subscribe for instant cross-tab refresh
+# shared-backend/cache.py is per-worker; a Redis-backed cache (see that
+# module's TODO) would make this cluster-wide and let invalidation target one
+# key instead of the whole namespace.
 _CACHE_GAME = "game.detail"          # game_id (str) → boardgamebuddy_games row dict
-_CACHE_MECHANICS = "game.mechanics"  # sentinel key → sorted list[str]
 _CACHE_GAME_TTL_S = 60 * 60          # games are immutable post-import; 1h is plenty
-_CACHE_MECHANICS_TTL_S = 60 * 60
-_MECHANICS_KEY = "all"               # single-entry namespace; constant key
 
 cache.configure(_CACHE_GAME, max_entries=2000)
-cache.configure(_CACHE_MECHANICS, max_entries=1)
 
 
-def _invalidate_game_caches(bgg_id: Optional[int] = None) -> None:
+def _invalidate_game_caches() -> None:
     """One-shot bust called from every admin path that mutates games (and from
-    import). Clears the in-process game row cache, the mechanics list, and the
-    BGG /thing XML cache so a subsequent read sees fresh data.
+    import). Clears the in-process game row cache and the BGG /thing XML cache
+    so a subsequent read sees fresh data.
     """
     cache.clear(_CACHE_GAME)
-    cache.clear(_CACHE_MECHANICS)
     invalidate_bgg_thing_cache()
 
 logger = logging.getLogger(__name__)
@@ -514,7 +502,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
     # New game added — mechanics list might expand and the catalog grew, so
     # bust the read-side caches. BGG /thing for THIS game is now stale (we
     # just persisted it; further /thing fetches should hit our DB instead).
-    _invalidate_game_caches(bgg_id=bgg_id)
+    _invalidate_game_caches()
     return result.data[0]
 
 
@@ -669,7 +657,7 @@ async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Non
         "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
     }).eq("id", game_id).execute()
     _sync_denormalized_game_fields(sb, game_id)
-    _invalidate_game_caches(bgg_id=bgg_id)
+    _invalidate_game_caches()
 
 
 @router.get(
@@ -800,7 +788,7 @@ async def _hydrate_description_from_bgg(sb: Client, game_id: str, bgg_id: int) -
     sb.table("boardgamebuddy_games").update(
         {"description": description}
     ).eq("id", game_id).execute()
-    _invalidate_game_caches(bgg_id=bgg_id)
+    _invalidate_game_caches()
     return description
 
 

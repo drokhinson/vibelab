@@ -143,8 +143,8 @@ def _upsert_collection_row(
     its denormalized fields (migration 020) are written inline so the new
     collection row doesn't need a sync trigger.
 
-    `private` is the dict produced by _parse_collection (private fields from
-    BGG's <privateinfo>). Keys missing from BGG come through as None so
+    `private` is the dict of private fields parsed from BGG's <privateinfo>
+    (bgg_collection_read). Keys missing from BGG come through as None so
     re-syncing after BGG-side deletion still nulls our copy.
     """
     # One row at a time here (the pending-import worker), so scope the
@@ -333,22 +333,8 @@ def _player_rows(
     return out
 
 
-def _queue_pending(
-    sb: Client,
-    user_id: str,
-    bgg_id: int,
-    kind: str,
-    payload: dict,
-) -> None:
-    """Queue a row for the background worker. Idempotent on (user, bgg_id, kind, status='pending')."""
-    sb.table("boardgamebuddy_bgg_pending_imports").upsert(
-        _pending_payload(user_id, bgg_id, kind, payload),
-        on_conflict="user_id,bgg_id,kind",
-    ).execute()
-
-
 def _pending_payload(user_id: str, bgg_id: int, kind: str, payload: dict) -> dict:
-    """The row _queue_pending writes. Shared with the batch path."""
+    """One pending-import row, as the batch path writes it."""
     return {
         "user_id": user_id,
         "bgg_id": bgg_id,

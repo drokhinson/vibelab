@@ -232,6 +232,3 @@ def read(user_id: str) -> Optional[dict]:
     """The latest snapshot for a user, or None when there is no record."""
     return cache.get(_NS, user_id)
 
-
-def clear(user_id: str) -> None:
-    cache.delete(_NS, user_id)

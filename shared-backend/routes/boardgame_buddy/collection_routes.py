@@ -35,108 +35,6 @@ from .game_routes import (
 from .services._helpers import game_select_clause
 
 
-# Deliberately narrower than game_select_clause(): /collection renders plain
-# tiles, so it skips the expansion and rulebook columns the grid and detail
-# surfaces need. image_url IS carried: the tiles crop square with object-fit,
-# which upscales BGG's ~200px thumbnail on any modern DPR.
-#
-# The web client no longer reads this endpoint at all — it derives its status
-# map and expansion counts from /collection/status-map, which is one bounded
-# round trip instead of three unbounded ones. What remains here serves the
-# native app, whose only consumer (app/src/store/AppContext.js:262) reads
-# `status` and `game_id`.
-_TILE_GAME_FIELDS = (
-    "id, bgg_id, name, year_published, min_players, max_players, "
-    "playing_time, thumbnail_url, image_url, theme_color"
-)
-
-
-@router.get(
-    "/collection",
-    response_model=list[CollectionItem],
-    status_code=200,
-    summary="Get user collection",
-)
-async def get_collection(
-    status: Optional[CollectionStatus] = Query(None, description="Filter by status"),
-    user: CurrentUser = Depends(get_current_user),
-) -> list[CollectionItem]:
-    """List all games in the current user's collection."""
-    sb = get_supabase()
-
-    query = (
-        sb.table("boardgamebuddy_collections")
-        .select(f"id, game_id, status, added_at, boardgamebuddy_games({_TILE_GAME_FIELDS})")
-        .eq("user_id", user.user_id)
-        .order("added_at", desc=True)
-    )
-
-    if status:
-        query = query.eq("status", status.value)
-
-    result = query.execute()
-
-    # When the caller only wants owned/wishlist, we don't need the full
-    # cross-user play visibility map — just stats for the games already on
-    # the shelf, so we can populate last_played_at / play_count on each tile.
-    shelf_game_ids: set[str] = {row["game_id"] for row in (result.data or [])}
-    if status is None or status == CollectionStatus.PLAYED:
-        last_played_by_game, play_counts = _play_stats(sb, user.user_id)
-    else:
-        last_played_by_game, play_counts = _play_stats(
-            sb, user.user_id, list(shelf_game_ids)
-        )
-
-    items: list[CollectionItem] = []
-    owned_game_ids: set[str] = set()
-    for row in result.data or []:
-        game_data = row.get("boardgamebuddy_games", {})
-        if game_data:
-            items.append(CollectionItem(
-                id=row["id"],
-                game_id=row["game_id"],
-                status=row["status"],
-                added_at=row["added_at"],
-                last_played_at=last_played_by_game.get(row["game_id"]),
-                play_count=play_counts.get(row["game_id"], 0),
-                game=GameSummary(**game_data),
-            ))
-            # prev_owned counts here too: this set suppresses the synthetic
-            # "played" row below, and the test it stands for is "does this game
-            # already have a collection row", not "do you still own it". A sold
-            # game with plays would otherwise appear twice in one response.
-            if row["status"] in OWNED_SHELF_STATUSES:
-                owned_game_ids.add(row["game_id"])
-
-    # Derive a synthetic "played" row for every game the user has a play for —
-    # logged by them or by someone who listed them as a player — and does NOT
-    # own. Played is no longer a user-selectable status; it's computed from
-    # play history. Wishlist-ed games with plays still get a derived played
-    # row (they'll show up in both tabs).
-    if status is None or status == CollectionStatus.PLAYED:
-        missing_ids = [gid for gid in last_played_by_game if gid not in owned_game_ids]
-        if missing_ids:
-            games = (
-                sb.table("boardgamebuddy_games")
-                .select(_TILE_GAME_FIELDS)
-                .in_("id", missing_ids)
-                .execute()
-            )
-            for g in games.data or []:
-                last_played = last_played_by_game[g["id"]]
-                items.append(CollectionItem(
-                    id=f"derived-{g['id']}",
-                    game_id=g["id"],
-                    status=CollectionStatus.PLAYED.value,
-                    added_at=f"{last_played}T00:00:00+00:00",
-                    last_played_at=last_played,
-                    play_count=play_counts.get(g["id"], 0),
-                    game=GameSummary(**g),
-                ))
-
-    return items
-
-
 def _play_stats(
     sb: Client,
     user_id: str,
@@ -354,13 +252,9 @@ async def collection_status_map(
 ) -> CollectionStatusMapResponse:
     """The status pills and expansion badges, in one DB round trip.
 
-    The web client used to derive these from GET /collection, which costs three
-    unbounded round trips — the whole collection with a games join, play stats
-    over the viewer's entire visible history, then an IN-query to hydrate
-    played-not-owned games — and then threw away everything except these two
-    dicts. That read re-fires roughly once a minute of active navigation.
-
-    GET /collection is unchanged: the native app consumes its row shape.
+    Replaced a flat collection read that cost three unbounded round trips to
+    produce two dicts. This read re-fires roughly once a minute of active
+    navigation.
     """
     data = get_supabase().rpc(
         "bgb_collection_status_map", {"p_viewer": user.user_id}
@@ -378,8 +272,8 @@ async def collection_status_map(
 # derives every page, filter and search locally. One DB round trip, down from
 # the grid's two (owned/wishlist) or three (played).
 #
-# /collection/grid is deliberately left untouched: the native app
-# (app/src/api/client.js) and the game explorer still page against it.
+# /collection/grid stays as the paginated, server-filtered path the game
+# explorer pages against.
 
 _SHELF_DEFAULT_LIMIT = 1000
 _SHELF_MAX_LIMIT = 5000

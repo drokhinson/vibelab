@@ -43,13 +43,6 @@ from .constants import (
 )
 
 
-# ── Shared ────────────────────────────────────────────────────────────────────
-
-class HealthResponse(BaseModel):
-    project: str
-    status: str
-
-
 class MessageResponse(BaseModel):
     message: str
 
@@ -550,18 +543,10 @@ class CollectionItem(BaseModel):
     last_played_at: Optional[date] = None
     play_count: int = 0
     game: GameSummary
-    # Always empty today: both branches of bgb_collection_shelf hard-code
-    # 'expansions', '[]'::jsonb, and /collection/grid never sets it either.
-    # The web client asks for the flat shelf with expansions included
-    # (exclude_expansions=false) and nests them itself, in
-    # web/domain/expansion-tree.js — nesting in SQL would silently drop the
-    # two cases that grouping surfaces: an owned expansion whose base game the
-    # viewer doesn't own, and one whose denormalized base_game_bgg_id is null.
-    # Kept on the wire because the native app reads this shape.
-    expansions: list["CollectionItem"] = Field(default_factory=list)
-
-
-CollectionItem.model_rebuild()
+    # No nested expansions: the web client asks for the flat shelf with
+    # expansions included (exclude_expansions=false) and nests them itself in
+    # web/domain/expansion-tree.js — nesting in SQL would silently drop an
+    # owned expansion whose base game the viewer doesn't own.
 
 
 class CollectionPageResponse(BaseModel):
@@ -578,9 +563,8 @@ class CollectionPageResponse(BaseModel):
 class CollectionStatusMapResponse(BaseModel):
     """The two small dicts the web client actually needs from a collection read.
 
-    GET /collection returns every row with its game embedded, which cost three
-    unbounded round trips to produce; the only consumer read four fields off it
-    and discarded the rest. This is that consumer's actual contract.
+    A flat collection read used to cost three unbounded round trips to produce
+    these; the only consumer read four fields off it and discarded the rest.
     """
 
     # game_id (UUID string) -> "owned" | "wishlist" | "played" | "prev_owned"
