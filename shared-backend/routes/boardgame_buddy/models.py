@@ -378,8 +378,8 @@ class BggCheckProgressResponse(BaseModel):
 
 
 class BggPushBody(BaseModel):
-    """POST /bgg/push. `checked_at` echoes the comparison the user reviewed so
-    the response can tell them if the plan moved underneath it."""
+    """POST /bgg/push. `checked_at` names the comparison the user reviewed, so
+    the push can commit that one instead of sweeping BGG again."""
     checked_at: Optional[datetime] = None
 
 
@@ -391,7 +391,6 @@ class BggPushSummary(BaseModel):
     updates: int = 0
     clears: int = 0
     unpushable: int = 0
-    plan_changed: bool = False
     warm_up_retry_pending: bool = False
     # True when this committed the comparison the user reviewed rather than
     # sweeping BoardGameGeek all over again. The push log narrates the two

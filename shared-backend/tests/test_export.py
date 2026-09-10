@@ -33,7 +33,7 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test")
 
 import pytest
 
-from routes.boardgame_buddy.constants import EXPORT_PAGE_SIZE, ExportDataset
+from routes.boardgame_buddy.constants import DB_PAGE_SIZE, ExportDataset
 from routes.boardgame_buddy.services import export_service as S
 from routes.boardgame_buddy.services.export_csv import CsvFile, _cell, render_csv
 
@@ -133,7 +133,7 @@ class _Q:
             rows = []
         elif self.hi is not None:
             # PostgREST caps a page server-side; mimic that exactly.
-            rows = rows[self.lo:self.hi + 1][:EXPORT_PAGE_SIZE]
+            rows = rows[self.lo:self.hi + 1][:DB_PAGE_SIZE]
         return type("R", (), {"data": rows, "count": count})()
 
 
@@ -434,20 +434,20 @@ def test_a_collection_larger_than_one_page_is_read_in_full():
     store = _store(boardgamebuddy_collections=[
         {"user_id": ME, "game_id": f"g{i:05d}", "status": "owned",
          "game_name": f"Game {i:05d}", "game_bgg_id": i}
-        for i in range(EXPORT_PAGE_SIZE + 200)
+        for i in range(DB_PAGE_SIZE + 200)
     ])
     zf, _ = _export(store, [ExportDataset.COLLECTION])
-    assert len(_shelf_rows(zf)) == EXPORT_PAGE_SIZE + 200
+    assert len(_shelf_rows(zf)) == DB_PAGE_SIZE + 200
 
 
 def test_paging_stops_on_a_short_page():
     store = _store(boardgamebuddy_collections=[
         {"user_id": ME, "game_id": f"g{i:05d}", "status": "owned",
          "game_name": f"Game {i:05d}", "game_bgg_id": i}
-        for i in range(EXPORT_PAGE_SIZE)
+        for i in range(DB_PAGE_SIZE)
     ])
     zf, _ = _export(store, [ExportDataset.COLLECTION])
-    assert len(_shelf_rows(zf)) == EXPORT_PAGE_SIZE
+    assert len(_shelf_rows(zf)) == DB_PAGE_SIZE
 
 
 # ── The manifest ─────────────────────────────────────────────────────────────

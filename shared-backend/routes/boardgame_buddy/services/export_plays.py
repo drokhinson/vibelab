@@ -36,7 +36,9 @@ from typing import Any
 from supabase import Client
 
 from .export_csv import CsvFile
-from .export_reads import chunks, embedded, page_all, profile_names
+from ..constants import EXPORT_IN_CHUNK
+from ._helpers import chunked, page_all
+from .export_reads import embedded, profile_names
 
 
 # The games embed MUST name its FK. boardgamebuddy_play_expansions is a
@@ -91,7 +93,7 @@ def _load_plays(sb: Client, user_id: str) -> list[dict[str, Any]]:
     missing = [pid for pid in _play_ids_seated_in(sb, user_id) if pid not in have]
 
     others: list[dict[str, Any]] = []
-    for chunk in chunks(missing):
+    for chunk in chunked(missing, EXPORT_IN_CHUNK):
         others.extend(
             (
                 sb.table("boardgamebuddy_plays")
@@ -115,7 +117,7 @@ def _load_plays(sb: Client, user_id: str) -> list[dict[str, Any]]:
 
 def _load_players(sb: Client, play_ids: list[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for chunk in chunks(play_ids):
+    for chunk in chunked(play_ids, EXPORT_IN_CHUNK):
         rows.extend(
             (
                 sb.table("boardgamebuddy_play_players")
@@ -130,7 +132,7 @@ def _load_players(sb: Client, play_ids: list[str]) -> list[dict[str, Any]]:
 
 def _load_play_expansions(sb: Client, play_ids: list[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for chunk in chunks(play_ids):
+    for chunk in chunked(play_ids, EXPORT_IN_CHUNK):
         rows.extend(
             (
                 sb.table("boardgamebuddy_play_expansions")

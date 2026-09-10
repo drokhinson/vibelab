@@ -33,6 +33,8 @@ import cache
 from api_logger import log_external_call
 from db import get_supabase
 
+from .services._helpers import chunked
+
 from .bgg_credentials import (
     BggSession,
     decrypt_password,
@@ -371,10 +373,7 @@ async def fetch_owner_counts(bgg_ids: list[int]) -> dict[int, int]:
         return counts
 
     misses.sort()
-    chunks = [
-        misses[i:i + _OWNED_CHUNK_SIZE]
-        for i in range(0, len(misses), _OWNED_CHUNK_SIZE)
-    ][:_OWNED_MAX_CHUNKS]
+    chunks = list(chunked(misses, _OWNED_CHUNK_SIZE))[:_OWNED_MAX_CHUNKS]
 
     for chunk in chunks:
         try:
@@ -470,6 +469,11 @@ def _load_profile_session(sb: Client, user_id: str) -> dict:
             detail="BGG re-link required: please re-enter your BGG password.",
         )
     return row
+
+
+def linked_bgg_username(sb: Client, user_id: str) -> str:
+    """The linked BGG handle — 400 with none linked, 409 when it needs a re-link."""
+    return _load_profile_session(sb, user_id)["bgg_username"]
 
 
 def _persist_session(sb: Client, user_id: str, session: BggSession) -> None:
@@ -874,6 +878,31 @@ _BLOCK_TAG_RE = re.compile(r"<\s*(?:br\s*/?|/p|/div|/li)\s*>", re.IGNORECASE)
 _ANY_TAG_RE = re.compile(r"<[^>]{0,200}>")
 _BLANK_LINES_RE = re.compile(r"\n{3,}")
 _INLINE_WS_RE = re.compile(r"[ \t]{2,}")
+
+
+def thing_item_basics(item: ET.Element) -> dict:
+    """Name, year and kind off one /thing <item>.
+
+    The primary name, not the first one: /thing lists every localized title,
+    and for a widely translated game the first is often not English. `name`
+    is "" when the item carries none.
+    """
+    name_el = item.find("name[@type='primary']")
+    if name_el is None:
+        name_el = item.find("name")
+    name = name_el.get("value", "") if name_el is not None else ""
+    year = None
+    year_el = item.find("yearpublished")
+    if year_el is not None:
+        try:
+            year = int(year_el.get("value", "0")) or None
+        except (TypeError, ValueError):
+            year = None
+    return {
+        "name": name,
+        "year_published": year,
+        "is_expansion": (item.get("type") or "") == "boardgameexpansion",
+    }
 
 
 def bgg_description_text(item: ET.Element) -> Optional[str]:

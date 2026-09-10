@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Path
 
 from auth import ADMIN_API_KEY
 from db import get_supabase
@@ -179,7 +179,7 @@ async def search_profiles(
     summary="Get a user's public profile",
 )
 async def get_public_profile(
-    user_id: str,
+    user_id: str = Path(..., description="User UUID"),
     viewer: CurrentUser = Depends(get_current_user),
 ) -> PublicProfileResponse:
     """Profiles are fully public — anyone signed in can see anyone else's profile."""

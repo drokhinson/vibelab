@@ -41,6 +41,7 @@ from .bgg_client import (
     BggWarmUpError,
     clear_user_session,
     fetch_bgg_as_user,
+    linked_bgg_username,
     parse_bgg_xml,
     store_user_credentials,
 )
@@ -55,7 +56,7 @@ from .bgg_collection_read import (
     collection_rows_from_items,
 )
 from .bgg_credentials import login_to_bgg
-from .constants import BggAuthState
+from .constants import auth_state_from
 from .dependencies import CurrentUser, get_current_user
 from .game_routes import import_game_from_bgg
 from .models import (
@@ -65,6 +66,7 @@ from .models import (
     BggSyncSummary,
 )
 from .services import bgg_check_cache
+from .services._helpers import chunked, reject_if_push_running
 
 logger = logging.getLogger(__name__)
 
@@ -365,11 +367,6 @@ def _pending_payload(user_id: str, bgg_id: int, kind: str, payload: dict) -> dic
 _BATCH = 500
 
 
-def _chunked(seq: list, size: int = _BATCH):
-    for i in range(0, len(seq), size):
-        yield seq[i:i + size]
-
-
 def _upsert_collection_rows(sb: Client, user_id: str, items: list[tuple]) -> int:
     """Bulk-upsert collection rows. `items` is [(game_row, status, private)]."""
     held = _prev_owned_game_ids(sb, user_id) if items else set()
@@ -382,7 +379,7 @@ def _upsert_collection_rows(sb: Client, user_id: str, items: list[tuple]) -> int
     # Doing this here rather than in the DB keeps one statement per chunk:
     # Postgres rejects an ON CONFLICT batch that hits the same key twice.
     deduped = {(r["user_id"], r["game_id"]): r for r in rows}
-    for chunk in _chunked(list(deduped.values())):
+    for chunk in chunked(list(deduped.values()), _BATCH):
         sb.table("boardgamebuddy_collections").upsert(
             chunk, on_conflict="user_id,game_id"
         ).execute()
@@ -396,7 +393,7 @@ def _queue_pending_rows(sb: Client, user_id: str, items: list[tuple]) -> int:
     if not rows:
         return 0
     deduped = {(r["user_id"], r["bgg_id"], r["kind"]): r for r in rows}
-    for chunk in _chunked(list(deduped.values())):
+    for chunk in chunked(list(deduped.values()), _BATCH):
         sb.table("boardgamebuddy_bgg_pending_imports").upsert(
             chunk, on_conflict="user_id,bgg_id,kind"
         ).execute()
@@ -441,7 +438,7 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
         return
 
     already: set = set()
-    for chunk in _chunked(sorted(keyed)):
+    for chunk in chunked(sorted(keyed), _BATCH):
         res = (
             sb.table("boardgamebuddy_plays")
             .select("bgg_play_id")
@@ -457,7 +454,7 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
         return
 
     player_rows: list[dict] = []
-    for chunk in _chunked(fresh):
+    for chunk in chunked(fresh, _BATCH):
         inserted = (
             sb.table("boardgamebuddy_plays")
             .insert([_play_row(user_id, game, payload) for _, (game, payload) in chunk])
@@ -472,7 +469,7 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
                 continue
             player_rows.extend(_player_rows(play_id, payload, user_id, owner_name))
 
-    for chunk in _chunked(player_rows):
+    for chunk in chunked(player_rows, _BATCH):
         sb.table("boardgamebuddy_play_players").insert(chunk).execute()
 
 
@@ -607,7 +604,7 @@ async def _process_pending_imports(user_id: str) -> None:
                 _materialize_plays(sb, user_id, [
                     (game_row, r["payload"]) for r in group if r["kind"] == "play"
                 ])
-                for chunk in _chunked([r["id"] for r in group]):
+                for chunk in chunked([r["id"] for r in group], _BATCH):
                     sb.table("boardgamebuddy_bgg_pending_imports").update({
                         "status": "done",
                         "error_message": None,
@@ -858,31 +855,6 @@ async def unlink_bgg(
     return BggLinkResponse(bgg_username=None)
 
 
-def _require_linked_username(sb: Client, user_id: str) -> str:
-    """Read the linked BGG handle off the profile.
-
-    Returns 400 when nothing is linked. Returns 409 ("re-link required") when
-    the username is set but no encrypted password exists — i.e. a legacy
-    public-only link from before per-user auth was added.
-    """
-    row = (
-        sb.table("boardgamebuddy_profiles")
-        .select("bgg_username, bgg_password_enc")
-        .eq("id", user_id)
-        .execute()
-    )
-    profile = (row.data or [None])[0]
-    if not profile or not profile.get("bgg_username"):
-        raise HTTPException(
-            status_code=400,
-            detail="No BoardGameGeek account linked. Link one first.",
-        )
-    if not profile.get("bgg_password_enc"):
-        raise HTTPException(
-            status_code=409,
-            detail="BGG re-link required: please re-enter your BGG password.",
-        )
-    return profile["bgg_username"]
 
 
 @router.post(
@@ -903,17 +875,12 @@ async def sync_bgg(
     ~1.5s apart).
     """
     sb = get_supabase()
-    username = _require_linked_username(sb, user.user_id)
+    username = linked_bgg_username(sb, user.user_id)
 
     # Both directions drive the same BGG session, and an import landing
     # mid-push would overwrite shelf rows the queued plan was computed from.
     # Enforced here, not only in the UI: two tabs, two devices.
-    push_state = sb.rpc("bgb_bgg_push_status", {"p_user": user.user_id}).execute().data or {}
-    if int(push_state.get("pending_count") or 0):
-        raise HTTPException(
-            status_code=409,
-            detail="A BoardGameGeek push is still running. Wait for it to finish, then try again.",
-        )
+    await reject_if_push_running(sb, user.user_id)
 
     # The comparison the user just reviewed read this exact collection, at most
     # five minutes ago. Taking that read rather than repeating it is the whole
@@ -957,12 +924,7 @@ async def get_sync_status(
         or {}
     )
     bgg_username = data.get("bgg_username")
-    if not bgg_username:
-        auth_state = BggAuthState.UNLINKED
-    elif data.get("has_credentials"):
-        auth_state = BggAuthState.LINKED
-    else:
-        auth_state = BggAuthState.RELINK_REQUIRED
+    auth_state = auth_state_from(data)
 
     return BggSyncStatus(
         bgg_username=bgg_username,

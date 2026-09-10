@@ -1,11 +1,95 @@
 """Shared helpers used across BoardgameBuddy services."""
 
-from typing import Any
+import asyncio
+import logging
+from typing import Any, Callable, Iterator, Optional, Sequence, TypeVar
 
 from fastapi import HTTPException
+from supabase import Client
 
 from ..models import BuddyEdgeResponse, GameSummary
-from ..constants import PlayMode
+from ..constants import DB_PAGE_MAX_ROWS, DB_PAGE_SIZE, PlayMode
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+def chunked(seq: Sequence[T], size: int) -> Iterator[list[T]]:
+    """`seq` in lists of at most `size` — the batch every `.in_()` and bulk
+    upsert here needs, since PostgREST carries filters in the query string."""
+    for i in range(0, len(seq), size):
+        yield list(seq[i:i + size])
+
+
+def page_all(
+    build_query: Callable[[], Any],
+    order_by: str,
+    *,
+    label: str,
+    page_size: int = DB_PAGE_SIZE,
+    max_rows: int = DB_PAGE_MAX_ROWS,
+) -> list[dict[str, Any]]:
+    """Read every row a query matches, in explicit pages.
+
+    THIS PAGINATION IS LOAD-BEARING: PostgREST caps an unbounded select at
+    1000 rows and a truncated read does not fail. A half shelf silently reads
+    as "these games are not in BgB", which the BGG push turns into clearing
+    games the user still owns; a half export ships looking complete.
+
+    `build_query` is a zero-arg callable because a PostgREST builder cannot be
+    re-ranged: each page needs a fresh one. `order_by` must totally order the
+    rows or a page boundary repeats and skips. The loop stops on a short page
+    and refuses, loudly, at `max_rows`.
+    """
+    rows: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        page = (
+            build_query()
+            .order(order_by)
+            .range(offset, offset + page_size - 1)
+            .execute()
+        ).data or []
+        rows.extend(page)
+        if len(page) < page_size:
+            return rows
+        offset += page_size
+        if offset > max_rows:
+            logger.error("Paging bound hit for %s at %d rows", label, len(rows))
+            raise RuntimeError(f"paging did not terminate for {label}")
+
+
+def parse_csv_param(raw: Optional[str]) -> list[str]:
+    """?ids=a,b,c → ["a", "b", "c"]; blank or missing → []."""
+    if not raw:
+        return []
+    return [s for s in (p.strip() for p in raw.split(",")) if s]
+
+
+# ── BGG worker guards ─────────────────────────────────────────────────────────
+# The import and the push drive the same BGG session and the same shelf rows,
+# so neither may start while the other's worker is still draining.
+
+def _pending_count(sb: Client, rpc: str, user_id: str) -> int:
+    data = sb.rpc(rpc, {"p_user": user_id}).execute().data or {}
+    return int(data.get("pending_count") or 0)
+
+
+async def reject_if_import_running(sb: Client, user_id: str) -> None:
+    if await asyncio.to_thread(_pending_count, sb, "bgb_bgg_sync_status", user_id):
+        raise HTTPException(
+            status_code=409,
+            detail="A BoardGameGeek import is still running. Wait for it to finish, then try again.",
+        )
+
+
+async def reject_if_push_running(sb: Client, user_id: str) -> None:
+    if await asyncio.to_thread(_pending_count, sb, "bgb_bgg_push_status", user_id):
+        raise HTTPException(
+            status_code=409,
+            detail="A BoardGameGeek push is still running. Wait for it to finish, then try again.",
+        )
 
 
 # The JSONB-returning RPCs (migrations 036/037/042/046) signal gate failures

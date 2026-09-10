@@ -35,13 +35,11 @@ from ..bgg_collection_read import (
 )
 from ..bgg_client import fetch_bgg_as_user
 from ..constants import BggCheckPhase, BggPullChange, BggPushChange
+from ._helpers import chunked, page_all
 from .bgg_progress import BggCheckProgress, NullProgress
 
 logger = logging.getLogger(__name__)
 
-# PostgREST caps an unbounded select server-side. Read the shelf in explicit
-# pages and prove we reached the end — see _load_local_collection.
-_PAGE = 1000
 # BGG's /collection accepts a comma-joined id list. Kept well under any
 # plausible URL ceiling; chunks are throttled like every other BGG call.
 _COLLID_CHUNK = 100
@@ -89,36 +87,14 @@ class ComparePlan:
 
 
 def _load_local_collection(sb: Client, user_id: str) -> list[dict]:
-    """Every collection row for one user, read in explicit pages.
-
-    THIS PAGINATION IS LOAD-BEARING. PostgREST caps an unbounded select at
-    1000 rows, and a truncated shelf does not fail — it silently reads as
-    "these games are not in BgB", which the push turns into clearing `own` off
-    games the user still owns. The loop only stops on a short page, and logs
-    loudly if it ever hits the safety bound instead.
-    """
-    rows: list[dict] = []
-    offset = 0
-    while True:
-        page = (
-            sb.table("boardgamebuddy_collections")
-            .select("game_id, status, game_name, game_thumbnail_url, game_bgg_id")
-            .eq("user_id", user_id)
-            .order("game_id")
-            .range(offset, offset + _PAGE - 1)
-            .execute()
-        ).data or []
-        rows.extend(page)
-        if len(page) < _PAGE:
-            return rows
-        offset += _PAGE
-        if offset > 100_000:
-            logger.error(
-                "BGG compare: collection paging bound hit for user=%s at %d rows; "
-                "refusing to plan against a possibly partial shelf",
-                user_id, len(rows),
-            )
-            raise RuntimeError("collection paging did not terminate")
+    """Every collection row for one user. Paged, because a truncated shelf reads
+    as "not in BgB" and the push would clear `own` off games still owned."""
+    return page_all(
+        lambda: sb.table("boardgamebuddy_collections")
+        .select("game_id, status, game_name, game_thumbnail_url, game_bgg_id")
+        .eq("user_id", user_id),
+        "game_id", label=f"collection user={user_id}",
+    )
 
 
 async def _resolve_collids(
@@ -140,10 +116,7 @@ async def _resolve_collids(
     if not bgg_ids:
         prog.skip(BggCheckPhase.COLLIDS, detail="Nothing new to add to BoardGameGeek")
         return found
-    chunks = [
-        bgg_ids[i:i + _COLLID_CHUNK]
-        for i in range(0, len(bgg_ids), _COLLID_CHUNK)
-    ][:_COLLID_MAX_CHUNKS]
+    chunks = list(chunked(bgg_ids, _COLLID_CHUNK))[:_COLLID_MAX_CHUNKS]
     prog.begin(BggCheckPhase.COLLIDS, total=len(chunks))
 
     for i, chunk in enumerate(chunks):
@@ -322,8 +295,7 @@ async def build_plan(
 def _known_catalog_ids(sb: Client, bgg_ids: list[int]) -> set[int]:
     """Which of these BGG ids already exist in boardgamebuddy_games."""
     known: set[int] = set()
-    for i in range(0, len(bgg_ids), 500):
-        chunk = bgg_ids[i:i + 500]
+    for chunk in chunked(bgg_ids, 500):
         rows = (
             sb.table("boardgamebuddy_games")
             .select("bgg_id")

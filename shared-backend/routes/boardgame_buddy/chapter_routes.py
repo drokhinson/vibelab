@@ -38,6 +38,7 @@ from .models import (
     MyGuideChapterResponse,
 )
 from .services import chapter_ai, chapter_grid
+from .services._helpers import parse_csv_param
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +49,6 @@ _CHAPTER_SELECT = (
     " boardgamebuddy_chapter_types(label, icon, display_order),"
     " boardgamebuddy_profiles(display_name)"
 )
-
-
-def _parse_expansion_ids(raw: Optional[str]) -> list[str]:
-    """Parse comma-separated ?expansion_ids=a,b,c into a list (empty if blank)."""
-    if not raw:
-        return []
-    return [s for s in (p.strip() for p in raw.split(",")) if s]
 
 
 def _build_source_map(sb, game_ids: list[str]) -> dict[str, dict[str, Any]]:
@@ -224,7 +218,7 @@ async def browse_chapter_pool(
     sb = get_supabase()
     su_user = await maybe_supabase_user(authorization)
 
-    exp_ids = _parse_expansion_ids(expansion_ids)
+    exp_ids = parse_csv_param(expansion_ids)
     all_game_ids = [game_id, *exp_ids]
 
     pool_q = sb.table("boardgamebuddy_guide_chapters").select(_CHAPTER_SELECT)
@@ -337,6 +331,8 @@ async def create_chapter(
         })
         .execute()
     )
+    if not insert.data:
+        raise HTTPException(status_code=500, detail="Chapter insert returned no row")
     new_id = insert.data[0]["id"]
 
     # Auto-add to creator's guide.
@@ -501,6 +497,8 @@ async def update_chapter(
         .eq("id", chapter_id)
         .execute()
     )
+    if not fetched.data:
+        raise HTTPException(status_code=404, detail="Chapter not found")
     return _chapter_row_to_response(fetched.data[0])
 
 
@@ -595,7 +593,7 @@ async def get_my_chapters(
     (and optionally for the listed expansions, merged into one response)."""
     sb = get_supabase()
 
-    exp_ids = _parse_expansion_ids(expansion_ids)
+    exp_ids = parse_csv_param(expansion_ids)
     all_game_ids = [game_id, *exp_ids]
 
     sel_q = (

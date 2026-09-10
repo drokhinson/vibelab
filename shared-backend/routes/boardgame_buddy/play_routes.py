@@ -472,6 +472,8 @@ async def update_play(
         .eq("id", play_id)
         .execute()
     )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Play not found")
     row = res.data[0]
     players_by_play = _fetch_players(sb, [play_id])
     expansions_by_play = _fetch_play_expansions(sb, [play_id])

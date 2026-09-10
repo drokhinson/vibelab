@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import cache
@@ -99,6 +99,9 @@ def pop_plan(user_id: str, *, checked_at: Optional[datetime]) -> Optional[Compar
     if checked_at is None:
         logger.info("BGG push: client named no comparison for user=%s; re-planning", user_id)
         return None
+    # A client may echo the stamp without its offset; it was minted in UTC.
+    if checked_at.tzinfo is None:
+        checked_at = checked_at.replace(tzinfo=timezone.utc)
     if abs(entry.checked_at - checked_at) > _STAMP_TOLERANCE:
         logger.info(
             "BGG push: stored comparison %s is not the reviewed one %s for user=%s; re-planning",
