@@ -2840,7 +2840,7 @@
             .catch(() => {});
         }
       }
-      this.render();
+      this._refreshScoringSection();
     }
 
     // Highest roundScores length across players — the authoritative round
@@ -2899,7 +2899,7 @@
       // is async.)
       if (this._liveScores) this._liveScores.removeRoundAt(r).catch(() => {});
       this._autoSelectWinners();
-      this.render();
+      this._refreshScoringSection();
     }
 
     _setRoundScore(playerIndex, roundIndex, value) {

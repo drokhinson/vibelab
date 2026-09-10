@@ -2,6 +2,7 @@
 // + expansions list (base game → expansions, expansion → base game).
 
 (function () {
+  const EXPANSION_CHECK = `<span class="expansion-polaroid__check"><i data-icon="check" class="w-3.5 h-3.5"></i></span>`;
   class GameDetailView extends window.View {
     constructor() {
       super("game-detail");
@@ -19,15 +20,13 @@
       this._statusMap = {};
       this.listen("myCollectionMap", (m) => {
         this._statusMap = m || {};
-        this.render();
+        this._paintStatuses();
       });
       this.listenDom("status-changed", (e) => {
         const { gameId, status } = e.detail || {};
         if (gameId) this._statusMap[gameId] = status;
-        // If the game on this page just changed, also refresh the action
-        // button at the top so it tracks the new status.
         if (this._game && gameId === this._game.id) this._status = status;
-        this.render();
+        this._paintStatuses();
       });
       this.listenDom("chapters-changed", (e) => {
         // The widget may not exist yet during the initial _load, and a
@@ -124,7 +123,6 @@
       }
       const g = this._game;
       const accent = g.accentColor();
-      const status = this._status;
 
       const heroSrc = gameArtSrc(g, "card");
       this.container.innerHTML = `
@@ -138,9 +136,7 @@
                 ${gameArtImg(g, "card", { eager: true }) || `<i data-icon="dice-6" class="w-10 h-10"></i>`}
               </div>
               ${g.year_published ? `<div class="game-detail__polaroid-cap">${g.year_published}</div>` : `<div class="game-detail__polaroid-cap">&nbsp;</div>`}
-              <span class="game-detail__polaroid-status">
-                ${window.renderStatusTag(g.id, status, { size: "lg", addLabel: "Add", gameName: g.name })}
-              </span>
+              <span class="game-detail__polaroid-status">${this._renderHeroStatus()}</span>
             </div>
           </header>
           <div class="game-detail__body">
@@ -274,6 +270,43 @@
       };
     }
 
+    _renderHeroStatus() {
+      const g = this._game;
+      return window.renderStatusTag(g.id, this._status, { size: "lg", addLabel: "Add", gameName: g.name });
+    }
+
+    // prev_owned is deliberately absent: the check means "you have this one",
+    // and an expansion you sold is the one case where having a collection row
+    // does not mean you have it. Same call the owned-expansion counts make.
+    _ownsExpansion(expansionGameId) {
+      const status = (this._statusMap || {})[expansionGameId] || null;
+      return status === "owned" || status === "played" || status === "wishlist";
+    }
+
+    // A status change — the viewer's tap, or the store catching up — repaints
+    // the hero tag and the expansion checks in place. The tap fires both the
+    // store write and the DOM event, so a full render here ran twice per tap.
+    _paintStatuses() {
+      const article = this._game && this.container.querySelector(".game-detail");
+      if (!article) { this.render(); return; }
+      const tag = article.querySelector(".game-detail__polaroid-status");
+      if (tag) {
+        tag.innerHTML = this._renderHeroStatus();
+        this.refreshIcons(tag);
+      }
+      for (const el of article.querySelectorAll(".expansion-polaroid[data-expansion-id]")) {
+        const photo = el.querySelector(".expansion-polaroid__photo");
+        const check = photo && photo.querySelector(".expansion-polaroid__check");
+        const owned = this._ownsExpansion(el.dataset.expansionId);
+        if (owned && photo && !check) {
+          photo.insertAdjacentHTML("beforeend", EXPANSION_CHECK);
+          this.refreshIcons(photo);
+        } else if (!owned && check) {
+          check.remove();
+        }
+      }
+    }
+
     _renderBaseGameLink(g) {
       // Expansion → base game banner. The GameDetail Pydantic shape carries
       // base_game_id + base_game_name when the game is an expansion.
@@ -319,12 +352,6 @@
           </h3>
           <div class="expansion-reel">
             ${list.map((e) => {
-              const status = (this._statusMap || {})[e.expansion_game_id] || null;
-              // prev_owned is deliberately absent: this check means "you have
-              // this one", and an expansion you sold is the one case where
-              // having a collection row does not mean you have it. Same call
-              // the owned-expansion counts make.
-              const owned = status === "owned" || status === "played" || status === "wishlist";
               // The page title already says the base game, so the caption drops
               // it — the cap is 2-line clamped and the prefix ate one of them.
               // Navigation still carries the full name: it seeds the
@@ -332,11 +359,12 @@
               const label = stripBaseGameName(e.name, g.name);
               return `
                 <article class="expansion-polaroid" title="${escapeAttr(e.name || '')}"
+                         data-expansion-id="${escapeAttr(e.expansion_game_id)}"
                          onclick="${escapeAttr(gameDetailJs(e.expansion_game_id, e.name))}">
                   <div class="expansion-polaroid__photo">
                     ${gameArtImg(e, "card", { width: 132, height: 110 })
                       || `<div class="expansion-polaroid__placeholder"><i data-icon="dice-6"></i></div>`}
-                    ${owned ? `<span class="expansion-polaroid__check"><i data-icon="check" class="w-3.5 h-3.5"></i></span>` : ""}
+                    ${this._ownsExpansion(e.expansion_game_id) ? EXPANSION_CHECK : ""}
                   </div>
                   <div class="expansion-polaroid__cap">${escapeHtml(label)}</div>
                 </article>

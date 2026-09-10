@@ -59,15 +59,16 @@
       // A background flush (boot, `online`, tab focus) can drain the queue
       // while this screen is open; connectivity returning also swaps the
       // section's copy and reveals the Upload now button.
-      this.listen("outboxCount", () => this.render());
+      this.listen("outboxCount", () => this._patchHost("set-outbox-host", this._renderPendingUploadsSection()));
       this.listen("offline", () => this.render());
       // Auto mode can flip while this screen is open (the OS appearance changed
       // in Settings, or the sunset switch landed) — the Appearance card's
       // "currently light/dark" subtext has to follow. See domain/theme.js.
       this.listen("theme", () => this.render());
       // The BGG flow's progress strip. The flow owns its own polling and
-      // outlives this view, so all this screen does is repaint on its ticks.
-      this.listen("bggSync", () => this.render());
+      // outlives this view; its ticks arrive every second or two for the
+      // length of a sync, so only that card repaints on them.
+      this.listen("bggSync", () => this._patchHost("set-bgg-host", this._renderBggCard()));
       // Its poll skips ticks while the tab is hidden; fire one catch-up when
       // it comes back. Auto-removed on unmount via listenDom.
       this.listenDom("visibilitychange", () => {
@@ -138,11 +139,11 @@
         <div class="set-card-label">Notifications</div>
         ${this._renderNotificationsCard()}
         <div class="set-card-label">Connections</div>
-        ${this._renderBggCard()}
+        <div id="set-bgg-host">${this._renderBggCard()}</div>
         <div class="set-card-label">Import</div>
         ${this._renderImportCard()}
         ${this._renderPastImportsSection()}
-        ${this._renderPendingUploadsSection()}
+        <div id="set-outbox-host">${this._renderPendingUploadsSection()}</div>
         <div class="set-card-label">Data management</div>
         ${this._renderExportCard()}
         ${this._renderCacheCard()}
@@ -153,6 +154,14 @@
       this.refreshIcons();
 
       restoreFocus(focus);
+    }
+
+    /** Repaint one card's host, or the screen when the host isn't up yet. */
+    _patchHost(id, html) {
+      const host = this.container.querySelector("#" + id);
+      if (!host) { this.render(); return; }
+      host.innerHTML = html;
+      this.refreshIcons(host);
     }
 
     // No close ×, same as the notifications screen. Settings is reachable from
