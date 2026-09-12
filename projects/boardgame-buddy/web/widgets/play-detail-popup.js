@@ -127,7 +127,30 @@
   // shell routes them all through onClose.
   function mountBackdrop() {
     _lastHtml = null;
-    _modal.open({ html: "", onClose: resetState });
+    _modal.open({ html: "", onClose: resetState, onEscape: hasStackedOverlay });
+  }
+
+  /**
+   * True while something this card opened sits on top of it — the game search
+   * or expansion picker sheet, the alias sheet, the BGG import popup behind
+   * the picker.
+   *
+   * Wired to the shell's onEscape, which is a first-refusal hook: returning
+   * true swallows the press. Every overlay registers its OWN capture-phase
+   * Escape on `document`, and stopPropagation does not stop a sibling listener
+   * on the same node — so an Escape aimed at the sheet ran this card's handler
+   * too, closing it and taking an unsaved edit draft with it. Topmost wins:
+   * while anything is stacked over us, Escape is theirs.
+   *
+   * Not a counter of our own opens: the sheets are shared singletons that can
+   * close by four routes each, and the DOM is the only account of what is on
+   * screen that cannot drift out of step with what actually is.
+   */
+  function hasStackedOverlay() {
+    const mine = _modal.el;
+    const stacked = document.querySelectorAll(".bgb-sheet, .bgb-modal");
+    for (const el of stacked) if (el !== mine) return true;
+    return false;
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -455,6 +478,14 @@
   function freshDraft(p) {
     return {
       played_at: p.played_at,
+      // The game this play is FOR. Editable since the commonest thing wrong
+      // with a logged play is the box on the front of it — a wrong edition, a
+      // near-namesake, or a pick made in a hurry at the table. Changing it here
+      // moves the play whole: the seats, the scores, the notes and the photo
+      // are facts about an evening, not about the game they were filed under.
+      game_id: p.game_id,
+      game_name: p.game_name,
+      game_thumbnail: p.game_thumbnail || null,
       notes: p.notes || "",
       players: (p.players || []).map((pl) => ({
         name: pl.name,
@@ -467,7 +498,15 @@
         // grid handlers can push into it directly when the author opts in.
         roundScores: Array.isArray(pl.round_scores) ? pl.round_scores.slice() : [],
       })),
-      expansion_ids: (p.expansions || []).map((e) => e.expansion_game_id),
+      // The whole refs, not just their ids: the edit form draws these as
+      // named chips, so a bare id list would mean holding a second lookup
+      // in parallel with the thing the user is actually editing. The save
+      // maps back down to ids, which is all PUT /plays/{id} takes.
+      expansions: (p.expansions || []).map((e) => ({
+        expansion_game_id: e.expansion_game_id,
+        name: e.name,
+        color: e.color || null,
+      })),
       play_mode: p.play_mode,
       // Carried so the edit grid labels its rows the same way the view grid
       // does. Never edited here, and never sent back: PUT /plays/{id} leaves
@@ -516,6 +555,8 @@
         </section>
 
         ${renderGameBubble(p, { editing: true })}
+
+        ${renderEditExpansions(d)}
 
         ${hasRoundGrid(d.players, "roundScores", d.scoring_template) ? `
           <section class="play-detail__section">
@@ -628,30 +669,49 @@
 
   // Shared game bubble for view + edit mode. The title reads "A game of
   // <name>" with the game name in the polaroid accent (same orange the
-  // feed uses for winners), and the right side hosts a Go-to-game-detail
-  // arrow that dismisses the popup before routing.
+  // feed uses for winners).
+  //
+  // The trailing control is the one thing the two modes don't share, because
+  // the bubble means something different in each: in view mode it is a
+  // signpost, so the control is the Go-to-game-detail arrow (dismissing the
+  // popup before it routes); in edit mode it is a FIELD, so the control opens
+  // the library search and the name it shows is the draft's, not the stored
+  // play's. Same row either way — the game is where the eye already is when
+  // the thought is "that's the wrong box", and a change-game control anywhere
+  // else would be a scavenger hunt.
   function renderGameBubble(p, { editing }) {
+    const d = state.draft;
+    const gameId = editing ? d.game_id : p.game_id;
+    const gameName = editing ? d.game_name : p.game_name;
+    const thumb = editing ? d.game_thumbnail : p.game_thumbnail;
     const gameNav = escapeAttr(gameDetailJs(p.game_id, p.game_name, {
       stop: true, before: "window.PlayDetailPopup.dismiss();",
     }));
     const subline = editing
       ? `<input id="play-popup-date" type="date" class="input input-bordered input-sm"
-                value="${escapeAttr(state.draft.played_at)}"
+                value="${escapeAttr(d.played_at)}"
                 onchange="window.PlayDetailPopup._setDraft('played_at', this.value)" />`
       : `<div class="play-detail__game-when">${playWhenLine(p)}</div>`;
     return `
       <div class="play-detail__meta">
         <div class="play-detail__game-row">
-          ${p.game_thumbnail
-            ? `<img class="play-detail__game-thumb" src="${escapeAttr(p.game_thumbnail)}" alt="" />`
+          ${thumb
+            ? `<img class="play-detail__game-thumb" src="${escapeAttr(thumb)}" alt="" />`
             : ""}
           <div class="play-detail__game-info">
             <div class="play-detail__game-title">
-              A game of <span class="play-detail__game-name">${escapeHtml(p.game_name)}</span>
+              A game of <span class="play-detail__game-name">${escapeHtml(gameName)}</span>
             </div>
             ${subline}
           </div>
-          ${p.game_id ? `
+          ${editing ? `
+            <button class="play-detail__game-goto play-detail__game-change" type="button"
+                    aria-label="Change the game this play was"
+                    title="Change game"
+                    onclick="window.PlayDetailPopup._openGamePicker(event)">
+              <i data-icon="pencil" class="w-4 h-4"></i>
+            </button>
+          ` : gameId ? `
             <button class="play-detail__game-goto" type="button"
                     aria-label="Go to game detail page"
                     title="Go to game detail page"
@@ -660,7 +720,87 @@
             </button>
           ` : ""}
         </div>
+        ${editing && d.game_id !== p.game_id ? `
+          <p class="play-detail__game-moved">
+            <i data-icon="info" class="w-3.5 h-3.5"></i>
+            <span>Saving moves this play to
+              <strong>${escapeHtml(d.game_name)}</strong>. Everyone at the table
+              keeps their score.${gamePivotLosses(p)}</span>
+          </p>
+        ` : ""}
       </div>
+    `;
+  }
+
+  // The half of a pivot that isn't carried, named before the user commits to it
+  // — and "" when nothing is, which is the common case and deserves no warning
+  // at all beyond the move itself.
+  //
+  // Both losses are the same shape: they were recorded against the game being
+  // left. An expansion belongs to that game's tree, and the scoring template is
+  // a snapshot of one of its chapters, so neither can follow the play across.
+  // The backend drops them on its own side too (_update_play_sync) — this is
+  // the sentence that stops it being a surprise. Expansions are the recoverable
+  // one: the card below is already offering the NEW game's, so the note points
+  // at it rather than leaving the loss looking final.
+  //
+  // Reads the stored play, not the draft: applyGamePick has already emptied
+  // both on the draft, and what the user needs named is what they had.
+  function gamePivotLosses(p) {
+    const hadExpansions = (p.expansions || []).length > 0;
+    const hadTemplate = templateRows(p.scoring_template).length > 0;
+    if (!hadExpansions && !hadTemplate) return "";
+    const lost = [];
+    if (hadExpansions) lost.push("expansions");
+    if (hadTemplate) lost.push("scoring rows");
+    return ` Its ${lost.join(" and ")} were recorded against `
+      + `${escapeHtml(p.game_name)} and have been cleared`
+      + (hadExpansions ? " — pick the new game's below." : ".");
+  }
+
+  /**
+   * The Expansions card in edit mode: one removable chip per expansion, plus
+   * an Add row.
+   *
+   * View mode already lists expansions, so the edit form listing them but
+   * refusing to change them was the one card on this surface that read as
+   * broken rather than as read-only — "we played that WITH Leaders" is exactly
+   * the kind of thing you remember an hour after logging the play.
+   *
+   * Always rendered, even with nothing on the play: an empty card is what says
+   * expansions are a thing you can add here. The chips carry the expansion's
+   * own colour dot, the same mark the view list and the feed card use, so one
+   * expansion is recognisable across all three at a glance.
+   */
+  function renderEditExpansions(d) {
+    return `
+      <section class="play-detail__section">
+        <h3 class="play-detail__section-title">
+          <i data-icon="puzzle" class="w-4 h-4"></i> Expansions
+        </h3>
+        ${d.expansions.length ? `
+          <ul class="play-detail__edit-expansions">
+            ${d.expansions.map((e) => `
+              <li class="play-detail__edit-expansion"
+                  style="${e.color ? `--exp-color:${escapeAttr(e.color)}` : ""}">
+                <span class="play-detail__expansion-dot"></span>
+                <span class="play-detail__edit-expansion-name"
+                      title="${escapeAttr(e.name || "")}">${escapeHtml(stripBaseGameName(e.name, d.game_name))}</span>
+                <button class="btn btn-ghost btn-xs" type="button"
+                        aria-label="${escapeAttr("Remove " + (e.name || "this expansion"))}"
+                        title="Remove"
+                        onclick="window.PlayDetailPopup._removeExpansion('${escapeAttr(e.expansion_game_id)}')">
+                  <i data-icon="x" class="w-3.5 h-3.5"></i>
+                </button>
+              </li>
+            `).join("")}
+          </ul>
+        ` : `<p class="play-detail__edit-expansions-empty">No expansions on this play.</p>`}
+        <button class="btn btn-ghost btn-xs play-detail__add-expansion" type="button"
+                onclick="window.PlayDetailPopup._openExpansionPicker(event)">
+          <i data-icon="plus" class="w-3.5 h-3.5"></i> Add an expansion
+        </button>
+      </section>
     `;
   }
 
@@ -668,6 +808,103 @@
   function setDraft(key, value) {
     if (state.draft) state.draft[key] = value;
   }
+  /**
+   * Pick a different game for this play. The library search, in the same sheet
+   * Gather uses, so "which game?" is asked the same way everywhere.
+   *
+   * Stacked over the popup rather than dismissing it first, like the alias
+   * sheet: there is an unsaved draft behind this, and closing the card to ask
+   * one question would throw it away.
+   * @param {Event} [event]
+   */
+  function openGamePicker(event) {
+    if (!state.draft) return;
+    window.GameSearchSheet.open({
+      title: "Which game was this?",
+      placeholder: "Search for a game…",
+      returnFocus: (event && event.currentTarget) || null,
+      onPick: (game) => {
+        // Same refusal Gather makes, for the same reason: an expansion is
+        // played WITH a base game, so it can't be what a play WAS. The
+        // backend refuses it too — this is the half that answers in the row
+        // the user tapped instead of at save time.
+        if (game && game.is_expansion) {
+          return { refuse: true, reason: "Pick a base game — expansions go in the Expansions card below." };
+        }
+        applyGamePick(game);
+      },
+      onError: (err) => showToast((err && err.message) || "Search failed", "error"),
+    });
+  }
+
+  /** @param {any} game A GameFinder result. */
+  function applyGamePick(game) {
+    const d = state.draft;
+    if (!d || !game || !game.id) return;
+    if (game.id === d.game_id) return;
+    d.game_id = game.id;
+    d.game_name = game.name;
+    d.game_thumbnail = game.thumbnail_url || null;
+    // Inherited from the new game the way a fresh log inherits it (play-flow's
+    // _applyGamePick does the same) — a play moved onto a co-op game is a co-op
+    // play. NOT falling back to what the play already had: that is the mode of
+    // the game being left, and carrying it across is the one answer that is
+    // certainly wrong. A search hit with no mode sends null instead, which the
+    // backend reads as "inherit from the new game" — same answer, decided by
+    // the side that can see the game row.
+    d.play_mode = game.play_mode || null;
+    // Both of these were recorded against the game being left: an expansion
+    // belongs to that game's tree, and the template is a snapshot of one of its
+    // scoring chapters. Neither can follow the play across, and the backend
+    // drops them on its own side too — clearing them here is what makes the
+    // form show the truth before the user saves it rather than after.
+    d.expansions = [];
+    d.scoring_template = null;
+    render();
+  }
+
+  /**
+   * Add an expansion to the draft, from the catalog for the draft's CURRENT
+   * game — which is the point of reading d.game_id rather than the stored
+   * play's: pivot the game and the picker follows, so the expansions offered
+   * are always ones that could actually have been at that table.
+   * @param {Event} [event]
+   */
+  function openExpansionPicker(event) {
+    const d = state.draft;
+    if (!d || !d.game_id) return;
+    window.ExpansionPickerSheet.open({
+      baseGameId: d.game_id,
+      baseGameName: d.game_name,
+      // The sheet's filter is "don't offer what's already picked" — it calls
+      // the option ownedIds because its first caller was the collection shelf.
+      ownedIds: d.expansions.map((e) => e.expansion_game_id),
+      returnFocus: (event && event.currentTarget) || null,
+      onPick: (exp) => addExpansion(exp),
+    });
+  }
+
+  /** @param {any} exp An ExpansionListItem from the picker. */
+  function addExpansion(exp) {
+    const d = state.draft;
+    if (!d || !exp || !exp.expansion_game_id) return;
+    if (d.expansions.some((e) => e.expansion_game_id === exp.expansion_game_id)) return;
+    d.expansions.push({
+      expansion_game_id: exp.expansion_game_id,
+      name: exp.name,
+      color: exp.color || null,
+    });
+    render();
+  }
+
+  /** @param {string} expansionGameId */
+  function removeExpansion(expansionGameId) {
+    const d = state.draft;
+    if (!d) return;
+    d.expansions = d.expansions.filter((e) => e.expansion_game_id !== expansionGameId);
+    render();
+  }
+
   function setPlayerWinner(i, checked) {
     if (state.draft) state.draft.players[i].is_winner = !!checked;
   }
@@ -1001,7 +1238,10 @@
       played_at: state.draft.played_at,
       notes: state.draft.notes || null,
       photo_url: photoUrl,
-      expansion_ids: state.draft.expansion_ids,
+      // Omitted-means-keep on the backend, so sending the draft's id is both
+      // the no-op for an untouched game and the whole of a pivot.
+      game_id: state.draft.game_id,
+      expansion_ids: state.draft.expansions.map((e) => e.expansion_game_id),
       play_mode: state.draft.play_mode || null,
       players: state.draft.players.map((p) => {
         const rs = Array.isArray(p.roundScores) ? p.roundScores : [];
@@ -1100,6 +1340,9 @@
     _setPlayerScore: setPlayerScore,
     _removePlayer: removePlayer,
     _addPlayer: addPlayer,
+    _openGamePicker: openGamePicker,
+    _openExpansionPicker: openExpansionPicker,
+    _removeExpansion: removeExpansion,
     _openAlias: openAlias,
     // Round-grid handlers (signatures match play-flow-view so the
     // shared round-score-grid widget can target either host).

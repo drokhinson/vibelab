@@ -5281,7 +5281,33 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-detail__expansion-dot {
   width: 10px; height: 10px; border-radius: 999px;
   background: var(--exp-color, var(--accent));
+  flex-shrink: 0;
 }
+
+/* Edit-mode expansion chips. Same row shape as the view list above, plus a
+   remove button — wrapping rather than stacking, because an edited play
+   commonly carries three or four and a column of them pushes the player list
+   off the card. */
+.play-detail__edit-expansions {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 0.3rem;
+}
+.play-detail__edit-expansion {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.25rem 0.3rem 0.25rem 0.55rem;
+  border-radius: 0.4rem;
+  background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
+  font-size: 0.85rem;
+  max-width: 100%;
+}
+.play-detail__edit-expansion-name {
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.play-detail__edit-expansions-empty {
+  font-size: 0.8rem; opacity: 0.65; margin: 0;
+}
+.play-detail__add-expansion { margin-top: 0.4rem; }
 
 .play-detail__notes {
   background: oklch(var(--b2)); border: 1px solid oklch(var(--b3));
@@ -11567,6 +11593,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .play-detail-popup__card .play-detail__edit-player,
 .play-detail-popup__card .play-detail__notes,
 .play-detail-popup__card .play-detail__expansions li,
+.play-detail-popup__card .play-detail__edit-expansion,
 .play-detail-popup__card .play-detail__edit-photo {
   background: var(--polaroid-bg-soft, #F5EEDC);
   border-color: var(--polaroid-line);
@@ -11679,6 +11706,36 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   background: rgba(0, 0, 0, 0.04);
   border-color: var(--polaroid-accent);
   color: var(--polaroid-accent);
+}
+
+/* Edit mode's swap for that arrow: same chip, same 44×44 thumb target, but it
+   opens the library search instead of routing away. Pre-tinted rather than
+   tinting on hover — it is a FIELD's control, and a touch screen never hovers,
+   so "this is changeable" has to be legible at rest. */
+.play-detail-popup__card .play-detail__game-change {
+  border-color: var(--polaroid-accent);
+  color: var(--polaroid-accent);
+}
+
+/* The pending-pivot note under the game row. Not an .alert: it reports a
+   consequence of a choice the user has already made and can still undo with
+   Cancel, so it sits with the field it describes rather than interrupting the
+   form. */
+.play-detail__game-moved {
+  display: flex; align-items: flex-start; gap: 0.35rem;
+  margin: 0.1rem 0 0;
+  font-size: 0.75rem; line-height: 1.4;
+  color: var(--polaroid-ink-soft, oklch(var(--bc) / 0.7));
+}
+.play-detail__game-moved i { flex-shrink: 0; margin-top: 0.1rem; }
+.play-detail__game-moved strong { color: var(--polaroid-accent, var(--accent)); }
+
+/* Quiet ghost chrome for the two expansion affordances, matching
+   .play-detail__init-rounds — both are opt-ins, not primary actions. */
+.play-detail-popup__card .play-detail__add-expansion,
+.play-detail-popup__card .play-detail__edit-expansions-empty {
+  color: var(--polaroid-ink-soft);
+  opacity: 1;
 }
 
 /* Sticky footer at the bottom of the popup card. Hosts the primary

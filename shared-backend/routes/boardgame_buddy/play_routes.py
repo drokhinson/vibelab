@@ -438,6 +438,32 @@ async def get_play(
     return await asyncio.to_thread(load_play_response, get_supabase(), play_id, user.user_id)
 
 
+def _load_pivot_game(sb: Client, game_id: str) -> dict:
+    """The game a play is being moved onto, read and checked before any write.
+
+    Expansions are refused here for the same reason the log flow refuses one as
+    a session's main game: an expansion is played WITH a base game, never
+    instead of it, and a play whose game_id pointed at one would be counted as
+    its own title in every shelf, stat and leaderboard. The FK would have
+    accepted it happily — this is the readable error in front of it.
+    """
+    res = (
+        sb.table("boardgamebuddy_games")
+        .select("id, name, thumbnail_url, is_expansion, play_mode")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    game = res.data[0]
+    if game.get("is_expansion"):
+        raise HTTPException(
+            status_code=400,
+            detail="Pick a base game — an expansion is played with one, not instead of it.",
+        )
+    return game
+
+
 def _update_play_sync(sb: Client, play_id: str, user_id: str, body: PlayUpdate) -> PlayResponse:
     existing = (
         sb.table("boardgamebuddy_plays")
@@ -449,6 +475,13 @@ def _update_play_sync(sb: Client, play_id: str, user_id: str, body: PlayUpdate) 
         raise HTTPException(status_code=404, detail="Play not found")
     if existing.data[0]["user_id"] != user_id:
         raise HTTPException(status_code=403, detail="Not allowed")
+
+    # "I logged the wrong game." game_id is omitted-means-keep, so only a body
+    # that carries one AND names a different game pivots anything; a client that
+    # round-trips the id it was given takes none of this path.
+    pivot = None
+    if body.game_id and body.game_id != existing.data[0]["game_id"]:
+        pivot = _load_pivot_game(sb, body.game_id)
 
     # Update the top-level row. play_mode and country_code are only written
     # when the request carries them — omitting either leaves whatever was
@@ -478,6 +511,28 @@ def _update_play_sync(sb: Client, play_id: str, user_id: str, body: PlayUpdate) 
     # every row of a play somebody edited a note on.
     if body.scoring_template is not None:
         update_payload["scoring_template"] = body.scoring_template.model_dump(mode="json")
+    if pivot:
+        update_payload["game_id"] = pivot["id"]
+        # game_name and game_thumbnail_url are denormalized onto the play row
+        # (bgb_log_play writes them at insert) and read STRAIGHT from it by the
+        # feed, the plays page, the play search and every notification — none of
+        # them join boardgamebuddy_games. Leaving them behind would move the
+        # play everywhere that counts it while every surface that names it went
+        # on naming the game it was moved off.
+        update_payload["game_name"] = pivot["name"]
+        update_payload["game_thumbnail_url"] = pivot.get("thumbnail_url")
+        # The template snapshots a scoring chapter of the OLD game, so its row
+        # labels describe a game this play is no longer a record of. Cleared
+        # outright rather than left to an absent field: everywhere else here an
+        # omitted template means "keep", and keeping this one is the bug. The
+        # numbers survive — they become a plain R1..Rn breakdown.
+        update_payload["scoring_template"] = None
+        # play_mode is inherited from the game at insert time (PlayCreate), so
+        # a pivot inherits it again — a competitive play moved onto a co-op game
+        # is a co-op play. A body that states a mode still wins: that is a
+        # deliberate per-play override, which is what the column is for.
+        if body.play_mode is None:
+            update_payload["play_mode"] = pivot.get("play_mode") or "competitive"
     sb.table("boardgamebuddy_plays").update(update_payload).eq("id", play_id).execute()
 
     # Full-replace the nested lists. Read the seats' linked_at BEFORE the
@@ -487,7 +542,11 @@ def _update_play_sync(sb: Client, play_id: str, user_id: str, body: PlayUpdate) 
     sb.table("boardgamebuddy_play_players").delete().eq("play_id", play_id).execute()
     sb.table("boardgamebuddy_play_expansions").delete().eq("play_id", play_id).execute()
     _write_play_players(sb, play_id, body.players, linked_at_by_user=carried)
-    _write_play_expansions(sb, play_id, body.expansion_ids)
+    # Every expansion row names a game in the OLD base game's tree, so a pivot
+    # drops the lot whatever the body asked for. The client clears its own list
+    # when the user picks a new game; this is the half that can't be skipped,
+    # because nothing about an expansion id says which base game it belongs to.
+    _write_play_expansions(sb, play_id, [] if pivot else body.expansion_ids)
 
     res = (
         sb.table("boardgamebuddy_plays")
@@ -519,7 +578,12 @@ async def update_play(
     play_id: str = Path(..., description="Play UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayResponse:
-    """Replace a play's top-level fields and its players/expansions lists (owner only)."""
+    """Replace a play's top-level fields and its players/expansions lists (owner only).
+
+    A body carrying a different `game_id` also PIVOTS the play onto that game:
+    the table, the scores and the photo stay, the expansions and the scoring
+    template — both of which belonged to the game being left — do not.
+    """
     sb = get_supabase()
     return await asyncio.to_thread(_update_play_sync, sb, play_id, user.user_id, body)
 

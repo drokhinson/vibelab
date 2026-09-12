@@ -724,9 +724,19 @@ def validated_roster(players: list[PlayerEntry]) -> list[PlayerEntry]:
 
 
 class PlayUpdate(BaseModel):
-    # Full replacement of the play. Mirrors PlayCreate but game_id can't change
-    # — pivoting a play to a different game would orphan the per-player scores.
+    # Full replacement of the play. Mirrors PlayCreate.
     played_at: date
+    # The game this play records. Omitted-means-keep, like play_mode and
+    # country_code below — a client that offers no way to change the game must
+    # not be able to move a play by leaving the field out.
+    #
+    # Supplying a DIFFERENT id pivots the play: the commonest edit on this
+    # surface is "I logged the wrong game", and before this the only way to say
+    # it was to delete the play and re-enter the table, the scores and the
+    # photo. The per-player scores come with it — a score is a number somebody
+    # got at a table, not a property of the box — while the two things that
+    # genuinely belonged to the old game do not. See _update_play_sync.
+    game_id: str | None = None
     players: list[PlayerEntry] = []
     notes: str | None = None
     photo_url: str | None = None
@@ -739,7 +749,9 @@ class PlayUpdate(BaseModel):
     # Migration 018, and only written when supplied, for exactly the reason
     # above: the play-detail popup's edit mode round-trips the snapshot it was
     # given and never offers a way to change it (editing row labels is a
-    # chapter edit — this play's copy is deliberately frozen).
+    # chapter edit — this play's copy is deliberately frozen). The one thing
+    # that CLEARS it is a game pivot, and that is decided server-side rather
+    # than by an absent field, for the same reason.
     scoring_template: PlayScoringTemplate | None = None
 
     @model_validator(mode="after")
