@@ -403,6 +403,7 @@
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .alias-sheet,
+     .ghost-name-sheet,
      .chapter-import-sheet,
      .tmpl-sheet,
      .bgg-import-sheet,
@@ -453,6 +454,7 @@
      .buddy-qr-sheet,
      .ghost-claim-sheet,
      .alias-sheet,
+     .ghost-name-sheet,
      .chapter-import-sheet,
      .tmpl-sheet,
      .bgg-import-sheet,
@@ -6413,19 +6415,29 @@ html.bgb-ptr-armed body {
 .export-sheet__error { color: var(--rust); }
 .export-sheet__retry { display: block; margin: 0 auto; }
 
-/* ── Buddy alias sheet ────────────────────────────────────────────────────
-   One text field and two commits, over the shared .bgb-sheet__* chrome. It has
-   no __list, so nothing in the panel grows — the shared
+/* ── Buddy alias sheet, and the ghost-name sheet beside it ────────────────
+   Two sheets, one shape, so the selectors are shared rather than copied: the
+   alias sheet renames a buddy for the viewer's eyes only, the ghost-name sheet
+   fixes the spelling of a custom player, and each is one text field over the
+   shared .bgb-sheet__* chrome. Only .alias-sheet__remove is single-owner —
+   there is no "remove" on a ghost's name, since a ghost with no name is not a
+   row the app can render.
+
+   Neither has a __list, so nothing in either panel grows — the shared
    `max-height: min(80%, 660px)` plus the .bgb-kb-open override is all the
    geometry it needs, and with a keyboard up the panel is the only thing on
    screen anyway.
 
    Everything here paints from the surface family (--polaroid-*), not the ground
-   tokens: the sheet is body-level and is named in the re-point list above, so
-   these resolve to chrome in both themes (.claude/rules/theming.md §6). */
-.alias-sheet__panel { gap: 0; }
-.alias-sheet__field { flex: none; margin: 0.75rem 0 0.2rem; }
-.alias-sheet__input {
+   tokens: both sheets are body-level and both are named in the re-point list
+   above, so these resolve to chrome in both themes
+   (.claude/rules/theming.md §6). */
+.alias-sheet__panel,
+.ghost-name-sheet__panel { gap: 0; }
+.alias-sheet__field,
+.ghost-name-sheet__field { flex: none; margin: 0.75rem 0 0.2rem; }
+.alias-sheet__input,
+.ghost-name-sheet__input {
   width: 100%;
   min-height: 52px;
   box-sizing: border-box;
@@ -6435,12 +6447,15 @@ html.bgb-ptr-armed body {
   color: var(--polaroid-ink);
   font-family: var(--font-sans);
 }
-.alias-sheet__input::placeholder { color: var(--polaroid-muted); opacity: 0.8; }
-.alias-sheet__input:focus-visible {
+.alias-sheet__input::placeholder,
+.ghost-name-sheet__input::placeholder { color: var(--polaroid-muted); opacity: 0.8; }
+.alias-sheet__input:focus-visible,
+.ghost-name-sheet__input:focus-visible {
   outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
 }
-.alias-sheet__hint {
+.alias-sheet__hint,
+.ghost-name-sheet__hint {
   margin: 0.5rem 0.15rem 0;
   font-size: 0.78rem;
   line-height: 1.4;
@@ -14158,9 +14173,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* Every labelled field on a polaroid card — the avatar customizer's display
    name and the first-run BGG credentials — in one selector. */
 .polaroid-field__input,
-/* The buddy alias field. It is the entire content of its sheet, so a focus
-   zoom here would scale the one thing the user opened the sheet to type into. */
-.alias-sheet__input {
+/* The buddy alias field and the ghost-name field. Each is the entire content
+   of its sheet, so a focus zoom here would scale the one thing the user opened
+   the sheet to type into. */
+.alias-sheet__input,
+.ghost-name-sheet__input {
   font-size: 16px;
 }
 

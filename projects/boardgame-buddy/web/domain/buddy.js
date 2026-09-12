@@ -152,6 +152,17 @@
         target_display_name: targetDisplayName,
       });
     }
+    // Fix a mistyped nickname. The same write as mergeGhosts underneath — a
+    // ghost has no id, so its name is its identity — but a separate endpoint
+    // because a typo fix has to accept "dave" → "Dave", which merge rejects as
+    // a no-op, and because free-typed text needs a length check merge's
+    // already-stored target does not.
+    static renameGhost(displayName, newDisplayName) {
+      return window.api.post("/ghost-players/rename", {
+        display_name: displayName,
+        new_display_name: newDisplayName,
+      });
+    }
 
     // ── Private aliases ─────────────────────────────────────────────────────
     // A private alias is a name the VIEWER gave one of their buddies, stored on
