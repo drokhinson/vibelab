@@ -58,22 +58,6 @@
       this._startPolling();
     }
 
-    /**
-     * Connectivity changed under us. Called by LogPlayView's `offline`
-     * subscriber, because a widget has no View.listen of its own.
-     *
-     * render() preserves the typed code and caret, so this is safe to fire on
-     * every flap. Coming back online also re-loads: the poll skipped every
-     * tick while offline, so the session list is however stale it was when
-     * signal died.
-     */
-    syncOffline() {
-      if (!this._host) return;
-      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
-      if (offline) { this.render(); return; }
-      this._load();
-    }
-
     unmount() {
       this._stopPolling();
       document.removeEventListener("visibilitychange", this._onVisibility);
@@ -81,16 +65,11 @@
     }
 
     async _load() {
-      // Joining is inherently a networked act — the lobby lives on the server
-      // and the code is its address. Offline, say so once instead of showing a
-      // failed fetch's error text, which reads like something broke.
-      if (window.BgbNet && window.BgbNet.isOffline()) {
-        this._loading = false;
-        this._error = null;
-        this._sessions = [];
-        this.render();
-        return;
-      }
+      // No connectivity pre-check. The request is made, and whatever comes
+      // back is reported in the card's own error slot — which is where a
+      // failure to list sessions belongs, right under the thing that lists
+      // them. api.js fails instantly rather than after the 15s deadline when
+      // the link is already known dead, so this costs no wait.
       this._loading = true;
       this._error = null;
       this.render();
@@ -101,7 +80,11 @@
         this._sessions = (resp && resp.sessions) || [];
       } catch (e) {
         if (seq !== this._loadSeq) return;
-        this._error = e.message || "Failed to load active sessions";
+        // The raw "You appear to be offline." is true but reads as a fault
+        // report; said in the list's own slot it can name what is missing.
+        this._error = isOfflineError(e)
+          ? "You're offline — active sessions need a connection."
+          : (e.message || "Failed to load active sessions");
         this._sessions = this._sessions || [];
       } finally {
         if (seq === this._loadSeq) {
@@ -163,10 +146,13 @@
       // A poll tick can land mid-typing.
       const focus = captureFocus();
 
-      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
-
+      // Renders identically whether or not there is a connection. Joining does
+      // need one — the lobby lives on the server and the code is its address —
+      // but a disabled field is a worse way to say that than letting the tap
+      // through and answering it: it leaves the user guessing whether the app
+      // is broken, and it was wrong every time the latch was stale.
       el.innerHTML = `
-        <section class="cascade-card${offline ? " cascade-card--offline" : ""}">
+        <section class="cascade-card">
           <label class="cascade-card__label">Enter a host's code</label>
           <div class="cascade-join__code-row">
             <input id="join-code-input"
@@ -174,26 +160,17 @@
                    placeholder="5-character code"
                    maxlength="5"
                    autocapitalize="characters"
-                   ${offline ? "disabled" : ""}
                    value="${escapeAttr(this._joinCode)}"
                    oninput="window.joinPanel._joinCode = this.value.toUpperCase();" />
             <button class="btn btn-primary"
-                    ${this._joining || offline ? "disabled" : ""}
+                    ${this._joining ? "disabled" : ""}
                     onclick="window.joinPanel._joinByCode()">
               ${this._joining ? "Joining…" : "Join"}
             </button>
           </div>
-          ${offline ? `
-            <p class="cascade-card__hint">
-              <i data-icon="cloud-off" class="w-4 h-4"></i>
-              Joining needs a connection — the lobby lives on the server. You
-              can still host your own game offline.
-            </p>
-          ` : ""}
-          ${this._error && !offline ? `<div class="cascade-card__error">${escapeHtml(this._error)}</div>` : ""}
+          ${this._error ? `<div class="cascade-card__error">${escapeHtml(this._error)}</div>` : ""}
         </section>
 
-        ${offline ? "" : `
         <section class="cascade-join__list-wrap">
           <div class="cascade-join__list-head">
             <h3 class="cascade-join__list-title">Active sessions</h3>
@@ -213,7 +190,6 @@
                    ${sessions.map((s) => this._renderSessionRow(s)).join("")}
                  </ul>`}
         </section>
-        `}
       `;
       window.BgbIcons.render(el);
 
@@ -305,7 +281,14 @@
           window.router.go("session-viewer", { code });
         }
       } catch (e) {
-        this._error = e.message || "Failed to join";
+        // Offline is not this card's error to show inline: the code the user
+        // typed is fine, and "You appear to be offline" printed under the
+        // field reads as a complaint about the code. It goes to the app's
+        // toast, like every other action that turns out to need the network.
+        // Anything the SERVER said ("No such session") stays inline, beside
+        // the field it is actually about.
+        if (isOfflineError(e)) notifyRequestError(e, "joining a game");
+        else this._error = e.message || "Failed to join";
       } finally {
         this._joining = false;
         this.render();

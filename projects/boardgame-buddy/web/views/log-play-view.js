@@ -53,11 +53,12 @@
       // uploads section, with the gear's dot as its signal, so this view no
       // longer watches it.
       // View.listen auto-unsubscribes on unmount.
-      this.listen("offline", () => {
-        this._patchChooserCards();
-        // The Join half is a widget, so it can't subscribe for itself.
-        window.joinPanel.syncOffline();
-      });
+      // Only the Host card's copy moves: hosting is the one thing on this
+      // screen that works either way, and offline it works DIFFERENTLY (the
+      // play saves to the device). The Join half renders the same whatever
+      // the link is doing and answers a tap that can't land — see
+      // widgets/join-panel.js.
+      this.listen("offline", () => this._patchChooserCards());
       this._refreshLastPlay();
     }
 
