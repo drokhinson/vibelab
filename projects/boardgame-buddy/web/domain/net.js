@@ -154,11 +154,6 @@
       return this._failures >= FAILURE_THRESHOLD;
     }
 
-    /** True while a user-triggered connectivity check is in flight. */
-    isProbing() {
-      return !!this._probing;
-    }
-
     /**
      * The current connectivity epoch. A caller reads this BEFORE it starts a
      * request and hands it back to noteFailure() — see there for why.

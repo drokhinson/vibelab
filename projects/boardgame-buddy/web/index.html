@@ -201,12 +201,6 @@
       </button>
     </header>
 
-    <!-- Offline banner. Sits between the header and the views so it reads as
-         app state rather than screen content, and so no individual view has to
-         remember to render it. init.js#syncOfflineBanner drives it from the
-         store's `offline` slot; hidden whenever the app is connected. -->
-    <div id="bgb-offline-banner" class="bgb-offline-banner hidden" role="status"></div>
-
     <!-- ── Views ────────────────────────────────────────────────────────────── -->
     <!-- The loader mark is inlined rather than left to SplashView.render() so
          the browser paints it as soon as CSS is ready. Every script below is
