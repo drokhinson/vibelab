@@ -120,12 +120,24 @@
      * or typing would walk the app into offline mode one keystroke at a time.
      * It rejects with `err.aborted = true`, which callers ignore.
      *
+     * The strike is tagged with the connectivity epoch the request STARTED in
+     * (domain/net.js#noteFailure). A request that was in flight when the OS
+     * froze the page rejects on resume, and its frozen deadline fires the
+     * moment it thaws — evidence about a page that wasn't running, not about
+     * the link, and enough of it to latch the app offline on a phone with full
+     * bars. The epoch is what tells the two apart.
+     *
+     * `countFailure` is false for a retry of a request that already recorded
+     * one — see the stalled-GET retry in _request.
+     *
      * @param {string} url
      * @param {RequestInit} init
      * @param {AbortSignal} [callerSignal]
+     * @param {boolean} [countFailure]
      * @returns {Promise<Response>}
      */
-    async _fetch(url, init, callerSignal) {
+    async _fetch(url, init, callerSignal, countFailure = true) {
+      const epoch = window.BgbNet ? window.BgbNet.epoch() : undefined;
       let res;
       try {
         res = await fetch(url, init);
@@ -137,7 +149,7 @@
           err.cause = e;
           throw err;
         }
-        if (window.BgbNet) window.BgbNet.noteFailure();
+        if (countFailure && window.BgbNet) window.BgbNet.noteFailure(epoch);
         const timedOut = !!e && (e.name === "AbortError" || e.name === "TimeoutError");
         const err = new Error(timedOut
           ? "The server took too long to respond."
@@ -164,9 +176,10 @@
      * @param {RequestInit} init
      * @param {number} timeoutMs
      * @param {AbortSignal} [callerSignal] aborts the request early
+     * @param {boolean} [countFailure] see _fetch
      * @returns {Promise<[Response, () => void]>} the response and its release fn
      */
-    _send(url, init, timeoutMs, callerSignal) {
+    _send(url, init, timeoutMs, callerSignal, countFailure = true) {
       // Composed by hand rather than AbortSignal.any(): that is Safari 17.4+,
       // and this app runs as an installed PWA on older iOS.
       const ctl = new AbortController();
@@ -183,7 +196,7 @@
         clearTimeout(timer);
         if (onCallerAbort) callerSignal.removeEventListener("abort", onCallerAbort);
       };
-      return this._fetch(url, { ...init, signal: ctl.signal }, callerSignal).then(
+      return this._fetch(url, { ...init, signal: ctl.signal }, callerSignal, countFailure).then(
         (res) => [res, release],
         (e) => { release(); throw e; },
       );
@@ -224,7 +237,11 @@
       let res, release;
       try {
         [res, release] = await this._send(
-          url, init, timeoutMs || REQUEST_TIMEOUT_MS, signal,
+          // The stalled retry below is the SAME logical request, so it must
+          // not record a second strike: two is the offline threshold, and one
+          // slow GET would otherwise clear it by itself — defeating the
+          // "two in a row, not one" rule this app's offline mode rests on.
+          url, init, timeoutMs || REQUEST_TIMEOUT_MS, signal, !_stalled,
         );
       } catch (e) {
         // A stalled socket does not heal itself — the same request on a new
