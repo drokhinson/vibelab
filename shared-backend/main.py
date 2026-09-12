@@ -58,6 +58,49 @@ app = FastAPI(
     ],
 )
 
+# ── Unhandled-exception safety net ────────────────────────────────────────────
+# Registered FIRST and therefore INNERMOST of the middlewares (add_middleware
+# prepends), which is the whole point: it sits *inside* CORSMiddleware, so the
+# 500 it returns passes back out through CORS and carries the headers.
+#
+# Without it, anything that isn't an HTTPException or a registered handler's
+# type reaches Starlette's ServerErrorMiddleware, which is OUTSIDE CORS. That
+# 500 has no CORS headers, so the browser never surfaces it as a response at
+# all — it reports an opaque "Failed to fetch", indistinguishable from a dead
+# network. The APIError handler below was added for exactly this reason, but
+# it only covers one exception class, and the failures that actually reach
+# here are the ones nobody predicted.
+#
+# That gap has a specific, recurring cost. Migrations in this repo are applied
+# BY HAND (db/migrations/README.md) while the code that depends on them deploys
+# automatically, so a deploy can lead its schema. The resulting drift surfaces
+# as a response-model ValidationError, an AttributeError on a None RPC result,
+# a KeyError on a column that isn't there — none of them APIError. Every one of
+# those used to reach the browser as "Failed to fetch", which boardgame-buddy's
+# api.js normalizes to `err.offline = true` (domain/api.js) and BgbNet counts
+# toward offline mode. A forgotten migration therefore presented to the user as
+# "you're offline" on a phone with full bars, with the real error visible
+# nowhere in the client.
+#
+# So: never let a server-side failure impersonate a network failure. The
+# browser gets a real 500 it can show, and the detail stays server-side.
+@app.middleware("http")
+async def unhandled_errors_stay_cors_bearing(request: Request, call_next):
+    """Turn any unhandled exception into a clean, CORS-bearing 500."""
+    try:
+        return await call_next(request)
+    except Exception:
+        # CancelledError is a BaseException, so a client disconnect still
+        # propagates rather than being logged as a server fault.
+        logging.getLogger("vibelab").exception(
+            "Unhandled error on %s %s", request.method, request.url.path
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "A server error occurred. Please try again in a moment."},
+        )
+
+
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Set ALLOWED_ORIGINS in Railway to comma-separated Vercel URLs.
 # React Native does not need CORS (not a browser origin).
@@ -84,12 +127,13 @@ app.add_middleware(
 # are not worth it: a health check, a {"status": "ok"}, a CORS preflight's empty
 # body.
 #
-# Ordering: add_middleware PREPENDS, so with CORS added above and the
-# @app.middleware("http") decorator below added after, the stack runs
-# outer-to-inner as api-logger-context -> GZip -> CORS -> routes. CORS headers
-# are therefore set inside the compressor and survive it, and Starlette's GZip
-# APPENDS to Vary rather than replacing it, so a compressed response carries
-# `Vary: Origin, Accept-Encoding` and stays correctly cacheable per-origin.
+# Ordering: add_middleware PREPENDS, so with the error net and CORS added above
+# and the @app.middleware("http") decorators below added after, the stack runs
+# outer-to-inner as api-logger-context -> GZip -> CORS -> error net -> routes.
+# CORS headers are therefore set inside the compressor and survive it, and
+# Starlette's GZip APPENDS to Vary rather than replacing it, so a compressed
+# response carries `Vary: Origin, Accept-Encoding` and stays correctly
+# cacheable per-origin.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 

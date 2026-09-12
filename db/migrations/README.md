@@ -69,4 +69,30 @@ empty DB — they are **not** re-run on the live database.
 3. Update `db/schema/<app>.sql` if table shape changed.
 4. Commit the migration + snapshot together.
 
+Step 2 is a hand step while the code that needs it deploys itself on merge, so
+the deploy can land ahead of its schema. Do step 2 *before* merging.
+
+## Checking for drift
+
+When an app misbehaves in a way that smells like schema drift — a call that
+500s, a screen that used to work, a client that thinks it is offline — find out
+before guessing:
+
+```bash
+python3 db/check_drift.py                 # every app
+python3 db/check_drift.py boardgamebuddy  # one app
+```
+
+Paste the output into the SQL editor. It is read-only, and every row it returns
+is an object some migration creates that the database does not have — the
+migration naming the most rows is the one to run. No rows means the schema is
+current. The query is generated from the migrations themselves, so it covers
+any migration added after this was written.
+
+It finds **missing** objects, which is the common case. It cannot see an
+unapplied `CREATE OR REPLACE FUNCTION`: the old function is still sitting there
+under the same name, and only its body is stale. When the check comes back
+clean and a call still fails, diff the live definition against the file —
+`select pg_get_functiondef('bgb_feed_plays'::regproc);`.
+
 See `.claude/rules/database-supabase.md` for RLS, grant, and naming conventions.
