@@ -752,11 +752,16 @@
   retryProfileWhenOnline();
 
   /**
-   * The banner's "Try again". Everything else about offline detection is
-   * passive — it learns from requests the app was making anyway — so this is
-   * the one path that asks on purpose, for when the user can see they have
-   * signal and the app hasn't caught up (walked out of the dead zone, joined
-   * the wifi, came off airplane mode).
+   * The banner's "Try again" — the impatient path to what BgbNet's recovery
+   * ladder is already doing on a backoff. It asks on purpose, for when the
+   * user can see they have signal and the app hasn't caught up yet (walked out
+   * of the dead zone, joined the wifi, came off airplane mode).
+   *
+   * A probe already in flight is JOINED rather than refused: probe() is
+   * single-flight, and with the ladder running there is very often one in the
+   * air when the tap lands. Bailing on isProbing() made exactly those taps do
+   * nothing at all — no "Checking…", no toast — which reads as a dead button
+   * on the one screen where the user is already unsure anything works.
    *
    * On success the store flips and the banner removes itself; BgbNet's own
    * offline→online edge drains the outbox, so nothing to do here. On failure
@@ -764,7 +769,7 @@
    * leaving the user unsure whether the tap registered.
    */
   window.retryConnection = async function () {
-    if (!window.BgbNet || window.BgbNet.isProbing()) return;
+    if (!window.BgbNet) return;
     syncOfflineBanner(true);            // paint "Checking…" in the tap frame
     const back = await window.BgbNet.probe();
     if (!back) {

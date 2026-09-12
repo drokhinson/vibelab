@@ -18,6 +18,29 @@
 //
 // A completed response outranks both: see isOffline().
 //
+// GETTING BACK OUT IS THE HARD HALF
+// ---------------------------------
+// Offline is a latch by construction: nearly every caller in the app gates on
+// isOffline() (the pickers, the outbox, the join panel, the lobby poll), so
+// once it reads true almost nothing issues a request — and noteSuccess(), the
+// only thing that clears it, is fed by requests. A state that can only be left
+// by evidence it also stops anyone from gathering will stay put forever.
+//
+// The browser's `online` event is not the answer on its own: it fires on a
+// TRANSITION, and the failure modes that get the app here don't involve one.
+// A phone that never lost its link (a stalled socket, a cold dyno, a PWA the
+// OS froze mid-request) has no transition to report, so nothing fires and the
+// user is left with a "No connection" banner on full bars. That was the bug:
+// "stuck in offline mode when my phone is online."
+//
+// So three things below exist purely to make the latch let go:
+//   * an epoch on every failure, so evidence from before a connectivity change
+//     (or before the OS froze the page) is discarded rather than counted;
+//   * a re-probe when the app becomes visible again, which is where a stale
+//     offline state is most likely to be sitting and most likely to be wrong;
+//   * a backing-off auto-probe while offline and on screen, so recovery never
+//     depends on the user finding the "Try again" button.
+//
 // Deliberately NOT wired to anything that tears down user state. Per
 // .claude/rules/web-frontend.md ("don't treat a transient blip as a real state
 // change"), going offline must never sign the user out, abandon a lobby, or
@@ -25,6 +48,26 @@
 
 (function () {
   const FAILURE_THRESHOLD = 2;
+
+  // Failures this close together are ONE piece of evidence, not two.
+  //
+  // "Two in a row" is about two moments, and the app does not make requests one
+  // at a time: a boot fires /bootstrap, the feed page, the profile bundle,
+  // stats and the collection map together, and warmRefresh() re-fires most of
+  // them on every focus. One blip catching a fan-out would otherwise clear a
+  // threshold meant to need a second, independent failure — the exact
+  // single-blip flip the threshold exists to prevent.
+  //
+  // 1.5s because the fan-out members do not fail simultaneously: staggered
+  // starts mean staggered deadlines, so the rejections arrive spread out.
+  const FAILURE_BURST_MS = 1500;
+
+  // The ladder the auto-probe walks while offline, in ms. Quick at first —
+  // the common case is a blip that has already passed and only needs one
+  // request to prove it — then backing off to a minute, which is a cheap
+  // standing cost for a device that really is in a basement. Only ever runs
+  // while the page is visible, so a pocketed phone probes nothing.
+  const RECOVERY_DELAYS_MS = [5000, 10000, 20000, 30000, 60000];
 
   // Cheap, unauthenticated, and already required on every project by
   // .claude/rules/backend-python.md — so the probe can't fail for a reason
@@ -37,10 +80,19 @@
       // "ok" once a request has demonstrably completed, "fail" after a network
       // error, null when we have no evidence either way. See isOffline().
       this._lastOutcome = null;
+      // When the last COUNTED failure landed, for the burst rule above.
+      this._lastFailureAt = null;
+      // Bumped by every connectivity change and every return to the
+      // foreground. A failure carries the epoch its request started in; see
+      // noteFailure().
+      this._epoch = 0;
       // In-flight probe(), so a leaning-on-the-button user fires one check.
       this._probing = null;
       // Last value published to the store, so we only notify on real edges.
       this._published = null;
+      // The auto-probe ladder: pending timer and how far up it we are.
+      this._recoveryTimer = null;
+      this._recoveryStep = 0;
     }
 
     /** Wire the browser events. Called once from init.js. */
@@ -53,16 +105,41 @@
       window.addEventListener("offline", () => {
         // The OS says the interface is down. That outranks our own evidence,
         // which is now stale by definition.
+        this._epoch++;
         this._lastOutcome = null;
         this._publish();
       });
       window.addEventListener("online", () => {
         // The link is back as far as the browser knows. Clear the learned
         // strikes so one stale failure can't keep the app in offline mode.
+        this._epoch++;
         this._failures = 0;
+        this._lastFailureAt = null;
         this._lastOutcome = null;
         this._publish();
       });
+
+      // Coming back to the foreground is the highest-yield moment to re-check,
+      // for two reasons that compound. The link genuinely may have changed
+      // while the app was away with no `online` event to show for it (the OS
+      // suspends a backgrounded PWA, and a suspended page hears nothing). And
+      // the strikes on the books may be an artefact of the suspension itself:
+      // iOS freezes the page mid-request, every in-flight fetch rejects on
+      // resume, and the deadline timers that were frozen fire the moment they
+      // thaw — a handful of failures, all of them about a page that wasn't
+      // running rather than about the network. The epoch bump discards exactly
+      // those, and the probe replaces them with a fresh answer.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "visible") {
+          this._stopRecovery();
+          return;
+        }
+        this._epoch++;
+        this._recoveryStep = 0;
+        if (this.isOffline()) this.probe();
+        this._syncRecovery();
+      });
+
       this._publish();
     }
 
@@ -83,12 +160,23 @@
     }
 
     /**
-     * Actively test the connection. Backs the offline banner's "Try again".
+     * The current connectivity epoch. A caller reads this BEFORE it starts a
+     * request and hands it back to noteFailure() — see there for why.
+     * @returns {number}
+     */
+    epoch() {
+      return this._epoch;
+    }
+
+    /**
+     * Actively test the connection. Backs the offline banner's "Try again" and
+     * the automatic recovery ladder.
      *
      * Everything else here is passive — it learns from requests the app was
      * making anyway. This is the one path that asks on purpose, for the case
-     * where the user can see they have signal and the app hasn't noticed yet
-     * (walked out of the dead zone, joined the wifi, turned off airplane mode).
+     * where the app is offline and nothing else is going to find out
+     * otherwise: every other caller gates on isOffline(), so with the latch
+     * set there are no requests left to learn from.
      *
      * The probe goes through window.api, so api._fetch does the bookkeeping:
      * a response calls noteSuccess(), a network error calls noteFailure().
@@ -110,15 +198,31 @@
       return this._probing;
     }
 
-    /** A request failed at the network layer (not an HTTP error). */
-    noteFailure() {
-      this._failures++;
+    /**
+     * A request failed at the network layer (not an HTTP error).
+     *
+     * @param {number} [epoch] the epoch the request STARTED in. A failure from
+     *   an older epoch is dropped: the connectivity state it was evidence
+     *   about has already been superseded (the browser reported a change, or
+     *   the page came back from being frozen), and counting it would let a
+     *   dead era's requests hold the app offline in the current one.
+     */
+    noteFailure(epoch) {
+      if (epoch !== undefined && epoch !== this._epoch) return;
+      const now = Date.now();
+      const burst = this._lastFailureAt !== null
+        && now - this._lastFailureAt < FAILURE_BURST_MS;
+      if (!burst) {
+        this._lastFailureAt = now;
+        this._failures++;
+      }
       this._lastOutcome = "fail";
       this._publish();
     }
 
     /** A request completed — the link demonstrably works. */
     noteSuccess() {
+      this._lastFailureAt = null;
       if (this._failures === 0 && this._lastOutcome === "ok") return;
       this._failures = 0;
       this._lastOutcome = "ok";
@@ -135,11 +239,47 @@
       const wasOffline = this._published === true;
       this._published = next;
       if (window.store) window.store.set("offline", next);
+      // A fresh descent into offline starts the ladder from the bottom: the
+      // blip that just happened deserves the quick first re-check, not
+      // whatever delay a previous outage had backed off to.
+      if (next) this._recoveryStep = 0;
+      this._syncRecovery();
       // The single place connectivity is regained, whatever caused it — the
       // browser's online event, a successful probe, or an ordinary background
       // request clearing the strikes. Push whatever the host recorded while
       // disconnected. flush() is single-flight and no-ops when empty.
       if (wasOffline && !next && window.Outbox) window.Outbox.flush();
+    }
+
+    // The auto-probe runs exactly while the app is offline and on screen.
+    _syncRecovery() {
+      const wanted = this._published === true
+        && (typeof document === "undefined" || document.visibilityState !== "hidden");
+      if (wanted) this._armRecovery();
+      else this._stopRecovery();
+    }
+
+    _armRecovery() {
+      if (this._recoveryTimer) return;
+      const i = Math.min(this._recoveryStep, RECOVERY_DELAYS_MS.length - 1);
+      this._recoveryTimer = setTimeout(() => {
+        this._recoveryTimer = null;
+        // Re-checked rather than assumed: the delay is long enough for an
+        // ordinary background request to have cleared the strikes already, or
+        // for the user to have pocketed the phone.
+        if (!this.isOffline() || document.visibilityState === "hidden") {
+          this._syncRecovery();
+          return;
+        }
+        this._recoveryStep++;
+        this.probe().then(() => this._syncRecovery(), () => this._syncRecovery());
+      }, RECOVERY_DELAYS_MS[i]);
+    }
+
+    _stopRecovery() {
+      if (!this._recoveryTimer) return;
+      clearTimeout(this._recoveryTimer);
+      this._recoveryTimer = null;
     }
   }
 
