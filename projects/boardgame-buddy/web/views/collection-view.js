@@ -1208,7 +1208,12 @@
         baseGameName: group.name,
         ownedIds: group.kids.filter((k) => k.owned).map((k) => k.gameId),
         returnFocus: trigger || null,
-        onPick: (exp) => this._addExpansion(group, exp),
+        // The sheet is multi-select, so a shelf that gained four expansions
+        // cost one open rather than four. Each pick still goes through the same
+        // optimistic add below, one at a time: the rollback is per row, and a
+        // batch that failed halfway would otherwise have to unpick rows the
+        // user can already see.
+        onConfirm: (exps) => exps.forEach((exp) => this._addExpansion(group, exp)),
       });
     }
 

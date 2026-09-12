@@ -798,7 +798,7 @@
         ` : `<p class="play-detail__edit-expansions-empty">No expansions on this play.</p>`}
         <button class="btn btn-ghost btn-xs play-detail__add-expansion" type="button"
                 onclick="window.PlayDetailPopup._openExpansionPicker(event)">
-          <i data-icon="plus" class="w-3.5 h-3.5"></i> Add an expansion
+          <i data-icon="plus" class="w-3.5 h-3.5"></i> Add expansions
         </button>
       </section>
     `;
@@ -864,7 +864,7 @@
   }
 
   /**
-   * Add an expansion to the draft, from the catalog for the draft's CURRENT
+   * Add expansions to the draft, from the catalog for the draft's CURRENT
    * game — which is the point of reading d.game_id rather than the stored
    * play's: pivot the game and the picker follows, so the expansions offered
    * are always ones that could actually have been at that table.
@@ -880,21 +880,28 @@
       // the option ownedIds because its first caller was the collection shelf.
       ownedIds: d.expansions.map((e) => e.expansion_game_id),
       returnFocus: (event && event.currentTarget) || null,
-      onPick: (exp) => addExpansion(exp),
+      // One repaint for the whole set, not one per expansion: the sheet is
+      // multi-select and hands back everything that was ticked, in tick order.
+      onConfirm: (exps) => addExpansions(exps),
     });
   }
 
-  /** @param {any} exp An ExpansionListItem from the picker. */
-  function addExpansion(exp) {
+  /** @param {any[]} exps ExpansionListItems from the picker, in tick order. */
+  function addExpansions(exps) {
     const d = state.draft;
-    if (!d || !exp || !exp.expansion_game_id) return;
-    if (d.expansions.some((e) => e.expansion_game_id === exp.expansion_game_id)) return;
-    d.expansions.push({
-      expansion_game_id: exp.expansion_game_id,
-      name: exp.name,
-      color: exp.color || null,
-    });
-    render();
+    if (!d || !Array.isArray(exps)) return;
+    let added = 0;
+    for (const exp of exps) {
+      if (!exp || !exp.expansion_game_id) continue;
+      if (d.expansions.some((e) => e.expansion_game_id === exp.expansion_game_id)) continue;
+      d.expansions.push({
+        expansion_game_id: exp.expansion_game_id,
+        name: exp.name,
+        color: exp.color || null,
+      });
+      added++;
+    }
+    if (added) render();
   }
 
   /** @param {string} expansionGameId */
