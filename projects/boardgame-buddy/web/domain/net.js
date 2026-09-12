@@ -182,13 +182,17 @@
      * a response calls noteSuccess(), a network error calls noteFailure().
      * Any status counts as reachable — a 500 still proves we got there.
      *
+     * `allowWhileOffline` is not optional here. api._fetch short-circuits every
+     * request while this latch is set, and a probe judged by the latch it
+     * exists to clear is the deadlock the header above is about.
+     *
      * @returns {Promise<boolean>} true when the connection came back
      */
     probe() {
       if (this._probing) return this._probing;
       this._probing = (async () => {
         try {
-          await window.api.get(PROBE_PATH);
+          await window.api.get(PROBE_PATH, null, { allowWhileOffline: true });
         } catch (_) {
           // Swallowed: noteFailure already recorded it, and the caller reads
           // the outcome from the return value rather than a rejection.
@@ -218,6 +222,28 @@
       }
       this._lastOutcome = "fail";
       this._publish();
+    }
+
+    /**
+     * Somebody tried to do something and api._fetch short-circuited it.
+     *
+     * Not evidence — no request was made — so nothing here touches the strike
+     * count or _lastOutcome. It is an intent signal, and it exists because the
+     * offline banner's "Try again" button was removed: a user who can see they
+     * have signal has no button left to press, so their own retry tap has to
+     * BE the button. Restart the ladder at its quick first rung and ask now.
+     *
+     * Cheap to call on every blocked request: probe() is single-flight, and
+     * _armRecovery() no-ops while a timer is already pending.
+     */
+    noteAttemptWhileOffline() {
+      // Drop the pending rung before resetting the step, or the reset is
+      // undone: _armRecovery() reads _recoveryStep when it ARMS, so a timer
+      // already waiting out 60s would still fire, still increment, and still
+      // re-arm from where the old outage had backed off to.
+      this._stopRecovery();
+      this._recoveryStep = 0;
+      this.probe().then(() => this._syncRecovery(), () => this._syncRecovery());
     }
 
     /** A request completed — the link demonstrably works. */
