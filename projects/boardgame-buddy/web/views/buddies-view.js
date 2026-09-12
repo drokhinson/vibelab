@@ -533,7 +533,7 @@
           </ul>
           ${this._renderPager(this._playedWithPage, pages, "_goPlayedWithPage", "Played-with pagination")}
           ${ghostsOnPage
-            ? `<p class="text-xs opacity-60 px-1 mt-1">Tap “Link” on a custom player to point them at a real account — past plays update too.</p>`
+            ? `<p class="text-xs opacity-60 px-1 mt-1">Tap “Link” on a custom player to point them at a real account, or the pencil to fix a misspelt name — past plays update either way.</p>`
             : ""}
         </section>
       `;
@@ -602,6 +602,12 @@
             </div>
             <div class="buddies-row__when">${g.play_count} ${g.play_count === 1 ? "play" : "plays"}${g.last_played_at ? " · last " + formatMonthYear(g.last_played_at) : ""}</div>
           </div>
+          <button class="bgb-alias-btn"
+                  aria-label="${escapeAttr("Fix the name " + g.display_name)}"
+                  title="Fix this name"
+                  onclick="${escapeAttr(`window.buddiesView._openGhostRename('${jsStr(g.display_name)}')`)}">
+            <i data-icon="pencil" class="w-3.5 h-3.5"></i>
+          </button>
           <button class="btn btn-ghost btn-xs" onclick="${escapeAttr(`window.buddiesView._openLinkSheet('${jsStr(g.display_name)}')`)}">
             Link
           </button>
@@ -1814,6 +1820,161 @@
       // — invalidate so the renamed/merged ghost shows up there too.
       if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
       await this._load();
+    }
+
+    // ── Fixing a ghost's name ───────────────────────────────────────────────
+    //
+    // The other half of the pair above. Link and Merge both answer "who is
+    // this?" by pointing the name at somebody who already exists — an account,
+    // or another ghost — which leaves the commonest problem on this screen
+    // unsayable: the name is right about WHO and wrong about HOW IT IS SPELT.
+    // "Micheal" typed at the table is a separate player for ever, because a
+    // ghost has no id and its name IS the join key, so one friend's history
+    // sits in two piles and nothing here could say so.
+    //
+    // Hence the pencil — the same glyph, in the same place, as the private
+    // alias on a buddy row, because to the user it is plainly the same act
+    // (.claude/rules/ui-object-design.md §3b). The two differ in who can see
+    // the result: an alias is the viewer's private label for somebody else's
+    // account, this is the actual stored name of a player only the viewer has.
+
+    /**
+     * Open the name sheet for one ghost. The live `_ghosts` row is the source
+     * of truth for the name and the play count, so a sheet opened twice in a
+     * row cannot show a value the first save has already replaced.
+     * @param {string} displayName
+     */
+    _openGhostRename(displayName) {
+      const ghost = (this._ghosts || []).find((g) => g.display_name === displayName);
+      window.GhostNameSheet.open({
+        displayName,
+        playCount: (ghost && ghost.play_count) || 0,
+        // Everyone the new spelling could collide with. The sheet warns as the
+        // user types, and hands the collision back so the confirm below can
+        // say what is about to happen rather than letting it happen quietly.
+        others: (this._ghosts || [])
+          .filter((g) => g.display_name !== displayName)
+          .map((g) => ({ name: g.display_name, playCount: g.play_count || 0 })),
+        returnFocus: document.activeElement,
+        onSave: (next, mergesInto) => this._saveGhostName(displayName, next, mergesInto),
+      });
+    }
+
+    /**
+     * Write the new spelling, painting it first.
+     *
+     * Optimistic in the shape of _saveAlias above rather than the reload
+     * _confirmLink and _confirmMerge do, because this one is a correction: the
+     * user is looking straight at the misspelling they came here to fix, and
+     * the round trip is the whole time it stays wrong on screen.
+     *
+     * Two outcomes from one field. A name nobody else has is a rename and the
+     * row keeps its place. A name another ghost already has is a merge — the
+     * two rows become one — which is a real answer to "what should this be
+     * called", so it is confirmed rather than refused.
+     * @param {string} source The ghost's current name.
+     * @param {string} next The new spelling, trimmed and non-empty.
+     * @param {{name: string, playCount: number}|null} mergesInto
+     */
+    async _saveGhostName(source, next, mergesInto) {
+      const key = "ghost-name:" + source.toLowerCase();
+      if (this._busy.has(key)) return;
+
+      if (mergesInto) {
+        const n = mergesInto.playCount || 0;
+        const ok = await window.PolaroidPopup.confirm({
+          title: `Two players called “${mergesInto.name}”?`,
+          body: `You already have a custom player called “${mergesInto.name}”${n ? ` with ${n} ${n === 1 ? "play" : "plays"}` : ""}. Saving joins the two into one player — “${source}” stops existing separately. Nobody's account is involved.`,
+          confirmLabel: "Join them",
+          cancelLabel: "Keep both",
+        });
+        if (!ok) return;
+      }
+
+      // A merge writes the spelling that already exists, not the one just
+      // typed. The two are the same name to the WRITE (bgb_merge_ghosts
+      // matches ILIKE) but not to the READ, which groups ghosts by
+      // `btrim(player_display_name)` case-SENSITIVELY — so sending "dave" at
+      // a list that holds "Dave" would leave two rows standing, which is the
+      // opposite of what the confirm above just promised.
+      const name = mergesInto ? mergesInto.name : next;
+
+      // Re-read the row after the confirm: it is async, so the list can have
+      // moved under it (a finished play adds ghosts) while the dialog was up.
+      const at = (this._ghosts || []).findIndex((g) => g.display_name === source);
+      if (at < 0) return;
+
+      this._busy.add(key);
+      // Same guard the friend-graph edits take: a _load() that was already in
+      // the air must not land the old spelling back on the row.
+      this._mutationSeq++;
+      const before = this._ghosts.slice();
+      this._ghosts = this._ghostsRenamed(this._ghosts, source, name);
+      this.render();
+
+      try {
+        const res = await window.Buddy.renameGhost(source, name);
+        const n = (res && res.rows_updated) || 0;
+        if (n === 0) console.warn("No matching ghost rows found to rename.");
+      } catch (e) {
+        this._ghosts = before;
+        this.render();
+        if (typeof showToast === "function") {
+          showToast(e.message || "Couldn't save that name", "error");
+        }
+        return;
+      } finally {
+        this._busy.delete(key);
+      }
+
+      // The name is stored on every play row, so the play-flow picker, the
+      // plays list and the feed all read it from caches this write just made
+      // wrong. Invalidate, then reconcile the counts a merge only estimated
+      // above against what the server actually rewrote.
+      if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
+      await this._load();
+    }
+
+    /**
+     * The ghost list as it will read once the server has done the rename —
+     * the optimistic half of _saveGhostName, kept whole and pure so the one
+     * subtle thing about it is in one place.
+     *
+     * That subtlety: the write and the read disagree about case. The write
+     * matches ILIKE, so EVERY spelling of `source` that differs only in case
+     * moves with it; the read groups by `btrim(player_display_name)` exactly,
+     * so those spellings are separate rows here. One rename can therefore
+     * retire two rows and produce one — which is right, they were always one
+     * person — and a paint that moved only the tapped row would be short by
+     * the other one's plays until the reload.
+     *
+     * The survivor keeps the earliest affected row's position (the list is
+     * ordered by play count, and a row that just grew has not moved DOWN) and
+     * the later `last_played_at` of the rows folded into it, null-safe because
+     * an imported play can carry no date at all.
+     * @param {any[]} ghosts @param {string} source @param {string} name
+     */
+    _ghostsRenamed(ghosts, source, name) {
+      const srcKey = String(source || "").trim().toLowerCase();
+      const dstKey = String(name || "").trim().toLowerCase();
+      const keyOf = (g) => String(g.display_name || "").trim().toLowerCase();
+      const touched = (g) => keyOf(g) === srcKey || keyOf(g) === dstKey;
+
+      const at = ghosts.findIndex(touched);
+      if (at < 0) return ghosts;
+
+      const survivor = ghosts.filter(touched).reduce((acc, g) => ({
+        display_name: name,
+        play_count: (acc.play_count || 0) + (g.play_count || 0),
+        last_played_at: (!acc.last_played_at
+          || (g.last_played_at && g.last_played_at > acc.last_played_at))
+          ? (g.last_played_at || acc.last_played_at)
+          : acc.last_played_at,
+      }), { display_name: name, play_count: 0, last_played_at: null });
+
+      const out = ghosts.filter((g) => !touched(g));
+      out.splice(at, 0, survivor);
+      return out;
     }
   }
 

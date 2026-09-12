@@ -14,6 +14,7 @@ count them in a dict.
 from fastapi import HTTPException
 from supabase import Client
 
+from ..constants import MAX_IMPORT_NAME_CHARS
 from ..models import (
     BuddyEdgeResponse,
     GhostPlayer,
@@ -155,7 +156,57 @@ def merge_ghosts(
     if src.lower() == tgt.lower():
         raise HTTPException(status_code=400, detail="Source and target ghost must differ")
 
-    # One statement (migration 050) — same query-string cliff as link_ghost.
+    return _write_ghost_name(sb, viewer_id, src, tgt)
+
+
+def rename_ghost(
+    sb: Client,
+    viewer_id: str,
+    display_name: str,
+    new_display_name: str,
+) -> int:
+    """Correct the spelling of one ghost nickname across the viewer's plays.
+
+    The same write as `merge_ghosts` — a ghost has no id, so its name IS its
+    identity and every edit to it is an UPDATE over the matching rows — with
+    two differences that follow from it being a typo fix rather than a claim
+    that two people are one:
+
+    * The new name is free text, so its length is checked here. Merge's target
+      is always a name already in the viewer's plays, which passed this same
+      limit on the way in.
+    * A change of CASE alone is allowed. "dave" → "Dave" is the single most
+      likely correction on this screen, and merge rejects it as a no-op
+      because for merge that is exactly what it is.
+
+    Typing an existing ghost's name is not an error and is not blocked: the
+    UPDATE simply lands both spellings on one name, which is the merge the
+    user just asked for in the only words this screen gives them. The caller
+    confirms that case before sending it (buddies-view `_openGhostRename`).
+
+    Returns the number of rows updated.
+    """
+    src = (display_name or "").strip()
+    tgt = (new_display_name or "").strip()
+    if not src or not tgt:
+        raise HTTPException(status_code=400, detail="Both the old and new name are required")
+    if len(tgt) > MAX_IMPORT_NAME_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A player name can be at most {MAX_IMPORT_NAME_CHARS} characters",
+        )
+    if src == tgt:
+        raise HTTPException(status_code=400, detail="That is already their name")
+
+    return _write_ghost_name(sb, viewer_id, src, tgt)
+
+
+def _write_ghost_name(sb: Client, viewer_id: str, src: str, tgt: str) -> int:
+    """Set `tgt` as the display name on every ghost row of the viewer's own
+    plays whose name matches `src` case-insensitively. Returns the row count.
+
+    One statement (migration 050) — same query-string cliff as link_ghost.
+    """
     data = sb.rpc("bgb_merge_ghosts", {
         "p_viewer": viewer_id,
         "p_source": src,

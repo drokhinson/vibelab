@@ -1226,6 +1226,24 @@ class GhostMergeResponse(BaseModel):
     rows_updated: int
 
 
+class GhostRenameRequest(BaseModel):
+    """Fix the spelling of one ghost nickname across the viewer's plays.
+
+    The sibling of GhostMergeRequest, and the same write underneath — but a
+    different act. Merge answers "these two ghosts are one person" and picks
+    its target from ghosts that already exist; this one answers "I typed it
+    wrong", so the new name is free text and a change of CASE alone ("dave" →
+    "Dave") is a legitimate edit rather than the no-op merge rejects.
+    """
+
+    display_name: str
+    new_display_name: str
+
+
+class GhostRenameResponse(BaseModel):
+    rows_updated: int
+
+
 # ── Ghost account claims (migration 070) ─────────────────────────────────────
 #
 # The mirror image of GhostLinkRequest above. That one is the ghost's OWNER

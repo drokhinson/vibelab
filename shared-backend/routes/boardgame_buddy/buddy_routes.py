@@ -36,6 +36,8 @@ from .models import (
     GhostMergeRequest,
     GhostMergeResponse,
     GhostPlayer,
+    GhostRenameRequest,
+    GhostRenameResponse,
     MessageResponse,
     PlayedWithUser,
     PlayPartnersResponse,
@@ -375,3 +377,27 @@ async def merge_ghost_players(
         body.target_display_name,
     )
     return GhostMergeResponse(rows_updated=n)
+
+
+@router.post(
+    "/ghost-players/rename",
+    response_model=GhostRenameResponse,
+    status_code=200,
+    summary="Correct the spelling of a ghost player's name",
+)
+async def rename_ghost_player(
+    body: GhostRenameRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> GhostRenameResponse:
+    """Rename every viewer-logged ghost row matching `display_name`
+    (case-insensitive) to `new_display_name`. The typo fix for a nickname
+    that was mistyped when the play was logged; unlike /merge it accepts a
+    change of case alone."""
+    n = await asyncio.to_thread(
+        played_with_service.rename_ghost,
+        get_supabase(),
+        user.user_id,
+        body.display_name,
+        body.new_display_name,
+    )
+    return GhostRenameResponse(rows_updated=n)
