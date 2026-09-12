@@ -3,9 +3,11 @@ main.py — vibelab shared FastAPI backend
 ONE service handles ALL projects. Each project registers its own router.
 Routes are namespaced: /api/v1/{project}/...
 """
+import asyncio
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from typing import Optional
 
 import truststore
@@ -39,7 +41,61 @@ from routes import admin
 
 load_dotenv()
 
+
+# ── Startup ────────────────────────────────────────────────────────────────────
+# Warming sauceboss's in-memory registries is the only work this service does at
+# boot, and it used to be able to take the whole monorepo down.
+#
+# It ran inline in an @app.on_event("startup") hook, and load_unit_registry()
+# reads sauceboss_unit from Supabase with nothing around it. An exception there
+# — Supabase paused or asleep, one network blip, a slow cold start, a rotated
+# key — aborts ASGI startup, so the process exits. Railway restarts it
+# (restartPolicyMaxRetries = 3 in railway.toml) and then gives up, and the
+# service stays down until somebody redeploys by hand. Nothing reports this:
+# the "Deploy Shared Backend" workflow is an echo, so Actions is green either
+# way, and from a phone every app in the repo simply stops answering. A sauce
+# unit table that didn't load must never be able to do that to boardgame-buddy.
+#
+# The asymmetry was plainly unintended: load_modifier_registry() right beside it
+# already catches its own failures and says so in its docstring.
+#
+# So the warm-up moves off the startup path entirely — a background task, off
+# the event loop (the Supabase client is blocking), retried on a short backoff.
+# Startup returns immediately, which also keeps a slow Supabase from eating the
+# 30s healthcheck budget. The cost is a brief window where sauceboss parses with
+# an empty unit registry; the alternative was every app being unreachable.
+_REGISTRY_RETRY_DELAYS_S = (0, 2, 10, 30)
+
+
+async def _warm_registries() -> None:
+    """Fill the sauceboss registries in the background. Never fatal."""
+    log = logging.getLogger("vibelab")
+    for delay in _REGISTRY_RETRY_DELAYS_S:
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            # Both are blocking Supabase reads, so they go off the loop.
+            await asyncio.to_thread(load_unit_registry)
+            await asyncio.to_thread(load_modifier_registry)
+            return
+        except Exception:
+            log.warning("Registry warm-up failed; retrying", exc_info=True)
+    log.error("Registry warm-up gave up. Sauceboss unit parsing is degraded; "
+              "every other app is unaffected.")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start the warm-up, don't wait for it, and don't let it fail the boot."""
+    task = asyncio.create_task(_warm_registries())
+    try:
+        yield
+    finally:
+        task.cancel()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="vibelab API",
     version="1.0.0",
     description="Shared backend for the vibelab monorepo. Each project registers routes under /api/v1/{project}/.",
@@ -57,6 +113,49 @@ app = FastAPI(
         {"name": "admin", "description": "Admin dashboard and user management"},
     ],
 )
+
+# ── Unhandled-exception safety net ────────────────────────────────────────────
+# Registered FIRST and therefore INNERMOST of the middlewares (add_middleware
+# prepends), which is the whole point: it sits *inside* CORSMiddleware, so the
+# 500 it returns passes back out through CORS and carries the headers.
+#
+# Without it, anything that isn't an HTTPException or a registered handler's
+# type reaches Starlette's ServerErrorMiddleware, which is OUTSIDE CORS. That
+# 500 has no CORS headers, so the browser never surfaces it as a response at
+# all — it reports an opaque "Failed to fetch", indistinguishable from a dead
+# network. The APIError handler below was added for exactly this reason, but
+# it only covers one exception class, and the failures that actually reach
+# here are the ones nobody predicted.
+#
+# That gap has a specific, recurring cost. Migrations in this repo are applied
+# BY HAND (db/migrations/README.md) while the code that depends on them deploys
+# automatically, so a deploy can lead its schema. The resulting drift surfaces
+# as a response-model ValidationError, an AttributeError on a None RPC result,
+# a KeyError on a column that isn't there — none of them APIError. Every one of
+# those used to reach the browser as "Failed to fetch", which boardgame-buddy's
+# api.js normalizes to `err.offline = true` (domain/api.js) and BgbNet counts
+# toward offline mode. A forgotten migration therefore presented to the user as
+# "you're offline" on a phone with full bars, with the real error visible
+# nowhere in the client.
+#
+# So: never let a server-side failure impersonate a network failure. The
+# browser gets a real 500 it can show, and the detail stays server-side.
+@app.middleware("http")
+async def unhandled_errors_stay_cors_bearing(request: Request, call_next):
+    """Turn any unhandled exception into a clean, CORS-bearing 500."""
+    try:
+        return await call_next(request)
+    except Exception:
+        # CancelledError is a BaseException, so a client disconnect still
+        # propagates rather than being logged as a server fault.
+        logging.getLogger("vibelab").exception(
+            "Unhandled error on %s %s", request.method, request.url.path
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "A server error occurred. Please try again in a moment."},
+        )
+
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Set ALLOWED_ORIGINS in Railway to comma-separated Vercel URLs.
@@ -84,12 +183,13 @@ app.add_middleware(
 # are not worth it: a health check, a {"status": "ok"}, a CORS preflight's empty
 # body.
 #
-# Ordering: add_middleware PREPENDS, so with CORS added above and the
-# @app.middleware("http") decorator below added after, the stack runs
-# outer-to-inner as api-logger-context -> GZip -> CORS -> routes. CORS headers
-# are therefore set inside the compressor and survive it, and Starlette's GZip
-# APPENDS to Vary rather than replacing it, so a compressed response carries
-# `Vary: Origin, Accept-Encoding` and stays correctly cacheable per-origin.
+# Ordering: add_middleware PREPENDS, so with the error net and CORS added above
+# and the @app.middleware("http") decorators below added after, the stack runs
+# outer-to-inner as api-logger-context -> GZip -> CORS -> error net -> routes.
+# CORS headers are therefore set inside the compressor and survive it, and
+# Starlette's GZip APPENDS to Vary rather than replacing it, so a compressed
+# response carries `Vary: Origin, Accept-Encoding` and stays correctly
+# cacheable per-origin.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
@@ -222,13 +322,6 @@ def _log_self(request, app_name, path, start, status, size) -> None:
         )
     except Exception:
         _log.warning("self-timing log failed for %s", path, exc_info=True)
-
-
-# ── Startup ────────────────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def _startup():
-    load_unit_registry()
-    load_modifier_registry()
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
