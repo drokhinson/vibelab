@@ -106,8 +106,11 @@
       // then always revalidate below so a stale list is corrected within one
       // render. Cold case: show the loader while the first fetch lands.
       let seeded = false;
+      // Read through the full stale window, always. The refresh below is on
+      // its way either way, and a guide cached yesterday beats a loader — or,
+      // on a dead link, beats an empty scroll at the table.
       const cached = window.Chapter && window.Chapter.cachedMyChapters
-        ? window.Chapter.cachedMyChapters(this._baseGameId, expansionIds)
+        ? window.Chapter.cachedMyChapters(this._baseGameId, expansionIds, { stale: true })
         : null;
       if (cached) {
         this._chapters = cached;
@@ -118,19 +121,11 @@
         this._loading = true;
       }
       this._render();
-      // Offline there is nothing to revalidate against. The seed above already
-      // read through the stale window, so skipping the request keeps the guide
-      // exactly as it is instead of flashing the loader and landing back on
-      // the same list one failed round trip later.
-      if (window.BgbNet && window.BgbNet.isOffline()) {
-        this._loading = false;
-        this._announceChapters();
-        this._render();
-        // Seeds the notice from the cache and bails before the request, same
-        // as this branch does.
-        this._fetchTemplates();
-        return;
-      }
+      // No connectivity pre-check. The request is made and, when it can't
+      // land, the catch below keeps the seeded chapters exactly as they are —
+      // which is the same outcome the old offline branch produced, without
+      // depending on a latch to reach it. Nothing is reported: the guide the
+      // user is reading is on screen and is the answer.
       try {
         const fresh = await window.Chapter.myChapters(this._baseGameId, { expansionIds }) || [];
         this._chapters = fresh;
@@ -156,16 +151,13 @@
       if (!this._baseGameId || !window.session) return;
       const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
       const cached = window.Chapter && window.Chapter.cachedScoringTemplates
-        ? window.Chapter.cachedScoringTemplates(this._baseGameId, expansionIds)
+        ? window.Chapter.cachedScoringTemplates(this._baseGameId, expansionIds, { stale: true })
         : null;
       if (cached) {
         this._templates = cached;
         this._paintNotice();
         this._announceTemplates();
       }
-      // Same bail as _fetch: offline there is nothing to revalidate against,
-      // and a failed round trip only costs a paint.
-      if (window.BgbNet && window.BgbNet.isOffline()) return;
       try {
         const rows = await window.Chapter.scoringTemplates(
           this._baseGameId, { expansionIds }
@@ -187,8 +179,8 @@
      * play cascade wants this exact list (see play-flow-view's
      * _maybeOfferTemplates) and mounts in the same frame for the same game, so
      * fetching it there would double the request on every cold mount — and
-     * would have to reimplement the cache seed, the offline bail and the
-     * revalidation this method already rides.
+     * would have to reimplement the stale-window seed and the revalidation
+     * this method already rides.
      */
     _announceTemplates() {
       document.dispatchEvent(new CustomEvent("guide-templates-loaded", {
@@ -285,8 +277,8 @@
     // It listens rather than fetching because the two mount in the SAME frame
     // for the same gameIds: calling Chapter.myChapters itself would double the
     // request on every cold mount, and this widget has already done it — with a
-    // localStorage seed, an offline bail and a revalidation the other one would
-    // have to reimplement.
+    // localStorage seed and a revalidation the other one would have to
+    // reimplement.
     _announceChapters() {
       document.dispatchEvent(new CustomEvent("guide-chapters-loaded", {
         detail: { gameId: this._baseGameId, chapters: this._chapters },
