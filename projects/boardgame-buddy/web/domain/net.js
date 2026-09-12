@@ -1,10 +1,25 @@
 // @ts-check
 // domain/net.js — Connectivity state. The single answer to "are we offline?".
 //
-// Offline mode exists because board games get played in basements, cabins and
-// pub back rooms. The host still needs to run the Gather → Play → Settle
-// cascade and record the result; the play then uploads on the next online
-// session (see domain/outbox.js).
+// WHAT THIS IS AND IS NOT
+// -----------------------
+// It is internal truth, not a UI mode. Nothing in the app renders "you are
+// offline" from it except the two play-recording notices (the Gather invite
+// card and the Play step's game-info strip), because recording a play is the
+// one flow being offline actually changes: the play saves to the device, and
+// with no lobby there is no code, no joiners and no live scores. Everywhere
+// else an action is attempted and reports its own failure — api.js fails it
+// instantly rather than after the deadline when this latch is set, and
+// helpers.js#notifyRequestError turns that into a sentence.
+//
+// That matters because a latch can be wrong, and a wrong latch used to disable
+// real controls and paint a banner over screens that were working fine.
+// Consumed the way it is now, being wrong costs one toast and a probe.
+//
+// The concept exists at all because board games get played in basements,
+// cabins and pub back rooms. The host still needs to run the Gather → Play →
+// Settle cascade and record the result; the play then uploads on the next
+// online session (see domain/outbox.js).
 //
 // Entirely automatic — there is no "play offline" switch. Two signals decide:
 //
@@ -20,11 +35,14 @@
 //
 // GETTING BACK OUT IS THE HARD HALF
 // ---------------------------------
-// Offline is a latch by construction: nearly every caller in the app gates on
-// isOffline() (the pickers, the outbox, the join panel, the lobby poll), so
-// once it reads true almost nothing issues a request — and noteSuccess(), the
-// only thing that clears it, is fed by requests. A state that can only be left
-// by evidence it also stops anyone from gathering will stay put forever.
+// Offline is a latch by construction: while it reads true api.js short-circuits
+// every request, and noteSuccess() — the only thing that clears it — is fed by
+// requests. A state that can only be left by evidence it also stops anyone
+// from gathering will stay put forever.
+//
+// (The short-circuit is why. It replaced a pile of per-caller isOffline()
+// gates, which had exactly the same property one layer up: the pickers, the
+// join panel and the guide each declined to ask, for the same reason.)
 //
 // The browser's `online` event is not the answer on its own: it fires on a
 // TRANSITION, and the failure modes that get the app here don't involve one.
@@ -39,12 +57,17 @@
 //   * a re-probe when the app becomes visible again, which is where a stale
 //     offline state is most likely to be sitting and most likely to be wrong;
 //   * a backing-off auto-probe while offline and on screen, so recovery never
-//     depends on the user finding the "Try again" button.
+//     depends on the user doing anything at all;
+//   * a probe kicked by any request the short-circuit blocks, since the
+//     offline banner's "Try again" button is gone and the user's own retry tap
+//     is what replaces it (throttled — see ATTEMPT_PROBE_MIN_MS).
 //
 // Deliberately NOT wired to anything that tears down user state. Per
 // .claude/rules/web-frontend.md ("don't treat a transient blip as a real state
 // change"), going offline must never sign the user out, abandon a lobby, or
-// re-mint a session — it only gates NEW behaviour.
+// re-mint a session — and it must never disable a control or hide a screen
+// either. It changes how a request fails and what a host is told before they
+// start a play. Nothing else.
 
 (function () {
   const FAILURE_THRESHOLD = 2;
@@ -238,8 +261,9 @@
      * have signal has no button left to press, so their own retry tap has to
      * BE the button. Restart the ladder at its quick first rung and ask now.
      *
-     * Cheap to call on every blocked request: probe() is single-flight, and
-     * _armRecovery() no-ops while a timer is already pending.
+     * Safe to call on every blocked request. The throttle is what makes it so —
+     * probe()'s single-flight guard alone would not, since a 2s poller would
+     * still land one probe per tick once each had settled.
      */
     noteAttemptWhileOffline() {
       const now = Date.now();

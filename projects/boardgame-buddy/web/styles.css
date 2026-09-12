@@ -629,8 +629,8 @@ body {
    play-flow/session-viewer containers). This rule ends it for every present and
    future component. `!important` is deliberate and safe: nothing in this app
    ever wants to override .hidden, and no JS sets an inline display on an
-   element that carries it — the router, the data-auth-only toggle and
-   syncOfflineBanner all depend on it actually hiding.
+   element that carries it — the router and the data-auth-only toggle both
+   depend on it actually hiding.
    ─────────────────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
 
