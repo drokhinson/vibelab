@@ -85,6 +85,32 @@
       if (matched) window.bgbCache.persist(NS, FIRST_KEY);
     }
 
+    /**
+     * Fold an accepted play EDIT into the cached first page.
+     *
+     * Sibling of applyReaction above, for the same reason and by the same
+     * mechanism: the entry is no longer dropped on an update (see the `patched`
+     * opt in domain/play.js#_invalidatePlayDeps), so this is what keeps it
+     * honest. Play.mergeIntoCard does the field mapping and is idempotent, and
+     * the entry is re-persisted so the patch survives a reload rather than
+     * living only as long as this tab — exactly the failure applyReaction's own
+     * comment describes.
+     *
+     * @param {any} play the PlayResponse the PUT echoed back
+     */
+    static applyPlayUpdate(play) {
+      if (!window.bgbCache || !play || !play.id) return;
+      const page = window.bgbCache.peek(NS, FIRST_KEY);
+      if (!page || !Array.isArray(page.cards)) return;
+      let matched = false;
+      for (const card of page.cards) {
+        if (card.kind !== "play" || card.play_id !== play.id) continue;
+        window.Play.mergeIntoCard(card, play);
+        matched = true;
+      }
+      if (matched) window.bgbCache.persist(NS, FIRST_KEY);
+    }
+
     // Drop the cached first page and re-fetch it. Two callers, both wanting
     // the new page warm before the user looks at it: the tab-focus warm
     // refresh, and any play mutation (save, delete) that just changed what

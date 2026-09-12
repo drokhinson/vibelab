@@ -1265,8 +1265,17 @@
       if (state.draft) clearPendingPhoto(state.draft);
       state.editing = false;
       state.draft = null;
-      if (window.store && window.store.invalidate) window.store.invalidate("feed");
-      document.dispatchEvent(new CustomEvent("play-changed", { detail: { playId: state.play.id, kind: "update" } }));
+      // No store.invalidate("feed") here any more. It re-rendered the whole
+      // Feed view — resetting its scroll and flipping every open card back
+      // over — off a page whose cards had not changed, so it cost the tear-down
+      // and showed nothing new. Play.update() now patches the one card that did
+      // change and repaints it in place instead.
+      //
+      // The fresh play rides on the event so listeners patch from it rather
+      // than refetching a row the server has just handed us.
+      document.dispatchEvent(new CustomEvent("play-changed", {
+        detail: { playId: state.play.id, kind: "update", play: state.play },
+      }));
     } catch (e) {
       state.editError = (e && e.message) || "Failed to save";
     } finally {

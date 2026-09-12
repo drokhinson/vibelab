@@ -304,7 +304,12 @@
      *     before (and offline, instead of) asking the server.
      *   • `game.search` is keyed by query, and answering "did we already fetch
      *     a shorter query this one extends?" means looking at the keys.
-     * Nothing else should reach for this — a view that knows which key it
+     * And by Play.applyToCachedLists, for the same reason in a third shape: a
+     * `play.list` key is a (user, game, buddy, search, page) tuple, so an
+     * edited play can sit in any number of cached pages and there is no key to
+     * name. Enumerating is the only way to find the ones holding it.
+     *
+     * Nothing else should reach for this — a caller that knows which key it
      * wants should peek() that key directly.
      *
      * Reads the in-memory map alone, which is complete: bindUser() rehydrates

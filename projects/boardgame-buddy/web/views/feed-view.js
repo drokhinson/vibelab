@@ -164,9 +164,9 @@
      * drop the card from the page we're holding right now, then reconcile with
      * the server in the background.
      *
-     * @param {{playId?: string, kind?: string}} detail
+     * @param {{playId?: string, kind?: string, play?: any}} detail
      */
-    _onPlayChanged({ playId, kind }) {
+    _onPlayChanged({ playId, kind, play }) {
       // A bulk unlink from the notifications screen. It can remove hundreds of
       // plays across pages this view is not holding, and a batch selection
       // doesn't even send its play ids — so there is nothing to splice by id.
@@ -178,8 +178,21 @@
         this._load({ initial: true });
         return;
       }
-      // "update" is left alone: the edit popup owns its own repaint and
-      // Play.update() already busted the cache for the next mount.
+      // An edit changes one card's CONTENTS, not which cards exist, so it takes
+      // neither the splice below nor a render(): ui/play-card.js has already
+      // repainted the card itself, in place, on every surface showing it. What
+      // is left is keeping this view's own page object honest, so a later
+      // render() (a pull-refresh, a delete, a status change) paints the edit
+      // rather than putting the pre-edit card back. Play.mergeIntoCard is
+      // idempotent, and this page is often the very object the cache holds, so
+      // patching it twice is free.
+      if (kind === "update") {
+        if (!play || !this._page || !Array.isArray(this._page.cards)) return;
+        for (const c of this._page.cards) {
+          if (c.kind === "play" && c.play_id === play.id) window.Play.mergeIntoCard(c, play);
+        }
+        return;
+      }
       if (!playId || (kind !== "delete" && kind !== "leave")) return;
       if (!this._page || !Array.isArray(this._page.cards)) return;
       // Count the removals that fell inside the first-page slice so the

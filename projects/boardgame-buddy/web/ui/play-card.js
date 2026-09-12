@@ -682,6 +682,36 @@
     return String(s).replace(/["\\]/g, "\\$&");
   }
 
+  /**
+   * Fold an accepted play edit into this module's two caches and repaint.
+   *
+   * Both Maps live for the life of the tab and had no invalidation at all, each
+   * with its own consequence:
+   *   - `cardState.hydrated` is the full play fetched on flip, and renderBack
+   *     prefers it over the seed. Flip, edit, save, flip again and the back
+   *     face showed the pre-edit roster and scores, permanently.
+   *   - `cardRegistry` is what findCardById prefers over the feed store, so a
+   *     stale entry here shadows a corrected page underneath it.
+   *
+   * rerenderCard then repaints EVERY mounted copy of the card — the router only
+   * hides views, so the same play can be on screen in the feed and in a game's
+   * recent-plays reel at once — and does it surgically, without the owning view
+   * re-rendering and losing its scroll.
+   *
+   * @param {any} play the PlayResponse the PUT echoed back
+   */
+  function applyPlayUpdate(play) {
+    if (!play || !play.id) return;
+    const card = cardRegistry.get(play.id);
+    if (card) window.Play.mergeIntoCard(card, play);
+    const s = cardState.get(play.id);
+    // Only when it was already hydrated: writing it otherwise would arm the
+    // back face for a card nobody has flipped, and the seed covers that path.
+    if (s && s.hydrated) s.hydrated = play;
+    rerenderCard(play.id);
+  }
+
   window.renderPlayCard = renderPlayCard;
   window.playCardFlip = controller;
+  window.BgbPlayCard = { applyPlayUpdate };
 })();

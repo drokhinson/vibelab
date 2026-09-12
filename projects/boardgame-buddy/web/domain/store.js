@@ -9,6 +9,13 @@
         session: null,        // Supabase auth session
         user: null,           // CurrentUser shape from /profile
         feed: null,           // FeedPageResponse (most recent first-page fetch)
+        // The last /profile/bundle, published by views/profile-self-view.js and
+        // read as a synchronous first-paint seed by the Plays and Collection
+        // spokes. Declared here rather than existing only by virtue of a set()
+        // because an undeclared slot is one reset() and one invalidation path
+        // cannot see: it survived logout into the next account, and it went on
+        // seeding the pre-edit copy of a play after every save.
+        profileBundle: null,
         // gameId → status. null = not loaded yet, which readers must NOT paint
         // as "owns nothing"; {} = loaded and the viewer has nothing. See
         // domain/collection.js.
@@ -117,6 +124,10 @@
         session: null,
         user: null,
         feed: null,
+        // Cleared like `feed`, and for a sharper reason: it carries the
+        // previous account's shelves, stats and recent plays, and two spokes
+        // paint their first frame from it without asking whose it is.
+        profileBundle: null,
         feedCursor: null,
         feedLoading: false,
         myCollectionMap: null,

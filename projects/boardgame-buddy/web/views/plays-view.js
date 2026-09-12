@@ -82,6 +82,28 @@
     async onMount() {
       this.listen("user", () => this.render());
       this.listen("myCollectionMap", () => this._refreshStatusMap());
+      // A play edited from the popup this list opens. The rows here are
+      // PlayResponse-shaped — the same shape the PUT echoes — so the fresh row
+      // goes straight in. Without this the row the user just tapped, edited and
+      // saved goes on showing its old date, game and scoreline until the view
+      // is remounted, because _plays is in-memory state no cache drop reaches.
+      //
+      // Only "update". A delete or a leave changes how many plays there are,
+      // which is _total, the pager and the infinite-scroll boundary as well as
+      // the array — that is a bigger change than this one and is left as it is.
+      this.listenDom("play-changed", (e) => {
+        const { kind, play } = e.detail || {};
+        if (kind !== "update" || !play || !Array.isArray(this._plays)) return;
+        // A run row stands for many identical imported plays and is not
+        // openable from this list; replacing it with the one play would drop
+        // the rest of the run.
+        const i = this._plays.findIndex((p) => p && p.id === play.id && (p.group_count || 1) === 1);
+        if (i < 0) return;
+        this._plays[i] = play;
+        // played_at is editable and is this list's sort key.
+        this._plays.sort((a, b) => String(b.played_at || "").localeCompare(String(a.played_at || "")));
+        this.render();
+      });
       this.listenDom("status-changed", (e) => {
         const { gameId, status } = e.detail || {};
         if (!gameId) return;
