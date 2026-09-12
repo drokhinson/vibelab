@@ -1466,7 +1466,15 @@
     _renderInviteCard() {
       // Offline the same slot carries the reason there's no code, rather than
       // a placeholder the host would keep waiting on. Nothing to share: no
-      // lobby was minted, so there is nothing for another phone to join.
+      // lobby was minted, so there is nothing for another phone to join and
+      // nothing for one to follow along with.
+      //
+      // This card and the game-info strip on the Play step are the only two
+      // places left in the app that render being offline. Everywhere else an
+      // action is attempted and reports its own failure — see helpers.js
+      // #notifyRequestError. Here it is worth saying up front, because the
+      // cascade still runs and the host needs to know what it will and won't
+      // do before they start rather than after.
       if (this._isOffline()) {
         return `
           <section class="cascade-card cascade-card--invite cascade-card--offline">
@@ -1476,7 +1484,8 @@
             <div class="cascade-invite__body">
               <span class="cascade-invite__title">Offline</span>
               <span class="cascade-invite__hint">
-                Saves to this device and uploads next time you're online. No code to share.
+                Saves to this device and uploads next time you're online. No code
+                to share, and scores won't sync live.
               </span>
             </div>
           </section>

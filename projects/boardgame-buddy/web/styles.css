@@ -617,11 +617,11 @@ body {
    stays visible with .hidden on it. Silently, and usually as a bare strip of
    its own padding.
 
-   That is not hypothetical — it shipped. #bgb-offline-banner rendered as a 17px
-   empty brown bar under the header on every screen, because syncOfflineBanner
-   adds .hidden and clears innerHTML while `.bgb-offline-banner { display:flex }`
-   below kept it laid out. The same defect was already live on .bgb-global-header
-   and .bgb-nav, which leaked onto splash/auth.
+   That is not hypothetical — it shipped. The since-removed offline banner
+   rendered as a 17px empty brown bar under the header on every screen, because
+   its controller added .hidden and cleared innerHTML while its own
+   `display: flex` rule kept it laid out. The same defect was already live on
+   .bgb-global-header and .bgb-nav, which leaked onto splash/auth.
 
    The project had patched this three times, three different ways (the
    :not(.hidden) guard on the chapter editor, the since-retired
@@ -629,8 +629,8 @@ body {
    play-flow/session-viewer containers). This rule ends it for every present and
    future component. `!important` is deliberate and safe: nothing in this app
    ever wants to override .hidden, and no JS sets an inline display on an
-   element that carries it — the router, the data-auth-only toggle and
-   syncOfflineBanner all depend on it actually hiding.
+   element that carries it — the router and the data-auth-only toggle both
+   depend on it actually hiding.
    ─────────────────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
 
@@ -13504,49 +13504,18 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Offline mode
-   Surfaces that appear when the app has no connection (domain/net.js) or the
-   host chose to play offline. Two visual rules across all of them:
-     • rust, never red — offline is a state, not an error. The project's
+   Offline play recording
+   The only surfaces in the app that render connectivity at all. Offline is
+   not a mode here — there is no banner and no switch, and nothing else in
+   the app paints a "you are offline" state. These exist because recording a
+   play is the one flow that genuinely CHANGES offline: the play saves to the
+   device, and there is no lobby, so no code, no joiners and no live scores.
+   Two visual rules across all of them:
+     • rust, never red — this is a state, not an error. The project's
        destructive accent stays reserved for actions that lose data.
-     • the same polaroid surface as everything else on these screens, so an
-       offline card reads as part of the flow rather than an interruption.
+     • the same polaroid surface as everything else on these screens, so the
+       card reads as part of the flow rather than an interruption.
    ═════════════════════════════════════════════════════════════════════════ */
-
-/* Persistent banner under the global header. Fixed height so the views below
-   don't shift when it appears mid-session. */
-.bgb-offline-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: var(--rust-soft);
-  border-bottom: 1px solid var(--rust-strong);
-  color: oklch(var(--bc));
-  font-size: 12.5px;
-  line-height: 1.3;
-}
-.bgb-offline-banner__icon { flex: none; color: var(--rust); }
-.bgb-offline-banner__text { flex: 1; min-width: 0; }
-/* 44px hit area per .claude/rules/web-frontend.md, even though the label is
-   two words — this sits inside a 33px-tall bar, so the padding does the work
-   and the bar grows to fit rather than the target shrinking. */
-.bgb-offline-banner__action {
-  flex: none;
-  min-height: 44px;
-  padding: 0 12px;
-  background: none;
-  border: none;
-  color: var(--rust);
-  font-weight: 700;
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.bgb-offline-banner__action:hover:not(:disabled) { text-decoration: underline; }
-.bgb-offline-banner__action:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
 
 /* Cascade cards that replace a connected affordance (the invite code on
    Gather, the photo picker on Settle Up). Dashed edge so they read as an

@@ -67,16 +67,30 @@
 
     // Synchronous read of a cached my-chapters list (or null when absent/stale).
     //
-    // Offline it reads through peek() instead of get(). get() only serves the
-    // fresh window, so a guide cached an hour ago would read as absent — and
-    // with no server to re-fetch from, the reference scroll on the Play screen
-    // would simply be empty at exactly the table where nobody can look the
-    // rules up any other way. A stale chapter list is the right answer there:
-    // chapters change rarely, and the alternative is nothing.
-    cachedMyChapters(baseGameId, expansionIds) {
+    /**
+     * Synchronous read of a cached guide.
+     *
+     * `stale: true` reads the full 7d window (peek) rather than the 24h fresh
+     * one (get). A READER always wants it: chapters change rarely, the
+     * request that would refresh them is already on its way, and the
+     * alternative on a dead link is an empty reference scroll at exactly the
+     * table where nobody can look the rules up any other way. A FRESHNESS
+     * CHECK — prefetchMyChapters deciding whether to warm — must not, or a
+     * stale entry would look like a reason to skip the refresh that would
+     * replace it.
+     *
+     * This used to branch on connectivity, which conflated the two: it made
+     * the freshness check stricter online than off for no reason, and tied a
+     * caching policy to a latch that could be stale.
+     *
+     * @param {string} baseGameId
+     * @param {string[]} [expansionIds]
+     * @param {{stale?: boolean}} [opts]
+     */
+    cachedMyChapters(baseGameId, expansionIds, opts) {
       if (!window.bgbCache || !baseGameId) return null;
       const key = chaptersKey(baseGameId, expansionIds);
-      return (window.BgbNet && window.BgbNet.isOffline())
+      return (opts && opts.stale)
         ? window.bgbCache.peek(CHAPTERS_NS, key)
         : window.bgbCache.get(CHAPTERS_NS, key);
     },
@@ -91,9 +105,9 @@
     // Fire-and-forget warm-up: skip when already fresh, otherwise fetch + cache.
     prefetchMyChapters(baseGameId, expansionIds = []) {
       if (!baseGameId || !window.session || !window.bgbCache) return;
-      // Nothing to warm from offline — the request can only fail, and
-      // cachedMyChapters already falls back to the stale window there.
-      if (window.BgbNet && window.BgbNet.isOffline()) return;
+      // No connectivity pre-check: api.js rejects instantly when the link is
+      // known dead, so a warm that can't land costs a microtask and a .catch()
+      // rather than a round trip. Readers fall back to the stale window.
       if (this.cachedMyChapters(baseGameId, expansionIds)) return;
       this.myChapters(baseGameId, { expansionIds })
         .then((rows) => this.cacheMyChapters(baseGameId, expansionIds, rows || []))
@@ -138,13 +152,12 @@
         expansionIds,
       });
     },
-    // Synchronous read, or null when absent/stale. Offline reads through
-    // peek() for the same reason cachedMyChapters does: with no server to
-    // revalidate against, a stale answer beats no answer.
-    cachedScoringTemplates(baseGameId, expansionIds) {
+    // Synchronous read. `stale: true` reads the full window rather than the
+    // fresh one — same split, and same reason, as cachedMyChapters above.
+    cachedScoringTemplates(baseGameId, expansionIds, opts) {
       if (!window.bgbCache || !baseGameId) return null;
       const key = chaptersKey(baseGameId, expansionIds);
-      return (window.BgbNet && window.BgbNet.isOffline())
+      return (opts && opts.stale)
         ? window.bgbCache.peek(TEMPLATES_NS, key)
         : window.bgbCache.get(TEMPLATES_NS, key);
     },

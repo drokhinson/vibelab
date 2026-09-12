@@ -99,6 +99,7 @@
       this._gameById = new Map();   // gameId → game object (so _pickById has the row data)
       this._outsideHandler = this._onOutsideClick.bind(this);
       this._docHandlerBound = false;
+      this._offlineNotified = false; // see _notifyOfflineOnce
     }
 
     mount(containerEl) {
@@ -149,14 +150,15 @@
       // below covers the cold-cache case (no bootstrap seed) and refreshes
       // when the entry has fallen into the SWR stale window.
       if (this._opts.includeRecentlyPlayed !== false && window.bgbCache) {
-        // peek() rather than get() when offline: get() only serves the 24h
-        // fresh window, and a host in a cabin for a weekend would find their
-        // own recents gone. peek() serves the full 7d stale window, which is
-        // exactly what bootstrap's hostSeed TTL pair was sized for.
-        const offline = window.BgbNet && window.BgbNet.isOffline();
-        const seeded = offline
-          ? window.bgbCache.peek("game.recent", "self")
-          : window.bgbCache.get("game.recent", "self");
+        // peek() rather than get(), always: get() only serves the 24h fresh
+        // window, and a host in a cabin for a weekend would find their own
+        // recents gone. peek() serves the full 7d stale window, which is
+        // exactly what bootstrap's hostSeed TTL pair was sized for — and
+        // _ensureRecentGamesLoad() below refreshes it a frame later anyway,
+        // so the wider window costs nothing when there IS a connection. This
+        // used to happen only when BgbNet said offline, which meant the seed
+        // was narrower precisely when it was cheapest to widen.
+        const seeded = window.bgbCache.peek("game.recent", "self");
         if (Array.isArray(seeded)) this._recentGames = seeded;
       }
       // Eagerly start loading recently-played so the dropdown is ready
@@ -229,9 +231,8 @@
       this._bggMode = false;
       const q = (value || "").trim();
 
-      // Empty query and offline both resolve with no request at all.
-      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
-      if (!q || offline) {
+      // An empty query resolves with no request at all.
+      if (!q) {
         this._renderDropdown(q);
         return;
       }
@@ -285,6 +286,9 @@
     /** @param {{ requireFocus?: boolean }} [opts] */
     async _open(opts) {
       const requireFocus = !opts || opts.requireFocus !== false;
+      // A fresh open is a fresh picking session, so the offline line is worth
+      // saying again — the user may well have moved rooms since the last one.
+      this._offlineNotified = false;
       // If recents aren't loaded yet, show a synchronous loading hint so
       // the user sees the dropdown immediately, then await the load and
       // render the real list.
@@ -366,14 +370,6 @@
         return;
       }
 
-      // Offline: /search is server-side, so filter what's already on the
-      // device instead. See _devicePool for what that pool is.
-      if (window.BgbNet && window.BgbNet.isOffline()) {
-        dd.classList.remove("game-finder-dropdown--loading");
-        this._renderOfflineResults(dd, this._deviceMatches(q));
-        return;
-      }
-
       // Cache hit → render instantly, no loading state, no network wait.
       const cached = (window.Game && window.Game.cachedSearch)
         ? window.Game.cachedSearch(q) : null;
@@ -401,6 +397,15 @@
         // An abort is this widget superseding itself, not a failure to report.
         if (token !== this._queryToken || (e && e.aborted)) return;
         dd.classList.remove("game-finder-dropdown--loading");
+        if (isOfflineError(e)) {
+          // /search is server-side, but the device pool is not — and it is
+          // overwhelmingly what a host on Gather is reaching for. Fall back to
+          // it rather than replacing real, tappable results with "Search
+          // failed" to report that there are no MORE of them.
+          this._renderOfflineResults(dd, this._deviceMatches(q));
+          this._notifyOfflineOnce();
+          return;
+        }
         dd.innerHTML =
           `<li class="game-finder-dropdown__hint">Search failed. Try again.</li>` +
           this._bggFooter(q);
@@ -507,9 +512,10 @@
      *     Bootstrap.warmGameBundles() from an idle callback after login.
      *
      * That second one is the real library: it's the user's whole collection,
-     * which is overwhelmingly what a group is playing — offline in a cabin, and
-     * equally at a table with signal, which is why this pool now backs the
-     * online first paint too and not just the offline branch. Read through
+     * which is overwhelmingly what a group is playing — in a cabin with no
+     * signal, and equally at a table with plenty, which is why this pool backs
+     * every first paint and is also what a failed /search falls back to rather
+     * than a branch taken before the request. Read through
      * peek() so entries past their fresh window still count — a stale name and
      * thumbnail are fine, and the game row itself is immutable after BGG
      * import anyway.
@@ -582,6 +588,23 @@
      * genuinely cannot be logged until the app is back online, and a host
      * staring at an empty list deserves to know that's why.
      */
+    /**
+     * Say it once per open, not once per keystroke.
+     *
+     * Every character types a new search, so the ordinary "the action failed,
+     * toast it" rule would fire a toast per keystroke here. The list itself
+     * carries the standing explanation ("On this device"); this is the one
+     * line that names WHY the rest of the library isn't in it, and it only
+     * needs saying once while the picker is open.
+     */
+    _notifyOfflineOnce() {
+      if (this._offlineNotified) return;
+      this._offlineNotified = true;
+      if (typeof showToast === "function") {
+        showToast("You're offline — searching the full library needs a connection.", "error");
+      }
+    }
+
     _renderOfflineResults(dd, games) {
       this._gameById.clear();
       games.forEach((g) => this._gameById.set(g.id, g));
@@ -589,8 +612,9 @@
         ? `<li class="game-finder-dropdown__header">On this device</li>` +
           games.map((g) => this._renderRow(g, "library")).join("")
         : `<li class="game-finder-dropdown__hint">
-             No match on this device. Offline you can only pick games already
-             saved here — your collection and recent plays.
+             No match on this device, and searching the full library needs a
+             connection. You can still pick anything already saved here — your
+             collection and recent plays.
            </li>`;
       this._show(dd);
       this._wireRowClicks(dd);
