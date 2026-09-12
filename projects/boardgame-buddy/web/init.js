@@ -94,8 +94,9 @@
         // the auth server, and gives up. Bouncing to /auth there strands a
         // host mid-game on a screen they physically cannot complete, and
         // takes their draft's view with it. Hold the last known session
-        // instead and let the offline banner explain the state; connectivity
-        // returning re-runs this callback with a real answer either way.
+        // instead; connectivity returning re-runs this callback with a real
+        // answer either way, and in the meantime anything the held session
+        // cannot actually do says so when it is tried.
         // Same rule as the 401 self-heal in domain/api.js — a blip is not a
         // state change (.claude/rules/web-frontend.md).
         if (_offlineWithKnownUser()) return;
@@ -722,63 +723,20 @@
   // there is nothing left to wire here. `offline` is not a subscriber either:
   // it only ever changed the old indicator's COPY, and a dot has none.
 
-  // Persistent offline banner under the global header. Lives at this level
-  // rather than in a View because connectivity is app state, not screen state:
-  // every view would otherwise have to remember to render it, and the one that
-  // forgot would be the one the user was on when their signal died.
-  function syncOfflineBanner(offline) {
-    const el = document.getElementById("bgb-offline-banner");
-    if (!el) return;
-    if (!offline) {
-      el.classList.add("hidden");
-      el.innerHTML = "";
-      return;
-    }
-    const probing = !!(window.BgbNet && window.BgbNet.isProbing());
-    el.innerHTML = `
-      <i data-icon="cloud-off" class="w-4 h-4 bgb-offline-banner__icon"></i>
-      <span class="bgb-offline-banner__text">
-        No connection — plays save to this device.
-      </span>
-      <button class="bgb-offline-banner__action" ${probing ? "disabled" : ""}
-              onclick="window.retryConnection()">
-        ${probing ? "Checking…" : "Try again"}
-      </button>
-    `;
-    el.classList.remove("hidden");
-    window.BgbIcons.render(el);
-  }
-  window.store.subscribe("offline", syncOfflineBanner);
+  // There is no offline banner, and `offline` is not a chrome subscriber.
+  //
+  // Connectivity used to paint a persistent strip here, which made offline a
+  // MODE the whole app was in. It is one now only for recording a play, where
+  // it genuinely changes what happens (the play saves locally, scores don't
+  // sync live) — see views/play-flow-view.js. Everywhere else an action is
+  // simply attempted and reports its own failure through notifyRequestError,
+  // so there is nothing app-level left to render.
+  //
+  // The subscribers that remain read `offline` to RETRY something that already
+  // failed, which is a different idea from rendering a state: the profile
+  // reload below, the feed's and the notification list's failed first loads,
+  // and BgbNet's own outbox drain.
   retryProfileWhenOnline();
-
-  /**
-   * The banner's "Try again" — the impatient path to what BgbNet's recovery
-   * ladder is already doing on a backoff. It asks on purpose, for when the
-   * user can see they have signal and the app hasn't caught up yet (walked out
-   * of the dead zone, joined the wifi, came off airplane mode).
-   *
-   * A probe already in flight is JOINED rather than refused: probe() is
-   * single-flight, and with the ladder running there is very often one in the
-   * air when the tap lands. Bailing on isProbing() made exactly those taps do
-   * nothing at all — no "Checking…", no toast — which reads as a dead button
-   * on the one screen where the user is already unsure anything works.
-   *
-   * On success the store flips and the banner removes itself; BgbNet's own
-   * offline→online edge drains the outbox, so nothing to do here. On failure
-   * the banner stays and says so, rather than silently doing nothing and
-   * leaving the user unsure whether the tap registered.
-   */
-  window.retryConnection = async function () {
-    if (!window.BgbNet) return;
-    syncOfflineBanner(true);            // paint "Checking…" in the tap frame
-    const back = await window.BgbNet.probe();
-    if (!back) {
-      syncOfflineBanner(true);          // restore the button
-      if (window.showToast) {
-        window.showToast("Still no connection — your plays are safe on this device.", "error");
-      }
-    }
-  };
 
   // Logout helper — referenced by ProfileSelfView.
   window.handleLogout = async function () {
@@ -860,11 +818,8 @@
     window.BgbTheme.start();
     window.BgbLayout.start();
     window.store.set("outboxCount", window.Outbox.count());
-    // start() only publishes on an edge, so a page that loads already offline
-    // would never fire the subscriber. Paint the banner from the current state.
-    syncOfflineBanner(window.BgbNet.isOffline());
-    // Same reasoning: store.set above only notifies when the value CHANGES, so
-    // a cold load with items already queued would never paint the gear's dot.
+    // store.set above only notifies when the value CHANGES, so a cold load with
+    // items already queued would never paint the gear's dot.
     syncHeaderDots();
 
     // Restore a previously-active play session, if any.
