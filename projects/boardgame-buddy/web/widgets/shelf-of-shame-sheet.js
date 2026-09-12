@@ -322,7 +322,7 @@
           this._apply(game, !next, { busy: false });
           if (window.showToast) {
             window.showToast(
-              (e && e.offline)
+              isOfflineError(e)
                 ? "You're offline — that mark didn't save."
                 : "Couldn't save that. Try again.",
               "error",
