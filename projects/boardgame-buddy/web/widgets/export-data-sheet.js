@@ -367,7 +367,7 @@
           let message;
           if (e && e.timeout) {
             message = "That took too long to build. Try fewer things at once.";
-          } else if (e && e.offline) {
+          } else if (isOfflineError(e)) {
             message = "You're offline — the export is built on the server.";
           } else {
             message = (e && e.message) || "Couldn't build your export.";

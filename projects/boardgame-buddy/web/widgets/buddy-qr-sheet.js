@@ -247,7 +247,7 @@
         [res] = await Promise.all([window.Buddy.qrToken(), loadEncoder()]);
       } catch (err) {
         if (seq !== this._seq || !this._showing()) return;
-        const offline = err && (err.offline || err.status === 0);
+        const offline = isOfflineError(err);
         this._paint(`
           <div class="buddy-qr-sheet__state">
             <p>${escapeHtml(
