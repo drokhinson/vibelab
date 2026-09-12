@@ -69,6 +69,14 @@
   // while the page is visible, so a pocketed phone probes nothing.
   const RECOVERY_DELAYS_MS = [5000, 10000, 20000, 30000, 60000];
 
+  // A blocked request asks for a probe (noteAttemptWhileOffline), and not
+  // every blocked request is a user tapping something: the spectator poll, the
+  // joinable-sessions poll and the BGG sync poll all tick on their own. Those
+  // pollers stand themselves down while offline, but a future one that forgets
+  // to must not be able to turn the ladder into a continuous probe — so the
+  // attempt path never asks more often than the ladder's own first rung.
+  const ATTEMPT_PROBE_MIN_MS = 5000;
+
   // Cheap, unauthenticated, and already required on every project by
   // .claude/rules/backend-python.md — so the probe can't fail for a reason
   // that isn't connectivity.
@@ -93,6 +101,8 @@
       // The auto-probe ladder: pending timer and how far up it we are.
       this._recoveryTimer = null;
       this._recoveryStep = 0;
+      // When the attempt path last asked, for ATTEMPT_PROBE_MIN_MS above.
+      this._lastAttemptProbeAt = null;
     }
 
     /** Wire the browser events. Called once from init.js. */
@@ -232,6 +242,10 @@
      * _armRecovery() no-ops while a timer is already pending.
      */
     noteAttemptWhileOffline() {
+      const now = Date.now();
+      if (this._lastAttemptProbeAt !== null
+          && now - this._lastAttemptProbeAt < ATTEMPT_PROBE_MIN_MS) return;
+      this._lastAttemptProbeAt = now;
       // Drop the pending rung before resetting the step, or the reset is
       // undone: _armRecovery() reads _recoveryStep when it ARMS, so a timer
       // already waiting out 60s would still fire, still increment, and still
@@ -244,6 +258,8 @@
     /** A request completed — the link demonstrably works. */
     noteSuccess() {
       this._lastFailureAt = null;
+      // The next outage gets its own first attempt answered immediately.
+      this._lastAttemptProbeAt = null;
       if (this._failures === 0 && this._lastOutcome === "ok") return;
       this._failures = 0;
       this._lastOutcome = "ok";
