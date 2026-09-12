@@ -29,7 +29,10 @@
    * @typedef {"ready"|"pending"|"offline"|"failed"} GameInfoBarState
    *   ready   — a live code to show.
    *   pending — the lobby is still minting one (host, first paint).
-   *   offline — no lobby was opened, so there is nothing to join.
+   *   offline — no connection, so no lobby was opened: nothing to join and
+   *             nothing to sync. This is one of the two places in the app
+   *             that still names being offline at all — recording a play is
+   *             the only flow it changes.
    *   failed  — the mint failed and nothing is in flight.
    */
 
@@ -41,7 +44,10 @@
     offline: {
       icon: "cloud-off",
       chip: "Offline",
-      note: "Saves to this device and uploads next time you're online. No code to share.",
+      // Both halves, said plainly. The local save is the half hosts ask about;
+      // the live scores are the half they only discover when a spectator's
+      // phone stops updating, which is worse to find out mid-game.
+      note: "Saves to this device and uploads next time you're online. No code to share, and scores won't sync live.",
     },
     failed: {
       icon: "wifi-off",

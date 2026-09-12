@@ -291,7 +291,7 @@
           // The stalled retry below is the SAME logical request, so it must
           // not record a second strike: two is the offline threshold, and one
           // slow GET would otherwise clear it by itself — defeating the
-          // "two in a row, not one" rule this app's offline mode rests on.
+          // "two in a row, not one" rule the latch rests on.
           url, init, timeoutMs || REQUEST_TIMEOUT_MS, signal, !_stalled, allowWhileOffline,
         );
       } catch (e) {
