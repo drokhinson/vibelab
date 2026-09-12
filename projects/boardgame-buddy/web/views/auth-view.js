@@ -9,18 +9,41 @@
       this._email = "";
     }
 
-    onMount() {
-      // Bound once. The form is re-rendered on tab switches but mount is single-shot.
-      // Connectivity is the exception: sign-in is the one flow with no offline
-      // path at all (Supabase Auth is a network call by definition), so the
-      // screen has to say so rather than let the user type a password into a
-      // form that can only fail.
-      this.listen("offline", () => this.render());
-    }
-
     setError(msg) {
       this._error = msg || null;
       this.render();
+    }
+
+    /**
+     * Supabase Auth does its own fetching, so its rejections carry none of
+     * domain/api.js's normalisation — no `offline`, no `status`, just a bare
+     * "Failed to fetch" that is true and tells the user nothing. This asks the
+     * connectivity signals directly instead.
+     *
+     * It replaces a banner this screen used to paint the moment BgbNet
+     * latched, before the user had typed anything. That was offline as a mode:
+     * it answered a question nobody had asked, and it was wrong every time the
+     * latch was stale. Signing in does need a connection — Supabase Auth is a
+     * network call by definition — and this is where that gets said.
+     *
+     * @param {any} e
+     * @param {string} fallback
+     */
+    _authErrorMessage(e, fallback) {
+      const message = (e && e.message) || "";
+      const looksOffline = navigator.onLine === false
+        || !!(window.BgbNet && window.BgbNet.isOffline())
+        // Last resort, for a link that died too recently for either signal
+        // above to know: this is the shape fetch() rejects with in Chromium,
+        // WebKit and Gecko respectively.
+        || /failed to fetch|load failed|networkerror/i.test(message);
+      if (!looksOffline) return message || fallback;
+      const queued = window.Outbox ? window.Outbox.count() : 0;
+      // Only said when it is both true and reassuring. On a signed-out phone
+      // with an empty queue it is noise on a login screen.
+      return queued > 0
+        ? "You're offline — signing in needs a connection. Plays you already recorded are safe on this device."
+        : "You're offline — signing in needs a connection.";
     }
 
     render() {
@@ -39,15 +62,6 @@
       });
       const errLine = this._error
         ? `<div class="text-error text-sm mb-3">${escapeHtml(this._error)}</div>` : "";
-      const offline = !!(window.BgbNet && window.BgbNet.isOffline());
-      const offlineBanner = offline
-        ? `<div class="alert alert-warning mb-4 text-sm">
-             <i data-icon="cloud-off" class="w-4 h-4"></i>
-             <span>You're offline. Signing in needs a connection — plays you
-             already recorded are safe on this device.</span>
-           </div>`
-        : "";
-
       this.container.innerHTML = `
         <div class="flex flex-col items-center justify-center min-h-[60vh] px-4">
           <div class="mb-8 text-center">
@@ -58,7 +72,6 @@
           <div class="card bg-base-200 w-full max-w-sm">
             <div class="card-body">
               ${configBanner}
-              ${offlineBanner}
               ${oauth}
               <div class="tabs tabs-boxed mb-4">
                 <button class="tab ${this._mode === "login" ? "tab-active" : ""}" onclick="window.authView.switchMode('login')">Log In</button>
@@ -102,7 +115,7 @@
         });
         if (error) throw error;
       } catch (e) {
-        this.setError(e.message || `${provider} sign-in failed`);
+        this.setError(this._authErrorMessage(e, `${provider} sign-in failed`));
       }
     }
 
@@ -145,7 +158,7 @@
           window.router.go("splash");
         }
       } catch (e) {
-        this.setError(e.message || "Authentication failed");
+        this.setError(this._authErrorMessage(e, "Authentication failed"));
       } finally {
         btn.classList.remove("loading");
         btn.disabled = false;
