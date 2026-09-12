@@ -48,7 +48,7 @@
    */
   function errorCopy(err, phase) {
     const adding = phase !== "read";
-    if (err && (err.offline || err.status === 0)) {
+    if (isOfflineError(err)) {
       return "You're offline — reconnect and scan again.";
     }
     switch (err && err.status) {

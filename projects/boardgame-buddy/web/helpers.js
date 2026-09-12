@@ -275,6 +275,51 @@ function showToast(message, type = "info") {
   setTimeout(() => toast.classList.add("hidden"), 3000);
 }
 
+/**
+ * True for a rejection that is about the LINK rather than about the request.
+ *
+ * A superseded request is excluded on purpose: the game picker aborts a search
+ * the moment the next keystroke lands (domain/api.js), and that abort carries
+ * `offline` nowhere but would otherwise read as one to a careless caller.
+ *
+ * @param {any} err
+ * @returns {boolean}
+ */
+function isOfflineError(err) {
+  return !!(err && err.offline && !err.aborted);
+}
+
+/**
+ * The one place a failed request becomes a sentence.
+ *
+ * Offline is no longer a mode this app renders — there is no banner and no
+ * disabled control that says "not while you're offline". Instead every action
+ * is attempted and the ones that need the network say so HERE, naming the
+ * thing the user was trying to do. Recording a play is the single exception,
+ * and it does not come through this function: it has its own notices, because
+ * there the play still happens (see views/play-flow-view.js).
+ *
+ * @param {any} err  the rejection from domain/api.js
+ * @param {string} action  a verb phrase completing "<action> needs a
+ *   connection" — "joining a game", "searching the library", "signing in"
+ */
+function notifyRequestError(err, action) {
+  // A keystroke superseding its own search is not a failure to report.
+  if (err && err.aborted) return;
+  let message;
+  if (err && err.timeout) {
+    // Tested BEFORE `offline`, because a deadline abort sets both (see
+    // domain/api.js). Getting this order wrong is not hypothetical: it told
+    // somebody whose data export ran long that they were offline.
+    message = "The server took too long — try that again.";
+  } else if (isOfflineError(err)) {
+    message = `You're offline — ${action} needs a connection.`;
+  } else {
+    message = (err && err.message) || `Couldn't finish ${action}.`;
+  }
+  showToast(message, "error");
+}
+
 // Photo prep. Mirrors the backend's _MAX_PHOTO_BYTES + MIME whitelist at
 // shared-backend/routes/boardgame_buddy/play_routes.py — keep in sync.
 // iPhone 12MP shots regularly come in at 6–10 MB and iOS Safari can hand

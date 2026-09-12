@@ -38,6 +38,29 @@
   const DOWNLOAD_TIMEOUT_MS = 120000;
 
   /**
+   * The one shape a connectivity failure reaches call sites in.
+   *
+   * Three different things produce it — a dead network rejecting fetch(), a
+   * deadline abort, and the offline short-circuit in _fetch() — and callers
+   * must not have to tell them apart. `status = 0` because no HTTP response
+   * happened; `offline` is the flag every consumer branches on; `timeout`
+   * separates "the link is down" from "the link is up and the server is not
+   * answering", which are different sentences to show a user.
+   *
+   * @param {boolean} timedOut
+   * @returns {Error & {offline: true, timeout: boolean, status: 0}}
+   */
+  function _offlineError(timedOut) {
+    const err = new Error(timedOut
+      ? "The server took too long to respond."
+      : "You appear to be offline.");
+    err.offline = true;
+    err.timeout = !!timedOut;
+    err.status = 0;
+    return err;
+  }
+
+  /**
    * The filename out of a Content-Disposition header, or "" when there isn't
    * one. Handles the RFC 5987 `filename*=UTF-8''…` form first, since that is
    * the one carrying anything non-ASCII.
@@ -134,9 +157,37 @@
      * @param {RequestInit} init
      * @param {AbortSignal} [callerSignal]
      * @param {boolean} [countFailure]
+     * @param {boolean} [allowWhileOffline] bypass the short-circuit below
      * @returns {Promise<Response>}
      */
-    async _fetch(url, init, callerSignal, countFailure = true) {
+    async _fetch(url, init, callerSignal, countFailure = true, allowWhileOffline = false) {
+      // THE OFFLINE SHORT-CIRCUIT — reactive, not pre-emptive.
+      //
+      // Nothing in this app asks "are we offline?" before OFFERING an action
+      // any more (see STRUCTURE.md §3). Every action is attempted, and the
+      // ones that need the network fail. This does not decide anything the
+      // request would not have decided by itself; it only makes that failure
+      // INSTANT rather than making the user watch a 15s deadline run down on
+      // a link the app already knows is dead. It throws the exact shape the
+      // catch below throws, so every call site still handles one path.
+      //
+      // Deliberately NO noteFailure(): no request was made, so there is no
+      // evidence about the link, and counting it would let the latch feed
+      // itself. What it reports instead is that somebody just TRIED, which is
+      // what restarts the recovery ladder at its quick first rung and kicks a
+      // probe. That matters because the offline banner's "Try again" button
+      // went away with the banner: the user's own second tap is the active
+      // probe now, and without this a stale latch could only be left by
+      // waiting out the ladder.
+      //
+      // `allowWhileOffline` is the probe's way past it. BgbNet.probe() goes
+      // through this client, and a probe judged by the very latch it exists
+      // to clear could never clear it — the exact deadlock domain/net.js's
+      // header calls "getting back out is the hard half".
+      if (!allowWhileOffline && window.BgbNet && window.BgbNet.isOffline()) {
+        window.BgbNet.noteAttemptWhileOffline();
+        throw _offlineError(false);
+      }
       const epoch = window.BgbNet ? window.BgbNet.epoch() : undefined;
       let res;
       try {
@@ -151,12 +202,7 @@
         }
         if (countFailure && window.BgbNet) window.BgbNet.noteFailure(epoch);
         const timedOut = !!e && (e.name === "AbortError" || e.name === "TimeoutError");
-        const err = new Error(timedOut
-          ? "The server took too long to respond."
-          : "You appear to be offline.");
-        err.offline = true;
-        err.timeout = timedOut;
-        err.status = 0;
+        const err = _offlineError(timedOut);
         err.cause = e;
         throw err;
       }
@@ -177,9 +223,10 @@
      * @param {number} timeoutMs
      * @param {AbortSignal} [callerSignal] aborts the request early
      * @param {boolean} [countFailure] see _fetch
+     * @param {boolean} [allowWhileOffline] see _fetch
      * @returns {Promise<[Response, () => void]>} the response and its release fn
      */
-    _send(url, init, timeoutMs, callerSignal, countFailure = true) {
+    _send(url, init, timeoutMs, callerSignal, countFailure = true, allowWhileOffline = false) {
       // Composed by hand rather than AbortSignal.any(): that is Safari 17.4+,
       // and this app runs as an installed PWA on older iOS.
       const ctl = new AbortController();
@@ -196,7 +243,9 @@
         clearTimeout(timer);
         if (onCallerAbort) callerSignal.removeEventListener("abort", onCallerAbort);
       };
-      return this._fetch(url, { ...init, signal: ctl.signal }, callerSignal, countFailure).then(
+      return this._fetch(
+        url, { ...init, signal: ctl.signal }, callerSignal, countFailure, allowWhileOffline,
+      ).then(
         (res) => [res, release],
         (e) => { release(); throw e; },
       );
@@ -221,7 +270,9 @@
     }
 
     async _request(method, path, opts = {}) {
-      const { body, query, headers, raw, signal, timeoutMs, _retried, _stalled } = opts;
+      const {
+        body, query, headers, raw, signal, timeoutMs, allowWhileOffline, _retried, _stalled,
+      } = opts;
       const url = this._buildUrl(path, query);
       const init = {
         method,
@@ -240,8 +291,8 @@
           // The stalled retry below is the SAME logical request, so it must
           // not record a second strike: two is the offline threshold, and one
           // slow GET would otherwise clear it by itself — defeating the
-          // "two in a row, not one" rule this app's offline mode rests on.
-          url, init, timeoutMs || REQUEST_TIMEOUT_MS, signal, !_stalled,
+          // "two in a row, not one" rule the latch rests on.
+          url, init, timeoutMs || REQUEST_TIMEOUT_MS, signal, !_stalled, allowWhileOffline,
         );
       } catch (e) {
         // A stalled socket does not heal itself — the same request on a new
@@ -296,8 +347,10 @@
     }
 
     // `opts` carries per-call extras: `{ signal }`, used by the game picker to
-    // drop a search the next keystroke has superseded, and `{ timeoutMs }` for
-    // the handful of endpoints whose honest budget is not a JSON round trip.
+    // drop a search the next keystroke has superseded, `{ timeoutMs }` for
+    // the handful of endpoints whose honest budget is not a JSON round trip,
+    // and `{ allowWhileOffline }` for the connectivity probe alone — see the
+    // short-circuit in _fetch.
     get(path, query, opts)   { return this._request("GET",    path, { ...(opts || {}), query }); }
     post(path, body, opts)   { return this._request("POST",   path, { ...(opts || {}), body }); }
     put(path, body)          { return this._request("PUT",    path, { body }); }
@@ -326,15 +379,23 @@
      *
      * @param {string} path
      * @param {Object} [query]
-     * @param {{timeoutMs?: number, fallbackName?: string, _retried?: boolean}} [opts]
+     * @param {{timeoutMs?: number, fallbackName?: string, allowWhileOffline?: boolean,
+     *   _retried?: boolean}} [opts]
      * @returns {Promise<{blob: Blob, filename: string}>}
      */
     async download(path, query, opts = {}) {
       const url = this._buildUrl(path, query);
+      // Threaded even though nothing downloads during a probe: this is the one
+      // path that reaches _send without passing through _request, so leaving
+      // it out would make the short-circuit silently inconsistent between two
+      // methods of the same client.
       const [res, release] = await this._send(
         url,
         { method: "GET", headers: { ...this._authHeader() } },
         opts.timeoutMs || DOWNLOAD_TIMEOUT_MS,
+        undefined,
+        true,
+        opts.allowWhileOffline,
       );
       try {
         if (!res.ok) {
