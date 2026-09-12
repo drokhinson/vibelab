@@ -1,7 +1,14 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 023_play_roster_integrity.sql (re-emits bgb_log_play with the
---               roster gate — a play with nobody at the table and a play
+-- Last updated: 024_collection_page.sql (adds bgb_collection_page — the
+--               collection grid now filters, sorts, counts and pages in
+--               Postgres instead of reading the whole shelf and doing all four
+--               in Python. Fixes a correctness bug as well as the cost: the
+--               old reads were unbounded, PostgREST caps those at 1000 rows,
+--               and the filter ran after the truncation.)
+--               Before that: 023_play_roster_integrity.sql (re-emits
+--               bgb_log_play with the roster gate — a play with nobody at the
+--               table and a play
 --               seating one account twice are both refused, with an error
 --               envelope, before anything is written. Same signature and same
 --               success shape; the seats it echoes are now the NORMALIZED
@@ -964,6 +971,57 @@
 --               viewer logged OR appears in, while `ghosts` covers only plays
 --               they logged; and ghost grouping is case-sensitive on the
 --               trimmed name, matching the Python dict key.
+
+-- bgb_collection_page(viewer UUID, target UUID, p_status TEXT DEFAULT 'owned',
+--                     p_search TEXT DEFAULT NULL, p_players INT DEFAULT NULL,
+--                     p_playtime_min INT DEFAULT NULL,
+--                     p_playtime_max INT DEFAULT NULL,
+--                     p_play_mode TEXT DEFAULT NULL,
+--                     p_exclude_expansions BOOLEAN DEFAULT true,
+--                     p_sort TEXT DEFAULT 'last_played',
+--                     p_prioritize_exact_players BOOLEAN DEFAULT false,
+--                     p_page INT DEFAULT 1, p_per_page INT DEFAULT 12)
+--   → JSONB { "items": [CollectionItem…], "total": BIGINT,
+--              "parted_total": BIGINT }
+--   Defined in: db/migrations/boardgamebuddy/024_collection_page.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/collection_routes.py
+--               (GET /collection/grid), which the web game explorer and the
+--               native app page against, and which the Collection spoke falls
+--               back to once a shelf outgrows /collection/shelf's row cap.
+--   Purpose:    The paginated, server-filtered sibling of bgb_collection_shelf.
+--               The endpoint used to read the WHOLE shelf on every page turn
+--               and filter, sort and slice it in Python, across two round trips
+--               (owned/wishlist) or three (played). Worse than slow: those
+--               reads carried no limit, PostgREST silently caps an unbounded
+--               select at 1000 rows, and the filter ran AFTER the truncation —
+--               so on a large shelf a matching game could be missing because it
+--               sat past row 1000. All four now happen in SQL, in one round
+--               trip, with expansion_count folded in as a catalog-wide LATERAL
+--               (the third round trip) and play stats as a second one, same
+--               visibility rule as bgb_play_stats.
+--               Equivalence rules carried over from the Python, each called out
+--               at its predicate in the migration: NULL player bounds are
+--               permissive, a 6+ player search drops the lower bound, NULL
+--               playtime counts as zero, and the search is a plain substring
+--               rather than a LIKE pattern (a typed % is a percent sign). The
+--               join onto boardgamebuddy_games is INNER, matching the Python's
+--               skip of a collection row whose game row had gone, and it is
+--               where every filter reads from — rulebook_url exists only there,
+--               which is why this does not use the denormalized c.game_*
+--               columns the shelf reads. Wishlist is self-only, matching
+--               bgb_collection_shelf and bgb_profile_bundle. The 'played'
+--               branch ignores p_sort and p_prioritize_exact_players, as the
+--               Python did — that shelf is defined by recency.
+--   NOTE:       One deliberate DIFFERENCE from the Python: every ordering ends
+--               in a unique tiebreak (the game/collection id). Ties previously
+--               fell in arbitrary PostgREST order, so a tied row could appear
+--               on two pages or on none.
+--   NOTE:       A separate function rather than parameters on
+--               bgb_collection_shelf: CREATE OR REPLACE cannot change a
+--               signature, so widening it would leave a second overload the
+--               defaults make ambiguous. The shelf's no-filter contract is also
+--               deliberate — one cache entry per shelf, everything else derived
+--               client-side.
 
 -- bgb_collection_shelf(viewer UUID, target UUID, p_status TEXT DEFAULT 'owned',
 --                      p_exclude_expansions BOOLEAN DEFAULT true,
