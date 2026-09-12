@@ -1,7 +1,8 @@
 """User collection endpoints — closet / played / wishlist.
 
-Every handler runs its Supabase round trips through `asyncio.to_thread`; the
-`_<handler>_sync` helper directly above a route is that blocking half.
+Every handler runs its Supabase round trips through `asyncio.to_thread` — the
+client is synchronous and this service runs one uvicorn worker, so a read left
+on the loop stalls every other request in flight.
 """
 
 import asyncio
@@ -22,11 +23,9 @@ from .models import (
     CollectionShelfResponse,
     CollectionStatusMapResponse,
     CollectionUpdate,
-    GameSummary,
     MessageResponse,
 )
 from .constants import (
-    OWNED_SHELF_STATUSES,
     CollectionSort,
     CollectionStatus,
     PlayMode,
@@ -34,42 +33,9 @@ from .constants import (
 from .dependencies import CurrentUser, get_current_user
 from .game_routes import (
     COLLECTION_DENORM_GAME_FIELDS,
-    _attach_expansion_counts,
     collection_denormalized_from_game,
 )
-from .services._helpers import game_select_clause
-
-
-def _play_stats(
-    sb: Client,
-    user_id: str,
-    game_ids: Optional[list[str]] = None,
-) -> tuple[dict[str, str], dict[str, int]]:
-    """last_played-by-game and play-count-by-game maps for every play the
-    user has been part of — logged themselves, OR appearing as a participant
-    on someone else's play. This is the rule every play-derived surface uses
-    (bgb_user_stats, bgb_profile_bundle, bgb_game_detail_bundle's status pill,
-    the play log), so a play that shows up in History also drives the Played
-    shelf and the counts on every tile.
-
-    One bgb_play_stats RPC (migration 039, SQL GROUP BY). The old path
-    fetched EVERY visible play row across up to 3 round trips and counted
-    them in Python — unbounded for BGG-synced users with thousands of plays.
-
-    `game_ids`, when provided, scopes the stats to those games — for callers
-    that only need the tiles already on the shelf.
-    """
-    if game_ids is not None and not game_ids:
-        return {}, {}
-    rows = (
-        sb.rpc("bgb_play_stats", {"p_viewer": user_id, "p_game_ids": game_ids})
-        .execute()
-        .data
-        or []
-    )
-    last_played = {r["game_id"]: r["last_played_at"] for r in rows}
-    counts = {r["game_id"]: int(r["play_count"] or 0) for r in rows}
-    return last_played, counts
+from .services._helpers import raise_for_rpc_error
 
 
 def _upsert_collection(sb: Client, user_id: str, game_id: str, status: str) -> None:
@@ -197,62 +163,12 @@ async def remove_from_collection(
     return MessageResponse(message="Game removed from collection")
 
 
-# ── Profile / Collection grid ─────────────────────────────────────────────────
-# Tailored read for the Profile view's collection plate. Two round-trips
-# (collection+game join, then plays for last_played_at) and sorts in Python
-# by (last_played DESC NULLS LAST, added_at DESC) so the user's most-
-# recently-played base games surface first, then the newest additions.
-#
-# Replaces the previous "/games?owned_only=true" call which ordered by
-# games.created_at (the catalog timestamp) and had nothing per-user to
-# anchor the sort on.
-
-def _attach_page_expansion_counts(sb: Client, items: list[CollectionItem]) -> None:
-    """Fill `game.expansion_count` on one page of grid items.
-
-    The tile badge counts every expansion the *catalog* holds for that base
-    game — the same number the game page's "Expansions (N)" heading shows —
-    not just the ones the viewer owns. Expansions arrive via the import popup
-    without touching anyone's collection, so an owned-only count reads as
-    zero for a game that plainly has eleven of them.
-
-    Reuses game_routes._attach_expansion_counts, which tallies the whole page
-    in one round-trip and leaves expansion rows at 0.
-    """
-    if items:
-        _attach_expansion_counts(sb, [it.game for it in items])
-
-
-def _passes_grid_filters(
-    game: dict,
-    *,
-    search: Optional[str],
-    players: Optional[int],
-    playtime_min: Optional[int],
-    playtime_max: Optional[int],
-    play_mode: Optional[str],
-    exclude_expansions: bool,
-) -> bool:
-    if exclude_expansions and game.get("is_expansion"):
-        return False
-    name = (game.get("name") or "").lower()
-    if search and search.lower() not in name:
-        return False
-    if players is not None:
-        mn, mx = game.get("min_players"), game.get("max_players")
-        if mx is not None and mx < players:
-            return False
-        if players < 6 and mn is not None and mn > players:
-            return False
-    pt = game.get("playing_time") or 0
-    if playtime_min is not None and pt < playtime_min:
-        return False
-    if playtime_max is not None and pt > playtime_max:
-        return False
-    if play_mode is not None and game.get("play_mode") != play_mode:
-        return False
-    return True
-
+# ── Collection reads ──────────────────────────────────────────────────────────
+# Three tailored reads for the Profile view's collection plate, each one RPC:
+# the status map (pills and expansion badges), the whole shelf (client-side
+# paging), and the paginated grid. All three sort by last_played DESC NULLS
+# LAST then added_at DESC, so the user's most-recently-played base games
+# surface first and the newest additions follow.
 
 @router.get(
     "/collection/status-map",
@@ -280,14 +196,11 @@ async def collection_status_map(
 
 
 # ── Whole-shelf read (client-side paging) ─────────────────────────────────────
-# /collection/grid materializes the entire shelf on every request and slices it
-# in Python, so a page turn costs the same as a first load — ~1s on mobile. The
-# web client instead pulls a shelf once through this endpoint, caches it, and
-# derives every page, filter and search locally. One DB round trip, down from
-# the grid's two (owned/wishlist) or three (played).
-#
-# /collection/grid stays as the paginated, server-filtered path the game
-# explorer pages against.
+# The web client pulls a shelf once through this endpoint, caches it, and
+# derives every page, filter and search locally — so a page turn costs no round
+# trip at all. /collection/grid is the paginated, server-filtered sibling the
+# game explorer pages against, and the fallback once a shelf outgrows the row
+# cap below.
 
 _SHELF_DEFAULT_LIMIT = 1000
 _SHELF_MAX_LIMIT = 5000
@@ -360,216 +273,6 @@ async def collection_shelf(
     )
 
 
-def _collection_grid_sync(
-    sb: Client,
-    viewer_id: str,
-    target_user_id: str,
-    *,
-    page: int,
-    per_page: int,
-    status: CollectionStatus,
-    search: Optional[str],
-    players: Optional[int],
-    playtime_min: Optional[int],
-    playtime_max: Optional[int],
-    play_mode: Optional[PlayMode],
-    exclude_expansions: bool,
-    sort: CollectionSort,
-    prioritize_exact_players: bool,
-) -> CollectionPageResponse:
-    status_value = status.value
-    mode_value = play_mode.value if play_mode else None
-
-    # A wishlist is private to its owner, the same gate bgb_collection_shelf
-    # applies (migration 003_rpcs). Owned and played shelves are public.
-    if status == CollectionStatus.WISHLIST and target_user_id != viewer_id:
-        return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
-
-    if status == CollectionStatus.PLAYED:
-        # Played-not-owned shelf: every game the user has a play for — logged
-        # by them or by someone who listed them as a player — that doesn't
-        # currently sit on their owned OR wishlist shelf. Lets the Profile
-        # surface games-they-play-but-don't-have as a distinct row without
-        # duplicating anything from the other two shelves above it.
-        last_played, play_counts = _play_stats(sb, target_user_id)
-        if not last_played:
-            return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
-
-        # Any collection row excludes the game from this shelf — both owned
-        # and wishlist live in the same table, so a single fetch covers both.
-        coll = (
-            sb.table("boardgamebuddy_collections")
-            .select("game_id")
-            .eq("user_id", target_user_id)
-            .execute()
-            .data
-            or []
-        )
-        collected_ids = {r["game_id"] for r in coll}
-        candidate_ids = [gid for gid in last_played if gid not in collected_ids]
-        if not candidate_ids:
-            return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
-
-        games = (
-            sb.table("boardgamebuddy_games")
-            .select(game_select_clause())
-            .in_("id", candidate_ids)
-            .execute()
-            .data
-            or []
-        )
-        filtered_games = [
-            g for g in games
-            if _passes_grid_filters(
-                g,
-                search=search,
-                players=players,
-                playtime_min=playtime_min,
-                playtime_max=playtime_max,
-                play_mode=mode_value,
-                exclude_expansions=exclude_expansions,
-            )
-        ]
-        total = len(filtered_games)
-        if total == 0:
-            return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
-
-        # Same sort axis as the owned grid below: most-recently-played first.
-        filtered_games.sort(
-            key=lambda g: last_played.get(g["id"], ""),
-            reverse=True,
-        )
-        offset = (page - 1) * per_page
-        page_games = filtered_games[offset : offset + per_page]
-        items = [
-            CollectionItem(
-                id=f"played-{g['id']}",
-                game_id=g["id"],
-                status=CollectionStatus.PLAYED.value,
-                added_at=f"{last_played[g['id']]}T00:00:00+00:00",
-                last_played_at=last_played.get(g["id"]),
-                play_count=play_counts.get(g["id"], 0),
-                game=GameSummary(**g),
-            )
-            for g in page_games
-        ]
-        _attach_page_expansion_counts(sb, items)
-        return CollectionPageResponse(items=items, total=total, page=page, per_page=per_page)
-
-    # Round-trip 1: every shelf row, with the joined game payload embedded.
-    #
-    # `owned` matches the SET ('owned', 'prev_owned') — a game you sold is still
-    # on your Owned shelf, just dimmed and stamped by the client. This has to
-    # agree with bgb_collection_shelf's widening (069), because a shelf past
-    # /collection/shelf's row cap falls back here mid-scroll and a different
-    # row set would reshuffle the grid under the reader. `status` joins the
-    # select so each item reports its own value rather than the query's.
-    shelf_statuses = (
-        list(OWNED_SHELF_STATUSES)
-        if status == CollectionStatus.OWNED
-        else [status_value]
-    )
-    coll_rows = (
-        sb.table("boardgamebuddy_collections")
-        .select(
-            "id, added_at, game_id, status, "
-            f"boardgamebuddy_games({game_select_clause()})"
-        )
-        .eq("user_id", target_user_id)
-        .in_("status", shelf_statuses)
-        .execute()
-        .data
-        or []
-    )
-
-    # In-Python filter (PostgREST can't filter on the embedded fields).
-    filtered: list[dict] = []
-    for r in coll_rows:
-        g = r.get("boardgamebuddy_games") or {}
-        if not g:
-            continue
-        if not _passes_grid_filters(
-            g,
-            search=search,
-            players=players,
-            playtime_min=playtime_min,
-            playtime_max=playtime_max,
-            play_mode=mode_value,
-            exclude_expansions=exclude_expansions,
-        ):
-            continue
-        filtered.append(r)
-
-    total = len(filtered)
-    if total == 0:
-        return CollectionPageResponse(items=[], total=0, page=page, per_page=per_page)
-
-    # Round-trip 2: last_played_at + play_count per game, scoped to the user's
-    # plays of the filtered game set. One query — keeps the endpoint at two
-    # round-trips total.
-    game_ids = [r["game_id"] for r in filtered]
-    last_played, play_counts = _play_stats(sb, target_user_id, game_ids)
-
-    if sort == CollectionSort.ADDED_AT:
-        ordered = sorted(filtered, key=lambda r: r.get("added_at") or "", reverse=True)
-    elif sort == CollectionSort.ALPHABETICAL:
-        ordered = sorted(
-            filtered,
-            key=lambda r: ((r.get("boardgamebuddy_games") or {}).get("name") or "").lower(),
-        )
-    else:
-        # last_played DESC NULLS LAST, then added_at DESC. Split into
-        # has-play and never-played buckets so NULLS LAST is trivial; each
-        # bucket sorts by its own secondary key.
-        has_plays = [r for r in filtered if r["game_id"] in last_played]
-        no_plays = [r for r in filtered if r["game_id"] not in last_played]
-        has_plays.sort(
-            key=lambda r: (last_played[r["game_id"]], r.get("added_at") or ""),
-            reverse=True,
-        )
-        no_plays.sort(key=lambda r: r.get("added_at") or "", reverse=True)
-        ordered = has_plays + no_plays
-
-    # Opt-in: when prioritize_exact_players=true AND players is set, surface
-    # exact-fit games (max_players == players) above wider-range ones. The
-    # stable sort preserves the chosen `sort` ordering inside each bucket.
-    # Off by default so the chosen `sort` stays consistent across pages.
-    if players is not None and prioritize_exact_players:
-        ordered = sorted(
-            ordered,
-            key=lambda r: 0 if ((r.get("boardgamebuddy_games") or {}).get("max_players") == players) else 1,
-        )
-
-    offset = (page - 1) * per_page
-    page_rows = ordered[offset : offset + per_page]
-    items = [
-        CollectionItem(
-            id=r["id"],
-            game_id=r["game_id"],
-            status=r.get("status") or status_value,
-            added_at=r["added_at"],
-            last_played_at=last_played.get(r["game_id"]),
-            play_count=play_counts.get(r["game_id"], 0),
-            game=GameSummary(**r["boardgamebuddy_games"]),
-        )
-        for r in page_rows
-    ]
-    _attach_page_expansion_counts(sb, items)
-    # Counted over `filtered`, not the page: the client subtracts it from the
-    # shelf's displayed count, which is about the whole filtered shelf.
-    parted_total = sum(
-        1 for r in filtered
-        if r.get("status") == CollectionStatus.PREV_OWNED.value
-    )
-    return CollectionPageResponse(
-        items=items,
-        total=total,
-        parted_total=parted_total,
-        page=page,
-        per_page=per_page,
-    )
-
-
 @router.get(
     "/collection/grid",
     response_model=CollectionPageResponse,
@@ -614,23 +317,44 @@ async def collection_grid(
     ),
     user: CurrentUser = Depends(get_current_user),
 ) -> CollectionPageResponse:
-    """Collection shelf sorted by `sort` (default last_played DESC NULLS LAST, then added_at DESC)."""
-    sb = get_supabase()
-    target_user_id = user_id or user.user_id
-    return await asyncio.to_thread(
-        _collection_grid_sync,
-        sb,
-        user.user_id,
-        target_user_id,
+    """Collection shelf sorted by `sort` (default last_played DESC NULLS LAST, then added_at DESC).
+
+    One RPC: bgb_collection_page (migration 024) filters, sorts, counts and
+    slices in Postgres. This used to read the WHOLE shelf on every page turn
+    and do all four in Python, across two round trips (owned/wishlist) or three
+    (played) — and worse than slow, the reads were unbounded, PostgREST
+    silently caps those at 1000 rows, and the filter ran after the truncation,
+    so on a large shelf a matching game could be missing because it sat past
+    row 1000. The wishlist gate and the played shelf's synthetic ids live in
+    the function now; its header states the equivalence rules.
+    """
+    result = await asyncio.to_thread(
+        get_supabase().rpc(
+            "bgb_collection_page",
+            {
+                "viewer": user.user_id,
+                "target": user_id or user.user_id,
+                "p_status": status.value,
+                "p_search": search,
+                "p_players": players,
+                "p_playtime_min": playtime_min,
+                "p_playtime_max": playtime_max,
+                "p_play_mode": play_mode.value if play_mode else None,
+                "p_exclude_expansions": exclude_expansions,
+                "p_sort": sort.value,
+                "p_prioritize_exact_players": prioritize_exact_players,
+                "p_page": page,
+                "p_per_page": per_page,
+            },
+        ).execute
+    )
+    raise_for_rpc_error(result.data, "Collection grid")
+
+    data = result.data
+    return CollectionPageResponse(
+        items=[CollectionItem(**row) for row in (data.get("items") or [])],
+        total=data.get("total") or 0,
+        parted_total=data.get("parted_total") or 0,
         page=page,
         per_page=per_page,
-        status=status,
-        search=search,
-        players=players,
-        playtime_min=playtime_min,
-        playtime_max=playtime_max,
-        play_mode=play_mode,
-        exclude_expansions=exclude_expansions,
-        sort=sort,
-        prioritize_exact_players=prioritize_exact_players,
     )
