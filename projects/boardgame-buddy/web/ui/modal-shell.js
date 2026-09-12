@@ -22,6 +22,13 @@
    * @property {string} id           DOM id for the backdrop — unique per modal.
    * @property {string} [className]  The modal's own backdrop class.
    * @property {string} [label]      Default aria-label for the dialog.
+   * @property {string} [cardSelector]  Selector for this modal's own card, used
+   *   by the outside-tap test (overlays.md §8a). Defaults to the shared
+   *   `.polaroid-popup__card`; a card with its own CSS family must name its own
+   *   class here, or every tap INSIDE it counts as a tap outside and closes it.
+   * @property {string} [closeSelector] Selector for this modal's × button.
+   *   Defaults to the shared `.polaroid-popup__close`; `[data-action="close"]`
+   *   always works too.
    */
 
   /**
@@ -48,6 +55,8 @@
       this._id = config.id;
       this._className = config.className || "";
       this._label = config.label || "";
+      this._cardSelector = config.cardSelector || ".polaroid-popup__card";
+      this._closeSelector = config.closeSelector || ".polaroid-popup__close";
 
       /** @type {HTMLElement|null} */
       this._el = null;
@@ -102,12 +111,28 @@
       root.addEventListener("click", (e) => {
         const t = /** @type {any} */ (e.target);
         // Outside the card is outside, whatever it landed on
-        // (.claude/rules/overlays.md §8a).
-        if (!t.closest(".polaroid-popup__card")) {
+        // (.claude/rules/overlays.md §8a). Asked of the TARGET, never as
+        // `card.contains(t)`: an inline handler that repaints the card — this
+        // is how every button in the play-detail popup works — has already
+        // replaced it by the time the click bubbles up here, and a
+        // containment test against the fresh card reads the press that caused
+        // the repaint as a tap outside. `closest` still walks the detached
+        // node's own subtree and answers correctly.
+        const inCard =
+          t.closest(this._cardSelector) ||
+          // Nothing in the backdrop matches the selector at all: that is a
+          // mis-set cardSelector, not a tap outside. Fall back to the
+          // backdrop's own child, the way the sheet shell measures its panel,
+          // so the cost is the dead strip beside the card rather than every
+          // button on it closing the modal.
+          (!root.querySelector(this._cardSelector) &&
+            root.firstElementChild &&
+            root.firstElementChild.contains(t));
+        if (!inCard) {
           if (this._dismissible()) this.close();
           return;
         }
-        if (t.closest('.polaroid-popup__close, [data-action="close"]')) { this.close(); return; }
+        if (t.closest(`${this._closeSelector}, [data-action="close"]`)) { this.close(); return; }
         if (opts.onClick) opts.onClick(e);
       });
 

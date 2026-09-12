@@ -17,6 +17,13 @@
     id: "bgb-play-detail-popup",
     className: "play-detail-popup__backdrop",
     label: "Play details",
+    // This card has its own CSS family, so the shell has to be told what its
+    // card and × are. Left on the shared `.polaroid-popup__*` defaults, the
+    // outside-tap test matched nothing inside this card and every press on it
+    // — Edit, Upload photo, Save, a score field — read as a tap outside and
+    // closed the popup instead (overlays.md §8a).
+    cardSelector: ".play-detail-popup__card",
+    closeSelector: ".play-detail-popup__close",
   });
 
   // Module-scoped singleton state. The popup is a transient sheet and
@@ -142,9 +149,8 @@
     root.innerHTML = html;
     _lastHtml = html;
     window.BgbIcons.render(root);
-
-    const closeBtn = root.querySelector(".play-detail-popup__close");
-    if (closeBtn) closeBtn.addEventListener("click", dismiss);
+    // The × needs no listener of its own: the shell's delegated click owns it
+    // via closeSelector, and its onClose is this popup's reset.
 
     restoreFocus(focus);
   }
