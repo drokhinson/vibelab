@@ -3,9 +3,11 @@ main.py — vibelab shared FastAPI backend
 ONE service handles ALL projects. Each project registers its own router.
 Routes are namespaced: /api/v1/{project}/...
 """
+import asyncio
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from typing import Optional
 
 import truststore
@@ -39,7 +41,61 @@ from routes import admin
 
 load_dotenv()
 
+
+# ── Startup ────────────────────────────────────────────────────────────────────
+# Warming sauceboss's in-memory registries is the only work this service does at
+# boot, and it used to be able to take the whole monorepo down.
+#
+# It ran inline in an @app.on_event("startup") hook, and load_unit_registry()
+# reads sauceboss_unit from Supabase with nothing around it. An exception there
+# — Supabase paused or asleep, one network blip, a slow cold start, a rotated
+# key — aborts ASGI startup, so the process exits. Railway restarts it
+# (restartPolicyMaxRetries = 3 in railway.toml) and then gives up, and the
+# service stays down until somebody redeploys by hand. Nothing reports this:
+# the "Deploy Shared Backend" workflow is an echo, so Actions is green either
+# way, and from a phone every app in the repo simply stops answering. A sauce
+# unit table that didn't load must never be able to do that to boardgame-buddy.
+#
+# The asymmetry was plainly unintended: load_modifier_registry() right beside it
+# already catches its own failures and says so in its docstring.
+#
+# So the warm-up moves off the startup path entirely — a background task, off
+# the event loop (the Supabase client is blocking), retried on a short backoff.
+# Startup returns immediately, which also keeps a slow Supabase from eating the
+# 30s healthcheck budget. The cost is a brief window where sauceboss parses with
+# an empty unit registry; the alternative was every app being unreachable.
+_REGISTRY_RETRY_DELAYS_S = (0, 2, 10, 30)
+
+
+async def _warm_registries() -> None:
+    """Fill the sauceboss registries in the background. Never fatal."""
+    log = logging.getLogger("vibelab")
+    for delay in _REGISTRY_RETRY_DELAYS_S:
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            # Both are blocking Supabase reads, so they go off the loop.
+            await asyncio.to_thread(load_unit_registry)
+            await asyncio.to_thread(load_modifier_registry)
+            return
+        except Exception:
+            log.warning("Registry warm-up failed; retrying", exc_info=True)
+    log.error("Registry warm-up gave up. Sauceboss unit parsing is degraded; "
+              "every other app is unaffected.")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start the warm-up, don't wait for it, and don't let it fail the boot."""
+    task = asyncio.create_task(_warm_registries())
+    try:
+        yield
+    finally:
+        task.cancel()
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="vibelab API",
     version="1.0.0",
     description="Shared backend for the vibelab monorepo. Each project registers routes under /api/v1/{project}/.",
@@ -266,13 +322,6 @@ def _log_self(request, app_name, path, start, status, size) -> None:
         )
     except Exception:
         _log.warning("self-timing log failed for %s", path, exc_info=True)
-
-
-# ── Startup ────────────────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def _startup():
-    load_unit_registry()
-    load_modifier_registry()
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
