@@ -102,7 +102,7 @@
          </li>`
       : `<li class="exp-tree__add-row">
            <button type="button" class="exp-tree__add" data-exp-add="${escapeAttr(key)}">
-             <i data-icon="plus" class="w-4 h-4"></i><span>Add expansion</span>
+             <i data-icon="plus" class="w-4 h-4"></i><span>Add expansions</span>
            </button>
          </li>`);
     return `

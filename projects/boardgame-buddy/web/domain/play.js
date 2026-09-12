@@ -137,6 +137,116 @@
     /** The remembered play, or null. Synchronous — this is its whole point. */
     static seeded(id) { return _seeds.get(id) || null; }
 
+    /**
+     * The inverse of fromFeedCard: write a PlayResponse's fields onto a
+     * feed-card-shaped object, IN PLACE.
+     *
+     * In place because every holder of that card — the cached feed page, the
+     * feed store slot, ui/play-card.js's render registry — is holding the same
+     * object by reference, which is what makes one patch reach all of them.
+     * Idempotent for the same reason: these are plain field writes, so running
+     * it twice over one card is the same as running it once.
+     *
+     * Only the fields a play OWNS are written. Everything a card carries that
+     * the play does not know about — reaction counts and reactors, who logged
+     * it, `kind` — is left alone, because a play edit does not change any of
+     * it and inventing values would undo a tap the viewer just made.
+     *
+     * @param {any} card a feed play card
+     * @param {any} play a PlayResponse
+     * @returns {any} the same card
+     */
+    static mergeIntoCard(card, play) {
+      if (!card || !play) return card;
+      const prev = card.game || {};
+      // A pivot (the edit moved the play to a different game) invalidates the
+      // whole game block, not just its name: box art and theme colour belong
+      // to the game that left. PlayResponse carries only the thumbnail, so the
+      // full-size art falls back to it and the accent falls back to the
+      // polaroid default rather than painting the previous game's identity
+      // over the new one. The next real feed fetch restores both.
+      card.game = prev.id && prev.id === play.game_id
+        ? Object.assign({}, prev, {
+            name: play.game_name,
+            thumbnail_url: play.game_thumbnail || prev.thumbnail_url || null,
+          })
+        : {
+            id: play.game_id,
+            name: play.game_name,
+            thumbnail_url: play.game_thumbnail || null,
+            image_url: play.game_thumbnail || null,
+          };
+      card.played_at = play.played_at;
+      card.notes = play.notes == null ? null : play.notes;
+      card.photo_url = play.photo_url == null ? null : play.photo_url;
+      card.play_mode = play.play_mode || "competitive";
+      card.country_code = play.country_code == null ? null : play.country_code;
+      card.players = play.players || [];
+      card.expansions = play.expansions || [];
+      // group_count is deliberately NOT written. One card can stand for a whole
+      // run of identical imported plays (migration 005), and PlayResponse
+      // always says 1 — so copying it across would collapse a run of 58 into a
+      // single play. Editing a play cannot change how many plays are in a run.
+      return card;
+    }
+
+    /**
+     * Fold an accepted edit into everything holding the old row.
+     *
+     * Order is load-bearing. The play-card patch re-renders the card, and
+     * rendering a card re-seeds `_seeds` from its PROJECTION — which carries no
+     * scoring_template, because a feed card never had one. So the full row goes
+     * into the seed last, or the repaint would quietly downgrade it and the
+     * next popup open would paint a round grid with no labels.
+     *
+     * @param {any} play the PlayResponse the PUT echoed back
+     */
+    static applyUpdate(play) {
+      if (!play || !play.id) return;
+      if (window.Feed && window.Feed.applyPlayUpdate) window.Feed.applyPlayUpdate(play);
+      Play.applyToCachedLists(play);
+      if (window.BgbPlayCard && window.BgbPlayCard.applyPlayUpdate) {
+        window.BgbPlayCard.applyPlayUpdate(play);
+      }
+      _seeds.set(play.id, play);
+      // The Another Round card seeds off the viewer's most recent play. Before
+      // this it was cleared outright on every edit — including an edit to that
+      // very play, which is the one case where we now know exactly what it
+      // should say. An edit to some OTHER play can still have moved which play
+      // is most recent (the date is editable), and that we cannot answer from
+      // here, so it keeps the clear.
+      const last = Play.cachedLastPlay();
+      if (last && last.id === play.id) Play.rememberLastPlay(play);
+      else Play.rememberLastPlay(null);
+    }
+
+    /**
+     * Patch the edited play into every cached /plays page that holds it.
+     *
+     * Each page is re-sorted by date afterwards, because played_at is editable
+     * and it is the sort key — without that, nudging a play back a day leaves
+     * it sitting above rows it now belongs below. A date change big enough to
+     * move the play to a DIFFERENT page is not fixable from here (the paging is
+     * offset-based); that corrects itself on the next revalidation, which is a
+     * far smaller wrong than dropping every page and painting a spinner.
+     *
+     * @param {any} play
+     */
+    static applyToCachedLists(play) {
+      if (!window.bgbCache || !play || !play.id) return;
+      for (const key of window.bgbCache.keys(LIST_NS)) {
+        const page = window.bgbCache.peek(LIST_NS, key);
+        if (!page || !Array.isArray(page.plays)) continue;
+        // Skip a run row: it stands for many identical plays, and swapping it
+        // for the one that was edited would drop the other 57.
+        const i = page.plays.findIndex((p) => p && p.id === play.id && (p.group_count || 1) === 1);
+        if (i < 0) continue;
+        page.plays[i] = play;
+        page.plays.sort((a, b) => String(b.played_at || "").localeCompare(String(a.played_at || "")));
+        window.bgbCache.persist(LIST_NS, key);
+      }
+    }
+
     // ── Reactions ("Good game", migration 016) ─────────────────────────────
     //
     // Both take the whole night's play ids, because the surface is the session
@@ -172,10 +282,19 @@
     static create(payload) {
       return window.api.post("/plays", payload).then((r) => { _invalidatePlayDeps(); return r; });
     }
+    // The PUT echoes the WHOLE play back — the server re-SELECTs it and
+    // re-hydrates players and expansions before answering — so an edit is the
+    // one mutation that hands us the correct new row. Fold it into every cache
+    // that can hold it rather than dropping them and making the next reader
+    // pay for a refetch it can't see the result of: "never refetch the whole
+    // list after a mutation, patch the one changed item into local state"
+    // (.claude/rules/web-frontend.md). The caches that CAN'T be patched from
+    // one play — stats, achievements, shelves, the profile and game bundles —
+    // are still dropped, by the same _invalidatePlayDeps as ever.
     static update(id, payload) {
       return window.api.put(`/plays/${id}`, payload).then((r) => {
-        _invalidatePlayDeps();
-        Play.rememberLastPlay(null);
+        _invalidatePlayDeps({ patched: true });
+        Play.applyUpdate(r);
         return r;
       });
     }
@@ -283,12 +402,23 @@
   // caller (play-flow's _runSave) writes the fresh row into the seed. The
   // mutations that can genuinely destroy or reshape the top play (update,
   // remove, leave) clear it themselves.
-  function _invalidatePlayDeps() {
+  /**
+   * @param {{patched?: boolean}} [opts] `patched: true` means the caller has
+   *   the fresh row and is folding it in itself (Play.applyUpdate), so the
+   *   three things that row can be patched INTO are left alone: the cached
+   *   feed first page, the cached /plays pages, and the feed store slot whose
+   *   subscriber re-renders the whole Feed view. Everything else is dropped
+   *   exactly as before, because nothing here can derive it from one play.
+   */
+  function _invalidatePlayDeps(opts) {
+    const patched = !!(opts && opts.patched);
     // Every seed, not the one that changed: this also fires for the bulk
     // import-group and import-batch deletes, which drop many plays at once and
     // whose ids the caller never enumerates. Clearing wholesale is free — the
     // feed cache is dropped a few lines below, so the next feed paint reseeds
-    // from fresh rows anyway — and it cannot miss a mutation path.
+    // from fresh rows anyway — and it cannot miss a mutation path. On the
+    // patched path nothing reseeds it, so Play.applyUpdate puts the one play it
+    // holds back afterwards.
     _seeds.clear();
     if (window.Profile && window.Profile.invalidate) window.Profile.invalidate();
     if (window.Game && window.Game.invalidateBundle) window.Game.invalidateBundle();
@@ -301,17 +431,30 @@
     // Drop the cached feed first page; the next Feed mount triggers a fresh
     // fetch. Callers that want the new page warm before the user gets there
     // (the host save flow) follow up with Feed.refreshFirstPage().
-    if (window.bgbCache) window.bgbCache.delete("feed", "first");
+    // Feed.applyPlayUpdate patches it in place instead on the patched path.
+    if (window.bgbCache && !patched) window.bgbCache.delete("feed", "first");
     // Every cached /plays page can contain the row that just changed, and the
     // paging is offset-based, so a single insert shifts every page after it.
-    // Namespace-wide is the only correct scope.
-    if (window.bgbCache) window.bgbCache.clear(LIST_NS);
+    // Namespace-wide is the only correct scope — for anything that INSERTS or
+    // REMOVES a row. An edit does neither, so the patched path rewrites the row
+    // where it sits (Play.applyToCachedLists) and keeps the pages.
+    if (window.bgbCache && !patched) window.bgbCache.clear(LIST_NS);
     // last_played_at / play_count are the collection shelf's sort key.
     if (window.Collection && window.Collection.invalidateShelves) {
       window.Collection.invalidateShelves();
     }
     if (window.Buddy && window.Buddy.invalidate) window.Buddy.invalidate();
-    window.store.invalidate("feed");
+    // Profile.invalidate() above drops the cached bundle; this is the SAME
+    // payload published to the store by views/profile-self-view.js, and the
+    // Plays and Collection spokes fall back to it when the cache misses. Left
+    // behind, it re-seeded the pre-edit play the cache drop had just removed.
+    if (window.store && window.store.set) window.store.set("profileBundle", null);
+    // A create or a delete changes which cards the feed HAS, so the view has
+    // to rebuild. An edit changes one card's contents, and ui/play-card.js
+    // repaints exactly that card in place — a full render here would reset the
+    // feed's scroll position and flip every open card back over for nothing
+    // (views/feed-view.js says as much above its own _syncCardStatus).
+    if (!patched) window.store.invalidate("feed");
   }
 
   window.Play = Play;

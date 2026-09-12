@@ -6324,6 +6324,11 @@ html.bgb-ptr-armed body {
   cursor: pointer;
 }
 .exp-picker__import:hover { background: var(--polaroid-bg-soft); }
+/* The untickable half of the tick column. .game-picker__check already reserves
+   its 20px whether or not anything is in it, so swapping plus for check cannot
+   reflow the name beside it (.claude/rules/overlays.md §6) — this only takes
+   the weight off the "not yet" state so the ticks are what the eye finds. */
+.exp-picker .game-picker__check--off { color: var(--polaroid-muted); }
 .exp-picker__dot { flex: none; width: 10px; height: 10px; border-radius: 999px; }
 .exp-picker__error { color: var(--rust); }
 
