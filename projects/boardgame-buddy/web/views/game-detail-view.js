@@ -34,8 +34,17 @@
         // expansion — refresh whenever the widget has a game in scope.
         if (this._guide) this._guide.refresh();
       });
+      // _paintStatuses(), NOT render(): this lands whenever the status map
+      // does, which on a cold or stale cache is a network round trip arriving
+      // seconds after the bundle has already painted the screen. A full render
+      // there rebuilds the whole article and replays its entrance animation —
+      // the screen reads as having reopened by itself. It is the same "the
+      // store catching up" case the two listeners above already patch in
+      // place; only this one was left on the full render. _paintStatuses()
+      // falls back to render() when there is no article yet, which covers the
+      // status map winning the race against the bundle.
       window.Collection.myStatusMap()
-        .then((m) => { if (!this._mounted) return; this._statusMap = m || {}; this.render(); })
+        .then((m) => { if (!this._mounted) return; this._statusMap = m || {}; this._paintStatuses(); })
         .catch(() => {});
       await this._load();
     }
