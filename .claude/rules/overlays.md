@@ -271,7 +271,12 @@ for visual consistency; they do not share the shell.
   the centred-card sibling of the sheet shell with the same contract: `open()`
   with `html`, `onClick`, `onEscape`, `canDismiss` (a card mid-save refuses the
   outside tap, Escape and back), `onOpen`, `onClose`. It owns the four exits,
-  the scroll lock and focus return; each card keeps its own markup. It was
+  the scroll lock and focus return; each card keeps its own markup — so a card
+  with its own CSS family must name it, at construction, as `cardSelector`
+  (and `closeSelector` for its ×). The defaults are the shared
+  `.polaroid-popup__*` classes, and a card that carries neither and names
+  neither is not *slightly* wrong: every tap on it is a tap outside by §8a, so
+  the card closes on its own buttons. It was
   extracted once four cards (play detail, outbox, import expansions, add
   buddies) had each grown their own copy and drifted — one bound Escape in the
   bubble phase, three never locked scroll. Where a popup's content is a list,
@@ -300,6 +305,14 @@ if (ev.target === root) dismiss();
 // Right: outside the card is outside, whatever it landed on.
 if (!ev.target.closest(".polaroid-popup__card")) dismiss();
 ```
+
+Ask it of the **target**, not as `card.contains(ev.target)`. An inline handler
+that repaints the card by replacing its host's `innerHTML` — how every button
+in boardgame-buddy's play-detail popup works — has already swapped the card out
+by the time the click bubbles to the backdrop, so a containment test against
+the fresh card reads the press that *caused* the repaint as a tap outside and
+closes the overlay. `closest()` walks the detached node's own subtree and still
+answers correctly.
 
 Boardgame-buddy's wrap-up and achievement cards each float a display-face
 headline above the card, inside the backdrop — the biggest words on the screen,
