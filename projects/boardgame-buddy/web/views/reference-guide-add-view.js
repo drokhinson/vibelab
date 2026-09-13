@@ -515,7 +515,8 @@ components above.
 
       // No topbar — the centred game chip is the top element across every
       // mode. Browse's back affordance is the left-side floating FAB;
-      // create / edit rely on the inline Cancel / Save footer for exit.
+      // create / edit carry a × beside that chip (_renderEditorChipRow) and
+      // the inline Cancel / Save footer, which are the same exit.
       // The editor renders its own chip (as a flex:none child of the shell, so
       // it stays pinned above the scroller); browse keeps it in normal flow.
       this.container.innerHTML = isBrowsing
@@ -731,9 +732,12 @@ components above.
     _wizBack() {
       if (this._tab !== "create") return;
       if (this._step <= 0) {
-        // Leaving the wizard entirely — _backToBrowse releases the guard via
-        // _resetFormState, so nothing to re-arm.
-        this._backToBrowse().then(() => this.render());
+        // Off the front of the wizard: the same exit the footer's Cancel and
+        // the × take, so a routed entry goes back to the screen that opened it
+        // rather than to Browse. Both paths inside _exitEditor release the
+        // guard through _resetFormState before this returns, so the caller's
+        // `_tab === "create"` re-arm check sees "browse" and nothing is re-armed.
+        this._exitEditor();
         return;
       }
       // Mirror of the forward jump in _wizNext: a grid never lands on step 1,
@@ -772,10 +776,10 @@ components above.
     }
 
     // One entry-point for all back affordances (topbar chip, browse FAB).
-    // Mirrors `_cancelForm` for create/edit; pops the router otherwise.
+    // Mirrors `_exitEditor` for create/edit; pops the router otherwise.
     _backAction() {
       if (this._tab !== "browse") {
-        return this._cancelForm();
+        return this._exitEditor();
       }
       window.router.back("game-detail");
     }
@@ -1113,7 +1117,7 @@ components above.
       }
 
       return `
-        ${this._renderGameChip()}
+        ${this._renderEditorChipRow(isEditing)}
         <form class="chapter-edit__form" onsubmit="window.referenceGuideAddView._submitForm(event)">
           <div class="chapter-edit__scroll">
             ${bar}
@@ -1125,22 +1129,59 @@ components above.
       `;
     }
 
+    /**
+     * The chip, plus the shell's one always-visible way out.
+     *
+     * The create / edit shell is `position: fixed` with the global header and
+     * the bottom nav hidden under it (`.chapter-edit-locked`), so the only
+     * exits it has are the ones it draws itself — and the footer draws one per
+     * step, except on step 1, whose pair is Skip and Generate. That step had no
+     * visible exit at all: leaving it meant the device back gesture, which a
+     * desktop browser's back button is a poor stand-in for and which nothing on
+     * screen mentions.
+     *
+     * So the × rides beside the chip instead of in the footer, where it is
+     * present on every step and in Edit, and where it does not have to compete
+     * with the step's own forward action for the 3-button row the footer note
+     * rules out on a phone. It is Cancel, exactly: same method, same discard.
+     *
+     * Browse renders the chip without it — that screen keeps the global header
+     * and its own back FAB.
+     *
+     * @param {boolean} isEditing
+     */
+    _renderEditorChipRow(isEditing) {
+      const label = isEditing ? "Close the editor" : "Leave the wizard";
+      return `
+        <div class="chapter-edit__chiprow">
+          ${this._renderGameChip()}
+          <button type="button" class="chapter-edit__close"
+                  aria-label="${escapeAttr(label)}" title="${escapeAttr(label)}"
+                  onclick="window.referenceGuideAddView._exitEditor()">
+            <i data-icon="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      `;
+    }
+
     /** The picked chapter type's row, or a neutral stand-in before one is picked. */
     _activeType() {
       const t = this._types.find((x) => x.id === this._formType);
       return t || { id: "", label: "chapter", icon: "book" };
     }
 
-    // Footer pairs, one per step. Every step has an exit on the left and the
-    // step's own forward action on the right, so no step is a dead end — step 0's
-    // Back leaves the wizard for browse rather than doing nothing.
+    // Footer pairs, one per step: the step's own backward move on the left and
+    // its forward action on the right. Leaving the wizard altogether is NOT one
+    // of these — that is the × in the chip row above, present on every step
+    // (see _renderEditorChipRow), which is what lets step 1 spend both of its
+    // slots on Skip / Generate without being a dead end.
     _renderWizardFooter(isEditing, step) {
       if (isEditing) {
         const label = this._saving ? "Saving…" : "Save changes";
         return `
           <div class="chapter-edit__footer">
             <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
-                    onclick="window.referenceGuideAddView._cancelForm()">Cancel</button>
+                    onclick="window.referenceGuideAddView._exitEditor()">Cancel</button>
             <button type="submit" class="chapter-edit__fbtn chapter-edit__fbtn--save"
                     ${this._saving || !this._formType ? "disabled" : ""}>
               ${escapeHtml(label)}
@@ -1156,7 +1197,7 @@ components above.
         return `
           <div class="chapter-edit__footer">
             <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel"
-                    onclick="window.referenceGuideAddView._cancelForm()">Cancel</button>
+                    onclick="window.referenceGuideAddView._exitEditor()">Cancel</button>
             <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--save"
                     ${noType ? "disabled" : ""}
                     onclick="window.referenceGuideAddView._wizNext()">
@@ -1166,14 +1207,15 @@ components above.
         `;
       }
 
-      // Step 1 — the head start is optional, so the step's two exits are its
-      // footer: Skip goes on to the editor empty-handed, Generate drafts first
-      // and lands on the editor too (_onGenerateAi advances the step itself).
+      // Step 1 — the head start is optional, so the step's two ways ON are its
+      // footer: Skip goes to the editor empty-handed, Generate drafts first and
+      // lands on the editor too (_onGenerateAi advances the step itself).
       //
       // No Back here, unlike the other steps: this pair is the whole decision
       // and a third button crowds it on a phone. Back to the type picker is the
       // Change link beside the type chip in the step body, plus the device back
-      // gesture, which still runs _wizBack.
+      // gesture, which still runs _wizBack; leaving the wizard outright is the ×
+      // above, which is on this step exactly like every other one.
       if (step === 1) {
         const busy = this._generating || this._saving;
         return `
@@ -1934,9 +1976,29 @@ components above.
       }
     }
 
-    async _cancelForm() {
-      // A routed entry (mode=edit, or mode=create&layout=scoring_grid) pops
-      // back to the prior view. In-view create / in-view edit return to browse.
+    /**
+     * Leave the editor — the wizard at any step, or an edit — and land back
+     * where the user came from.
+     *
+     * Two destinations, and `_arrivedByRoute` is the record of which one is
+     * right: a routed entry (the guide's Edit, or its "tap to build one") pops
+     * the router back to the screen that opened it; an in-view entry (the
+     * browse FAB, an expanded pool row's Edit) returns to Browse, which is
+     * where it came from and is still under it.
+     *
+     * EVERY exit goes through here — the footer's Cancel, the × in the chip
+     * row, backing off the front of step 0, and the device back gesture — so
+     * the four cannot mean four different things
+     * (.claude/rules/ui-object-design.md §3b). Before this, the device gesture
+     * and the footer disagreed: the gesture always went to Browse, so a viewer
+     * who opened the grid builder from a game's reference guide and pressed
+     * back twice landed on a chapter-browse screen they had never asked for,
+     * with the screen they came from another press away.
+     *
+     * Discards without confirming, which is what Cancel has always done — the
+     * × is the same action with a visible affordance, not a new one.
+     */
+    async _exitEditor() {
       if (this._arrivedByRoute) {
         this._resetFormState();
         this._teardownEditorChrome();
