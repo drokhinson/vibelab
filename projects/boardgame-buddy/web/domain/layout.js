@@ -106,6 +106,9 @@
 
   const BgbLayout = {
     BREAKPOINTS,
+    /** The media query that defines the `land` tier. Exported so a consumer
+     *  can watch the same string rather than keep a copy of it in step. */
+    LAND_QUERY,
 
     /** @returns {"phone"|"tablet"|"wide"|"land"} the tier currently laid out */
     current() {
