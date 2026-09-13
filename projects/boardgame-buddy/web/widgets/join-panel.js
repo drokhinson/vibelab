@@ -265,17 +265,7 @@
         const session = await window.PlaySession.fetchLobby(code);
         const me = window.store.get("user");
         if (me && session && session.host_user_id === me.id) {
-          const ps = window.PlaySession.load() || new window.PlaySession();
-          ps.code = session.code;
-          ps.sessionId = session.id;
-          ps.hostUserId = session.host_user_id;
-          ps.phase = session.phase || "gather";
-          if (session.game) {
-            ps.gameId = session.game.id;
-            ps.gameSnapshot = session.game;
-          }
-          ps.persist();
-          window.store.set("activePlay", ps);
+          window.PlaySession.adoptHostSession(session);
           window.router.go("play-flow");
         } else {
           window.router.go("session-viewer", { code });

@@ -134,15 +134,78 @@
       this._loading = true;
       this._error = null;
       this.render();
+      // The other half of the host-vs-viewer fork. play-flow sends everyone it
+      // cannot positively identify as the host here — including, since a
+      // failed lobby probe is no evidence at all, a host whose own probe
+      // blipped. This read is what settles it, so a host who landed on the
+      // mirror by accident does not sit there read-only watching a game they
+      // are supposed to be scoring.
+      //
+      // No loop: play-flow only sends someone here once it has FETCHED a
+      // session whose host is not them, and this only sends them back once it
+      // has fetched one whose host IS them. Both need a successful read, and
+      // the two conditions cannot both hold.
+      //
+      // Held rather than acted on inside the try, so a screen we are leaving
+      // is not painted (and its phase side effects not run) on the way out.
+      let handOff = null;
       try {
-        const session = await window.PlaySession.fetchLobby(this._code);
-        this._session = session;
+        const session = await this._readSession();
+        if (this._isMine(session)) handOff = session;
+        else this._session = session;
       } catch (e) {
         this._error = e.message || "Failed to load session";
       } finally {
-        this._loading = false;
-        this.render();
-        this._handlePhaseSideEffects(this._session);
+        if (!handOff) {
+          this._loading = false;
+          this.render();
+          this._handlePhaseSideEffects(this._session);
+        }
+      }
+      if (handOff) {
+        window.PlaySession.adoptHostSession(handOff);
+        window.router.go("play-flow");
+      }
+    }
+
+    /**
+     * Is this session one WE host? Only ever true on a session actually read
+     * back from the server — an unanswered fetch says nothing about who hosts
+     * what, and treating silence as "mine" is the bug this pair of checks
+     * exists to close.
+     *
+     * @param {Object|null} session
+     * @returns {boolean}
+     */
+    _isMine(session) {
+      const me = window.store.get("user");
+      return !!(me && session && session.host_user_id && session.host_user_id === me.id);
+    }
+
+    /**
+     * The session bundle, registering this account as a viewer on the way.
+     *
+     * POST /sessions/{code}/watch returns exactly what GET /sessions/{code}
+     * returns, so this is the same one round trip the screen always paid — it
+     * just also leaves a viewer row behind, which is what makes the live-score
+     * table and its Realtime channel readable (migration 027). Without it a
+     * spectator spends the whole game on the bundle's baked-in grid and a 4s
+     * poll, while a seated player next to them watches the same numbers land
+     * instantly.
+     *
+     * Falls back to the plain GET if the POST fails for any reason. Watching
+     * is an upgrade, never a gate: the web app and the API deploy separately,
+     * so a client that ships before the route does must still open the screen,
+     * and a viewer row that cannot be written is a slower grid, not a broken
+     * one — precisely the path this screen already handles.
+     *
+     * @returns {Promise<Object>} the session bundle
+     */
+    async _readSession() {
+      try {
+        return await window.PlaySession.watchLobby(this._code);
+      } catch (_) {
+        return await window.PlaySession.fetchLobby(this._code);
       }
     }
 
@@ -180,11 +243,12 @@
         // Gather keeps the full 2s cadence — roster joins/leaves are
         // poll-only.
         //
-        // Unless this spectator is on the seeded path: they joined after
-        // Gather, so RLS hides the scores table from them and Realtime is
-        // silent by construction. The poll IS their live scoring, and
-        // standing it down would leave the grid frozen. Every other tick
-        // (4s) — still half the Gather cadence.
+        // Unless this screen is on the seeded path: it never got a viewer row
+        // (migration 027 — an API older than this client, or a watch POST that
+        // failed), so RLS hides the scores table from it and Realtime is
+        // silent by construction. The poll IS its live scoring, and standing
+        // it down would leave the grid frozen. Every other tick (4s) — still
+        // half the Gather cadence.
         const seedOnly = this._liveScores && this._liveScores.isSeedOnly();
         this._pollTick++;
         if (seedOnly && phase === "play") {
@@ -206,6 +270,17 @@
       }
       try {
         const next = await window.PlaySession.fetchLobby(this._code);
+        // Same hand-off as _load. A first read that failed leaves this screen
+        // on its error state with the poll as its only way back, so the answer
+        // to "whose session is this?" has to be re-asked on whichever read
+        // actually lands — otherwise the host whose probe blipped watches
+        // their own game read-only until they navigate away by hand.
+        if (this._isMine(next)) {
+          this._stopPolling();
+          window.PlaySession.adoptHostSession(next);
+          window.router.go("play-flow");
+          return;
+        }
         const prev = this._session;
         const prevPhase = prev && prev.phase;
         const structural = this._structuralDiff(prev, next);
@@ -334,8 +409,8 @@
         isHost: false,
       });
       // Seed from the bundle we already hold before the channel's own read —
-      // for a late spectator (no participant row, table hidden by RLS) it is
-      // the only copy of the grid that will ever reach this screen.
+      // it paints instantly, and when the watch registration did not land
+      // (see _readSession) it is the only copy of the grid this screen gets.
       this._seedLiveScores(this._session);
       // Subscribe BEFORE start(). start() backfills the table and _emit()s
       // once when it's done; subscribing afterwards missed that emit, so a

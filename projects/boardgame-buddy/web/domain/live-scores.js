@@ -46,10 +46,13 @@
       // bundle (see seed()). Kept separately so refresh() can fall back to it
       // rather than overwrite it.
       this._seed = new Map();
-      // Has a direct table read ever returned rows? For a spectator who joined
-      // after Gather the answer is permanently no — they have no participant
-      // row, so bgb_session_scores_select filters everything out — and the
-      // seed is the only copy of the grid they will ever get.
+      // Has a direct table read ever returned rows? Everyone watching a
+      // session may read the table now — host, seated player or spectator
+      // alike (migration 027, on the viewer row POST /sessions/{code}/watch
+      // leaves behind) — so the answer is normally yes for anybody who got as
+      // far as this screen. It is still no when that registration did not
+      // happen (an API older than this client, a failed POST), and then the
+      // seed is the only copy of the grid this screen will get.
       this._tableReadable = false;
       // Host-only ordered writer. Owns every local edit that the table has not
       // yet been observed to agree with, keyed "<participant>|<round>".
@@ -138,7 +141,8 @@
         const rows = data || [];
         if (rows.length) this._tableReadable = true;
         // Zero rows is ambiguous: either nobody has scored yet, or RLS is
-        // filtering the whole table out from under a late spectator. Fall back
+        // filtering the whole table out from under a viewer whose watch
+        // registration never landed. Fall back
         // to the bundle's copy — which is empty too in the first case, so the
         // two are indistinguishable exactly when it doesn't matter.
         //
@@ -206,10 +210,16 @@
     }
 
     /**
-     * True while the only copy of the grid we hold came from a seed. That is
-     * the late-spectator case, and it means Realtime will never fire for this
-     * session either (the same policy gates both), so a caller polling on a
-     * "Realtime is the fast path" cadence should not stand down for us.
+     * True while the only copy of the grid we hold came from a seed — i.e. this
+     * client cannot read the scores table, so Realtime will never fire for it
+     * either (the same policy gates both) and a caller polling on a "Realtime
+     * is the fast path" cadence must not stand down for us.
+     *
+     * Since migration 027 this is the exception rather than the spectator's
+     * lot: watching a session earns the read, so the seeded path is what is
+     * left when the viewer row could not be written (an API older than this
+     * client, or a POST that failed). The degraded mode is worth keeping
+     * precisely because it is invisible to the person watching.
      */
     isSeedOnly() {
       return !this._tableReadable;
