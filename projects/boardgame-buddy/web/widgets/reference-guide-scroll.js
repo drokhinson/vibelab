@@ -735,6 +735,21 @@
       // State C: signed in, has chapters (or still loading). Toggleable.
       const open = this._scrollOpen;
       const rolledClass = open ? "" : "scroll-panel--rolled";
+      // A search field over one chapter is chrome with nothing to do: the
+      // chapter is already on screen, and the field costs a row of the peek —
+      // the strip that is ALL you see on the Play screen, where the scroll
+      // opens rolled up. Two is where narrowing starts to mean something.
+      //
+      // Counted on `visible`, so the adopted scoring grids drawn by their own
+      // section below do not let the field in on their own: a guide holding one
+      // rule and two grids has one thing to search.
+      const canSearch = visible.length >= 2;
+      // The field going away has to take any query with it, or the list stays
+      // silently filtered with nothing on screen to clear it — and the query
+      // would come back the moment a second chapter did. Reconciled here
+      // because every path that changes the guide (the fetch, a removal, a
+      // scope change) lands in a render, and this is the one place they meet.
+      if (!canSearch) this._search = "";
       const needle = (this._search || "").trim().toLowerCase();
       const filtered = needle
         ? visible.filter((c) =>
@@ -768,6 +783,7 @@
           <button class="scroll-panel__roll scroll-panel__roll--top"
                   aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
                   onclick="window.referenceGuideScroll._toggleScroll()"></button>
+          ${!open || canSearch ? `
           <div class="scroll-panel__peek">
             <!-- The peek is the strip that stays visible when the scroll is
                  rolled up — and rolled up is how the Play screen opens it, with
@@ -777,10 +793,16 @@
                  would be, and two copies of one offer on one screen is the
                  duplicate .claude/rules/ui-object-design.md §3b is about. Both
                  open the same sheet. State B (nothing in the scroll) renders no
-                 peek at all, so it carries its own copy of the host above. -->
+                 peek at all, so it carries its own copy of the host above.
+
+                 Open, with too few chapters to search, every one of the peek's
+                 three tenants is suppressed — so the strip itself goes rather
+                 than being left as a band of padding between the roll and the
+                 body. -->
             ${!open ? `<div class="scroll-panel__notice-host" data-notice-host>
               ${this._renderScoringCta()}
             </div>` : ""}
+            ${canSearch ? `
             <div class="scroll-panel__search-row" data-search-host>
               <i data-icon="search" class="w-4 h-4 scroll-panel__search-icon"></i>
               <input class="scroll-panel__search"
@@ -792,14 +814,14 @@
                      value="${escapeAttr(this._search)}"
                      oninput="window.referenceGuideScroll._onSearch(this.value)" />
               ${window.BgbSearchField.clearButton({ value: this._search })}
-            </div>
+            </div>` : ""}
             ${!open ? `
               <button class="scroll-panel__hint" type="button"
                       onclick="window.referenceGuideScroll._toggleScroll()">
                 <i data-icon="chevron-down" class="w-3.5 h-3.5"></i>
                 Tap to expand and see chapters
               </button>` : ""}
-          </div>
+          </div>` : ""}
           <div class="scroll-panel__body">
             ${bodyInner}
             <!-- Last, always: a scoring grid is the shape of the scorepad
