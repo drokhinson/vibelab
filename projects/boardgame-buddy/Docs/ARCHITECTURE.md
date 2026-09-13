@@ -775,7 +775,11 @@ projects/boardgame-buddy/web/
 │   │      replaced its only caller, and Settings could already link and sync)
 │   ├── import-plays-steps.js        → the notes importer's six step bodies
 │   ├── photo-import-steps.js        → the photo importer's three step bodies
-│   └── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal)
+│   ├── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal):
+│   │     the modal, the fetch, and the read-only card
+│   └── play-detail-edit.js          → the same popup's edit half — draft, form, write
+│         handlers, save/delete. Loads first; the shell wires it and folds its
+│         handler set into the one PlayDetailPopup namespace the markup names
 │
 ├── views/                  ← One file per screen / route
 │   ├── feed-view.js, log-play-view.js, play-flow-view.js, stats-view.js, …
