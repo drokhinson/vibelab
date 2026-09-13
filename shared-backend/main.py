@@ -11,6 +11,7 @@ from typing import Optional
 import truststore
 truststore.inject_into_ssl()  # use OS certificate store instead of certifi bundle
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -111,6 +112,32 @@ async def _handle_supabase_api_error(request: Request, exc: APIError) -> JSONRes
     return JSONResponse(
         status_code=500,
         content={"detail": "A server error occurred. Please try again in a moment."},
+    )
+
+
+# A round trip that never produced a response is a different animal: no APIError
+# is raised because PostgREST never answered. Supabase's edge recycles pooled
+# connections (h2 GOAWAY / a closed keep-alive socket) and the request riding
+# that connection dies with httpx.RemoteProtocolError — which, unhandled, is the
+# CORS-less 500 the comment above describes, on a database that is perfectly
+# healthy. db.py retries those at the transport; this is what the residue lands
+# on, and 503 + Retry-After says "transient" where 500 says "broken".
+@app.exception_handler(httpx.TransportError)
+async def _handle_upstream_transport_error(
+    request: Request, exc: httpx.TransportError
+) -> JSONResponse:
+    """Turn a Supabase round trip that never completed into a clean 503."""
+    _log.error(
+        "Supabase transport error on %s %s: %s: %s",
+        request.method,
+        request.url.path,
+        type(exc).__name__,
+        exc,
+    )
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "The database is briefly unreachable. Please try again."},
+        headers={"Retry-After": "1"},
     )
 
 
