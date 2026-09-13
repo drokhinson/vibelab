@@ -39,8 +39,6 @@
   class Buddy {
     constructor(raw) { Object.assign(this, raw || {}); }
 
-    static list() { return window.api.get("/buddies"); }
-
     static requests() { return window.api.get("/buddies/requests"); }
 
     static sendRequest(targetUserId) {
@@ -309,6 +307,24 @@
         },
         { freshTtl: FRESH_TTL_MS, staleTtl: STALE_TTL_MS },
       );
+    }
+
+    /**
+     * Synchronous stale-tolerant peek at the cached partner accounts, so a
+     * surface can paint its first frame instead of awaiting. peek(), not get():
+     * a buddy list a few hours old beats a spinner, and allBuddies() is what
+     * corrects it — the same trade Play.cachedList makes.
+     *
+     * Warm on first paint in practice: bootstrap seeds `buddy:all` from the
+     * boot payload's play_partners, and the alias/edge-id maps resolve off that
+     * very entry, so names on a first paint agree with names on the second.
+     *
+     * @returns {any[]} buddy EDGES (other_user_id / other_display_name), or []
+     */
+    static cachedAccounts() {
+      if (!window.bgbCache) return [];
+      const bundle = window.bgbCache.peek(CACHE_NS, ALL_KEY);
+      return (bundle && bundle.accounts) || [];
     }
 
     /**

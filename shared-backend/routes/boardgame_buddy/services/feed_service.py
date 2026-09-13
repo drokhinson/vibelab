@@ -76,6 +76,10 @@ def _play_card_from_rpc_row(row: dict[str, Any]) -> FeedPlayCard:
         players=[PlayPlayerResponse(**p) for p in (row.get("players") or [])],
         expansions=[PlayExpansionRef(**e) for e in (row.get("expansions") or [])],
         country_code=row.get("country_code"),
+        # Migration 031. Same unmigrated-RPC tolerance as everything above: an
+        # older function returns no such key, the default holds, and the detail
+        # popup repaints once to pick up the template exactly as it did before.
+        scoring_template=row.get("scoring_template"),
         # Migration 016. Same unmigrated-RPC tolerance as everything above: an
         # older function returns none of these keys, the defaults hold, and the
         # session footer simply does not render.
