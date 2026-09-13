@@ -314,6 +314,28 @@ the fresh card reads the press that *caused* the repaint as a tap outside and
 closes the overlay. `closest()` walks the detached node's own subtree and still
 answers correctly.
 
+**`closest()` is only enough while a repaint detaches the WHOLE card.** A
+surface that repaints *surgically* — boardgame-buddy's play-detail popup, via
+`ui/dom-patch.js` — detaches small subtrees instead, so a control that removes
+itself ("Track per-round scores", "Add a photo") leaves its own click target in
+an orphan fragment whose ancestor chain never reaches the card. `closest()`
+returns null and the overlay closes on its own button. Ask the **dispatch path**
+first:
+
+```js
+const path = typeof ev.composedPath === "function" ? ev.composedPath() : null;
+const inCard =
+  (path && path.some((n) => n && n.nodeType === 1 && n.matches
+                            && n.matches(cardSelector)))
+  || ev.target.closest(cardSelector);
+```
+
+`composedPath()` is fixed when the event is dispatched, before any handler ran,
+so no mutation a handler makes can rewrite it; `closest()` stays behind it as the
+fallback. This lives in `ui/modal-shell.js`, so every `BgbModal` consumer has it.
+A shell whose cards repaint in place and which keeps only the `closest()` test
+is the bug.
+
 Boardgame-buddy's wrap-up and achievement cards each float a display-face
 headline above the card, inside the backdrop — the biggest words on the screen,
 and the natural place to tap to get rid of it. `=== root` did nothing there.

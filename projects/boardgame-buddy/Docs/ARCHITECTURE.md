@@ -235,6 +235,43 @@ Every choice list in the app is a **bottom sheet**, not a `position: absolute` d
 
 A searchable sheet hands its field to the shell: `open({ search: { listSel, onQuery } })` binds the input, pins the list at its opening height and gives Escape first refusal to clearing the query, so the four picker sheets keep only their list patch. The centred-card sibling is `ui/modal-shell.js` (`window.BgbModal`) — same contract, plus `canDismiss` for a card mid-save — hosting the play-detail popup, the outbox, the expansion importer and the add-buddies card. `ui/polaroid-popup.js` stays its own family (wrap-up, confirm, alert, prompt, avatar customizer): it is a singleton with an in-place `update()` path.
 
+### 4.3d Repainting a card without rebuilding it
+
+`ui/dom-patch.js` (`window.BgbDomPatch.morph(host, html)`) walks a live subtree
+against freshly rendered markup and writes only what differs — changed text,
+changed attributes, added and removed nodes. Everything else keeps its identity,
+and with it the things a rebuild destroys: a photo `<img>`'s decoded bitmap, the
+card's entrance animation, a scroller's offset, `:active` under a finger
+mid-press, and the focus and caret of the field being typed into.
+
+The play-detail popup is its first consumer, because it is the surface where the
+cost was loudest: it paints from a feed seed and then repaints from a confirming
+fetch a second later, so a user watched the card they had just opened tear itself
+down and come back. `render()` keeps its byte-identity fast path in front of the
+morph — when the seed and the row agree there is nothing to do at all — and falls
+back to a plain `innerHTML` only on the first paint, where there is nothing to
+patch against.
+
+Two things about it are load-bearing beyond the diff itself:
+
+- **Icons are hydrated on the NEW tree before comparing.** `BgbIcons.render`
+  swaps `<i data-icon>` for an inline `<svg data-icon-name>`, so the live DOM
+  never holds the placeholder a template emits; without that pass every icon
+  reads as a tag mismatch and is rebuilt on every morph.
+- **`ui/modal-shell.js`'s outside-tap test had to change with it.** It used to
+  rely on a repaint detaching the *whole* card, so `closest()` on a detached
+  target still found it. A surgical repaint detaches small subtrees instead, so a
+  button that removes itself — "Track per-round scores", "Add a photo" — left its
+  own click target in an orphan fragment and the press that caused the repaint
+  read as a tap outside. The shell now asks `event.composedPath()` first, which
+  is fixed at dispatch and cannot be rewritten by a handler. See
+  `.claude/rules/overlays.md` §8a.
+
+Matching is positional, except in a container whose element children all carry
+`data-morph-key` — the play-detail card's optional sections do, so one appearing
+or disappearing cannot slide its siblings by one and pair the photo `<img>`
+against a `<section>`.
+
 Eight consumers today (this table had drifted at four — grep `BgbBottomSheet`
 rather than trusting a count):
 
@@ -744,6 +781,8 @@ projects/boardgame-buddy/web/
 │   ├── bgg-import-toast.js  → the "it landed" notification a finished catalog import
 │   │     pops wherever the user is, carrying the add-to-a-shelf step with it
 │   ├── icons.js             → BgbIcons — the vendored Phosphor set + render pass
+│   ├── dom-patch.js         → BgbDomPatch.morph — repaint a subtree by writing only
+│   │     the nodes that differ, instead of replacing its innerHTML (§4.3d)
 │   ├── viewport-lock.js     → publishes the visible viewport as CSS properties
 │   ├── zoom-lock.js         → holds the page at 1x on iOS Safari
 │   ├── dropdown-fit.js      → the residual fit pass, for a finder mounted as a dropdown

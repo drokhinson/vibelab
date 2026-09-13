@@ -129,6 +129,22 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
                 round_scores=row.get("round_scores"),
             )
         )
+    # Sorted to match what the feed RPC already promises
+    # (bgb_feed_page: is_winner DESC, score DESC NULLS LAST). PostgREST gives
+    # no order at all, so the same play served here and via the feed came back
+    # with its roster in two different orders — and the client paints one from
+    # the feed projection and then repaints from this row, so the whole card
+    # rebuilt for a difference nobody had made. Sorted in Python rather than as
+    # an .order() on the query: no extra round trip, and no dependence on how a
+    # given PostgREST version orders an embedded resource.
+    for rows_for_play in players_by_play.values():
+        rows_for_play.sort(
+            key=lambda pl: (
+                not pl.is_winner,
+                -pl.score if pl.score is not None else float("inf"),
+                pl.name or "",
+            )
+        )
     return players_by_play
 
 
@@ -157,6 +173,10 @@ def _fetch_play_expansions(
                 color=game.get("expansion_color"),
             )
         )
+    # Name order, matching the feed RPC's `ORDER BY eg.name`, for the same
+    # reason the roster above is sorted.
+    for refs in out.values():
+        refs.sort(key=lambda e: e.name or "")
     return out
 
 

@@ -463,13 +463,10 @@
     // keeps the game-tab layout intact.
     const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
 
-    // Rank by score descending; players without a score keep their order
-    // after the scored rows.
-    const ranked = players.slice().sort((a, b) => {
-      const sa = a.score == null ? -Infinity : Number(a.score);
-      const sb = b.score == null ? -Infinity : Number(b.score);
-      return sb - sa;
-    });
+    // Rank by score descending, through the shared helper. This used to be its
+    // own copy of the sort, which made the card back and the detail popup — the
+    // same roster, drawn twice — disagree about the order of tied players.
+    const ranked = window.Play.rankPlayers(players);
 
     const notesBlock = p.notes
       ? `<p class="play-card__back-notes">${escapeHtml(p.notes)}</p>`

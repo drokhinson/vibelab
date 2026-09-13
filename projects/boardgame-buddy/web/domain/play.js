@@ -111,6 +111,49 @@
 
     static get(id) { return window.api.get(`/plays/${id}`); }
 
+    /**
+     * A roster in a deterministic TOTAL order, for painting a scoreboard.
+     *
+     * The three payloads a play can arrive in disagree about row order, and two
+     * of them have no order at all: the feed RPC sorts
+     * (is_winner DESC, score DESC NULLS LAST, migration 031), while
+     * `bgb_plays_page` and the REST `_fetch_players` both hand back whatever
+     * Postgres felt like. A sort keyed only on `score` is *stable*, so it
+     * preserves whichever arrival order it was given — which means the same
+     * play painted from a seed and then from the confirming fetch renders its
+     * players in two different orders, and the surface repaints for no reason.
+     * Every co-op play (all scores null) and every tie hits this.
+     *
+     * `score` stays the primary key, so nothing about today's ranking moves;
+     * the rest of the chain exists only to break ties the same way twice.
+     *
+     * Presentation only. It does NOT normalise the stored row: an edit draft,
+     * a save payload and the live play screen each have their own legitimate
+     * order, and re-sorting under a user who is typing would move rows out from
+     * under their finger.
+     *
+     * @param {any[]} players
+     * @returns {any[]} a sorted copy
+     */
+    static rankPlayers(players) {
+      return (players || []).slice().sort((a, b) => {
+        const sa = a.score == null ? -Infinity : a.score;
+        const sb = b.score == null ? -Infinity : b.score;
+        // Not `sb - sa`: two unscored players are both -Infinity and the
+        // subtraction is NaN, which leaves the comparator lying about equality.
+        if (sa !== sb) return sa < sb ? 1 : -1;
+        const wa = a.is_winner ? 1 : 0;
+        const wb = b.is_winner ? 1 : 0;
+        if (wa !== wb) return wb - wa;
+        const byName = String(a.name || "").localeCompare(String(b.name || ""));
+        if (byName) return byName;
+        // Ghosts carry no user_id and sort together under "". Two ghosts with
+        // the same name and score are genuinely indistinguishable here; they
+        // render identically too, so the ambiguity costs nothing.
+        return String(a.user_id || "").localeCompare(String(b.user_id || ""));
+      });
+    }
+
     // ── Seeds from the feed (migration 015) ────────────────────────────────
     //
     // The feed card now carries the whole play — the full roster with scores
