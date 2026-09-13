@@ -1639,6 +1639,42 @@ components above.
         `#tmpl-row-label-${this._formRows.length - 1}`
       );
       if (el) el.focus();
+      // Focus alone only guarantees the row is *somewhere* on screen — and on
+      // a long grid "somewhere" is the last inch above the footer, with the
+      // row's own colour picker still half below the fold. Park it at the top
+      // of the scroller instead, so the row just added is the row in hand.
+      this._tmplScrollRowToTop(this._formRows.length - 1);
+    }
+
+    /**
+     * Pull one row up to the top of the editor's scroller.
+     *
+     * Manual arithmetic rather than scrollIntoView({block:"start"}), for the
+     * same reason _scrollStripToCursor uses it in photo-import-view: the row
+     * sits inside the fixed .chapter-edit-locked shell, and scrollIntoView
+     * walks every scrollable ancestor on its way out.
+     *
+     * Runs after the focus() above so it wins over the container's focusin
+     * handler, which nudges whatever took focus into view with
+     * `block: "nearest"` — a no-op once the row is already sitting at the top.
+     *
+     * @param {number} i
+     */
+    _tmplScrollRowToTop(i) {
+      const scroller = this.container.querySelector(".chapter-edit__scroll");
+      const row = this.container.querySelector(`.tmpl-row[data-row="${i}"]`);
+      if (!scroller || !row) return;
+      // A sliver of the row above stays visible, so the top of the list reads
+      // as scrolled-past rather than as the first row.
+      const BREATH = 8;
+      const top = row.getBoundingClientRect().top
+        - scroller.getBoundingClientRect().top
+        + scroller.scrollTop
+        - BREATH;
+      // The last row can't always reach the top — the add button and the
+      // preview are all there is below it — and scrollTo clamps, which lands
+      // it as high as the content allows.
+      scroller.scrollTo({ top: Math.max(0, top), behavior: "auto" });
     }
 
     _tmplRemoveRow(i) {
