@@ -202,7 +202,7 @@
         const from = t.source_game_name
           ? ` · ${t.source_game_name}`
           : "";
-        const who = this._authorLabel(t);
+        const who = window.ScoringTemplateEditor.authorLabel(t);
         return `
           <button type="button" role="option" aria-selected="${on ? "true" : "false"}"
                   class="tmpl-sheet__row ${on ? "tmpl-sheet__row--on" : ""}"
@@ -233,17 +233,6 @@
           <button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>
         </div>
       `;
-    }
-
-    /**
-     * Who wrote this grid — the one thing that actually tells two of them
-     * apart, since every grid for one game carries the same derived title.
-     * @param {TemplateChapter} t
-     */
-    _authorLabel(t) {
-      const me = window.store && window.store.get && window.store.get("user");
-      if (me && t.created_by && me.id === t.created_by) return "Your grid";
-      return t.created_by_name ? `${t.created_by_name}'s grid` : "Community grid";
     }
 
     /**
@@ -284,7 +273,7 @@
         return `
           <div class="tmpl-offer__card">
             <div class="tmpl-offer__head">
-              <span class="tmpl-offer__who">${escapeHtml(this._authorLabel(t))}</span>
+              <span class="tmpl-offer__who">${escapeHtml(window.ScoringTemplateEditor.authorLabel(t))}</span>
               ${popChip}
             </div>
             <span class="tmpl-offer__meta">${rows.length} row${rows.length === 1 ? "" : "s"}${from}</span>

@@ -420,6 +420,13 @@ async def get_game_detail_bundle(
     Backed by the `bgb_game_detail_bundle` RPC; mirrors what the FE used to
     fetch via /games/{id}, /collection (for viewer status), /plays?game_id,
     and /games/{id}/expansions.
+
+    Also carries `viewer_stats` (migration 030): the viewer's own record with
+    this one game — plays, wins, decided_plays, scored_plays,
+    avg_winning_score, your_avg_score, your_best_score, first and last played —
+    or None when they have never played it. Same row bgb_user_stats_detail's
+    games[] carries, computed here because that payload is the whole play
+    history and far too big a read to hang off opening a game.
     """
     sb = get_supabase()
     result = await asyncio.to_thread(

@@ -276,10 +276,28 @@
     });
   }
 
+  /**
+   * Whose grid this is — the one thing that tells two grids for one game apart,
+   * since the title is derived from the game and is therefore identical on both
+   * (see the NO TITLE FIELD note above). Lives here rather than in either
+   * caller because the offer sheet and the reference-guide scroll both label
+   * the same grids and must not label them differently
+   * (.claude/rules/ui-object-design.md §2).
+   *
+   * @param {{created_by?: string, created_by_name?: string}} t
+   * @returns {string} plain text — callers escape it.
+   */
+  function authorLabel(t) {
+    const me = window.store && window.store.get && window.store.get("user");
+    if (me && t.created_by && me.id === t.created_by) return "Your grid";
+    return t.created_by_name ? `${t.created_by_name}'s grid` : "Community grid";
+  }
+
   window.ScoringTemplateEditor = {
     render,
     renderRowList,
     preview,
+    authorLabel,
     blankRow,
     ROW_COLORS,
     MAX_ROWS,

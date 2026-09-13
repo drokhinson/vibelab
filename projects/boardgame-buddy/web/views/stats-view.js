@@ -40,9 +40,9 @@
   const MEDALS = ["", "stats-plinth--1", "stats-plinth--2", "stats-plinth--3"];
   const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const PLAYER_LABEL = { 1: "Solo", 2: "2 players", 3: "3 players", 4: "4 players", 5: "5+" };
-  // 2πr for the two dials below, so the dasharray never drifts from the r in
-  // the markup.
-  const RING_R = 44;
+  // 2πr for the shelf dial below, so the dasharray never drifts from the r in
+  // the markup. The By-game dial's own radius moved out with it, into
+  // ui/game-stats-panel.js.
   const SHELF_R = 24;
   // Stable host for the By-game card, so picking a game can swap just that
   // section instead of the whole screen.
@@ -290,95 +290,11 @@
       `;
     }
 
+    // The panel itself is ui/game-stats-panel.js — Game Detail draws the same
+    // row for one game from its own bundle, and two copies of this markup would
+    // be two win rates to keep agreeing (.claude/rules/ui-object-design.md §2).
     _renderGamePanel(g) {
-      // Wins are read against the plays that recorded a RESULT, never against
-      // every play: a play nobody won and nobody scored said nothing about how
-      // it went, and counting it here reports a loss that never happened. The
-      // fallback keeps a cached pre-018 payload rendering the old way rather
-      // than dividing by undefined.
-      const decided = g.decided_plays != null ? g.decided_plays : g.plays;
-      const pct = decided ? Math.round((g.wins / decided) * 100) : 0;
-      const undecided = Math.max(0, (g.plays || 0) - decided);
-      const circ = 2 * Math.PI * RING_R;
-      const offset = circ * (1 - pct / 100);
-      const isCoop = g.play_mode === "coop";
-      // A co-op game has no per-player score to average, and a competitive one
-      // may simply never have had scores typed in. Both land on the same
-      // dashes; the footnote is what tells them apart.
-      const noScores = g.avg_winning_score == null;
-      const scoreCell = (v) => (noScores
-        ? `<span class="stats-fact__v stats-fact__v--none">no scores</span>`
-        : `<span class="stats-fact__v">${v}</span>`);
-
-      return `
-        <div class="stats-ratio">
-          <div class="stats-ring">
-            <svg width="104" height="104" viewBox="0 0 104 104" aria-hidden="true">
-              <circle class="stats-ring__track" cx="52" cy="52" r="${RING_R}" fill="none" stroke-width="11" />
-              <circle class="stats-ring__arc" cx="52" cy="52" r="${RING_R}" fill="none" stroke-width="11"
-                      stroke-linecap="round" stroke-dasharray="${circ.toFixed(1)}"
-                      stroke-dashoffset="${offset.toFixed(1)}" />
-            </svg>
-            <div class="stats-ring__mid">
-              <div>
-                <div class="stats-ring__pct">${decided ? `${pct}%` : "&mdash;"}</div>
-                <div class="stats-ring__lab">${isCoop ? "Table wins" : "Win rate"}</div>
-              </div>
-            </div>
-          </div>
-          <div class="stats-facts">
-            <div class="stats-fact"><span class="stats-fact__k">Plays</span><span class="stats-fact__v">${g.plays}</span></div>
-            <div class="stats-fact"><span class="stats-fact__k">Wins</span><span class="stats-fact__v stats-fact__v--gold">${g.wins}</span></div>
-            <div class="stats-fact"><span class="stats-fact__k">Avg winning score</span>${scoreCell(g.avg_winning_score)}</div>
-            <div class="stats-fact"><span class="stats-fact__k">Your average</span>${scoreCell(g.your_avg_score)}</div>
-            <div class="stats-fact"><span class="stats-fact__k">Your best</span>${scoreCell(g.your_best_score)}</div>
-          </div>
-        </div>
-
-        ${decided ? `
-          <div class="stats-split">
-            <i class="stats-split__win" style="width:${pct}%"></i>
-            <i class="stats-split__loss" style="width:${100 - pct}%"></i>
-          </div>
-          <div class="stats-legend">
-            <span>${isCoop ? "Beat the game" : "Won"} <b>${g.wins}</b></span>
-            <span>${isCoop ? "Lost to it" : "Lost"} <b>${decided - g.wins}</b></span>
-          </div>
-        ` : ""}
-
-        <p class="stats-foot">${this._panelFootnote(g, isCoop, noScores, decided, undecided)}</p>
-      `;
-    }
-
-    _panelFootnote(g, isCoop, noScores, decided, undecided) {
-      const last = g.last_played_at ? ` Last played ${formatDate(g.last_played_at)}.` : "";
-      // The Plays fact counts every play; the ring counts only the ones the
-      // viewer sat in AND that recorded a result (migration 020's `decided`).
-      // Both halves of the gap have to be named, or the sentence libels a play
-      // that has a winner and simply wasn't one of theirs.
-      const blanks = undecided
-        ? ` ${undecided} of ${g.plays} ${g.plays === 1 ? "play" : "plays"} ${undecided === 1 ? "is" : "are"} left out of the win rate — no result recorded, or logged without you at the table.`
-        : "";
-      if (!decided) {
-        return escapeHtml(
-          (g.plays === 1
-            ? "This play recorded no winner and no score, so there's no win rate to show yet."
-            : `None of these ${g.plays} plays recorded a winner or a score, so there's no win rate to show yet.`)
-          + last,
-        );
-      }
-      if (isCoop) {
-        return escapeHtml(
-          `Co-operative game — a win here is the whole table beating the game, and no per-player score is kept.${blanks}${last}`,
-        );
-      }
-      if (noScores) {
-        return escapeHtml(`No scores were logged on any of these plays, so there's no average to show.${blanks}${last}`);
-      }
-      return escapeHtml(
-        `Winning score averaged across the ${g.scored_plays} of ${g.plays} ` +
-        `${g.plays === 1 ? "play" : "plays"} that recorded scores.${blanks}${last}`,
-      );
+      return window.renderGameStatsPanel(g);
     }
 
     // ── Extra cards ───────────────────────────────────────────────────────────

@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 024_collection_page.sql (adds bgb_collection_page — the
+-- Last updated: 030_game_viewer_stats.sql (re-emits bgb_game_detail_bundle with
+--               a `viewer_stats` block, so the game's own page can draw the
+--               viewer's record with it without pulling the Stats spoke's
+--               whole-history payload.)
+--               Before that: 024_collection_page.sql (adds bgb_collection_page — the
 --               collection grid now filters, sorts, counts and pages in
 --               Postgres instead of reading the whole shelf and doing all four
 --               in Python. Fixes a correctness bug as well as the cost: the
@@ -373,7 +377,17 @@
 --   → JSONB
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/021_profile_and_game_detail_bundles.sql)
---   Last updated in: db/migrations/boardgamebuddy/023_game_detail_bundle_viewer_status_played.sql
+--   Last updated in: db/migrations/boardgamebuddy/030_game_viewer_stats.sql
+--               (adds `viewer_stats` — the viewer's own record with this one
+--                game: plays, wins, decided_plays, scored_plays,
+--                avg_winning_score, your_avg_score, your_best_score, first and
+--                last played. NULL when they have never played it. Same row
+--                bgb_user_stats_detail's games[] carries, under 020's
+--                semantics, because both feed the same component
+--                (web/ui/game-stats-panel.js); computed here so Game Detail
+--                does not have to pull an eleven-block whole-history payload
+--                to draw one ring.)
+--               Before that: db/migrations/boardgamebuddy/023_game_detail_bundle_viewer_status_played.sql
 --               (viewer_status now falls through to 'played' when the viewer
 --               has any visible play of the game with no collection row —
 --               same fix Profile bundle's status_map got in migration 022)
@@ -387,8 +401,9 @@
 --   Purpose:    Single round-trip Game Detail payload: game row + base game
 --               (when expansion) + viewer's collection status + last N
 --               plays visible to viewer + expansions list with viewer's
---               toggle state. Reads denormalized plays.game_* fields (020)
---               so most rows don't join boardgamebuddy_games.
+--               toggle state + the viewer's own record with the game. Reads
+--               denormalized plays.game_* fields (020) so most rows don't join
+--               boardgamebuddy_games.
 
 -- bgb_profile_bundle(viewer UUID, target UUID, col_per_page INT DEFAULT 12,
 --                    plays_per_page INT DEFAULT 10)

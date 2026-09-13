@@ -3483,6 +3483,11 @@
           gameImage,
           onAfterMutate: () => this.render(),
           defaultOpen: true,
+          // The scorepad IS the grid on this screen, a card or two up, with its
+          // own template bar. The guide still OFFERS a grid nobody has adopted
+          // — that one is on nobody's screen yet — it just doesn't redraw the
+          // table the host is already filling in.
+          showScoringGrids: false,
         });
         this._guideWidget.mount(host);
       } else {
