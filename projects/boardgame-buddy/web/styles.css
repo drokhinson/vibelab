@@ -5480,15 +5480,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--accent-ink);
 }
 .session-viewer__guide-mount { margin-top: 0.25rem; }
-/* Sits under the "Scoring" label on the spectator's mirror. The grid there is
-   deliberately chrome-free, so this one line is what says the missing inputs
-   are the design rather than something that failed to load. */
-.session-viewer__scoring-hint {
-  margin: -0.15rem 0 0.4rem;
-  font-size: 0.72rem;
-  color: var(--polaroid-muted);
-}
-
 /* Edit mode */
 .play-detail--edit .play-detail__game-info { gap: 0.35rem; }
 
