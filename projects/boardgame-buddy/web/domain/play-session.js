@@ -287,6 +287,23 @@
       return window.api.get(`/sessions/${code}`);
     }
 
+    /**
+     * Register this account as a viewer of `code`, and get the bundle back.
+     *
+     * Not a join: it never touches the roster, so watching cannot turn into a
+     * column on the host's grid or a player on the saved play. What it buys is
+     * the grid itself — the live-score table and its Realtime channel are
+     * RLS-gated on being the host, seated, OR watching (migration 027), and
+     * without a viewer row a spectator reads an empty table and lives on the
+     * bundle's baked-in copy plus a faster poll for the whole game.
+     *
+     * @param {string} code
+     * @returns {Promise<Object>} the same session bundle fetchLobby returns
+     */
+    static watchLobby(code) {
+      return window.api.post(`/sessions/${code}/watch`, {});
+    }
+
     // Host-only. Pass `gameId: null` to clear the pick.
     static updateLobby(code, { gameId } = {}) {
       return window.api.patch(`/sessions/${code}`, { game_id: gameId || null });

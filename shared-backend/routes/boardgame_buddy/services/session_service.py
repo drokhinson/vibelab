@@ -1,6 +1,7 @@
 """Short-code play-session service.
 
-Owns boardgamebuddy_play_sessions + participants. The host's phone calls
+Owns boardgamebuddy_play_sessions, its participants (who is PLAYING) and
+its viewers (who is WATCHING — migration 027). The host's phone calls
 create_session(); other phones call join_session(code, ...). When the host
 hits Save, finalize_session() writes the canonical boardgamebuddy_plays row
 and marks the session 'finalized'.
@@ -94,6 +95,9 @@ def join_session(
     the participants table: the caller is a spectator with the same
     read-only session-viewer view as joiners-during-gather, just absent
     from the host's player list. All of that lives in bgb_join_session.
+
+    Seeing the live grid is not what a seat buys, though — watch_session()
+    below is what grants that, to spectators and seated players alike.
     """
     data = (
         sb.rpc("bgb_join_session", {
@@ -102,6 +106,33 @@ def join_session(
             "p_user_display_name": user_display_name,
             "p_guest_display_name": guest_display_name,
         })
+        .execute()
+        .data
+    )
+    return _bundle_to_response(data)
+
+
+def watch_session(sb: Client, code: str, *, viewer_id: str) -> SessionResponse:
+    """Record that this account is watching, and hand back the lobby bundle.
+
+    The read side of a live session used to ask "are you SEATED?" — which made
+    a spectator (anyone who opened the session after Gather, so
+    bgb_join_session never gave them a participant row) a second-class viewer:
+    RLS hid the scores table and its Realtime channel from them, and their grid
+    came from the bundle's baked-in copy plus a faster poll. Watching is now its
+    own fact, recorded in its own table, and the grid reads the same for
+    everyone in the room. Only the host can write it — bgb_session_scores_write
+    is unchanged.
+
+    Deliberately NOT a join: seating someone would put them in the roster, which
+    is what the scoring columns and the finalized play's player rows are built
+    from. This says "is looking at it", nothing more.
+
+    Same envelope as GET /sessions/{code}, so the viewer screen gets its data
+    from this call rather than paying for a second one.
+    """
+    data = (
+        sb.rpc("bgb_watch_session", {"p_code": code, "p_viewer": viewer_id})
         .execute()
         .data
     )

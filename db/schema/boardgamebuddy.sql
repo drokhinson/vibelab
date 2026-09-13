@@ -632,6 +632,25 @@ GRANT SELECT ON public.boardgamebuddy_play_session_scores TO boardgamebuddy_role
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.boardgamebuddy_play_session_scores TO authenticated;
 
 
+-- ── Who is watching a session ─────────────────────────────────────────────────
+-- Not the roster — that is boardgamebuddy_play_session_participants, which the
+-- scoring columns and the finalized play's player rows are built from. This is
+-- "has this account opened this session", written by bgb_watch_session and read
+-- only by the two SELECT policies at the end of this file. It is what lets a
+-- spectator see the same live grid a seated player sees (migration 027);
+-- editing stays host-only.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_viewers (
+  session_id UUID NOT NULL,
+  user_id UUID NOT NULL,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT boardgamebuddy_play_session_viewers_pkey PRIMARY KEY (session_id, user_id),
+  CONSTRAINT boardgamebuddy_play_session_viewers_session_id_fkey FOREIGN KEY (session_id) REFERENCES boardgamebuddy_play_sessions(id) ON DELETE CASCADE
+);
+ALTER TABLE public.boardgamebuddy_play_session_viewers ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_play_session_viewers TO boardgamebuddy_role;
+GRANT SELECT ON public.boardgamebuddy_play_session_viewers TO authenticated;
+
+
 -- ── Unlocked achievements ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_achievements (
   user_id UUID NOT NULL,
@@ -734,7 +753,23 @@ COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS 'First time
 -- once per statement. Same value, same rows — Supabase's auth_rls_initplan
 -- lint is about the plan, not the result.
 
--- You can see a session you host or are a participant in.
+-- A signed-in user reads their own seat and their own watch rows. Both exist
+-- only to make the EXISTS clauses below reachable: a policy subquery is
+-- privilege-checked AND row-filtered as the querying user, so without these the
+-- branches that reference these tables match nobody (migrations 026, 027).
+CREATE POLICY bgb_play_session_participants_select_self
+  ON public.boardgamebuddy_play_session_participants
+  FOR SELECT TO authenticated USING (
+    user_id = (select auth.uid())
+  );
+
+CREATE POLICY bgb_play_session_viewers_select_self
+  ON public.boardgamebuddy_play_session_viewers
+  FOR SELECT TO authenticated USING (
+    user_id = (select auth.uid())
+  );
+
+-- You can see a session you host, are seated in, or are watching.
 CREATE POLICY bgb_play_sessions_select ON public.boardgamebuddy_play_sessions
   FOR SELECT TO authenticated USING (
     host_user_id = (select auth.uid())
@@ -743,9 +778,14 @@ CREATE POLICY bgb_play_sessions_select ON public.boardgamebuddy_play_sessions
       WHERE p.session_id = boardgamebuddy_play_sessions.id
         AND p.user_id = (select auth.uid())
     )
+    OR EXISTS (
+      SELECT 1 FROM public.boardgamebuddy_play_session_viewers v
+      WHERE v.session_id = boardgamebuddy_play_sessions.id
+        AND v.user_id = (select auth.uid())
+    )
   );
 
--- Everyone at the table reads live scores…
+-- Everyone watching reads live scores — host, seated player or spectator…
 CREATE POLICY bgb_session_scores_select ON public.boardgamebuddy_play_session_scores
   FOR SELECT TO authenticated USING (
     EXISTS (
@@ -756,6 +796,10 @@ CREATE POLICY bgb_session_scores_select ON public.boardgamebuddy_play_session_sc
           OR EXISTS (
             SELECT 1 FROM public.boardgamebuddy_play_session_participants p
             WHERE p.session_id = s.id AND p.user_id = (select auth.uid())
+          )
+          OR EXISTS (
+            SELECT 1 FROM public.boardgamebuddy_play_session_viewers v
+            WHERE v.session_id = s.id AND v.user_id = (select auth.uid())
           )
         )
     )

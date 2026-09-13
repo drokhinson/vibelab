@@ -135,14 +135,40 @@
       this._error = null;
       this.render();
       try {
-        const session = await window.PlaySession.fetchLobby(this._code);
-        this._session = session;
+        this._session = await this._readSession();
       } catch (e) {
         this._error = e.message || "Failed to load session";
       } finally {
         this._loading = false;
         this.render();
         this._handlePhaseSideEffects(this._session);
+      }
+    }
+
+    /**
+     * The session bundle, registering this account as a viewer on the way.
+     *
+     * POST /sessions/{code}/watch returns exactly what GET /sessions/{code}
+     * returns, so this is the same one round trip the screen always paid — it
+     * just also leaves a viewer row behind, which is what makes the live-score
+     * table and its Realtime channel readable (migration 027). Without it a
+     * spectator spends the whole game on the bundle's baked-in grid and a 4s
+     * poll, while a seated player next to them watches the same numbers land
+     * instantly.
+     *
+     * Falls back to the plain GET if the POST fails for any reason. Watching
+     * is an upgrade, never a gate: the web app and the API deploy separately,
+     * so a client that ships before the route does must still open the screen,
+     * and a viewer row that cannot be written is a slower grid, not a broken
+     * one — precisely the path this screen already handles.
+     *
+     * @returns {Promise<Object>} the session bundle
+     */
+    async _readSession() {
+      try {
+        return await window.PlaySession.watchLobby(this._code);
+      } catch (_) {
+        return await window.PlaySession.fetchLobby(this._code);
       }
     }
 
@@ -180,11 +206,12 @@
         // Gather keeps the full 2s cadence — roster joins/leaves are
         // poll-only.
         //
-        // Unless this spectator is on the seeded path: they joined after
-        // Gather, so RLS hides the scores table from them and Realtime is
-        // silent by construction. The poll IS their live scoring, and
-        // standing it down would leave the grid frozen. Every other tick
-        // (4s) — still half the Gather cadence.
+        // Unless this screen is on the seeded path: it never got a viewer row
+        // (migration 027 — an API older than this client, or a watch POST that
+        // failed), so RLS hides the scores table from it and Realtime is
+        // silent by construction. The poll IS its live scoring, and standing
+        // it down would leave the grid frozen. Every other tick (4s) — still
+        // half the Gather cadence.
         const seedOnly = this._liveScores && this._liveScores.isSeedOnly();
         this._pollTick++;
         if (seedOnly && phase === "play") {
@@ -334,8 +361,8 @@
         isHost: false,
       });
       // Seed from the bundle we already hold before the channel's own read —
-      // for a late spectator (no participant row, table hidden by RLS) it is
-      // the only copy of the grid that will ever reach this screen.
+      // it paints instantly, and when the watch registration did not land
+      // (see _readSession) it is the only copy of the grid this screen gets.
       this._seedLiveScores(this._session);
       // Subscribe BEFORE start(). start() backfills the table and _emit()s
       // once when it's done; subscribing afterwards missed that emit, so a

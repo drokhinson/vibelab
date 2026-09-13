@@ -581,6 +581,20 @@
 --               (spectator). Same semantics the Python service had, minus
 --               the 3-4 extra round trips.
 
+-- bgb_watch_session(p_code TEXT, p_viewer UUID)
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired"}
+--   Defined in: db/migrations/boardgamebuddy/027_session_viewers.sql
+--   Called by:  shared-backend/routes/boardgame_buddy/services/session_service.py
+--               (watch_session — POST /sessions/{code}/watch)
+--   Purpose:    Record that an account is WATCHING a session — one row in
+--               boardgamebuddy_play_session_viewers, idempotent — and return
+--               the same bundle bgb_get_session returns, so the viewer screen
+--               pays one round trip rather than two. The row is what the
+--               sessions/scores SELECT policies read, so a spectator sees the
+--               same live grid a seated player does. Deliberately not a join:
+--               it never touches the roster, which the scoring columns and the
+--               finalized play's players are built from.
+
 -- bgb_game_summary(p_game_id UUID)
 --   → JSONB shaped like models.GameSummary (bgg_url / expansion_count are
 --     computed/defaulted Pydantic-side), or NULL for NULL/unknown ids

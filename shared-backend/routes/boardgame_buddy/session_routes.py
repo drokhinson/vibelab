@@ -122,6 +122,30 @@ async def join_session(
 
 
 @router.post(
+    "/sessions/{code}/watch",
+    response_model=SessionResponse,
+    status_code=200,
+    summary="Register as a viewer of a play session",
+)
+async def watch_session(
+    code: str = Path(..., description="Session code"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionResponse:
+    """Idempotent: say this account is watching, and get the lobby bundle back.
+
+    Not a join — it never touches the roster, so a spectator does not become a
+    scoring column or a player on the saved play. What it buys them is the
+    grid: the live-score table and its Realtime channel are RLS-gated on being
+    host, seated OR watching (migration 027), so without this row a spectator
+    reads an empty table and their screen falls back to the bundle's baked-in
+    copy plus a faster poll. Editing stays host-only either way.
+    """
+    return await asyncio.to_thread(
+        session_service.watch_session, get_supabase(), code, viewer_id=user.user_id
+    )
+
+
+@router.post(
     "/sessions/{code}/participants",
     response_model=SessionResponse,
     status_code=200,
