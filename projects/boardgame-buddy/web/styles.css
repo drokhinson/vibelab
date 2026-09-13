@@ -413,6 +413,7 @@
 :is(.set-card,
      .profile-stat-card,
      .statsblock,
+     .game-detail__statspanel,
      .preview-card,
      .bgb-spoke-screen,
      .game-picker-sheet,
@@ -464,6 +465,7 @@
 :root[data-bgb="dark"] :is(.set-card,
      .profile-stat-card,
      .statsblock,
+     .game-detail__statspanel,
      .preview-card,
      .bgb-spoke-screen,
      .game-picker-sheet,
@@ -840,6 +842,13 @@ body {
 /* 44x44 without inflating a 14px glyph inside a 44px row. */
 .scroll-panel__notice-x::before { content: ""; position: absolute; inset: -12px; }
 .scroll-panel__notice-x:active { color: #5C3F14; }
+/* "Nobody has written one yet — build it" wears the same coat as the offer above
+   it: the two are the same call to action for the same thing and are never on
+   screen together (one falls back to the other), so a second treatment would be
+   two looks for one affordance. It carries no dismiss X — there is nothing to
+   dismiss — so it pays back the room that X was holding on the right. */
+.scroll-panel__notice--create { padding-right: 10px; }
+
 /* Inside the empty state the notice is the only thing between the copy and the
    Add button, so it gets air on both sides rather than just below. */
 .scroll-panel__empty .scroll-panel__notice { margin: 0.6rem 0; }
@@ -851,6 +860,15 @@ body {
 .scroll-section:first-child {
   margin-top: 0.25rem;
 }
+/* The Scoring section is always last and always alone in its own host div, so
+   the :first-child rule above would give it the tighter top margin meant for
+   the section that opens the scroll. Later in the file at equal specificity,
+   which is what puts it back on the normal rhythm. */
+.scroll-section--scoring { margin-top: 0.6rem; }
+/* The offer sits under the grids the viewer already has, or alone when they
+   have none; either way it needs air above it and none below — the Add a
+   chapter button brings its own. */
+.scroll-section--scoring .scroll-panel__notice { margin-top: 0.4rem; }
 .scroll-section__header {
   display: flex;
   align-items: center;
@@ -975,6 +993,22 @@ body {
 .scroll-chapter__summary::marker { content: ""; }
 .scroll-chapter__icon { flex-shrink: 0; }
 .scroll-chapter__title { flex: 1; min-width: 0; }
+/* Whose grid — only on a scoring grid, whose title is derived from the game and
+   so is identical on every grid for it. Ellipsised rather than wrapped: the
+   title owns the flex and this rides at the end of the row. Parchment is paper,
+   light in both themes, so the ink is a literal brown like its neighbours
+   (.claude/rules/theming.md §6). */
+.scroll-chapter__by {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #8A6F45;
+}
 .scroll-chapter__content {
   padding: 4px 14px 12px;
   font-size: 0.88rem;
@@ -8841,6 +8875,28 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   padding-top: 1rem;
   border-top: 1px solid oklch(var(--b3));
 }
+/* Your stats — ui/game-stats-panel.js on the game page.
+
+   The panel is written for the Stats spoke's preview-card, which is PAPER: its
+   ring, facts and footnote read --polaroid-* and --accent-ink throughout. Game
+   Detail is the app GROUND, so rather than teach the panel a second palette it
+   gets a card of its own here and that card is in the re-point list at the top
+   of this file (theming.md §6) — one entry, and every rule in the family lands
+   right in both themes by construction.
+
+   A card and not a bare block, because the section above it is a reel of
+   photographs: numbers floating on the ground between the expansion polaroids
+   and the play polaroids read as a rendering accident. */
+.game-detail__statspanel {
+  background: var(--polaroid-bg, #FFFBF1);
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
+  padding: 0.85rem 0.9rem 0.9rem;
+  box-shadow: var(--sh-2);
+}
+/* The panel's first child carries its own top margin for the spoke, where it
+   follows the game picker. Here it is the first thing in the card. */
+.game-detail__statspanel .stats-ratio { margin-top: 0; }
 .game-detail__section-title {
   display: inline-flex; align-items: center; gap: 0.35rem;
   font-weight: 600;

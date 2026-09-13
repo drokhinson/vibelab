@@ -23,6 +23,11 @@
 // Edit is for.
 
 (function () {
+  // The one chapter type whose body is a grid rather than markdown. Mirrors
+  // services/chapter_grid.SCORING_GRID_CHAPTER_TYPE and the `layout` value the
+  // backend pairs it with — the two are 1:1, which is why _pickType derives one
+  // from the other rather than asking twice.
+  const GRID_TYPE = "scoring_grid";
 
   // The body of an expanded chapter. A scoring grid's rows live in `grid`, not
   // in `content` — `content` holds a generated bullet mirror of them, which is
@@ -166,7 +171,11 @@ components above.
     _resetFormState() {
       // Tab + mode
       this._tab = "browse";          // "browse" | "create" | "edit"
-      this._externalEdit = false;    // true only when arrived via mode=edit route
+      // True when this screen was ROUTED to with a job already chosen
+      // (mode=edit, or mode=create&layout=scoring_grid), rather than reached by
+      // flipping tabs inside it. Cancel and Save then pop the router back to
+      // whatever opened it instead of landing the user in Browse.
+      this._arrivedByRoute = false;
       // Create-wizard position: 0 type → 1 draft → 2 edit. Meaningless in
       // "browse" and "edit" (edit IS the editor and shows no step bar), but
       // reset here with everything else so a create abandoned on step 1 can't
@@ -358,14 +367,31 @@ components above.
       // stashes the chapter and passes mode=edit. Cancel/Save in this case
       // pops back to the prior view (typically game-detail).
       // In-view transitions (FAB → create, expanded-row Edit → edit) flip
-      // _tab directly without re-routing, leaving _externalEdit false so
+      // _tab directly without re-routing, leaving _arrivedByRoute false so
       // Cancel returns to browse instead of game-detail.
       if (p.mode === "edit" && this._prefillChapter) {
         const c = this._prefillChapter;
         this._prefillChapter = null;
         this._loadChapterIntoForm(c);
         this._tab = "edit";
-        this._externalEdit = true;
+        this._arrivedByRoute = true;
+      } else if (p.mode === "create" && p.layout === GRID_TYPE) {
+        // External create entry: the reference guide's Scoring section, on a
+        // game that has no scoring grid at all, offers "tap to build one" and
+        // routes here.
+        //
+        // It lands on the ROW EDITOR, not on step 0. A grid's wizard has
+        // nothing to ask before it: step 0 picks a chapter type, and the type
+        // is the very thing the caller has already said; step 1 is the AI head
+        // start, which a grid skips in both directions (see _wizNext). So both
+        // steps would be a forced tap on a question already answered. _pickType
+        // is what seeds the first blank row, exactly as tapping the type pill
+        // would — the editor must never open on its own empty state.
+        this._tab = "create";
+        this._pickType(GRID_TYPE);
+        this._step = 2;
+        this._arrivedByRoute = true;
+        this._armWizardGuard();
       }
       // else: fresh mount stays on browse — _resetFormState() at the top of
       // onMount already set _tab = "browse" and cleared the form buffer.
@@ -719,11 +745,11 @@ components above.
 
     // What view the back affordance will land on. Browse pops to whatever
     // is on the router back-stack (usually game-detail). In-view edit /
-    // create returns to browse. External edit (route arrived with
-    // mode=edit) still pops the router so the user lands where they came
-    // from.
+    // create returns to browse. A routed entry (mode=edit, or
+    // mode=create&layout=scoring_grid) still pops the router so the user lands
+    // where they came from.
     _backDestination() {
-      if (this._tab !== "browse" && !this._externalEdit) return "reference-guide-add";
+      if (this._tab !== "browse" && !this._arrivedByRoute) return "reference-guide-add";
       const peeker = window.router && window.router.peekBack;
       if (typeof peeker === "function") return peeker.call(window.router, "game-detail");
       const stack = (window.router && window.router._stack) || [];
@@ -917,7 +943,7 @@ components above.
       `;
     }
 
-    // In-view edit transition: no routing, no _externalEdit flag → Cancel
+    // In-view edit transition: no routing, no _arrivedByRoute flag → Cancel
     // and Save return to browse instead of popping the router stack.
     // Load an existing chapter into the editor's form buffer. Both edit entry
     // points go through here — the in-view "Edit" on an expanded pool row, and
@@ -956,7 +982,7 @@ components above.
       this._error = null;
       this._activePop = null;
       this._tab = "edit";
-      this._externalEdit = false;
+      this._arrivedByRoute = false;
       this.render();
     }
 
@@ -1909,9 +1935,9 @@ components above.
     }
 
     async _cancelForm() {
-      // External edit (arrived via route with mode=edit) pops back to the
-      // prior view. In-view create / in-view edit return to browse.
-      if (this._externalEdit) {
+      // A routed entry (mode=edit, or mode=create&layout=scoring_grid) pops
+      // back to the prior view. In-view create / in-view edit return to browse.
+      if (this._arrivedByRoute) {
         this._resetFormState();
         this._teardownEditorChrome();
         window.router.back("game-detail");
@@ -1991,7 +2017,7 @@ components above.
       this._saving = true;
       this.render();
       const isEditing = this._tab === "edit";
-      const externalEdit = this._externalEdit;
+      const arrivedByRoute = this._arrivedByRoute;
       const targetGameId = this._createTargetGameId || this._gameId;
       try {
         if (isEditing) {
@@ -2018,7 +2044,7 @@ components above.
           detail: { gameId: targetGameId },
         }));
         this._saving = false;
-        if (externalEdit) {
+        if (arrivedByRoute) {
           // Came from the scroll widget on another view — return there so
           // the user lands back where they started. Clear the editor buffer
           // before popping so a later re-entry can't show stale form fields

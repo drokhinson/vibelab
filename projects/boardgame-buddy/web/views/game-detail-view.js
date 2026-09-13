@@ -1,5 +1,6 @@
 // views/game-detail-view.js — game detail w/ collection toggle + rulebook link
-// + expansions list (base game → expansions, expansion → base game).
+// + expansions list (base game → expansions, expansion → base game)
+// + the viewer's own record with the game, above the plays it summarises.
 
 (function () {
   const EXPANSION_CHECK = `<span class="expansion-polaroid__check"><i data-icon="check" class="w-3.5 h-3.5"></i></span>`;
@@ -10,6 +11,7 @@
       this._status = null;
       this._plays = [];
       this._expansions = [];  // ExpansionListItem[] (only for base games)
+      this._viewerStats = null;  // bundle.viewer_stats, or null if never played
       this._loading = false;
       this._error = null;
       this._guide = null;  // ReferenceGuideScroll widget; instantiated on first render
@@ -66,6 +68,7 @@
       this._status = null;
       this._plays = [];
       this._expansions = [];
+      this._viewerStats = null;
       this._guide = null;
       // Singleton view: without this reset an expanded description leaks
       // across games (expansion → base game, search hit while one is open).
@@ -95,6 +98,10 @@
         this._status = bundle.viewer_status || null;
         this._plays = bundle.recent_plays || [];
         this._expansions = Array.isArray(bundle.expansions) ? bundle.expansions : [];
+        // Migration 030. Absent from a bundle cached before that shipped, and
+        // null for a game the viewer has never played — the same "no section"
+        // either way, so no version check is needed here.
+        this._viewerStats = bundle.viewer_stats || null;
         // Defence in depth: pre-migration-023 the bundle's viewer_status was
         // null for games the viewer had only played (no collection row).
         // Derive 'played' from the recent_plays block so the hero banner
@@ -175,6 +182,7 @@
             ${this._renderDescription(g)}
             <div id="game-detail-expansions">${this._renderExpansions()}</div>
             ${this._renderReferenceGuide()}
+            ${this._renderViewerStats()}
             ${this._renderRecentPlays()}
           </div>
         </article>
@@ -227,6 +235,31 @@
       btn.setAttribute("aria-expanded", String(this._descExpanded));
       const label = btn.querySelector("span");
       if (label) label.textContent = this._descExpanded ? "Show less" : "Read more";
+    }
+
+    // The viewer's own record with this game, immediately above the plays it
+    // is the summary of.
+    //
+    // The panel is ui/game-stats-panel.js, the same renderer the Stats spoke's
+    // By game card uses, fed by the same row computed under the same rules
+    // (migration 030) — a win rate that reads one way here and another way one
+    // tap into the profile would be worse than not showing one at all.
+    //
+    // Nothing is drawn for a game the viewer has never played: an empty ring
+    // and five dashes are not an invitation to play it, and the hero already
+    // carries the "+ Add" and "Log a play" affordances that are.
+    _renderViewerStats() {
+      const s = this._viewerStats;
+      if (!s || !s.plays) return "";
+      return `
+        <section class="game-detail__section game-detail__section--stats">
+          <h3 class="game-detail__section-title">
+            <i data-icon="trophy" class="w-4 h-4"></i>
+            Your stats
+          </h3>
+          <div class="game-detail__statspanel">${window.renderGameStatsPanel(s)}</div>
+        </section>
+      `;
     }
 
     _renderRecentPlays() {
