@@ -695,38 +695,84 @@ body {
   border-radius: 2px;
 }
 
-/* ── Quick Reference — parchment scroll (slim padding for one-handed lookup) ─ */
+/* ── Quick Reference — the parchment scroll ─────────────────────────────────
+   THREE elements, and the split is load-bearing:
+
+     .scroll-paper        the OBJECT. A flex column: roll, sheet, roll. Carries
+                          no paint of its own — it exists because the sheet
+                          clips (below), and a barrel drawn inside a clipping
+                          box is a barrel with its top half missing. Which is
+                          exactly what the ::before/::after bars that used to
+                          live here were: 14px tall at top:-6px, six of them
+                          behind overflow:hidden, which is why the scroll read
+                          as a rectangle with a dark stripe. It also carries
+                          BOTH state classes (--rolled, --nosearch): the rolls
+                          are PRECEDING siblings of the sheet and CSS has no
+                          previous-sibling combinator, so a state class on the
+                          sheet could not reach them.
+     .scroll-panel        the SHEET. The parchment, and the overflow:hidden that
+                          makes the roll animation possible. Every
+                          `.scroll-panel <thing>` rule in this file still reads
+                          off it, unchanged — which is why the sheet kept the
+                          name and the wrapper got the new one.
+     .scroll-paper__roll  the two barrels, real flow siblings of the sheet, so
+                          they overhang it at both ends the way the rolls on a
+                          real scroll overhang the page.
+
+   A sheet with NO wrapper is a legitimate state and there are three: the
+   anonymous scroll, the empty scroll, and the browse pool in
+   views/reference-guide-add-view.js. None of them rolls, so none of them gets
+   barrels — a barrel that never turns is decoration pretending to be a control.
+
+   Painted from literals throughout. The scroll is a photograph of parchment:
+   light in BOTH themes, so it takes no ground token (.claude/rules/theming.md
+   §6/§7, and the scope note at the top of this file). The one exception is
+   --accent-on-paper on chapter links; the comment at .scroll-chapter__content a
+   says why that token and not --accent-ink. Do not reach for the --sh-* ramp
+   here either: these shadows are tinted to the parchment, not to a theme
+   ground. */
+.scroll-paper {
+  display: flex;
+  flex-direction: column;
+  margin: var(--s-2) 0;
+  /* Keeps the rolls' z-index:2 local. The app's z-ladder starts view content
+     below 20 and a paper island must not join it. */
+  isolation: isolate;
+}
 .scroll-panel {
   position: relative;
-  padding: 0.75rem 0.5rem;        /* was 1.5rem 1rem — reclaims ~24px vertical */
-  margin: 0.25rem 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Slim inline padding is deliberate — one-handed lookup on a phone column.
+     Vertical is a full step because the barrels sit on top of it, and because
+     it is what keeps a rolled scroll with an empty peek reading as a band of
+     parchment between two barrels rather than as a seam. */
+  padding: var(--s-3) var(--s-2);
   background:
     radial-gradient(ellipse at center, #E8D5A8 0%, #D9BF8A 75%, #C9A76A 100%);
   color: #2B1D0A;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   box-shadow:
     inset 0 0 28px rgba(139, 111, 60, 0.28),
     0 4px 12px rgba(0, 0, 0, 0.35);
 }
-/* Rolled edges — top and bottom "curl" (matches the original
-   parchment-scroll look). */
-.scroll-panel::before,
-.scroll-panel::after {
-  content: "";
-  position: absolute;
-  left: -4px;
-  right: -4px;
-  height: 14px;
-  background: linear-gradient(180deg, #B89556 0%, #8B6F3C 60%, #6B532A 100%);
-  border-radius: 4px;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.45);
+/* Only a sheet that HAS barrels gets the shadow of paper emerging from under
+   them. Without these the paper reads as butted against the rolls rather than
+   fed out of them; with them on a roll-less sheet (the pool, the empty state)
+   they read as a smudge. (0,2,0) child selector, so it cannot be reached by the
+   base rule's source order. */
+.scroll-paper > .scroll-panel {
+  box-shadow:
+    inset 0 0 28px rgba(139, 111, 60, 0.28),
+    inset 0  7px 9px -7px rgba(60, 42, 16, 0.62),
+    inset 0 -7px 9px -7px rgba(60, 42, 16, 0.62),
+    0 4px 12px rgba(0, 0, 0, 0.35);
 }
-.scroll-panel::before { top: -6px; }
-.scroll-panel::after  { bottom: -6px; }
 .scroll-panel .scroll-chapter {
   background: rgba(255, 250, 235, 0.55);
   border: 1px solid rgba(139, 111, 60, 0.3);
-  border-radius: 3px;
+  border-radius: var(--r-sm);
 }
 .scroll-panel .scroll-chapter [data-icon-name] {
   color: #6B4A1A;
@@ -735,58 +781,89 @@ body {
   color: #2B1D0A;
 }
 
-/* ── Reference guide scroll: roll-up animation + open/closed states ────── */
-.scroll-panel {
-  overflow: hidden;
-  transition: padding 480ms cubic-bezier(.22, .61, .36, 1);
-}
+/* ── The body, and the unroll ───────────────────────────────────────────── */
 .scroll-panel__body {
-  max-height: 4000px;
+  /* Explicit, not inherited: max-height caps the BORDER box, so the padding
+     below has to land inside the cap or the collapse leaves a seam. */
+  box-sizing: border-box;
   overflow: hidden;
-  opacity: 1;
-  transform-origin: top center;
-  transform: scaleY(1);
+  display: flex;
+  flex-direction: column;
+  /* No padding of its own, deliberately. max-height caps the BORDER box, so a
+     body with 12px of padding floors at 12px however far max-height is driven
+     down — a rolled scroll would carry a band of dead parchment it cannot
+     collapse. The inset between the peek and the body lives on the PEEK
+     instead, where it is free to go to zero on its own terms. */
+  gap: var(--s-4);
   transition:
-    max-height 480ms cubic-bezier(.22, .61, .36, 1),
-    transform  480ms cubic-bezier(.22, .61, .36, 1),
-    opacity    280ms ease 80ms;
+    max-height 520ms var(--ease),
+    opacity 240ms var(--ease) 80ms,
+    visibility 0s;
 }
-.scroll-panel--rolled {
-  /* Keep some height so the rolled scroll looks like a thick cylinder
-     around the search peek, not a thin seam. */
-  padding-top: 0.4rem;
-  padding-bottom: 0.4rem;
-}
-.scroll-panel--rolled .scroll-panel__body {
-  max-height: 0;
+/* max-height is written inline by JS from a measured scrollHeight — see
+   _applyScrollState in widgets/reference-guide-scroll.js. The 4000px ceiling
+   that used to sit here meant ~85% of the transition happened off-screen and
+   the last 15% snapped. Nothing in CSS sets it now. */
+.scroll-paper--rolled .scroll-panel__body {
   opacity: 0;
-  transform: scaleY(0.85);
+  /* Keeps the collapsed chapters out of the tab order and the a11y tree. The 0s
+     delay holds it visible for the whole close and drops it at the end. */
+  visibility: hidden;
+  transition:
+    max-height 520ms var(--ease),
+    opacity 200ms var(--ease),
+    visibility 0s linear 520ms;
 }
+/* An empty Scoring host is an empty flex item that would buy a 16px gap with
+   nothing to put in it. Both this host and the notice host are emitted with NO
+   whitespace inside them (see _html): :empty does not match an element holding
+   a whitespace text node, which is why the notice-host rule further down never
+   fired on a first render before this change — only after _paintNotice had
+   replaced the host's innerHTML with "". */
+.scroll-panel__scoring-host:empty { display: none; }
 
-/* Always-visible peek between the rolls. Holds the search row plus,
-   when rolled, the "Tap to expand" hint. */
+/* ── The peek ───────────────────────────────────────────────────────────────
+   The strip between the rolls. Two tenants — the scoring notice and the search
+   row — and BOTH are unconditional markup now, shown and hidden by state
+   classes on .scroll-paper rather than by a render branch. That is forced by
+   the toggle: _toggleScroll flips a class on the live DOM instead of
+   re-rendering (it has to, or the transition cannot run), and a tenant that
+   only exists in one state cannot animate across the toggle.
+
+   display:none, not visibility or opacity: it takes the tenant out of the
+   accessibility tree, out of the tab order, AND out of the peek's flex gap, so
+   the cascade enforces exactly what the branches used to.
+
+   The two text hints that used to live here are gone. The arrows on the rolls
+   are the affordance now, and each roll carries the old wording as its
+   aria-label. */
 .scroll-panel__peek {
   position: relative;
   z-index: 1;
-  padding-top: 0.45rem;
-}
-.scroll-panel__hint {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3rem;
-  width: 100%;
-  margin-top: 0.45rem;
-  padding: 4px 8px;
-  background: transparent;
-  border: 0;
-  color: #6B4A1A;
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  cursor: pointer;
+  flex-direction: column;
+  gap: var(--s-2);
+  /* The gap between the peek and the body — see the note on .scroll-panel__body
+     for why it cannot live there. Transitioned with the roll so the strip closes
+     up as the body collapses. */
+  padding-bottom: var(--s-3);
+  transition: padding-bottom 520ms var(--ease);
 }
-.scroll-panel__hint:hover { color: #2B1D0A; }
+/* Rolled, the peek is the whole sheet: this padding would sit under the search
+   field as 12px the sheet's own bottom padding already provides, leaving the
+   field off-centre between the two barrels. */
+.scroll-paper--rolled .scroll-panel__peek { padding-bottom: 0; }
+/* Open, the Scoring section says the same thing in the place the grid itself
+   would be, and two copies of one offer on one screen is the duplicate
+   .claude/rules/ui-object-design.md §3b is about. Both open the same sheet. */
+.scroll-paper:not(.scroll-paper--rolled) .scroll-panel__notice-host { display: none; }
+/* A search field over one chapter is chrome with nothing to do — the widget's
+   _canSearch() carries the argument. Nothing here ever sets display:block, so
+   the :empty rules keep working: they are never out-specified, only reinforced. */
+.scroll-paper--nosearch .scroll-panel__search-row { display: none; }
+/* Every tenant suppressed → the strip goes with them, rather than being left as
+   a band of padding between the roll and the body. */
+.scroll-paper--nosearch:not(.scroll-paper--rolled) .scroll-panel__peek { display: none; }
 
 /* "Custom scoring grids are available — tap to add" (migration 018).
    Two placements, one renderer: first in the always-visible peek (so it shows
@@ -794,7 +871,7 @@ body {
    inside the empty state, which renders no peek at all and is exactly the case
    the nudge is most for.
 
-   Literal colours, like .scroll-panel__hint above and the rest of this family:
+   Literal colours, like the rest of this family:
    the scroll is a photograph of parchment, so it is light in both themes and
    paints from literals rather than from the ground tokens
    (.claude/rules/theming.md §6). */
@@ -802,16 +879,15 @@ body {
 .scroll-panel__notice {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--s-2);
   width: 100%;
   /* 44px floor: this is the whole affordance for adding a template
      (.claude/rules/mobile-web.md §5). */
   min-height: 44px;
-  margin-bottom: 0.45rem;
-  padding: 6px 8px 6px 10px;
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
   text-align: left;
   border: 1px solid rgba(107, 74, 26, 0.28);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: rgba(201, 146, 42, 0.14);
   color: #5C3F14;
   font-size: 0.74rem;
@@ -847,34 +923,31 @@ body {
    screen together (one falls back to the other), so a second treatment would be
    two looks for one affordance. It carries no dismiss X — there is nothing to
    dismiss — so it pays back the room that X was holding on the right. */
-.scroll-panel__notice--create { padding-right: 10px; }
+.scroll-panel__notice--create { padding-right: var(--s-3); }
 
 /* Inside the empty state the notice is the only thing between the copy and the
    Add button, so it gets air on both sides rather than just below. */
-.scroll-panel__empty .scroll-panel__notice { margin: 0.6rem 0; }
 
-/* Per-type section inside the guide. Header above its chapter list. */
+/* Per-type section inside the guide. Header above its chapter list.
+
+   One rhythm, no exceptions. The pile this replaces was `margin-top: .6rem`, a
+   `:first-child { margin-top: .25rem }` carve-out, a `.scroll-section--scoring`
+   rule that existed ONLY to undo that carve-out (the Scoring section is always
+   alone in its own host div and so is always a first child), and a fourth rule
+   for the offer inside it. A flex column on the body plus a flex column here
+   deletes all four: the gap between sections is the body's, the gap inside one
+   is the section's, and first and last are not special. */
 .scroll-section {
-  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
 }
-.scroll-section:first-child {
-  margin-top: 0.25rem;
-}
-/* The Scoring section is always last and always alone in its own host div, so
-   the :first-child rule above would give it the tighter top margin meant for
-   the section that opens the scroll. Later in the file at equal specificity,
-   which is what puts it back on the normal rhythm. */
-.scroll-section--scoring { margin-top: 0.6rem; }
-/* The offer sits under the grids the viewer already has, or alone when they
-   have none; either way it needs air above it and none below — the Add a
-   chapter button brings its own. */
-.scroll-section--scoring .scroll-panel__notice { margin-top: 0.4rem; }
 .scroll-section__header {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin: 0 0 0.3rem;
-  padding: 0 4px;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0 var(--s-1);
   font-family: var(--font-display);
   font-size: 0.85rem;
   font-weight: 700;
@@ -883,30 +956,148 @@ body {
   color: #6B4A1A;
 }
 .scroll-section__header [data-icon-name] { color: #6B4A1A; }
-/* Make the rolled edges tappable. They visually overlap the existing
-   ::before/::after rolls and give a 32px tap target. */
-.scroll-panel__roll {
-  position: absolute;
-  left: -4px;
-  right: -4px;
-  height: 32px;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
+/* ── The rolls ──────────────────────────────────────────────────────────────
+   A lit cylinder, not a flat bar — but the SAME ink the flat bar had. Three
+   things carry the read:
+     * the ramp is the old #B89556 / #8B6F3C / #6B532A, reordered so the light
+       lands across a round surface (dark lip, rising to a highlight at 42%,
+       falling to a dark lip) instead of running straight down a flat face.
+       Same colours, same weight, same contrast budget; it just stops reading
+       as a bar;
+     * a repeating band overlay is the coil, and it is the only thing here that
+       can SHOW the roll turning. The bands run ACROSS the barrel and travel
+       along its short axis, which is what a rotating cylinder does; a vertical
+       grain sliding sideways would read as the tube being dragged, not spun;
+     * the barrel overlaps the sheet and casts onto it, so the paper passes
+       UNDER the roll instead of butting against it. */
+.scroll-paper__roll {
+  position: relative;
   z-index: 2;
+  display: grid;
+  place-items: center;
+  /* Wider than the sheet at both ends: the barrel of a scroll overhangs the
+     page. 10px is the ceiling — the Play step's .cascade-card has 14px of
+     padding and no overflow, so anything past 14 spills its border, and Game
+     Detail's column has 16px. */
+  width: calc(100% + 20px);
+  margin-inline: -10px;
+  height: 30px;
   padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.scroll-panel__roll--top    { top: -16px; }
-.scroll-panel__roll--bottom { bottom: -16px; }
-.scroll-panel__roll:focus-visible {
+/* 44px hit area over a 30px barrel — the overhang is the tap target, not the
+   visible control. It bleeds 7px outward, into .scroll-paper's own margin, and
+   7px inward, into the sheet's 12px top padding — so it stops short of the
+   peek's first child (the scoring notice, itself a 44px affordance) and of the
+   rulebook row above the scroll on the Play card, which carries an 8px bottom
+   margin of its own.
+   The OLD .scroll-panel__roll claimed 32px and got 16: it was an absolutely
+   positioned child at top:-16px inside a box with overflow:hidden. */
+.scroll-paper__roll::before { content: ""; position: absolute; inset: -7px 0; }
+.scroll-paper__roll--top    { margin-bottom: -5px; }
+.scroll-paper__roll--bottom { margin-top: -5px; }
+.scroll-paper__roll:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 4px;
-  border-radius: 6px;
+  outline-offset: 3px;
+  border-radius: var(--r-pill);
+}
+
+.scroll-paper__barrel {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-pill);
+  background:
+    repeating-linear-gradient(180deg,
+      rgba(255, 244, 214, 0.00) 0px,
+      rgba(255, 244, 214, 0.16) 2px,
+      rgba(92, 66, 26, 0.00)    4px,
+      rgba(92, 66, 26, 0.18)    6px,
+      rgba(92, 66, 26, 0.00)    9px),
+    linear-gradient(180deg,
+      #5E4722 0%, #7A6030 8%, #A98247 24%,
+      #C6A468 42%, #B89556 56%, #8B6F3C 78%, #5A4522 100%);
+  background-size: 100% 9px, 100% 100%;
+  background-repeat: repeat, no-repeat;
+  transition:
+    background-position 520ms var(--ease),
+    transform 520ms var(--ease),
+    filter 140ms var(--ease);
+}
+.scroll-paper__roll--top .scroll-paper__barrel {
+  box-shadow: inset 0 1px 0 rgba(255, 246, 220, 0.6), 0  5px 9px -3px rgba(43, 29, 10, 0.48);
+}
+.scroll-paper__roll--bottom .scroll-paper__barrel {
+  box-shadow: inset 0 1px 0 rgba(255, 246, 220, 0.6), 0 -5px 9px -3px rgba(43, 29, 10, 0.48);
+}
+
+/* ── The unroll ─────────────────────────────────────────────────────────────
+   OPEN is the default state, so a freshly-rendered panel starts there with no
+   transition to run (CSS does not transition an initial style computation) and
+   only a LIVE class flip animates — which is exactly what _toggleScroll now
+   does, and why _html() paints the paper open and lets _applyScrollState add
+   --rolled.
+
+   Two things move on the barrel. It SPINS: the 9px band overlay travels three
+   periods, the two ends in OPPOSITE directions, because the two rolls of a
+   scroll counter-rotate as the middle unravels between them. Three whole
+   periods, so the travel lands back in phase and the coil never appears to jump
+   at either end. And it THINS: rolled, it holds all the paper; open, almost
+   none. transform on the barrel only, so the 44px hit area and the arrow never
+   move. */
+.scroll-paper__roll--top    .scroll-paper__barrel { background-position: 0 -27px, 0 0; transform: scaleY(0.78); }
+.scroll-paper__roll--bottom .scroll-paper__barrel { background-position: 0  27px, 0 0; transform: scaleY(0.78); }
+.scroll-paper--rolled       .scroll-paper__barrel { background-position: 0 0, 0 0;     transform: scaleY(1); }
+
+/* Accordion convention — rolled points DOWN, open points UP — and not the
+   apart/together reading the two-ended metaphor invites. With the text hints
+   gone these arrows are the ONLY affordance on the scroll, so they have to read
+   as a disclosure control on sight, and every other collapsible in the app
+   (.collapsible-header__chev) points this way.
+
+   Dark, not the cream the dark lips would suggest: the arrow sits at the
+   barrel's VERTICAL CENTRE, which is the lit band (#C6A468 → #B89556), and cream
+   on that is ~2.2:1 — invisible, on the one control the scroll has left. The
+   parchment's own ink is ~6.9:1 there. */
+.scroll-paper__chev {
+  position: relative;
+  display: grid;
+  place-items: center;
+  color: rgba(43, 29, 10, 0.72);
+  transform: rotate(180deg);
+  transition: transform 300ms var(--ease), color 140ms var(--ease);
+}
+.scroll-paper--rolled .scroll-paper__chev { transform: rotate(0deg); }
+
+/* :active is the primary press affordance — these are touch surfaces
+   (.claude/rules/web-frontend.md § Motion). The barrel squashes like a roll
+   being pressed, and it can, because _toggleScroll no longer destroys the
+   button under the user's finger. */
+.scroll-paper__roll:active .scroll-paper__barrel {
+  transform: scaleY(0.62);
+  filter: brightness(0.94);
+  transition-duration: 90ms;
+}
+.scroll-paper__roll:active .scroll-paper__chev { color: #2B1D0A; }
+@media (hover: hover) {
+  .scroll-paper__roll:hover .scroll-paper__barrel { filter: brightness(1.06); }
+  .scroll-paper__roll:hover .scroll-paper__chev   { color: #2B1D0A; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The roll transition shipped without one, while ~10 other animations in this
+     file have one. The JS backstop in _releaseHeight covers the transitionend
+     that now never fires. */
+  .scroll-paper__barrel,
+  .scroll-paper__chev,
+  .scroll-panel__peek,
+  .scroll-panel__body { transition: none; }
 }
 
 .scroll-panel__search-row {
   position: relative;
-  margin-bottom: 0.4rem;
 }
 .scroll-panel__search-icon {
   position: absolute;
@@ -918,7 +1109,7 @@ body {
 .scroll-panel__search {
   width: 100%;
   height: 38px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: rgba(255, 250, 235, 0.75);
   border: 1px solid rgba(139, 111, 60, 0.35);
   color: #2B1D0A;
@@ -975,14 +1166,15 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--s-2);
 }
 .scroll-chapter__summary {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 10px 12px;
-  min-height: 48px;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  /* 56px, the list/picker-row floor (.claude/rules/web-frontend.md). */
+  min-height: 56px;
   cursor: pointer;
   list-style: none;
   font-family: var(--font-display);
@@ -991,7 +1183,6 @@ body {
 }
 .scroll-chapter__summary::-webkit-details-marker { display: none; }
 .scroll-chapter__summary::marker { content: ""; }
-.scroll-chapter__icon { flex-shrink: 0; }
 .scroll-chapter__title { flex: 1; min-width: 0; }
 /* Whose grid — only on a scoring grid, whose title is derived from the game and
    so is identical on every grid for it. Ellipsised rather than wrapped: the
@@ -1010,7 +1201,7 @@ body {
   color: #8A6F45;
 }
 .scroll-chapter__content {
-  padding: 4px 14px 12px;
+  padding: var(--s-1) var(--s-3) var(--s-3);
   font-size: 0.88rem;
   color: #2B1D0A;
   line-height: 1.45;
@@ -1056,8 +1247,8 @@ body {
 }
 .scroll-chapter__actions {
   display: flex;
-  gap: 0.4rem;
-  padding: 0 12px 10px;
+  gap: var(--s-2);
+  padding: 0 var(--s-3) var(--s-3);
 }
 
 /* Delete, in the pool row's action strip. Two panel-scoped rules paint every
@@ -1079,35 +1270,40 @@ body {
 .scroll-panel .scroll-chapter .bgb-destructive-icon-btn:hover [data-icon-name],
 .scroll-panel .scroll-chapter .bgb-destructive-icon-btn:hover i { color: #74280F; }
 .scroll-panel__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
   text-align: center;
-  padding: 1rem 0.6rem;
+  padding: var(--s-4) var(--s-3);
   font-size: 0.88rem;
   color: #6B4A1A;
 }
 .scroll-panel__loading {
   display: flex;
   justify-content: center;
-  padding: 0.6rem 0;
 }
 .scroll-panel__add {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: var(--s-2);
   width: 100%;
-  margin-top: 0.6rem;
-  padding: 10px 14px;
+  min-height: 44px;
+  padding: var(--s-3) var(--s-4);
   background: rgba(43, 29, 10, 0.85);
   color: #F5E9D0;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background 120ms var(--ease), transform 90ms var(--ease);
 }
-.scroll-panel__add:hover { background: rgba(43, 29, 10, 1); }
+.scroll-panel__add:active { transform: scale(0.985); }
+@media (hover: hover) {
+  .scroll-panel__add:hover { background: rgba(43, 29, 10, 1); }
+}
 /* "(3 of 12)" — how much of what exists for this game the viewer keeps. Muted
    by opacity rather than by a colour of its own: the scroll is a photograph of
    parchment and paints from literals in both themes (see the note above
@@ -1128,26 +1324,11 @@ body {
   flex-shrink: 0;
   box-shadow: 0 0 0 1px rgba(43, 29, 10, 0.18);
 }
-
-/* Bottom "roll up" affordance inside the open scroll body. Mirrors the
-   top peek hint that prompts "tap to expand" when rolled. */
-.scroll-panel__rollup-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3rem;
-  width: 100%;
-  margin-top: 0.55rem;
-  padding: 4px 8px;
-  background: transparent;
-  border: 0;
-  color: #6B4A1A;
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-}
-.scroll-panel__rollup-hint:hover { color: #2B1D0A; }
+/* Reserved column. With the redundant per-chapter icon gone, a row without a
+   source colour would start 17px left of one with it, and every title in a
+   merged list would sit at a different place. Only emitted when the scroll is
+   actually merged — see _renderChapter. */
+.scroll-chapter__source-dot--none { visibility: hidden; }
 
 /* ── Collapsible section header (Expansions, etc.) ───────────────────────── */
 .collapsible-header {
@@ -1177,18 +1358,15 @@ body {
 .collapsible-header:hover .collapsible-header__chev { opacity: 1; }
 
 /* ── Add-chapter view (Create | Browse) ──────────────────────────────────── */
-/* Browse pool wraps a parchment scroll widget so it reads the same as the
-   user's own reference guide. The pool-scroll variant skips the rolled-edge
-   collapse animation — it's always open, height driven by content. */
-.chapter-add__pool-scroll {
-  margin-top: 0.4rem;
-}
-.chapter-add__pool-scroll .scroll-panel__body {
-  max-height: none;
-  opacity: 1;
-  transform: none;
-  transition: none;
-}
+/* The browse pool is the same parchment, minus the rolls: always open, height
+   driven by content, nothing to roll. It therefore gets no .scroll-paper
+   wrapper — which is also what keeps every --rolled / --nosearch rule above from
+   ever matching it, and why the whole body override that used to sit here
+   (max-height:none / opacity / transform / transition:none) is now dead:
+   max-height is written by the widget's JS and nothing else, and the pool's JS
+   never calls it. The class survives as the query hook for the scroll-position
+   preservation in views/reference-guide-add-view.js. */
+.chapter-add__pool-scroll { margin-top: var(--s-2); }
 
 /* Target-game selector on the Create tab. Pill-style chips, one per game
    (base + expansions); active chip uses the expansion accent. */
@@ -2557,14 +2735,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    right for one-tap add/remove without expanding the row. */
 .scroll-chapter__summary--rich {
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--s-2);
 }
 .scroll-chapter__summary-text { flex: 1; min-width: 0; }
 .scroll-chapter__submeta {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  margin-top: 2px;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
   font-family: var(--font-sans);
   font-size: 0.72rem;
   font-weight: 600;

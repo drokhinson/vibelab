@@ -58,6 +58,42 @@
     return window.renderMarkdown(c.content || "");
   }
 
+  /**
+   * One rolled edge of the scroll.
+   *
+   * A SIBLING of the sheet, never a child. The sheet carries `overflow: hidden`
+   * — it is what clips the body during the roll — so a barrel drawn inside it
+   * loses whatever hangs past the edge. That is exactly what the flat
+   * `.scroll-panel::before/::after` bars this replaces were: 14px of barrel with
+   * six of them behind the clip, which is why the scroll read as a rectangle
+   * with a dark stripe rather than as a scroll.
+   *
+   * Paints OPEN. The live state is `.scroll-paper--rolled` on the wrapper,
+   * written by _applyScrollState — see the note there for why the markup must
+   * not carry it.
+   *
+   * A local rather than a shared module: two calls, one file. Both rolls go
+   * through it so they cannot drift onto different handlers.
+   *
+   * @param {"top"|"bottom"} edge
+   */
+  function rollHtml(edge) {
+    return `
+      <button class="scroll-paper__roll scroll-paper__roll--${edge}" type="button"
+              aria-expanded="true" aria-controls="guide-scroll-body"
+              aria-label="Roll up the reference guide"
+              onclick="window.referenceGuideScroll._toggleScroll()">
+        <!-- The barrel is its own element so :active can compress the roll
+             without squashing the arrow, and so the spin (a background-position
+             shift) is independent of the button's own box. -->
+        <span class="scroll-paper__barrel" aria-hidden="true"></span>
+        <span class="scroll-paper__chev" aria-hidden="true">
+          <i data-icon="chevron-down" class="w-3.5 h-3.5"></i>
+        </span>
+      </button>
+    `;
+  }
+
   class ReferenceGuideScroll {
     /**
      * @param {Object} opts
@@ -313,6 +349,37 @@
       return (this._chapters || []).filter((c) => !isScoringGrid(c));
     }
 
+    /**
+     * Whether the search field earns its row in the peek.
+     *
+     * A search field over one chapter is chrome with nothing to do: the chapter
+     * is already on screen, and the field costs a row of the peek — the strip
+     * that is ALL you see on the Play screen, where the scroll opens rolled up.
+     * Two is where narrowing starts to mean something.
+     *
+     * Counted on `visible`, so the adopted scoring grids drawn by their own
+     * section below do not let the field in on their own: a guide holding one
+     * rule and two grids has one thing to search.
+     *
+     * The field going away has to take any query with it, or the list stays
+     * silently filtered with nothing on screen to clear it — and the query would
+     * come back the moment a second chapter did.
+     *
+     * A method rather than a local in _html because the answer is now a CLASS on
+     * the paper (`--nosearch`) rather than a render branch, and because
+     * _toggleScroll no longer re-renders: it must be knowable without one. It
+     * does not need to be — it turns only on the chapter list, and every path
+     * that changes that list lands in a render.
+     *
+     * @param {Array} [visible] the already-filtered list, when the caller has one.
+     */
+    _canSearch(visible) {
+      const list = visible || this._visibleChapters();
+      const can = list.length >= 2;
+      if (!can) this._search = "";
+      return can;
+    }
+
     /** The templates this viewer has not adopted, minus any they dismissed. */
     _pendingTemplates() {
       return window.Chapter.pendingTemplates(this._templates, this._baseGameId);
@@ -350,6 +417,9 @@
         // and _render()'s pass over the lists has long since run.
         this._wireAccordion(host);
       }
+      // The Scoring section just changed height under a cap that may have been
+      // measured before it existed.
+      this._syncOpenHeight();
     }
 
     /**
@@ -419,6 +489,10 @@
       if (!host) return;
       host.innerHTML = this._renderAddButton();
       window.BgbIcons.render(host);
+      // "Add a chapter" → "Edit chapters (3 of 12)" can change the button's
+      // height, and the count lands asynchronously — including in the middle of
+      // an unroll, against a cap measured before it existed.
+      this._syncOpenHeight();
     }
 
     /**
@@ -656,9 +730,109 @@
 
     _render() {
       if (!this._container) return;
+      // Was the scroll rolled a moment ago? _html() always paints it open, so
+      // the live DOM is the only record of what the user is looking at. The one
+      // path that changes the roll state THROUGH a render is _onSearch's
+      // auto-expand; replaying the transition on the fresh nodes is what makes
+      // the first keystroke unroll the scroll rather than teleport it open.
+      const prev = this._container.querySelector(".scroll-paper");
+      const wasRolled = !!(prev && prev.classList.contains("scroll-paper--rolled"));
       this._container.innerHTML = this._html();
       window.BgbIcons.render(this._container);
       this._wireAccordion(this._container);
+      this._applyScrollState({ animate: !!prev && wasRolled === this._scrollOpen });
+    }
+
+    /**
+     * Put the open/rolled state on the LIVE DOM.
+     *
+     * This exists because _toggleScroll used to be `flip the flag; _render()`,
+     * and _render replaces the whole panel — so the browser only ever saw the
+     * FINAL state and the transition in styles.css never ran once. It also
+     * destroyed the button under the user's finger (losing :active and focus)
+     * and closed every expanded <details> in the scroll.
+     *
+     * max-height is animated from a MEASURED scrollHeight rather than the old
+     * 4000px ceiling: over ~600px of content, 4000 → 0 spends ~85% of the
+     * transition off-screen and then snaps.
+     *
+     * @param {{animate?: boolean}} [opts]
+     */
+    _applyScrollState({ animate = false } = {}) {
+      if (!this._container) return;
+      const paper = this._container.querySelector(".scroll-paper");
+      const body = this._container.querySelector("#guide-scroll-body");
+      // States A and B are bare sheets with no rolls — nothing to toggle.
+      if (!paper || !body) return;
+      const open = this._scrollOpen;
+
+      // Both rolls are the same disclosure control, so both carry the state.
+      paper.querySelectorAll(".scroll-paper__roll").forEach((btn) => {
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        btn.setAttribute("aria-label", open
+          ? "Roll up the reference guide"
+          : "Unroll the reference guide");
+      });
+
+      this._cancelHeightRelease(body);
+
+      if (!animate) {
+        paper.classList.toggle("scroll-paper--rolled", !open);
+        // No inline cap while open: a repainted Scoring section, a repainted Add
+        // button, or an expanded <details> must be free to grow.
+        body.style.maxHeight = open ? "" : "0px";
+        return;
+      }
+
+      // Start from where it actually stands, so a toggle mid-transition reverses
+      // from that point instead of jumping to an end state.
+      body.style.maxHeight = (open ? 0 : body.scrollHeight) + "px";
+      void body.offsetHeight;                      // flush, so there is a start value
+      paper.classList.toggle("scroll-paper--rolled", !open);
+      body.style.maxHeight = (open ? body.scrollHeight : 0) + "px";
+      this._releaseHeight(body);
+    }
+
+    _cancelHeightRelease(body) {
+      if (this._heightTimer) { clearTimeout(this._heightTimer); this._heightTimer = null; }
+      if (this._heightDone) { body.removeEventListener("transitionend", this._heightDone); this._heightDone = null; }
+    }
+
+    /**
+     * Drop the inline max-height once an OPEN scroll has finished unrolling.
+     *
+     * Whichever arrives first wins: transitionend is the honest signal, the
+     * timer is the backstop for prefers-reduced-motion (where the transition is
+     * suppressed and no event fires) and for a tab backgrounded mid-animation.
+     */
+    _releaseHeight(body) {
+      const finish = () => {
+        this._cancelHeightRelease(body);
+        if (this._scrollOpen) body.style.maxHeight = "";
+      };
+      this._heightDone = (ev) => {
+        if (ev.target === body && ev.propertyName === "max-height") finish();
+      };
+      body.addEventListener("transitionend", this._heightDone);
+      // 600ms must stay at or above the max-height transition on
+      // .scroll-panel__body in styles.css (520ms), plus slack.
+      this._heightTimer = setTimeout(finish, 600);
+    }
+
+    /**
+     * Re-measure an open scroll whose content just changed underneath it.
+     *
+     * Only matters while an unroll is still in flight — after it lands the cap
+     * is gone and the body is free-height. Called by the two in-place painters
+     * (_paintNotice, _paintAddButton), either of which can land at an arbitrary
+     * moment: the Scoring section arrives with the template fetch, the Add
+     * button's "(3 of 12)" arrives with the pool count, and both change the
+     * body's height against a cap measured before they existed.
+     */
+    _syncOpenHeight() {
+      if (!this._scrollOpen || !this._heightTimer) return;
+      const body = this._container && this._container.querySelector("#guide-scroll-body");
+      if (body) body.style.maxHeight = body.scrollHeight + "px";
     }
 
     /**
@@ -720,12 +894,12 @@
             <div class="scroll-panel__body">
               <div class="scroll-panel__empty">
                 <p>Add chapters for quick rule lookup and clarification.</p>
-                <div class="scroll-panel__notice-host" data-notice-host>
-                  ${this._renderScoringCta()}
-                </div>
-                <div class="scroll-panel__add-host" data-add-host>
-                  ${this._renderAddButton()}
-                </div>
+                <!-- No whitespace inside either host: :empty does not match an
+                     element holding a whitespace text node, and an empty host is
+                     a flex item that would otherwise buy a gap with nothing in
+                     it. Same reason in State C below. -->
+                <div class="scroll-panel__notice-host" data-notice-host>${this._renderScoringCta()}</div>
+                <div class="scroll-panel__add-host" data-add-host>${this._renderAddButton()}</div>
               </div>
             </div>
           </div>
@@ -733,23 +907,16 @@
       }
 
       // State C: signed in, has chapters (or still loading). Toggleable.
-      const open = this._scrollOpen;
-      const rolledClass = open ? "" : "scroll-panel--rolled";
-      // A search field over one chapter is chrome with nothing to do: the
-      // chapter is already on screen, and the field costs a row of the peek —
-      // the strip that is ALL you see on the Play screen, where the scroll
-      // opens rolled up. Two is where narrowing starts to mean something.
       //
-      // Counted on `visible`, so the adopted scoring grids drawn by their own
-      // section below do not let the field in on their own: a guide holding one
-      // rule and two grids has one thing to search.
-      const canSearch = visible.length >= 2;
-      // The field going away has to take any query with it, or the list stays
-      // silently filtered with nothing on screen to clear it — and the query
-      // would come back the moment a second chapter did. Reconciled here
-      // because every path that changes the guide (the fetch, a removal, a
-      // scope change) lands in a render, and this is the one place they meet.
-      if (!canSearch) this._search = "";
+      // The roll state is NOT written here. _html() always paints the paper
+      // OPEN and _applyScrollState puts `--rolled` on before the browser gets a
+      // frame, so the markup and the class cannot disagree — which is what lets
+      // _toggleScroll flip the class on the LIVE nodes instead of re-rendering.
+      // Re-rendering is why the roll transition never ran once.
+      //
+      // `--nosearch` IS written here: it turns only on the chapter list, so it
+      // is stable across a toggle and belongs with the paint that knows it.
+      const canSearch = this._canSearch(visible);
       const needle = (this._search || "").trim().toLowerCase();
       const filtered = needle
         ? visible.filter((c) =>
@@ -770,74 +937,60 @@
                 .map((g) => this._renderChapterSection(g)).join("")
             : noMatch);
 
-      const rollupHint = open && (hasChapters || hasScoring) ? `
-        <button class="scroll-panel__rollup-hint" type="button"
-                onclick="window.referenceGuideScroll._toggleScroll()">
-          <i data-icon="chevron-up" class="w-3.5 h-3.5"></i>
-          Tap to roll up scroll
-        </button>
-      ` : "";
-
       return `
-        <div class="scroll-panel ${rolledClass}">
-          <button class="scroll-panel__roll scroll-panel__roll--top"
-                  aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
-                  onclick="window.referenceGuideScroll._toggleScroll()"></button>
-          ${!open || canSearch ? `
-          <div class="scroll-panel__peek">
-            <!-- The peek is the strip that stays visible when the scroll is
-                 rolled up — and rolled up is how the Play screen opens it, with
-                 the Scoring section at the foot of the body hidden with the
-                 rest of it. So the notice rides here ONLY while rolled: open,
-                 that section says the same thing in the place the grid itself
-                 would be, and two copies of one offer on one screen is the
-                 duplicate .claude/rules/ui-object-design.md §3b is about. Both
-                 open the same sheet. State B (nothing in the scroll) renders no
-                 peek at all, so it carries its own copy of the host above.
+        <div class="scroll-paper${canSearch ? "" : " scroll-paper--nosearch"}">
+          ${rollHtml("top")}
+          <div class="scroll-panel">
+            <div class="scroll-panel__peek">
+              <!-- The peek is the strip that stays visible when the scroll is
+                   rolled up — and rolled up is how the Play screen opens it, with
+                   the Scoring section at the foot of the body hidden with the
+                   rest of it. So the notice SHOWS here only while rolled: open,
+                   that section says the same thing in the place the grid itself
+                   would be, and two copies of one offer on one screen is the
+                   duplicate .claude/rules/ui-object-design.md §3b is about. Both
+                   open the same sheet. State B (nothing in the scroll) renders no
+                   peek at all, so it carries its own copy of the host above.
 
-                 Open, with too few chapters to search, every one of the peek's
-                 three tenants is suppressed — so the strip itself goes rather
-                 than being left as a band of padding between the roll and the
-                 body. -->
-            ${!open ? `<div class="scroll-panel__notice-host" data-notice-host>
-              ${this._renderScoringCta()}
-            </div>` : ""}
-            ${canSearch ? `
-            <div class="scroll-panel__search-row" data-search-host>
-              <i data-icon="search" class="w-4 h-4 scroll-panel__search-icon"></i>
-              <input class="scroll-panel__search"
-                     id="guide-scroll-search"
-                     type="text"
-                     placeholder="Search chapters…"
-                     aria-label="Search chapters"
-                     autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
-                     value="${escapeAttr(this._search)}"
-                     oninput="window.referenceGuideScroll._onSearch(this.value)" />
-              ${window.BgbSearchField.clearButton({ value: this._search })}
-            </div>` : ""}
-            ${!open ? `
-              <button class="scroll-panel__hint" type="button"
-                      onclick="window.referenceGuideScroll._toggleScroll()">
-                <i data-icon="chevron-down" class="w-3.5 h-3.5"></i>
-                Tap to expand and see chapters
-              </button>` : ""}
-          </div>` : ""}
-          <div class="scroll-panel__body">
-            ${bodyInner}
-            <!-- Last, always: a scoring grid is the shape of the scorepad
-                 rather than a rule anybody opened the scroll to look up, and
-                 migration 021's display_order would otherwise put it first. -->
-            <div class="scroll-panel__scoring-host" data-scoring-host>
-              ${this._renderScoringSection()}
+                   Both tenants are now in the DOM in BOTH states and shown or
+                   hidden by state classes on .scroll-paper, because _toggleScroll
+                   flips a class on the live nodes rather than re-rendering — a
+                   tenant that only exists in one state cannot animate across the
+                   toggle. display:none keeps a hidden tenant out of the
+                   accessibility tree and out of the peek's flex gap, so the
+                   cascade enforces what the branches used to.
+
+                   Open, with too few chapters to search, both tenants are
+                   suppressed — and the strip itself goes with them rather than
+                   being left as a band of padding between the roll and the body.
+                   That is the --nosearch:not(--rolled) rule in styles.css. -->
+              <div class="scroll-panel__notice-host" data-notice-host>${this._renderScoringCta()}</div>
+              <div class="scroll-panel__search-row" data-search-host>
+                <i data-icon="search" class="w-4 h-4 scroll-panel__search-icon"></i>
+                <input class="scroll-panel__search"
+                       id="guide-scroll-search"
+                       type="text"
+                       placeholder="Search chapters…"
+                       aria-label="Search chapters"
+                       autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+                       value="${escapeAttr(this._search)}"
+                       oninput="window.referenceGuideScroll._onSearch(this.value)" />
+                ${window.BgbSearchField.clearButton({ value: this._search })}
+              </div>
             </div>
-            <div class="scroll-panel__add-host" data-add-host>
-              ${this._renderAddButton()}
+            <div class="scroll-panel__body" id="guide-scroll-body">
+              ${bodyInner}
+              <!-- Last, always: a scoring grid is the shape of the scorepad
+                   rather than a rule anybody opened the scroll to look up, and
+                   migration 021's display_order would otherwise put it first.
+                   No whitespace inside either host below: :empty does not match
+                   an element holding a whitespace text node, and an empty host
+                   is a flex item that would buy a 16px gap. -->
+              <div class="scroll-panel__scoring-host" data-scoring-host>${this._renderScoringSection()}</div>
+              <div class="scroll-panel__add-host" data-add-host>${this._renderAddButton()}</div>
             </div>
-            ${rollupHint}
           </div>
-          <button class="scroll-panel__roll scroll-panel__roll--bottom"
-                  aria-label="${open ? "Roll up the reference guide" : "Open the reference guide"}"
-                  onclick="window.referenceGuideScroll._toggleScroll()"></button>
+          ${rollHtml("bottom")}
         </div>
       `;
     }
@@ -875,13 +1028,20 @@
     }
 
     _renderChapter(c) {
-      const icon = c.chapter_type_icon || "book";
-      // Source dot ties expansion chapters to their identity color.
-      // The base game leaves source_color null, so no dot rendered.
+      // Source dot ties expansion chapters to their identity color. The base
+      // game leaves source_color null — but with the redundant per-chapter icon
+      // gone (the section header above already carries the type's glyph, and
+      // every chapter in a section repeated it) there is no icon column
+      // absorbing that, so an undotted row would start 17px left of a dotted one
+      // and every title in a merged list would sit at a different place. The
+      // column is therefore RESERVED whenever the scroll is merged, and omitted
+      // entirely on a single game, where no row has a dot and the column would
+      // be 17px of nothing on every row.
+      const merged = this._gameIds.length > 1;
       const dot = c.source_color
         ? `<span class="scroll-chapter__source-dot" style="--exp-color:${escapeAttr(c.source_color)}"
                  title="${escapeAttr(c.source_game_name || "")}"></span>`
-        : "";
+        : (merged ? `<span class="scroll-chapter__source-dot scroll-chapter__source-dot--none"></span>` : "");
       // Edit affordance appears only for chapters the current user authored.
       // Routes through the shared add-view in "edit" mode with the chapter
       // stashed on the singleton so we don't need an extra GET.
@@ -906,7 +1066,6 @@
           <details>
             <summary class="scroll-chapter__summary">
               ${dot}
-              <span class="scroll-chapter__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
               <span class="scroll-chapter__title">${escapeHtml(c.title)}</span>
               ${by}
             </summary>
@@ -949,7 +1108,11 @@
 
     _toggleScroll() {
       this._scrollOpen = !this._scrollOpen;
-      this._render();
+      // No _render(). See _applyScrollState — re-rendering is what killed the
+      // transition, the focus ring and every open <details>. Nothing else needs
+      // recomputing either: `--nosearch` and the loading state both turn on the
+      // chapter list, which a toggle cannot change.
+      this._applyScrollState({ animate: true });
     }
 
     _onSearch(v) {
@@ -957,6 +1120,9 @@
       // Auto-expand the scroll the moment the user types. Don't auto-collapse
       // when they clear the box — once open, stay open until the user rolls it.
       if (this._search && !this._scrollOpen) this._scrollOpen = true;
+      // _render() notices that the auto-expand changed the roll state and
+      // replays the unroll on the new nodes, so typing opens the scroll with the
+      // same motion a tap on a roll gives.
       this._render();
       const el = this._container && this._container.querySelector(".scroll-panel__search");
       if (el) { el.focus(); el.setSelectionRange(this._search.length, this._search.length); }
