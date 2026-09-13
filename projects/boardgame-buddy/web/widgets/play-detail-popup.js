@@ -48,19 +48,76 @@
   // wherever the backdrop itself is created or destroyed.
   let _lastHtml = null;
 
+  // The play id whose partner-bundle refresh has already been kicked off.
+  // ensureBuddies() is called twice in one open, and without this the second
+  // call would fire a duplicate request on a cold cache. A play id rather than
+  // a boolean: a popup closed mid-flight can be reopened before the first
+  // request settles, and a flag cleared by that stale request's `finally` would
+  // let the new open fire a third.
+  let _buddiesFor = null;
+
+  /**
+   * Fill `state.buddies` for edit mode, off the critical path.
+   *
+   * Reads the cached partner bundle synchronously — bootstrap seeds it, and it
+   * is the same entry the alias and edge-id maps resolve from, so a first paint
+   * agrees with a second on every name. The refresh behind it is deliberately
+   * NOT awaited: `state.buddies` is read only in edit mode (the add-player
+   * datalist, addPlayer, the alias sheet), so nothing on screen waits for it,
+   * and the render it triggers is dropped by the byte-identity guard whenever
+   * the bundle confirms what is already held — which, the bundle being SWR'd
+   * 24h/7d, is almost always.
+   *
+   * /play-partners rather than /buddies: both return the same BuddyEdgeResponse
+   * rows, but only this one is cached, pre-seeded at boot, and already the
+   * source of the alias map.
+   */
+  function ensureBuddies() {
+    if (!state.play || !state.play.is_own) return;
+    state.buddies = window.Buddy.cachedAccounts();
+    const playId = state.playId;
+    if (_buddiesFor === playId) return;
+    _buddiesFor = playId;
+    window.Buddy.allBuddies()
+      .then((bundle) => {
+        // The popup may have been closed and reopened on another play while
+        // this was in the air; writing into the new open's state would put one
+        // play's buddies under another's.
+        if (state.playId !== playId) return;
+        state.buddies = (bundle && bundle.accounts) || [];
+        render();
+      })
+      .catch(() => {});
+  }
+
   async function show(playId) {
     if (!playId) return;
     dismiss();
-    // Since migration 015 the feed card carries the whole play, so a popup
-    // opened from a card the feed drew has its content before it is mounted
-    // and never shows a loading state. It still revalidates underneath: the
-    // seed is a projection of a feed page that may have been served stale (the
-    // feed's own cache holds a long stale window on purpose), and this is an
-    // EDIT surface. What the seed buys is the first frame, not the fetch.
+    // Since migration 015 the feed card carries the whole play, and since 031
+    // it carries the scoring template too, so a popup opened from a card the
+    // feed drew has its content before it is mounted and never shows a loading
+    // state. Play.seeded also falls back to a cached /plays page, which covers
+    // the surfaces that draw no feed cards at all — the plays log, the profile
+    // preview, notifications, the session viewer.
     //
-    // What the revalidation no longer buys is a repaint: render() drops the
-    // one it would have done when the fetch confirms what is already on
-    // screen, which is the common case and was the visible flicker.
+    // It still revalidates underneath: the seed is a projection of a page that
+    // may have been served stale (those caches hold long stale windows on
+    // purpose), and this is an EDIT surface. What the seed buys is the first
+    // frame, not the fetch.
+    //
+    // The invariant that makes the revalidation free: a seed carrying the
+    // template, agreeing with the server on game_thumbnail and resolving the
+    // same aliases produces the same BYTES as the fetched row, so render()
+    // drops the confirming paint outright. A seed that genuinely disagrees —
+    // someone else edited the play, a page went stale — repaints, which is the
+    // point of revalidating at all. Every field the seed and the row could
+    // disagree on by construction rather than by fact is a flicker, so keep
+    // Play.fromFeedCard honest about the shape it is projecting into.
+    //
+    // Nothing is awaited between the two paints except the play itself. The
+    // buddy list used to be, and it is needed only in edit mode — a whole
+    // round trip that bought the first render nothing and delayed the second
+    // long enough to read as a flicker rather than as part of the open.
     //
     // There is no `loading` flag any more: it existed only to drive the
     // spinner, the spinner is now gated on having nothing to show, and a flag
@@ -78,26 +135,35 @@
     });
     mountBackdrop();
     render();
+    ensureBuddies();
     try {
       const fresh = await window.Play.get(playId);
+      // Hold the authoritative row. Keyed by id, so this is right whatever the
+      // popup has moved on to: a second open of this play in the same session
+      // paints once from it and never revalidates into a repaint.
+      window.Play.remember(fresh);
+      // Every entry point is a tap on a list, so the user can open another play
+      // while this is in the air — and `state` is a module-scoped singleton.
+      // Writing a resolved row into it without checking which play it belongs
+      // to paints one play's details under another's (web-frontend.md, "Async
+      // state & race conditions"). The `finally` render below still runs and is
+      // correct: it renders whatever the popup is actually showing now.
+      if (state.playId !== playId) return;
       // Never clobber an edit in progress. The user can be typing by the time
       // this lands — the popup painted from the seed and opened for business
       // several hundred milliseconds ago — and replacing `play` under an open
       // draft would reset the form to the server's copy mid-keystroke.
       if (!state.editing) state.play = fresh;
-      if (state.play && state.play.is_own) {
-        // Buddy list powers the add-player datalist in edit mode. Free
-        // lookup — list is small and cached server-side.
-        state.buddies = await window.Buddy.list().catch(() => []);
-        // Seed the session alias map off our own read, so a popup opened on a
-        // cold boot renders aliases without waiting for the partner bundle.
-        window.Buddy.rememberAliases(state.buddies);
-      }
+      // Asked again because the seed may not have known this play was ours —
+      // a cold open with no seed at all starts with `state.play` null.
+      ensureBuddies();
     } catch (e) {
       // A failed revalidation over a seed is not an error the user can act on
       // — the play is on screen. Only a cold open with nothing to show gets
-      // the error state.
-      if (!state.play) state.error = (e && e.message) || "Failed to load play";
+      // the error state, and only while it is still the open we failed for.
+      if (state.playId === playId && !state.play) {
+        state.error = (e && e.message) || "Failed to load play";
+      }
     } finally {
       render();
     }
@@ -110,6 +176,7 @@
 
   function resetState() {
     _lastHtml = null;
+    _buddiesFor = null;
     if (state.draft) clearPendingPhoto(state.draft);
     Object.assign(state, {
       playId: null,

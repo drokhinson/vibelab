@@ -32,6 +32,48 @@
     return [userId || "me", gameId || "", buddyId || "", search || "", page, perPage].join("|");
   }
 
+  /**
+   * A play projected out of a cached /plays page, or null.
+   *
+   * `bgb_plays_page` (migration 018) returns the whole PlayResponse per row —
+   * the full roster with round_scores, and the scoring_template — so a page the
+   * client already holds can seed the detail popup just as a feed card does.
+   *
+   * Three gates, and each one is load-bearing:
+   *
+   * 1. `group_count === 1`. A run row stands for many identical imported plays;
+   *    the same rule keeps applyToCachedLists from swapping one for 58.
+   * 2. The row must actually carry `scoring_template` AND a roster. This is why
+   *    the fallback lives here rather than at the call sites: plays-view falls
+   *    back to the profile bundle's `recent_plays` (003_rpcs.sql), whose players
+   *    carry no round_scores and which has no template at all, and preview-card
+   *    renders from the same rows. Seeding off those would recreate the exact
+   *    bug this fallback exists to fix, from a second source.
+   * 3. `is_own` is RECOMPUTED. bgb_plays_page computes it as
+   *    `pg.user_id = p_target` — relative to whose log you are browsing, not to
+   *    the viewer — so a buddy's play read off their own log claims is_own and
+   *    the popup would flash Edit and Delete before the fetch took them away.
+   *
+   * @param {string} id a play id
+   * @returns {any} a PlayResponse-shaped object, or null
+   */
+  function _seedFromCachedLists(id) {
+    if (!window.bgbCache) return null;
+    for (const key of window.bgbCache.keys(LIST_NS)) {
+      const page = window.bgbCache.peek(LIST_NS, key);
+      if (!page || !Array.isArray(page.plays)) continue;
+      const row = page.plays.find((p) => p && p.id === id && (p.group_count || 1) === 1);
+      if (!row) continue;
+      if (!("scoring_template" in row)) continue;
+      if (!Array.isArray(row.players) || row.players.length === 0) continue;
+      const me = window.store && window.store.get && window.store.get("user");
+      return Object.assign({}, row, {
+        is_own: !!(me && me.id && row.logged_by_id && row.logged_by_id === me.id),
+      });
+    }
+    return null;
+  }
+
   class Play {
     constructor(raw) { Object.assign(this, raw || {}); }
 
@@ -102,7 +144,12 @@
         id: card.play_id,
         game_id: g.id || null,
         game_name: g.name || "",
-        game_thumbnail: g.thumbnail_url || g.image_url || null,
+        // thumbnail_url ONLY. `game_thumbnail` on a PlayResponse is
+        // games.thumbnail_url (play_routes.py _build_play_response), so falling
+        // back to the full-size image_url here made the seed disagree with the
+        // row it is a projection of: a game with art but no thumbnail painted
+        // one on the first frame that vanished when the fetch landed.
+        game_thumbnail: g.thumbnail_url || null,
         played_at: card.played_at,
         created_at: card.created_at,
         notes: card.notes == null ? null : card.notes,
@@ -115,6 +162,15 @@
         logged_by_name: logger ? logger.display_name : null,
         is_own: !!(me && me.id && logger && logger.id === me.id),
         group_count: card.group_count || 1,
+        // Migration 031. The popup gates its Rounds section on
+        // hasRoundGrid(players, key, template), which needs only ONE round when
+        // a template exists and two without one — so a seed missing this
+        // rendered no grid at all on a single-round play and generic R1..Rn
+        // labels on a multi-round one, and the confirming fetch then repainted
+        // the whole card. `undefined` (a card from a pre-031 payload) is left
+        // as undefined rather than nulled; seedFromFeedCard reads that
+        // distinction.
+        scoring_template: card.scoring_template,
       };
     }
 
@@ -130,12 +186,55 @@
       if (!card || !card.play_id) return null;
       if (!Array.isArray(card.players) || card.players.length === 0) return null;
       const play = Play.fromFeedCard(card);
+      // Never let a card that predates 031 downgrade a seed that has the
+      // template. The feed cache holds a 24h stale window, so for a day after
+      // deploy some cards arrive with no such key at all — and the seed this
+      // would overwrite may have come from a /plays page or from the row a PUT
+      // echoed back, both of which carry it.
+      //
+      // The test is `undefined`, not falsiness: undefined means UNKNOWN (a
+      // pre-031 payload) and keeps whatever is already held; null means this
+      // play genuinely has no template and must be taken, or a play whose
+      // template was removed would keep painting the old labels.
+      if (play.scoring_template === undefined) {
+        const prev = _seeds.get(card.play_id);
+        play.scoring_template = prev ? prev.scoring_template : null;
+      }
       _seeds.set(card.play_id, play);
       return play;
     }
 
-    /** The remembered play, or null. Synchronous — this is its whole point. */
-    static seeded(id) { return _seeds.get(id) || null; }
+    /**
+     * Remember a play the client has in full — the row GET /plays/{id} or a PUT
+     * echoed back. The popup calls this with its own fetch, so a second open of
+     * the same play in one session paints once and never repaints.
+     *
+     * @param {any} play a PlayResponse
+     */
+    static remember(play) {
+      if (!play || !play.id) return;
+      _seeds.set(play.id, play);
+    }
+
+    /**
+     * The remembered play, or null. Synchronous — this is its whole point.
+     *
+     * Falls back to a cached /plays page, so the surfaces that do NOT draw feed
+     * cards — the plays log, the profile preview, notifications, the session
+     * viewer — open on content rather than a spinner. Those pages have carried
+     * the full row, scoring_template included, since migration 018; nothing had
+     * ever wired them to the seed.
+     */
+    static seeded(id) {
+      if (!id) return null;
+      const held = _seeds.get(id);
+      if (held) return held;
+      const fromList = _seedFromCachedLists(id);
+      // Memoise. `_seeds` is cleared wholesale by _invalidatePlayDeps, so this
+      // inherits the existing invalidation story rather than adding one.
+      if (fromList) _seeds.set(id, fromList);
+      return fromList;
+    }
 
     /**
      * The inverse of fromFeedCard: write a PlayResponse's fields onto a
@@ -183,6 +282,12 @@
       card.country_code = play.country_code == null ? null : play.country_code;
       card.players = play.players || [];
       card.expansions = play.expansions || [];
+      // A play owns its template, so an edit that changed it has to reach the
+      // card too. Without this the card's projection would keep saying
+      // "unknown" and the seed would hold the pre-edit labels on the strength
+      // of seedFromFeedCard's undefined guard — which is a backstop for stale
+      // payloads, not a place to hide a field we know the new value of.
+      card.scoring_template = play.scoring_template == null ? null : play.scoring_template;
       // group_count is deliberately NOT written. One card can stand for a whole
       // run of identical imported plays (migration 005), and PlayResponse
       // always says 1 — so copying it across would collapse a run of 58 into a
@@ -194,10 +299,11 @@
      * Fold an accepted edit into everything holding the old row.
      *
      * Order is load-bearing. The play-card patch re-renders the card, and
-     * rendering a card re-seeds `_seeds` from its PROJECTION — which carries no
-     * scoring_template, because a feed card never had one. So the full row goes
-     * into the seed last, or the repaint would quietly downgrade it and the
-     * next popup open would paint a round grid with no labels.
+     * rendering a card re-seeds `_seeds` from its PROJECTION. Since 031 that
+     * projection carries the scoring_template, and seedFromFeedCard holds the
+     * previous one when a stale card has no such key — but the full row still
+     * goes into the seed last, because it is the authoritative copy and the
+     * card is a lossy view of it.
      *
      * @param {any} play the PlayResponse the PUT echoed back
      */
@@ -208,7 +314,7 @@
       if (window.BgbPlayCard && window.BgbPlayCard.applyPlayUpdate) {
         window.BgbPlayCard.applyPlayUpdate(play);
       }
-      _seeds.set(play.id, play);
+      Play.remember(play);
       // The Another Round card seeds off the viewer's most recent play. Before
       // this it was cleared outright on every edit — including an edit to that
       // very play, which is the one case where we now know exactly what it

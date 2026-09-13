@@ -1,6 +1,16 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 030_game_viewer_stats.sql (re-emits bgb_game_detail_bundle with
+-- Last updated: 031_feed_scoring_template.sql (re-emits bgb_feed_plays with
+--               scoring_template, reversing the call 018 made below. The
+--               play-detail popup does revalidate through GET /plays/{id}, but
+--               it paints from a seed projected off the feed card FIRST — and
+--               without the template that first paint gets the round grid wrong
+--               (no Rounds section at all on a single-round play, generic
+--               R1..Rn labels on a multi-round one), so the confirming render
+--               had to rebuild the whole card. One column carried off the
+--               existing `page` CTE; DROP + CREATE, since another OUT column is
+--               a new return type.)
+--               Before that: 030_game_viewer_stats.sql (re-emits bgb_game_detail_bundle with
 --               a `viewer_stats` block, so the game's own page can draw the
 --               viewer's record with it without pulling the Stats spoke's
 --               whole-history payload.)
@@ -30,9 +40,12 @@
 --               re-emits bgb_log_play, bgb_session_bundle and bgb_plays_page
 --               so a play, a live lobby and the History page each carry the
 --               scoring-grid row labels the play was scored on. bgb_feed_plays
---               is deliberately NOT re-emitted — its RETURNS TABLE signature
+--               was deliberately NOT re-emitted — its RETURNS TABLE signature
 --               would force a DROP + full re-CREATE for one column, and the
---               play-detail popup revalidates through GET /plays/{id} anyway.)
+--               play-detail popup revalidates through GET /plays/{id} anyway.
+--               031 reverses that: the popup's FIRST paint comes from the feed
+--               card, not from the revalidation, so the column was worth the
+--               re-CREATE after all.)
 --               Before that: 017_push_notifications.sql (adds bgb_push_note_failure — a
 --               one-line UPDATE as an RPC because PostgREST cannot express
 --               `failure_count = failure_count + 1`. The notification RPCs are
@@ -156,11 +169,21 @@
 --            participant_count INT, participants JSONB, group_count INT,
 --            import_group_id UUID, players JSONB, expansions JSONB,
 --            country_code TEXT, reaction_count INT, viewer_reacted BOOLEAN,
---            reactors JSONB, import_batch_id UUID)
+--            reactors JSONB, import_batch_id UUID, scoring_template JSONB)
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/014_feed_order_by_played_at.sql)
 --               (originally 012; signature changed to a composite cursor)
---   Last updated in: db/migrations/boardgamebuddy/022_feed_import_batch.sql
+--   Last updated in: db/migrations/boardgamebuddy/031_feed_scoring_template.sql
+--               (adds scoring_template, carried straight off the `page` CTE —
+--               no new read, no behavior change in SQL. bgb_plays_page has
+--               emitted it since 018; this gives the feed the same field so the
+--               play-detail popup, which paints from a seed projected off the
+--               feed card before its revalidation lands, gets the round grid
+--               right on its first frame instead of repainting the whole card.
+--               DROP + CREATE, since another OUT column is a new return type —
+--               which also discards the ACL, so 028's revoke is re-applied for
+--               this function alongside the grant.)
+--   Previously updated in: db/migrations/boardgamebuddy/022_feed_import_batch.sql
 --               (adds import_batch_id, carried straight off the `page` CTE —
 --               no new read, no behavior change in SQL. It is the flag the
 --               feed's client-side grouping needs to tell an imported play
@@ -172,7 +195,7 @@
 --               indistinguishable from another in the same paste, so every
 --               one-off in an import carries a batch id and no group id.
 --               DROP + CREATE, since another OUT column is a new return type.)
---   Previously updated in: db/migrations/boardgamebuddy/016_play_reactions.sql
+--   Before that: db/migrations/boardgamebuddy/016_play_reactions.sql
 --               (adds reaction_count, viewer_reacted and reactors — the "Good
 --               game" reaction, drawn on the SESSION footer but stored per
 --               play, because a feed session is grouped client-side off a

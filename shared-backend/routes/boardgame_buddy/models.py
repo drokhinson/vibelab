@@ -1739,6 +1739,18 @@ class FeedPlayCard(BaseModel):
     players: list[PlayPlayerResponse] = []
     expansions: list[PlayExpansionRef] = []
     country_code: str | None = None
+    # ── Migration 031 — the play's frozen copy of the chapter's scoring grid.
+    #
+    # Same field as PlayResponse.scoring_template, and here for the same reason
+    # the roster is: the detail popup paints synchronously from a seed projected
+    # off this card, and without the template that first paint gets the round
+    # grid wrong — no Rounds section at all on a single-round play, generic
+    # R1..Rn labels on a multi-round one — so the confirming render after
+    # GET /plays/{id} had to repaint the whole card.
+    #
+    # Defaults to None so a database still on the pre-031 RPC serves cards
+    # without it, exactly as today, rather than erroring.
+    scoring_template: PlayScoringTemplate | None = None
     # ── Migration 016 — the "Good game" reaction.
     #
     # Per PLAY, though the UI draws it per session: a feed session is grouped
