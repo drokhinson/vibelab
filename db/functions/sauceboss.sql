@@ -1,17 +1,43 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SauceBoss — RPC function inventory
--- Last updated: 2026-05-14
+-- Last updated: 2026-09-13
 -- FOR REFERENCE ONLY — apply changes via db/migrations/
+--
+-- search_path: every function listed below is pinned with
+-- `SET search_path TO 'public'` by sauceboss/029_supabase_linter_fixes.sql,
+-- which clears Supabase's function_search_path_mutable lint. Any new sauceboss
+-- function must declare the same clause in its CREATE statement (see
+-- boardgamebuddy/003_rpcs.sql for the house style) or the warning comes back.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 
--- ── Trigger functions ───────────────────────────────────────────────────────
+-- ── Trigger functions and helpers ───────────────────────────────────────────
+-- The 001 baseline's sauceboss_sauce_items_check() was dropped by 009 and the
+-- 013 rename split its job across the three checks below.
 
--- sauceboss_sauce_items_check()
+-- sauceboss_dish_level_check()
 --   Signature : () → TRIGGER
 --   Language  : plpgsql
---   Defined in: sauceboss/001_baseline.sql
---   Purpose   : Enforces dish-level shape invariants on sauceboss_dish.
+--   Defined in: sauceboss/013_table_rename_consolidation.sql
+--   Purpose   : Enforces the two-tier dish/subtype shape on sauceboss_dish.
+
+-- sauceboss_sauce_variant_check()
+--   Signature : () → TRIGGER
+--   Language  : plpgsql
+--   Defined in: sauceboss/013_table_rename_consolidation.sql
+--   Purpose   : Keeps sauce variants one level deep (no grandparent chains).
+
+-- sauceboss_sauce_to_dish_check()
+--   Signature : () → TRIGGER
+--   Language  : plpgsql
+--   Defined in: sauceboss/013_table_rename_consolidation.sql
+--   Purpose   : Validates a sauce↔dish attachment against the sauce's type.
+
+-- sauceboss_type_to_category(p_sauce_type TEXT)
+--   Signature : (p_sauce_type TEXT) → TEXT
+--   Language  : SQL IMMUTABLE
+--   Defined in: sauceboss/013_table_rename_consolidation.sql
+--   Purpose   : sauce_type → dish category map used by the attachment trigger.
 
 
 -- ── Read functions (public RPC) ─────────────────────────────────────────────
