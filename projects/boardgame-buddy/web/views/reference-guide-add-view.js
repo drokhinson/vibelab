@@ -391,7 +391,18 @@ components above.
         this._pickType(GRID_TYPE);
         this._step = 2;
         this._arrivedByRoute = true;
-        this._armWizardGuard();
+        // NO wizard guard here, unlike _enterCreate. The guard's whole job is
+        // to give a mode that has no history entry one of its own, so the back
+        // press closes the mode instead of walking the screen underneath it —
+        // which is exactly right for the in-view create, a mode of the Browse
+        // screen. A ROUTED wizard is not a mode: router.go already pushed an
+        // entry for it, and arming here put a second one on top of the same
+        // screen. Leaving then had to unwind two entries by two different
+        // mechanisms — release()'s deferred history.back() and router.back()'s
+        // — and nothing orders a 0ms timer against a history traversal, so
+        // which ran first decided whether the user landed on the game page or
+        // back on this screen's own entry, where mode=create re-opened the
+        // wizard they had just closed. One entry, one pop, no race.
       }
       // else: fresh mount stays on browse — _resetFormState() at the top of
       // onMount already set _tab = "browse" and cleared the form buffer.
@@ -675,6 +686,12 @@ components above.
     // own close while steps remain (which arm() explicitly supports).
     _armWizardGuard() {
       if (!window.BgbBackGuard) return;
+      // Only the in-view wizard is guarded — a routed one owns the screen's own
+      // history entry and must not push a second (see the routed-create branch
+      // in onMount). Belt and braces: an entry armed over a routed entry is the
+      // race that shipped, and it is cheaper to refuse it here than to find it
+      // again from a bug report.
+      if (this._arrivedByRoute) return;
       // Idempotent: entering create twice without leaving must not stack two
       // guards, or back would need two presses to move one step.
       if (this._wizBackTok) return;
@@ -736,7 +753,9 @@ components above.
         // the × take, so a routed entry goes back to the screen that opened it
         // rather than to Browse. Both paths inside _exitEditor release the
         // guard through _resetFormState before this returns, so the caller's
-        // `_tab === "create"` re-arm check sees "browse" and nothing is re-armed.
+        // `_tab === "create"` re-arm check sees "browse" and nothing is
+        // re-armed. (A routed wizard has no guard to begin with — its back
+        // press reaches the router, which pops the one entry it owns.)
         this._exitEditor();
         return;
       }

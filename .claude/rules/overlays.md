@@ -353,6 +353,17 @@ window.BgbBackGuard.release(this._back);          // X, backdrop, Escape, a pick
 - **A guard may be re-armed from inside its own `close`.** That is how an overlay
   answers a press without closing — the onboarding deck walks back one slide, a
   card mid-save refuses — rather than letting the press fall through to the page.
+- **Only arm something that has no history entry of its own.** The guard exists
+  to give a *mode* an entry so back can close it; a screen the router navigated
+  to already has one, and arming over it puts two entries on the same url.
+  Leaving then has to unwind both — `release()`'s deferred `history.back()` and
+  the screen's own `router.back()` — and nothing in the spec orders a 0ms timer
+  against a history traversal, so whichever ran first decided where the user
+  landed. Boardgame-buddy's chapter wizard shipped exactly that: reached from
+  the Browse FAB it is a mode and arms; reached by route
+  (`mode=create&layout=scoring_grid`) it is the screen, and arming made the ×
+  re-enter the wizard it had just closed about half the time. The test for this
+  has to drive **both** orderings — one of them passes on the broken code.
 - **The entry is an optimisation, not the mechanism.** A browser can refuse the
   `pushState` (History API throttling), so `arm()` registers the overlay whether
   or not the entry lands and the press is spent on it either way. Registering
@@ -385,8 +396,10 @@ Consumers: the sheet shell (`ui/bottom-sheet.js`, so every sheet), the whole
 customizer), `widgets/add-buddies-modal.js`,
 `widgets/import-expansions-modal.js`, `widgets/outbox-modal.js`,
 `widgets/play-detail-popup.js`, `widgets/onboarding-deck.js`, and the authoring
-guide in `views/reference-guide-add-view.js`. Grep `BgbBackGuard` rather than
-trusting the list. A new overlay that skips this is the bug again.
+guide plus the IN-VIEW create wizard in `views/reference-guide-add-view.js` (the
+routed wizard on the same screen deliberately arms nothing — see the bullet
+above). Grep `BgbBackGuard` rather than trusting the list. A new overlay that
+skips this is the bug again.
 
 ## Anti-patterns to refactor away when touching a project
 
