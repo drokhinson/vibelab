@@ -365,7 +365,7 @@
                 onclick="window.referenceGuideScroll._openCreateTemplate(event)">
           <i data-icon="plus" class="w-4 h-4"></i>
           <span class="scroll-panel__notice-text">
-            No scoring grid for this game yet — tap to build one
+            No scoring template yet — tap to build one
           </span>
         </button>
       `;
