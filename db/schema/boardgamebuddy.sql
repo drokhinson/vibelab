@@ -727,15 +727,21 @@ COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS 'First time
 -- backend, so these policies are the actual authorization for live sessions.
 -- Everything else in this file relies on RLS-with-no-policy to deny direct
 -- access outright.
+--
+-- auth.uid() is wrapped in a scalar subquery in every predicate (migration
+-- 025): bare, it is part of the per-row qual and runs once per row scanned;
+-- as `(select auth.uid())` the planner hoists it into an InitPlan and runs it
+-- once per statement. Same value, same rows — Supabase's auth_rls_initplan
+-- lint is about the plan, not the result.
 
 -- You can see a session you host or are a participant in.
 CREATE POLICY bgb_play_sessions_select ON public.boardgamebuddy_play_sessions
   FOR SELECT TO authenticated USING (
-    host_user_id = auth.uid()
+    host_user_id = (select auth.uid())
     OR EXISTS (
       SELECT 1 FROM public.boardgamebuddy_play_session_participants p
       WHERE p.session_id = boardgamebuddy_play_sessions.id
-        AND p.user_id = auth.uid()
+        AND p.user_id = (select auth.uid())
     )
   );
 
@@ -746,10 +752,10 @@ CREATE POLICY bgb_session_scores_select ON public.boardgamebuddy_play_session_sc
       SELECT 1 FROM public.boardgamebuddy_play_sessions s
       WHERE s.id = boardgamebuddy_play_session_scores.session_id
         AND (
-          s.host_user_id = auth.uid()
+          s.host_user_id = (select auth.uid())
           OR EXISTS (
             SELECT 1 FROM public.boardgamebuddy_play_session_participants p
-            WHERE p.session_id = s.id AND p.user_id = auth.uid()
+            WHERE p.session_id = s.id AND p.user_id = (select auth.uid())
           )
         )
     )
@@ -764,14 +770,14 @@ CREATE POLICY bgb_session_scores_write ON public.boardgamebuddy_play_session_sco
       SELECT 1 FROM public.boardgamebuddy_play_sessions s
       WHERE s.id = boardgamebuddy_play_session_scores.session_id
         AND s.phase = 'play'
-        AND s.host_user_id = auth.uid()
+        AND s.host_user_id = (select auth.uid())
     )
   ) WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.boardgamebuddy_play_sessions s
       WHERE s.id = boardgamebuddy_play_session_scores.session_id
         AND s.phase = 'play'
-        AND s.host_user_id = auth.uid()
+        AND s.host_user_id = (select auth.uid())
     )
   );
 
