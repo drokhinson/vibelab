@@ -870,7 +870,6 @@
       return `
         <section class="cascade-card cascade-card--scoring">
           <label class="cascade-card__label">Scoring</label>
-          <p class="session-viewer__scoring-hint">View only — the host is keeping score.</p>
           ${grid}
         </section>
       `;
