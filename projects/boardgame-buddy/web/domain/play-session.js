@@ -304,6 +304,38 @@
       return window.api.post(`/sessions/${code}/watch`, {});
     }
 
+    /**
+     * Adopt a session bundle as THIS device's host draft, and publish it.
+     *
+     * The host re-entering their own session — from the code box, the joinable
+     * list, or the viewer screen they were bounced to while the network was
+     * misbehaving — needs the draft rebuilt from the server's row before
+     * play-flow opens, or the cascade mints a second lobby over the top of the
+     * one they are already hosting. Every caller did this by hand; one copy
+     * means the host path cannot drift between them.
+     *
+     * The caller is responsible for having established that `session` really is
+     * ours (`session.host_user_id === me.id`). This function does not check,
+     * because the two callers learn it in different ways.
+     *
+     * @param {Object} session a SessionResponse bundle
+     * @returns {Object} the persisted PlaySession
+     */
+    static adoptHostSession(session) {
+      const ps = PlaySession.load() || new PlaySession();
+      ps.code = session.code;
+      ps.sessionId = session.id;
+      ps.hostUserId = session.host_user_id;
+      ps.phase = session.phase || "gather";
+      if (session.game) {
+        ps.gameId = session.game.id;
+        ps.gameSnapshot = session.game;
+      }
+      ps.persist();
+      if (window.store) window.store.set("activePlay", ps);
+      return ps;
+    }
+
     // Host-only. Pass `gameId: null` to clear the pick.
     static updateLobby(code, { gameId } = {}) {
       return window.api.patch(`/sessions/${code}`, { game_id: gameId || null });

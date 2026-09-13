@@ -134,15 +134,52 @@
       this._loading = true;
       this._error = null;
       this.render();
+      // The other half of the host-vs-viewer fork. play-flow sends everyone it
+      // cannot positively identify as the host here — including, since a
+      // failed lobby probe is no evidence at all, a host whose own probe
+      // blipped. This read is what settles it, so a host who landed on the
+      // mirror by accident does not sit there read-only watching a game they
+      // are supposed to be scoring.
+      //
+      // No loop: play-flow only sends someone here once it has FETCHED a
+      // session whose host is not them, and this only sends them back once it
+      // has fetched one whose host IS them. Both need a successful read, and
+      // the two conditions cannot both hold.
+      //
+      // Held rather than acted on inside the try, so a screen we are leaving
+      // is not painted (and its phase side effects not run) on the way out.
+      let handOff = null;
       try {
-        this._session = await this._readSession();
+        const session = await this._readSession();
+        if (this._isMine(session)) handOff = session;
+        else this._session = session;
       } catch (e) {
         this._error = e.message || "Failed to load session";
       } finally {
-        this._loading = false;
-        this.render();
-        this._handlePhaseSideEffects(this._session);
+        if (!handOff) {
+          this._loading = false;
+          this.render();
+          this._handlePhaseSideEffects(this._session);
+        }
       }
+      if (handOff) {
+        window.PlaySession.adoptHostSession(handOff);
+        window.router.go("play-flow");
+      }
+    }
+
+    /**
+     * Is this session one WE host? Only ever true on a session actually read
+     * back from the server — an unanswered fetch says nothing about who hosts
+     * what, and treating silence as "mine" is the bug this pair of checks
+     * exists to close.
+     *
+     * @param {Object|null} session
+     * @returns {boolean}
+     */
+    _isMine(session) {
+      const me = window.store.get("user");
+      return !!(me && session && session.host_user_id && session.host_user_id === me.id);
     }
 
     /**
@@ -233,6 +270,17 @@
       }
       try {
         const next = await window.PlaySession.fetchLobby(this._code);
+        // Same hand-off as _load. A first read that failed leaves this screen
+        // on its error state with the poll as its only way back, so the answer
+        // to "whose session is this?" has to be re-asked on whichever read
+        // actually lands — otherwise the host whose probe blipped watches
+        // their own game read-only until they navigate away by hand.
+        if (this._isMine(next)) {
+          this._stopPolling();
+          window.PlaySession.adoptHostSession(next);
+          window.router.go("play-flow");
+          return;
+        }
         const prev = this._session;
         const prevPhase = prev && prev.phase;
         const structural = this._structuralDiff(prev, next);

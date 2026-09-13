@@ -244,9 +244,23 @@
           // immediately re-fetch the same code.
           this._prefetchedLobby = s || null;
         } catch (_) {
-          // Lobby fetch failed — treat as a regular play-flow open and let
-          // _ensureLobbyOpen handle the recovery.
-          this._ps.code = urlCode;
+          // The probe failed, so we do NOT know whose session this is — and
+          // this code came out of the URL, not out of this device's draft
+          // (the `_ps.code !== urlCode` guard above). Adopting it as our own
+          // was the one answer that can be actively wrong: it put a joiner who
+          // tapped a friend's link during a network blip onto the HOST
+          // cascade, where _ensureLobbyOpen would then either adopt someone
+          // else's lobby wholesale or — if the retry came back 404/410 — mint
+          // a brand-new session in their name. A failed probe is exactly when
+          // the app knows least, so it takes the answer that cannot do damage.
+          //
+          // The viewer is not a guess about who they are, it is where the
+          // question gets asked again with data in hand: session-viewer reads
+          // the session itself and hands a host straight back here (its
+          // _load). Whoever they turn out to be, one fetch settles it.
+          window.PlaySession.discardPrefetchedLobby();
+          window.router.go("session-viewer", { code: urlCode });
+          return;
         }
       }
       this._ensureSelfIncluded();
@@ -769,6 +783,20 @@
             ? pre
             : await window.PlaySession.fetchLobby(this._ps.code);
           if (s && s.status === "open" && s.phase && s.phase !== "abandoned") {
+            // Whose lobby is this? onMount's deep-link probe answers that
+            // before we ever get here, but it is not the only way a code
+            // reaches the draft, and adopting the row without asking is how a
+            // joiner ends up holding the host's controls. Belt to onMount's
+            // braces: hand them to the viewer and take the foreign code back
+            // out of the draft, or the next open bounces the same way again.
+            const me = window.store.get("user");
+            if (me && s.host_user_id && s.host_user_id !== me.id) {
+              const theirCode = s.code || this._ps.code;
+              this._ps.code = null;
+              this._ps.persist();
+              window.router.go("session-viewer", { code: theirCode });
+              return;
+            }
             this._lobby = s;
             this._lobbyProvisional = false;
             this._ps.sessionId = s.id;
