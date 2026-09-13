@@ -12,9 +12,12 @@
 
 (function () {
   // Three rows of the polaroid grid: 3-up on a phone, 4 on a tablet, 6 on a
-  // wide screen (styles.css .lp-find-grid). Keep COLS in step with the CSS.
+  // wide screen or a phone held sideways (styles.css .lp-find-grid). Keep COLS
+  // in step with the CSS — a tier missing from COLS falls back to the phone
+  // count with no error, so the grid paints six columns while only three rows'
+  // worth is fetched.
   const PAGE_ROWS = 3;
-  const COLS = { phone: 3, tablet: 4, wide: 6 };
+  const COLS = { phone: 3, tablet: 4, wide: 6, land: 6 };
   function perPage() {
     const tier = window.BgbLayout ? window.BgbLayout.current() : "phone";
     return PAGE_ROWS * (COLS[tier] || COLS.phone);

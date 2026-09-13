@@ -17,23 +17,44 @@
 //   phone   < 768px    today's layout, untouched
 //   tablet  768–1023   720px column, bottom bar stays
 //   wide    ≥ 1024     left rail, header folded into it, 1040px column
+//   land    sideways   a phone on its side: the same rail, compact
 //
-// A stored choice is `phone` or `tablet`, never `wide`: pinning a tier is for
-// a device that lands on the wrong side of a breakpoint, and the rail is not
-// something a 700px screen can hold. And a stored `tablet` still floors to
-// `phone` below MIN_TABLET_PX — a two-pane play cascade on a real phone is
-// two panes nobody can read.
+// `land` is the one tier that is not a width. A phone held sideways is 852×393,
+// which every width test here calls a tablet — so it keeps a 53px header and a
+// 64px bottom bar on a 393px screen, a third of the short axis spent on chrome.
+// Width cannot tell an iPad standing up (768×1024) from a phone lying down;
+// height can, which is why LAND_QUERY leads with it and is asked first.
+//
+// A stored choice is `phone` or `tablet`, never `wide` or `land`: pinning a
+// tier is for a device that lands on the wrong side of a breakpoint, and a rail
+// is not something a 700px screen can hold. And a stored `tablet` still floors
+// to `phone` below MIN_TABLET_PX — a two-pane play cascade on a real phone is
+// two panes nobody can read. A pin outranks orientation: someone who asked for
+// the phone layout keeps the bottom bar when they turn the device.
 
 (function () {
   const LS_KEY = "bgb.layout";
   const BREAKPOINTS = { tablet: 768, wide: 1024 };
   const MIN_TABLET_PX = 600;
 
+  // A phone on its side. Three clauses, each ruling something out:
+  //   orientation  — portrait is never this tier, whatever its size.
+  //   max-height   — the one test that separates it from an iPad (≥ 744px on
+  //                  its side). 560px clears every phone in landscape, which
+  //                  run 375–430px tall, with room to spare.
+  //   min-width    — below this there is no room for two panes beside a rail,
+  //                  so a very narrow device stays on the bottom bar.
+  // Read against the LAYOUT viewport, which iOS does not shrink for the
+  // software keyboard — so focusing a field cannot flip the tier.
+  const LAND_QUERY =
+    "(orientation: landscape) and (max-height: 560px) and (min-width: 640px)";
+
   // Module-scoped on purpose — see start(). A MediaQueryList held only by a
   // function local can be garbage-collected in WebKit while its `change`
   // listener is still registered, and the listener then silently stops firing.
   let mqlTablet = null;
   let mqlWide = null;
+  let mqlLand = null;
 
   function stored() {
     try {
@@ -53,6 +74,10 @@
   function auto() {
     // Reuse the retained lists once start() has made them, so the reads that
     // resync() does can't be answered by a stale throwaway object.
+    // Asked first, and deliberately: a landscape phone satisfies the tablet
+    // width test too, so a width-first ladder would never reach this.
+    const land = mqlLand ? mqlLand.matches : matches(LAND_QUERY);
+    if (land) return "land";
     const wide = mqlWide ? mqlWide.matches : matches("(min-width: " + BREAKPOINTS.wide + "px)");
     if (wide) return "wide";
     const tablet = mqlTablet ? mqlTablet.matches : matches("(min-width: " + BREAKPOINTS.tablet + "px)");
@@ -81,11 +106,17 @@
 
   const BgbLayout = {
     BREAKPOINTS,
+    /** The media query that defines the `land` tier. Exported so a consumer
+     *  can watch the same string rather than keep a copy of it in step. */
+    LAND_QUERY,
 
-    /** @returns {"phone"|"tablet"|"wide"} the tier currently laid out */
+    /** @returns {"phone"|"tablet"|"wide"|"land"} the tier currently laid out */
     current() {
       const v = document.documentElement.getAttribute("data-bgb-layout");
-      return v === "tablet" || v === "wide" ? v : "phone";
+      // Every consumer reads the tier through here, so a value missing from
+      // this list does not throw — it quietly reports "phone" and the JS half
+      // of a tier stops happening while the CSS half still paints.
+      return v === "tablet" || v === "wide" || v === "land" ? v : "phone";
     },
 
     /** The viewport's own answer, ignoring any stored choice. Use this for
@@ -138,9 +169,10 @@
       if (!window.matchMedia) return;
       mqlTablet = window.matchMedia("(min-width: " + BREAKPOINTS.tablet + "px)");
       mqlWide = window.matchMedia("(min-width: " + BREAKPOINTS.wide + "px)");
+      mqlLand = window.matchMedia(LAND_QUERY);
       // Not gated on isAuto(): a pinned tablet still floors to phone under
       // MIN_TABLET_PX, so a resize can change the answer either way.
-      for (const m of [mqlTablet, mqlWide]) {
+      for (const m of [mqlTablet, mqlWide, mqlLand]) {
         if (m.addEventListener) m.addEventListener("change", resync);
         else if (m.addListener) m.addListener(resync);
       }

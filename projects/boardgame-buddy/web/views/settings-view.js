@@ -254,9 +254,11 @@
       const auto = L.isAuto();
       const tier = L.current();
       const pick = L.stored();
-      // "desktop" in copy, "wide" in code: the tier name is about width, but
-      // to the person reading this it is the monitor in front of them.
-      const word = tier === "wide" ? "desktop" : tier;
+      // Tier names are about geometry; this copy is about the thing in the
+      // person's hands. "wide" is the monitor in front of them, and "land" is
+      // the phone they just turned on its side.
+      const WORDS = { wide: "desktop", land: "sideways" };
+      const word = WORDS[tier] || tier;
       const seg = (value, label) => {
         const on = value === "auto" ? auto : (!auto && pick === value);
         return `

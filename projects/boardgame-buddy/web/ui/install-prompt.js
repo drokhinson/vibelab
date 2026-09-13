@@ -101,8 +101,17 @@
   // The viewport's OWN answer (BgbLayout.auto), not the tier on screen: a
   // desktop user who pinned the phone layout in Settings is still on a desktop,
   // and must not be offered Add to Home Screen.
+  //
+  // `land` counts too, and this is the question that tier exists to answer. A
+  // phone held sideways is 852px wide, so before there was a `land` tier it
+  // came back "tablet" and this gate said no — rotating the device was enough
+  // to make Add to Home Screen disappear. Turning a phone on its side does not
+  // make it a tablet, and both widths below are the same device.
   function _isPhone() {
-    if (window.BgbLayout) return window.BgbLayout.auto() === "phone";
+    if (window.BgbLayout) {
+      const tier = window.BgbLayout.auto();
+      return tier === "phone" || tier === "land";
+    }
     return _safe(() => window.matchMedia("(max-width: 767px)").matches, false);
   }
 
@@ -333,8 +342,11 @@
 
       // Rotating a phone into landscape crosses the 767px gate, and launching
       // an installed copy flips display-mode without a reload. Re-run the
-      // gates on both rather than waiting for the next navigation.
+      // gates on both rather than waiting for the next navigation. The land
+      // query is watched too: a rotation crosses it and the 767px gate at the
+      // same moment, and _isPhone() now reads both sides of that.
       _watch("(max-width: " + ((window.BgbLayout ? window.BgbLayout.BREAKPOINTS.tablet : 768) - 1) + "px)");
+      if (window.BgbLayout && window.BgbLayout.LAND_QUERY) _watch(window.BgbLayout.LAND_QUERY);
       _watch("(display-mode: standalone)");
 
       setTimeout(() => { _settled = true; _sync(); }, SETTLE_MS);

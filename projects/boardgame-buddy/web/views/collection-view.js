@@ -56,9 +56,11 @@
   // not items: the grid is 3-up on a phone, 4 on a tablet and 6 on a wide
   // screen (styles.css .profile-collection-grid), and a batch has to fill a
   // comparable amount of screen whatever the column count
-  // (.claude/rules/ui-object-design.md §3d). Keep COLS in step with the CSS.
+  // (.claude/rules/ui-object-design.md §3d). Keep COLS in step with the CSS —
+  // a tier missing from COLS falls back to the phone count with no error, so
+  // the grid paints six columns while only three rows' worth is fetched.
   const BATCH_ROWS = 7;
-  const COLS = { phone: 3, tablet: 4, wide: 6 };
+  const COLS = { phone: 3, tablet: 4, wide: 6, land: 6 };
   function batchSize() {
     const tier = window.BgbLayout ? window.BgbLayout.current() : "phone";
     return BATCH_ROWS * (COLS[tier] || COLS.phone);

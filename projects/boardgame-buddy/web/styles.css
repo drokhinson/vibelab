@@ -102,20 +102,41 @@
 }
 
 /* ── Layout tiers ──────────────────────────────────────────────────────────── */
-/* tablet: an iPad held upright. The column widens, the bottom bar stays —
-   thumbs are still at the bottom. Screens that split into two panes do so
-   from here (grep `data-bgb-layout="tablet"], :root[data-bgb-layout="wide"]`).
+/* Two selector groups carry every per-tier rule in this file. Grep for them:
+     SPLIT TIERS  `[data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]`
+                  — enough room for two panes. Screens that split, split here.
+     RAIL TIERS   `[data-bgb-layout="wide"], [data-bgb-layout="land"]`
+                  — the bottom bar is a left rail and the header is folded
+                    into it, so both height tokens are 0px.
+   tablet: an iPad held upright. The column widens, the bottom bar stays —
+   thumbs are still at the bottom.
    wide: an iPad on its side, a laptop, a monitor. The bottom bar becomes a
    left rail carrying the header's logo, bell and gear, so the header itself
    is hidden — and both height tokens go to 0px, which collapses #app's
    bottom padding, every `bottom: calc(var(--bgb-nav-height) + …)` and every
-   sticky sub-header's `top:` without touching those rules. */
+   sticky sub-header's `top:` without touching those rules.
+   land: a phone held sideways. The same rail, drawn compact, for the same
+   reason the header goes: 117px of chrome on a 393px screen is a third of it.
+   See domain/layout.js for when this tier is chosen. */
 :root[data-bgb-layout="tablet"] {
   --bgb-col-max: 720px;
 }
 :root[data-bgb-layout="wide"] {
   --bgb-col-max: 1040px;
   --bgb-rail-width: 88px;
+  --bgb-nav-height: 0px;
+  --bgb-header-height: 0px;
+}
+/* --bgb-col-max is a CAP THAT NEVER BINDS here, not a column width, and it has
+   to stay a real length rather than `none`: three rules feed it into a calc()
+   — the rail's own `left:` below, and both .chapter-add__fab offsets — and
+   `calc(none / 2)` is invalid, which drops the whole declaration silently.
+   1024px can never bind on this tier, since the tier itself stops at 1023px
+   wide and the rail takes 64 off that, so the column always fills the space
+   beside the rail and every existing formula keeps working untouched. */
+:root[data-bgb-layout="land"] {
+  --bgb-col-max: 1024px;
+  --bgb-rail-width: 64px;
   --bgb-nav-height: 0px;
   --bgb-header-height: 0px;
 }
@@ -2661,7 +2682,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    page makes room for it here and #app centres in what is left. Only while
    the rail is actually on screen: it is data-auth-only, and the splash and
    auth screens would otherwise sit 88px off-centre with nothing beside them. */
-:root[data-bgb-layout="wide"] body:has(> .bgb-nav:not(.hidden)) {
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) body:has(> .bgb-nav:not(.hidden)) {
   padding-left: var(--bgb-rail-width);
 }
 
@@ -2807,9 +2828,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgb-nav__brand,
 .bgb-nav__tab--util { display: none; }
 
-:root[data-bgb-layout="wide"] .bgb-global-header { display: none; }
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-global-header { display: none; }
 
-:root[data-bgb-layout="wide"] .bgb-nav {
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav {
   top: 0;
   bottom: 0;
   right: auto;
@@ -2825,30 +2846,30 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-:root[data-bgb-layout="wide"] .bgb-nav__brand {
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__brand {
   display: grid;
   place-items: center;
   height: 64px;
   margin-bottom: 8px;
   cursor: pointer;
 }
-:root[data-bgb-layout="wide"] .bgb-nav__logo {
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__logo {
   width: 40px;
   height: 40px;
   border-radius: 0.6rem;
   object-fit: cover;
 }
-:root[data-bgb-layout="wide"] .bgb-nav__tab {
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab {
   flex: 0 0 auto;
   min-height: 64px;
 }
-:root[data-bgb-layout="wide"] .bgb-nav__tab--util { display: flex; }
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab--util { display: flex; }
 /* The utilities sink to the bottom of the rail, under the tabs: the first
    utility (the one directly after the last route tab) takes the slack. */
-:root[data-bgb-layout="wide"] .bgb-nav__tab[data-nav] + .bgb-nav__tab--util { margin-top: auto; }
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab[data-nav] + .bgb-nav__tab--util { margin-top: auto; }
 /* The active marker turns from a rule under the tab into a rule down its
    leading edge. */
-:root[data-bgb-layout="wide"] .bgb-nav__tab.active::before {
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab.active::before {
   top: 0;
   bottom: 0;
   left: 0;
@@ -2862,7 +2883,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   color: var(--accent);
   background: var(--accent-quiet);
 }
-:root[data-bgb-layout="wide"] .bgb-nav__tab--util[aria-pressed="true"]::before {
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-nav__tab--util[aria-pressed="true"]::before {
   content: "";
   position: absolute;
   top: 0;
@@ -2870,6 +2891,30 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   left: 0;
   width: 2px;
   background: var(--accent, #CDA23F);
+}
+
+/* ── The rail, drawn compact (land tier) ────────────────────────────────────
+   Same rail, sized for the short axis instead of a monitor. The wide rail does
+   not fit here and the arithmetic is the whole reason this block exists: a
+   64px brand plus five 64px tabs plus its padding is 396px, and a phone on its
+   side is 375–430px tall — so on the shortest of them the gear falls off the
+   bottom edge. At 38 + 5 × 46 it comes to 268px and clears every phone with
+   room to spare. The rail scrolls (`overflow-y: auto`, set above) as a
+   backstop, but a nav you have to scroll is a nav with a hidden item. */
+:root[data-bgb-layout="land"] .bgb-nav {
+  padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+}
+:root[data-bgb-layout="land"] .bgb-nav__brand {
+  height: 38px;
+  margin-bottom: 4px;
+}
+:root[data-bgb-layout="land"] .bgb-nav__logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 0.45rem;
+}
+:root[data-bgb-layout="land"] .bgb-nav__tab {
+  min-height: 46px;
 }
 
 /* ── Tabs — warm gold active state ──────────────────────────────────────────── */
@@ -3113,6 +3158,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   column-gap: 32px;
   justify-content: center;
 }
+/* land takes neither: wide centres a 560+300 pair and lets a monitor keep the
+   rest, but a phone on its side has no rest to give away — the pair fills the
+   width beside the rail. The aside keeps its own scroll, which it already has
+   from .feed-aside below: with both height tokens at 0px on this tier its
+   max-height resolves to the full viewport less 32px, so the sidebar holds
+   still while the stream moves under it. */
+:root[data-bgb-layout="land"] .feed-shell--split {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  column-gap: 20px;
+}
 .feed-shell--split > .alert { grid-column: 1 / -1; }
 .feed-aside {
   position: sticky;
@@ -3141,14 +3196,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    spanning the two, so the columns are labelled by what they do rather than by
    one header that belongs to neither. The divider goes out with display:none,
    which also takes it out of the grid flow so it claims no cell. */
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) main[data-view="log-play"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   column-gap: 24px;
   align-content: start;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .lp-divider { display: none; }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="log-play"] > .lp-join-section {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) main[data-view="log-play"] > .lp-divider { display: none; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) main[data-view="log-play"] > .lp-join-section {
   position: sticky;
   top: calc(var(--bgb-header-height) + 16px);
   align-self: start;
@@ -3158,56 +3213,56 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    and page sizes in collection-view.js and game-explorer-view.js are rows ×
    these columns — change both together. */
 :root[data-bgb-layout="tablet"] :is(.profile-collection-grid, .lp-find-grid) { grid-template-columns: repeat(4, 1fr); }
-:root[data-bgb-layout="wide"]   :is(.profile-collection-grid, .lp-find-grid) { grid-template-columns: repeat(6, 1fr); }
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(.profile-collection-grid, .lp-find-grid) { grid-template-columns: repeat(6, 1fr); }
 
 /* Game detail: the polaroid, status and actions in a sticky left column, the
    description, expansions, guide scroll and recent plays down the right. The
    back button is position:absolute and so takes no grid cell. */
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .game-detail {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   column-gap: 24px;
   align-items: start;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail__cover {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .game-detail__cover {
   position: sticky;
   top: calc(var(--bgb-header-height) + 16px);
   padding: 2.75rem 0 0.75rem;   /* room for the back button above the polaroid */
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail__body { padding-top: 0.75rem; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .game-detail__body { padding-top: 0.75rem; }
 /* Its -1rem bleed is for the phone column's gutters; in the right-hand pane it
    would run into the gap. */
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .game-detail__plays-scroll { margin: 0; padding-inline: 0; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .game-detail__plays-scroll { margin: 0; padding-inline: 0; }
 
 /* Profile hubs (own and other): the account card, the stats block and any
    back row span; the preview cards pair up two to a row. */
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   column-gap: 16px;
   align-content: start;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > * {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > * {
   grid-column: 1 / -1;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > .preview-card {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > .preview-card {
   grid-column: auto;
 }
 
 /* Stats: the head, the podium and the career strip span; the stat cards pair
    up. Loading, empty and error states render one child, which spans. */
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="stats"] {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) main[data-view="stats"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   column-gap: 16px;
   align-content: start;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="stats"] > * { grid-column: 1 / -1; }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) main[data-view="stats"] > .preview-card { grid-column: auto; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) main[data-view="stats"] > * { grid-column: 1 / -1; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) main[data-view="stats"] > .preview-card { grid-column: auto; }
 
 /* Achievements: each group's horizontal rail wraps into a grid of the same
    medallions, so a whole group is on screen at once. */
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .ach-rail {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .ach-rail {
   flex-wrap: wrap;
   overflow: visible;
   scroll-snap-type: none;
@@ -5607,6 +5662,12 @@ html.bgb-ptr-armed body {
   pointer-events: none;
   opacity: 0;
   transition: opacity 160ms var(--ease);
+}
+/* --bgb-header-height is 0px wherever the header is folded into the rail, which
+   would pin the disc flush to the top edge, half of it cropped as it grows.
+   Give it the gap the header used to provide. */
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-ptr {
+  top: 12px;
 }
 .bgb-ptr.is-pulling,
 .bgb-ptr.is-refreshing { opacity: 1; }
@@ -9267,19 +9328,19 @@ main[data-view="session-viewer"].hidden {
 .cascade-cols,
 .cascade-col { display: contents; }
 
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-cols {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .cascade-cols {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
   column-gap: 16px;
   align-items: start;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-col {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .cascade-col {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;   /* the scoring table scrolls inside its pane, not the page */
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-col--aside {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .cascade-col--aside {
   position: sticky;
   top: calc(var(--bgb-header-height) + 12px);
   /* Everything between the header and the docked bar, minus the screen's own
@@ -9290,12 +9351,12 @@ main[data-view="session-viewer"].hidden {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-cta-wrap {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .cascade-cta-wrap {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
   column-gap: 16px;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .cascade-cta-wrap .cascade-cta {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .cascade-cta-wrap .cascade-cta {
   grid-column: 1;
 }
 /* The joiner's read-only mirror reuses .cascade-screen but renders no CTA
