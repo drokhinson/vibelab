@@ -33,6 +33,7 @@ from .models import (
     ChapterCreate,
     ChapterGenerateRequest,
     ChapterGenerateResponse,
+    ChapterPoolCountResponse,
     ChapterPoolItem,
     ChapterReportCreate,
     ChapterReportResponse,
@@ -303,6 +304,54 @@ async def browse_chapter_pool(
         layout=layout,
         expansion_ids=expansion_ids,
     )
+
+
+def _chapter_pool_count_sync(
+    sb: Client, game_id: str, expansion_ids: Optional[str]
+) -> int:
+    exp_ids = parse_csv_param(expansion_ids)
+    all_game_ids = [game_id, *exp_ids]
+    # head=True asks Postgrest for the tally and none of the rows — the whole
+    # reason this is not just `len()` of the pool, whose rows each carry a full
+    # markdown body.
+    count_q = sb.table("boardgamebuddy_guide_chapters").select(
+        "id", count="exact", head=True
+    )
+    count_q = (
+        count_q.in_("game_id", all_game_ids) if exp_ids else count_q.eq("game_id", game_id)
+    )
+    return count_q.execute().count or 0
+
+
+@router.get(
+    "/games/{game_id}/chapter-pool/count",
+    response_model=ChapterPoolCountResponse,
+    status_code=200,
+    summary="How many chapters exist for a game",
+)
+async def count_chapter_pool(
+    game_id: str = Path(..., description="Game UUID"),
+    expansion_ids: Optional[str] = Query(
+        None,
+        description=(
+            "Comma-separated expansion game UUIDs to also count, matching the"
+            " scope `GET /games/{game_id}/chapter-pool` would return for the"
+            " same parameters."
+        ),
+    ),
+) -> ChapterPoolCountResponse:
+    """Count every chapter written for this game (optionally + expansions).
+
+    The same number `GET /games/{game_id}/chapter-pool` would return the length
+    of, without the chapter bodies. No auth: the pool size is the same for
+    everybody, and the caller's own guide is counted client-side from
+    `my-chapters`.
+    """
+    sb = get_supabase()
+    total = await asyncio.to_thread(
+        _chapter_pool_count_sync, sb, game_id, expansion_ids
+    )
+    return ChapterPoolCountResponse(total=total)
 
 
 def _create_chapter_sync(
