@@ -29,6 +29,29 @@
 --   travelscrapbook/015 already revokes all three, which is why its RPCs were
 --   the only SECURITY DEFINER functions in the database not flagged.
 --
+-- WHY THIS MATCHES ON NAME, NOT SIGNATURE
+--   The first draft of this file wrote out all 60 signatures explicitly,
+--   generated from a replay of boardgamebuddy/003–027. Running it against
+--   production failed:
+--
+--     ERROR: 42883: function public.boardgamebuddy_search_games(uuid, text,
+--            integer, boolean) does not exist
+--
+--   Production still has the three-argument form from archive/040; the
+--   p_include_expansions parameter that archive/041 added — and that the
+--   consolidated 003_rpcs.sql carries — is not there. A replay of the
+--   migrations is therefore NOT byte-identical to production, and any file
+--   that hardcodes argument lists is one drift away from erroring out
+--   halfway through and leaving the revokes only partly applied.
+--
+--   So the list below is 60 function NAMES, and the loop revokes whatever
+--   overloads of those names actually exist in the database it is run
+--   against. The scope stays explicit and bgb-owned (it is a fixed list, not
+--   a schema-wide sweep, so replaying this app alone still lands the right
+--   grants), but signature drift, extra overloads and functions that were
+--   never created are all handled rather than fatal. Names absent from the
+--   target database are reported in a NOTICE at the end.
+--
 -- SAFE FOR THE APP
 --   No client calls an RPC: `grep -rn "\.rpc(" projects/` is empty across
 --   every web prototype and native app. supabase-js is used only for Auth,
@@ -37,146 +60,131 @@
 --   through shared-backend, whose client is built from
 --   SUPABASE_SERVICE_ROLE_KEY and so executes as `service_role`.
 --
---   This file touches function EXECUTE only. Schema USAGE and table grants for
---   anon / authenticated are untouched, so that read and the Realtime
---   subscription keep working. service_role keeps EXECUTE (its ACL entry is
---   not named here), and so does boardgamebuddy_role, which 003_rpcs.sql
---   grants for psql / TablePlus access.
+--   Function EXECUTE only. Schema USAGE and table grants for anon /
+--   authenticated are untouched, so that read and the Realtime subscription
+--   keep working. service_role and boardgamebuddy_role are not named in the
+--   REVOKE, so their grants survive.
 --
--- Covers the 60 SECURITY DEFINER functions defined by boardgamebuddy/003–027.
--- Signatures were generated from pg_proc (oid::regprocedure) against a replay
--- of those migrations, not typed by hand. Idempotent: revoking an absent
--- privilege is a no-op.
+-- Idempotent: revoking an absent privilege is a no-op, and the loop skips
+-- names that are not present. Safe to re-run after adding RPCs.
 --
--- Any NEW SECURITY DEFINER function needs its own revoke next to its CREATE —
--- see .claude/rules/database-supabase.md. There is no default-privileges
--- setting that covers it: Postgres hardcodes EXECUTE-to-PUBLIC for new
--- functions and ALTER DEFAULT PRIVILEGES ... REVOKE cannot suppress that.
+-- Any NEW SECURITY DEFINER function needs its own revoke next to its CREATE
+-- and its name added here — see .claude/rules/database-supabase.md. There is
+-- no default-privileges setting that covers it: Postgres hardcodes
+-- EXECUTE-to-PUBLIC for new functions and ALTER DEFAULT PRIVILEGES ... REVOKE
+-- cannot suppress that.
 --
 -- Run in: Supabase Dashboard → SQL Editor → New Query → Run
 -- ─────────────────────────────────────────────────────────────────────────────
 
+DO $$
+DECLARE
+  bgb_rpcs CONSTANT text[] := ARRAY[
+    'bgb_abandon_session',
+    'bgb_accept_ghost_claim',
+    'bgb_add_participant',
+    'bgb_advance_phase',
+    'bgb_bgg_push_status',
+    'bgb_bgg_sync_status',
+    'bgb_bootstrap',
+    'bgb_collection_page',
+    'bgb_collection_shelf',
+    'bgb_collection_status_map',
+    'bgb_create_ghost_claim',
+    'bgb_create_session',
+    'bgb_delete_import_batch',
+    'bgb_delete_import_group',
+    'bgb_dismiss_ghost_claim',
+    'bgb_distinct_mechanics',
+    'bgb_dormant_collection',
+    'bgb_feed_plays',
+    'bgb_finalize_session',
+    'bgb_game_bundles',
+    'bgb_game_detail_bundle',
+    'bgb_game_summary',
+    'bgb_get_session',
+    'bgb_ghost_claim_detail',
+    'bgb_ghost_claim_suggestions',
+    'bgb_ghost_claims',
+    'bgb_ghost_out_of_plays',
+    'bgb_ghost_summary',
+    'bgb_hot_games',
+    'bgb_import_plays',
+    'bgb_join_session',
+    'bgb_joinable_sessions',
+    'bgb_link_ghost',
+    'bgb_link_ghost_rows',
+    'bgb_list_imports',
+    'bgb_log_play',
+    'bgb_mark_link_notifications_seen',
+    'bgb_merge_ghosts',
+    'bgb_notifications',
+    'bgb_notifications_unread',
+    'bgb_onboarding_buddy_suggestions',
+    'bgb_onboarding_suggestion_network',
+    'bgb_play_partners',
+    'bgb_play_stats',
+    'bgb_plays_page',
+    'bgb_profile_bundle',
+    'bgb_push_note_failure',
+    'bgb_reject_ghost_claim',
+    'bgb_remove_participant',
+    'bgb_reorder_participants',
+    'bgb_session_bundle',
+    'bgb_session_gate',
+    'bgb_set_session_scoring',
+    'bgb_suggested_buddies',
+    'bgb_sync_achievements',
+    'bgb_update_session_game',
+    'bgb_user_stats',
+    'bgb_user_stats_detail',
+    'bgb_watch_session',
+    'boardgamebuddy_search_games'
+  ];
+  fn        record;
+  nm        text;
+  n_revoked int  := 0;
+  n_open    int  := 0;
+  absent    text[] := '{}';
+BEGIN
+  -- Report names this database does not have at all, so a genuine typo here
+  -- is visible instead of silently doing nothing.
+  FOREACH nm IN ARRAY bgb_rpcs LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_proc p
+        JOIN pg_namespace ns ON ns.oid = p.pronamespace
+       WHERE ns.nspname = 'public' AND p.proname = nm
+    ) THEN
+      absent := absent || nm;
+    END IF;
+  END LOOP;
 
-REVOKE EXECUTE ON FUNCTION public.bgb_abandon_session(uuid, text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_accept_ghost_claim(uuid, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_add_participant(uuid, text, uuid, text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_advance_phase(uuid, text, text, jsonb)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_bgg_push_status(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_bgg_sync_status(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_bootstrap(uuid, integer, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_collection_page(uuid, uuid, text, text, integer, integer, integer, text, boolean, text, boolean, integer, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_collection_shelf(uuid, uuid, text, boolean, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_collection_status_map(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_create_ghost_claim(uuid, uuid, text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_create_session(uuid, text, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_delete_import_batch(uuid, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_delete_import_group(uuid, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_dismiss_ghost_claim(uuid, uuid, text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_distinct_mechanics()
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_dormant_collection(uuid, integer, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_feed_plays(uuid, date, timestamp with time zone, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_finalize_session(uuid, text, jsonb)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_game_bundles(uuid, integer, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_game_detail_bundle(uuid, uuid, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_game_summary(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_get_session(text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_ghost_claim_detail(uuid, uuid, text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_ghost_claim_suggestions(uuid, integer, real)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_ghost_claims(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_ghost_out_of_plays(uuid, uuid[], uuid[], uuid[])
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_ghost_summary(uuid, uuid, text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_hot_games(integer, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_import_plays(uuid, jsonb)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_join_session(text, uuid, text, text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_joinable_sessions(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_link_ghost(uuid, text, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_link_ghost_rows(uuid, text, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_list_imports(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_log_play(uuid, jsonb)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_mark_link_notifications_seen(uuid, timestamp with time zone)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_merge_ghosts(uuid, text, text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_notifications(uuid, integer, timestamp with time zone, text)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_notifications_unread(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_onboarding_buddy_suggestions(uuid, integer, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_onboarding_suggestion_network(uuid, uuid[], integer, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_play_partners(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_play_stats(uuid, uuid[])
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_plays_page(uuid, integer, integer, uuid, uuid, text, boolean)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_profile_bundle(uuid, uuid, integer, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_push_note_failure(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_reject_ghost_claim(uuid, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_remove_participant(uuid, text, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_reorder_participants(uuid, text, uuid[])
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_session_bundle(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_session_gate(text, uuid, boolean)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_set_session_scoring(uuid, text, jsonb)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_suggested_buddies(uuid, integer)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_sync_achievements(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_update_session_game(uuid, text, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_user_stats(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_user_stats_detail(uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.bgb_watch_session(text, uuid)
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.boardgamebuddy_search_games(uuid, text, integer, boolean)
-  FROM PUBLIC, anon, authenticated;
+  FOR fn IN
+    SELECT p.oid,
+           quote_ident(ns.nspname) || '.' || quote_ident(p.proname)
+             || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS sig
+      FROM pg_proc p
+      JOIN pg_namespace ns ON ns.oid = p.pronamespace
+     WHERE ns.nspname = 'public'
+       AND p.prosecdef                    -- SECURITY DEFINER only
+       AND p.proname = ANY (bgb_rpcs)
+     ORDER BY p.proname
+  LOOP
+    IF has_function_privilege('anon', fn.oid, 'EXECUTE')
+       OR has_function_privilege('authenticated', fn.oid, 'EXECUTE') THEN
+      n_open := n_open + 1;
+    END IF;
+
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated', fn.sig);
+    n_revoked := n_revoked + 1;
+  END LOOP;
+
+  RAISE NOTICE 'bgb SECURITY DEFINER functions revoked: % (% were reachable by anon/authenticated before this run)',
+    n_revoked, n_open;
+  IF array_length(absent, 1) > 0 THEN
+    RAISE NOTICE 'listed but not present in this database: %', absent;
+  END IF;
+END $$;
 
 
 -- ── Verification ────────────────────────────────────────────────────────────
@@ -192,7 +200,7 @@ REVOKE EXECUTE ON FUNCTION public.boardgamebuddy_search_games(uuid, text, intege
 --        OR has_function_privilege('authenticated', p.oid, 'EXECUTE'))
 --    ORDER BY 1;
 --
--- And the backend must keep all 60 — both columns must read 60:
+-- And the backend must keep every one of them — both columns must match:
 --
 --   SELECT count(*) FILTER (WHERE has_function_privilege('service_role', p.oid, 'EXECUTE')) AS callable,
 --          count(*) AS total

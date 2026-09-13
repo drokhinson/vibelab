@@ -43,10 +43,44 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 
-REVOKE EXECUTE ON FUNCTION public.admin_table_sizes()
-  FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.analytics_summary_counts()
-  FROM PUBLIC, anon, authenticated;
+-- Matched on name rather than signature, for the same reason as
+-- boardgamebuddy/028: a replay of the migrations is not byte-identical to
+-- production (bgb's search RPC differs there), so a hardcoded argument list
+-- can error mid-file and leave the revokes half applied. Both of these are
+-- zero-argument today; the loop keeps that from mattering.
+DO $$
+DECLARE
+  shared_rpcs CONSTANT text[] := ARRAY[
+    'admin_table_sizes',
+    'analytics_summary_counts'
+  ];
+  fn        record;
+  n_revoked int := 0;
+  n_open    int := 0;
+BEGIN
+  FOR fn IN
+    SELECT p.oid,
+           quote_ident(ns.nspname) || '.' || quote_ident(p.proname)
+             || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS sig
+      FROM pg_proc p
+      JOIN pg_namespace ns ON ns.oid = p.pronamespace
+     WHERE ns.nspname = 'public'
+       AND p.prosecdef
+       AND p.proname = ANY (shared_rpcs)
+     ORDER BY p.proname
+  LOOP
+    IF has_function_privilege('anon', fn.oid, 'EXECUTE')
+       OR has_function_privilege('authenticated', fn.oid, 'EXECUTE') THEN
+      n_open := n_open + 1;
+    END IF;
+
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated', fn.sig);
+    n_revoked := n_revoked + 1;
+  END LOOP;
+
+  RAISE NOTICE 'shared admin RPCs revoked: % (% were reachable by anon/authenticated before this run)',
+    n_revoked, n_open;
+END $$;
 
 
 -- ── Verification ────────────────────────────────────────────────────────────
