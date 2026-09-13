@@ -88,6 +88,13 @@
       // Scoring-grid chapters that EXIST for this game, adopted or not
       // (migration 018). Drives the "templates available" notice.
       this._templates = [];
+      // How many chapters exist for this game at all — the denominator of the
+      // Edit-chapters button. `null` is "not known yet", which is a different
+      // thing from 0 ("nobody has written one"), exactly as _templatesLoaded
+      // above separates those two for grids. _poolCountKey is the game scope
+      // the number in hand was counted for.
+      this._poolTotal = null;
+      this._poolCountKey = null;
       // Bind once so the global window.referenceGuideScroll handle stays
       // pointed at the active widget for inline `onclick` handlers.
       window.referenceGuideScroll = this;
@@ -197,6 +204,7 @@
         // awaited: the notice is a nudge and must never hold up the chapters
         // somebody opened the scroll to read.
         this._fetchTemplates();
+        this._fetchPoolCount();
       }
     }
 
@@ -246,6 +254,44 @@
       document.dispatchEvent(new CustomEvent("guide-templates-loaded", {
         detail: { gameId: this._baseGameId, templates: this._templates },
       }));
+    }
+
+    /**
+     * The denominator of the button's "N of M" — how many chapters exist for
+     * this game at all, adopted or not. Same cache-then-revalidate shape as
+     * _fetchTemplates above, and fired beside it for the same reason: a number
+     * on a button must never hold up the chapters somebody opened the scroll to
+     * read.
+     */
+    async _fetchPoolCount() {
+      if (!this._baseGameId || !window.session) return;
+      const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
+      // The count is scoped to the game set, so a scope change — a host ticking
+      // an expansion while the guide is loading — drops the number in hand
+      // rather than leaving the previous scope's total under the new guide.
+      const key = [this._baseGameId].concat(this._gameIds).join("|");
+      if (this._poolCountKey !== key) {
+        this._poolCountKey = key;
+        this._poolTotal = null;
+      }
+      const cached = window.Chapter && window.Chapter.cachedPoolCount
+        ? window.Chapter.cachedPoolCount(this._baseGameId, expansionIds, { stale: true })
+        : null;
+      if (cached !== null) {
+        this._poolTotal = cached;
+        this._paintAddButton();
+      }
+      try {
+        const total = await window.Chapter.poolCount(this._baseGameId, { expansionIds });
+        this._poolTotal = total;
+        if (window.Chapter.cachePoolCount) {
+          window.Chapter.cachePoolCount(this._baseGameId, expansionIds, total);
+        }
+      } catch (_) {
+        // Leave whatever the cache seeded, and the plain label when it seeded
+        // nothing. A button without its count still opens the same screen.
+      }
+      this._paintAddButton();
     }
 
     /**
@@ -304,6 +350,75 @@
         // and _render()'s pass over the lists has long since run.
         this._wireAccordion(host);
       }
+    }
+
+    /**
+     * The one affordance that opens the add/browse screen. Rendered by State B's
+     * empty state and again at the foot of State C's body; one renderer rather
+     * than the two copies that were there, because the label is now a function
+     * of two counts and two copies would drift apart.
+     *
+     * The counts answer the question the button could not: is there anything
+     * written for this game already, or would I be authoring the first one —
+     * the same question _renderCreateTemplate answers for scoring grids. Three
+     * states:
+     *
+     *   pool size unknown → no count at all. The button paints before the count
+     *     lands (and on a dead link never gets one), and "(3 of 3)" corrected to
+     *     "(3 of 12)" a moment later is worse than a label that waits.
+     *   pool empty        → nobody has written one; say that instead of "0 of 0".
+     *   pool has chapters → "N of M", where N is the WHOLE guide including the
+     *     adopted scoring grids the section directly above draws. Counting mine
+     *     one way and the total another would make the ratio a lie.
+     */
+    _renderAddButton() {
+      const mine = (this._chapters || []).length;
+      const known = typeof this._poolTotal === "number";
+      // A chapter can outlive its pool row — deleted at the source while still
+      // sitting in somebody's guide — and "5 of 4" reads as a bug rather than
+      // as the edge case it is.
+      const total = known ? Math.max(this._poolTotal, mine) : 0;
+      let icon = "plus";
+      let label = "Add a chapter";
+      let aria = "Add a chapter";
+      if (known && total === 0) {
+        label = "Write the first chapter";
+        aria = "Write the first chapter for this game";
+      } else if (known) {
+        icon = "pencil";
+        // The count rides INSIDE the label's span, not beside it: this button is
+        // a flex row with a gap, so a sibling span would be spaced off like a
+        // third column. Same trap as _expansionsHeaderLabel in
+        // views/play-flow-view.js, which carries the long version of this note.
+        label = `Edit chapters <span class="scroll-panel__add-count">(${mine} of ${total})</span>`;
+        aria = `Edit chapters, ${mine} of ${total} in your guide`;
+      }
+      return `
+        <button class="scroll-panel__add" type="button"
+                aria-label="${escapeAttr(aria)}"
+                onclick="window.referenceGuideScroll._openAddChapter()">
+          <i data-icon="${icon}" class="w-4 h-4"></i>
+          <span>${label}</span>
+        </button>
+      `;
+    }
+
+    /**
+     * Patch the button in place when the count lands.
+     *
+     * It sits outside both hosts _paintNotice knows about, and a full _render()
+     * would destroy the search field mid-keystroke along with its focus and
+     * caret — the hazard documented on _paintNotice above.
+     *
+     * No full-render fallback, unlike _paintNotice: the one state that renders
+     * no button at all is the anonymous one, which has no guide to count.
+     */
+    _paintAddButton() {
+      if (!this._container) return;
+      const host = this._container.querySelector("[data-add-host]");
+      if (!host) return;
+      host.innerHTML = this._renderAddButton();
+      window.BgbIcons.render(host);
     }
 
     /**
@@ -461,9 +576,9 @@
      *
      * Grids with no rows are filtered out, exactly as the play cascade filters
      * them: a candidate the sheet can only draw as an empty table is not a
-     * candidate. The browse screen stays reachable from "Add a chapter" below,
-     * which is where browsing belongs, and is the fallback if the sheet is
-     * somehow not on the page.
+     * candidate. The browse screen stays reachable from the Edit-chapters
+     * button below, which is where browsing belongs, and is the fallback if the
+     * sheet is somehow not on the page.
      */
     _openTemplates(event) {
       if (event) event.stopPropagation();
@@ -608,10 +723,9 @@
                 <div class="scroll-panel__notice-host" data-notice-host>
                   ${this._renderScoringCta()}
                 </div>
-                <button class="scroll-panel__add"
-                        onclick="window.referenceGuideScroll._openAddChapter()">
-                  <i data-icon="plus" class="w-4 h-4"></i> Add a chapter
-                </button>
+                <div class="scroll-panel__add-host" data-add-host>
+                  ${this._renderAddButton()}
+                </div>
               </div>
             </div>
           </div>
@@ -694,10 +808,9 @@
             <div class="scroll-panel__scoring-host" data-scoring-host>
               ${this._renderScoringSection()}
             </div>
-            <button class="scroll-panel__add"
-                    onclick="window.referenceGuideScroll._openAddChapter()">
-              <i data-icon="plus" class="w-4 h-4"></i> Add a chapter
-            </button>
+            <div class="scroll-panel__add-host" data-add-host>
+              ${this._renderAddButton()}
+            </div>
             ${rollupHint}
           </div>
           <button class="scroll-panel__roll scroll-panel__roll--bottom"
@@ -829,8 +942,9 @@
 
     /**
      * The one route to the add screen. Both affordances go through it — the
-     * scroll's own "Add a chapter" and the templates notice — so the two cannot
-     * land anywhere different (.claude/rules/ui-object-design.md §3b).
+     * scroll's own Edit-chapters button (_renderAddButton) and the templates
+     * notice — so the two cannot land anywhere different
+     * (.claude/rules/ui-object-design.md §3b).
      * @param {string} [filter] pre-set the browse tab's chapter-type filter.
      */
     _openAddChapter(filter) {

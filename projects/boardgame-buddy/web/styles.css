@@ -1108,6 +1108,14 @@ body {
   transition: background 120ms ease;
 }
 .scroll-panel__add:hover { background: rgba(43, 29, 10, 1); }
+/* "(3 of 12)" — how much of what exists for this game the viewer keeps. Muted
+   by opacity rather than by a colour of its own: the scroll is a photograph of
+   parchment and paints from literals in both themes (see the note above
+   .scroll-panel__notice), so opacity is one fewer literal to keep in step. */
+.scroll-panel__add-count {
+  opacity: 0.72;
+  font-weight: 400;
+}
 
 /* Source dot on chapter summaries — ties an expansion's chapter to its
    identity color when the scroll is showing a merged base+expansions view.

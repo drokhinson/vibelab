@@ -967,6 +967,14 @@ class ChapterPoolItem(ChapterResponse):
     in_my_guide: bool = False
 
 
+class ChapterPoolCountResponse(BaseModel):
+    # How many chapters exist for a game, with none of them on the wire. The
+    # reference guide needs the number to say "3 of 12" on its Edit-chapters
+    # button; pulling /chapter-pool for it would carry every chapter's full
+    # markdown body to render one integer.
+    total: int = 0
+
+
 class MyGuideChapterResponse(ChapterResponse):
     added_at: datetime
 

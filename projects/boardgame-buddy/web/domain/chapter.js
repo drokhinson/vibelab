@@ -18,6 +18,11 @@
   // different question — "what is out there" rather than "what is mine" — and
   // is read by the scroll's "templates available" notice.
   const TEMPLATES_NS = "scoring-templates";
+  // How many chapters EXIST for a game, adopted or not — the denominator of the
+  // scroll's "3 of 12" button. Its own namespace for the same reason as
+  // TEMPLATES_NS: it answers "what is out there", not "what is mine", and it is
+  // a single integer rather than a row list.
+  const POOL_COUNT_NS = "chapter-pool-count";
   const CH_FRESH = 10 * 60 * 1000; // instant-seed (get) window
   const CH_STALE = 30 * 60 * 1000; // outer bound retained in storage
 
@@ -122,6 +127,10 @@
         // to fall with the guide's or the notice outlives the tap that answered
         // it by up to ten minutes.
         window.bgbCache.clear(TEMPLATES_NS);
+        // Writing a chapter grows the pool, so the denominator falls with the
+        // guide's cache too — otherwise the button says "1 of 0" for up to ten
+        // minutes after somebody writes the first one for a game.
+        window.bgbCache.clear(POOL_COUNT_NS);
       }
       // Three tiers of "chapters in your guide" hang off this count, so every
       // chapter mutation is an achievement mutation too.
@@ -164,6 +173,42 @@
     cacheScoringTemplates(baseGameId, expansionIds, rows) {
       if (!window.bgbCache || !baseGameId) return;
       window.bgbCache.setWithTtls(TEMPLATES_NS, chaptersKey(baseGameId, expansionIds), rows || [], {
+        freshTtl: CH_FRESH,
+        staleTtl: CH_STALE,
+      });
+    },
+
+    // ── Pool size ───────────────────────────────────────────────────────────
+    //
+    // Just the count of `pool()` above, fetched separately rather than derived
+    // from it: the pool's rows each carry a full markdown body, and the guide
+    // wants this number on every mount to say how much of what exists the
+    // viewer keeps.
+
+    poolCount(gameId, { expansionIds } = {}) {
+      const query = {};
+      if (expansionIds && expansionIds.length) {
+        query.expansion_ids = expansionIds.join(",");
+      }
+      return window.api
+        .get(`/games/${gameId}/chapter-pool/count`, query)
+        .then((res) => (res && typeof res.total === "number" ? res.total : 0));
+    },
+    // Synchronous read. `stale: true` reads the full window rather than the
+    // fresh one — same split, and same reason, as cachedMyChapters above.
+    cachedPoolCount(baseGameId, expansionIds, opts) {
+      if (!window.bgbCache || !baseGameId) return null;
+      const key = chaptersKey(baseGameId, expansionIds);
+      const hit = (opts && opts.stale)
+        ? window.bgbCache.peek(POOL_COUNT_NS, key)
+        : window.bgbCache.get(POOL_COUNT_NS, key);
+      // A cached 0 is an answer ("nobody has written one") and must survive the
+      // read, so test the type rather than truthiness.
+      return typeof hit === "number" ? hit : null;
+    },
+    cachePoolCount(baseGameId, expansionIds, total) {
+      if (!window.bgbCache || !baseGameId) return;
+      window.bgbCache.setWithTtls(POOL_COUNT_NS, chaptersKey(baseGameId, expansionIds), total || 0, {
         freshTtl: CH_FRESH,
         staleTtl: CH_STALE,
       });
