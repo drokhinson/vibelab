@@ -158,15 +158,21 @@
   function render(s) {
     const rows = Array.isArray(s.rows) ? s.rows : [];
     const atMax = rows.length >= MAX_ROWS;
+    // The mode question goes ABOVE the lede, not under it: on an expansion it
+    // is the first thing to answer and it reframes everything below — a
+    // replacement sheet wants the base game's categories reprinted among its
+    // rows and an add-on wants them left out, so an author who meets it after
+    // typing the rows has typed the wrong ones. It renders to nothing on a
+    // base game's grid, where the lede stays the first line on the step.
     return `
       ${s.typeRow}
+
+      ${renderMode(s.expansionName, s.mode)}
 
       <p class="chapter-wiz__lede">
         A custom scoring template. Create row heads with a custom colour, and
         add an optional description to clarify the scoring instructions.
       </p>
-
-      ${renderMode(s.expansionName, s.mode)}
 
       <div class="tmpl-rows" id="tmpl-rows-host">
         ${renderRowList(rows, s)}
