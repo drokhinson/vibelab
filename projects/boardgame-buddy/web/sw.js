@@ -134,6 +134,7 @@ async function showPush(event) {
   } catch (_) {}
 
   const title = data.title || "BoardgameBuddy";
+  const tag = data.tag || "bgb";
   await self.registration.showNotification(title, {
     body: data.body || "Something happened in BoardgameBuddy.",
     icon: "/assets/brand/bgb-icon-192.png",
@@ -142,11 +143,44 @@ async function showPush(event) {
     // The server tags by (event, actor) or by session, so a second buddy
     // request from the same person REPLACES the first rather than stacking —
     // it tells the recipient nothing new. renotify makes the replacement still
-    // buzz, because it is a fresh act even when it is the same sentence.
-    tag: data.tag || "bgb",
-    renotify: !!data.tag,
+    // buzz, because it is a fresh act even when it is the same sentence — with
+    // one exception the server has to declare, see isQuietUpdate below.
+    tag,
+    renotify: !!data.tag && !(await isQuietUpdate(data, tag)),
     data: { url: data.url || "/notifications" },
   });
+}
+
+/**
+ * Is this push a rewrite of a card the recipient still has, rather than news?
+ *
+ * BOTH HALVES MATTER, WHICH IS WHY NEITHER SIDE CAN DECIDE THIS ALONE.
+ *
+ * Only the server knows an event supersedes rather than repeats — a saved play
+ * concluding the lobby invite that announced it does, a buddy request sent
+ * twice does not, and both arrive here wearing the same collapsing tag. So it
+ * marks the first kind `quiet` (push_service.payload) and silencing every tag
+ * collapse is exactly what we must not do.
+ *
+ * Only the DEVICE knows whether the card being superseded is still on screen,
+ * which is the whole point: an invite the recipient never cleared should be
+ * rewritten in place, quietly, because they have already been interrupted once
+ * for this game. One they dismissed an hour ago is gone, and this push is the
+ * first they will hear that the game was saved — that has to buzz like any
+ * other notification.
+ *
+ * Failure buzzes. getNotifications is everywhere the Notification API is, but
+ * if it throws or the permission has been narrowed, an over-eager alert is a
+ * far better outcome than a notification that silently never announces itself.
+ */
+async function isQuietUpdate(data, tag) {
+  if (data.quiet !== "1") return false;
+  try {
+    const open = await self.registration.getNotifications({ tag });
+    return open.length > 0;
+  } catch (_) {
+    return false;
+  }
 }
 
 self.addEventListener("notificationclick", (event) => {

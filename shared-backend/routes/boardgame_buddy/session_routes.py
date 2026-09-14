@@ -329,5 +329,7 @@ async def finalize_session(
         code=code,
         payload=body.model_dump(mode="json"),
     )
-    push_notify.play_logged(background_tasks, sb, user, play)
+    # session_code, so the push replaces this table's invite in the tray
+    # rather than stacking a near-identical card on top of it.
+    push_notify.play_logged(background_tasks, sb, user, play, session_code=code)
     return play

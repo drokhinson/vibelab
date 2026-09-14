@@ -39,7 +39,11 @@ def _b64(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
+from fastapi import BackgroundTasks
+from types import SimpleNamespace
+
 from routes.boardgame_buddy.constants import PushEvent, PushTier, push_tier_admits
+from routes.boardgame_buddy.services import push_notify as N
 from routes.boardgame_buddy.services import push_service as P
 
 # The keys are written onto the MODULE, not into os.environ, and that is not a
@@ -474,3 +478,74 @@ def test_a_real_pair_is_enabled():
     assert P.BGB_VAPID_PUBLIC_KEY.startswith("B")   # 0x04 leads, so base64 'B'
     assert len(P.BGB_VAPID_PRIVATE_KEY) == 43
     assert P.enabled() is True
+
+
+# ── One table, one card ──────────────────────────────────────────────────────
+#
+# The invite and the saved play are two pushes about the same evening, and the
+# only thing making the second replace the first on the device is that their
+# tags are byte-identical. Nothing anywhere else asserts that: a drift in
+# either string leaves both notifications working perfectly and simply stacks
+# them again, which is precisely the clutter they were collapsed to avoid.
+
+
+def _pushes(fn, *args, **kwargs):
+    """Every payload `fn` queued, in order.
+
+    `sb` is None on purpose — _queue hands it straight to add_task without
+    touching it, so a fake would only obscure that nothing is read here. The
+    achievement sweep play_logged also queues is filtered out by func.
+    """
+    tasks = BackgroundTasks()
+    fn(tasks, None, *args, **kwargs)
+    return [t.args[3] for t in tasks.tasks if t.func is P.send]
+
+
+def _actor():
+    return SimpleNamespace(user_id="host-1", display_name="Dave")
+
+
+def _seated(*user_ids):
+    return [SimpleNamespace(user_id=uid) for uid in user_ids]
+
+
+def test_a_finalised_session_rewrites_the_invite_it_concludes():
+    """Same tag, and flagged as a rewrite rather than news.
+
+    The finalize route passes the code from the URL, which the session RPCs
+    match case-insensitively (`upper(p_code)`) — so the lower-cased code here
+    is the realistic input, not a contrived one, and it still has to land on
+    the tag the invite used.
+    """
+    actor = _actor()
+    session = SimpleNamespace(code="ABCD", game=SimpleNamespace(name="Catan"))
+    play = SimpleNamespace(game_name="Catan", players=_seated("guest-1"))
+
+    (invite,) = _pushes(N.session_invite, actor, session, "guest-1")
+    (saved,) = _pushes(N.play_logged, actor, play, session_code="abcd")
+
+    assert saved["tag"] == invite["tag"] == "session:ABCD"
+    assert saved["quiet"] == "1"
+    # The invite is the first anyone hears of the game: it must always alert.
+    assert "quiet" not in invite
+    # And it may not send the recipient to a lobby that no longer exists.
+    assert saved["url"] == "/notifications"
+
+
+def test_a_play_logged_outside_a_lobby_is_unchanged():
+    """No session, no rewrite. This play was never announced in advance, so it
+    keeps the per-actor tag and alerts like it always has."""
+    play = SimpleNamespace(game_name="Catan", players=_seated("guest-1"))
+
+    (pushed,) = _pushes(N.play_logged, _actor(), play)
+
+    assert pushed["tag"] == "play_link:host-1"
+    assert "quiet" not in pushed
+
+
+def test_quiet_is_absent_from_every_other_payload():
+    """A key the worker reads as "do not alert" is opt-in, and stays opt-in:
+    the default payload is byte-identical to what it was before."""
+    assert P.payload(
+        event=PushEvent.BUDDY_REQUEST, title="t", body="b", url="/u", tag="x"
+    ) == {"kind": "buddy_request", "title": "t", "body": "b", "url": "/u", "tag": "x"}
