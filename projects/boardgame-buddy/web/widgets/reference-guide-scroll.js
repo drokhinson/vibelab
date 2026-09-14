@@ -446,6 +446,16 @@
      *   pool has chapters → "N of M", where N is the WHOLE guide including the
      *     adopted scoring grids the section directly above draws. Counting mine
      *     one way and the total another would make the ratio a lie.
+     *
+     * The VERB is a separate question from the count, and it is answered by the
+     * guide alone: with chapters in it the screen this opens is where they are
+     * edited and removed, so the button says Edit guide and carries the pencil
+     * the per-chapter Edit affordance already uses. With an empty guide there is
+     * nothing to edit yet, whatever the pool holds, so it stays Add with the
+     * plus. Gating the verb on the POOL count instead — which is what it used to
+     * do — got both ends wrong: an empty guide beside a stocked pool offered
+     * "Edit chapters (0 of 12)", and a guide full of chapters whose pool count
+     * never landed offered "Add a chapter".
      */
     _renderAddButton() {
       const mine = (this._chapters || []).length;
@@ -454,21 +464,26 @@
       // sitting in somebody's guide — and "5 of 4" reads as a bug rather than
       // as the edge case it is.
       const total = known ? Math.max(this._poolTotal, mine) : 0;
+      // The count rides INSIDE the label's span, not beside it: this button is a
+      // flex row with a gap, so a sibling span would be spaced off like a third
+      // column. Same trap as _expansionsHeaderLabel in views/play-flow-view.js,
+      // which carries the long version of this note.
+      const count = known && total > 0
+        ? ` <span class="scroll-panel__add-count">(${mine} of ${total})</span>`
+        : "";
+      const ariaCount = known && total > 0 ? `, ${mine} of ${total} in your guide` : "";
       let icon = "plus";
       let label = "Add a chapter";
-      let aria = "Add a chapter";
-      if (known && total === 0) {
+      let aria = "Add a chapter" + ariaCount;
+      if (mine > 0) {
+        icon = "pencil";
+        label = "Edit guide";
+        aria = "Edit guide" + ariaCount;
+      } else if (known && total === 0) {
         label = "Write the first chapter";
         aria = "Write the first chapter for this game";
-      } else if (known) {
-        icon = "pencil";
-        // The count rides INSIDE the label's span, not beside it: this button is
-        // a flex row with a gap, so a sibling span would be spaced off like a
-        // third column. Same trap as _expansionsHeaderLabel in
-        // views/play-flow-view.js, which carries the long version of this note.
-        label = `Edit chapters <span class="scroll-panel__add-count">(${mine} of ${total})</span>`;
-        aria = `Edit chapters, ${mine} of ${total} in your guide`;
       }
+      label += count;
       return `
         <button class="scroll-panel__add" type="button"
                 aria-label="${escapeAttr(aria)}"
@@ -495,9 +510,9 @@
       if (!host) return;
       host.innerHTML = this._renderAddButton();
       window.BgbIcons.render(host);
-      // "Add a chapter" → "Edit chapters (3 of 12)" can change the button's
-      // height, and the count lands asynchronously — including in the middle of
-      // an unroll, against a cap measured before it existed.
+      // "Edit guide" → "Edit guide (3 of 12)" can change the button's height,
+      // and the count lands asynchronously — including in the middle of an
+      // unroll, against a cap measured before it existed.
       this._syncOpenHeight();
     }
 
@@ -598,7 +613,7 @@
      */
     _openCreateTemplate(event) {
       if (event) event.stopPropagation();
-      const baseName = (this._expansionMeta[this._baseGameId] || {}).name || "";
+      const baseName = this._baseGameName();
       window.router.go("reference-guide-add", {
         gameId: this._baseGameId,
         gameName: baseName,
@@ -606,6 +621,19 @@
         mode: "create",
         layout: "scoring_grid",
       });
+    }
+
+    /**
+     * The base game's name, as the merged-guide meta knows it.
+     *
+     * Read from `_expansionMeta` rather than held as a field of its own: the
+     * meta is what the host hands in and what setGameIds replaces, so a second
+     * copy would be one more thing to keep in step. Empty string when the host
+     * passed no meta — every caller treats that as "don't strip / don't name",
+     * which is the right answer when the base game has no name to offer.
+     */
+    _baseGameName() {
+      return (this._expansionMeta[this._baseGameId] || {}).name || "";
     }
 
     /** The adopted scoring grids, narrowed by the search box when it is in use. */
@@ -688,7 +716,7 @@
       // So an expansion's grid is captioned with the expansion's name alone —
       // the scroll's own chapter rows already strip the base game off the
       // front, and the sheet opens over them.
-      const baseGameName = (this._expansionMeta[this._baseGameId] || {}).name || "";
+      const baseGameName = this._baseGameName();
       const steps = pending.length && window.ScoringTemplate
         ? window.ScoringTemplate.groupByGame(pending, {
             baseGameId: this._baseGameId,
@@ -1140,12 +1168,20 @@
       const by = isScoringGrid(c) && window.ScoringTemplateEditor
         ? `<span class="scroll-chapter__by">${escapeHtml(window.ScoringTemplateEditor.authorLabel(c))}</span>`
         : "";
+      // An expansion grid is titled from its game's raw BGG name, base game and
+      // all — "Everdell: Pearlbrook score sheet" in a scroll already headed
+      // Everdell, one row under Everdell's own sheet. The base game comes off
+      // here exactly as it does on the pills the play screen draws from the
+      // same grids (domain/scoring-template.js#titleOf).
+      const title = window.ScoringTemplate
+        ? window.ScoringTemplate.titleOf(c, this._baseGameName())
+        : c.title;
       return `
         <li class="scroll-chapter" data-chapter-id="${c.id}">
           <details>
             <summary class="scroll-chapter__summary">
               ${dot}
-              <span class="scroll-chapter__title">${escapeHtml(c.title)}</span>
+              <span class="scroll-chapter__title">${escapeHtml(title)}</span>
               ${by}
             </summary>
             <div class="scroll-chapter__content">${chapterBodyHtml(c, this._baseGameId)}</div>
@@ -1175,7 +1211,7 @@
       if (window.referenceGuideAddView) {
         window.referenceGuideAddView._prefillChapter = chapter;
       }
-      const baseName = (this._expansionMeta[this._baseGameId] || {}).name || "";
+      const baseName = this._baseGameName();
       const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
       window.router.go("reference-guide-add", {
         gameId: this._baseGameId,
@@ -1215,7 +1251,7 @@
      * @param {string} [filter] pre-set the browse tab's chapter-type filter.
      */
     _openAddChapter(filter) {
-      const baseName = (this._expansionMeta[this._baseGameId] || {}).name || "";
+      const baseName = this._baseGameName();
       const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
       const params = {
         gameId: this._baseGameId,
