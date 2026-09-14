@@ -65,6 +65,11 @@
        *  changes what adopting it does to the table. */
       /** @type {string|null} */
       this._baseGameId = null;
+      // The base game's NAME, for stripping it off the front of an expansion's
+      // ("Everdell: Pearlbrook" -> "Pearlbrook"). Separate from the id because
+      // the id answers a different question — modeTag asks it which grids are
+      // expansions at all — and a caller can know one without the other.
+      this._baseGameName = "";
       this._onPick = /** @type {any} */ (null);
       this._onSkip = /** @type {any} */ (null);
 
@@ -89,12 +94,13 @@
      * why `onSkip` fires from the button rather than from onClose.
      *
      * @param {{templates: TemplateChapter[], returnFocus?: Element|null,
-     *          baseGameId?: string|null,
+     *          baseGameId?: string|null, baseGameName?: string|null,
      *          onAdopt: (t: TemplateChapter) => void,
      *          onSkip: (shown: TemplateChapter[]) => void}} opts
      */
     offer(opts) {
       this._baseGameId = opts.baseGameId || null;
+      this._baseGameName = opts.baseGameName || "";
       // Sorted here, not trusted. The pool arrives popularity-first from the
       // backend and pendingTemplates only filters, so this is usually a no-op —
       // but OFFER_MAX below throws the rest away, and "the three most players
@@ -174,7 +180,12 @@
       const cards = shown.map((t, i) => {
         const rows = (t.grid && t.grid.rows) || [];
         const pop = t.popularity || 0;
-        const from = t.source_game_name ? ` · ${escapeHtml(t.source_game_name)}` : "";
+        // Short-named, the same way the scoring bar's pills and chips name the
+        // same expansions two taps away (.claude/rules/ui-object-design.md §2)
+        // — this sheet is opened FROM that bar, and one box called two
+        // different things across the gap is the drift that rule is about.
+        const fromName = window.ScoringTemplate.gameNameOf(t, this._baseGameName);
+        const from = fromName ? ` · ${escapeHtml(fromName)}` : "";
         const hidden = Math.max(0, rows.length - PREVIEW_ROWS);
         // The count rides BESIDE the author rather than in the meta line under
         // it, because between two grids for one game it is the tiebreaker: the
