@@ -520,6 +520,10 @@ components above.
       // than scrolling the document — document scroll survived an innerHTML
       // replace, an inner scroller's does not.
       const prevChipScroll = this.container.querySelector(".chapter-add__filter-chips")?.scrollLeft || 0;
+      // `.chapter-add__pool-scroll` is a query hook now — its CSS block is one
+      // margin. The pool deliberately takes no .scroll-paper wrapper and no rolls
+      // (see styles.css): it is always open, so there is nothing to roll, and
+      // nothing here ever writes the max-height the widget's JS owns.
       const prevPoolScroll = this.container.querySelector(".chapter-add__pool-scroll .scroll-panel__body")?.scrollTop || 0;
       const prevEditScroll = this.container.querySelector(".chapter-edit__scroll")?.scrollTop || 0;
       const prevTypeScroll = this.container.querySelector(".chapter-edit__typescroll")?.scrollLeft || 0;
@@ -896,7 +900,6 @@ components above.
     }
 
     _renderPoolRow(c) {
-      const icon = c.chapter_type_icon || "book";
       const author = c.created_by_name ? `by ${escapeHtml(c.created_by_name)}` : "";
       const inGuide = !!c.in_my_guide;
       const me = window.store && window.store.get("user");
@@ -906,10 +909,18 @@ components above.
       // mirrors exactly that — an admin browsing the pool can clear a bad
       // chapter without going through the reports queue.
       const canDelete = isOwner || !!(me && me.is_admin);
+      // Reserved column, not just a dot: the per-chapter glyph that used to sit
+      // beside it is gone (the section header already carries the type's), so an
+      // undotted row would start 17px left of a dotted one. Only while the pool
+      // is actually merged — on a single game no row has a dot and the column
+      // would be 17px of nothing on every row. Mirrors _renderChapter in
+      // widgets/reference-guide-scroll.js, which draws the same row.
       const dot = (this._expansionIds.length && c.source_color)
         ? `<span class="scroll-chapter__source-dot" style="--exp-color:${escapeAttr(c.source_color)}"
                  title="${escapeAttr(c.source_game_name || "")}"></span>`
-        : "";
+        : (this._expansionIds.length
+            ? `<span class="scroll-chapter__source-dot scroll-chapter__source-dot--none"></span>`
+            : "");
       // Add/Added toggle lives on the right of the summary so a user can
       // grab a chapter without having to expand it first. preventDefault +
       // stopPropagation stop the toggle click from also flipping <details>.
@@ -928,7 +939,6 @@ components above.
           <details>
             <summary class="scroll-chapter__summary scroll-chapter__summary--rich">
               ${dot}
-              <span class="scroll-chapter__icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
               <div class="scroll-chapter__summary-text">
                 <div class="scroll-chapter__title">${escapeHtml(c.title)}</div>
                 <div class="scroll-chapter__submeta">
