@@ -997,6 +997,14 @@ components above.
 
     _renderPoolRow(c) {
       const author = c.created_by_name ? `by ${escapeHtml(c.created_by_name)}` : "";
+      // A scoring grid is titled from its game's raw BGG name, so an expansion's
+      // reads "Everdell: Pearlbrook score sheet" in a list already scoped to
+      // Everdell. Stripped for display exactly as the guide's own rows do it
+      // (domain/scoring-template.js#titleOf) — the two lists show the same
+      // chapters and must not name them differently.
+      const title = window.ScoringTemplate
+        ? window.ScoringTemplate.titleOf(c, this._gameName)
+        : c.title;
       const inGuide = !!c.in_my_guide;
       const me = window.store && window.store.get("user");
       const isAuthed = !!me;
@@ -1045,7 +1053,7 @@ components above.
         <button class="chapter-add__pool-dislike"
                 type="button"
                 title="Stop recommending this"
-                aria-label="Stop recommending ${escapeAttr(c.title)}"
+                aria-label="Stop recommending ${escapeAttr(title)}"
                 onclick="event.preventDefault();event.stopPropagation();window.referenceGuideAddView._dislikeChapter('${c.id}')">
           <i data-icon="thumbs-down" class="w-4 h-4"></i>
         </button>
@@ -1057,7 +1065,7 @@ components above.
             <summary class="scroll-chapter__summary scroll-chapter__summary--rich">
               ${dot}
               <div class="scroll-chapter__summary-text">
-                <div class="scroll-chapter__title">${escapeHtml(c.title)}</div>
+                <div class="scroll-chapter__title">${escapeHtml(title)}</div>
                 <div class="scroll-chapter__submeta">
                   <span class="scroll-chapter__pop" title="${c.popularity} ${c.popularity === 1 ? "person has" : "people have"} this in their guide">
                     <i data-icon="users" class="w-3 h-3"></i> ${c.popularity}
@@ -1142,11 +1150,17 @@ components above.
             suggestions. Only you can see this.
           </p>
           <ul class="scroll-chapter-list">
-            ${rows.map((c) => `
+            ${rows.map((c) => {
+              // Same strip as _renderPoolRow — a grid turned down is the same
+              // chapter under a different heading, not a different name.
+              const title = window.ScoringTemplate
+                ? window.ScoringTemplate.titleOf(c, this._gameName)
+                : c.title;
+              return `
               <li class="scroll-chapter scroll-chapter--disliked" data-chapter-id="${c.id}">
                 <div class="scroll-chapter__summary scroll-chapter__summary--rich">
                   <div class="scroll-chapter__summary-text">
-                    <div class="scroll-chapter__title">${escapeHtml(c.title)}</div>
+                    <div class="scroll-chapter__title">${escapeHtml(title)}</div>
                     <div class="scroll-chapter__submeta">
                       <span class="scroll-chapter__author">
                         ${escapeHtml(c.chapter_type_label || c.chapter_type || "Chapter")}
@@ -1157,13 +1171,14 @@ components above.
                   <button class="chapter-add__pool-toggle chapter-add__pool-toggle--compact"
                           type="button"
                           title="Put this back in the list"
-                          aria-label="Undo turning down ${escapeAttr(c.title)}"
+                          aria-label="Undo turning down ${escapeAttr(title)}"
                           onclick="window.referenceGuideAddView._undislikeChapter('${c.id}')">
                     <i data-icon="rotate-ccw" class="w-4 h-4"></i><span>Undo</span>
                   </button>
                 </div>
               </li>
-            `).join("")}
+            `;
+            }).join("")}
           </ul>
           </div>
         </details>

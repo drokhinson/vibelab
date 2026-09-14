@@ -152,6 +152,41 @@
     return stripBaseGameName(raw, baseGameName) || raw;
   }
 
+  /**
+   * What to PRINT as a grid chapter's title where the base game is already named.
+   *
+   * A grid has no title of its own: the backend derives one from the game it
+   * belongs to (services/chapter_grid.grid_title), so an expansion's grid comes
+   * back titled with the expansion's raw `games.name` — which on BGG carries
+   * the base game on the front. "Everdell: Pearlbrook score sheet", under a
+   * scroll already headed Everdell, inside a Scoring section that lists the
+   * base game's own sheet directly above it. The prefix is the half that says
+   * nothing there, and on a 390px phone it is also the half that fits.
+   *
+   * Same strip and the same caveat as gameNameOf above: helpers.js#
+   * stripBaseGameName needs a real separator, so a base game's own
+   * "Everdell score sheet" survives being passed against "Everdell" untouched,
+   * and so does an expansion BGG never prefixed.
+   *
+   * Grids only — every other chapter's title was TYPED by its author, and a
+   * title someone chose is not ours to trim. Either tagging counts, matching
+   * isScoringGrid in widgets/reference-guide-scroll.js: a row cached before
+   * migration 018 carries the type without the layout.
+   *
+   * Omit `baseGameName` where the full name is the point: a report, a
+   * moderation queue, a confirm dialog naming what is about to be deleted.
+   *
+   * @param {GridChapter & {layout?: string, chapter_type?: string}} c
+   * @param {string} [baseGameName] the base game whose screen this is
+   */
+  function titleOf(c, baseGameName) {
+    const raw = (c && c.title) || "";
+    if (!raw || !baseGameName) return raw;
+    const isGrid = c.layout === "scoring_grid" || c.chapter_type === "scoring_grid";
+    if (!isGrid) return raw;
+    return stripBaseGameName(raw, baseGameName) || raw;
+  }
+
   /** A grid's ordering key: its game's BGG id, with unknown ids sorting last. */
   function bggIdOf(c) {
     const n = c && c.source_bgg_id;
@@ -484,6 +519,7 @@
     MAX_ROWS,
     gameIdOf,
     gameNameOf,
+    titleOf,
     modeOf,
     split,
     groupByGame,
