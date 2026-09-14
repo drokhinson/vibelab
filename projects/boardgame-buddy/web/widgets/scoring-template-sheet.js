@@ -2,12 +2,28 @@
 // widgets/scoring-template-sheet.js — "this game has scoring grids you have
 // not adopted; want one?"
 //
-// ONE QUESTION, asked in one place. offer() opens when the host has NO scoring
-// grid in their guide for a game that has some — once on the Play step
-// (views/play-flow-view.js#_maybeOfferTemplates) and from the reference guide's
-// own notice (widgets/reference-guide-scroll.js). It cannot be answered without
-// SEEING the rows, so each candidate draws its real grid rather than a
-// one-line summary of it.
+// ONE QUESTION, asked once per GAME on the table. offer() opens when the host
+// has no scoring grid in their guide for a game that has some — once on the
+// Play step (views/play-flow-view.js#_maybeOfferTemplates) and from the
+// reference guide's own notice (widgets/reference-guide-scroll.js). It cannot
+// be answered without SEEING the rows, so each candidate draws its real grid
+// rather than a one-line summary of it.
+//
+// A PLAY IS SEVERAL GAMES. The chapter pool is fetched for the base game and
+// every expansion on the table in one request, so what arrives is several
+// games' grids in one popularity-sorted list — and three cards drawn from
+// three different boxes make the host answer about a grid without being told
+// which box it came out of. So the offer is a QUEUE: one step per game
+// (domain/scoring-template.js#groupByGame), base game first and then the
+// expansions in the order compose() will stack their rows, with a "2 of 3"
+// counter so the host can see how many questions are left. A host with an
+// unadopted base grid and two unadopted expansion grids answers three
+// questions in one pass instead of one merged question about all three.
+//
+// The queue advances IN PLACE rather than closing and reopening. A close per
+// step would spend a back-guard history entry, a scroll lock and a focus
+// return per game (.claude/rules/overlays.md §8b), and would flash the screen
+// underneath between questions.
 //
 // This file used to carry a second mode, open(), for picking between the grids
 // a host had ALREADY adopted. That question moved to the pill row in the
@@ -31,9 +47,10 @@
 // (the guide reloads its lists; the play screen must not, with a scorepad
 // underneath).
 //
-// The thumbs-down is the one answer that does NOT close the sheet: three grids
-// you do not want are three refusals, and being asked again next round about
-// the two you did not reach is the bug this feature exists to fix. See offer().
+// The thumbs-down is the one answer that does NOT move the queue on by itself:
+// three grids you do not want are three refusals, and being asked again next
+// round about the two you did not reach is the bug this feature exists to fix.
+// See offer().
 //
 // Its class is named in the theme re-point list in styles.css; a body-level
 // sheet lands outside the screen that opened it (.claude/rules/theming.md §8).
@@ -55,11 +72,20 @@
    *   flag rides on the rows, so the shape says so.
    */
 
-  // How many candidates the offer shows. A SAMPLE, not the pool: each one draws
+  /**
+   * @typedef {Object} OfferStep One game's question, as built by
+   *   domain/scoring-template.js#groupByGame.
+   * @property {string} gameId
+   * @property {string} gameName  already short-named against the base game
+   * @property {TemplateChapter[]} templates
+   */
+
+  // How many candidates one STEP shows. A SAMPLE, not the pool: each one draws
   // a real grid, and the host is standing at a table with the game already set
   // up. The pool arrives sorted by popularity, so three is the three most
   // players use; the rest stay one tap away in the reference guide, which is
-  // where browsing belongs.
+  // where browsing belongs. Per step rather than per queue — a play with two
+  // expansions asks three short questions, not one nine-card one.
   const OFFER_MAX = 3;
 
   // How many of a candidate's rows the preview draws. Cropped in JS rather
@@ -71,9 +97,13 @@
 
   class ScoringTemplateSheet {
     constructor() {
+      /** Every game still to be asked about, in order. @type {OfferStep[]} */
+      this._steps = [];
+      /** Which of them is on screen. */
+      this._stepIndex = 0;
       /** The three on screen. @type {TemplateChapter[]} */
       this._templates = [];
-      /** Every candidate the caller offered, so a dislike can re-slice the
+      /** Every candidate in the CURRENT step, so a dislike can re-slice the
        *  three from what is left rather than shrinking the list.
        *  @type {TemplateChapter[]} */
       this._pool = [];
@@ -101,58 +131,60 @@
     get isOpen() { return this._sheet.isOpen; }
 
     /**
-     * The offer: this game HAS scoring grids and the host has adopted none.
+     * The offer: these games HAVE scoring grids and the host has adopted none
+     * of them.
      *
-     * THREE answers now, and they do not all end the sheet. "Use this one" and
-     * "Continue without" both close it on a decision the caller records, so the
-     * host is not asked again next round. A thumbs-down is the third: it turns
-     * ONE grid down for good (migration 033) and leaves the sheet standing, so
-     * a host looking at three grids they do not want can say so about each of
-     * them in one pass rather than being asked again next round about the two
-     * they did not get to. The card goes the moment it is tapped; when the last
-     * one goes there is nothing left to offer and the sheet closes itself.
+     * THREE answers per step, and only one of them ends the sheet outright.
+     * "Use this one" and "Continue without" are both answers the caller
+     * records, so the host is not asked again next round — and on any step but
+     * the last they ADVANCE to the next game rather than closing, which is what
+     * makes the queue a queue. A thumbs-down is the third: it turns ONE grid
+     * down for good (migration 033) and leaves the step standing, so a host
+     * looking at three grids they do not want can say so about each of them in
+     * one pass. The card goes the moment it is tapped; when the last one on a
+     * step goes there is nothing left to ask about that game and the queue
+     * moves on by itself.
      *
      * Backdrop, Escape and the device back gesture are the remaining exit and
-     * mean none of the three: they close the sheet and leave the question open
-     * for next time (.claude/rules/overlays.md §8 — four exits, one meaning,
-     * and that meaning here is "not now"), which is why `onSkip` fires from the
-     * button rather than from onClose.
+     * mean none of the three, for the WHOLE queue: they close the sheet and
+     * leave every remaining question open for next time
+     * (.claude/rules/overlays.md §8 — four exits, one meaning, and that meaning
+     * here is "not now"), which is why `onSkip` fires from the button rather
+     * than from onClose.
      *
      * NO FETCH here, per this file's header: `onDislike` hands the grid to the
      * caller and the caller does the write. The sheet only stops drawing it.
      *
-     * @param {{templates: TemplateChapter[], returnFocus?: Element|null,
+     * @param {{steps: OfferStep[], returnFocus?: Element|null,
      *          baseGameId?: string|null, baseGameName?: string|null,
      *          onAdopt: (t: TemplateChapter) => void,
      *          onSkip: (shown: TemplateChapter[]) => void,
      *          onDislike?: (t: TemplateChapter) => void}} opts
      */
     offer(opts) {
+      // Steps with nothing drawable in them are dropped HERE rather than
+      // trusted out of the caller: an empty step would render a headed panel
+      // with no cards under it, and "2 of 3" would be counting a question
+      // nobody can answer.
+      const steps = (opts.steps || []).filter(
+        (s) => s && (s.templates || []).some(
+          (t) => t.grid && Array.isArray(t.grid.rows) && t.grid.rows.length
+        )
+      );
+      if (!steps.length) return;
+
+      this._steps = steps;
+      this._stepIndex = 0;
       this._baseGameId = opts.baseGameId || null;
       this._baseGameName = opts.baseGameName || "";
-      // Sorted here, not trusted. The pool arrives popularity-first from the
-      // backend and pendingTemplates only filters, so this is usually a no-op —
-      // but OFFER_MAX below throws the rest away, and "the three most players
-      // use" has to be true of the three that survive rather than of whatever
-      // order the caller happened to hand over (a cache seeded by an older
-      // response, a future caller that merges lists). Array#sort is stable, so
-      // ties keep the pool's own created_at DESC.
-      //
-      // `_pool` keeps the WHOLE candidate list, not just the three shown. It is
-      // what a dislike re-slices against, so turning one of the three down
-      // promotes the next-most-popular into the gap rather than leaving two
-      // cards and a grid nobody was offered.
-      this._pool = (opts.templates || [])
-        .slice()
-        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-      this._templates = this._pool.slice(0, OFFER_MAX);
       this._onPick = opts.onAdopt;
       this._onSkip = opts.onSkip;
       this._onDislike = opts.onDislike || null;
+      this._seedStep();
 
       this._sheet.open({
         html: this._renderOfferPanel(),
-        label: "Scoring templates for this game",
+        label: "Scoring templates for this play",
         returnFocus: opts.returnFocus || null,
         onClick: (e) => {
           if (e.target.closest("[data-tmpl-skip]")) { this._skip(); return; }
@@ -163,41 +195,100 @@
           const use = e.target.closest("[data-tmpl-id]");
           if (use) this._pick(use.dataset.tmplId);
         },
-        onOpen: (root) => {
-          // The first candidate's own button. Nothing here is a text input —
-          // the offer has no field at all — so this is simply the first thing
-          // a screen reader should meet after the dialog's label
-          // (.claude/rules/overlays.md §5).
-          const first = /** @type {HTMLElement|null} */ (
-            root.querySelector("[data-tmpl-id]")
-          );
-          if (first) first.focus();
-        },
+        onOpen: () => this._focusFirst(),
       });
     }
 
     close() { this._sheet.close(); }
 
-    /** "Continue without" — an answer, and the caller records it as one. */
+    /** The game currently being asked about. @returns {OfferStep|null} */
+    _step() { return this._steps[this._stepIndex] || null; }
+
+    /** Is this the last question in the queue? */
+    _isLast() { return this._stepIndex >= this._steps.length - 1; }
+
+    /**
+     * Load the current step's candidates.
+     *
+     * Sorted here, not trusted. The pool arrives popularity-first from the
+     * backend and neither pendingTemplates nor groupByGame reorders it, so this
+     * is usually a no-op — but OFFER_MAX below throws the rest away, and "the
+     * three most players use" has to be true of the three that survive rather
+     * than of whatever order the caller happened to hand over (a cache seeded
+     * by an older response, a future caller that merges lists). Array#sort is
+     * stable, so ties keep the pool's own created_at DESC.
+     *
+     * `_pool` keeps the WHOLE candidate list for this step, not just the three
+     * shown. It is what a dislike re-slices against, so turning one of the
+     * three down promotes the next-most-popular into the gap rather than
+     * leaving two cards and a grid nobody was offered.
+     */
+    _seedStep() {
+      const step = this._step();
+      this._pool = ((step && step.templates) || [])
+        .slice()
+        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+      this._templates = this._pool.slice(0, OFFER_MAX);
+    }
+
+    /**
+     * On to the next game — or out, when there is no next game.
+     *
+     * The step index walks forward past anything that has emptied out (every
+     * grid disliked) rather than stopping on it, so the queue never parks on a
+     * question with no answers.
+     */
+    _advance() {
+      for (let i = this._stepIndex + 1; i < this._steps.length; i++) {
+        this._stepIndex = i;
+        this._seedStep();
+        if (this._templates.length) { this._patch(); this._focusFirst(); return; }
+      }
+      this._sheet.close();
+    }
+
+    /**
+     * "Continue without" on the last question, "Skip this one" before it.
+     *
+     * Either way it is an ANSWER about this game and the caller records it, by
+     * the ids actually SHOWN — the ones the sample left out were never put to
+     * the host, so they stay pending. Only the last one closes the sheet;
+     * before that the queue simply moves on, which is the difference between
+     * declining Everdell's grids and declining the whole table's.
+     */
     _skip() {
       const shown = this._templates.slice();
       const onSkip = this._onSkip;
-      this._sheet.close();
+      if (this._isLast()) {
+        this._sheet.close();
+        if (onSkip) onSkip(shown);
+        return;
+      }
       if (onSkip) onSkip(shown);
+      this._advance();
     }
 
     _pick(id) {
       const picked = this._templates.find((t) => t.id === id) || null;
       if (!picked) return;
-      // Close first: the host's grid repaints behind the sheet, and applying a
-      // template can change its row count, so the sheet coming down first is
-      // what makes the change read as "the table I just chose".
-      this._sheet.close();
+      if (this._isLast()) {
+        // Close first: the host's grid repaints behind the sheet, and applying
+        // a template can change its row count, so the sheet coming down first
+        // is what makes the change read as "the table I just chose".
+        this._sheet.close();
+        if (this._onPick) this._onPick(picked);
+        return;
+      }
+      // Mid-queue there is nothing to reveal yet — the sheet is staying up for
+      // the next question — so the adoption goes through first and the next
+      // step takes its place. The table underneath is repainted by the caller
+      // either way, and the host sees it when the queue ends.
       if (this._onPick) this._onPick(picked);
+      this._advance();
     }
 
     /**
-     * Turn one grid down, and stay open.
+     * Turn one grid down, and stay on this question.
      *
      * The card goes immediately and the write flows through the caller behind
      * it (.claude/rules/web-frontend.md, "Mutations feel instantaneous"). There
@@ -214,46 +305,70 @@
       const [turned] = this._pool.splice(idx, 1);
       this._templates = this._pool.slice(0, OFFER_MAX);
 
-      // Nothing left to choose between, so the sheet has no question to ask.
-      // It closes WITHOUT onSkip: skipping is "not these, not now" and would
-      // have the caller write a per-device dismissal, where these grids are
-      // already turned down for good on the server. Asking the caller to
-      // record a second, weaker refusal on top would be recording the same
-      // decision twice.
-      if (!this._templates.length) this._sheet.close();
+      // Nothing left to choose between for THIS game, so it has no question to
+      // ask and the queue moves on (closing, if it was the last). It does so
+      // WITHOUT onSkip: skipping is "not these, not now" and would have the
+      // caller write a per-device dismissal, where these grids are already
+      // turned down for good on the server. Asking the caller to record a
+      // second, weaker refusal on top would be recording the same decision
+      // twice.
+      if (!this._templates.length) this._advance();
       else this._patch();
 
       if (this._onDislike) this._onDislike(turned);
     }
 
     /**
-     * Repaint the two regions a dislike changes — the candidate list and the
-     * count line above it — and nothing else.
+     * Put focus on the first candidate's own button.
+     *
+     * Nothing here is a text input — the offer has no field at all — so this is
+     * simply the first thing a screen reader should meet after the dialog's
+     * label (.claude/rules/overlays.md §5). Called on open and on every step
+     * change, but only when focus has actually fallen through to <body> (the
+     * button that was tapped went with its card): never stolen from the Skip
+     * button a host is working their way down the queue with, or from wherever
+     * they have since moved.
+     */
+    _focusFirst() {
+      const root = this._sheet.el;
+      if (!root) return;
+      if (root.contains(document.activeElement)
+          && document.activeElement !== document.body) return;
+      const first = /** @type {HTMLElement|null} */ (
+        root.querySelector("[data-tmpl-id]")
+      );
+      if (first) first.focus();
+    }
+
+    /**
+     * Repaint the four regions a dislike or a step change touches — the step
+     * counter, the count line, the candidate list and the cancel button's
+     * label — and nothing else.
      *
      * Not the panel. There is no text input to destroy here, but a panel
-     * repaint would drop focus on its way past, and the grip and title have not
-     * changed. Two hosts rather than one for the same reason
-     * widgets/reference-guide-scroll.js#_paintNotice has two: the count sits
-     * above the scrollport and the cards inside it.
+     * repaint would drop focus on its way past, and the grip and the title do
+     * not change between steps (the game's name rides in the count line, where
+     * it can ellipsise without taking the question with it). Four hosts rather
+     * than one for the same reason widgets/reference-guide-scroll.js#
+     * _paintNotice has two: they sit in different places in the panel, and the
+     * one in the middle is the scrollport.
      */
     _patch() {
       const root = this._sheet.el;
       if (!root) return;
+      const step = root.querySelector("[data-tmpl-step]");
       const sub = root.querySelector("[data-tmpl-sub]");
       const list = root.querySelector("[data-tmpl-list]");
+      const skip = root.querySelector("[data-tmpl-skip-label]");
+      if (step) step.textContent = this._stepText();
       if (sub) sub.innerHTML = this._subText();
       if (list) list.innerHTML = this._renderCards();
+      if (skip) skip.textContent = this._skipLabel();
       window.BgbIcons.render(root);   // every innerHTML patch re-hydrates icons
-      // The button that was just tapped went with its card, so focus has
-      // fallen through to <body>. Put it on the first remaining candidate —
-      // recovering ONLY in that case, never stealing focus from wherever the
-      // user has since moved (.claude/rules/overlays.md §5).
-      if (document.activeElement === document.body) {
-        const first = /** @type {HTMLElement|null} */ (
-          root.querySelector("[data-tmpl-id]")
-        );
-        if (first) first.focus();
-      }
+      // A step change scrolls the list back to the top: the new game's cards
+      // start at the top of the scrollport, not wherever the last game's third
+      // card had been dragged to.
+      if (list) list.scrollTop = 0;
     }
 
     /**
@@ -270,36 +385,68 @@
      * inert anyway (`.tmpl-preview .scoring-table-wrap` is pointer-events:
      * none), so the Add button is the whole tap target and says what it does.
      *
-     * Split three ways — panel, count line, cards — because a dislike repaints
-     * the last two and must not touch the first (see _patch).
+     * Split into hosts — counter, count line, cards, cancel label — because a
+     * dislike or a step change repaints those and must not touch the rest
+     * (see _patch).
+     *
+     * The counter is rendered only for a real queue: on a single-game offer
+     * there is no "1 of 1" to report and the panel reads exactly as it did
+     * before this file grew steps. `aria-live` on it is what announces the move
+     * to the next game, since the dialog's own label is read once on open.
      */
     _renderOfferPanel() {
+      const multi = this._steps.length > 1;
       return `
         <div class="bgb-sheet__panel">
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
+          ${multi
+            ? `<p class="tmpl-offer__step" data-tmpl-step aria-live="polite">${this._stepText()}</p>`
+            : ""}
           <h3 class="bgb-sheet__title">Score on a shared grid?</h3>
           <p class="bgb-sheet__sub" data-tmpl-sub>${this._subText()}</p>
           <div class="bgb-sheet__list tmpl-offer" data-tmpl-list>
             ${this._renderCards()}
           </div>
           <button class="bgb-sheet__cancel" type="button" data-tmpl-skip>
-            Continue without
+            <span data-tmpl-skip-label>${this._skipLabel()}</span>
           </button>
         </div>
       `;
     }
 
+    /** "2 of 3" — which question this is, out of how many the host has left. */
+    _stepText() {
+      return `${this._stepIndex + 1} of ${this._steps.length}`;
+    }
+
     /**
-     * The count line. Reads `_pool`, so turning a grid down re-counts: for this
-     * viewer it is no longer one of the grids written for this game, and a line
-     * that still said "3" over two cards would be counting a refusal.
+     * Skipping one question is not skipping the offer, and the button has to
+     * say which it is doing — a "Continue without" that silently asks about
+     * the next box reads as a control that did not work.
+     */
+    _skipLabel() {
+      return this._isLast() ? "Continue without" : "Skip this one";
+    }
+
+    /**
+     * The count line, and the only place the step's GAME is named.
+     *
+     * Reads `_pool`, so turning a grid down re-counts: for this viewer it is no
+     * longer one of the grids written for this game, and a line that still said
+     * "3" over two cards would be counting a refusal.
      */
     _subText() {
       const total = this._pool.length;
+      const step = this._step();
+      const name = (step && step.gameName) || "";
+      // "for this game" is the fallback rather than a bare sentence: a grid
+      // whose game the pool never named still belongs to something, and the
+      // wording is what the single-game offer has always said.
+      const who = name ? `for ${escapeHtml(name)}` : "for this game";
       return `
         ${total === 1
-          ? "Someone has written a scoring grid for this game."
-          : `${total} scoring grids have been written for this game.`}
+          ? `Someone has written a scoring grid ${who}.`
+          : `${total} scoring grids have been written ${who}.`}
         Pick one and it joins your reference guide, ready for next time.
       `;
     }
@@ -337,7 +484,7 @@
             <span class="tmpl-offer__meta">${rows.length} row${rows.length === 1 ? "" : "s"}${from}</span>
             ${window.ScoringTemplateEditor.modeTag(t, this._baseGameId)}
             <div class="tmpl-preview tmpl-offer__preview" aria-hidden="true">
-              ${window.ScoringTemplateEditor.preview(rows.slice(0, PREVIEW_ROWS), `tmplOffer${i}`)}
+              ${window.ScoringTemplateEditor.preview(rows.slice(0, PREVIEW_ROWS), `tmplOffer${this._stepIndex}_${i}`)}
               ${hidden ? `<span class="tmpl-offer__rest">+${hidden} more row${hidden === 1 ? "" : "s"}</span>` : ""}
             </div>
             <div class="tmpl-offer__answers">
