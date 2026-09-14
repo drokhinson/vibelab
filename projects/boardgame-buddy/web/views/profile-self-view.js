@@ -21,6 +21,12 @@
   // the background fetch that fills it can't blow away a scroll position or a
   // half-open sheet elsewhere on the hub.
   const ACH_HOST_ID = "profile-ach-card";
+  // Same story for the Recent plays card: a play edited in the detail popup is
+  // patched into the bundle this hub is already holding and repainted where it
+  // sits, rather than through render(). The popup opens OVER the hub — nothing
+  // navigated — so a full rebuild here would be a teardown under an open
+  // overlay, and the hub is exactly as scrolled as the user left it.
+  const PLAYS_HOST_ID = "profile-plays-card";
 
   class ProfileSelfView extends window.View {
     constructor() {
@@ -47,7 +53,46 @@
       for (const slot of window.BgbNotifications.slots()) {
         this.listen(slot, () => this.render());
       }
+      // A play edited, deleted or left in the detail popup this card's rows
+      // open. The popup is an overlay, so the hub never unmounts and never
+      // re-reads the bundle it painted from — without this the row the user
+      // just changed goes on showing its old game, date and scoreline behind
+      // the popup they changed it in.
+      this.listenDom("play-changed", (e) => this._onPlayChanged(e.detail || {}));
       await this._loadBundle();
+    }
+
+    /**
+     * @param {{playId?: string, kind?: string, play?: any}} detail
+     *   `play` is the fresh PlayResponse on an update — the PUT echoes the
+     *   whole row back, so the card repaints from the server's copy rather
+     *   than from a guess at what the edit did.
+     */
+    _onPlayChanged({ playId, kind, play }) {
+      // A play that stops existing moves everything on this hub, not one card:
+      // the stats block's play and win counts, the played-not-owned shelf
+      // behind the Collection strip, the badges that were earned on it. None
+      // of that is derivable from the row that went away — and the hub would
+      // otherwise print two different numbers for one fact, because the stats
+      // tile and the plays card both read `recent_plays_total`. So the honest
+      // repaint is the one the next mount would do, taken now: Play.remove()
+      // has already dropped this bundle from the cache, so _loadBundle() comes
+      // back with fresh everything. Both kinds dismiss the popup on their way
+      // out (widgets/play-detail-popup.js), so this is not a teardown under an
+      // open overlay.
+      if (kind === "delete" || kind === "leave") {
+        this._loadBundle();
+        return;
+      }
+      // An edit changes one row's CONTENTS and nothing about which plays
+      // exist, so it takes the row and the card it sits in — not the hub. The
+      // stats block can still drift (a win toggled off, the date of the most
+      // recent play moved) and is left to the next mount, exactly as it was
+      // before this: none of it is answerable from one play.
+      if (kind !== "update") return;
+      const rows = this._bundle && this._bundle.recent_plays;
+      if (!window.Play.applyToRows(rows, play)) return;
+      this._paintPlays();
     }
 
     async _loadBundle() {
@@ -348,6 +393,17 @@
     }
 
     _renderPlaysPreview(b) {
+      return `<div id="${PLAYS_HOST_ID}">${this._playsCardInner(b)}</div>`;
+    }
+
+    _paintPlays() {
+      const host = this.container && this.container.querySelector(`#${PLAYS_HOST_ID}`);
+      if (!host) return;
+      host.innerHTML = this._playsCardInner(this._bundle);
+      this.refreshIcons(host);
+    }
+
+    _playsCardInner(b) {
       const plays = (b && b.recent_plays) || [];
       const total = (b && b.recent_plays_total) || 0;
       const body = plays.length

@@ -41,6 +41,10 @@
 (function () {
   const PREVIEW_COVERS = 4;
   const PREVIEW_PLAYS = 2;
+  // The Shared plays card repaints in place when one of its rows is edited in
+  // the detail popup — the popup is an overlay over this screen, so a render()
+  // would rebuild a profile the user never navigated away from.
+  const SHARED_HOST_ID = "profile-other-shared-card";
 
   class ProfileOtherView extends window.View {
     constructor() {
@@ -60,8 +64,41 @@
     }
 
     async onMount() {
+      // The rows of the Shared plays card open the detail popup, and a play
+      // the viewer logged is editable from there. Nothing unmounts this screen
+      // while that popup is open, so the row would otherwise keep its pre-edit
+      // date, game and scoreline. Same event, same patch as the profile hub.
+      this.listenDom("play-changed", (e) => this._onPlayChanged(e.detail || {}));
       await this._load();
     }
+
+    /**
+     * A row of the Shared plays card changed in the popup it opens.
+     *
+     * Both this card's total and the stats tiles above it are counts of plays,
+     * but they are counts of DIFFERENT plays — `total` is the two of you
+     * together, the tiles are everything this person has logged — so patching
+     * the one the card owns cannot put two numbers for one fact on screen.
+     * (The profile hub's own card shares its number with a stat tile, which is
+     * why views/profile-self-view.js refetches on a removal instead.) The
+     * tiles are left to the next mount, as they were before this.
+     *
+     * @param {{playId?: string, kind?: string, play?: any}} detail
+     */
+    _onPlayChanged({ playId, kind, play }) {
+      const shared = this._shared;
+      if (!shared || !Array.isArray(shared.plays)) return;
+      if (kind === "update") {
+        if (!window.Play.applyToRows(shared.plays, play)) return;
+      } else if (kind === "delete" || kind === "leave") {
+        if (!window.Play.removeFromRows(shared.plays, playId)) return;
+        shared.total = Math.max(0, (shared.total || 0) - 1);
+      } else {
+        return;
+      }
+      this._paintShared();
+    }
+
     async onParamsChange() { await this._load(); }
 
     _userId() {
@@ -146,7 +183,7 @@
         ${this._renderTogether(b)}
         ${this._renderTopGames(b)}
         ${this._renderCollectionPreview(b)}
-        ${this._renderSharedPlays()}
+        <div id="${SHARED_HOST_ID}">${this._renderSharedPlays()}</div>
         <div style="height: 1rem"></div>
       `;
       this.refreshIcons();
@@ -554,6 +591,13 @@
         seeAllJs: "window.profileOtherView._goSharedPlays()",
         body,
       });
+    }
+
+    _paintShared() {
+      const host = this.container && this.container.querySelector(`#${SHARED_HOST_ID}`);
+      if (!host) return;
+      host.innerHTML = this._renderSharedPlays();
+      this.refreshIcons(host);
     }
 
     _goCollection() { window.router.go("collection", { userId: this._userId() }); }

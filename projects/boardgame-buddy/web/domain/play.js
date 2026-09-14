@@ -32,6 +32,29 @@
     return [userId || "me", gameId || "", buddyId || "", search || "", page, perPage].join("|");
   }
 
+  // Where a play sits in a list of play rows, or -1.
+  //
+  // A run row is deliberately never matched: it stands for a whole group of
+  // identical imported plays (migration 005), swapping it for the one play
+  // that was edited would drop the other 57, and removing it would drop them
+  // all. It is not openable from any list either, so a mutation cannot have
+  // come from one.
+  function _rowIndex(rows, playId) {
+    return rows.findIndex((p) => p && p.id === playId && (p.group_count || 1) === 1);
+  }
+
+  // The order every plays query returns: `played_at DESC, created_at DESC`.
+  // played_at is editable and is the primary key of that sort, so a patched
+  // list has to be re-sorted or a play nudged back a day sits above rows it
+  // now belongs below. created_at breaks the tie the same way the SQL does —
+  // several plays on one date is the normal case, not an edge one.
+  function _sortRows(rows) {
+    rows.sort((a, b) =>
+      String(b.played_at || "").localeCompare(String(a.played_at || ""))
+      || String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    return rows;
+  }
+
   /**
    * A play projected out of a cached /plays page, or null.
    *
@@ -385,15 +408,57 @@
       if (!window.bgbCache || !play || !play.id) return;
       for (const key of window.bgbCache.keys(LIST_NS)) {
         const page = window.bgbCache.peek(LIST_NS, key);
-        if (!page || !Array.isArray(page.plays)) continue;
-        // Skip a run row: it stands for many identical plays, and swapping it
-        // for the one that was edited would drop the other 57.
-        const i = page.plays.findIndex((p) => p && p.id === play.id && (p.group_count || 1) === 1);
-        if (i < 0) continue;
-        page.plays[i] = play;
-        page.plays.sort((a, b) => String(b.played_at || "").localeCompare(String(a.played_at || "")));
+        if (!page || !Play.applyToRows(page.plays, play)) continue;
         window.bgbCache.persist(LIST_NS, key);
       }
+    }
+
+    /**
+     * Swap an edited play into ONE list of play rows, in place.
+     *
+     * Every list of plays in the app is the same rows in the same order — a
+     * cached /plays page, the Plays log's in-memory array, the profile
+     * bundle's `recent_plays` — because the SQL behind each of them selects a
+     * PlayResponse-shaped row and orders it `played_at DESC, created_at DESC`.
+     * So the patch a saved edit needs is one function, and the surfaces
+     * holding those lists differ only in what they repaint afterwards.
+     *
+     * In place, for the same reason mergeIntoCard is: a view's array is often
+     * the very object the cache holds, and one splice reaching both is the
+     * point. Returns whether the list held the play so the caller can skip a
+     * repaint it doesn't need.
+     *
+     * @param {any[]} rows a list of PlayResponse-shaped rows
+     * @param {any} play the PlayResponse the PUT echoed back
+     * @returns {boolean} true when `rows` held the play and now holds the edit
+     */
+    static applyToRows(rows, play) {
+      if (!Array.isArray(rows) || !play || !play.id) return false;
+      const i = _rowIndex(rows, play.id);
+      if (i < 0) return false;
+      rows[i] = play;
+      _sortRows(rows);
+      return true;
+    }
+
+    /**
+     * Drop a deleted (or left) play from one list of play rows, in place.
+     *
+     * The counterpart to applyToRows, and the same contract: in place, and
+     * true only when the row was actually there. The caller owns whatever
+     * total sits beside the list — this cannot know whether the row it just
+     * removed was counted in one.
+     *
+     * @param {any[]} rows
+     * @param {string} playId
+     * @returns {boolean}
+     */
+    static removeFromRows(rows, playId) {
+      if (!Array.isArray(rows) || !playId) return false;
+      const i = _rowIndex(rows, playId);
+      if (i < 0) return false;
+      rows.splice(i, 1);
+      return true;
     }
 
     // ── Reactions ("Good game", migration 016) ─────────────────────────────

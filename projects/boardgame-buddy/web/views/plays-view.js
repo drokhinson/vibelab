@@ -93,15 +93,12 @@
       // the array — that is a bigger change than this one and is left as it is.
       this.listenDom("play-changed", (e) => {
         const { kind, play } = e.detail || {};
-        if (kind !== "update" || !play || !Array.isArray(this._plays)) return;
-        // A run row stands for many identical imported plays and is not
-        // openable from this list; replacing it with the one play would drop
-        // the rest of the run.
-        const i = this._plays.findIndex((p) => p && p.id === play.id && (p.group_count || 1) === 1);
-        if (i < 0) return;
-        this._plays[i] = play;
-        // played_at is editable and is this list's sort key.
-        this._plays.sort((a, b) => String(b.played_at || "").localeCompare(String(a.played_at || "")));
+        if (kind !== "update") return;
+        // Patches the row and re-sorts on this list's own key (played_at, then
+        // created_at) — and skips a run row, which stands for many identical
+        // imported plays and is not openable from this list, so replacing it
+        // with the one play would drop the rest of the run.
+        if (!window.Play.applyToRows(this._plays, play)) return;
         this.render();
       });
       this.listenDom("status-changed", (e) => {
