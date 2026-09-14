@@ -2128,6 +2128,51 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   outline-offset: 2px;
 }
 
+/* ── Expansion grid mode (migration 032) ─────────────────────────────────────
+   The one question an EXPANSION's scoring grid asks: do these rows join the
+   base game's score sheet, or replace it? Two stacked cards rather than a
+   segmented pill — each option needs a sentence to be answerable, and a pill
+   only has room for a word. */
+.tmpl-mode { margin-top: 0.7rem; }
+.tmpl-mode__opts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+.tmpl-mode__opt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  /* 56px is the row floor (.claude/rules/mobile-web.md §5) and two lines of
+     text clear it on their own; min-height keeps the one-line case honest. */
+  min-height: 56px;
+  justify-content: center;
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: oklch(var(--b2));
+  color: oklch(var(--bc));
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.tmpl-mode__opt:active { transform: scale(0.995); }
+.tmpl-mode__opt--on {
+  border-color: var(--accent);
+  background: var(--accent-quiet);
+}
+.tmpl-mode__title { font-size: 0.85rem; font-weight: 600; }
+.tmpl-mode__body {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: oklch(var(--bc) / 0.62);
+}
+.tmpl-mode__opt--on .tmpl-mode__title { color: var(--accent-ink); }
+.tmpl-mode__opt:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ── Scoring-grid rows (migration 018) ───────────────────────────────────────
    The body of a layout='scoring_grid' chapter, in place of the markdown
    toolbar + textarea. One card per row: the label, its position controls, and
@@ -8434,6 +8479,47 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: oklch(var(--bc) / 0.55);
   text-align: center;
 }
+/* What an expansion's grid DOES — adds rows to the base game's, or stands in
+   for them (migration 032). A tag rather than another meta line: it is the one
+   fact on a grid that changes what adopting it does to the table. Shared by
+   the offer sheet, the guide scroll and the browse pool, which is why it is
+   not in any of their class families
+   (widgets/scoring-template-editor.js#modeTag). */
+.tmpl-modetag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  /* Both sides: the tag sits UNDER the meta line on an offer card and ABOVE
+     the table in the reference guide. */
+  margin: 0.35rem 0;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: oklch(var(--b3));
+  color: oklch(var(--bc) / 0.7);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+/* Replace is the surprising one — the base game's rows disappear — so it reads
+   as caution rather than as another neutral fact. --rust / --rust-soft, not
+   --rust-ink: the card is oklch(var(--b3)), a ground surface that follows the
+   theme, and --rust-ink is the fixed paper-only pair (.claude/rules/theming.md
+   §6). */
+.tmpl-modetag--replace {
+  background: var(--rust-soft);
+  color: var(--rust);
+}
+/* Under the candidate list: what the add-ons do to whichever row is picked. */
+.tmpl-sheet__addon {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0.5rem 0.2rem 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: oklch(var(--bc) / 0.6);
+}
+.tmpl-sheet__addon i, .tmpl-sheet__addon svg { flex: none; margin-top: 0.12rem; }
 
 .scoring-cell-wrap {
   display: flex; align-items: center; gap: 0.25rem; min-width: 0;

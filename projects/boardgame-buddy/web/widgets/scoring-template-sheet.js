@@ -1,10 +1,17 @@
 // @ts-check
 // widgets/scoring-template-sheet.js — the two questions a scoring grid asks.
 //
-// open()  — pick WHICH grid this play uses. Only opens when the host has MORE
-//   THAN ONE scoring-grid chapter in their guide for this game (Everdell base
-//   vs. Everdell + Pearlbrook). With exactly one, play-flow-view applies it
-//   silently; with none, that question does not exist.
+// open()  — pick WHICH SCOREPAD this play uses. Only opens when the host has
+//   more than one CANDIDATE for it — two community grids for the base game, or
+//   two expansions on the table each bringing a replacement. With exactly one,
+//   play-flow-view applies it silently; with none, that question does not
+//   exist.
+//
+//   Add-on expansion grids are NOT candidates and never appear as rows here.
+//   Their rows join whichever candidate wins (domain/scoring-template.js), so
+//   listing them as options would be offering a choice between a scorepad and
+//   a fragment of one. The panel says where they went instead — a host who
+//   ticked Pearlbrook and then opened this sheet should not have to guess.
 //
 // offer() — the OTHER end of the same range: the host has NONE in their guide
 //   and the game has some. Opened once, on the Play step, by
@@ -40,7 +47,7 @@
    * @typedef {Object} TemplateChapter
    * @property {string} id
    * @property {string} title
-   * @property {{rows: Array<{label: string, color: string}>}} grid
+   * @property {{rows: Array<{label: string, color: string}>, mode?: string|null}} grid
    * @property {string} [source_game_name]
    * @property {string} [created_by]
    * @property {string} [created_by_name]
@@ -68,8 +75,17 @@
     constructor() {
       /** @type {TemplateChapter[]} */
       this._templates = [];
+      /** The add-on grids folding into whichever candidate wins. Named in the
+       *  panel, never listed as options — see the header note. */
+      /** @type {TemplateChapter[]} */
+      this._addOns = [];
       /** @type {string|null} */
       this._activeId = null;
+      /** The play's BASE game, so an expansion's grid can be labelled with the
+       *  mode it acts in. Only the offer needs it; the picker's candidates are
+       *  already known to be scorepads. */
+      /** @type {string|null} */
+      this._baseGameId = null;
       this._onPick = /** @type {any} */ (null);
       this._onSkip = /** @type {any} */ (null);
 
@@ -84,11 +100,13 @@
 
     /**
      * @param {{templates: TemplateChapter[], activeId?: string|null,
+     *          addOns?: TemplateChapter[],
      *          returnFocus?: Element|null,
      *          onPick: (t: TemplateChapter) => void}} opts
      */
     open(opts) {
       this._templates = opts.templates || [];
+      this._addOns = opts.addOns || [];
       this._activeId = opts.activeId || null;
       this._onPick = opts.onPick;
       this._onSkip = null;
@@ -128,10 +146,13 @@
      * why `onSkip` fires from the button rather than from onClose.
      *
      * @param {{templates: TemplateChapter[], returnFocus?: Element|null,
+     *          baseGameId?: string|null,
      *          onAdopt: (t: TemplateChapter) => void,
      *          onSkip: (shown: TemplateChapter[]) => void}} opts
      */
     offer(opts) {
+      this._baseGameId = opts.baseGameId || null;
+      this._addOns = [];
       // Sorted here, not trusted. The pool arrives popularity-first from the
       // backend and pendingTemplates only filters, so this is usually a no-op —
       // but OFFER_MAX below throws the rest away, and "the three most players
@@ -230,8 +251,37 @@
                data-tmpl-list>
             ${rows}
           </div>
+          ${this._renderAddOnNote()}
           <button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>
         </div>
+      `;
+    }
+
+    /**
+     * "Pearlbrook's 2 rows are added to whichever you pick."
+     *
+     * The one place the sheet talks about add-ons at all. It sits UNDER the
+     * list rather than in the subtitle above it because it is not a
+     * qualification of the choice — it is true of every row equally, and
+     * whichever one the host taps. Silent when there are none, which is every
+     * play without expansions.
+     */
+    _renderAddOnNote() {
+      const adds = this._addOns || [];
+      if (!adds.length) return "";
+      const rows = adds.reduce(
+        (n, t) => n + (((t.grid && t.grid.rows) || []).length), 0
+      );
+      const names = adds.map((t) => t.source_game_name).filter(Boolean);
+      const who = names.length && names.length <= 2
+        ? names.join(" and ")
+        : `${adds.length} expansion${adds.length === 1 ? "" : "s"}`;
+      return `
+        <p class="tmpl-sheet__addon">
+          <i data-icon="plus" class="w-3.5 h-3.5"></i>
+          <span>${escapeHtml(who)} add${names.length === 1 ? "s" : ""}
+            ${rows} row${rows === 1 ? "" : "s"} to whichever you pick.</span>
+        </p>
       `;
     }
 
@@ -277,6 +327,7 @@
               ${popChip}
             </div>
             <span class="tmpl-offer__meta">${rows.length} row${rows.length === 1 ? "" : "s"}${from}</span>
+            ${window.ScoringTemplateEditor.modeTag(t, this._baseGameId)}
             <div class="tmpl-preview tmpl-offer__preview" aria-hidden="true">
               ${window.ScoringTemplateEditor.preview(rows.slice(0, PREVIEW_ROWS), `tmplOffer${i}`)}
               ${hidden ? `<span class="tmpl-offer__rest">+${hidden} more row${hidden === 1 ? "" : "s"}</span>` : ""}

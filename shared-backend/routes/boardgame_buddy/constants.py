@@ -640,6 +640,38 @@ class ScoringRowColor(StrEnum):
     PURPLE = "purple"
 
 
+class ScoringGridMode(StrEnum):
+    """How an EXPANSION's scoring grid meets the base game's.
+
+    A grid written for an expansion is not a scorepad in its own right — the
+    expansion is played WITH the base game, and the two either share one
+    scorepad or the expansion brings its own. Which of the two is a property of
+    the expansion, known by whoever writes its grid, so it is stored on the
+    grid rather than guessed at the table:
+
+      * ADD_ON — the expansion's rows are APPENDED to the base game's grid.
+        Everdell + Pearlbrook: the base fourteen rows plus Pearl and Wonders.
+      * REPLACE — the expansion's rows ARE the scorepad, and the base game's
+        grid is not used at all. A legacy/campaign box that reprints the whole
+        score sheet with its own categories.
+
+    NULL on a BASE game's grid, and that absence is meaningful: the mode
+    answers "how does this meet the base game's grid", which a base game's own
+    grid cannot be asked. services/chapter_grid.resolve_grid_mode is the one
+    place that decides, and it defaults an expansion grid that names no mode to
+    ADD_ON — the commoner shape by far, and the one that loses nothing if it is
+    wrong (the rows are still on the table; a wrong REPLACE would have hidden
+    the base game's).
+
+    The DB stores this INSIDE the `grid` JSONB rather than in a column of its
+    own (migration 032): it is part of the grid document, versioned by the same
+    `v`, and nothing queries or sorts by it.
+    """
+
+    ADD_ON = "add_on"
+    REPLACE = "replace"
+
+
 # Rows in one scoring template. boardgamebuddy_play_session_scores.round_index
 # is CHECK'd 0..63 and template rows occupy the low indexes, so 24 leaves 40
 # rounds of headroom for the extras a scorer appends before a live-scores write

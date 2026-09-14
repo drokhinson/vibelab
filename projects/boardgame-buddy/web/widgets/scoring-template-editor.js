@@ -63,11 +63,97 @@
     return ROW_COLORS.find((c) => c.id === (slug || "neutral")) || ROW_COLORS[0];
   }
 
+  // Mirrors ScoringGridMode in the backend's constants.py and the
+  // bgb_chapters_grid_mode CHECK (migration 032). Only an EXPANSION's grid has
+  // one; see domain/scoring-template.js for what each does at the table.
+  const MODE_ADD_ON = "add_on";
+  const MODE_REPLACE = "replace";
+
+  /**
+   * The one question an expansion's grid asks that a base game's does not:
+   * when this box is on the table, do these rows JOIN the base game's score
+   * sheet, or ARE they the score sheet?
+   *
+   * Asked here, of the author, rather than at the table of the host — the
+   * author has the expansion in front of them and knows which it is; the host
+   * would be guessing on someone else's behalf every single game. That is the
+   * whole reason the mode is stored on the grid.
+   *
+   * Absent entirely for a base game's grid. It has nothing to meet, and a
+   * disabled control asking an unanswerable question is worse than no control
+   * (.claude/rules/ui-object-design.md §3b).
+   *
+   * Two radio-behaving buttons rather than a switch: neither is the default
+   * state of the other, and a switch labelled "Replace" reads as if off means
+   * nothing happens. The descriptions are part of the control because the
+   * words alone do not carry it — "add-on" is what the box IS, and the
+   * question is what its ROWS do.
+   *
+   * @param {string|null|undefined} expansionName
+   * @param {string|null|undefined} mode
+   */
+  function renderMode(expansionName, mode) {
+    if (!expansionName) return "";
+    const active = mode === MODE_REPLACE ? MODE_REPLACE : MODE_ADD_ON;
+    const opt = (id, title, body) => `
+      <button type="button" role="radio" aria-checked="${id === active ? "true" : "false"}"
+              class="tmpl-mode__opt ${id === active ? "tmpl-mode__opt--on" : ""}"
+              onclick="${V}._tmplSetMode('${id}')">
+        <span class="tmpl-mode__title">${title}</span>
+        <span class="tmpl-mode__body">${body}</span>
+      </button>
+    `;
+    const who = escapeHtml(expansionName);
+    return `
+      <div class="chapter-edit__field tmpl-mode">
+        <label class="chapter-edit__label">When ${who} is on the table</label>
+        <div class="tmpl-mode__opts" role="radiogroup"
+             aria-label="How ${escapeAttr(expansionName)}'s rows meet the base game's">
+          ${opt(MODE_ADD_ON, "Add these rows",
+                `They join the base game's scoring template, under its rows.`)}
+          ${opt(MODE_REPLACE, "Replace the template",
+                `These rows are the whole score sheet — the base game's are not used.`)}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * The one-line badge saying what an EXPANSION's grid does when its box is on
+   * the table — adds its rows to the base game's, or stands in for them.
+   *
+   * Lives here rather than in either caller because three surfaces label the
+   * same grids and must not label them differently
+   * (.claude/rules/ui-object-design.md §2): the play cascade's offer sheet, the
+   * reference-guide scroll, and the browse pool behind it. Empty string for a
+   * BASE game's grid, which has no mode — and for a caller that does not know
+   * the base game, where "add-on" and "replace" would both be guesses.
+   *
+   * @param {{grid?: {mode?: string|null}, game_id?: string, source_game_id?: string}} c
+   * @param {string|null|undefined} baseGameId
+   * @returns {string} html, or "" when there is no mode to show
+   */
+  function modeTag(c, baseGameId) {
+    if (!window.ScoringTemplate || !baseGameId) return "";
+    const mode = window.ScoringTemplate.modeOf(c, baseGameId);
+    if (!mode) return "";
+    const replaces = mode === MODE_REPLACE;
+    return `
+      <span class="tmpl-modetag ${replaces ? "tmpl-modetag--replace" : ""}">
+        <i data-icon="${replaces ? "refresh-cw" : "plus"}" class="w-3 h-3"></i>
+        ${replaces ? "Replaces the base game's rows" : "Adds to the base game's rows"}
+      </span>
+    `;
+  }
+
   /**
    * The editor body: the row list and a live preview.
    * @param {{rows: Array<{label: string, color: string, note?: string}>,
    *          typeRow: string, error: string,
-   *          colorOpen?: number|null, noteOpen?: number|null}} s
+   *          colorOpen?: number|null, noteOpen?: number|null,
+   *          expansionName?: string|null, mode?: string|null}} s
+   *   `expansionName` is set only when the grid is being saved against an
+   *   EXPANSION, and is what makes the mode question appear at all.
    */
   function render(s) {
     const rows = Array.isArray(s.rows) ? s.rows : [];
@@ -79,6 +165,8 @@
         A custom scoring template. Create row heads with a custom colour, and
         add an optional description to clarify the scoring instructions.
       </p>
+
+      ${renderMode(s.expansionName, s.mode)}
 
       <div class="tmpl-rows" id="tmpl-rows-host">
         ${renderRowList(rows, s)}
@@ -295,6 +383,10 @@
 
   window.ScoringTemplateEditor = {
     render,
+    renderMode,
+    modeTag,
+    MODE_ADD_ON,
+    MODE_REPLACE,
     renderRowList,
     preview,
     authorLabel,

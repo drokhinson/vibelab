@@ -359,7 +359,12 @@ def _create_chapter_sync(
 ) -> MyGuideChapterResponse:
     game = (
         sb.table("boardgamebuddy_games")
-        .select("id, name")
+        # is_expansion decides a scoring grid's MODE (migration 032) — an
+        # expansion's rows either join the base game's grid or stand in for it,
+        # and a base game's own grid is in neither mode. Selected here beside
+        # the name the title is derived from, so the mode costs no extra
+        # round-trip.
+        .select("id, name, is_expansion")
         .eq("id", game_id)
         .execute()
     )
@@ -392,7 +397,13 @@ def _create_chapter_sync(
             "title": title,
             "content": content,
             "layout": str(body.layout),
-            "grid": body.grid.model_dump(mode="json") if body.grid else None,
+            "grid": (
+                chapter_grid.apply_grid_mode(
+                    body.grid, bool(game.data[0].get("is_expansion"))
+                )
+                if body.grid
+                else None
+            ),
             "created_by": user_id,
         })
         .execute()
@@ -550,21 +561,24 @@ def _update_chapter_sync(
     # body said — which is also how a grid authored before the title field was
     # retired, or one whose game has since been renamed, picks up the current
     # form. Costs one lookup, and only on a grid edit.
+    is_expansion = False
     if str(layout) == str(ChapterLayout.SCORING_GRID):
         game = (
             sb.table("boardgamebuddy_games")
-            .select("name")
+            # is_expansion rides along for the mode below, same one lookup.
+            .select("name, is_expansion")
             .eq("id", row["game_id"])
             .execute()
         )
         updates["title"] = chapter_grid.grid_title(
             game.data[0].get("name") if game.data else None
         )
+        is_expansion = bool(game.data[0].get("is_expansion")) if game.data else False
     # A None grid means "not supplied", so this endpoint cannot CLEAR one. That
     # is deliberate: a chapter never changes layout in practice, and the editor
     # sends layout and grid together or neither.
     if body.grid is not None:
-        updates["grid"] = body.grid.model_dump(mode="json")
+        updates["grid"] = chapter_grid.apply_grid_mode(body.grid, is_expansion)
         # Keep the derived mirror in step with the rows it mirrors, whether or
         # not the caller also sent `content`.
         updates["content"] = chapter_grid.grid_to_content(body.grid)

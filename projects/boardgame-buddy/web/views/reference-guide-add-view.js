@@ -34,12 +34,17 @@
   // what keeps the pool's search and the moderation preview working — so show
   // the real grid instead of the mirror. Falls through to markdown whenever the
   // rows aren't there, which covers a cached row from before migration 018.
-  function chapterBodyHtml(c) {
+  //
+  // An EXPANSION's grid is badged with its mode (migration 032) — the pool is
+  // where someone decides whether to adopt one, and "adds two rows to Everdell"
+  // and "is the whole score sheet instead" are not the same offer.
+  function chapterBodyHtml(c, baseGameId) {
     const rows = c.layout === "scoring_grid" && c.grid && Array.isArray(c.grid.rows)
       ? c.grid.rows
       : null;
     if (rows && rows.length && window.ScoringTemplateEditor) {
-      return window.ScoringTemplateEditor.preview(rows);
+      return window.ScoringTemplateEditor.modeTag(c, baseGameId)
+        + window.ScoringTemplateEditor.preview(rows);
     }
     return window.renderMarkdown(c.content || "");
   }
@@ -191,6 +196,13 @@ components above.
       // Only the `scoring` type offers the choice; every other type is text.
       this._formLayout = "text";
       this._formRows = [];           // [{label, color, note}] — scoring_grid only
+      // How an EXPANSION's grid meets the base game's (migration 032):
+      // "add_on" appends its rows to the base template, "replace" stands in
+      // for it. Only asked when the save target IS an expansion — see
+      // _gridExpansionName — and ignored by the backend otherwise, which
+      // resolves the stored value against the game itself
+      // (services/chapter_grid.resolve_grid_mode).
+      this._formGridMode = window.ScoringTemplateEditor.MODE_ADD_ON;
       // Which row currently has its colour picker / description field open.
       // Disclosure state, so it lives here rather than inside the row objects —
       // those get posted to the server. One index each, not a per-row flag: a
@@ -950,7 +962,7 @@ components above.
               </div>
               ${toggleBtn}
             </summary>
-            <div class="scroll-chapter__content">${chapterBodyHtml(c)}</div>
+            <div class="scroll-chapter__content">${chapterBodyHtml(c, this._gameId)}</div>
             <div class="scroll-chapter__actions">
               ${isOwner ? `
                 <button class="btn btn-ghost btn-xs"
@@ -1004,6 +1016,13 @@ components above.
       this._tmplColorOpen = null;
       this._tmplNoteOpen = null;
       this._createTargetGameId = c.source_game_id || c.game_id || this._gameId;
+      // A grid written before migration 032 stores no mode at all, and an
+      // expansion's grid that stored none has always behaved as an add-on —
+      // so that is what the control opens on, matching the backend's own
+      // default rather than presenting the author with an empty question.
+      this._formGridMode = (c.grid && c.grid.mode === window.ScoringTemplateEditor.MODE_REPLACE)
+        ? window.ScoringTemplateEditor.MODE_REPLACE
+        : window.ScoringTemplateEditor.MODE_ADD_ON;
       this._centerTypeScrollOnNext = true;
     }
 
@@ -1303,7 +1322,27 @@ components above.
         error: this._error,
         colorOpen: this._tmplColorOpen,
         noteOpen: this._tmplNoteOpen,
+        expansionName: this._gridExpansionName(),
+        mode: this._formGridMode,
       });
+    }
+
+    /**
+     * The name of the expansion this grid is being saved against, or null when
+     * it is the base game's own.
+     *
+     * The test is the TARGET, not the list of expansions in scope: `_gameId`
+     * is always the base game (it is the route's own parameter), so anything
+     * else the chapter can be saved to is an expansion by construction. Going
+     * through `_expansionIds` instead would hide the question when editing an
+     * expansion's grid from a screen that has no expansions in scope, which is
+     * exactly where a wrong mode would go unnoticed.
+     */
+    _gridExpansionName() {
+      const target = this._createTargetGameId || this._gameId;
+      if (!target || target === this._gameId) return null;
+      const meta = this._expansionMeta[target];
+      return (meta && meta.name) || "this expansion";
     }
 
     // Edit keeps the pill scroller: the chapter already has a type and changing
@@ -1532,6 +1571,9 @@ components above.
 
     _pickCreateTarget(id) {
       this._createTargetGameId = id;
+      // The mode question appears and disappears with this choice (a base
+      // game's grid has no mode), so a full render is what the target picker
+      // has always done and is what it still needs to do.
       this.render();
     }
 
@@ -1577,6 +1619,19 @@ components above.
           + window.ScoringTemplateEditor.preview(this._formRows);
       }
       this.refreshIcons();
+    }
+
+    /**
+     * Pick the mode an EXPANSION's grid acts in (migration 032). A full render
+     * rather than the `#tmpl-rows-host` patch the row handlers use: the control
+     * is above the row list, not inside it, and nothing in this editor holds a
+     * caret when a mode button is tapped.
+     */
+    _tmplSetMode(mode) {
+      this._formGridMode = mode === window.ScoringTemplateEditor.MODE_REPLACE
+        ? window.ScoringTemplateEditor.MODE_REPLACE
+        : window.ScoringTemplateEditor.MODE_ADD_ON;
+      this.render();
     }
 
     _tmplSetLabel(i, value) {
@@ -2136,7 +2191,14 @@ components above.
       // 'text' was the only value the column's CHECK allowed and is a hard error
       // the moment it isn't.
       const layout = isGrid ? "scoring_grid" : "text";
-      const grid = isGrid ? { v: 1, rows } : null;
+      // The mode rides on the document but is only MEANINGFUL for an
+      // expansion's grid, and the backend is the authority on which games those
+      // are — it re-resolves the field against the chapter's own game
+      // (services/chapter_grid.resolve_grid_mode) and nulls it on a base game's
+      // grid. Sending it unconditionally is therefore safe and keeps this
+      // branch out of the save path: a target the client thinks is a base game
+      // and the server knows is an expansion still gets a defensible mode.
+      const grid = isGrid ? { v: 1, mode: this._formGridMode, rows } : null;
       // A grid has no title of its own: the backend derives one from the game
       // (services/chapter_grid.grid_title) and overwrites whatever a client
       // sends, so sending one would only invite the two to disagree.

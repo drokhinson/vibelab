@@ -39,6 +39,7 @@ from .constants import (
     PlayMode,
     PlaySessionStatus,
     PushTier,
+    ScoringGridMode,
     ScoringRowColor,
     SessionPhase,
 )
@@ -130,13 +131,45 @@ class ScoringGrid(BaseModel):
     """The body of a layout='scoring_grid' chapter.
 
     `v` is here from the start so the document is migratable later (a subtotal
-    row kind, a per-row cap): free to add now, impossible to retrofit.
+    row kind, a per-row cap): free to add now, impossible to retrofit. `mode`
+    (migration 032) is that extension point being used for the first time.
     """
 
     v: int = 1
+    # How an EXPANSION's grid meets the base game's — appended to it, or
+    # instead of it. NULL on a base game's own grid, where the question does
+    # not arise. The client may leave it out entirely; the write path resolves
+    # it against the game the chapter is FOR, which is the only place that
+    # knows whether that game is an expansion — see
+    # services/chapter_grid.resolve_grid_mode.
+    mode: ScoringGridMode | None = None
     rows: list[ScoringRow] = Field(
         ..., min_length=1, max_length=MAX_SCORING_TEMPLATE_ROWS
     )
+
+
+class ScoringTemplatePart(BaseModel):
+    """One chapter that contributed rows to a COMPOSED template (migration 032).
+
+    A play with expansions can be scored on rows drawn from several grids at
+    once — the base game's, plus every add-on expansion's. `rows` above is the
+    flattened result, which is what every renderer wants; this is the seam list
+    beside it, so a reader can still say where a row came from and the play
+    screen can name the composition ("Everdell score sheet + Pearlbrook")
+    without re-deriving it from a guide that may since have changed.
+
+    Provenance only, exactly like PlayScoringTemplate.chapter_id: nothing joins
+    on these ids and they are allowed to dangle.
+    """
+
+    chapter_id: str | None = None
+    game_id: str | None = None
+    game_name: str | None = None
+    # NULL for the base-game part; a ScoringGridMode value for an expansion's.
+    mode: ScoringGridMode | None = None
+    # How many of the flattened rows this part contributed, in order — so the
+    # seams can be found without matching labels.
+    row_count: int = 0
 
 
 class PlayScoringTemplate(ScoringGrid):
@@ -146,10 +179,30 @@ class PlayScoringTemplate(ScoringGrid):
     dangle, because the chapter it names is community-owned and may be edited or
     deleted long after the play. See the COMMENT ON boardgamebuddy_plays
     .scoring_template for the full argument.
+
+    On a COMPOSED template (base game + add-on expansions) `chapter_id` names
+    the part that supplied the leading rows — the base game's grid, or the
+    replace-mode expansion grid standing in for it — and `parts` lists every
+    contributor in row order. A single-grid template leaves `parts` None rather
+    than writing a one-element list, so the common case reads exactly as it did
+    before migration 032.
+
+    The inherited MAX_SCORING_TEMPLATE_ROWS ceiling still applies to a
+    composed template: composition is capped at the same number where it
+    happens, so a snapshot over the ceiling is a bug rather than something to
+    accommodate here.
     """
 
     chapter_id: str | None = None
     title: str | None = None
+    parts: list[ScoringTemplatePart] | None = None
+    # Inherited from ScoringGrid and meaningless here: a COMPOSED template has
+    # no single mode — its parts each have one, and they are in `parts`. Kept
+    # (rather than made an error) so a client sending a chapter's document
+    # straight through is not rejected over a field nothing reads, and
+    # excluded from serialization so the stored snapshot does not carry a null
+    # that looks like an answer.
+    mode: ScoringGridMode | None = Field(default=None, exclude=True)
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────
