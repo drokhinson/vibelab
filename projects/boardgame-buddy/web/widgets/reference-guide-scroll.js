@@ -673,26 +673,40 @@
      * candidate. The browse screen stays reachable from the Edit-chapters
      * button below, which is where browsing belongs, and is the fallback if the
      * sheet is somehow not on the page.
+     *
+     * Grouped per game, one step each, exactly as the play cascade groups them
+     * — the pool this notice counts merges the base game and every expansion,
+     * and the sheet asking about all of them at once is what groupByGame
+     * exists to stop. No `coveredGameIds` here, though: the play cascade only
+     * INTERRUPTS about games the viewer keeps nothing for, whereas somebody
+     * who has TAPPED "3 grids are available" is asking to see all three.
      */
     _openTemplates(event) {
       if (event) event.stopPropagation();
       const pending = this._pendingTemplates()
         .filter((t) => t.grid && Array.isArray(t.grid.rows) && t.grid.rows.length);
-      if (!pending.length || !window.BgbScoringTemplateSheet) {
+      // So an expansion's grid is captioned with the expansion's name alone —
+      // the scroll's own chapter rows already strip the base game off the
+      // front, and the sheet opens over them.
+      const baseGameName = (this._expansionMeta[this._baseGameId] || {}).name || "";
+      const steps = pending.length && window.ScoringTemplate
+        ? window.ScoringTemplate.groupByGame(pending, {
+            baseGameId: this._baseGameId,
+            baseGameName,
+          })
+        : [];
+      if (!steps.length || !window.BgbScoringTemplateSheet) {
         this._openAddChapter("scoring_grid");
         return;
       }
       window.BgbScoringTemplateSheet.offer({
-        templates: pending,
+        steps,
         // So an expansion's grid is badged with the mode it would act in
         // (migration 032) — the guide's pool merges base + expansions, and
         // "adds two rows" and "is the whole score sheet instead" are not the
         // same offer.
         baseGameId: this._baseGameId,
-        // And so an expansion's grid is captioned with the expansion's name
-        // alone — the scroll's own chapter rows already strip the base game
-        // off the front, and the sheet opens over them.
-        baseGameName: (this._expansionMeta[this._baseGameId] || {}).name || "",
+        baseGameName,
         returnFocus: (event && event.currentTarget) || null,
         onAdopt: (tpl) => this._adoptTemplate(tpl),
         onSkip: (shown) => this._dismissTemplates(shown),

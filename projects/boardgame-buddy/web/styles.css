@@ -8607,6 +8607,23 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    which is exactly what .tmpl-preview's own re-point block above is for — the
    card keeps that class and overrides only its box.
    ────────────────────────────────────────────────────────────────────────── */
+/* "2 OF 3" — which game the offer is asking about, out of how many are left.
+   Rendered only when there is more than one, so a single-game offer reads
+   exactly as it did before the sheet grew a queue. Same face, size and
+   letter-spacing as .cascade-screen__step so the two step counters in this app
+   read as the same thing (.claude/rules/ui-object-design.md §3a); it sits above
+   the sheet's own title, so it takes the panel's muted ink rather than the
+   ground's — the .tmpl-sheet re-point aliases --polaroid-muted onto the ground
+   tokens for this chrome surface (.claude/rules/theming.md §6/§8). Padding
+   matches .bgb-sheet__title's so the two line up on the left edge. */
+.tmpl-offer__step {
+  margin: 0 0 2px; padding: 0 10px; flex: none;
+  font-family: var(--font-score);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted);
+}
 /* .bgb-sheet__list is already the flex column with the scrollport; cards need
    room between them where rows sat flush. */
 .tmpl-offer { gap: 0.7rem; }

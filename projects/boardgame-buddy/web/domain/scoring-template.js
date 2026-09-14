@@ -411,6 +411,73 @@
     return !!(snap && Array.isArray(snap.parts) && snap.parts.length > 1);
   }
 
+  /**
+   * One offer step per GAME, from a flat pool of grids nobody has adopted.
+   *
+   * The chapter pool is fetched for the base game AND the expansions on the
+   * table in one request (domain/chapter.js#scoringTemplates), so what comes
+   * back is several games' grids in one popularity-sorted list. That is the
+   * right shape for counting ("3 grids are available") and the wrong shape for
+   * ASKING: "do you want one of these?" is a question about one game, and three
+   * cards drawn from three different boxes make the host answer about a grid
+   * without being told which box it came out of.
+   *
+   * So the offer is grouped: base game first, then each expansion, one step
+   * each. `coveredGameIds` is what makes a step disappear once the host already
+   * keeps a grid for that game — the play cascade passes the games its guide
+   * covers, and the reference guide's own notice passes nothing, because a
+   * viewer who TAPPED "3 grids are available" is asking to see all three.
+   *
+   * Expansion steps run in ASCENDING BGG ID, the same order compose() appends
+   * their rows in, so the questions arrive in the order the answers will stack
+   * up on the scorepad.
+   *
+   * @param {GridChapter[]} rows grids already filtered to the unadopted ones
+   *   (Chapter.pendingTemplates)
+   * @param {{baseGameId: string, baseGameName?: string,
+   *          coveredGameIds?: Set<string>}} opts
+   * @returns {Array<{gameId: string, gameName: string, templates: GridChapter[]}>}
+   */
+  function groupByGame(rows, opts) {
+    const baseGameId = (opts && opts.baseGameId) || null;
+    const baseGameName = (opts && opts.baseGameName) || "";
+    const covered = (opts && opts.coveredGameIds) || null;
+
+    /** @type {Map<string, {gameId: string, gameName: string, templates: GridChapter[]}>} */
+    const groups = new Map();
+    for (const c of rows || []) {
+      // An untagged row is one the guide fetched for a single game and so did
+      // not have to label — it can only be the base game's. Same assumption
+      // play-flow-view#_scoringSplit already makes about the adopted list.
+      const gid = gameIdOf(c) || baseGameId;
+      if (!gid || (covered && covered.has(gid))) continue;
+      let g = groups.get(gid);
+      if (!g) {
+        g = { gameId: gid, gameName: "", templates: [] };
+        groups.set(gid, g);
+      }
+      g.templates.push(c);
+    }
+
+    const out = Array.from(groups.values());
+    for (const g of out) {
+      // The base game is named from the draft rather than from a row: its rows
+      // are the ones most likely to be untagged, and the caller knows the name
+      // even when the chapter does not. An expansion with no name at all gets
+      // an empty label rather than the base game's — a step headed with the
+      // wrong game is worse than a step headed with none.
+      g.gameName = g.gameId === baseGameId
+        ? baseGameName
+        : (gameNameOf(g.templates[0], baseGameName) || "");
+    }
+    out.sort((a, b) => {
+      if (a.gameId === baseGameId) return b.gameId === baseGameId ? 0 : -1;
+      if (b.gameId === baseGameId) return 1;
+      return byBggId(a.templates[0], b.templates[0]);
+    });
+    return out;
+  }
+
   window.ScoringTemplate = {
     MODE_ADD_ON,
     MODE_REPLACE,
@@ -419,6 +486,7 @@
     gameNameOf,
     modeOf,
     split,
+    groupByGame,
     preferredBase,
     compose,
     composedTitle,

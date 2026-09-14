@@ -101,9 +101,20 @@
       // guide-templates-loaded event. Read only by _maybeOfferTemplates.
       this._poolTemplates = [];
       this._poolTemplatesGameId = null;
-      // The game the Play step has already put the offer to the host for, so
-      // it asks once per game per mount and not on every guide reload.
-      this._offeredForGame = null;
+      // The games the Play step has already put the offer to the host for.
+      // A SET, not one id: a play is the base game plus its expansions, each
+      // with its own grids and its own question, and ticking a new expansion
+      // mid-Play has to be askable without re-asking about the boxes already
+      // answered for. Asks once per game per mount, not on every guide reload.
+      /** @type {Set<string>} */
+      this._offeredGameIds = new Set();
+      // Grids taken earlier in the CURRENT offer queue. The guide reload each
+      // adoption kicks off lands frames later, so without this the second
+      // adoption in one pass would compose against a `_templates` that has
+      // never heard of the first and would take its rows straight back off the
+      // table. Read only by _adoptTemplate, and reset when a queue opens.
+      /** @type {any[]} */
+      this._offerAdopted = [];
       this._liveScores = null;
       this._liveOff = null;
       this._error = null;
@@ -187,7 +198,8 @@
         // that answer outlive the tab (Chapter.dismissTemplates).
         this._poolTemplates = [];
         this._poolTemplatesGameId = null;
-        this._offeredForGame = null;
+        this._offeredGameIds.clear();
+        this._offerAdopted = [];
       }
       // Drop the previous run's lobby unless it still addresses the run we are
       // about to start. This view is a singleton, so without this a finished
@@ -283,9 +295,10 @@
         this._onChaptersLoaded(d.chapters || []);
       });
 
-      // And the pool behind it — what this game HAS, adopted or not — from the
-      // same widget's second fetch. Together the two answer the only question
-      // the offer asks: none of mine, some of theirs.
+      // And the pool behind it — what the base game and every ticked expansion
+      // HAVE, adopted or not, from the same widget's second fetch. Together the
+      // two answer the only question the offer asks, and answer it per game:
+      // none of mine for THIS box, some of theirs.
       this.listenDom("guide-templates-loaded", (ev) => {
         const d = (ev && ev.detail) || {};
         if (!d.gameId || d.gameId !== this._ps.gameId) return;
@@ -2788,8 +2801,10 @@
         const base = window.ScoringTemplate.preferredBase(sp, this._ps.gameId);
         if (base || sp.addOns.length) this._maybeAutoApplyTemplate(base);
       }
-      // None adopted at all is the third case, and the one the guide can
-      // answer: ask whether they want one of this game's (_maybeOfferTemplates).
+      // And whatever is still unadopted is the question the guide can answer:
+      // ask, once per box on the table, whether they want one of its grids
+      // (_maybeOfferTemplates). Not only when NOTHING is adopted — a base grid
+      // in the guide says nothing about the expansion beside it.
       this._maybeOfferTemplates();
       if (this._ps.phase === "play") this._refreshScoringSection();
     }
@@ -2835,11 +2850,25 @@
      * The ORDER the ticks are in is deliberately not passed on: add-on blocks
      * are ordered by BGG id, so two hosts with the same boxes get the same
      * scorepad whichever order they ticked them in.
+     *
+     * `extra` is for grids the host has just taken that the guide has not
+     * echoed back yet — see _adoptTemplate, the only caller that passes it.
+     * Merged by id so a grid that HAS landed in `_templates` is not counted
+     * twice, and run through the same split(), so the newcomer is mode-resolved
+     * and BGG-ordered exactly like everything already on the table rather than
+     * appended to the end of the scorepad.
+     *
+     * @param {any[]} [extra]
      */
-    _scoringSplit() {
+    _scoringSplit(extra) {
       const ps = this._ps;
       const active = new Set([ps.gameId, ...(ps.expansionIds || [])]);
-      const scoped = this._templates.filter((c) => {
+      const all = (extra && extra.length)
+        ? this._templates.concat(
+            extra.filter((c) => !this._templates.some((x) => x.id === c.id))
+          )
+        : this._templates;
+      const scoped = all.filter((c) => {
         const gid = window.ScoringTemplate.gameIdOf(c);
         // An untagged chapter is one the guide fetched for a single game and
         // so did not have to label — it can only be the base game's.
@@ -2849,8 +2878,18 @@
     }
 
     /**
-     * The Play step's one-time offer: this game HAS scoring grids and the host
-     * has adopted none of them.
+     * The Play step's offer: the games on this table HAVE scoring grids and the
+     * host has adopted none of them.
+     *
+     * ONE QUESTION PER GAME. A play is the base game plus the expansions on the
+     * table, and each of those is a separate box with its own grids — so the
+     * offer is a queue the sheet cycles through ("2 of 3"), built by
+     * domain/scoring-template.js#groupByGame. It used to be one merged sample
+     * of three drawn from every game's grids at once, which asked the host to
+     * choose between scorepads without saying which box each came out of, and
+     * it used to give up entirely the moment the host owned ANY grid — so a
+     * host with Everdell's grid in their guide was never once offered
+     * Pearlbrook's.
      *
      * Deliberately not on Gather. Gather is a roster, and a scorepad the host
      * has not reached yet is not a question worth interrupting it with; by the
@@ -2861,14 +2900,17 @@
      * Every guard here is "the host has not already answered this", in one
      * form or another:
      *
-     *   * a grid already in their guide (`_templates`) means the scoring bar
-     *     has it and auto-apply handled it;
-     *   * a template on the draft, or every scorepad pill deliberately
-     *     deselected (`scoringTemplateOff`), is a choice made — the same field
-     *     _maybeAutoApplyTemplate refuses to answer over;
+     *   * a grid already in their guide FOR THAT GAME (`covered` below) means
+     *     the scoring bar has it and auto-apply handled it. Per game, not per
+     *     play: a base grid in the guide is not an answer about an expansion;
+     *   * every scorepad pill deliberately deselected (`scoringTemplateOff`)
+     *     is a choice made — the same field _maybeAutoApplyTemplate refuses to
+     *     answer over. A template already ON the table is NOT such a choice
+     *     any more: "do you also want the rows this box brings" is exactly
+     *     what this offer is for, and _adoptTemplate composes them in;
      *   * rounds or scores already on the table mean restructuring it now is
      *     worse than never offering at all, exactly as it is for auto-apply;
-     *   * `_offeredForGame` is the once-per-mount latch, and
+     *   * `_offeredGameIds` is the once-per-game-per-mount latch, and
      *     Chapter.pendingTemplates below is the durable one — a grid turned
      *     down stays turned down, here and in the guide's own notice.
      *
@@ -2877,9 +2919,9 @@
      */
     _maybeOfferTemplates() {
       if (!window.session || !window.BgbScoringTemplateSheet) return;
-      const gameId = this._ps.gameId;
-      if (!gameId || this._ps.phase !== "play") return;
-      if (this._offeredForGame === gameId) return;
+      const ps = this._ps;
+      const gameId = ps.gameId;
+      if (!gameId || ps.phase !== "play") return;
       if (this._isOffline()) return;
       // The pool having been announced for THIS game is what says the question
       // is answerable at all — otherwise "none of mine" is just "the guide has
@@ -2889,20 +2931,42 @@
       // empty array onMount seeds when the game changes.
       if (this._templatesGameId !== gameId) return;
       if (this._poolTemplatesGameId !== gameId) return;
-      if (this._templates.length) return;
-      if (this._ps.scoringTemplate || this._ps.scoringTemplateOff) return;
+      if (ps.scoringTemplateOff) return;
       if (this._maxRoundCount() > 1 || this._gridHasScores()) return;
       if (window.BgbScoringTemplateSheet.isOpen) return;
 
+      // Keyed on the BASE game, deliberately: that is the key
+      // Chapter.dismissTemplates writes under, so an expansion's grid is turned
+      // down against the game it was offered beside rather than against itself.
       const pending = window.Chapter.pendingTemplates(this._poolTemplates, gameId)
         .filter((t) => t.grid && Array.isArray(t.grid.rows) && t.grid.rows.length);
       if (!pending.length) return;
 
+      // The games this host already keeps a grid for. An untagged chapter is
+      // one the guide fetched for a single game and so did not have to label —
+      // it can only be the base game's, the same reading _scoringSplit makes.
+      const covered = new Set(
+        this._templates.map((c) => window.ScoringTemplate.gameIdOf(c) || gameId)
+      );
+      const onTable = new Set([gameId, ...(ps.expansionIds || [])]);
+      const steps = window.ScoringTemplate
+        .groupByGame(pending, {
+          baseGameId: gameId,
+          baseGameName: this._baseGameName(),
+          coveredGameIds: covered,
+        })
+        // The pool is fetched for a game set that can be one tick behind the
+        // draft's own, so a box the host has just unticked must not still get
+        // a question — same reason _scoringSplit filters by the draft's ids.
+        .filter((st) => onTable.has(st.gameId) && !this._offeredGameIds.has(st.gameId));
+      if (!steps.length) return;
+
       // Latch BEFORE opening: the guide reloads itself after an adoption, and
       // the announce that follows re-enters this method.
-      this._offeredForGame = gameId;
+      for (const st of steps) this._offeredGameIds.add(st.gameId);
+      this._offerAdopted = [];
       window.BgbScoringTemplateSheet.offer({
-        templates: pending,
+        steps,
         baseGameId: gameId,
         baseGameName: this._baseGameName(),
         onAdopt: (tpl) => this._adoptTemplate(tpl),
@@ -2963,21 +3027,36 @@
      * So a failure says exactly that and nothing rolls back.
      *
      * An ADD-ON grid taken from the offer goes on as an add-on, not as the
-     * scorepad: _applyTemplate composes it with whatever base the split
-     * already had, so adopting Pearlbrook's rows beside an Everdell grid
-     * appends them rather than throwing the base rows away.
+     * scorepad: it is composed with whatever base the table already has, so
+     * adopting Pearlbrook's rows beside an Everdell grid appends them rather
+     * than throwing the base rows away.
+     *
+     * The composition is built from the adopted set PLUS this queue's earlier
+     * answers (`_offerAdopted`). The offer no longer fires only when nothing is
+     * adopted — that was the bug that hid every expansion's grid from anyone
+     * who owned the base game's — and within one pass the guide reload each
+     * adoption kicks off lands frames after the next question is answered. So
+     * `_templates` alone would still be describing the table as it was two
+     * taps ago, and composing against it would take the rows of the grid just
+     * adopted straight back off.
      */
     async _adoptTemplate(tpl) {
+      this._offerAdopted.push(tpl);
+      const sp = this._scoringSplit(this._offerAdopted);
       if (this._gridMode(tpl) === window.ScoringTemplate.MODE_ADD_ON) {
-        // The offer only ever fires with NOTHING adopted, so there is no base
-        // grid to compose against yet — the add-on's rows stand alone until
-        // one arrives. Passing it through _applyTemplate as an add-on rather
-        // than as the base is still the right shape: the guide reload this
-        // adoption triggers re-enters _onChaptersLoaded, and _recomposeTemplate
-        // then folds it into any base grid that turns up with it.
-        this._applyTemplate(null, [tpl]);
+        // _leadingBase may answer null — the host has adopted nothing for the
+        // base game yet, or it is genuinely ambiguous. Both are fine here: an
+        // add-on's rows stand alone until a base turns up, which is a better
+        // table than refusing to compose because half the pair is missing, and
+        // the guide reload this adoption triggers re-enters _onChaptersLoaded
+        // so _recomposeTemplate folds it into whatever arrives.
+        this._applyTemplate(this._leadingBase(sp.bases), sp.addOns);
       } else {
-        this._applyTemplate(tpl);
+        // A scorepad grid LEADS. Deliberately NOT recorded as a pill pick:
+        // accepting an offer is not the same act as overruling the derivation
+        // from the bar, and marking it so would stop a replace expansion
+        // ticked later from taking the scorepad the way it is supposed to.
+        this._applyTemplate(tpl, sp.addOns);
       }
       // Pool rows can come from an expansion, and a chapter is adopted against
       // the game it belongs to — mirror reference-guide-add-view#_toggleInGuide.
@@ -3035,6 +3114,38 @@
     }
 
     /**
+     * Which adopted grid LEADS the table right now — the scorepad the add-ons
+     * fold into.
+     *
+     * Two rules, in this order, and they are the same two wherever the
+     * question comes up (a recompose after an expansion tick, an adoption
+     * taken from the offer sheet) — which is why they live here rather than
+     * being spelled twice:
+     *
+     *   * a scorepad the host PICKED from the pills is theirs and survives the
+     *     ticks. They have overruled the derivation, so folding another
+     *     expansion in must not move the scorepad out from under them;
+     *   * anything else is DERIVED, by preferredBase — a replace expansion on
+     *     the table takes the scorepad, else the base game's single grid. This
+     *     is what makes a newly-ticked replace expansion take over.
+     *
+     * Null means the base game is genuinely ambiguous (two community grids for
+     * it, no replacement in play). Callers decide what to do about that; it is
+     * never a licence to guess.
+     *
+     * @param {any[]} bases a split()'s candidate list
+     * @returns {any|null}
+     */
+    _leadingBase(bases) {
+      const cur = this._ps.scoringTemplate;
+      if (cur && cur.chapter_id && this._ps.scoringTemplatePicked) {
+        const picked = (bases || []).find((c) => c.id === cur.chapter_id);
+        if (picked) return picked;
+      }
+      return window.ScoringTemplate.preferredBase({ bases: bases || [] }, this._ps.gameId);
+    }
+
+    /**
      * Fold the expansions back in after the ticks change — without disturbing
      * anything already written down.
      *
@@ -3056,35 +3167,26 @@
     _recomposeTemplate() {
       const cur = this._ps.scoringTemplate;
       if (!cur) return;
-      const { bases, addOns } = this._scoringSplit();
+      // `_offerAdopted` for the same reason _adoptTemplate passes it: a guide
+      // announce landing mid-queue describes the table as it was one answer
+      // ago, and a composition built from it alone would read the rows of the
+      // grid taken two taps ago as empty trailing rows and drop them — safely,
+      // by _safeRowSwap's test, and wrongly. Entries the announce has caught up
+      // with are deduped by id; the only ones that linger are adoptions the
+      // server refused, whose rows this method is supposed to leave alone.
+      const { bases, addOns } = this._scoringSplit(this._offerAdopted);
 
-      let base = null;
-      if (cur.chapter_id) {
-        // The scorepad has left the guide entirely — the host removed the
-        // chapter, or its author deleted it. Keep the table exactly as it is:
-        // the snapshot is a complete copy of the rows precisely so it outlives
-        // the chapters it was built from, and re-deriving the composition from
-        // what is left would take the base rows off a live scorepad.
-        if (!bases.length) return;
-        // A scorepad the host PICKED from the pills is theirs and survives the
-        // ticks: they have overruled the derivation, so ticking another
-        // expansion folds its add-on rows in without moving the scorepad out
-        // from under them. A DERIVED one is re-derived below, which is what
-        // makes a newly-ticked replace expansion take over.
-        if (this._ps.scoringTemplatePicked) {
-          base = bases.find((c) => c.id === cur.chapter_id) || null;
-        }
-      }
-      if (!base) {
-        // Nothing was leading (add-ons standing alone), or what was leading was
-        // derived, or the host's own pick has left the candidate list. All
-        // three are the same question, and preferredBase answers it the way
-        // auto-apply does — a replace expansion on the table takes the
-        // scorepad. A null answer means the base game is genuinely ambiguous,
-        // so nothing changes and the pills ask.
-        base = window.ScoringTemplate.preferredBase({ bases }, this._ps.gameId);
-        if (!base && cur.chapter_id) return;
-      }
+      // The scorepad has left the guide entirely — the host removed the
+      // chapter, or its author deleted it. Keep the table exactly as it is:
+      // the snapshot is a complete copy of the rows precisely so it outlives
+      // the chapters it was built from, and re-deriving the composition from
+      // what is left would take the base rows off a live scorepad.
+      if (cur.chapter_id && !bases.length) return;
+      const base = this._leadingBase(bases);
+      // A null answer means the base game is genuinely ambiguous — two
+      // community grids for it and no replacement in play — so nothing changes
+      // and the pills ask, rather than a coin flip reshaping a live table.
+      if (!base && cur.chapter_id) return;
 
       const next = window.ScoringTemplate.snapshot(base, addOns);
       // Nothing left to compose (every grid came off the table with its
