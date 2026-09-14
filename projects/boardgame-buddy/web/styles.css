@@ -12994,8 +12994,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .user-badge.preview-card__bud { width: 38px; height: 38px; }
 .user-badge.preview-card__bud .user-badge__initials { font-size: 14px; }
 .preview-card__bud:first-child { margin-left: 0; }
+/* The overflow chip sits ON TOP of the last avatar in the stack, so its fill
+   has to be opaque — mixed into the card's own ground rather than left
+   translucent, which let the circle underneath show through. Same slight grey,
+   no ghosting, and it follows the card's surface in both themes. */
 .preview-card__bud--more {
-  background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+  background: color-mix(in srgb, var(--polaroid-ink) 12%, var(--polaroid-bg, #FFFBF1));
   color: var(--polaroid-muted, #8B7E68);
   font-weight: 800;
   font-size: 0.78rem;
