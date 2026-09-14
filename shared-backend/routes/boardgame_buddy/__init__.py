@@ -37,6 +37,10 @@ from . import stats_routes     # noqa: F401, E402
 from . import achievement_routes  # noqa: F401, E402
 from . import search_routes    # noqa: F401, E402
 from . import chapter_routes   # noqa: F401, E402
+# The wizard's two AI drafting endpoints. No ordering constraint against
+# chapter_routes: every path here is a literal `/chapters/generate…` under a
+# game id, which no parameterised route in that module can swallow.
+from . import chapter_ai_routes  # noqa: F401, E402
 from . import expansion_routes  # noqa: F401, E402
 from . import profile_routes   # noqa: F401, E402
 # No ordering constraint: every path here is a literal under /push/.

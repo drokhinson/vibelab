@@ -262,6 +262,32 @@
       if (focus) body.prompt = focus;
       return window.api.post(`/games/${gameId}/chapters/generate`, body);
     },
+    // AI-draft the ROWS of a scoring grid for this game. Returns
+    // { grid: { v, rows: [{label, color, note?}] } } — the same shape create()
+    // takes, so the wizard can load it into the row editor and post it back
+    // unedited if the author likes it as it stands.
+    //
+    // A separate endpoint from generate() above rather than a branch inside it:
+    // a grid has no markdown in it, so the two calls share neither a prompt nor
+    // a reply shape, and generate() 400s a scoring_grid chapter_type outright.
+    // No chapter type on the wire at all — a grid is one type by definition.
+    //
+    // `mode` is the add_on / replace choice for an EXPANSION's grid (migration
+    // 032), and unlike `prompt` it changes WHAT is drafted rather than steering
+    // it: an add-on wants the rows the box brings, a replacement wants the whole
+    // reprinted sheet. Sent unconditionally, exactly as create() sends it — the
+    // backend re-resolves it against the game (it is the only side that knows
+    // authoritatively whether that game is an expansion) and ignores it for a
+    // base game, so a client that guesses wrong cannot mis-shape the draft.
+    //
+    // Same pending-state obligation as generate(): it is a live LLM round trip.
+    generateGrid(gameId, prompt, mode) {
+      const body = {};
+      const focus = (prompt || "").trim();
+      if (focus) body.prompt = focus;
+      if (mode) body.mode = mode;
+      return window.api.post(`/games/${gameId}/chapters/generate-grid`, body);
+    },
     add(gameId, chapterId) {
       return window.api.post(`/games/${gameId}/my-chapters`, { chapter_id: chapterId });
     },

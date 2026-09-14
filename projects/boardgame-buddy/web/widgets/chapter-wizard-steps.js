@@ -88,18 +88,50 @@
   // the type is one tap from either step. (The device back gesture still steps
   // back too — _wizBack is unchanged.)
   //
+  // A SCORING GRID gets this step too, and gets it from here rather than from a
+  // step of its own: the decision is identical ("draft me something, or let me
+  // start empty"), only the noun changes — rows instead of prose — and two
+  // screens that ask one question are two screens to keep agreeing
+  // (.claude/rules/ui-object-design.md §2). What `grid` switches is the copy
+  // and nothing else; the caller (_onGenerateGrid vs _onGenerateAi) decides
+  // which drafter the footer's Generate reaches.
+  //
+  // The grid lede says out loud that the model is small. It is a mini model on
+  // a task it will sometimes get wrong, and an author who expects a finished
+  // scorepad reads a half-right one as a broken feature, while an author who
+  // expects a rough cut reads the same rows as ten seconds saved.
+  //
+  // `modeControl` is the add_on / replace question for an EXPANSION's grid
+  // (migration 032), rendered by the editor's own
+  // ScoringTemplateEditor.renderMode and handed in as a string so this stays a
+  // pure function. It appears HERE as well as in the editor on step 3 because
+  // it is an INPUT to the draft, not decoration: an add-on wants the two rows
+  // the box brings and a replacement wants a whole reprinted sheet, so a
+  // drafter that has not been told which writes the wrong document. One
+  // control, one renderer, one piece of state (`_formGridMode`) and one handler
+  // (`_tmplSetMode`) — the author answers it wherever they meet it first, and
+  // the other placement shows the answer they already gave. Empty string for a
+  // base game's grid and for a markdown chapter, both of which have no mode.
+  //
   // @param {{typeLabel: string, typeIcon: string, genPrompt: string,
-  //          generating: boolean, saving: boolean, error: ?string}} s
+  //          generating: boolean, saving: boolean, error: ?string,
+  //          grid?: boolean, modeControl?: string}} s
   function renderDraftStep(s) {
     const busy = s.generating || s.saving;
+    const grid = !!s.grid;
+
+    const lede = grid
+      ? `Have the AI rough out the scoring rows, or skip and build them
+         yourself. It's a small model, so expect a starting point rather than a
+         finished scorepad — every row is yours to rename, recolour, reorder or
+         delete. Nothing is saved until you hit Save on the next step.`
+      : `Have the AI draft this chapter for you, or skip and write it yourself.
+         Nothing is saved until you hit Save on the next step.`;
 
     return `
       <div class="chapter-wiz__step">
         <h3 class="chapter-wiz__title font-display">Want a head start?</h3>
-        <p class="chapter-wiz__lede">
-          Have the AI draft this chapter for you, or skip and write it yourself.
-          Nothing is saved until you hit Save on the next step.
-        </p>
+        <p class="chapter-wiz__lede">${lede}</p>
 
         <div class="chapter-wiz__picked">
           <span class="chapter-wiz__typechip">
@@ -111,17 +143,26 @@
                   onclick="${V}._goToStep(0)">Change</button>
         </div>
 
+        ${grid ? (s.modeControl || "") : ""}
+
         <label class="chapter-wiz__field">
-          <span class="chapter-wiz__label">What should it focus on? <em>(optional)</em></span>
+          <span class="chapter-wiz__label">
+            ${grid ? "Anything it should know?" : "What should it focus on?"}
+            <em>(optional)</em>
+          </span>
           <textarea id="chapter-gen-prompt"
                     class="chapter-wiz__prompt"
                     rows="3" maxlength="500"
                     ${busy ? "disabled" : ""}
                     spellcheck="true"
                     oninput="${V}._genPrompt = this.value"
-                    placeholder="e.g. just the endgame trigger and how final scoring works">${escapeHtml(s.genPrompt)}</textarea>
+                    placeholder="${grid
+                      ? "e.g. we play with the Pearlbrook expansion"
+                      : "e.g. just the endgame trigger and how final scoring works"}">${escapeHtml(s.genPrompt)}</textarea>
           <span class="chapter-wiz__hint">
-            Leave it blank for a general ${escapeHtml(s.typeLabel.toLowerCase())} chapter.
+            ${grid
+              ? "Leave it blank for the rows the base game scores."
+              : `Leave it blank for a general ${escapeHtml(s.typeLabel.toLowerCase())} chapter.`}
           </span>
         </label>
 

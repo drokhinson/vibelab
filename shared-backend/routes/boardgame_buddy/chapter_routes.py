@@ -6,6 +6,10 @@ title + markdown), or browse the pool of existing chapters for that
 game and add the ones they want. No curated defaults, no review queue
 — moderation is reactive via per-chapter reports.
 
+The wizard's optional AI head start — the markdown drafter and the scoring-grid
+one both — lives next door in `chapter_ai_routes.py`, so the two prompts and
+their 502 mapping are not interleaved with the CRUD.
+
 Every handler runs its Supabase round trips through `asyncio.to_thread`; the
 `_<handler>_sync` helper directly above a route is that blocking half.
 """
@@ -18,7 +22,6 @@ from fastapi import Depends, Header, HTTPException, Path, Query, Response
 from supabase import Client
 
 from db import get_supabase
-from gemini import GeminiError
 
 from . import router
 from .dependencies import (
@@ -31,8 +34,6 @@ from .constants import ChapterLayout
 from .models import (
     AddChapterRequest,
     ChapterCreate,
-    ChapterGenerateRequest,
-    ChapterGenerateResponse,
     ChapterPoolCountResponse,
     ChapterPoolItem,
     ChapterReportCreate,
@@ -43,7 +44,7 @@ from .models import (
     MessageResponse,
     MyGuideChapterResponse,
 )
-from .services import chapter_ai, chapter_grid
+from .services import chapter_grid
 from .services._helpers import parse_csv_param
 
 logger = logging.getLogger(__name__)
@@ -159,22 +160,6 @@ def _validate_chapter_type(sb, chapter_type: str) -> None:
     )
     if not row.data:
         raise HTTPException(status_code=400, detail="Unknown chapter type")
-
-
-def _chapter_type_label(sb, chapter_type: str) -> str:
-    """Validate the chapter type and return its human label in one round-trip.
-
-    The AI prompt wants "Tips & Tricks", not the `tips` slug.
-    """
-    row = (
-        sb.table("boardgamebuddy_chapter_types")
-        .select("id, label")
-        .eq("id", chapter_type)
-        .execute()
-    )
-    if not row.data:
-        raise HTTPException(status_code=400, detail="Unknown chapter type")
-    return row.data[0].get("label") or chapter_type
 
 
 @router.get(
@@ -460,75 +445,6 @@ async def create_chapter(
     """Create a new chapter attached to a game and immediately add it to the creator's guide."""
     sb = get_supabase()
     return await asyncio.to_thread(_create_chapter_sync, sb, game_id, body, user.user_id)
-
-
-def _generate_chapter_before_sync(
-    sb: Client, game_id: str, chapter_type: str
-) -> tuple[dict[str, Any], str]:
-    """The game row and the chapter type's label — the two lookups the prompt needs."""
-    game = (
-        sb.table("boardgamebuddy_games")
-        .select("id, name, year_published")
-        .eq("id", game_id)
-        .execute()
-    )
-    if not game.data:
-        raise HTTPException(status_code=404, detail="Game not found")
-    row = game.data[0]
-
-    label = _chapter_type_label(sb, chapter_type)
-    return row, label
-
-
-@router.post(
-    "/games/{game_id}/chapters/generate",
-    response_model=ChapterGenerateResponse,
-    status_code=200,
-    summary="Draft a chapter with AI",
-)
-async def generate_chapter(
-    body: ChapterGenerateRequest,
-    game_id: str = Path(..., description="Game UUID"),
-    user: CurrentUser = Depends(get_current_user),
-) -> ChapterGenerateResponse:
-    """Draft a chapter of the given type (optionally steered by a focus prompt) — returned for the user to review, not saved."""
-    # A scoring grid's body is rows in the typed `grid` column, not markdown, so
-    # there is nothing here for the model to draft and nowhere to put it if
-    # there were. The wizard skips its AI step for grids and so never asks; this
-    # is for everything else that can reach a public endpoint.
-    if body.chapter_type == chapter_grid.SCORING_GRID_CHAPTER_TYPE:
-        raise HTTPException(
-            status_code=400,
-            detail="Scoring grid templates are built row by row, not drafted.",
-        )
-
-    sb = get_supabase()
-    row, label = await asyncio.to_thread(
-        _generate_chapter_before_sync, sb, game_id, body.chapter_type
-    )
-
-    try:
-        title, content = await chapter_ai.generate_chapter(
-            game_name=row.get("name") or "",
-            game_year=row.get("year_published"),
-            chapter_type_id=body.chapter_type,
-            chapter_type_label=label,
-            focus=body.prompt,
-        )
-    except GeminiError as exc:
-        # The underlying reason (missing key, safety block, model drift) is in
-        # the api_logs row; the user just needs to know to try again.
-        logger.warning("chapter generation failed for game %s: %s", game_id, exc)
-        raise HTTPException(
-            status_code=502,
-            detail="Couldn't draft a chapter right now — try again in a moment.",
-        ) from exc
-
-    return ChapterGenerateResponse(
-        chapter_type=body.chapter_type,
-        title=title,
-        content=content,
-    )
 
 
 def _update_chapter_sync(
