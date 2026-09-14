@@ -46,7 +46,7 @@ By contrast the things people assume are hard are cheap here:
 
 ---
 
-## 2. The two things actually forcing this decision
+## 2. The three things actually forcing this decision
 
 Neither is a hosting problem, and it is worth separating them from the hosting
 question before spending money.
@@ -75,9 +75,9 @@ Three ways to fix it, in ascending cost:
    as **bcrypt**, which Firebase's `importUsers` accepts directly, so a
    migration would not force password resets.
 
-**Branded auth does not require moving to GCP.** It costs $10/month where you
-already are. Option 3 is worth knowing about, but as a *later, separate* choice —
-it is not a reason to move the database or the API.
+**Branded auth does not require moving the database or the API.** It costs
+$10/month where you already are, or $0 with option 3 — which is a real choice,
+not a footnote, once you see how small the auth surface is. See §2d.
 
 ### 2b. Monetization
 
@@ -96,6 +96,78 @@ PWA, not a native app. Stripe takes ~3%; the App Store and Play would take 15–
 of subscriptions. Staying a PWA is currently worth more than a native app is.
 
 ---
+
+### 2c. Scored against the three deciding needs
+
+*(Added 2026-09-14, after the three needs below were named as the actual decision
+criteria. One of them changes §2a's conclusion — see the auth fork.)*
+
+| Need | Settled by | Cost | Contested? |
+|---|---|---|---|
+| **1. Photo storage that doesn't grow exponentially** | Cloudflare R2 behind a custom domain with a long Edge TTL | 10 GB free, then $0.015/GB, $0 egress | No — nothing else is close |
+| **2. Branded custom-domain auth, ideally free** | three real answers, see below | $0 or $10/mo | **Yes — the only real fork** |
+| **3. Ability to monetize** | not being on Vercel Hobby | $0 | No |
+
+**On need 1 — what makes growth linear rather than exponential.** Two quantities
+grow with success, and only one of them has to cost anything. *Stored bytes*
+grow linearly with plays logged (~0.9 MB per user per month) and are
+irreducible — that is the product. *Egress* grows with users × photos viewed,
+which is the compounding term: ~270 MB per user per month, and it is ~93% of all
+bytes leaving the system. R2 charges **$0 for egress, permanently**, which
+deletes the compounding term outright and leaves a bill that tracks only stored
+bytes. Cache rules on the R2 custom domain (long Edge TTL, short Browser TTL)
+also drive Class B read operations to near zero after warm-up, so the operation
+meter does not quietly become the new exponential.
+
+**On need 3 — it is a single-vendor veto, not a stack decision.** Vercel defines
+commercial usage as *any* deployment "used for the purpose of financial gain of
+anyone involved in any part of the production of the project, including a paid
+employee or consultant writing the code" — which is broad enough that intent to
+monetize is enough to disqualify Hobby. Every other component in Option D
+permits commercial use on its free tier, **Supabase's free plan included** (its
+free-tier limits are technical — 500 MB, 5 GB egress, 7-day idle pause — not
+licensing). So need 3 costs $0 and constrains nothing except which static host
+you use.
+
+### 2d. The auth fork — three ways to get need 2
+
+§2a treated the Supabase custom-domain add-on as the whole answer. That is still
+the lowest-effort answer, but it is not free, and the surface that would have to
+change to leave Supabase Auth turns out to be **much smaller than the
+254-call-site data layer suggests**:
+
+| Surface | Size |
+|---|---|
+| Frontend auth call sites | **8**, in 3 files (`views/auth-view.js`, `init.js`, `domain/api.js`) |
+| Distinct SDK methods used | 7 — `signUp`, `signInWithPassword`, `signInWithOAuth`, `signOut`, `getSession`, `refreshSession`, `onAuthStateChange` |
+| Backend files touching auth | **2** — `jwt_auth.py` (JWKS URL + decode) and `routes/dependencies.py` |
+| `REFERENCES auth.users` | **1** — `boardgamebuddy_profiles.id` |
+| RLS policies using `auth.uid()` | **3**, all on the live play-session tables (the realtime spectator mirror, which the client reads directly with the anon key) |
+
+That is roughly a day, not a project. And the RLS worry has a clean answer:
+**Supabase supports Firebase Auth as a third-party auth provider**, trusting
+externally-issued JWTs the same way it trusts its own, so `auth.uid()` in those
+3 policies keeps working and the backend change is a JWKS URL.
+
+| Option | Monthly | Work | Forced re-login | Catch |
+|---|---|---|---|---|
+| **A. Supabase custom domain** | **$10** | ~1 hour, zero code | none | Not free. And it is auth *on Supabase*, so it re-migrates if you ever self-host. |
+| **B. GCP Identity Platform**, custom auth handler on a free Firebase Hosting domain, wired to Supabase as third-party auth | **$0** to 50k MAU | ~1 day | once, now | Second vendor. Verify Supabase's **TP-MAU** billing line for third-party auth before assuming $0 on their side. |
+| **C. Self-hosted GoTrue** on the Stage-5 VPS | **$0** (box already paid) | ~1 day + ongoing ops | once | You run auth. Falling behind on GoTrue security patches is not survivable. |
+
+**The trajectory argument, which is what actually decides it.** If the end state
+is Hetzner (and on cost it is), the Supabase-Auth path forces **two** global
+re-logins: once at Stage 3b when BoardgameBuddy gets its own Supabase project
+with new signing keys, and again at Stage 6 when auth moves to a self-hosted
+GoTrue. Option B forces **one**, now, at the lowest user count you will ever
+have — and then auth never moves again, because Identity Platform is independent
+of where Postgres lives. It is also the only option that satisfies need 2's
+"ideally free" literally.
+
+So: **Option B if $0 is a real requirement or Hetzner is a real destination;
+Option A if you would rather pay $120/year than add a vendor and spend a day.**
+Either satisfies the need — the difference is $120/year against one day of work
+plus one fewer future migration.
 
 ## 3. What actually scales with users in *this* app
 
