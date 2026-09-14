@@ -620,12 +620,44 @@
   const nameKey = (n) => String(n || "").trim().toLowerCase();
 
   /**
-   * Everyone this play could gain: the viewer's buddies, the accounts they've
-   * shared a table with, and the ghost names from past plays — minus everyone
-   * already seated in the draft, which is the sheet's own contract for
-   * `candidates` ("everyone addable, already filtered of people in the roster
-   * by the caller"). A row it offers that seatPlayer would drop is a row that
-   * does nothing when tapped.
+   * The signed-in user as a picker row, or null when there is no session.
+   *
+   * GET /play-partners never returns the viewer — it answers "who do you play
+   * with?" — so every surface that can seat somebody OTHER than by
+   * construction has to prepend this row itself (both importers already do).
+   * This one can: a play whose roster the viewer is missing from, either
+   * because the row was removed here or because the play was logged without
+   * them, had no way to put them back. The sheet was showing every person
+   * they have ever played with except the one they were looking for.
+   *
+   * Named exactly as _ensureSelfIncluded and the importers spell the seeded
+   * seat, so the row and the seat it would duplicate can never disagree.
+   */
+  function viewerCandidate() {
+    const me = window.store && window.store.get("user");
+    if (!me || !me.id) return null;
+    const name = me.display_name || me.username || "";
+    if (!name) return null;
+    return {
+      source: "account",
+      user_id: me.id,
+      name,
+      username: me.username || null,
+      avatar: me.avatar || null,
+      isViewer: true,
+    };
+  }
+
+  /**
+   * Everyone this play could gain: the viewer themselves, their buddies, the
+   * accounts they've shared a table with, and the ghost names from past plays
+   * — minus everyone already seated in the draft, which is the sheet's own
+   * contract for `candidates` ("everyone addable, already filtered of people
+   * in the roster by the caller"). A row it offers that seatPlayer would drop
+   * is a row that does nothing when tapped.
+   *
+   * YOU come first, so the answer to "why am I not on this play?" is the row
+   * the sheet opens on rather than something to scroll for.
    *
    * Filtered on BOTH id and name, because the roster mixes the two kinds of
    * seat: an account is already at this table if its id is, and a ghost has no
@@ -637,10 +669,21 @@
     const seated = (state.draft && state.draft.players) || [];
     const seatedIds = new Set(seated.map((p) => p.user_id).filter(Boolean));
     const seatedNames = new Set(seated.map((p) => nameKey(p.name)));
-    return window.Buddy.toPlayerCandidates(state.partners).filter((c) => (
-      !seatedNames.has(nameKey(c.name))
-      && !(c.user_id && seatedIds.has(c.user_id))
-    ));
+    const me = viewerCandidate();
+    const rows = (me ? [me] : []).concat(window.Buddy.toPlayerCandidates(state.partners));
+    // Accounts are deduped by id here rather than relying on the bundle's own
+    // dedupe, because the viewer row is prepended from the store: a user who
+    // somehow also appears in their own partner list would otherwise be
+    // offered twice, with only one of the two rows marked "You".
+    const seenIds = new Set();
+    return rows.filter((c) => {
+      if (!c.name || seatedNames.has(nameKey(c.name))) return false;
+      if (c.user_id) {
+        if (seatedIds.has(c.user_id) || seenIds.has(c.user_id)) return false;
+        seenIds.add(c.user_id);
+      }
+      return true;
+    });
   }
 
   /** How many people lead the list before "everyone else" starts. */

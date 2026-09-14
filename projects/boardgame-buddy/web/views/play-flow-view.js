@@ -4112,10 +4112,45 @@
     // were seated. The sheet is position:fixed and sized off --bgb-vv-h, so
     // there is no fit pass, no flip, and no z-index race with the CTA bar.
 
-    // Unified candidate list for the player picker: accounts (accepted
-    // buddies, with avatar + username) + ghosts (free-text names from past
-    // plays). Names already in the current draft are excluded. Account rows
-    // win over ghost rows when both share a name.
+    /**
+     * The signed-in user as a picker row, or null when there is no session or
+     * they are already at this table.
+     *
+     * GET /play-partners never returns the viewer — it answers "who do you
+     * play with?" — and Gather normally does not need it to, because
+     * _ensureSelfIncluded seats the host by construction. But that seat has an
+     * × like every other, and once it is tapped nothing in the bundle can give
+     * it back: the host was left looking at a list of everyone they have ever
+     * played with except themselves.
+     *
+     * Named exactly as _ensureSelfIncluded spells the seeded seat, so the row
+     * and the seat it would replace can never disagree. Suppressed on id AND
+     * name, because a seat may carry either handle: the host's own row has an
+     * id, but a roster adopted from an old draft can hold their name alone.
+     *
+     * @param {Set<string>} already Case-folded names already seated.
+     */
+    _viewerCandidate(already) {
+      const me = window.store.get("user");
+      if (!me || !me.id) return null;
+      const name = me.display_name || me.username || "";
+      if (!name || already.has(name.toLowerCase())) return null;
+      if (this._ps.players.some((p) => p.user_id === me.id)) return null;
+      return {
+        source: "account",
+        user_id: me.id,
+        name,
+        username: me.username || null,
+        avatar: me.avatar || null,
+        isViewer: true,
+      };
+    }
+
+    // Unified candidate list for the player picker: the viewer (see
+    // _viewerCandidate) + accounts (accepted buddies, with avatar + username)
+    // + ghosts (free-text names from past plays). Names already in the current
+    // draft are excluded. Account rows win over ghost rows when both share a
+    // name.
     //
     // Deliberately not Buddy.toPlayerCandidates(): Gather holds the three
     // lists separately because `recent` is its own SECTION here, and every row
@@ -4131,6 +4166,16 @@
       const seenIds = new Set();
       const seen = new Set();
       const out = [];
+      // YOU first, so a host who removed their own seat finds it where they
+      // look. Seeded into both dedupe sets so a buddy edge or recent row
+      // pointing back at the viewer cannot offer them a second, unlabelled
+      // time.
+      const me = this._viewerCandidate(already);
+      if (me) {
+        out.push(me);
+        seenIds.add(me.user_id);
+        seen.add(me.name.toLowerCase());
+      }
       for (const b of (this._buddies || [])) {
         const name = b.other_display_name || "";
         const userId = b.other_user_id;
@@ -4170,7 +4215,8 @@
      * frequent first (the server orders `recent` by play count). Cross-
      * referenced against the candidates so the unified shape is kept and
      * anyone already seated is excluded; a recent who isn't a buddy yet still
-     * shows, as a name-only add.
+     * shows, as a name-only add. The viewer leads it whenever they are not at
+     * the table — see _viewerCandidate.
      * @returns {any[]}
      */
     _recentCandidates() {
@@ -4179,7 +4225,14 @@
       const already = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
       const seatedAccounts = new Set(this._ps.players.map((p) => p.user_id).filter(Boolean));
       const rows = [];
+      // `recent` REPLACES the list while the search box is empty (see the
+      // sheet's _matches()), so a viewer row that only reached `candidates`
+      // would sit behind a keystroke on the one screen that opens with this
+      // list. Lead with it here too.
+      const me = this._viewerCandidate(already);
+      if (me) rows.push(byUserId.get(me.user_id) || me);
       for (const r of (this._recent || [])) {
+        if (me && r && r.user_id === me.user_id) continue;
         // Offering somebody already at the table is offering a seat that
         // cannot be taken — _addPlayer drops it, so the row would do nothing.
         if (r.user_id && seatedAccounts.has(r.user_id)) continue;
