@@ -292,14 +292,30 @@ def payload(
     body: str,
     url: str,
     tag: str,
+    quiet: bool = False,
 ) -> dict[str, str]:
     """One notification, in the shape sw.js's push handler reads.
 
     `tag` is what collapses repeats on the device: two buddy requests from the
     same person replace each other rather than stacking, because the second one
     does not tell the recipient anything the first did not.
+
+    `quiet` is the other half of that, and it is a different claim. A tag
+    collapse still buzzes, because a repeat is a fresh act — somebody asked
+    twice. `quiet` says this notification SUPERSEDES one already sent: same
+    event, later state, nothing new demanded of the recipient. sw.js rewrites
+    the tray entry in place without a second alert, but only while the original
+    is still sitting there — if it was already dismissed, this is the first the
+    recipient hears of it and it alerts normally. That conditional half cannot
+    be expressed here; the key only marks the intent, and the worker decides.
+
+    Sent only when true, so every other event's payload is byte-identical to
+    what it was before this existed.
     """
-    return {"kind": str(event), "title": title, "body": body, "url": url, "tag": tag}
+    data = {"kind": str(event), "title": title, "body": body, "url": url, "tag": tag}
+    if quiet:
+        data["quiet"] = "1"
+    return data
 
 
 async def send(

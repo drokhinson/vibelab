@@ -58,6 +58,7 @@ def _queue(
     url: str,
     tag: str,
     actor_id: str | None,
+    quiet: bool = False,
 ) -> None:
     """One place that touches BackgroundTasks, so every call site is uniform."""
     ids = [r for r in recipients if r]
@@ -68,9 +69,28 @@ def _queue(
         sb,
         ids,
         event,
-        push_service.payload(event=event, title=title, body=body, url=url, tag=tag),
+        push_service.payload(
+            event=event, title=title, body=body, url=url, tag=tag, quiet=quiet
+        ),
         exclude=actor_id,
     )
+
+
+def _session_tag(code: str) -> str:
+    """The device-side identity of one table, for every push about it.
+
+    ONE FUNCTION BECAUSE TWO NOTIFICATIONS DEPEND ON AGREEING. The invite and
+    the saved-play push that concludes it collapse onto each other only while
+    these strings match exactly, and a mismatch does not fail — it silently
+    goes back to two cards in the tray, which is the bug this replaced.
+
+    Upper-cased rather than passed through, because the two call sites do not
+    get the code from the same place: the invite reads the canonical
+    `session.code` off the row, while finalize has whatever the client put in
+    the URL, and every session RPC matches on `upper(p_code)` (migration 003)
+    so a lower-cased code is accepted there and would tag differently here.
+    """
+    return f"session:{code.strip().upper()}"
 
 
 # ── Buddies ──────────────────────────────────────────────────────────────────
@@ -216,8 +236,9 @@ def session_invite(
         url=f"/play/{session.code}",
         # Tagged on the SESSION, not the actor: being removed and re-added is
         # the same invitation to the same table, and should replace rather
-        # than stack.
-        tag=f"session:{session.code}",
+        # than stack. The same tag carries through to the saved-play push at
+        # the end of the night — see play_logged.
+        tag=_session_tag(session.code),
         actor_id=user.user_id,
     )
 
@@ -227,6 +248,8 @@ def play_logged(
     sb: Client,
     user: CurrentUser,
     play: PlayResponse,
+    *,
+    session_code: str | None = None,
 ) -> None:
     """Somebody logged a play and seated other people in it.
 
@@ -238,19 +261,43 @@ def play_logged(
     six phones, and the bell already collapses it into one entry, which is the
     right surface for a bulk fact.
 
+    `session_code` SAYS THIS PLAY CAME OUT OF A LOBBY, and changes the
+    notification rather than adding one. Everybody it is about was told at the
+    start of the night — "Dave added you to Catan", tagged on the session — and
+    the second card an hour later said almost the same sentence about the same
+    game, so a phone nobody had cleared ended up holding two. Reusing the
+    session's tag makes the later one REPLACE the earlier: whoever cleared the
+    invite gets a normal notification, and whoever didn't gets the one they
+    already had, now reading as the conclusion it is. `quiet` keeps that
+    rewrite from buzzing a second time (push_service.payload), and the url
+    moves off the lobby — which no longer exists once the play is written, so
+    the stale invite's tap used to dead-end there.
+
     The achievement sweep rides along because this is the moment badges become
     earnable — see achievements_after_play.
     """
     seated = [p.user_id for p in play.players if p.user_id and p.user_id != user.user_id]
     if not seated:
         return
+    # Same event, same recipients, same destination either way — only the
+    # sentence and what the device does with it turn on where the play came
+    # from, so the branch picks those three and nothing else can drift.
+    if session_code:
+        title = "Final scores are in"
+        body = f"{user.display_name} saved the {play.game_name} game"
+        tag, quiet = _session_tag(session_code), True
+    else:
+        title = "You were in a game"
+        body = f"{user.display_name} added you to {play.game_name}"
+        tag, quiet = f"play_link:{user.user_id}", False
     _queue(
         background_tasks, sb, seated, PushEvent.PLAY_LINK,
-        title="You were in a game",
-        body=f"{user.display_name} added you to {play.game_name}",
+        title=title,
+        body=body,
         url="/notifications",
-        tag=f"play_link:{user.user_id}",
+        tag=tag,
         actor_id=user.user_id,
+        quiet=quiet,
     )
     background_tasks.add_task(
         achievements_after_play, sb, seated + [user.user_id]
