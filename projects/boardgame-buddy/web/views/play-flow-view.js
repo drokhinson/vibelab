@@ -3394,7 +3394,7 @@
       if (!totalsRow) return;
       const mode = this._resolvePlayMode();
       totalsRow.innerHTML =
-        `<th>Total</th>` +
+        `<th scope="row">Total</th>` +
         this._ps.players
           .map((pl, i) => this._renderTotalsCell(pl, i, mode, this._playerTotal(pl)))
           .join("");

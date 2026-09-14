@@ -161,6 +161,7 @@ h2 + .lede { margin-bottom: 22px; }
    ══════════════════════════════════════════════════════════════════════════ */
 .sim {
   --bgb-header-height: 53px;
+  --bgb-cascade-head-height: 55px;
   --bgb-nav-height: 0px;          /* the mock shows no bottom nav */
   --cascade-cta-bar: 92px;
   --cascade-bottom-pad: calc(var(--cascade-cta-bar) + 12px);
@@ -218,6 +219,41 @@ h2 + .lede { margin-bottom: 22px; }
   padding: 12px 16px var(--cascade-bottom-pad);
   display: flex; flex-direction: column; gap: 12px;
   position: relative;
+}
+/* The step header pins too, so the back chevron and the End-session × are one
+   tap away however far down the grid you are. It parks directly under the
+   global header, the two reading as one stack of chrome — and the grid's own
+   band then parks under BOTH, which is what --bgb-cascade-head-height is for.
+   The negative inline margin gives back .cascade-screen's 16px gutter so the
+   band bleeds to the column edges and cards can't slide past it. */
+.sim .cascade-screen > .cascade-screen__header {
+  position: sticky;
+  top: var(--bgb-header-height);
+  z-index: 20;
+  display: grid; grid-template-columns: 44px 1fr 44px;
+  align-items: center; gap: 6px;
+  margin-inline: -16px; padding-inline: 16px; padding-block: 4px 6px;
+  margin-bottom: 4px;
+  background: color-mix(in srgb, var(--bg-0) 95%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.sim .cascade-screen__header-body { text-align: center; }
+.sim .cascade-screen__title {
+  font-family: "Fraunces", Georgia, serif; font-weight: 700; font-size: 24px;
+  line-height: 1.1; color: var(--ink); letter-spacing: -.01em; margin: 0;
+}
+.sim .cascade-screen__step {
+  display: block; font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  opacity: .55; margin-top: 2px;
+}
+.sim .cascade-back, .sim .cascade-screen__close {
+  width: 44px; height: 44px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-2); border: 1px solid var(--line-strong);
+  color: var(--ink); font: inherit; font-size: 15px; cursor: pointer;
 }
 .sim .cascade-card {
   background: var(--bg-1);
@@ -279,8 +315,9 @@ h2 + .lede { margin-bottom: 22px; }
 .sim[data-layout="tablet"] .cascade-col--aside,
 .sim[data-layout="wide"] .cascade-col--aside {
   position: sticky;
-  top: calc(var(--bgb-header-height) + 12px);
-  max-height: calc(100% - var(--bgb-header-height) - var(--cascade-bottom-pad) - 12px);
+  top: calc(var(--bgb-header-height) + var(--bgb-cascade-head-height) + 12px);
+  max-height: calc(100% - var(--bgb-header-height) - var(--bgb-cascade-head-height)
+                   - var(--cascade-bottom-pad) - 12px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -351,7 +388,9 @@ h2 + .lede { margin-bottom: 22px; }
 }
 /* The session screens pin under the global header. On the wide/land tiers that
    token is 0px, so this collapses without a tier rule of its own. */
-.sim .cascade-card--scoring .rg { --rg-pin-top: var(--bgb-header-height); }
+.sim .cascade-card--scoring .rg {
+  --rg-pin-top: calc(var(--bgb-header-height) + var(--bgb-cascade-head-height));
+}
 
 .sim .rg__pinzone { position: relative; }
 
@@ -692,6 +731,7 @@ body:not(.is-fullsim) .simbar { display: none; }
       <li>At <strong>6 players</strong> the body scrolls sideways; the header and the Total row must travel with it, and the round-label column must stay pinned on the left in all three.</li>
       <li>Flip to <strong>Name</strong> headers: the header band grows and the pin offset has to follow it (it is a token, <code>--rg-head-h</code>, which is why the new-row scroll still clears it).</li>
       <li>Both themes: the pinned band must be opaque, or the rows ghost through it.</li>
+      <li>The <strong>step header</strong> pins under the global header and the grid's band under both, so Back and End session stay one tap away however far down the grid you are. Once the grid band is released it slides <em>behind</em> the step header — z 15 under z 20.</li>
       <li><strong>Known cosmetic:</strong> on a desktop with classic scrollbars the body's horizontal scrollbar sits between the last round row and Total. On touch it is an overlay and takes no space.</li>
     </ul>
   </div>
@@ -829,6 +869,14 @@ body:not(.is-fullsim) .simbar { display: none; }
     return '' +
       '<header class="bgb-global-header"><span class="bgb-global-header__dot"></span>BoardgameBuddy</header>' +
       '<section class="cascade-screen">' +
+        '<header class="cascade-screen__header">' +
+          '<button class="cascade-back" aria-label="Back to Gather">\u2303</button>' +
+          '<div class="cascade-screen__header-body">' +
+            '<h1 class="cascade-screen__title">Play</h1>' +
+            '<span class="cascade-screen__step">Step 2 of 3</span>' +
+          "</div>" +
+          '<button class="cascade-screen__close" aria-label="End session">\u00d7</button>' +
+        "</header>" +
         '<section class="cascade-card"><div class="info-bar">' +
           '<span class="info-bar__thumb"></span><span>Terraforming Mars</span>' +
           '<span class="info-bar__code">7KQ2</span>' +

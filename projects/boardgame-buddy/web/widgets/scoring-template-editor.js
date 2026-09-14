@@ -336,7 +336,7 @@
    * a table at all.
    *
    * Descriptions ride along, so a row that has one shows its info button here
-   * too. The button does not open — `.tmpl-preview .scoring-table-wrap` is
+   * too. The button does not open — `.tmpl-preview .rg` is
    * `pointer-events: none`, because the preview is a picture and must not steal
    * a tap meant for the editor above it — but seeing the mark appear is how the
    * author knows the description landed on the row they meant.

@@ -163,7 +163,7 @@
      * <button>: a row carrying a description renders a note button of its own
      * inside the preview, and a button cannot contain a button — the parser
      * closes the outer one early and the card falls apart. The preview is
-     * inert anyway (`.tmpl-preview .scoring-table-wrap` is pointer-events:
+     * inert anyway (`.tmpl-preview .rg` is pointer-events:
      * none), so the Add button is the whole tap target and says what it does.
      *
      * @param {number} total how many were pending before the OFFER_MAX slice

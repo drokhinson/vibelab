@@ -226,7 +226,7 @@ Components are global functions / classes attached to `window`. There is no modu
 | User badges (LEGACY) | `.avatar-bubble*` family | DELETED | n/a | All variants removed in cleanup; visual intent ported to `.user-badge--me` + `.bgb-global-header__avatar .user-badge--me`. |
 | Modal popups | `.polaroid-popup__*`, `.avatar-cust__*` | `styles.css:200–500` block | `--font-polaroid` for title, `--font-display` for body headings | None |
 | Cascade play flow | `.cascade-screen*`, `.cascade-card*`, `.cascade-game-chip`, `.cascade-player`, `.cascade-notes`, `.cascade-photo` | `styles.css:5028+` block | `--font-display` for headings | None |
-| Scoring grid | `.scoring-table`, `.scoring-table-wrap`, `.scoring-cell`, `.scoring-cell--read`, `.scoring-total-row`, `.scoring-total-cell--winner`, `.scoring-head` | Inside scoring section | `--font-score` (JetBrains Mono) for all numbers | None |
+| Scoring grid | `.rg`, `.rg__pinzone`, `.rg__head`, `.rg__body`, `.rg__foot`, `.scoring-table`, `.scoring-cell`, `.scoring-cell--read`, `.scoring-total-row`, `.scoring-total-cell--winner`, `.scoring-head` | Inside scoring section | `--font-score` (JetBrains Mono) for all numbers | None |
 | Profiles | `.profile-hub*`, `.profile-id*`, `.profile-collection-grid`, `.profile-collection__*`, `.profile-stats`, `.profile-stat-card*`, `.profile-empty`, `.profile-loading`, `.profile-panel__*` | `styles.css:3179–3500+` | `--font-display` for names + stats | None |
 | Spoke / sub-pages | `.spoke-head*`, `.spoke-toggle*` | Inside collection / wishlist / plays | `--font-display` for title | None |
 | Buddies | `.buddies-row`, `.buddies-row__avatar`, `.buddies-row__avatar--ghost`, `.buddy-tile`, `.buddy-tile__avatar`, `.buddies-add*` | Inside buddies section | `--font-sans` | None |
