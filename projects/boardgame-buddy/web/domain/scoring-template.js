@@ -40,7 +40,10 @@
 // Pure functions of their arguments — no fetch, no DOM, no store. That is what
 // lets the play screen, the picker sheet and the reference guide all describe
 // the same composition without three of them deriving it differently
-// (.claude/rules/ui-object-design.md §2).
+// (.claude/rules/ui-object-design.md §2). The one thing reached for outside
+// this file is helpers.js#stripBaseGameName, in gameNameOf — still a pure
+// function of its arguments, and the alternative was a third spelling of a
+// rule the expansion picker and the chapter-target selector already share.
 
 (function () {
   /**
@@ -119,9 +122,34 @@
     return raw === MODE_REPLACE ? MODE_REPLACE : MODE_ADD_ON;
   }
 
-  /** The name to print for a grid's game — the expansion's, or nothing. */
-  function gameNameOf(c) {
-    return (c && c.source_game_name) || null;
+  /**
+   * The name to print for a grid's game — the expansion's, or nothing.
+   *
+   * `source_game_name` is the raw `games.name`, and an expansion's row on BGG
+   * carries its base game on the front: "Everdell: Pearlbrook", "Everdell:
+   * Newleaf". Printed verbatim beside the base game's own pill that is the base
+   * game's name three times in one strip, and on a 390px phone it is also the
+   * half of each label that ellipsises away — leaving two pills reading
+   * "Everdell: Pear…" and "Everdell: New…", which is the one thing they must
+   * not do, since telling them apart is what the labels are for.
+   *
+   * So hand in the base game's name and it comes off, exactly as the expansion
+   * picker and the chapter-target selector already do it (helpers.js#
+   * stripBaseGameName, which needs a real separator to match — so a base game's
+   * own name survives being passed against itself, and an expansion BGG never
+   * prefixed keeps its full name rather than losing a leading word).
+   *
+   * Omit `baseGameName` where the full name is the point: a title attribute
+   * disambiguating a colour dot, or any surface that does not print the base
+   * game beside it.
+   *
+   * @param {GridChapter} c
+   * @param {string} [baseGameName] the base game this grid's game hangs off
+   */
+  function gameNameOf(c, baseGameName) {
+    const raw = (c && c.source_game_name) || null;
+    if (!raw || !baseGameName) return raw;
+    return stripBaseGameName(raw, baseGameName) || raw;
   }
 
   /** A grid's ordering key: its game's BGG id, with unknown ids sorting last. */
@@ -304,15 +332,25 @@
    * + Pearlbrook". Past two add-ons it counts them instead, because this
    * string lands in the scoring bar's one line on a 390px phone.
    *
+   * `baseGameName` strips that game's name off the front of each expansion, as
+   * gameNameOf does — for a caller printing this on a screen that already says
+   * which base game it is. Omitted by snapshot() below, so what gets STORED on
+   * a play keeps naming both games in full: a title read back months later, on
+   * a screen that may be showing several games at once, has no such context to
+   * lean on.
+   *
    * @param {{rows: Array<any>, parts: TemplatePart[]}} composed
    * @param {GridChapter|null} base
+   * @param {string} [baseGameName]
    */
-  function composedTitle(composed, base) {
+  function composedTitle(composed, base, baseGameName) {
     const parts = (composed && composed.parts) || [];
     const lead = base ? (base.title || "Custom rows") : null;
     const extras = parts
       .filter((p) => p.mode === MODE_ADD_ON)
-      .map((p) => p.game_name)
+      .map((p) => (p.game_name && baseGameName
+        ? stripBaseGameName(p.game_name, baseGameName) || p.game_name
+        : p.game_name))
       .filter(Boolean);
     if (!lead) {
       // No base grid — the add-ons ARE the scorepad, so they name it.

@@ -678,6 +678,10 @@
         // "adds two rows" and "is the whole score sheet instead" are not the
         // same offer.
         baseGameId: this._baseGameId,
+        // And so an expansion's grid is captioned with the expansion's name
+        // alone — the scroll's own chapter rows already strip the base game
+        // off the front, and the sheet opens over them.
+        baseGameName: (this._expansionMeta[this._baseGameId] || {}).name || "",
         returnFocus: (event && event.currentTarget) || null,
         onAdopt: (tpl) => this._adoptTemplate(tpl),
         onSkip: (shown) => this._dismissTemplates(shown),

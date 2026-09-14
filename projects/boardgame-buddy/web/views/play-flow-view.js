@@ -1925,7 +1925,8 @@
     _renderTemplateAddOns(addOns) {
       const chips = addOns.map((c) => {
         const color = c.source_color || "";
-        const name = window.ScoringTemplate.gameNameOf(c) || "Expansion";
+        const name = window.ScoringTemplate.gameNameOf(c, this._baseGameName())
+          || "Expansion";
         return `
           <span class="scoring-tpladd" ${color ? `style="--exp-color: ${escapeAttr(color)}"` : ""}>
             <span class="scoring-tpladd__dot"></span>
@@ -2011,7 +2012,7 @@
       if (o.key === ADDONS_ONLY) {
         const { addOns } = this._scoringSplit();
         return window.ScoringTemplate.composedTitle(
-          window.ScoringTemplate.compose(null, addOns), null
+          window.ScoringTemplate.compose(null, addOns), null, this._baseGameName()
         );
       }
       // A ghost has no chapter left to read a name off, so it takes the
@@ -2023,13 +2024,29 @@
       return this._templatePillName(o.chapter);
     }
 
-    /** A pill's label: the game the grid belongs to. */
+    /**
+     * A pill's label: the game the grid belongs to, with the base game's name
+     * off the front of an expansion's ("Everdell: Pearlbrook" -> "Pearlbrook").
+     *
+     * The strip already says which base game this is — it is the game being
+     * scored, named at the top of the screen, and one of these pills IS it. A
+     * row reading "Everdell · Everdell: Pearlbrook · Everdell: Legacy" spends
+     * its width on the one word every pill shares, and spends it at the START,
+     * where the 11rem ellipsis then eats the words that actually tell them
+     * apart.
+     */
     _templatePillName(c) {
-      if (c.source_game_name) return c.source_game_name;
+      const name = window.ScoringTemplate.gameNameOf(c, this._baseGameName());
+      if (name) return name;
       // A guide fetched for a single game does not tag its chapters, so an
       // untagged grid can only be the base game's — and the draft knows that
       // game's name even when the chapter row does not.
-      return ((this._ps.gameSnapshot || {}).name) || "Base game";
+      return this._baseGameName() || "Base game";
+    }
+
+    /** The game being scored, as the draft's own snapshot knows it. */
+    _baseGameName() {
+      return ((this._ps.gameSnapshot || {}).name) || "";
     }
 
     // Re-render just the scoring section in place (cheaper than a full view
@@ -2887,6 +2904,7 @@
       window.BgbScoringTemplateSheet.offer({
         templates: pending,
         baseGameId: gameId,
+        baseGameName: this._baseGameName(),
         onAdopt: (tpl) => this._adoptTemplate(tpl),
         onSkip: (shown) => this._declineTemplates(shown),
       });
