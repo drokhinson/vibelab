@@ -369,13 +369,27 @@
       if (!count) {
         body = `<div class="preview-card__empty">No buddies yet — tap See all to invite some.</div>`;
       } else {
-        const shown = buddies.slice(0, PREVIEW_BUDDIES);
+        // Under the viewer's private alias when they set one, and ordered by
+        // that same name — the stack is a preview of the Buddies list, so it
+        // has to show the first faces that screen shows, under the names that
+        // screen uses. The bundle RPC neither joins the alias nor sorts by it
+        // (it orders on the raw display_name), which is why both happen here.
+        // Skipping this was how the stack ended up printing initials off names
+        // the viewer had renamed away from — including two buddies who share
+        // real initials but not the aliases they are known by.
+        const named = buddies
+          .map((bud) => ({
+            bud,
+            name: window.Buddy.nameFor(bud.other_user_id, bud.other_display_name),
+          }))
+          .sort((a, b2) => a.name.toLowerCase().localeCompare(b2.name.toLowerCase()));
+        const shown = named.slice(0, PREVIEW_BUDDIES);
         const extra = Math.max(0, count - shown.length);
         body = `
           <div class="preview-card__buds">
-            ${shown.map((bud) => window.BgbBadge.render({
+            ${shown.map(({ bud, name }) => window.BgbBadge.render({
               avatar: bud.other_avatar,
-              displayName: bud.other_display_name,
+              displayName: name,
               size: "sm",
               extraClass: "preview-card__bud",
             })).join("")}
