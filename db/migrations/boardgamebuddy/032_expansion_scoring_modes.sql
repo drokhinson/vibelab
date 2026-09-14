@@ -27,7 +27,8 @@
 -- with the big box still on the table is asking for something reasonable.
 -- Add-on grids are never pills: their rows fold into whichever pill is chosen,
 -- and the rows say so themselves by drawing the expansion's colour down the
--- left edge of their header cell.
+-- RIGHT edge of their header cell — the left edge already carries the row's own
+-- palette tint, so the two facts get opposite edges rather than one.
 --
 -- WHY INSIDE `grid` AND NOT A COLUMN. `grid` is a versioned document
 -- ({"v":1,"rows":[…]}) and 018 put `v` there precisely so it could grow; the
@@ -117,8 +118,9 @@ COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS
   'the add-ons appended in ascending BGG id so every client composes the same scorepad — in which case '
   '`chapter_id` names the grid that supplied the leading rows and `parts` lists every contributor in row '
   'order as {chapter_id,game_id,game_name,mode,row_count}. A row an add-on contributed also carries that '
-  'expansion''s `source_color` (boardgamebuddy_games.expansion_color), which draws the rule down the left '
-  'edge of its header cell; the leading grid''s rows carry none. `parts` is absent, and no row carries a '
+  'expansion''s `source_color` (boardgamebuddy_games.expansion_color), which draws a rule down the RIGHT '
+  'edge of its header cell — the left edge carries the row''s own palette tint, so the two never collide; '
+  'the leading grid''s rows carry none. `parts` is absent, and no row carries a '
   'source_color, when one grid supplied the whole thing — so a pre-032 snapshot reads exactly as it always did.';
 
 COMMENT ON COLUMN public.boardgamebuddy_play_sessions.scoring_template IS

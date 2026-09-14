@@ -132,12 +132,13 @@
             ${Array.from({ length: roundCount }).map((_, r) => {
               const tpl = rowLabels[r] || null;
               // A row contributed by an ADD-ON expansion carries that
-              // expansion's colour (domain/scoring-template.js), which draws the
-              // rule down the left edge of the header cell in place of the row's
-              // own tint — one channel for what the row IS (the author's
-              // palette wash) and one for where it CAME FROM. Set as a custom
-              // property, never as a literal, which is the one legitimate
-              // inline-colour case in .claude/rules/theming.md §10.
+              // expansion's colour (domain/scoring-template.js), which draws a
+              // rule down the RIGHT edge of the header cell. The left edge is
+              // already the row's own palette tint, so the two facts — what the
+              // row IS and which box it CAME FROM — get opposite edges rather
+              // than fighting over one. Set as a custom property, never as a
+              // literal, the one legitimate inline-colour case in
+              // .claude/rules/theming.md §10.
               const src = (tpl && tpl.source_color) || null;
               return `
               <tr>

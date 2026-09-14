@@ -1874,7 +1874,7 @@
      *
      * Add-ons are NOT pills. They are not alternatives to anything — they fold
      * into whichever pill is chosen — and their rows say so themselves, with
-     * the expansion's colour down the left edge of each one.
+     * the expansion's colour down the right edge of each one.
      *
      * Absent entirely with one candidate: a row of one pill is a label
      * pretending to be a control.

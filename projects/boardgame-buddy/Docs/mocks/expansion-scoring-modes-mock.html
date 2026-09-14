@@ -353,10 +353,13 @@ h2 + .lede { margin-bottom: 22px; }
 .scoring-table tbody th.scoring-round-th--tpl {
   color: color-mix(in srgb, var(--polaroid-ink) 88%, transparent);
 }
-/* …and the EXPANSION's, on a row an add-on contributed. The wash above is
-   untouched, so the two facts never compete for the same channel. */
+/* …and the EXPANSION's, on the cell's OTHER edge. The left rule and the wash
+   stay the author's; the right rule says which box the row came from. Both
+   shadows are restated because box-shadow does not merge across rules. */
 .scoring-round-th--tpl.scoring-round-th--exp {
-  box-shadow: inset 3px 0 0 var(--exp-accent, var(--row-accent));
+  box-shadow:
+    inset  3px 0 0 var(--row-accent),
+    inset -3px 0 0 var(--exp-accent, var(--row-accent));
 }
 
 /* ── The mode badge, as the guide and the offer sheet draw it ────────────── */
@@ -408,6 +411,10 @@ h2 + .lede { margin-bottom: 22px; }
   background: var(--wall-2); border: 1px solid var(--wall-line);
 }
 .seam__swatch { flex: none; width: 4px; align-self: stretch; border-radius: 2px; min-height: 42px; }
+/* The card's own rule sits where the mark it describes sits — leading edge for
+   the row's colour, trailing edge for the expansion's. */
+.seam--right { text-align: right; }
+.seam--right .seam__d, .seam--right .seam__t { text-align: left; }
 .seam__body { min-width: 0; }
 .seam__t { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
 .seam__d { font-size: 13.5px; color: var(--wall-mute); }
@@ -457,7 +464,7 @@ h2 + .lede { margin-bottom: 22px; }
         <p class="mode__body">
           The expansion brings extra categories to a scorepad that is otherwise
           the base game's. Its rows are <strong>appended</strong>, in ascending
-          BGG id, and each one draws the expansion's colour down its left edge.
+          BGG id, and each one draws the expansion's colour down its right edge.
         </p>
       </div>
       <div class="mode">
@@ -496,38 +503,42 @@ h2 + .lede { margin-bottom: 22px; }
     </p>
   </div>
 
-  <h2>Two facts, two channels</h2>
+  <h2>Two facts, two edges</h2>
   <p class="lede">
-    A row header carries a colour wash <em>and</em> a left rule, and they answer
-    different questions. Collapsing them into one mark would make a green
-    Pearlbrook row unable to be both green and Pearlbrook's.
+    A row header carries three marks and they answer two questions. The wash and
+    the <em>left</em> rule are the author's tint for what the row is; the
+    <em>right</em> rule is the box it came from. Opposite edges, because sharing
+    one would make a green Pearlbrook row unable to be both green and
+    Pearlbrook's.
   </p>
   <div class="seams">
     <div class="seam">
-      <div class="seam__swatch" style="background: linear-gradient(#4A7A4A, #4A7A4A); opacity:.14"></div>
+      <div class="seam__swatch" style="background:#4A7A4A"></div>
       <div class="seam__body">
-        <div class="seam__t">The wash — what the row <em>is</em></div>
+        <div class="seam__t">Left rule + wash — what the row <em>is</em></div>
         <div class="seam__d">
-          14% of the palette slug the grid's author picked for that row
-          (<code>green</code>, <code>gold</code>, …). Their tint for the
-          category, resolved by the stylesheet because the scorepad is paper in
-          both themes and an author could otherwise pick a yellow nobody can
-          read.
+          The palette slug the grid's author picked for that row
+          (<code>green</code>, <code>gold</code>, …), at full strength on the
+          left edge and at 14% behind the label. Their tint for the category,
+          resolved by the stylesheet because the scorepad is paper in both
+          themes and an author could otherwise pick a yellow nobody can read.
         </div>
       </div>
     </div>
-    <div class="seam">
-      <div class="seam__swatch" style="background:#4A6F94"></div>
+    <div class="seam seam--right">
       <div class="seam__body">
-        <div class="seam__t">The left rule — where it <em>came from</em></div>
+        <div class="seam__t">Right rule — where it <em>came from</em></div>
         <div class="seam__d">
           The contributing expansion's own colour
           (<code>games.expansion_color</code>), matching its pill's dot and its
-          dot in the reference guide. Rows from whichever grid <em>leads</em> the
-          composition carry none — marking those too would say the whole table
-          came from somewhere else.
+          dot in the reference guide. It sits on the opposite edge so it never
+          overwrites the author's, and lands on the pinned column's boundary
+          with the scores — where it reads as “this block ends here”. Rows from
+          whichever grid <em>leads</em> the composition carry none: marking those
+          too would say the whole table came from somewhere else.
         </div>
       </div>
+      <div class="seam__swatch" style="background:#17808F"></div>
     </div>
   </div>
 
@@ -546,7 +557,7 @@ h2 + .lede { margin-bottom: 22px; }
       </div>
       <div class="guide-card">
         <div class="guide-card__t">
-          <span class="guide-card__dot" style="background:#4A6F94"></span>
+          <span class="guide-card__dot" style="background:#17808F"></span>
           Pearlbrook score sheet
         </div>
         <span class="tmpl-modetag"><svg class="ico" viewBox="0 0 256 256" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg> Adds to the base game's rows</span>
@@ -621,7 +632,12 @@ const LEGACY = [
   { label: "Basic points",  color: "gold" },
 ];
 
-const EXP = { pearlbrook: "#4A6F94", newleaf: "#4A7A4A", legacy: "#7A5293" };
+// The expansions' own colours (games.expansion_color), deliberately picked to
+// sit OUTSIDE the nine-slug row palette above. Not decoration: if an
+// expansion's colour happened to equal one of its rows' author tint, that row's
+// two edges would match and the mock would quietly stop demonstrating the thing
+// it exists to demonstrate.
+const EXP = { pearlbrook: "#17808F", newleaf: "#A02D6B", legacy: "#7A5293" };
 
 const addOn = (rows, color) => rows.map((r) => ({ ...r, exp: color }));
 

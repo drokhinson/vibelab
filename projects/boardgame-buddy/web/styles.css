@@ -8323,9 +8323,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   outline-offset: -3px;
 }
 /* The expansion's own colour, so a pill matches the coloured rule its rows draw
-   down the left of the grid. Data-derived, set inline as a custom property
-   (.claude/rules/theming.md §10); the base game's pill has none and shows no
-   dot, which is the same convention as the reference guide's chapter dots. */
+   down the right edge of their label cells. Data-derived, set inline as a
+   custom property (.claude/rules/theming.md §10); the base game's pill has none
+   and shows no dot, the same convention as the reference guide's chapter dots. */
 .scoring-tplpill__dot {
   flex: none;
   width: 7px; height: 7px;
@@ -8626,18 +8626,28 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   background: color-mix(in srgb, var(--row-accent) 14%, var(--polaroid-bg));
   box-shadow: inset 3px 0 0 var(--row-accent);
 }
-/* A row an ADD-ON EXPANSION contributed (migration 032): the left rule takes
-   the EXPANSION's colour instead of the row's own, which is what marks the seam
-   in a scorepad whose rows came from two boxes. The 14% wash above is untouched
-   and still the author's — two independent facts, two independent channels, so
-   a green Pearlbrook row still reads green and still reads as Pearlbrook's.
+/* A row an ADD-ON EXPANSION contributed (migration 032) gets a SECOND rule, on
+   the cell's other edge: the left one stays the row's own palette colour, the
+   right one is the expansion's.
 
-   `--exp-accent` is set inline from boardgamebuddy_games.expansion_color, the
-   data-derived custom property .claude/rules/theming.md §10 allows. Doubled to
-   out-specify the (0,1,0) rule above rather than relying on source order
-   (.claude/rules/mobile-web.md §3), and it inherits that rule's background. */
+   Opposite edges, not the same one. Two independent facts — what the row IS and
+   which box it CAME FROM — cannot share a channel: putting the expansion colour
+   on the left would overwrite the author's tint and make a green Pearlbrook row
+   stop reading as green, which is exactly the confusion the pair is meant to
+   resolve. And the right edge is free: it is the pinned column's boundary with
+   the scores, so a rule there reads as "this block ends here" rather than
+   competing with anything.
+
+   Both shadows are restated because box-shadow does not merge across rules —
+   dropping the first would silently take the row's own rule off every add-on
+   row. `--exp-accent` is set inline from boardgamebuddy_games.expansion_color,
+   the data-derived custom property .claude/rules/theming.md §10 allows. Doubled
+   to out-specify the (0,1,0) rule above rather than relying on source order
+   (.claude/rules/mobile-web.md §3); the background is inherited from it. */
 .scoring-round-th--tpl.scoring-round-th--exp {
-  box-shadow: inset 3px 0 0 var(--exp-accent, var(--row-accent));
+  box-shadow:
+    inset  3px 0 0 var(--row-accent),
+    inset -3px 0 0 var(--exp-accent, var(--row-accent));
 }
 /* A tinted row wants a stronger ink than the base rule's 70%: it is read
    against its own 14% wash rather than against bare paper. Matched to the

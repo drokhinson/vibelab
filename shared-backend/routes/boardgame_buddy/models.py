@@ -153,15 +153,16 @@ class ScoringSnapshotRow(ScoringRow):
 
     `source_color` is the `boardgamebuddy_games.expansion_color` of the
     expansion whose grid contributed the row, and None for a row from whichever
-    grid leads the composition. It draws the coloured rule down the left edge of
-    the row's header cell, which is how a scorer tells "this row came with
-    Pearlbrook" from "this row is the base game's" at a glance.
+    grid leads the composition. It draws a rule down the RIGHT edge of the row's
+    header cell, which is how a scorer tells "this row came with Pearlbrook"
+    from "this row is the base game's" at a glance.
 
     A SECOND channel from `color`, not a replacement for it: `color` is the
     author's tint for what the row IS (a palette slug the stylesheet owns), and
     this is the provenance of where it came FROM. They are independent, so they
-    get independent marks — the wash stays the author's, the left rule is the
-    expansion's.
+    get independent marks on OPPOSITE EDGES of the same cell — the left rule and
+    the wash stay the author's, the right rule is the expansion's. Sharing one
+    edge would mean an add-on's rows losing the tint their author chose.
 
     Deliberately not on ScoringRow itself: an authored grid has no provenance to
     record — every one of its rows is its own — so the field would be a

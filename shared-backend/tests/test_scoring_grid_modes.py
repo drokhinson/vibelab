@@ -155,9 +155,9 @@ def test_uncomposed_snapshot_grows_no_seams():
 def test_composed_rows_carry_their_expansion():
     """An add-on's rows say which box they came from; the scorepad's do not.
 
-    The colour draws the rule down the left edge of the row header, so marking
-    the leading grid's rows too would say the whole table came from somewhere
-    else — see ScoringSnapshotRow.
+    The colour draws a rule down the right edge of the row header — the left
+    edge is the row's own palette tint — so marking the leading grid's rows too
+    would say the whole table came from somewhere else. See ScoringSnapshotRow.
     """
     snap = PlayScoringTemplate(
         chapter_id="c1",

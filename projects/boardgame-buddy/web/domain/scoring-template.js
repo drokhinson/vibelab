@@ -253,10 +253,11 @@
     for (const layer of layers) {
       const src = rowsOf(layer.c) || [];
       // The expansion this block came from, stamped onto every row it
-      // contributes. It draws the coloured rule down the left edge of the row
-      // header, which is how a scorer tells "this row came with Pearlbrook"
-      // from "this row is the base game's" without reading the labels — the
-      // seam is otherwise invisible once the rows are one flat list.
+      // contributes. It draws the coloured rule down the RIGHT edge of the row
+      // header — the left edge is already the row's own palette tint — which is
+      // how a scorer tells "this row came with Pearlbrook" from "this row is
+      // the base game's" without reading the labels. The seam is otherwise
+      // invisible once the rows are one flat list.
       //
       // Only on an ADD-ON: the leading grid's rows are the scorepad, not a
       // block appended to it, so marking them would say the whole table came
