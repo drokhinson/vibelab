@@ -378,6 +378,7 @@
     MODE_REPLACE,
     MAX_ROWS,
     gameIdOf,
+    gameNameOf,
     modeOf,
     split,
     preferredBase,

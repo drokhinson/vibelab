@@ -8227,50 +8227,50 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.5rem; margin-bottom: 0.35rem;
 }
-/* The line above the grid naming this game's scoring template, with the switch
-   that puts it on the table (migration 018). Absent entirely when the game has
-   none adopted, so the scoring card is untouched for every game that doesn't use
-   one. Paper tokens, because it sits inside the scorepad card. */
+/* The strip above the grid: which scorepad the table is built on, and which
+   expansions are appending rows to it (migrations 018 / 032). Absent entirely
+   when the game has no grid adopted, so the scoring card is untouched for every
+   game that doesn't use one. Paper tokens, because it sits inside the scorepad
+   card.
+
+   Two rows, stacked: the scorepad pills, then the add-on chips. The pills used
+   to share a line with a name and an on/off switch; the pill row IS the switch
+   now (tapping the lit one deselects), so the line and the switch are gone and
+   the expansions moved out of the title's "+" run into a row of their own. */
 .scoring-tplbar {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.3rem;
   margin-bottom: 0.45rem;
   padding: 0.3rem 0.45rem;
   border-radius: 0.5rem;
   background: color-mix(in srgb, var(--polaroid-line) 40%, transparent);
 }
-/* The bar's first line: what is on the table, and the switch. The pill row,
-   when there is one, sits under it — which is why the bar is a column now and
-   this line carries the name/switch justification it used to. */
-.scoring-tplbar__line {
+/* Each row is a fixed lead-in mark plus a scroller. The mark sits OUTSIDE the
+   scroller so it stays put while the pills slide under it. */
+.scoring-tplbar__row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.scoring-tplbar__name {
-  display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: color-mix(in srgb, var(--polaroid-ink) 82%, transparent);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.scoring-tplbar__actions {
+.scoring-tplbar__mark {
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.7rem;
+  color: color-mix(in srgb, var(--polaroid-ink) 55%, transparent);
+}
+/* Nothing selected is a real state, not a broken one: the pills stay, unlit,
+   each still naming what it would put on the table. The mark dims so the strip
+   reads as "no scorepad" at a glance rather than as "pick one of these". */
+.scoring-tplbar--off .scoring-tplbar__mark {
+  color: color-mix(in srgb, var(--polaroid-ink) 32%, transparent);
 }
 /* ── The scorepad pills ──────────────────────────────────────────────────────
    Which grid the table is built on: the base game, then each replace-mode
-   expansion in play (migration 032). A radiogroup in normal flow, not a sheet —
-   two or three options that change the table right below them, so the pick and
-   its effect want to be visible at once.
+   expansion in play (migration 032). A button group in normal flow, not a
+   sheet — two or three options that change the table right below them, so the
+   pick and its effect want to be visible at once. Toggle buttons rather than
+   radios, because tapping the lit one turns the template off and a radio
+   cannot be unchecked by clicking it.
 
    Scrolls rather than wraps: a wrapped second line would push the grid down by
    a row height every time a third expansion joins, on the one screen where
@@ -8278,6 +8278,11 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-tplpills {
   display: flex;
   gap: 0.3rem;
+  /* A flex item that scrolls needs the explicit min-width:0 — the default
+     min-width:auto floors it at its content, so the row would push the strip
+     wider than the card instead of scrolling inside it. */
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   /* The pills are the last thing before the table, so let their focus rings and
      :active scale breathe without the scroller clipping them. */
@@ -8332,12 +8337,48 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   border-radius: 50%;
   background: var(--exp-color, var(--polaroid-muted));
 }
-/* Switched off, the name is still the name of this game's template — it says
-   what the switch would turn on. Dimmed, because those rows are not what the
-   table is currently showing. */
-.scoring-tplbar--off .scoring-tplbar__name {
-  color: color-mix(in srgb, var(--polaroid-ink) 55%, transparent);
+/* ── The add-on chips ────────────────────────────────────────────────────────
+   The expansions whose grids are appending rows to whichever pill is lit. Read
+   only: which expansions are in play is answered by the tick list on Gather,
+   and a second control for it here would be two places to answer one question
+   (.claude/rules/ui-object-design.md §3b). Flatter and quieter than a pill for
+   exactly that reason — nothing here is pressable.
+
+   The dot carries the expansion's own colour, which is the colour of the rule
+   its rows draw down the right edge of their label cells, so the strip and the
+   table name the same box in the same ink. */
+.scoring-tpladds {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 0 0.1rem 0.05rem;
+  margin: 0 -0.1rem;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.scoring-tpladds::-webkit-scrollbar { display: none; }
+.scoring-tpladd {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  max-width: 10rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--polaroid-line) 55%, transparent);
+  color: color-mix(in srgb, var(--polaroid-ink) 72%, transparent);
+  font-size: 0.68rem;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.scoring-tpladd__dot {
+  flex: none;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--exp-color, var(--polaroid-muted));
 }
 
 /* ── The Play step's "score on a shared grid?" offer ──────────────────────────
