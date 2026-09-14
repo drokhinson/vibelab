@@ -33,6 +33,15 @@
   // all is worse than one whose predecessor's spectators saw 'abandoned'.
   const LOBBY_GATE_MAX_WAIT_MS = 8000;
 
+  // The scorepad pill that stands for "the add-on expansions, with no grid
+  // leading them" — the shape a host gets when they have adopted an
+  // expansion's grid and nothing for the base game
+  // (domain/scoring-template.js#compose takes a null base for exactly this).
+  // Not a chapter id, because there is no one chapter to name; it is the key
+  // the pill row and _pickTemplateBase agree on, and it never reaches the
+  // draft, whose snapshot records the same state as `chapter_id: null`.
+  const ADDONS_ONLY = "__addons__";
+
   // How many times the Gather poll will re-push a roster that still hasn't
   // fully landed, before it stops trying. The reconcile runs every 2s for the
   // whole Gather phase, so it needs a floor: a row the server keeps refusing
@@ -85,11 +94,7 @@
       // 018), handed over by the reference-guide scroll. Never fetched here —
       // see the guide-chapters-loaded listener in onMount.
       this._templates = [];
-      // The last template that was on the table, kept while the scoring bar's
-      // switch is off so flipping it back on restores that grid rather than a
-      // guess. Written by _applyTemplate in both directions.
-      this._lastTemplate = null;
-      // Which game _templates / _lastTemplate were loaded for. See onMount.
+      // Which game _templates was loaded for. See onMount.
       this._templatesGameId = null;
       // The scoring grids that EXIST for this game, adopted or not — the
       // chapter pool, handed over by the reference-guide scroll on the
@@ -166,15 +171,13 @@
       this._ps = existing || new window.PlaySession();
       // Template state belongs to the game it was loaded for, and this view is
       // a singleton: without this, a draft for a different game paints its
-      // first frame with the LAST game's scoring bar — naming a grid that has
-      // nothing to do with what is on the table, and offering to switch it on.
-      // The guide re-announces a frame or two later and corrects the list; the
-      // first paint is what this covers. Same game (a refresh, another round)
-      // keeps both, which is what lets round two put the template back with one
-      // tap.
+      // first frame with the LAST game's scoring bar — a pill row offering a
+      // grid that has nothing to do with what is on the table. The guide
+      // re-announces a frame or two later and corrects the list; the first
+      // paint is what this covers. Same game (a refresh, another round) keeps
+      // it, which is what lets round two put the template back with one tap.
       if (this._templatesGameId !== this._ps.gameId) {
         this._templates = [];
-        this._lastTemplate = null;
         this._templatesGameId = this._ps.gameId;
         // The Play step's offer is keyed the same way, and for the same
         // reason: a different game is a different question, while the same
@@ -1798,62 +1801,53 @@
     }
 
     /**
-     * The line above the grid: the template this game has, and a switch that
-     * puts it on the table or takes it off. Silent in the common case — with no
-     * scoring-grid chapter adopted for this game and none applied to the draft
-     * there is nothing to name and nothing to flip, and the scoring card looks
-     * exactly as it always has.
+     * The strip above the grid: WHICH scorepad the table is built on, and which
+     * expansions are folded into it. Silent in the common case — with no
+     * scoring-grid chapter adopted for this game and nothing applied to the
+     * draft there is nothing to name and nothing to pick, and the scoring card
+     * looks exactly as it always has.
      *
-     * A SWITCH, NOT A "CLEAR". Clear was a one-way door in a bar that then went
-     * quiet: with one adopted template, clearing removed the only control on
-     * the strip, so the labels the host had just turned off could not be turned
-     * back on for the rest of the game — and a template that auto-apply had
-     * declined (a resumed draft with numbers already on it) rendered no bar at
-     * all, which is the same dead end reached from the other side. On/off is
-     * what the host is actually choosing between, it is reversible, and the
-     * switch says which way it currently sits without the bar having to spell
-     * out "Plain rounds".
+     * TWO ROWS, AND THE FIRST ONE IS ALSO THE ON/OFF CONTROL.
      *
-     * The name stays put across a flip. Off does not mean "no template" — it
-     * means this game's template, not in play — so naming it is what makes the
-     * switch's other position legible before you touch it.
+     * Row one is the scorepad pills: the base game's grid, then each
+     * replace-mode expansion on the table (domain/scoring-template.js#split).
+     * Exactly one is on, or none — and tapping the one that IS on takes the
+     * template off. That is why there is no switch beside them any more: a
+     * switch and a pill row are two controls answering one question, and they
+     * could disagree about it ("off" plus a lit pill). Deselecting reads as
+     * "score on plain rounds" without the bar having to spell it out, and the
+     * pills stay on screen saying exactly what a tap would turn back on.
      *
-     * With expansions on the table the name is the COMPOSITION's — "Everdell
-     * score sheet + Pearlbrook" — because that is what the rows under the bar
-     * actually are (domain/scoring-template.js#composedTitle). Naming only the
-     * base grid there would leave the host looking for where two extra rows
-     * came from.
+     * Row two is the add-ons: the expansions whose grids APPEND rows to
+     * whichever pill is chosen, each as its own colour-dotted chip. It used to
+     * be a "+" run inside the composition's title ("Everdell score sheet +
+     * Pearlbrook"), which put three different things — the base grid, the
+     * expansions, and the fact that they had been joined — into one ellipsised
+     * line on a 390px phone. As chips they carry the expansion's own colour,
+     * which is the colour of the rule their rows draw down the right edge of
+     * the label cells, so the strip and the table say the same thing in the
+     * same ink.
+     *
+     * With nothing selected the add-on row is GONE, not greyed: an add-on has
+     * nothing to append to, so nothing of it is on the table and a chip saying
+     * otherwise would be a lie.
      */
     _renderTemplateBar() {
-      const tpl = this._ps.scoringTemplate;
-      const cand = tpl || (this._candidateComposition() || {}).snap;
-      if (!cand) return "";
-      const on = !!tpl;
-      // A grid's title is derived by the backend from its game
-      // (services/chapter_grid.grid_title), so it is the same string for every
-      // grid this game has — which is fine here, where it names the ROW SHAPE
-      // in play; picking between two of them is the sheet's job, and that one
-      // leads with the author instead.
-      const name = cand.title || "Custom rows";
+      const { opts, addOns } = this._scorepadOptions();
+      if (!opts.length) return "";
+      const activeId = this._activeBaseId();
+      const on = !!activeId;
+      // With ADDONS_ONLY lit the add-ons ARE the scorepad, and their pill is
+      // already named after them — a chip row under it would say the same
+      // expansions twice.
+      const chips = on && activeId !== ADDONS_ONLY ? addOns : [];
       return `
         <div class="scoring-tplbar${on ? "" : " scoring-tplbar--off"}">
-          <div class="scoring-tplbar__line">
-            <span class="scoring-tplbar__name" title="${escapeAttr(name)}">
-              <i data-icon="table" class="w-3.5 h-3.5"></i>
-              ${escapeHtml(name)}
-            </span>
-            <span class="scoring-tplbar__actions">
-              ${window.BgbSwitch.render({
-                on,
-                paper: true,
-                compact: true,
-                ariaLabel: `Score on the ${name} rows`,
-                title: on ? "Turn the scoring template off" : "Turn the scoring template on",
-                onclick: "window.playFlowView._toggleTemplate()",
-              })}
-            </span>
+          <div class="scoring-tplbar__row">
+            <i data-icon="table" class="w-3.5 h-3.5 scoring-tplbar__mark" aria-hidden="true"></i>
+            ${this._renderTemplatePills(opts, activeId)}
           </div>
-          ${this._renderTemplatePills()}
+          ${chips.length ? this._renderTemplateAddOns(chips) : ""}
         </div>
       `;
     }
@@ -1868,50 +1862,165 @@
      * table under the pills looks like, so seeing that change happen in place
      * is the whole feedback loop. A sheet would cover the grid it is about.
      * (.claude/rules/overlays.md §1 argues sheets over ANCHORED DROPDOWNS —
-     * this is neither: it is a radiogroup in normal flow, with no fit pass, no
-     * flip and no keyboard to dodge, the same standing the scoring editor's
+     * this is neither: it is a button group in normal flow, with no fit pass,
+     * no flip and no keyboard to dodge, the same standing the scoring editor's
      * colour swatches have.)
      *
-     * Add-ons are NOT pills. They are not alternatives to anything — they fold
-     * into whichever pill is chosen — and their rows say so themselves, with
-     * the expansion's colour down the right edge of each one.
+     * A ROW OF ONE IS STILL A CONTROL, which is why this no longer bails on a
+     * single candidate. It used to: a lone pill was a label pretending to be a
+     * button while the switch beside it did the work. The switch is gone and
+     * the pill does that work now, so the commonest shape of all — one grid,
+     * on or off — is exactly the shape that needs it.
      *
-     * Absent entirely with one candidate: a row of one pill is a label
-     * pretending to be a control.
+     * Add-ons are NOT pills. They are not alternatives to anything; they fold
+     * into whichever pill is chosen, and they get their own row underneath
+     * (_renderTemplateAddOns).
+     *
+     * `aria-pressed` toggle buttons rather than a radiogroup: a radio cannot be
+     * unchecked by clicking it, and unchecking is half of what these do.
      */
-    _renderTemplatePills() {
-      if (!this._canChangeTemplate()) return "";
-      const { bases } = this._scoringSplit();
-      const activeId = (this._ps.scoringTemplate || {}).chapter_id || null;
+    _renderTemplatePills(opts, activeId) {
       // Two grids for one game carry the same derived title AND the same game
       // name, so the pill would say "Everdell" twice. The author is the thing
       // that tells them apart (widgets/scoring-template-editor.js#authorLabel),
       // and it is added ONLY where it is needed — a pill row that said
       // "Everdell · your grid, Pearlbrook · Sam's grid" would be noise on the
       // common case, which is one grid per game.
-      const names = bases.map((c) => this._templatePillName(c));
+      const names = opts.map((o) => this._scorepadOptionName(o));
       const dupes = new Set(names.filter((n, i) => names.indexOf(n) !== i));
-      const pills = bases.map((c, i) => {
-        const on = c.id === activeId;
-        const color = c.source_color || "";
-        const label = dupes.has(names[i])
-          ? `${names[i]} · ${window.ScoringTemplateEditor.authorLabel(c)}`
+      const pills = opts.map((o, i) => {
+        const on = o.key === activeId;
+        const label = dupes.has(names[i]) && o.chapter
+          ? `${names[i]} · ${window.ScoringTemplateEditor.authorLabel(o.chapter)}`
           : names[i];
         return `
-          <button type="button" role="radio" aria-checked="${on ? "true" : "false"}"
+          <button type="button" aria-pressed="${on ? "true" : "false"}"
                   class="scoring-tplpill${on ? " scoring-tplpill--on" : ""}"
-                  ${color ? `style="--exp-color: ${escapeAttr(color)}"` : ""}
-                  onclick="window.playFlowView._pickTemplateBase('${escapeAttr(jsStr(c.id))}')">
-            ${color ? `<span class="scoring-tplpill__dot"></span>` : ""}
+                  ${o.color ? `style="--exp-color: ${escapeAttr(o.color)}"` : ""}
+                  title="${escapeAttr(on
+                    ? `Score on plain rounds instead of ${label}`
+                    : `Score on the ${label} rows`)}"
+                  onclick="window.playFlowView._pickTemplateBase('${escapeAttr(jsStr(o.key))}')">
+            ${o.color ? `<span class="scoring-tplpill__dot"></span>` : ""}
             ${escapeHtml(label)}
           </button>
         `;
       }).join("");
       return `
-        <div class="scoring-tplpills" role="radiogroup" aria-label="Scoring template">
+        <div class="scoring-tplpills" role="group" aria-label="Scorepad">
           ${pills}
         </div>
       `;
+    }
+
+    /**
+     * The add-on row: every expansion whose grid is appending rows to the
+     * scorepad right now, as a colour-dotted chip.
+     *
+     * Not buttons. Which add-ons are in play is decided by which expansion
+     * boxes are ticked on the Gather step — that IS the control, one per
+     * expansion, and a second one here would be two places to answer the same
+     * question (.claude/rules/ui-object-design.md §3b). These chips report.
+     */
+    _renderTemplateAddOns(addOns) {
+      const chips = addOns.map((c) => {
+        const color = c.source_color || "";
+        const name = window.ScoringTemplate.gameNameOf(c) || "Expansion";
+        return `
+          <span class="scoring-tpladd" ${color ? `style="--exp-color: ${escapeAttr(color)}"` : ""}>
+            <span class="scoring-tpladd__dot"></span>
+            ${escapeHtml(name)}
+          </span>
+        `;
+      }).join("");
+      return `
+        <div class="scoring-tplbar__row">
+          <i data-icon="plus" class="w-3.5 h-3.5 scoring-tplbar__mark" aria-hidden="true"></i>
+          <div class="scoring-tpladds" role="group"
+               aria-label="Expansion rows added to the scorepad">
+            ${chips}
+          </div>
+        </div>
+      `;
+    }
+
+    /**
+     * What the pill row offers, in row order.
+     *
+     * Three kinds of option, and only the first is the common one:
+     *
+     *   * a CANDIDATE grid — the base game's, or a replace-mode expansion's.
+     *   * the ADD-ONS ALONE, when no grid is leading them. Those rows are
+     *     still the best table anyone can offer
+     *     (domain/scoring-template.js#compose takes a null base for exactly
+     *     this), so they get a pill of their own rather than being
+     *     unreachable — and it is named after them, since they are what it is.
+     *     Offered when there is no candidate to lead them, and kept while it is
+     *     the composition actually on the table: auto-apply reaches that state
+     *     with candidates present too (preferredBase declines to guess between
+     *     two community grids, but the add-ons still go on), and a lit
+     *     composition with no pill to unlight it is the hole this closes.
+     *   * a GHOST, for a scorepad that is on the table but no longer among the
+     *     candidates: the host removed the chapter from their guide, its author
+     *     deleted it, or the guide simply has not answered yet on a resumed
+     *     draft. Without it the rows under the bar would be labelled by a
+     *     template with no control anywhere that could take it off. It stands
+     *     down the moment a real candidate with its id turns up.
+     *
+     * Every state where a template is ON therefore has exactly one pill lit —
+     * that is the invariant the whole strip rests on, since the lit pill is
+     * also the only way to turn the template back off.
+     *
+     * @returns {{opts: Array<{key: string, chapter: any|null, color: string}>,
+     *            addOns: any[]}}
+     */
+    _scorepadOptions() {
+      const { bases, addOns } = this._scoringSplit();
+      const activeId = this._activeBaseId();
+      const opts = bases.map((c) => ({
+        key: c.id,
+        chapter: c,
+        color: c.source_color || "",
+      }));
+      if (addOns.length && (!bases.length || activeId === ADDONS_ONLY)) {
+        opts.push({ key: ADDONS_ONLY, chapter: null, color: "" });
+      }
+      if (activeId && activeId !== ADDONS_ONLY && !opts.some((o) => o.key === activeId)) {
+        opts.push({ key: activeId, chapter: null, color: "", ghost: true });
+      }
+      return { opts, addOns };
+    }
+
+    /**
+     * Which pill is lit: the chapter id of the scorepad on the table, or
+     * ADDONS_ONLY for a composition no grid leads. Null with the template off.
+     *
+     * Read off the DRAFT rather than off the candidate list, so a scorepad that
+     * has left the guide still lights its ghost pill — what the table is
+     * showing is a fact about the draft, not about what the guide currently
+     * offers.
+     */
+    _activeBaseId() {
+      const t = this._ps.scoringTemplate;
+      if (!t) return null;
+      return t.chapter_id || ADDONS_ONLY;
+    }
+
+    /** One option's label: the game its grid belongs to. */
+    _scorepadOptionName(o) {
+      if (o.key === ADDONS_ONLY) {
+        const { addOns } = this._scoringSplit();
+        return window.ScoringTemplate.composedTitle(
+          window.ScoringTemplate.compose(null, addOns), null
+        );
+      }
+      // A ghost has no chapter left to read a name off, so it takes the
+      // composition's own title — which is the string the bar used to print on
+      // its own line, and still the truest description of those rows.
+      if (!o.chapter) {
+        return (this._ps.scoringTemplate || {}).title || "Custom rows";
+      }
+      return this._templatePillName(o.chapter);
     }
 
     /** A pill's label: the game the grid belongs to. */
@@ -2672,8 +2781,8 @@
      * Forget everything the scoring bar knows, because the game changed.
      *
      * A scorepad belongs to the game it was written for — the snapshot's rows,
-     * the switch's off position, and (migration 032) whether the host picked
-     * the scorepad by hand. Carrying any of the three onto a different game
+     * the deselected state, and (migration 032) whether the host picked the
+     * scorepad by hand. Carrying any of the three onto a different game
      * puts Everdell's fourteen rows on a game of Wingspan, and puts them there
      * in a state that says the host asked for them.
      *
@@ -2687,7 +2796,6 @@
       ps.scoringTemplate = null;
       ps.scoringTemplateOff = false;
       ps.scoringTemplatePicked = false;
-      this._lastTemplate = null;
       ps.persist();
     }
 
@@ -2738,8 +2846,8 @@
      *
      *   * a grid already in their guide (`_templates`) means the scoring bar
      *     has it and auto-apply handled it;
-     *   * a template on the draft, or the bar's switch deliberately off
-     *     (`scoringTemplateOff`), is a choice made — the same field
+     *   * a template on the draft, or every scorepad pill deliberately
+     *     deselected (`scoringTemplateOff`), is a choice made — the same field
      *     _maybeAutoApplyTemplate refuses to answer over;
      *   * rounds or scores already on the table mean restructuring it now is
      *     worse than never offering at all, exactly as it is for auto-apply;
@@ -2850,11 +2958,11 @@
      * offering the template at all. So the bar is "no template chosen yet AND
      * the grid is still empty".
      *
-     * A host who has turned the switch OFF has chosen, and auto-apply must not
-     * answer for them again — which is why the off state is a persisted field
-     * of the draft rather than the absence of one. Without it, coming back to a
-     * still-empty grid re-applied the template the host had just taken off, and
-     * the switch appeared to flip itself back on.
+     * A host who has deselected every scorepad pill has chosen, and auto-apply
+     * must not answer for them again — which is why the off state is a
+     * persisted field of the draft rather than the absence of one. Without it,
+     * coming back to a still-empty grid re-applied the template the host had
+     * just taken off, and the pill appeared to light itself back up.
      *
      * @param {any|null} base the scorepad grid, or null for add-ons alone
      */
@@ -2882,7 +2990,7 @@
      * composition whose leading rows still match the current ones cannot
      * relabel a scored cell, and one that only drops EMPTY trailing rows
      * cannot lose a score. Anything else waits for the host, who can reach it
-     * through the bar's Change; refusing silently is right because the
+     * through the bar's own pills; refusing silently is right because the
      * alternative is a table that reshapes itself between two rounds.
      */
     _recomposeTemplate() {
@@ -2970,64 +3078,24 @@
     }
 
     /**
-     * Which composition a flip to ON would put on the table — and, with the
-     * switch off, what the bar names.
+     * Tap a scorepad pill.
      *
-     * Three sources, in order of how much they know about the host's intent:
-     * the scorepad they had on a moment ago (kept through an off, so the flip
-     * back is exact even when the guide offers several), then a single
-     * candidate, and otherwise the add-ons alone. With two or more candidates
-     * and no history there is nothing to name — picking for them would be the
-     * same guess auto-apply refuses to make — so _toggleTemplate opens the
-     * sheet instead.
-     *
-     * The add-ons are always the CURRENT ones, even when the base comes from
-     * history: flipping back on after ticking another expansion should bring
-     * that expansion's rows with it, not restore the table as it stood.
-     *
-     * @returns {{base: any|null, addOns: any[], snap: any}|null}
+     * The pill that is already on turns the template OFF, which is the whole
+     * reason the switch could go: one control, one question, and no way for
+     * the two of them to disagree about the answer. Off is immediate and never
+     * asks — it takes the labels off and leaves every row and every score
+     * exactly where it was. Turning one ON goes through the confirm, because
+     * rows that have already been scored into get relabelled and the table can
+     * grow.
      */
-    _candidateComposition() {
-      const sp = this._scoringSplit();
-      const base = this._lastTemplate
-        ? this._lastTemplate.base
-        : window.ScoringTemplate.preferredBase(sp, this._ps.gameId);
-      const snap = window.ScoringTemplate.snapshot(base || null, sp.addOns);
-      return snap ? { base: base || null, addOns: sp.addOns, snap } : null;
-    }
-
-    /**
-     * Is there more than one scorepad to choose between? That, and only that,
-     * is what puts the pill row under the bar — with a single candidate there
-     * is nothing to pick and a row of one pill is a label pretending to be a
-     * control.
-     */
-    _canChangeTemplate() {
-      return this._scoringSplit().bases.length > 1;
-    }
-
-    /**
-     * The switch. Off is immediate and never asks — it takes the labels off and
-     * leaves every row and every score exactly where it was. On goes through
-     * the same confirm a Change does, because it is the same event for the host:
-     * rows they have already scored into get relabelled and the table can grow.
-     */
-    _toggleTemplate() {
-      if (this._ps.scoringTemplate) { this._clearTemplate(); return; }
-      const cand = this._candidateComposition();
-      if (cand) this._confirmTemplateSwitch(cand.base);
-    }
-
-    /**
-     * Tap a scorepad pill. A no-op on the one already chosen, so the row does
-     * not put the confirm up in front of a host who tapped what was already on.
-     */
-    _pickTemplateBase(chapterId) {
-      const { bases } = this._scoringSplit();
-      const base = bases.find((c) => c.id === chapterId);
-      if (!base) return;
-      const cur = this._ps.scoringTemplate;
-      if (cur && cur.chapter_id === chapterId) return;
+    _pickTemplateBase(key) {
+      if (key === this._activeBaseId()) { this._clearTemplate(); return; }
+      const { bases, addOns } = this._scoringSplit();
+      // ADDONS_ONLY is a pill, not a chapter: it means "compose the add-ons
+      // with no grid leading them", which _applyTemplate spells as a null base.
+      const base = key === ADDONS_ONLY ? null : bases.find((c) => c.id === key);
+      if (base === undefined) return;
+      if (!base && !addOns.length) return;
       // Set BEFORE the confirm, not after it resolves: the confirm can be
       // declined, and a host who says "keep these rows" has still expressed a
       // preference for the scorepad they are keeping — re-deriving it away on
@@ -3041,7 +3109,7 @@
      * Switching scorepads changes the row count, so a grid that already holds
      * numbers gets the project's one confirm surface first
      * (.claude/rules/ui-object-design.md §3c). Turning the template OFF never
-     * asks — that is _toggleTemplate calling _clearTemplate directly.
+     * asks — that is _pickTemplateBase calling _clearTemplate directly.
      *
      * `base` may legitimately be null: that is "the add-ons on their own", not
      * "nothing", and it reshapes the table exactly as any other choice does.
@@ -3087,40 +3155,24 @@
       // Nothing to compose — a caller asking for a template when the guide has
       // none left is asking to score on plain rounds.
       if (!snap) { this._clearTemplate(); return; }
-      // Remember the SCOREPAD, not the composition: the add-ons are re-read
-      // from the table on every flip, so a host who ticks another expansion
-      // while the template is off gets its rows when they flip it back on.
-      this._lastTemplate = { base: base || null };
       this._writeTemplate(snap, { rebuild: true });
     }
 
     /**
-     * Take the template off. Every row and every score stays exactly where it
-     * is — only the labels go.
+     * Take the template off — the pill row's own deselect. Every row and every
+     * score stays exactly where it is; only the labels go.
+     *
+     * Nothing is remembered on the way out, because the pills ARE the memory:
+     * they stay on screen with none of them lit, each one still naming the
+     * grid it would put back. That is what the old "last template on the
+     * table" field existed to reconstruct for a switch that had no way of
+     * saying which grid it was about.
      *
      * `scoringTemplateOff` is the host's choice recorded as one, read by
      * _maybeAutoApplyTemplate so a guide reload cannot answer it for them a
      * second time. Persisted with the draft, so it survives a refresh mid-game.
      */
     _clearTemplate() {
-      const ps = this._ps;
-      // Remember what is coming off, so the switch can put it straight back.
-      // Resolved against the candidate list first and rebuilt from the draft's
-      // own snapshot otherwise: a host who took the grid out of their guide
-      // mid-game, or whose guide has not answered yet, must still be able to
-      // flip a template they had on a second ago back on — the snapshot is a
-      // complete copy of the rows, which is the whole point of it being one.
-      if (ps.scoringTemplate) {
-        const snap = ps.scoringTemplate;
-        const { bases } = this._scoringSplit();
-        const live = snap.chapter_id
-          ? bases.find((t) => t.id === snap.chapter_id)
-          : null;
-        this._lastTemplate = {
-          base: live
-            || (snap.chapter_id ? window.ScoringTemplate.fromSnapshot(snap) : null),
-        };
-      }
       this._writeTemplate(null, { rebuild: false });
     }
 

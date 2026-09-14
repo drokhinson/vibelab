@@ -346,12 +346,18 @@ hand-written copy was a bad idea — the knob's travel is *derived* from the tra
 (width, minus its two borders, minus the padding, minus the knob), so a copy
 drifts on the first tweak to either.
 
+The template bar has since given its switch back: the scorepad pills answer
+on/off by deselecting, and two controls for one question could disagree about
+the answer. The collection is the one consumer again — which does not
+argue for folding the shell back into it, for the same reason it was extracted:
+the next surface that needs a switch must not write the geometry a third time.
+
 Two variants, and they are the two axes a switch actually differs on here:
 
 | Opt | For |
 |---|---|
 | `paper` | a photo-paper surface (§4.2a). Re-points the three colours the control is made of at `--polaroid-*`; ground tokens would render a dark box on cream. |
-| `compact` | a dense strip whose own type is smaller than a 44px control — the template bar is 0.74rem. Shrinks the track and buys the tap target back with an inset `::before`, the same move `.scoring-tplbar__btn` beside it makes. |
+| `compact` | a dense strip whose own type is smaller than a 44px control. Shrinks the track and buys the tap target back with an inset `::before`, the same move `.scoring-tplpill` makes. |
 
 ### 4.3b The BGG import log, and the polaroid field
 
