@@ -131,6 +131,19 @@ components above.
       this._gameId = null;            // base game uuid (route param)
       this._gameName = "";
       this._gameThumb = null;         // base game thumbnail_url
+      // Is the ROUTE'S OWN game an expansion? The guide opens on a base game
+      // most of the time, but an expansion is a first-class game with a
+      // collection tile and a guide of its own, so the route lands on one
+      // directly too — and there nothing about the route's shape says so.
+      // Authoritative, from the games row (`is_expansion`), because a scoring
+      // grid's mode hangs off it (migration 032) and guessing from the route
+      // is what made the question disappear on exactly that screen.
+      this._gameIsExpansion = false;
+      // That game's name with its base game's stripped off ("Everdell:
+      // Pearlbrook" → "Pearlbrook"), for the mode question's own label. The
+      // full name stays on `_gameName` — the game chip heads the screen and
+      // must keep saying which box this is.
+      this._gameShortName = "";
       // Optional expansion uuids passed from the in-play guide widget. When
       // present, Browse shows chapters across base + these expansions and the
       // Create tab gets a "Target game" picker so the new chapter can be
@@ -287,6 +300,11 @@ components above.
       const p = this.params || {};
       this._gameId = p.gameId || null;
       this._gameName = p.gameName || "";
+      // Cleared with the rest of the route facts: the games fetch below is what
+      // answers them, and a stale `true` from the previous mount would put an
+      // add-on / replace question on a base game's grid.
+      this._gameIsExpansion = false;
+      this._gameShortName = "";
       const rawExp = p.expansionIds || "";
       this._expansionIds = rawExp.split(",").map((s) => s.trim()).filter(Boolean);
       this._createTargetGameId = this._gameId;
@@ -367,6 +385,13 @@ components above.
           thumb: this._gameThumb,
         };
         if (!this._gameName) this._gameName = game.name || "";
+        // The route's own game can itself be an expansion — see the note on
+        // _gameIsExpansion. `base_game_name` rides along on an expansion's
+        // GameDetail, so the short name costs no extra lookup.
+        this._gameIsExpansion = !!game.is_expansion;
+        this._gameShortName = this._gameIsExpansion
+          ? stripBaseGameName(game.name || this._gameName, game.base_game_name)
+          : "";
       }
       // Chips and colored-dot labels sit next to the base game's own chip, so
       // they drop its name and show only what the expansion is called. The
@@ -1353,20 +1378,37 @@ components above.
 
     /**
      * The name of the expansion this grid is being saved against, or null when
-     * it is the base game's own.
+     * it is a base game's own grid.
      *
-     * The test is the TARGET, not the list of expansions in scope: `_gameId`
-     * is always the base game (it is the route's own parameter), so anything
-     * else the chapter can be saved to is an expansion by construction. Going
-     * through `_expansionIds` instead would hide the question when editing an
-     * expansion's grid from a screen that has no expansions in scope, which is
-     * exactly where a wrong mode would go unnoticed.
+     * Two ways the target can be an expansion, and the question has to appear
+     * for BOTH — a grid saved without it silently defaults to add_on
+     * (services/chapter_grid.resolve_grid_mode), so a missing control is a
+     * wrong answer rather than no answer:
+     *
+     *   * the target is not the route's game. Anything else the chapter can be
+     *     filed against came out of `/games/{id}/expansions`, so it is an
+     *     expansion by construction — no lookup needed. Testing the TARGET
+     *     rather than `_expansionIds` is what keeps the question up when
+     *     editing an expansion's grid from a screen with no expansions in
+     *     scope.
+     *   * the route's game IS the expansion. An expansion is a first-class
+     *     game with its own collection tile and its own reference guide, so
+     *     "Add a chapter" from there arrives with the expansion as `_gameId`
+     *     and no target picker at all — the target can never differ, and the
+     *     first test alone answers "base game" to the one screen whose every
+     *     grid is an expansion's. `_gameIsExpansion` is read off the games row
+     *     instead, which is the same column the backend resolves the stored
+     *     mode against.
      */
     _gridExpansionName() {
       const target = this._createTargetGameId || this._gameId;
-      if (!target || target === this._gameId) return null;
-      const meta = this._expansionMeta[target];
-      return (meta && meta.name) || "this expansion";
+      if (!target) return null;
+      if (target !== this._gameId) {
+        const meta = this._expansionMeta[target];
+        return (meta && meta.name) || "this expansion";
+      }
+      if (!this._gameIsExpansion) return null;
+      return this._gameShortName || this._gameName || "this expansion";
     }
 
     // Edit keeps the pill scroller: the chapter already has a type and changing
