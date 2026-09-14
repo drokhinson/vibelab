@@ -1514,15 +1514,54 @@ body {
   outline-offset: -3px;   /* the scroll clips an outset ring */
 }
 
-/* The section itself. Separated from the type sections above by a rule rather
-   than by spacing alone: it is a different kind of thing, not one more type. */
+/* The section itself — a <details>, collapsed by default. Separated from the
+   type sections above by a rule rather than by spacing alone: it is a
+   different kind of thing, not one more type.
+
+   Left at display:block on purpose. The section's flex column lives on
+   __body below, because putting it here would have to lay out across
+   ::details-content, which is not the same box in every engine. */
 .chapter-add__disliked {
   margin-top: var(--s-4);
   padding-top: var(--s-3);
   border-top: 1px solid rgba(107, 74, 26, 0.22);
 }
+/* The <summary>. Carries .scroll-section__header too, so the type, the ink and
+   the uppercase come from there and only the disclosure behaviour is here. */
+.chapter-add__disliked-head {
+  min-height: 44px;              /* it is a control now (mobile-web.md §5) */
+  padding-block: var(--s-1);
+  cursor: pointer;
+  list-style: none;              /* Firefox's marker */
+  user-select: none;
+}
+.chapter-add__disliked-head::-webkit-details-marker { display: none; }
+.chapter-add__disliked-head::marker { content: ""; }
+.chapter-add__disliked-head:focus-visible {
+  outline: 2px solid #6B4A1A;
+  outline-offset: -3px;          /* the scroll clips an outset ring */
+  border-radius: var(--r-xs);
+}
+/* The affordance. Pushed to the trailing edge by the auto margin rather than
+   by justify-content, so the glyph and the label stay together on the left. */
+.chapter-add__disliked-caret {
+  margin-left: auto;
+  opacity: 0.7;
+  transition: transform 160ms var(--ease);
+}
+.chapter-add__disliked[open] .chapter-add__disliked-caret { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .chapter-add__disliked-caret { transition: none; }
+}
+/* What .scroll-section used to supply when this was a <section>. */
+.chapter-add__disliked-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-top: var(--s-2);
+}
 .chapter-add__disliked-note {
-  margin: calc(var(--s-1) * -1) var(--s-1) 0;
+  margin: 0 var(--s-1);
   font-family: var(--font-sans);
   font-size: 0.72rem;
   line-height: 1.4;

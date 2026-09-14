@@ -419,7 +419,10 @@ come back forever, in the pool on every visit, in the "N of M" denominator that
 could then never close, and in the scoring-template offer at the table. A
 dislike takes it out of all three. It is per-viewer and one-directional: the
 author is never told, `popularity` is unaffected, and nothing is removed for
-anybody else. Reversible from the builder's Turned-down section, and cleared
+anybody else. Reversible from the builder's Turned-down section — a `<details>`
+collapsed by default, since it is a record of decisions already made and the
+browse list is what the screen is for; the count rides in its header so the
+collapsed state still answers "did I turn anything down here?" — and cleared
 automatically by adding the chapter — the act that contradicts it — exactly as
 sending a buddy request clears a `buddy_suggestion_dismissals` row.
 

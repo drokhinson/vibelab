@@ -262,6 +262,13 @@ components above.
       // Browse filters
       this._search = "";
       this._typeFilter = "";
+      // Is the Turned-down section open? Closed on every mount: it is a record
+      // of decisions already made, and the browse list is what the screen is
+      // for. Tracked here rather than left to <details>' own state because
+      // render() replaces the panel wholesale — without it, undoing one dislike
+      // would slam the section shut under the thumb of somebody working
+      // through three.
+      this._dislikedOpen = false;
     }
 
     // Synchronous placeholder — runs BEFORE onMount (see domain/view.js). Must
@@ -905,7 +912,10 @@ components above.
       const emptyLine = (this._search || this._typeFilter)
         ? "No chapters available for this filter."
         : dislikedCount
-          ? `You've turned down ${dislikedCount === 1 ? "the only chapter" : `all ${dislikedCount} chapters`} written for this game. They're below if you want one back.`
+          // Names the control rather than saying "below": the section is
+          // collapsed by default, so a viewer looking for the chapters it
+          // holds has to be told there is something to open.
+          ? `You've turned down ${dislikedCount === 1 ? "the only chapter" : `all ${dislikedCount} chapters`} written for this game. Open Turned down to put one back.`
           : "No chapters available yet.";
       const scrollBody = this._poolLoading
         ? `<div class="scroll-panel__loading">${window.buddyLoader({ size: 60 })}</div>`
@@ -1101,16 +1111,32 @@ components above.
      *
      * Absent entirely at zero. An empty "Disliked (0)" heading is an invitation
      * to a feature rather than a record of anything.
+     *
+     * COLLAPSED by default, and the count rides in the header so the collapsed
+     * state still answers the only question anyone asks from the browse screen
+     * — "did I turn anything down here?" Open, it is a list of chapters the
+     * viewer has already decided about sitting under the list they came to
+     * read, which is the pile in the way rather than out of the way.
+     *
+     * A <details> rather than a class toggle, so the open state is the
+     * element's own and the header gets a disclosure control's keyboard
+     * behaviour for free. It stays display:block: putting the section's flex
+     * column on the <details> itself would lay out across ::details-content,
+     * which is not the same box in every engine. The body div carries it.
      */
     _renderDislikedSection() {
       const rows = this._dislikedPool();
       if (!rows.length) return "";
       return `
-        <section class="scroll-section chapter-add__disliked" data-type="__disliked">
-          <h4 class="scroll-section__header">
+        <details class="chapter-add__disliked" data-type="__disliked"
+                 ${this._dislikedOpen ? "open" : ""}
+                 ontoggle="window.referenceGuideAddView._setDislikedOpen(this.open)">
+          <summary class="scroll-section__header chapter-add__disliked-head">
             <i data-icon="thumbs-down" class="w-4 h-4"></i>
-            Turned down (${rows.length})
-          </h4>
+            <span>Turned down (${rows.length})</span>
+            <i data-icon="chevron-down" class="w-4 h-4 chapter-add__disliked-caret"></i>
+          </summary>
+          <div class="chapter-add__disliked-body">
           <p class="chapter-add__disliked-note">
             Hidden from this list, from your chapter count and from scoring-template
             suggestions. Only you can see this.
@@ -1139,8 +1165,22 @@ components above.
               </li>
             `).join("")}
           </ul>
-        </section>
+          </div>
+        </details>
       `;
+    }
+
+    /**
+     * Remember whether the Turned-down section is open, so the next render()
+     * puts it back the way the viewer left it.
+     *
+     * Records only — it does not re-render. The <details> has already done the
+     * opening by the time `toggle` fires, so painting again here would be a
+     * second, identical paint that also throws away the browse list's scroll
+     * position.
+     */
+    _setDislikedOpen(open) {
+      this._dislikedOpen = !!open;
     }
 
     /**
