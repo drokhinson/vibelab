@@ -21,10 +21,19 @@
 // switch on the same bar, one control per question per
 // .claude/rules/ui-object-design.md §3b.
 //
-// NO FETCH. The candidates come from the reference-guide scroll's own pool
-// load, handed over on the `guide-templates-loaded` event — the same list the
-// host can see behind this sheet, which is what stops the sheet and the guide
-// disagreeing about what is in it.
+// NO FETCH — and that holds for the thumbs-down too. The candidates come from
+// the reference-guide scroll's own pool load, handed over on the
+// `guide-templates-loaded` event — the same list the host can see behind this
+// sheet, which is what stops the sheet and the guide disagreeing about what is
+// in it. Turning one down is the same division of labour: the sheet stops
+// drawing the card, `onDislike` hands the grid to whoever opened the sheet, and
+// that caller does the write and owns what else has to change because of it
+// (the guide reloads its lists; the play screen must not, with a scorepad
+// underneath).
+//
+// The thumbs-down is the one answer that does NOT close the sheet: three grids
+// you do not want are three refusals, and being asked again next round about
+// the two you did not reach is the bug this feature exists to fix. See offer().
 //
 // Its class is named in the theme re-point list in styles.css; a body-level
 // sheet lands outside the screen that opened it (.claude/rules/theming.md §8).
@@ -62,8 +71,12 @@
 
   class ScoringTemplateSheet {
     constructor() {
-      /** @type {TemplateChapter[]} */
+      /** The three on screen. @type {TemplateChapter[]} */
       this._templates = [];
+      /** Every candidate the caller offered, so a dislike can re-slice the
+       *  three from what is left rather than shrinking the list.
+       *  @type {TemplateChapter[]} */
+      this._pool = [];
       /** The play's BASE game, so an expansion's grid can be badged with the
        *  mode it would act in — the one thing about an unfamiliar grid that
        *  changes what adopting it does to the table. */
@@ -71,6 +84,7 @@
       this._baseGameId = null;
       this._onPick = /** @type {any} */ (null);
       this._onSkip = /** @type {any} */ (null);
+      this._onDislike = /** @type {any} */ (null);
 
       this._sheet = new window.BgbBottomSheet({
         id: "bgb-scoring-template-sheet",
@@ -84,18 +98,29 @@
     /**
      * The offer: this game HAS scoring grids and the host has adopted none.
      *
-     * Two answers, and both of them are answers — "Add one" and "Continue
-     * without" both close the sheet on a decision the caller then records, so
-     * the host is not asked again next round. Backdrop, Escape and the device
-     * back gesture are the third exit and mean neither: they close the sheet
-     * and leave the question open for next time (.claude/rules/overlays.md §8
-     * — four exits, one meaning, and that meaning here is "not now"), which is
-     * why `onSkip` fires from the button rather than from onClose.
+     * THREE answers now, and they do not all end the sheet. "Use this one" and
+     * "Continue without" both close it on a decision the caller records, so the
+     * host is not asked again next round. A thumbs-down is the third: it turns
+     * ONE grid down for good (migration 033) and leaves the sheet standing, so
+     * a host looking at three grids they do not want can say so about each of
+     * them in one pass rather than being asked again next round about the two
+     * they did not get to. The card goes the moment it is tapped; when the last
+     * one goes there is nothing left to offer and the sheet closes itself.
+     *
+     * Backdrop, Escape and the device back gesture are the remaining exit and
+     * mean none of the three: they close the sheet and leave the question open
+     * for next time (.claude/rules/overlays.md §8 — four exits, one meaning,
+     * and that meaning here is "not now"), which is why `onSkip` fires from the
+     * button rather than from onClose.
+     *
+     * NO FETCH here, per this file's header: `onDislike` hands the grid to the
+     * caller and the caller does the write. The sheet only stops drawing it.
      *
      * @param {{templates: TemplateChapter[], returnFocus?: Element|null,
      *          baseGameId?: string|null,
      *          onAdopt: (t: TemplateChapter) => void,
-     *          onSkip: (shown: TemplateChapter[]) => void}} opts
+     *          onSkip: (shown: TemplateChapter[]) => void,
+     *          onDislike?: (t: TemplateChapter) => void}} opts
      */
     offer(opts) {
       this._baseGameId = opts.baseGameId || null;
@@ -106,20 +131,29 @@
       // order the caller happened to hand over (a cache seeded by an older
       // response, a future caller that merges lists). Array#sort is stable, so
       // ties keep the pool's own created_at DESC.
-      this._templates = (opts.templates || [])
+      //
+      // `_pool` keeps the WHOLE candidate list, not just the three shown. It is
+      // what a dislike re-slices against, so turning one of the three down
+      // promotes the next-most-popular into the gap rather than leaving two
+      // cards and a grid nobody was offered.
+      this._pool = (opts.templates || [])
         .slice()
-        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
-        .slice(0, OFFER_MAX);
+        .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+      this._templates = this._pool.slice(0, OFFER_MAX);
       this._onPick = opts.onAdopt;
       this._onSkip = opts.onSkip;
-      const total = (opts.templates || []).length;
+      this._onDislike = opts.onDislike || null;
 
       this._sheet.open({
-        html: this._renderOfferPanel(total),
+        html: this._renderOfferPanel(),
         label: "Scoring templates for this game",
         returnFocus: opts.returnFocus || null,
         onClick: (e) => {
           if (e.target.closest("[data-tmpl-skip]")) { this._skip(); return; }
+          // Asked BEFORE the use button: the two live in one row and a
+          // `closest` for the card's id would match from inside either.
+          const no = e.target.closest("[data-tmpl-dislike]");
+          if (no) { this._dislike(no.getAttribute("data-tmpl-dislike")); return; }
           const use = e.target.closest("[data-tmpl-id]");
           if (use) this._pick(use.dataset.tmplId);
         },
@@ -157,6 +191,66 @@
     }
 
     /**
+     * Turn one grid down, and stay open.
+     *
+     * The card goes immediately and the write flows through the caller behind
+     * it (.claude/rules/web-frontend.md, "Mutations feel instantaneous"). There
+     * is no undo on this surface by design: the durable record is server-side,
+     * and the way back is the Turned-down section in the reference guide
+     * builder, which is where a list of things you have set aside belongs.
+     *
+     * Dropped from `_pool` as well as from the three on screen, or the re-slice
+     * below would promote it straight back into the gap it just left.
+     */
+    _dislike(id) {
+      const idx = this._pool.findIndex((t) => t.id === id);
+      if (idx < 0) return;
+      const [turned] = this._pool.splice(idx, 1);
+      this._templates = this._pool.slice(0, OFFER_MAX);
+
+      // Nothing left to choose between, so the sheet has no question to ask.
+      // It closes WITHOUT onSkip: skipping is "not these, not now" and would
+      // have the caller write a per-device dismissal, where these grids are
+      // already turned down for good on the server. Asking the caller to
+      // record a second, weaker refusal on top would be recording the same
+      // decision twice.
+      if (!this._templates.length) this._sheet.close();
+      else this._patch();
+
+      if (this._onDislike) this._onDislike(turned);
+    }
+
+    /**
+     * Repaint the two regions a dislike changes — the candidate list and the
+     * count line above it — and nothing else.
+     *
+     * Not the panel. There is no text input to destroy here, but a panel
+     * repaint would drop focus on its way past, and the grip and title have not
+     * changed. Two hosts rather than one for the same reason
+     * widgets/reference-guide-scroll.js#_paintNotice has two: the count sits
+     * above the scrollport and the cards inside it.
+     */
+    _patch() {
+      const root = this._sheet.el;
+      if (!root) return;
+      const sub = root.querySelector("[data-tmpl-sub]");
+      const list = root.querySelector("[data-tmpl-list]");
+      if (sub) sub.innerHTML = this._subText();
+      if (list) list.innerHTML = this._renderCards();
+      window.BgbIcons.render(root);   // every innerHTML patch re-hydrates icons
+      // The button that was just tapped went with its card, so focus has
+      // fallen through to <body>. Put it on the first remaining candidate —
+      // recovering ONLY in that case, never stealing focus from wherever the
+      // user has since moved (.claude/rules/overlays.md §5).
+      if (document.activeElement === document.body) {
+        const first = /** @type {HTMLElement|null} */ (
+          root.querySelector("[data-tmpl-id]")
+        );
+        if (first) first.focus();
+      }
+    }
+
+    /**
      * The offer panel. Each candidate is a CARD, not a row: the row form above
      * says "6 rows · Everdell", which is not enough to choose between two
      * scorepads with your friends waiting — so each one draws its real grid,
@@ -170,11 +264,43 @@
      * inert anyway (`.tmpl-preview .scoring-table-wrap` is pointer-events:
      * none), so the Add button is the whole tap target and says what it does.
      *
-     * @param {number} total how many were pending before the OFFER_MAX slice
+     * Split three ways — panel, count line, cards — because a dislike repaints
+     * the last two and must not touch the first (see _patch).
      */
-    _renderOfferPanel(total) {
+    _renderOfferPanel() {
+      return `
+        <div class="bgb-sheet__panel">
+          <div class="bgb-sheet__grip" aria-hidden="true"></div>
+          <h3 class="bgb-sheet__title">Score on a shared grid?</h3>
+          <p class="bgb-sheet__sub" data-tmpl-sub>${this._subText()}</p>
+          <div class="bgb-sheet__list tmpl-offer" data-tmpl-list>
+            ${this._renderCards()}
+          </div>
+          <button class="bgb-sheet__cancel" type="button" data-tmpl-skip>
+            Continue without
+          </button>
+        </div>
+      `;
+    }
+
+    /**
+     * The count line. Reads `_pool`, so turning a grid down re-counts: for this
+     * viewer it is no longer one of the grids written for this game, and a line
+     * that still said "3" over two cards would be counting a refusal.
+     */
+    _subText() {
+      const total = this._pool.length;
+      return `
+        ${total === 1
+          ? "Someone has written a scoring grid for this game."
+          : `${total} scoring grids have been written for this game.`}
+        Pick one and it joins your reference guide, ready for next time.
+      `;
+    }
+
+    _renderCards() {
       const shown = this._templates;
-      const more = total - shown.length;
+      const more = this._pool.length - shown.length;
       const cards = shown.map((t, i) => {
         const rows = (t.grid && t.grid.rows) || [];
         const pop = t.popularity || 0;
@@ -203,35 +329,28 @@
               ${window.ScoringTemplateEditor.preview(rows.slice(0, PREVIEW_ROWS), `tmplOffer${i}`)}
               ${hidden ? `<span class="tmpl-offer__rest">+${hidden} more row${hidden === 1 ? "" : "s"}</span>` : ""}
             </div>
-            <button type="button" class="tmpl-offer__use"
-                    data-tmpl-id="${escapeAttr(t.id)}">
-              <i data-icon="plus" class="w-4 h-4"></i>
-              Use this one
-            </button>
+            <div class="tmpl-offer__answers">
+              <button type="button" class="tmpl-offer__use"
+                      data-tmpl-id="${escapeAttr(t.id)}">
+                <i data-icon="plus" class="w-4 h-4"></i>
+                Use this one
+              </button>
+              <button type="button" class="tmpl-offer__dislike"
+                      data-tmpl-dislike="${escapeAttr(t.id)}"
+                      title="Stop suggesting this"
+                      aria-label="Stop suggesting ${escapeAttr(window.ScoringTemplateEditor.authorLabel(t))}">
+                <i data-icon="thumbs-down" class="w-5 h-5"></i>
+              </button>
+            </div>
           </div>
         `;
       }).join("");
 
       return `
-        <div class="bgb-sheet__panel">
-          <div class="bgb-sheet__grip" aria-hidden="true"></div>
-          <h3 class="bgb-sheet__title">Score on a shared grid?</h3>
-          <p class="bgb-sheet__sub">
-            ${total === 1
-              ? "Someone has written a scoring grid for this game."
-              : `${total} scoring grids have been written for this game.`}
-            Pick one and it joins your reference guide, ready for next time.
-          </p>
-          <div class="bgb-sheet__list tmpl-offer">
-            ${cards}
-            ${more > 0
-              ? `<p class="tmpl-offer__more">${more} more in your reference guide.</p>`
-              : ""}
-          </div>
-          <button class="bgb-sheet__cancel" type="button" data-tmpl-skip>
-            Continue without
-          </button>
-        </div>
+        ${cards}
+        ${more > 0
+          ? `<p class="tmpl-offer__more">${more} more in your reference guide.</p>`
+          : ""}
       `;
     }
   }

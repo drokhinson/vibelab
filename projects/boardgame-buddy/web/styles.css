@@ -8608,6 +8608,54 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   outline: 2px solid var(--accent);
   outline-offset: -3px;
 }
+/* The card's two answers about ITSELF, side by side: take this grid, or stop
+   being offered it (migration 033). "Continue without" stays at the foot of
+   the sheet, because it is an answer about the whole question rather than
+   about one card. */
+.tmpl-offer__answers { display: flex; align-items: stretch; gap: 0.5rem; }
+.tmpl-offer__answers .tmpl-offer__use { flex: 1; min-width: 0; }
+/* Square, icon-only and outlined against the filled commit button beside it —
+   the weighting says which one the sheet is for, exactly as the thumbs-down
+   beside Add does in the guide builder.
+
+   The tokens are the one thing that does NOT carry over from there. The builder
+   draws on the parchment scroll, which is paper and light in both themes, so
+   its control takes the #6B4A1A literal. This sheet is CHROME — .tmpl-sheet is
+   in the theme re-point list at the top of this file — so it reads the ground
+   vocabulary instead, and the parchment ink would go muddy on it in dark. Same
+   control, different surface, different palette (.claude/rules/theming.md §6). */
+.tmpl-offer__dislike {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Square on the commit button's own 52px, so the two read as one row and the
+     refusal clears the commit-button floor too (.claude/rules/mobile-web.md §5). */
+  width: 52px;
+  min-height: 52px;
+  margin-top: 0.6rem;          /* matches .tmpl-offer__use */
+  border: 1px solid var(--sheet-line);
+  border-radius: 12px;
+  background: transparent;
+  color: oklch(var(--bc) / 0.55);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+/* Touch has no hover, so :active is the mandatory one. */
+.tmpl-offer__dislike:active {
+  background: oklch(var(--bc) / 0.10);
+  color: oklch(var(--bc) / 0.9);
+}
+@media (hover: hover) {
+  .tmpl-offer__dislike:hover {
+    background: oklch(var(--bc) / 0.07);
+    color: oklch(var(--bc) / 0.9);
+  }
+}
+.tmpl-offer__dislike:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
 .tmpl-offer__more {
   padding: 0.2rem 0.2rem 0;
   font-size: 0.75rem;
