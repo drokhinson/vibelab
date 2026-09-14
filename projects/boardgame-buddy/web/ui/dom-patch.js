@@ -46,7 +46,8 @@
 //    round-score cell typed as "5x" still snaps back to the sanitized "5", and a
 //    Won checkbox still follows autoSelectWinners. A control the template
 //    renders with NO `value` attribute is treated as uncontrolled and keeps what
-//    is in it (see #play-popup-add-name).
+//    is in it — a search box the user has typed into keeps their query across a
+//    repaint of the list beneath it.
 //
 // 4. morph() syncs liveRoot's CHILDREN and never liveRoot's own attributes.
 //    The host belongs to its owner — a BgbModal backdrop, a list host — and the

@@ -47,7 +47,12 @@
     saving: false,
     editError: null,
     draft: null,        // working copy while editing
-    buddies: [],        // buddy datalist for the add-player input
+    buddies: [],        // buddy EDGES — alias lookup, and the picker's accounts
+    // The same rows as `buddies` plus the two lists a player picker also needs:
+    // ghost names from past plays, and accounts shared a table with but never
+    // added. Held whole because window.Buddy.toPlayerCandidates() takes the
+    // bundle, not its parts.
+    partners: { accounts: [], ghosts: [], recent: [] },
   };
 
   // The card markup currently painted into the backdrop. render() compares
@@ -67,16 +72,19 @@
   let _buddiesFor = null;
 
   /**
-   * Fill `state.buddies` for edit mode, off the critical path.
+   * Fill `state.buddies` / `state.partners` for edit mode, off the critical
+   * path.
    *
    * Reads the cached partner bundle synchronously — bootstrap seeds it, and it
    * is the same entry the alias and edge-id maps resolve from, so a first paint
    * agrees with a second on every name. The refresh behind it is deliberately
-   * NOT awaited: `state.buddies` is read only in edit mode (the add-player
-   * datalist, addPlayer, the alias sheet), so nothing on screen waits for it,
-   * and the render it triggers is dropped by the byte-identity guard whenever
-   * the bundle confirms what is already held — which, the bundle being SWR'd
-   * 24h/7d, is almost always.
+   * NOT awaited: these are read only in edit mode (the player picker, the
+   * alias sheet), so nothing on screen waits for them, and the render it
+   * triggers is dropped by the byte-identity guard whenever the bundle
+   * confirms what is already held — which, the bundle being SWR'd 24h/7d, is
+   * almost always. The one thing that DOES need telling is a picker already on
+   * screen: it read its rows at open time, so on a cold cache it opened empty
+   * and only refreshPlayerPicker() can fill it in place.
    *
    * /play-partners rather than /buddies: both return the same BuddyEdgeResponse
    * rows, but only this one is cached, pre-seeded at boot, and already the
@@ -84,7 +92,8 @@
    */
   function ensureBuddies() {
     if (!state.play || !state.play.is_own) return;
-    state.buddies = window.Buddy.cachedAccounts();
+    state.partners = window.Buddy.cachedPartners();
+    state.buddies = state.partners.accounts;
     const playId = state.playId;
     if (_buddiesFor === playId) return;
     _buddiesFor = playId;
@@ -94,7 +103,13 @@
         // this was in the air; writing into the new open's state would put one
         // play's buddies under another's.
         if (state.playId !== playId) return;
-        state.buddies = (bundle && bundle.accounts) || [];
+        state.partners = {
+          accounts: (bundle && bundle.accounts) || [],
+          ghosts: (bundle && bundle.ghosts) || [],
+          recent: (bundle && bundle.recent) || [],
+        };
+        state.buddies = state.partners.accounts;
+        window.PlayDetailEdit.refreshPlayerPicker();
         render();
       })
       .catch(() => {});
@@ -142,6 +157,7 @@
       editError: null,
       draft: null,
       buddies: [],
+      partners: { accounts: [], ghosts: [], recent: [] },
     });
     mountBackdrop();
     render();
@@ -197,6 +213,7 @@
       editError: null,
       draft: null,
       buddies: [],
+      partners: { accounts: [], ghosts: [], recent: [] },
     });
   }
 

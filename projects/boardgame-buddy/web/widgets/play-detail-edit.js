@@ -235,24 +235,24 @@
               </li>
             `).join("")}
           </ul>
-          <div class="play-detail__add-player">
-            <input id="play-popup-add-name" class="input input-bordered input-sm w-full"
-                   list="play-popup-buddy-list"
-                   placeholder="Add player (buddy or free-text)"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();window.PlayDetailPopup._addPlayer();}" />
-            <!-- Both spellings, deliberately: a datalist option value is
-                 literally what lands in the input, and someone who set an alias
-                 may type either it or the real name. addPlayer() below resolves
-                 both to the same account and stores the REAL name. -->
-            <datalist id="play-popup-buddy-list">
-              ${state.buddies.flatMap((b) => [
-                `<option value="${escapeAttr(b.other_display_name)}">`,
-                b.other_alias ? `<option value="${escapeAttr(b.other_alias)}">` : "",
-              ]).join("")}
-            </datalist>
-            <button class="btn btn-primary btn-sm" type="button"
-                    onclick="window.PlayDetailPopup._addPlayer()">Add</button>
-          </div>
+          <!-- The same sheet Gather and the play importer open, asking the
+               same question of the same list — and deliberately the same
+               AFFORDANCE as Gather's, down to the class: one destination gets
+               one affordance (.claude/rules/ui-object-design.md §3b), and
+               .cascade-add-player already paints from the --polaroid-* family
+               this card sets, so it needs no CSS of its own here.
+
+               It replaced a bare text input with a buddy datalist beside it.
+               A datalist offers its options only once you start typing, so
+               every buddy sat behind a name the user had to remember first;
+               aliases had to be templated in as a second <option> per person
+               to be typeable at all; and a typo landed silently as a brand-new
+               ghost player rather than the account it meant. -->
+          <button class="cascade-add-player" type="button" aria-haspopup="dialog"
+                  onclick="window.PlayDetailPopup._openPlayerPicker(event)">
+            <i data-icon="plus" class="w-4 h-4"></i>
+            <span>Add players…</span>
+          </button>
           ${hasRoundGrid(d.players, "roundScores", d.scoring_template) ? "" : `
             <button class="btn btn-ghost btn-xs play-detail__init-rounds" type="button"
                     onclick="window.PlayDetailPopup._initRounds()">
@@ -599,43 +599,173 @@
     return n;
   }
 
-  function addPlayer() {
-    const input = document.getElementById("play-popup-add-name");
-    const name = (input && input.value || "").trim();
-    if (!name || !state.draft) return;
-    // Match either spelling — the datalist offers both, and someone who set an
-    // alias will reach for it before the real name.
-    const lower = name.toLowerCase();
-    const buddy = (state.buddies || []).find(
-      (b) => (b.other_display_name || "").toLowerCase() === lower
-          || (b.other_alias || "").toLowerCase() === lower
-    );
-    // THE name that gets stored. Always the real one: this string becomes
-    // play_players.player_display_name (play_routes.py), a row every
-    // participant in the play can read, so a private alias must never reach it
-    // — and a typed alias that fell through as free text would create a GHOST
-    // player named after it, detached from the account it actually meant.
-    const storedName = buddy ? buddy.other_display_name : name;
-    const dupe = state.draft.players.some(
-      (p) => (p.name || "").toLowerCase() === storedName.toLowerCase()
-    );
-    if (!dupe) {
-      // Match the existing rounds shape so the new row aligns with the
-      // grid (nulls fill the columns that other players already have).
-      const existingRounds = window.roundGridRoundCount(state.draft.players);
-      state.draft.players.push({
-        name: storedName,
-        is_winner: false,
-        score: "",
-        user_id: buddy ? buddy.other_user_id : null,
-        avatar: buddy ? (buddy.other_avatar || null) : null,
-        roundScores: existingRounds > 0
-          ? Array.from({ length: existingRounds }, () => null)
-          : [],
-      });
-    }
-    if (input) input.value = "";
-    render();
+  // ── Adding players ────────────────────────────────────────────────────────
+  //
+  // Through widgets/player-picker-sheet.js — multi-select, so a play missing
+  // three of the five people at the table is one open, three taps and Add,
+  // rather than three rounds of remember-a-name-and-type-it. It stacks over
+  // the popup like the game and expansion sheets do (there is an unsaved draft
+  // behind this card, and closing it to ask one question would throw the draft
+  // away), and Escape while it is up belongs to the sheet — see the shell's
+  // hasStackedOverlay().
+  //
+  // The sheet's contract does the work the old typed input had to do by hand:
+  // it paints a private alias but hands back the REAL display name, so the
+  // string that reaches play_players.player_display_name — a row every
+  // participant in the play can read — is never someone's private nickname for
+  // them, and a buddy reached for by their alias can no longer land as a ghost
+  // named after it.
+
+  /** Case-folded name key — the roster's own identity test, see seatPlayer. */
+  const nameKey = (n) => String(n || "").trim().toLowerCase();
+
+  /**
+   * Everyone this play could gain: the viewer's buddies, the accounts they've
+   * shared a table with, and the ghost names from past plays — minus everyone
+   * already seated in the draft, which is the sheet's own contract for
+   * `candidates` ("everyone addable, already filtered of people in the roster
+   * by the caller"). A row it offers that seatPlayer would drop is a row that
+   * does nothing when tapped.
+   *
+   * Filtered on BOTH id and name, because the roster mixes the two kinds of
+   * seat: an account is already at this table if its id is, and a ghost has no
+   * id to match on. The name test also catches the crossing case — a play with
+   * a ghost "Marcus" on it must not offer buddy Marcus's account, because
+   * seatPlayer dedupes by name and would refuse the seat.
+   */
+  function playerCandidates() {
+    const seated = (state.draft && state.draft.players) || [];
+    const seatedIds = new Set(seated.map((p) => p.user_id).filter(Boolean));
+    const seatedNames = new Set(seated.map((p) => nameKey(p.name)));
+    return window.Buddy.toPlayerCandidates(state.partners).filter((c) => (
+      !seatedNames.has(nameKey(c.name))
+      && !(c.user_id && seatedIds.has(c.user_id))
+    ));
+  }
+
+  /** How many people lead the list before "everyone else" starts. */
+  const SUGGEST_MAX = 6;
+
+  /**
+   * The people most likely to be the missing seat, leading the list: whoever
+   * the viewer has shared the most tables with, ghost players included.
+   *
+   * `suggestions` rather than `recent`, deliberately. `recent` REPLACES the
+   * list while the search box is empty (see the sheet's _matches()), and the
+   * bundle's recent rows are accounts only — so on the one surface where the
+   * answer is often a ghost from an old play, every ghost would have sat
+   * behind a keystroke, which is the "picker that hides its own escape hatch"
+   * anti-pattern in .claude/rules/overlays.md. Suggestions sit ABOVE the full
+   * list instead: the likely answers are first and nobody is hidden.
+   *
+   * Ranked off each candidate's own `plays` (Buddy.toPlayerCandidates folds the
+   * bundle's play counts onto both accounts and ghosts) rather than off the
+   * recent list, so a ghost name that appears on nine plays leads too.
+   *
+   * @param {any[]} candidates The list these are drawn from — the same row
+   *   objects, so the section is a re-ordering rather than a second copy.
+   * @returns {any[]} Empty when splitting the list would not earn its headings.
+   */
+  function rankedSuggestions(candidates) {
+    // A list that already fits on one screen is not worth cutting in two: the
+    // headings would label two halves of something readable at a glance.
+    if (candidates.length <= SUGGEST_MAX) return [];
+    const played = candidates.filter((c) => (c.plays || 0) > 0);
+    if (played.length < 2) return [];
+    return played
+      .slice()
+      .sort((a, b) => (b.plays || 0) - (a.plays || 0))
+      .slice(0, SUGGEST_MAX);
+  }
+
+  /**
+   * Open the picker. The partner bundle is normally already in memory — the
+   * shell's ensureBuddies() peeks the cache the moment the popup opens, well
+   * before anyone can reach Edit — so the sheet paints populated. On a cold
+   * cache it opens empty and the refresh behind it calls back through
+   * refreshPlayerPicker().
+   * @param {Event} [event]
+   */
+  function openPlayerPicker(event) {
+    if (!state.draft) return;
+    const seated = state.draft.players;
+    const candidates = playerCandidates();
+    window.PlayerPickerSheet.open({
+      candidates,
+      suggestions: rankedSuggestions(candidates),
+      // Says what made them suggestions, not that they are suggestions
+      // (.claude/rules/web-frontend.md).
+      suggestionsLabel: "You play with these people most",
+      restLabel: "Everyone else",
+      seated: seated.length,
+      // The names filtered out of `candidates` above. Without them the guest
+      // row cannot see who is already at the table, so a differently-cased
+      // spelling of a seated player would be offered back as a new guest —
+      // and seatPlayer would then refuse it, silently.
+      seatedNames: seated.map((p) => p.name),
+      returnFocus: (event && event.currentTarget) || null,
+      onConfirm: (picks) => addPlayers(picks),
+    });
+  }
+
+  /**
+   * Fill a picker that opened before the partner bundle landed, from the
+   * shell's refresh. Guarded on the sheet being open AND a draft existing:
+   * the sheet is a shared singleton, and the only way it is up with an edit
+   * draft behind it is that openPlayerPicker put it there.
+   */
+  function refreshPlayerPicker() {
+    if (!state || !state.draft) return;
+    if (!window.PlayerPickerSheet || !window.PlayerPickerSheet.isOpen()) return;
+    const candidates = playerCandidates();
+    window.PlayerPickerSheet.setCandidates(candidates, [], rankedSuggestions(candidates));
+  }
+
+  /**
+   * Seat everyone ticked, in tick order — and that order matters: the roster
+   * array IS the round grid's column order (widgets/round-score-grid.js maps
+   * it straight to columns), so ticking Marcus then Priya seats them in that
+   * order. One repaint for the whole set, not one per player.
+   * @param {any[]} picks
+   */
+  function addPlayers(picks) {
+    if (!state.draft || !Array.isArray(picks)) return;
+    let added = 0;
+    for (const c of picks) if (seatPlayer(c)) added++;
+    if (added) render();
+  }
+
+  /**
+   * Push one candidate into the draft roster.
+   *
+   * Deduped by NAME rather than id, because the roster is a mix of accounts
+   * and ghosts and a name is the only handle every seat has — and because
+   * play_players carries a unique index on it since migration 023, so a second
+   * seat under the same name is a save the backend refuses.
+   *
+   * @param {{name?: string, user_id?: string|null, avatar?: any}} c
+   * @returns {boolean} Whether a seat was actually added.
+   */
+  function seatPlayer(c) {
+    const name = String((c && c.name) || "").trim();
+    if (!name || !state.draft) return false;
+    if (state.draft.players.some((p) => nameKey(p.name) === nameKey(name))) return false;
+    // Match the existing rounds shape so the new row aligns with the
+    // grid (nulls fill the columns that other players already have). A
+    // same-length all-null column changes nobody's total and cannot change the
+    // grid's round count, so there is nothing to resync afterwards.
+    const existingRounds = window.roundGridRoundCount(state.draft.players);
+    state.draft.players.push({
+      name,
+      is_winner: false,
+      score: "",
+      user_id: (c && c.user_id) || null,
+      avatar: (c && c.avatar) || null,
+      roundScores: existingRounds > 0
+        ? Array.from({ length: existingRounds }, () => null)
+        : [],
+    });
+    return true;
   }
   async function onPhotoSelect(fileList) {
     const file = fileList && fileList[0];
@@ -795,6 +925,7 @@
     init,
     renderForm: renderEdit,
     discardDraft,
+    refreshPlayerPicker,
     // Handlers exposed for inline onclick wiring inside the rendered HTML.
     // The shell folds these into window.PlayDetailPopup, which is the name
     // every onclick string and the round-grid widget's host prefix already
@@ -807,7 +938,7 @@
       _setPlayerWinner: setPlayerWinner,
       _setPlayerScore: setPlayerScore,
       _removePlayer: removePlayer,
-      _addPlayer: addPlayer,
+      _openPlayerPicker: openPlayerPicker,
       _openGamePicker: openGamePicker,
       _openExpansionPicker: openExpansionPicker,
       _removeExpansion: removeExpansion,
