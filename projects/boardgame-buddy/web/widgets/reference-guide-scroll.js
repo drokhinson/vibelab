@@ -50,10 +50,16 @@
   // keeps the pool's search working — so draw the real grid, through the same
   // ScoringTemplateEditor.preview the author's editor and the offer sheet use
   // (.claude/rules/ui-object-design.md §2).
-  function chapterBodyHtml(c) {
+  //
+  // An EXPANSION's grid gets its mode badge above the table (migration 032).
+  // Without it the guide shows two scorepads for one game with nothing to say
+  // that the second one either joins or supplants the first — which is the
+  // whole distinction the play screen then acts on.
+  function chapterBodyHtml(c, baseGameId) {
     const rows = gridRows(c);
     if (rows && window.ScoringTemplateEditor) {
-      return window.ScoringTemplateEditor.preview(rows, `guideGrid-${c.id}`);
+      return window.ScoringTemplateEditor.modeTag(c, baseGameId)
+        + window.ScoringTemplateEditor.preview(rows, `guideGrid-${c.id}`);
     }
     return window.renderMarkdown(c.content || "");
   }
@@ -664,6 +670,11 @@
       }
       window.BgbScoringTemplateSheet.offer({
         templates: pending,
+        // So an expansion's grid is badged with the mode it would act in
+        // (migration 032) — the guide's pool merges base + expansions, and
+        // "adds two rows" and "is the whole score sheet instead" are not the
+        // same offer.
+        baseGameId: this._baseGameId,
         returnFocus: (event && event.currentTarget) || null,
         onAdopt: (tpl) => this._adoptTemplate(tpl),
         onSkip: (shown) => this._dismissTemplates(shown),
@@ -1069,7 +1080,7 @@
               <span class="scroll-chapter__title">${escapeHtml(c.title)}</span>
               ${by}
             </summary>
-            <div class="scroll-chapter__content">${chapterBodyHtml(c)}</div>
+            <div class="scroll-chapter__content">${chapterBodyHtml(c, this._baseGameId)}</div>
             <div class="scroll-chapter__actions">
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._removeChapter('${c.id}', '${c.source_game_id || c.game_id}', event)">

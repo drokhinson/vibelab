@@ -58,17 +58,22 @@ _CHAPTER_SELECT = (
 
 
 def _build_source_map(sb, game_ids: list[str]) -> dict[str, dict[str, Any]]:
-    """Fetch (name, expansion_color) for a list of game ids in one round-trip.
+    """Fetch (name, expansion_color, bgg_id) for a list of game ids in one trip.
 
     The chapter response uses this to populate source_game_name / source_color
     so the FE can render colored dots tying each chapter to its expansion (or
     leave the dot blank for base-game chapters).
+
+    `bgg_id` rides along for migration 032: when several add-on expansions
+    contribute rows to one scorepad, their blocks are ordered by BGG id
+    ascending — a stable, publication-ordered key every client agrees on, where
+    the order the guide happens to return them in is not.
     """
     if not game_ids:
         return {}
     rows = (
         sb.table("boardgamebuddy_games")
-        .select("id, name, expansion_color, is_expansion")
+        .select("id, name, expansion_color, is_expansion, bgg_id")
         .in_("id", game_ids)
         .execute()
     ).data or []
@@ -77,6 +82,7 @@ def _build_source_map(sb, game_ids: list[str]) -> dict[str, dict[str, Any]]:
             "name": r.get("name") or "",
             # Base games get None — the FE skips the colored dot.
             "color": r.get("expansion_color") if r.get("is_expansion") else None,
+            "bgg_id": r.get("bgg_id"),
         }
         for r in rows
     }
@@ -110,12 +116,14 @@ def _chapter_row_to_response(
     source_game_id = None
     source_game_name = None
     source_color = None
+    source_bgg_id = None
     if source_map is not None:
         entry = source_map.get(row["game_id"])
         source_game_id = row["game_id"]
         if entry:
             source_game_name = entry.get("name")
             source_color = entry.get("color")
+            source_bgg_id = entry.get("bgg_id")
 
     return ChapterResponse(
         id=row["id"],
@@ -137,6 +145,7 @@ def _chapter_row_to_response(
         source_game_id=source_game_id,
         source_game_name=source_game_name,
         source_color=source_color,
+        source_bgg_id=source_bgg_id,
     )
 
 
@@ -359,7 +368,12 @@ def _create_chapter_sync(
 ) -> MyGuideChapterResponse:
     game = (
         sb.table("boardgamebuddy_games")
-        .select("id, name")
+        # is_expansion decides a scoring grid's MODE (migration 032) — an
+        # expansion's rows either join the base game's grid or stand in for it,
+        # and a base game's own grid is in neither mode. Selected here beside
+        # the name the title is derived from, so the mode costs no extra
+        # round-trip.
+        .select("id, name, is_expansion")
         .eq("id", game_id)
         .execute()
     )
@@ -392,7 +406,13 @@ def _create_chapter_sync(
             "title": title,
             "content": content,
             "layout": str(body.layout),
-            "grid": body.grid.model_dump(mode="json") if body.grid else None,
+            "grid": (
+                chapter_grid.apply_grid_mode(
+                    body.grid, bool(game.data[0].get("is_expansion"))
+                )
+                if body.grid
+                else None
+            ),
             "created_by": user_id,
         })
         .execute()
@@ -550,21 +570,24 @@ def _update_chapter_sync(
     # body said — which is also how a grid authored before the title field was
     # retired, or one whose game has since been renamed, picks up the current
     # form. Costs one lookup, and only on a grid edit.
+    is_expansion = False
     if str(layout) == str(ChapterLayout.SCORING_GRID):
         game = (
             sb.table("boardgamebuddy_games")
-            .select("name")
+            # is_expansion rides along for the mode below, same one lookup.
+            .select("name, is_expansion")
             .eq("id", row["game_id"])
             .execute()
         )
         updates["title"] = chapter_grid.grid_title(
             game.data[0].get("name") if game.data else None
         )
+        is_expansion = bool(game.data[0].get("is_expansion")) if game.data else False
     # A None grid means "not supplied", so this endpoint cannot CLEAR one. That
     # is deliberate: a chapter never changes layout in practice, and the editor
     # sends layout and grid together or neither.
     if body.grid is not None:
-        updates["grid"] = body.grid.model_dump(mode="json")
+        updates["grid"] = chapter_grid.apply_grid_mode(body.grid, is_expansion)
         # Keep the derived mirror in step with the rows it mirrors, whether or
         # not the caller also sent `content`.
         updates["content"] = chapter_grid.grid_to_content(body.grid)

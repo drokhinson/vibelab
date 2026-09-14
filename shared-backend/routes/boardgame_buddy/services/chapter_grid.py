@@ -23,7 +23,7 @@ guideline) does not grow further.
 
 from fastapi import HTTPException
 
-from ..constants import ChapterLayout
+from ..constants import ChapterLayout, ScoringGridMode
 from ..models import ScoringGrid
 
 # The chapter type a scoring grid must be filed under, seeded by migration 021
@@ -62,6 +62,51 @@ def validate_layout_pairing(
     else:
         detail = f"A '{SCORING_GRID_CHAPTER_TYPE}' chapter must have a scoring grid"
     raise HTTPException(status_code=400, detail=detail)
+
+
+def resolve_grid_mode(
+    grid: ScoringGrid | None,
+    is_expansion: bool,
+) -> ScoringGridMode | None:
+    """Decide the mode a grid is STORED with, from the game it is written for.
+
+    Two modes exist and only an expansion can be in either (see
+    constants.ScoringGridMode): an add-on's rows join the base game's grid, a
+    replacement's stand in for it. A base game's own grid has nothing to meet,
+    so its mode is NULL — not 'add_on', which would read as "these rows join
+    something" and make every base grid look like half a scorepad.
+
+    The client cannot decide this on its own. The editor knows which game it is
+    saving to, but not authoritatively whether that game is an expansion; the
+    write path has just SELECTed the row to derive the title, so it does, and
+    resolving here is what stops a mode landing on a base grid because a stale
+    client thought otherwise.
+
+    An expansion grid that names no mode gets ADD_ON. That is the commoner
+    shape by a wide margin, and it is the safe one to be wrong about: an add-on
+    that should have replaced leaves the base game's rows on the table above
+    its own, which a scorer can see and ignore, where the reverse silently
+    hides rows they were expecting to fill in.
+    """
+    if grid is None:
+        return None
+    if not is_expansion:
+        return None
+    return grid.mode or ScoringGridMode.ADD_ON
+
+
+def apply_grid_mode(grid: ScoringGrid, is_expansion: bool) -> dict:
+    """The `grid` JSONB to store: the document, with its mode resolved.
+
+    One helper rather than two lines at each of the two write paths, because
+    the two lines have to agree — a create that stored the client's mode
+    verbatim and an update that resolved it would let an edit silently change a
+    grid's mode without anyone touching the control.
+    """
+    doc = grid.model_dump(mode="json")
+    mode = resolve_grid_mode(grid, is_expansion)
+    doc["mode"] = str(mode) if mode is not None else None
+    return doc
 
 
 def grid_title(game_name: str | None) -> str:

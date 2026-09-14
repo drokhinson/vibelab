@@ -1817,11 +1817,16 @@
      * The name stays put across a flip. Off does not mean "no template" — it
      * means this game's template, not in play — so naming it is what makes the
      * switch's other position legible before you touch it.
+     *
+     * With expansions on the table the name is the COMPOSITION's — "Everdell
+     * score sheet + Pearlbrook" — because that is what the rows under the bar
+     * actually are (domain/scoring-template.js#composedTitle). Naming only the
+     * base grid there would leave the host looking for where two extra rows
+     * came from.
      */
     _renderTemplateBar() {
       const tpl = this._ps.scoringTemplate;
-      const many = this._templates.length > 1;
-      const cand = tpl || this._templateCandidate();
+      const cand = tpl || (this._candidateComposition() || {}).snap;
       if (!cand) return "";
       const on = !!tpl;
       // A grid's title is derived by the backend from its game
@@ -1832,26 +1837,90 @@
       const name = cand.title || "Custom rows";
       return `
         <div class="scoring-tplbar${on ? "" : " scoring-tplbar--off"}">
-          <span class="scoring-tplbar__name" title="${escapeAttr(name)}">
-            <i data-icon="table" class="w-3.5 h-3.5"></i>
-            ${escapeHtml(name)}
-          </span>
-          <span class="scoring-tplbar__actions">
-            ${many
-              ? `<button type="button" class="scoring-tplbar__btn"
-                         onclick="window.playFlowView._openTemplateSheet(event)">Change</button>`
-              : ""}
-            ${window.BgbSwitch.render({
-              on,
-              paper: true,
-              compact: true,
-              ariaLabel: `Score on the ${name} rows`,
-              title: on ? "Turn the scoring template off" : "Turn the scoring template on",
-              onclick: "window.playFlowView._toggleTemplate(event)",
-            })}
-          </span>
+          <div class="scoring-tplbar__line">
+            <span class="scoring-tplbar__name" title="${escapeAttr(name)}">
+              <i data-icon="table" class="w-3.5 h-3.5"></i>
+              ${escapeHtml(name)}
+            </span>
+            <span class="scoring-tplbar__actions">
+              ${window.BgbSwitch.render({
+                on,
+                paper: true,
+                compact: true,
+                ariaLabel: `Score on the ${name} rows`,
+                title: on ? "Turn the scoring template off" : "Turn the scoring template on",
+                onclick: "window.playFlowView._toggleTemplate()",
+              })}
+            </span>
+          </div>
+          ${this._renderTemplatePills()}
         </div>
       `;
+    }
+
+    /**
+     * The scorepad pills: the base game, then each replace-mode expansion on
+     * the table, in that order (domain/scoring-template.js#split).
+     *
+     * ONE ROW OF PILLS RATHER THAN A SHEET. Picking a scorepad is not the kind
+     * of choice a sheet is for — it is two or three options, they are already
+     * on the screen the host is scoring on, and the answer changes what the
+     * table under the pills looks like, so seeing that change happen in place
+     * is the whole feedback loop. A sheet would cover the grid it is about.
+     * (.claude/rules/overlays.md §1 argues sheets over ANCHORED DROPDOWNS —
+     * this is neither: it is a radiogroup in normal flow, with no fit pass, no
+     * flip and no keyboard to dodge, the same standing the scoring editor's
+     * colour swatches have.)
+     *
+     * Add-ons are NOT pills. They are not alternatives to anything — they fold
+     * into whichever pill is chosen — and their rows say so themselves, with
+     * the expansion's colour down the right edge of each one.
+     *
+     * Absent entirely with one candidate: a row of one pill is a label
+     * pretending to be a control.
+     */
+    _renderTemplatePills() {
+      if (!this._canChangeTemplate()) return "";
+      const { bases } = this._scoringSplit();
+      const activeId = (this._ps.scoringTemplate || {}).chapter_id || null;
+      // Two grids for one game carry the same derived title AND the same game
+      // name, so the pill would say "Everdell" twice. The author is the thing
+      // that tells them apart (widgets/scoring-template-editor.js#authorLabel),
+      // and it is added ONLY where it is needed — a pill row that said
+      // "Everdell · your grid, Pearlbrook · Sam's grid" would be noise on the
+      // common case, which is one grid per game.
+      const names = bases.map((c) => this._templatePillName(c));
+      const dupes = new Set(names.filter((n, i) => names.indexOf(n) !== i));
+      const pills = bases.map((c, i) => {
+        const on = c.id === activeId;
+        const color = c.source_color || "";
+        const label = dupes.has(names[i])
+          ? `${names[i]} · ${window.ScoringTemplateEditor.authorLabel(c)}`
+          : names[i];
+        return `
+          <button type="button" role="radio" aria-checked="${on ? "true" : "false"}"
+                  class="scoring-tplpill${on ? " scoring-tplpill--on" : ""}"
+                  ${color ? `style="--exp-color: ${escapeAttr(color)}"` : ""}
+                  onclick="window.playFlowView._pickTemplateBase('${escapeAttr(jsStr(c.id))}')">
+            ${color ? `<span class="scoring-tplpill__dot"></span>` : ""}
+            ${escapeHtml(label)}
+          </button>
+        `;
+      }).join("");
+      return `
+        <div class="scoring-tplpills" role="radiogroup" aria-label="Scoring template">
+          ${pills}
+        </div>
+      `;
+    }
+
+    /** A pill's label: the game the grid belongs to. */
+    _templatePillName(c) {
+      if (c.source_game_name) return c.source_game_name;
+      // A guide fetched for a single game does not tag its chapters, so an
+      // untagged grid can only be the base game's — and the draft knows that
+      // game's name even when the chapter row does not.
+      return ((this._ps.gameSnapshot || {}).name) || "Base game";
     }
 
     // Re-render just the scoring section in place (cheaper than a full view
@@ -2295,6 +2364,7 @@
     _clearGamePick() {
       const ps = this._ps;
       if (!ps) return;
+      this._resetTemplateForNewGame();
       ps.gameId = null;
       ps.gameSnapshot = null;
       ps.persist();
@@ -2318,6 +2388,7 @@
     _applyGamePick(game) {
       if (!game || !game.id) return;
       const ps = this._ps;
+      if (ps.gameId !== game.id) this._resetTemplateForNewGame();
       ps.gameId = game.id;
       ps.gameSnapshot = {
         id: game.id,
@@ -2563,18 +2634,93 @@
         (c) => c.layout === "scoring_grid"
             && c.grid && Array.isArray(c.grid.rows) && c.grid.rows.length
       );
+      // Identity AND mode: an author who switches their expansion's grid from
+      // add-on to replace changes what the table should look like without
+      // changing which grids are in the list, and comparing ids alone would
+      // sit on the old composition until the next mount.
       const changed = next.length !== this._templates.length
-        || next.some((c, i) => c.id !== this._templates[i].id);
+        || next.some((c, i) => c.id !== this._templates[i].id
+            || this._gridMode(c) !== this._gridMode(this._templates[i]));
       this._templates = next;
       this._templatesGameId = this._ps.gameId;
       if (!changed) return;
-      // Exactly one adopted template auto-applies; two or more never do, because
-      // guessing wrong reshapes the table the host is about to score on.
-      if (next.length === 1) this._maybeAutoApplyTemplate(next[0]);
-      // None adopted is the third case, and the one the guide can answer: ask
-      // whether they want one of this game's (see _maybeOfferTemplates).
+      const sp = this._scoringSplit();
+      if (this._ps.scoringTemplate) {
+        // Something is already on the table, so this is an expansion coming on
+        // or off it. The composition follows — within what it can do without
+        // disturbing scores already typed; see _recomposeTemplate.
+        this._recomposeTemplate();
+      } else {
+        // Nothing on the table yet. preferredBase is the whole of the replace
+        // rule in one call (domain/scoring-template.js): a replace expansion on
+        // the table takes the scorepad, else the base game's single grid, else
+        // nothing — two community grids for one base game is the one case where
+        // guessing would reshape the table on a coin flip, and the pills ask
+        // instead. Add-ons fold into whichever wins, and stand alone when
+        // nothing does: an adopted expansion grid with no base grid under it is
+        // still the best table anyone can offer.
+        const base = window.ScoringTemplate.preferredBase(sp, this._ps.gameId);
+        if (base || sp.addOns.length) this._maybeAutoApplyTemplate(base);
+      }
+      // None adopted at all is the third case, and the one the guide can
+      // answer: ask whether they want one of this game's (_maybeOfferTemplates).
       this._maybeOfferTemplates();
       if (this._ps.phase === "play") this._refreshScoringSection();
+    }
+
+    /**
+     * Forget everything the scoring bar knows, because the game changed.
+     *
+     * A scorepad belongs to the game it was written for — the snapshot's rows,
+     * the switch's off position, and (migration 032) whether the host picked
+     * the scorepad by hand. Carrying any of the three onto a different game
+     * puts Everdell's fourteen rows on a game of Wingspan, and puts them there
+     * in a state that says the host asked for them.
+     *
+     * Called from the two game-pick paths rather than from _onChaptersLoaded,
+     * because the guide announce for the new game arrives frames later and the
+     * paint in between is the one the host sees.
+     */
+    _resetTemplateForNewGame() {
+      const ps = this._ps;
+      if (!ps.scoringTemplate && !ps.scoringTemplateOff && !ps.scoringTemplatePicked) return;
+      ps.scoringTemplate = null;
+      ps.scoringTemplateOff = false;
+      ps.scoringTemplatePicked = false;
+      this._lastTemplate = null;
+      ps.persist();
+    }
+
+    /** This chapter's grid mode, resolved against the play's base game. */
+    _gridMode(c) {
+      return window.ScoringTemplate.modeOf(c, this._ps.gameId);
+    }
+
+    /**
+     * The adopted grids, sorted into scorepad candidates and add-ons
+     * (domain/scoring-template.js#split).
+     *
+     * Scoped to the games actually on the table first. `_templates` comes from
+     * the reference-guide scroll, which reloads when the expansion ticks
+     * change — but not in the same frame, so between a tap and the guide's
+     * announce the list still holds the grid of an expansion that just came
+     * off. Filtering by the draft's own ids means the composition is never one
+     * announce behind the checkbox that drives it.
+     *
+     * The ORDER the ticks are in is deliberately not passed on: add-on blocks
+     * are ordered by BGG id, so two hosts with the same boxes get the same
+     * scorepad whichever order they ticked them in.
+     */
+    _scoringSplit() {
+      const ps = this._ps;
+      const active = new Set([ps.gameId, ...(ps.expansionIds || [])]);
+      const scoped = this._templates.filter((c) => {
+        const gid = window.ScoringTemplate.gameIdOf(c);
+        // An untagged chapter is one the guide fetched for a single game and
+        // so did not have to label — it can only be the base game's.
+        return !gid || active.has(gid);
+      });
+      return window.ScoringTemplate.split(scoped, { baseGameId: ps.gameId });
     }
 
     /**
@@ -2632,6 +2778,7 @@
       this._offeredForGame = gameId;
       window.BgbScoringTemplateSheet.offer({
         templates: pending,
+        baseGameId: gameId,
         onAdopt: (tpl) => this._adoptTemplate(tpl),
         onSkip: (shown) => this._declineTemplates(shown),
       });
@@ -2646,9 +2793,24 @@
      * chose is theirs for this play whatever the network does; the adoption is
      * what makes it theirs for the NEXT one, and it is the half that can fail.
      * So a failure says exactly that and nothing rolls back.
+     *
+     * An ADD-ON grid taken from the offer goes on as an add-on, not as the
+     * scorepad: _applyTemplate composes it with whatever base the split
+     * already had, so adopting Pearlbrook's rows beside an Everdell grid
+     * appends them rather than throwing the base rows away.
      */
     async _adoptTemplate(tpl) {
-      this._applyTemplate(tpl);
+      if (this._gridMode(tpl) === window.ScoringTemplate.MODE_ADD_ON) {
+        // The offer only ever fires with NOTHING adopted, so there is no base
+        // grid to compose against yet — the add-on's rows stand alone until
+        // one arrives. Passing it through _applyTemplate as an add-on rather
+        // than as the base is still the right shape: the guide reload this
+        // adoption triggers re-enters _onChaptersLoaded, and _recomposeTemplate
+        // then folds it into any base grid that turns up with it.
+        this._applyTemplate(null, [tpl]);
+      } else {
+        this._applyTemplate(tpl);
+      }
       // Pool rows can come from an expansion, and a chapter is adopted against
       // the game it belongs to — mirror reference-guide-add-view#_toggleInGuide.
       const targetGameId = tpl.source_game_id || tpl.game_id || this._ps.gameId;
@@ -2679,7 +2841,8 @@
     }
 
     /**
-     * Apply the one adopted template, but only onto a grid nobody has touched.
+     * Apply the one candidate scorepad, but only onto a grid nobody has
+     * touched.
      *
      * A resumed draft is the case this is guarding: the host may be four rounds
      * into a game, and restructuring the table under them — inserting five
@@ -2692,31 +2855,155 @@
      * of the draft rather than the absence of one. Without it, coming back to a
      * still-empty grid re-applied the template the host had just taken off, and
      * the switch appeared to flip itself back on.
+     *
+     * @param {any|null} base the scorepad grid, or null for add-ons alone
      */
-    _maybeAutoApplyTemplate(tpl) {
+    _maybeAutoApplyTemplate(base) {
       if (this._ps.scoringTemplate) return;
       if (this._ps.scoringTemplateOff) return;
       if (this._maxRoundCount() > 1) return;
       if (this._gridHasScores()) return;
-      this._applyTemplate(tpl);
+      this._applyTemplate(base);
     }
 
     /**
-     * Which template a flip to ON would put on the table — and, with the switch
-     * off, what the bar names.
+     * Fold the expansions back in after the ticks change — without disturbing
+     * anything already written down.
+     *
+     * This is where both modes actually pay off mid-game. Ticking an add-on
+     * appends its rows to the table; unticking it takes them off again;
+     * ticking a REPLACE expansion swaps the whole scorepad for the one it
+     * brought, because a replace grid displaces the base game's as a candidate
+     * (domain/scoring-template.js#split) and one candidate is unambiguous.
+     *
+     * What it will not do is move a number the host has already typed. The
+     * safety test is positional: rows are addressed by index everywhere —
+     * roundScores, live-scores' round_index, the grid's own cells — so a
+     * composition whose leading rows still match the current ones cannot
+     * relabel a scored cell, and one that only drops EMPTY trailing rows
+     * cannot lose a score. Anything else waits for the host, who can reach it
+     * through the bar's Change; refusing silently is right because the
+     * alternative is a table that reshapes itself between two rounds.
+     */
+    _recomposeTemplate() {
+      const cur = this._ps.scoringTemplate;
+      if (!cur) return;
+      const { bases, addOns } = this._scoringSplit();
+
+      let base = null;
+      if (cur.chapter_id) {
+        // The scorepad has left the guide entirely — the host removed the
+        // chapter, or its author deleted it. Keep the table exactly as it is:
+        // the snapshot is a complete copy of the rows precisely so it outlives
+        // the chapters it was built from, and re-deriving the composition from
+        // what is left would take the base rows off a live scorepad.
+        if (!bases.length) return;
+        // A scorepad the host PICKED from the pills is theirs and survives the
+        // ticks: they have overruled the derivation, so ticking another
+        // expansion folds its add-on rows in without moving the scorepad out
+        // from under them. A DERIVED one is re-derived below, which is what
+        // makes a newly-ticked replace expansion take over.
+        if (this._ps.scoringTemplatePicked) {
+          base = bases.find((c) => c.id === cur.chapter_id) || null;
+        }
+      }
+      if (!base) {
+        // Nothing was leading (add-ons standing alone), or what was leading was
+        // derived, or the host's own pick has left the candidate list. All
+        // three are the same question, and preferredBase answers it the way
+        // auto-apply does — a replace expansion on the table takes the
+        // scorepad. A null answer means the base game is genuinely ambiguous,
+        // so nothing changes and the pills ask.
+        base = window.ScoringTemplate.preferredBase({ bases }, this._ps.gameId);
+        if (!base && cur.chapter_id) return;
+      }
+
+      const next = window.ScoringTemplate.snapshot(base, addOns);
+      // Nothing left to compose (every grid came off the table with its
+      // expansion) — leave what is on the grid alone rather than clearing it.
+      // The rows are the host's now; the snapshot is a complete copy of them
+      // precisely so it outlives the chapters it was built from.
+      if (!next) return;
+      if (this._sameTemplateRows(cur.rows, next.rows)) {
+        // Same table, different name or seams — a renamed expansion, or a
+        // pre-032 snapshot picking up its parts list. Write it through without
+        // touching a single cell.
+        if (cur.title !== next.title) {
+          this._writeTemplate(next, { rebuild: false });
+        }
+        return;
+      }
+      if (!this._safeRowSwap(cur.rows, next.rows)) return;
+      this._applyTemplate(base, addOns);
+    }
+
+    /** Two composed row lists, compared the way the grid renders them. */
+    _sameTemplateRows(a, b) {
+      const x = a || [];
+      const y = b || [];
+      if (x.length !== y.length) return false;
+      return x.every((r, i) => r.label === y[i].label
+        && (r.color || "neutral") === (y[i].color || "neutral")
+        && (r.note || "") === (y[i].note || ""));
+    }
+
+    /**
+     * Can `before` become `after` without moving a number?
+     *
+     * An untouched grid can become anything. Otherwise the leading rows have
+     * to be unchanged — that is what makes the swap positionally invisible —
+     * and any row the new list drops has to be empty in every column.
+     */
+    _safeRowSwap(before, after) {
+      if (!this._gridHasScores()) return true;
+      const x = before || [];
+      const y = after || [];
+      const shared = Math.min(x.length, y.length);
+      for (let i = 0; i < shared; i++) {
+        if (x[i].label !== y[i].label) return false;
+      }
+      if (y.length >= x.length) return true;
+      for (let r = y.length; r < x.length; r++) {
+        if (this._ps.players.some((p) => this._resolvedScore(p, r) != null)) return false;
+      }
+      return true;
+    }
+
+    /**
+     * Which composition a flip to ON would put on the table — and, with the
+     * switch off, what the bar names.
      *
      * Three sources, in order of how much they know about the host's intent:
-     * the one they had on a moment ago (kept through an off, so the flip back
-     * is exact even when the guide offers several), then the game's single
-     * adopted grid, and otherwise nothing — with two or more adopted and no
-     * history, picking for them would be the same guess auto-apply refuses to
-     * make, so _toggleTemplate opens the sheet instead.
+     * the scorepad they had on a moment ago (kept through an off, so the flip
+     * back is exact even when the guide offers several), then a single
+     * candidate, and otherwise the add-ons alone. With two or more candidates
+     * and no history there is nothing to name — picking for them would be the
+     * same guess auto-apply refuses to make — so _toggleTemplate opens the
+     * sheet instead.
      *
-     * @returns {any|null} a scoring-grid chapter, or the draft's own snapshot.
+     * The add-ons are always the CURRENT ones, even when the base comes from
+     * history: flipping back on after ticking another expansion should bring
+     * that expansion's rows with it, not restore the table as it stood.
+     *
+     * @returns {{base: any|null, addOns: any[], snap: any}|null}
      */
-    _templateCandidate() {
-      if (this._lastTemplate) return this._lastTemplate;
-      return this._templates.length === 1 ? this._templates[0] : null;
+    _candidateComposition() {
+      const sp = this._scoringSplit();
+      const base = this._lastTemplate
+        ? this._lastTemplate.base
+        : window.ScoringTemplate.preferredBase(sp, this._ps.gameId);
+      const snap = window.ScoringTemplate.snapshot(base || null, sp.addOns);
+      return snap ? { base: base || null, addOns: sp.addOns, snap } : null;
+    }
+
+    /**
+     * Is there more than one scorepad to choose between? That, and only that,
+     * is what puts the pill row under the bar — with a single candidate there
+     * is nothing to pick and a row of one pill is a label pretending to be a
+     * control.
+     */
+    _canChangeTemplate() {
+      return this._scoringSplit().bases.length > 1;
     }
 
     /**
@@ -2725,35 +3012,42 @@
      * the same confirm a Change does, because it is the same event for the host:
      * rows they have already scored into get relabelled and the table can grow.
      */
-    _toggleTemplate(event) {
-      if (this._ps.scoringTemplate) { this._applyTemplate(null); return; }
-      const back = this._templateCandidate();
-      if (back) { this._confirmTemplateSwitch(back); return; }
-      this._openTemplateSheet(event);
-    }
-
-    /** Open the picker. Only reachable when 2+ templates are adopted. */
-    _openTemplateSheet(event) {
-      if (!window.BgbScoringTemplateSheet) return;
-      window.BgbScoringTemplateSheet.open({
-        templates: this._templates,
-        activeId: (this._ps.scoringTemplate || {}).chapter_id || null,
-        returnFocus: (event && event.currentTarget) || null,
-        onPick: (tpl) => this._confirmTemplateSwitch(tpl),
-      });
+    _toggleTemplate() {
+      if (this._ps.scoringTemplate) { this._clearTemplate(); return; }
+      const cand = this._candidateComposition();
+      if (cand) this._confirmTemplateSwitch(cand.base);
     }
 
     /**
-     * Switching templates changes the row count, so a grid that already holds
+     * Tap a scorepad pill. A no-op on the one already chosen, so the row does
+     * not put the confirm up in front of a host who tapped what was already on.
+     */
+    _pickTemplateBase(chapterId) {
+      const { bases } = this._scoringSplit();
+      const base = bases.find((c) => c.id === chapterId);
+      if (!base) return;
+      const cur = this._ps.scoringTemplate;
+      if (cur && cur.chapter_id === chapterId) return;
+      // Set BEFORE the confirm, not after it resolves: the confirm can be
+      // declined, and a host who says "keep these rows" has still expressed a
+      // preference for the scorepad they are keeping — re-deriving it away on
+      // the next tick would answer a question they just answered.
+      this._ps.scoringTemplatePicked = true;
+      this._ps.persist();
+      this._confirmTemplateSwitch(base);
+    }
+
+    /**
+     * Switching scorepads changes the row count, so a grid that already holds
      * numbers gets the project's one confirm surface first
      * (.claude/rules/ui-object-design.md §3c). Turning the template OFF never
-     * asks — that is _toggleTemplate calling _applyTemplate(null) directly — and
-     * the `!tpl` branch here is the same statement for a caller that reaches it
-     * with nothing to apply: it takes the labels off and leaves every row and
-     * every score exactly where it was.
+     * asks — that is _toggleTemplate calling _clearTemplate directly.
+     *
+     * `base` may legitimately be null: that is "the add-ons on their own", not
+     * "nothing", and it reshapes the table exactly as any other choice does.
      */
-    async _confirmTemplateSwitch(tpl) {
-      if (!tpl || !this._gridHasScores()) { this._applyTemplate(tpl); return; }
+    async _confirmTemplateSwitch(base) {
+      if (!this._gridHasScores()) { this._applyTemplate(base); return; }
       const ok = await window.PolaroidPopup.confirm({
         title: "Change the scoring rows?",
         body: "The scores already on the table stay where they are, but the rows "
@@ -2761,7 +3055,7 @@
         confirmLabel: "Change rows",
         cancelLabel: "Keep these rows",
       });
-      if (ok) this._applyTemplate(tpl);
+      if (ok) this._applyTemplate(base);
     }
 
     /** Has anybody put a number on this grid yet? */
@@ -2774,52 +3068,88 @@
     }
 
     /**
-     * Put a template's rows on the grid — or take them off with `null`.
+     * Put a composition on the grid: one scorepad grid plus every add-on
+     * expansion's rows, flattened into the row list the table draws
+     * (domain/scoring-template.js).
      *
      * The rows are MATERIALIZED into every player's roundScores rather than
      * left for the renderer to infer, because _maxRoundCount, _addRound and
      * _removeRoundAt all read that array: a grid painting rows the model has
      * never heard of is the disagreement this file's history is made of (see
      * the notes at _normalizeRoundArrays and _playerTotal).
+     *
+     * @param {any|null} base the scorepad grid, or null for add-ons alone
+     * @param {any[]} [addOns] defaults to the expansions currently on the table
      */
-    _applyTemplate(tpl) {
+    _applyTemplate(base, addOns) {
+      const extras = addOns || this._scoringSplit().addOns;
+      const snap = window.ScoringTemplate.snapshot(base || null, extras);
+      // Nothing to compose — a caller asking for a template when the guide has
+      // none left is asking to score on plain rounds.
+      if (!snap) { this._clearTemplate(); return; }
+      // Remember the SCOREPAD, not the composition: the add-ons are re-read
+      // from the table on every flip, so a host who ticks another expansion
+      // while the template is off gets its rows when they flip it back on.
+      this._lastTemplate = { base: base || null };
+      this._writeTemplate(snap, { rebuild: true });
+    }
+
+    /**
+     * Take the template off. Every row and every score stays exactly where it
+     * is — only the labels go.
+     *
+     * `scoringTemplateOff` is the host's choice recorded as one, read by
+     * _maybeAutoApplyTemplate so a guide reload cannot answer it for them a
+     * second time. Persisted with the draft, so it survives a refresh mid-game.
+     */
+    _clearTemplate() {
       const ps = this._ps;
-      const before = this._maxRoundCount();
       // Remember what is coming off, so the switch can put it straight back.
-      // Resolved against the adopted list first and rebuilt from the draft's
+      // Resolved against the candidate list first and rebuilt from the draft's
       // own snapshot otherwise: a host who took the grid out of their guide
       // mid-game, or whose guide has not answered yet, must still be able to
       // flip a template they had on a second ago back on — the snapshot is a
       // complete copy of the rows, which is the whole point of it being one.
-      if (!tpl && ps.scoringTemplate) {
+      if (ps.scoringTemplate) {
         const snap = ps.scoringTemplate;
-        this._lastTemplate = this._templates.find((t) => t.id === snap.chapter_id)
-          || { id: snap.chapter_id, title: snap.title, grid: { rows: snap.rows || [] } };
-      } else if (tpl) {
-        this._lastTemplate = tpl;
+        const { bases } = this._scoringSplit();
+        const live = snap.chapter_id
+          ? bases.find((t) => t.id === snap.chapter_id)
+          : null;
+        this._lastTemplate = {
+          base: live
+            || (snap.chapter_id ? window.ScoringTemplate.fromSnapshot(snap) : null),
+        };
       }
-      // The host's choice, not an absence of one: read by _maybeAutoApplyTemplate
-      // so a guide reload cannot answer it for them a second time. Persisted with
-      // the draft, so it survives a refresh mid-game.
-      ps.scoringTemplateOff = !tpl;
-      ps.scoringTemplate = tpl
-        ? {
-            v: 1,
-            chapter_id: tpl.id,
-            title: tpl.title || null,
-            rows: tpl.grid.rows.map((r) => ({
-              label: r.label,
-              color: r.color || "neutral",
-              ...(r.note ? { note: r.note } : {}),
-            })),
-          }
-        : null;
-      if (tpl) {
-        const need = tpl.grid.rows.length;
+      this._writeTemplate(null, { rebuild: false });
+    }
+
+    /**
+     * The one place `ps.scoringTemplate` is written — and everything that has
+     * to happen in the same breath: the rows the model owns, the spectators'
+     * copy of the labels, the winner marks and the repaint.
+     *
+     * `rebuild` says whether the row COUNT can have changed. A recompose that
+     * only renamed the composition passes false and leaves roundScores alone;
+     * anything that puts rows on or takes them off passes true.
+     *
+     * @param {any|null} snap
+     * @param {{rebuild: boolean}} opts
+     */
+    _writeTemplate(snap, opts) {
+      const ps = this._ps;
+      const before = this._maxRoundCount();
+      const prevSnap = ps.scoringTemplate;
+      const prevRows = (prevSnap && Array.isArray(prevSnap.rows) && prevSnap.rows.length) || 0;
+      ps.scoringTemplateOff = !snap;
+      ps.scoringTemplate = snap;
+      if (snap && opts.rebuild) {
+        const need = snap.rows.length;
         for (const p of ps.players) {
           if (!Array.isArray(p.roundScores)) p.roundScores = [];
           while (p.roundScores.length < need) p.roundScores.push(null);
         }
+        this._trimTemplateTail(prevRows, need, before);
         this._normalizeRoundArrays();
       }
       ps.persist();
@@ -2844,6 +3174,31 @@
       this._refreshScoringSection();
     }
 
+    /**
+     * Drop the rows a shrinking template leaves behind — but only the ones it
+     * owned, and only when they are empty.
+     *
+     * Unticking an expansion is the case: two Pearlbrook rows come off a
+     * sixteen-row table and, without this, stay as two unlabelled rounds the
+     * host never asked for. The guard is that the grid was EXACTLY the
+     * template (`before === prevRows`), so a host who had appended rounds of
+     * their own keeps every one of them — those rows are theirs, not the
+     * composition's, and their indexes must not shift under the scores in
+     * them. Emptiness is re-checked here rather than trusted from
+     * _safeRowSwap, because auto-apply reaches this path without it.
+     */
+    _trimTemplateTail(prevRows, nextRows, before) {
+      if (nextRows >= prevRows) return;
+      if (before !== prevRows) return;
+      for (let r = nextRows; r < prevRows; r++) {
+        if (this._ps.players.some((p) => this._resolvedScore(p, r) != null)) return;
+      }
+      for (const p of this._ps.players) {
+        if (Array.isArray(p.roundScores) && p.roundScores.length > nextRows) {
+          p.roundScores.length = nextRows;
+        }
+      }
+    }
     /** How many leading rows the applied template owns, and so locks. */
     _lockedRowCount() {
       const t = this._ps.scoringTemplate;

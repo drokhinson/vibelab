@@ -1,0 +1,792 @@
+<title>Expansion Scoring Modes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" />
+
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   HARNESS — a neutral studio wall, deliberately NOT the app's espresso, so the
+   scorepad is judged on its own rather than against the page it sits on. Same
+   idiom as play-flow-dark-mock.html and the rest of Docs/mocks/.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --wall:      #EFEBE3;
+  --wall-2:    #F7F4EF;
+  --wall-ink:  #221E19;
+  --wall-mute: #6C645A;
+  --wall-line: #D8D1C5;
+  --wall-mark: #8E5F10;
+  --wall-sh:   0 1px 2px rgba(120, 96, 60, .10), 0 12px 32px -18px rgba(120, 96, 60, .40);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --wall:      #16140F;
+    --wall-2:    #1F1C16;
+    --wall-ink:  #EBE5DA;
+    --wall-mute: #9A9285;
+    --wall-line: #2F2A22;
+    --wall-mark: #E0A94A;
+    --wall-sh:   0 1px 2px rgba(0, 0, 0, .5), 0 12px 32px -18px rgba(0, 0, 0, .8);
+  }
+}
+:root[data-theme="dark"] {
+  --wall:      #16140F;
+  --wall-2:    #1F1C16;
+  --wall-ink:  #EBE5DA;
+  --wall-mute: #9A9285;
+  --wall-line: #2F2A22;
+  --wall-mark: #E0A94A;
+  --wall-sh:   0 1px 2px rgba(0, 0, 0, .5), 0 12px 32px -18px rgba(0, 0, 0, .8);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--wall);
+  color: var(--wall-ink);
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page { max-width: 1240px; margin: 0 auto; padding: 40px 24px 88px; }
+
+.masthead {
+  display: flex; flex-direction: column; gap: 14px;
+  padding-bottom: 26px; border-bottom: 1px solid var(--wall-line);
+}
+.eyebrow {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--wall-mark);
+}
+h1 {
+  margin: 0; font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(28px, 4.5vw, 42px); font-weight: 600; line-height: 1.1;
+}
+.lede { margin: 0; max-width: 68ch; color: var(--wall-mute); }
+.lede strong { color: var(--wall-ink); font-weight: 600; }
+
+h2 {
+  margin: 54px 0 6px; font-family: "Fraunces", Georgia, serif;
+  font-size: 22px; font-weight: 600;
+}
+h2 + .lede { margin-bottom: 22px; }
+
+/* ── The two-mode key ─────────────────────────────────────────────────── */
+.modes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 22px; }
+.mode {
+  padding: 16px 18px; border-radius: 14px;
+  background: var(--wall-2); border: 1px solid var(--wall-line);
+  box-shadow: var(--wall-sh);
+}
+.mode__name {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--wall-mark); margin-bottom: 6px;
+}
+.mode__body { margin: 0; font-size: 14px; color: var(--wall-mute); }
+.mode__body strong { color: var(--wall-ink); font-weight: 600; }
+
+/* ── Phone frames ─────────────────────────────────────────────────────── */
+/* A 2x2 storyboard: four steps of one sequence, so they want to be read in a
+   block rather than strung out in a line that wraps 3-and-1. */
+.frames {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, 372px);
+  justify-content: start;
+  gap: 38px 28px;
+  max-width: 772px;
+}
+.frame {
+  display: grid;
+  /* Subgrid, so every caption in a row takes the tallest one's height and the
+     phones under them start on the same line — the frames exist to be compared
+     against each other, and a phone shifted 20px down reads as a difference. */
+  grid-template-rows: subgrid;
+  grid-row: span 2;
+  gap: 12px;
+  /* Grid items default to min-width:auto, i.e. min-content — and the scoring
+     table's min-content is wider than a phone, so without this the frame blows
+     past its 372px track and lands on its neighbour instead of letting the
+     table's own scrollport do its job. */
+  min-width: 0;
+}
+.frame > * { min-width: 0; }
+/* Rows are as tall as their tallest phone; a shorter one should not stretch to
+   match and paint a strip of empty bezel under its card. */
+.phone { align-self: start; min-width: 0; }
+/* Fallback where subgrid is unavailable: reserve the tallest caption by hand. */
+@supports not (grid-template-rows: subgrid) {
+  .frame { grid-template-rows: 128px auto; }
+}
+.frame__cap {
+  display: flex; flex-direction: column; gap: 3px;
+  padding-left: 2px;
+}
+.frames--pair .frame__cap { min-height: 0; }
+.frame__n {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--wall-mark);
+}
+.frame__title { font-weight: 600; font-size: 15px; }
+.frame__note { font-size: 13px; color: var(--wall-mute); }
+.frame__note code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11.5px; background: color-mix(in srgb, var(--wall-line) 60%, transparent);
+  padding: 1px 5px; border-radius: 5px;
+}
+
+/* The espresso ground the cascade card actually sits on, so the paper island
+   reads with the same contrast it has in the app. */
+.phone {
+  border-radius: 26px;
+  padding: 14px 12px;
+  background: #1A1310;
+  border: 1px solid rgba(255, 255, 255, .07);
+  box-shadow: var(--wall-sh);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   APP CSS — copied from projects/boardgame-buddy/web/styles.css. Class names
+   and values are the shipped ones so this mock is a preview and not a
+   lookalike; only the tokens are pinned (the app resolves them per theme, and
+   the scorepad is PAPER, which is light in both — theming.md §6).
+   ══════════════════════════════════════════════════════════════════════════ */
+.phone {
+  /* Paper island tokens, dark-theme values (--paper stays light in both). */
+  --paper:            #F8F2E5;
+  --paper-ink:        #211A12;
+  --paper-muted:      #6F6556;
+  --paper-line:       #E6DCC8;
+  --polaroid-bg:      var(--paper);
+  --polaroid-ink:     var(--paper-ink);
+  --polaroid-muted:   var(--paper-muted);
+  --polaroid-line:    var(--paper-line);
+  --polaroid-accent:  #C8553D;              /* --win, terracotta */
+  --accent-ink:       #8A5F0B;              /* --accent-on-paper */
+  --font-score:       'JetBrains Mono', ui-monospace, monospace;
+  --r-pill:           999px;
+  --ease:             cubic-bezier(.4, 0, .2, 1);
+  /* The row palette the chapter's colour SLUG resolves against. A slug, never
+     a hex, because the grid lands on paper and the stylesheet owns the ink. */
+  --row-red:    #B03028;
+  --row-pink:   #C2557E;
+  --row-rust:   #A65D2C;
+  --row-brown:  #6B4423;
+  --row-gold:   #C9922A;
+  --row-yellow: #B5A800;
+  --row-green:  #4A7A4A;
+  --row-blue:   #4A6F94;
+  --row-purple: #7A5293;
+}
+
+.cascade-card {
+  background: var(--polaroid-bg);
+  border-radius: 14px;
+  padding: 0.7rem 0.75rem 0.6rem;
+  color: var(--polaroid-ink);
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+}
+.scoring-section__head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+.cascade-card__label {
+  font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--polaroid-muted);
+}
+
+/* ── The template bar + the scorepad pills (migration 032) ───────────────── */
+.scoring-tplbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--polaroid-line) 40%, transparent);
+}
+.scoring-tplbar__line {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+}
+.scoring-tplbar__name {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--polaroid-ink) 82%, transparent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scoring-tplbar__actions { flex: none; display: inline-flex; align-items: center; gap: 0.7rem; }
+.scoring-tplpills {
+  display: flex; gap: 0.3rem;
+  overflow-x: auto;
+  padding: 0.1rem 0.1rem 0.15rem;
+  margin: 0 -0.1rem;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.scoring-tplpills::-webkit-scrollbar { display: none; }
+.scoring-tplpill {
+  flex: none; position: relative;
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  max-width: 11rem;
+  padding: 0.24rem 0.6rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--polaroid-line);
+  background: var(--polaroid-bg);
+  color: color-mix(in srgb, var(--polaroid-ink) 70%, transparent);
+  font: inherit; font-size: 0.72rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.scoring-tplpill::before { content: ""; position: absolute; inset: -9px -2px; }
+.scoring-tplpill:active { transform: scale(0.97); }
+.scoring-tplpill--on {
+  border-color: var(--polaroid-accent);
+  background: color-mix(in srgb, var(--polaroid-accent) 12%, var(--polaroid-bg));
+  color: var(--polaroid-ink);
+  font-weight: 700;
+}
+.scoring-tplpill:focus-visible { outline: 2px solid var(--polaroid-accent); outline-offset: -3px; }
+.scoring-tplpill__dot {
+  flex: none; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--exp-color, var(--polaroid-muted));
+}
+
+/* ── The switch ──────────────────────────────────────────────────────────── */
+.bgb-switch {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  min-height: 44px; min-width: 0; padding: 0 0.2rem;
+  background: none; border: none; cursor: pointer;
+}
+.bgb-switch--compact { min-height: 0; position: relative; padding: 0; }
+.bgb-switch--compact::before { content: ""; position: absolute; inset: -12px -10px; }
+.bgb-switch__track {
+  flex: none; box-sizing: border-box;
+  width: 34px; height: 20px;
+  border-radius: 999px; padding: 2px; display: flex;
+  border: 1px solid color-mix(in srgb, var(--polaroid-ink) 22%, transparent);
+  background: color-mix(in srgb, var(--polaroid-ink) 12%, transparent);
+  transition: background .15s ease, border-color .15s ease;
+}
+.bgb-switch.is-on .bgb-switch__track { background: var(--polaroid-accent); border-color: transparent; }
+.bgb-switch__knob {
+  width: 14px; height: 14px; border-radius: 999px;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+  transition: transform .15s ease;
+}
+.bgb-switch.is-on .bgb-switch__knob { transform: translateX(14px); }
+
+/* ── The grid ────────────────────────────────────────────────────────────── */
+.scoring-table-wrap { overflow: auto; -webkit-overflow-scrolling: touch; box-sizing: border-box; }
+.scoring-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8rem; }
+.scoring-table th, .scoring-table td {
+  padding: 0.3rem 0.4rem; text-align: center;
+  border-bottom: 1px solid var(--polaroid-line);
+  color: var(--polaroid-ink);
+}
+.scoring-table th:first-child, .scoring-table td:first-child {
+  border-right: 1px solid color-mix(in srgb, var(--polaroid-line) 60%, transparent);
+}
+.scoring-table th:nth-child(n + 3), .scoring-table td:nth-child(n + 3) {
+  border-left: 1px solid color-mix(in srgb, var(--polaroid-line) 60%, transparent);
+}
+.scoring-table thead th {
+  font-size: 0.72rem; font-weight: 600; white-space: nowrap;
+  position: sticky; top: 0; z-index: 5; background: var(--polaroid-bg);
+}
+.scoring-table tbody th {
+  text-align: left; font-weight: 600;
+  color: color-mix(in srgb, var(--polaroid-ink) 70%, transparent);
+}
+.scoring-round-th {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--polaroid-bg);
+  white-space: nowrap;
+}
+.scoring-round-label { display: inline-flex; align-items: center; gap: 0.3rem; }
+.scoring-round-text {
+  display: inline-block; max-width: 7.5rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scoring-head__bubble {
+  display: inline-grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: color-mix(in srgb, var(--polaroid-ink) 10%, transparent);
+  font-size: 0.7rem; font-weight: 700;
+  color: color-mix(in srgb, var(--polaroid-ink) 75%, transparent);
+}
+.scoring-cell--read {
+  display: inline-block; min-width: 2.2rem;
+  font-family: var(--font-score); font-variant-numeric: tabular-nums;
+}
+.scoring-total-row th, .scoring-total-row td {
+  background: color-mix(in srgb, var(--polaroid-line) 55%, var(--polaroid-bg));
+  border-bottom: none;
+}
+.scoring-total {
+  font-family: var(--font-score); font-weight: 700;
+  color: var(--polaroid-accent); font-variant-numeric: tabular-nums;
+}
+
+/* The row's own tint — the AUTHOR's mark for what the row IS. */
+.scoring-round-th--tpl { --row-accent: var(--polaroid-muted); }
+.scoring-round-th--tpl[data-row-color="red"]    { --row-accent: var(--row-red); }
+.scoring-round-th--tpl[data-row-color="pink"]   { --row-accent: var(--row-pink); }
+.scoring-round-th--tpl[data-row-color="rust"]   { --row-accent: var(--row-rust); }
+.scoring-round-th--tpl[data-row-color="brown"]  { --row-accent: var(--row-brown); }
+.scoring-round-th--tpl[data-row-color="gold"]   { --row-accent: var(--row-gold); }
+.scoring-round-th--tpl[data-row-color="yellow"] { --row-accent: var(--row-yellow); }
+.scoring-round-th--tpl[data-row-color="green"]  { --row-accent: var(--row-green); }
+.scoring-round-th--tpl[data-row-color="blue"]   { --row-accent: var(--row-blue); }
+.scoring-round-th--tpl[data-row-color="purple"] { --row-accent: var(--row-purple); }
+.scoring-round-th--tpl {
+  background: color-mix(in srgb, var(--row-accent) 14%, var(--polaroid-bg));
+  box-shadow: inset 3px 0 0 var(--row-accent);
+}
+.scoring-table tbody th.scoring-round-th--tpl {
+  color: color-mix(in srgb, var(--polaroid-ink) 88%, transparent);
+}
+/* …and the EXPANSION's, on the cell's OTHER edge. The left rule and the wash
+   stay the author's; the right rule says which box the row came from. Both
+   shadows are restated because box-shadow does not merge across rules. */
+.scoring-round-th--tpl.scoring-round-th--exp {
+  box-shadow:
+    inset  3px 0 0 var(--row-accent),
+    inset -3px 0 0 var(--exp-accent, var(--row-accent));
+}
+
+/* ── The mode badge, as the guide and the offer sheet draw it ────────────── */
+.tmpl-modetag {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  margin: 0.35rem 0;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, .07);
+  color: rgba(0, 0, 0, .62);
+  font-size: 0.7rem; font-weight: 600; line-height: 1.35;
+}
+.tmpl-modetag--replace { background: rgba(168, 69, 47, .16); color: #A8452F; }
+
+
+/* The three glyphs the app renders through ui/icons.js. Inlined at their real
+   path data (Phosphor, the project's set) rather than substituted with text
+   characters — .claude/rules/web-frontend.md is explicit that a generic
+   character is never a stand-in for an icon, mock or not. */
+.ico { flex: none; width: 1em; height: 1em; fill: currentColor; vertical-align: -0.13em; }
+.scoring-tplbar__name .ico { width: 0.95em; height: 0.95em; }
+.tmpl-modetag .ico { width: 0.85em; height: 0.85em; }
+
+.finding {
+  margin-top: 34px; padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--wall-mark) 34%, var(--wall-line));
+  background: color-mix(in srgb, var(--wall-mark) 7%, var(--wall-2));
+  max-width: 74ch;
+}
+.finding__tag {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--wall-mark); margin-bottom: 5px;
+}
+.finding__body { margin: 0; font-size: 14px; color: var(--wall-mute); }
+.finding__body strong { color: var(--wall-ink); font-weight: 600; }
+.finding__body code {
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px;
+  background: color-mix(in srgb, var(--wall-line) 60%, transparent);
+  padding: 1px 5px; border-radius: 5px;
+}
+
+/* ── Annotation callouts ─────────────────────────────────────────────────── */
+.seams { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-top: 22px; }
+.seam {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 15px 17px; border-radius: 14px;
+  background: var(--wall-2); border: 1px solid var(--wall-line);
+}
+.seam__swatch { flex: none; width: 4px; align-self: stretch; border-radius: 2px; min-height: 42px; }
+/* The card's own rule sits where the mark it describes sits — leading edge for
+   the row's colour, trailing edge for the expansion's. */
+.seam--right { text-align: right; }
+.seam--right .seam__d, .seam--right .seam__t { text-align: left; }
+.seam__body { min-width: 0; }
+.seam__t { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+.seam__d { font-size: 13.5px; color: var(--wall-mute); }
+
+.guide-card {
+  max-width: 372px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #F8F2E5;
+  color: #211A12;
+  box-shadow: var(--wall-sh);
+  font-size: 14px;
+}
+.guide-card__t {
+  font-family: "Fraunces", Georgia, serif; font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; gap: 7px;
+}
+.guide-card__dot { width: 8px; height: 8px; border-radius: 50%; }
+.guide-card__rows { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #6F6556; }
+
+.foot {
+  margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--wall-line);
+  font-size: 13px; color: var(--wall-mute); max-width: 74ch;
+}
+.foot code {
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px;
+  background: color-mix(in srgb, var(--wall-line) 60%, transparent);
+  padding: 1px 5px; border-radius: 5px;
+}
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">boardgamebuddy · migration 032 · play step</div>
+    <h1>Scoring a game whose expansions both add and replace</h1>
+    <p class="lede">
+      Everdell on the table with three boxes ticked: <strong>Pearlbrook</strong> and
+      <strong>Newleaf</strong> are add-ons, <strong>Everdell Legacy</strong> reprints
+      the whole score sheet. Four frames, in the order the host meets them.
+      Everything below is the shipped CSS and the shipped class names — the
+      scorepad here is the scorepad.
+    </p>
+    <div class="modes">
+      <div class="mode">
+        <div class="mode__name">add_on</div>
+        <p class="mode__body">
+          The expansion brings extra categories to a scorepad that is otherwise
+          the base game's. Its rows are <strong>appended</strong>, in ascending
+          BGG id, and each one draws the expansion's colour down its right edge.
+        </p>
+      </div>
+      <div class="mode">
+        <div class="mode__name">replace</div>
+        <p class="mode__body">
+          The expansion <strong>is</strong> the score sheet. It becomes the
+          scorepad by default — but it does not lock the base game out: both
+          become pills, and the host can pick either.
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <h2>The scoring card, frame by frame</h2>
+  <p class="lede">
+    Only the base game's grid and the replacements are ever pills. Add-ons are
+    not alternatives to anything, so they never appear as an option — they fold
+    into whichever pill is chosen, and say so on their own rows.
+  </p>
+
+  <div class="frames" id="frames"></div>
+
+  <div class="finding">
+    <div class="finding__tag">what this surfaces</div>
+    <p class="finding__body">
+      <strong>The composed title does not fit at two add-ons.</strong> Frames 2
+      and 4 read “Everdell score sheet + Pearlbrook +” — Newleaf is ellipsised
+      off the end of a one-line bar on a 390px phone.
+      <code>composedTitle()</code> only collapses to a count at
+      <em>three</em> extras, which makes exactly-two the longest string it can
+      produce and the one that always truncates. The composition is still
+      legible from the coloured rows, so nothing is lost — but the bar reads as
+      broken text. Collapsing at two (“Everdell score sheet + 2 expansions”), or
+      naming only the scorepad and letting the rows carry the rest, both fix it;
+      neither is in this change.
+    </p>
+  </div>
+
+  <h2>Two facts, two edges</h2>
+  <p class="lede">
+    A row header carries three marks and they answer two questions. The wash and
+    the <em>left</em> rule are the author's tint for what the row is; the
+    <em>right</em> rule is the box it came from. Opposite edges, because sharing
+    one would make a green Pearlbrook row unable to be both green and
+    Pearlbrook's.
+  </p>
+  <div class="seams">
+    <div class="seam">
+      <div class="seam__swatch" style="background:#4A7A4A"></div>
+      <div class="seam__body">
+        <div class="seam__t">Left rule + wash — what the row <em>is</em></div>
+        <div class="seam__d">
+          The palette slug the grid's author picked for that row
+          (<code>green</code>, <code>gold</code>, …), at full strength on the
+          left edge and at 14% behind the label. Their tint for the category,
+          resolved by the stylesheet because the scorepad is paper in both
+          themes and an author could otherwise pick a yellow nobody can read.
+        </div>
+      </div>
+    </div>
+    <div class="seam seam--right">
+      <div class="seam__body">
+        <div class="seam__t">Right rule — where it <em>came from</em></div>
+        <div class="seam__d">
+          The contributing expansion's own colour
+          (<code>games.expansion_color</code>), matching its pill's dot and its
+          dot in the reference guide. It sits on the opposite edge so it never
+          overwrites the author's, and lands on the pinned column's boundary
+          with the scores — where it reads as “this block ends here”. Rows from
+          whichever grid <em>leads</em> the composition carry none: marking those
+          too would say the whole table came from somewhere else.
+        </div>
+      </div>
+      <div class="seam__swatch" style="background:#17808F"></div>
+    </div>
+  </div>
+
+  <h2>Where the mode comes from</h2>
+  <p class="lede">
+    Not from the host at the table — from the author of the grid, who has the box
+    in front of them. It reads back as a badge wherever someone is deciding
+    whether to adopt a grid: the offer sheet, the reference-guide scroll, the
+    browse pool.
+  </p>
+  <div class="frames frames--pair">
+    <div class="frame">
+      <div class="frame__cap">
+        <div class="frame__n">reference guide</div>
+        <div class="frame__title">An add-on's grid</div>
+      </div>
+      <div class="guide-card">
+        <div class="guide-card__t">
+          <span class="guide-card__dot" style="background:#17808F"></span>
+          Pearlbrook score sheet
+        </div>
+        <span class="tmpl-modetag"><svg class="ico" viewBox="0 0 256 256" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg> Adds to the base game's rows</span>
+        <ul class="guide-card__rows"><li>Pearls</li><li>Wonders</li></ul>
+      </div>
+    </div>
+    <div class="frame">
+      <div class="frame__cap">
+        <div class="frame__n">reference guide</div>
+        <div class="frame__title">A replacement's grid</div>
+      </div>
+      <div class="guide-card">
+        <div class="guide-card__t">
+          <span class="guide-card__dot" style="background:#7A5293"></span>
+          Everdell Legacy score sheet
+        </div>
+        <span class="tmpl-modetag tmpl-modetag--replace"><svg class="ico" viewBox="0 0 256 256" aria-hidden="true"><path d="M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z"/></svg> Replaces the base game's rows</span>
+        <ul class="guide-card__rows">
+          <li>Chapter goals</li><li>Legacy cards</li><li>Prosperity</li>
+          <li>Journey</li><li>Basic points</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">
+    Rendered from the same data shape the app composes:
+    <code>ScoringTemplate.split()</code> sorts the adopted grids into scorepad
+    candidates and add-ons, <code>preferredBase()</code> picks the default, and
+    <code>compose()</code> flattens one candidate plus the add-ons into the row
+    list — stamping each add-on row with its expansion's colour. See
+    <code>web/domain/scoring-template.js</code> and
+    <code>db/migrations/boardgamebuddy/032_expansion_scoring_modes.sql</code>.
+  </p>
+</div>
+
+<script>
+/* The compositions below are written the way the app stores them — a flat row
+   list plus a seam list — rather than as hand-written table markup, so the
+   mock cannot drift from what compose() actually produces. */
+
+// Phosphor 'table', the glyph ui/icons.js swaps in for the bar's
+// <i data-icon="table">. A mock has no icon pass, so it is inlined.
+const ICON = { table: '<svg class="ico" viewBox="0 0 256 256" aria-hidden="true"><path d="M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48ZM40,112H80v32H40Zm56,0H216v32H96ZM216,64V96H40V64ZM40,160H80v32H40Zm176,32H96V160H216v32Z"/></svg>' };
+
+const PLAYERS = ["SR", "DK", "MW"];
+
+// The four grids in play. `color` is the row's palette SLUG (the author's);
+// `exp` is the contributing expansion's own colour, and only an add-on's rows
+// carry one.
+const EVERDELL = [
+  { label: "Basic cards", color: "gold" },
+  { label: "Prosperity",  color: "green" },
+  { label: "Events",      color: "rust" },
+  { label: "Journey",     color: "blue" },
+  { label: "Point tokens", color: "purple" },
+  { label: "Special",     color: "neutral" },
+];
+const PEARLBROOK = [
+  { label: "Pearls",  color: "blue" },
+  { label: "Wonders", color: "gold" },
+];
+const NEWLEAF = [
+  { label: "Tickets",  color: "green" },
+  { label: "Visitors", color: "pink" },
+];
+const LEGACY = [
+  { label: "Chapter goals", color: "purple" },
+  { label: "Legacy cards",  color: "rust" },
+  { label: "Prosperity",    color: "green" },
+  { label: "Journey",       color: "blue" },
+  { label: "Basic points",  color: "gold" },
+];
+
+// The expansions' own colours (games.expansion_color), deliberately picked to
+// sit OUTSIDE the nine-slug row palette above. Not decoration: if an
+// expansion's colour happened to equal one of its rows' author tint, that row's
+// two edges would match and the mock would quietly stop demonstrating the thing
+// it exists to demonstrate.
+const EXP = { pearlbrook: "#17808F", newleaf: "#A02D6B", legacy: "#7A5293" };
+
+const addOn = (rows, color) => rows.map((r) => ({ ...r, exp: color }));
+
+const FRAMES = [
+  {
+    n: "1",
+    title: "Base game only",
+    note: "One candidate, so no pill row — the bar just names what is on the table.",
+    bar: "Everdell score sheet",
+    pills: null,
+    rows: EVERDELL,
+    scores: [[12, 9, 4, 6, 3, 0], [10, 14, 2, 9, 5, 2], [8, 11, 7, 3, 4, 0]],
+  },
+  {
+    n: "2",
+    title: "+ Pearlbrook, + Newleaf",
+    note: "Both add-ons. Still one candidate, so still no pills — the rows just grow, and each block is coloured by the box it came from.",
+    bar: "Everdell score sheet + Pearlbrook + Newleaf",
+    pills: null,
+    rows: [
+      ...EVERDELL,
+      ...addOn(PEARLBROOK, EXP.pearlbrook),
+      ...addOn(NEWLEAF, EXP.newleaf),
+    ],
+    scores: [
+      [12, 9, 4, 6, 3, 0, 5, 7, 2, 4],
+      [10, 14, 2, 9, 5, 2, 3, 0, 6, 1],
+      [8, 11, 7, 3, 4, 0, 8, 4, 1, 3],
+    ],
+  },
+  {
+    n: "3",
+    title: "+ Everdell Legacy",
+    note: "A replacement joins. Now there are two candidates, so the pills appear — and the replacement is the one selected, which is what “replace” means. The add-ons fold into it unchanged.",
+    bar: "Everdell Legacy score sheet + Pearlbrook + Newleaf",
+    pills: [
+      { name: "Everdell", color: null },
+      { name: "Everdell Legacy", color: EXP.legacy, on: true },
+    ],
+    rows: [
+      ...LEGACY,
+      ...addOn(PEARLBROOK, EXP.pearlbrook),
+      ...addOn(NEWLEAF, EXP.newleaf),
+    ],
+    scores: [
+      [6, 11, 9, 6, 12, 5, 7, 2, 4],
+      [9, 7, 14, 9, 10, 3, 0, 6, 1],
+      [4, 13, 11, 3, 8, 8, 4, 1, 3],
+    ],
+  },
+  {
+    n: "4",
+    title: "Host taps the Everdell pill",
+    note: "The default is a default, not a lockout. The base scorepad comes back with Legacy still on the table, and the add-ons stay folded in.",
+    bar: "Everdell score sheet + Pearlbrook + Newleaf",
+    pills: [
+      { name: "Everdell", color: null, on: true },
+      { name: "Everdell Legacy", color: EXP.legacy },
+    ],
+    rows: [
+      ...EVERDELL,
+      ...addOn(PEARLBROOK, EXP.pearlbrook),
+      ...addOn(NEWLEAF, EXP.newleaf),
+    ],
+    scores: [
+      [12, 9, 4, 6, 3, 0, 5, 7, 2, 4],
+      [10, 14, 2, 9, 5, 2, 3, 0, 6, 1],
+      [8, 11, 7, 3, 4, 0, 8, 4, 1, 3],
+    ],
+  },
+];
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function renderPills(pills) {
+  if (!pills) return "";
+  const items = pills.map((p) => `
+    <button type="button" role="radio" aria-checked="${p.on ? "true" : "false"}"
+            class="scoring-tplpill${p.on ? " scoring-tplpill--on" : ""}"
+            ${p.color ? `style="--exp-color: ${p.color}"` : ""}>
+      ${p.color ? `<span class="scoring-tplpill__dot"></span>` : ""}
+      ${esc(p.name)}
+    </button>`).join("");
+  return `<div class="scoring-tplpills" role="radiogroup" aria-label="Scoring template">${items}</div>`;
+}
+
+function renderFrame(f) {
+  const total = (col) => f.scores[col].reduce((a, b) => a + b, 0);
+
+  const body = f.rows.map((row, r) => `
+    <tr>
+      <th class="scoring-round-th scoring-round-th--tpl${row.exp ? " scoring-round-th--exp" : ""}"
+          ${row.exp ? `style="--exp-accent: ${row.exp}"` : ""}
+          data-row-color="${row.color}" title="${esc(row.label)}">
+        <span class="scoring-round-label">
+          <span class="scoring-round-text">${esc(row.label)}</span>
+        </span>
+      </th>
+      ${PLAYERS.map((_, i) =>
+        `<td><span class="scoring-cell--read">${f.scores[i][r]}</span></td>`).join("")}
+    </tr>`).join("");
+
+  return `
+    <div class="frame">
+      <div class="frame__cap">
+        <div class="frame__n">frame ${f.n}</div>
+        <div class="frame__title">${esc(f.title)}</div>
+        <div class="frame__note">${f.note}</div>
+      </div>
+      <div class="phone">
+        <section class="cascade-card cascade-card--scoring">
+          <div class="scoring-section__head">
+            <label class="cascade-card__label">Scoring</label>
+          </div>
+          <div class="scoring-tplbar">
+            <div class="scoring-tplbar__line">
+              <span class="scoring-tplbar__name" title="${esc(f.bar)}">${ICON.table} ${esc(f.bar)}</span>
+              <span class="scoring-tplbar__actions">
+                <span class="bgb-switch bgb-switch--paper bgb-switch--compact is-on">
+                  <span class="bgb-switch__track"><span class="bgb-switch__knob"></span></span>
+                </span>
+              </span>
+            </div>
+            ${renderPills(f.pills)}
+          </div>
+          <div class="scoring-table-wrap">
+            <table class="scoring-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  ${PLAYERS.map((p) =>
+                    `<th><span class="scoring-head__bubble">${esc(p)}</span></th>`).join("")}
+                </tr>
+              </thead>
+              <tbody>
+                ${body}
+                <tr class="scoring-total-row">
+                  <th>Total</th>
+                  ${PLAYERS.map((_, i) =>
+                    `<td><span class="scoring-total">${total(i)}</span></td>`).join("")}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>`;
+}
+
+document.getElementById("frames").innerHTML = FRAMES.map(renderFrame).join("");
+</script>
