@@ -27,6 +27,15 @@
       this._buddiesPage = 1;
       this._playedWithPage = 1;
 
+      // ONE filter over BOTH long lists. The two sections answer the same
+      // question from opposite ends — "who do I know here" — and which of them
+      // a half-remembered person sits in is exactly what the viewer doesn't
+      // know, so a box that searched one of them would report the other's
+      // people as absent. Purely local: both lists are already whole in
+      // memory (the bundle brings them), so there is no fetch, no debounce and
+      // no "searching…" — every keystroke is the finished answer.
+      this._query = "";
+
       // Played-with state
       this._playedWith = [];   // PlayedWithUser[]
       this._ghosts = [];       // GhostPlayer[]
@@ -86,6 +95,7 @@
       // state on every mount of a reused view").
       this._buddiesPage = 1;
       this._playedWithPage = 1;
+      this._query = "";
 
       // Arrived via a /b/<token> QR link, which init.js rewrites to this view
       // with the token as a param. Scrub it from the address bar first and
@@ -268,11 +278,19 @@
         playCountByUser[p.user_id] = p.play_count;
       }
 
-      // Clamp before slicing: an unfriend or a ghost link can shrink either
-      // list out from under the page the user is on.
-      const buddiesPages = totalPages(this._buddies.length);
+      // Clamp before slicing: an unfriend, a ghost link or a keystroke in the
+      // filter can shrink either list out from under the page the user is on.
+      const buddyRows = this._filteredBuddies();
+      const buddiesPages = totalPages(buddyRows.length);
       this._buddiesPage = Math.min(this._buddiesPage, buddiesPages);
-      const buddiesSlice = pageSlice(this._buddies, this._buddiesPage);
+      const buddiesSlice = pageSlice(buddyRows, this._buddiesPage);
+
+      const filtering = this._q() !== "";
+      // Whether to offer the box at all is decided on the UNFILTERED totals.
+      // Deriving it from what is currently on screen would let a query that
+      // matches nothing take away the field holding that query — the user
+      // would be left staring at two empty lists with no way to undo it.
+      const searchable = this._buddies.length + this._playedWithRows().length > 0;
 
       // Section order is deliberate: everything the user can CLEAR sits above
       // everything they can only browse. Incoming requests, link requests and
@@ -298,6 +316,16 @@
               <i data-icon="qr-code" class="w-5 h-5"></i>
             </button>
           </div>
+          ${searchable ? window.BgbSearchField.render({
+            id: "buddies-search-input",
+            cls: "buddies-add__search",
+            value: this._query,
+            icon: true,
+            placeholder: "Search buddies and played with",
+            ariaLabel: "Filter buddies and played with",
+            clearLabel: "Clear the buddy filter",
+            oninput: "window.buddiesView._onSearchInput(this.value)",
+          }) : ""}
         </section>
 
         ${this._requests.incoming.length > 0 ? `
@@ -351,9 +379,11 @@
         })}
 
         <section class="buddies-section">
-          <h3>Buddies (${this._buddies.length})</h3>
-          ${this._buddies.length === 0
-            ? `<p class="text-sm opacity-60 p-3">No buddies yet — tap Add buddies to find some.</p>`
+          <h3>Buddies (${filtering ? `${buddyRows.length} of ${this._buddies.length}` : this._buddies.length})</h3>
+          ${buddyRows.length === 0
+            ? `<p class="text-sm opacity-60 p-3">${filtering
+                ? `No buddies match \u201C${escapeHtml(this._query.trim())}\u201D.`
+                : "No buddies yet — tap Add buddies to find some."}</p>`
             : `<ul class="buddies-list">${buddiesSlice.map((b) => {
                 const plays = playCountByUser[b.other_user_id] || 0;
                 const sub = [
@@ -505,12 +535,66 @@
         .concat(ghosts.map((item) => ({ kind: "ghost", item })));
     }
 
+    // ── The filter ──────────────────────────────────────────────────────────
+
+    /** The query folded for comparison, or "" when the box is empty. */
+    _q() {
+      return window.BgbNameMatch.normalize(this._query || "");
+    }
+
+    /**
+     * Buddies the current query admits.
+     *
+     * Derived, never stored: `_buddies` is the array every write path on this
+     * screen addresses directly — the optimistic add, the unfriend that
+     * splices by index and puts the row back at the same index when the
+     * request fails, the alias write that finds by edge id. Filtering it in
+     * place would make a keystroke in the search box able to unfriend the
+     * wrong person.
+     */
+    _filteredBuddies() {
+      const q = this._q();
+      if (!q) return this._buddies;
+      return this._buddies.filter((b) => nameMatches(q, [
+        b.other_display_name,
+        // Both halves of an aliased row are searchable, because both are on
+        // screen: the alias is what the viewer reads, the real name is what
+        // anyone else would call them, and either is a fair thing to type.
+        b.other_alias,
+        b.other_username,
+      ]));
+    }
+
+    /** The Played-with sequence the current query admits. */
+    _visiblePlayedWithRows() {
+      const q = this._q();
+      const rows = this._playedWithRows();
+      if (!q) return rows;
+      return rows.filter((r) => nameMatches(q, [r.item.display_name]));
+    }
+
+    _onSearchInput(value) {
+      this._query = value;
+      // Both lists go back to their first page on every keystroke. Without
+      // this a viewer filtering from page 3 lands on page 3 of a one-page
+      // result — the clamp in render() would pull them back to a page whose
+      // rows they never asked to skip. The top of the matches is the answer.
+      this._buddiesPage = 1;
+      this._playedWithPage = 1;
+      this.render();
+    }
+
     _renderPlayedWithSection() {
       // Each row carries a type chip so the user can tell accounts from
       // customs at a glance.
-      const rows = this._playedWithRows();
-      if (rows.length === 0) return "";
+      // An account that has never logged a play alongside anyone else has no
+      // Played-with section at all — filter or no filter, there is nothing
+      // here to say "no matches" about.
+      const all = this._playedWithRows();
+      if (all.length === 0) return "";
 
+      const filtering = this._q() !== "";
+      const rows = this._visiblePlayedWithRows();
       const pages = totalPages(rows.length);
       this._playedWithPage = Math.min(this._playedWithPage, pages);
       const slice = pageSlice(rows, this._playedWithPage);
@@ -527,10 +611,12 @@
 
       return `
         <section class="buddies-section">
-          <h3>Played with (${rows.length})</h3>
-          <ul class="buddies-list">
+          <h3>Played with (${filtering ? `${rows.length} of ${all.length}` : all.length})</h3>
+          ${rows.length === 0
+            ? `<p class="text-sm opacity-60 p-3">No one you\u2019ve played with matches \u201C${escapeHtml(this._query.trim())}\u201D.</p>`
+            : `<ul class="buddies-list">
             ${rowHtml}
-          </ul>
+          </ul>`}
           ${this._renderPager(this._playedWithPage, pages, "_goPlayedWithPage", "Played-with pagination")}
           ${ghostsOnPage
             ? `<p class="text-xs opacity-60 px-1 mt-1">Tap “Link” on a custom player to point them at a real account, or the pencil to fix a misspelt name — past plays update either way.</p>`
@@ -561,14 +647,14 @@
     }
 
     _goBuddiesPage(n) {
-      const next = clampPage(n, this._buddies.length);
+      const next = clampPage(n, this._filteredBuddies().length);
       if (next === this._buddiesPage) return;
       this._buddiesPage = next;
       this.render();
     }
 
     _goPlayedWithPage(n) {
-      const next = clampPage(n, this._playedWithRows().length);
+      const next = clampPage(n, this._visiblePlayedWithRows().length);
       if (next === this._playedWithPage) return;
       this._playedWithPage = next;
       this.render();
@@ -1976,6 +2062,32 @@
       out.splice(at, 0, survivor);
       return out;
     }
+  }
+
+  /**
+   * Does any of `fields` contain the already-folded `needle`?
+   *
+   * Both sides go through BgbNameMatch.normalize, the app's one name-folding
+   * rule, so this screen reads names the way the ghost linker and the play
+   * importer already do: accents off, case off, punctuation to spaces. "renee"
+   * finds Renée, and a typed "@marcus" finds the username `marcus` because the
+   * @ folds away on the query side too. (Punctuation becoming a SPACE rather
+   * than nothing is the one edge worth knowing: "o hara" finds O'Hara,
+   * "ohara" does not. Matching across a fold that the row's own text does not
+   * show is the fuzzy scorer's job, not this one's.)
+   *
+   * Substring, not that fuzzy scorer next door, on purpose: this filters a
+   * list already on screen, where a row surviving a query it visibly does not
+   * contain reads as a bug rather than as cleverness.
+   *
+   * @param {string} needle Folded query. Never empty — callers return early.
+   * @param {Array<string|null|undefined>} fields
+   */
+  function nameMatches(needle, fields) {
+    for (const f of fields) {
+      if (f && window.BgbNameMatch.normalize(f).includes(needle)) return true;
+    }
+    return false;
   }
 
   function totalPages(count) {
