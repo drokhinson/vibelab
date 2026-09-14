@@ -83,6 +83,19 @@
 //     live-scores overlay and the spectator's mirror are both stored under; a
 //     second numbering scheme would be a second truth.
 //
+// THE GRID IS THREE TABLES, not one, and that is load-bearing rather than
+// incidental. The column headers pin against the PAGE scroll (there is no
+// inner vertical scroller any more), which they can only do from outside the
+// horizontal scroller — an `overflow-x: auto` box is a scroll container on
+// both axes, so a <thead> inside it pins to a scrollport that never scrolls
+// down. Splitting the Total row out again is what bounds the pin: .rg__head's
+// containing block is .rg__pinzone, which ends at the last round row, so the
+// header is handed back exactly there and can never cover the Total row. The
+// three tables are held in column by ONE colgroup (renderColGroup) plus
+// `table-layout: fixed` — never by measuring one and applying it to another —
+// and in horizontal position by RoundGridScroll.sync. See the block comment
+// above `.rg` in styles.css for the full argument.
+//
 // There is deliberately NO total resolver. The Total row is ALWAYS the sum of
 // the very cells this render just emitted — same getCellValue, same round
 // range — so "the column doesn't add up" is not a state the grid can reach.
@@ -112,23 +125,33 @@
     // range the rows below were built from.
     const getTotal = (p) => roundGridTotal(p, roundCount, getCell);
 
-    // The pane keeps its place across the host's re-renders, and drops to the
-    // bottom when this render added a round. See RoundGridScroll.
+    // The body keeps its column across the host's re-renders, and drops to the
+    // new last round when this render added one. See RoundGridScroll.
     RoundGridScroll.schedule(host, roundCount);
 
+    const cols = renderColGroup(safePlayers.length);
+
     return `
-      <div class="scoring-table-wrap" data-round-grid="${escapeAttr(host)}"
-           onscroll="window.RoundGridScroll.remember('${host}', this)">
-        <table class="scoring-table">
-          <thead>
-            <tr>
-              <th></th>
-              ${safePlayers.map((p) => `
-                <th class="scoring-head${headerNames ? " is-named" : ""}" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name, headerNames, headerNamesDefault)}</th>
-              `).join("")}
-            </tr>
-          </thead>
-          <tbody>
+      <div class="rg" data-round-grid="${escapeAttr(host)}" style="--rg-cols: ${safePlayers.length}">
+        <div class="rg__pinzone">
+          <div class="rg__head" data-rg-sync>
+            <table class="scoring-table scoring-table--head">
+              ${cols}
+              <thead>
+                <tr>
+                  <th class="scoring-head-corner"></th>
+                  ${safePlayers.map((p) => `
+                    <th class="scoring-head${headerNames ? " is-named" : ""}" scope="col" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name, headerNames, headerNamesDefault)}</th>
+                  `).join("")}
+                </tr>
+              </thead>
+            </table>
+          </div>
+          <div class="rg__body" data-rg-scroller
+               onscroll="window.RoundGridScroll.sync('${host}', this)">
+            <table class="scoring-table scoring-table--body">
+              ${cols}
+              <tbody>
             ${Array.from({ length: roundCount }).map((_, r) => {
               const tpl = rowLabels[r] || null;
               // A row contributed by an ADD-ON expansion carries that
@@ -140,9 +163,14 @@
               // literal, the one legitimate inline-colour case in
               // .claude/rules/theming.md §10.
               const src = (tpl && tpl.source_color) || null;
+              // The three tables no longer share a <thead>, so a cell can no
+              // longer be associated with its column by structure. Every cell
+              // says what it is instead — which these inputs never did at all
+              // before, so it is a gain rather than a patch for the split.
+              const rowName = tpl ? tpl.label : `Round ${r + 1}`;
               return `
               <tr>
-                <th class="scoring-round-th${tpl ? " scoring-round-th--tpl" : ""}${src ? " scoring-round-th--exp" : ""}"
+                <th scope="row" class="scoring-round-th${tpl ? " scoring-round-th--tpl" : ""}${src ? " scoring-round-th--exp" : ""}"
                     ${src ? `style="--exp-accent: ${escapeAttr(src)}"` : ""}
                     ${tpl ? `data-row-color="${escapeAttr(tpl.color || "neutral")}"` : ""}
                     ${tpl ? `title="${escapeAttr(tpl.label)}"` : ""}>
@@ -159,18 +187,27 @@
                 ${safePlayers.map((p, i) => `
                   <td>
                     ${editable
-                      ? renderEditableCell(getCell(p, r), i, r, host, showSign)
-                      : `<span class="scoring-cell--read" data-score-cell="${i}-${r}">${escapeHtml(getCell(p, r))}</span>`}
+                      ? renderEditableCell(getCell(p, r), i, r, host, showSign, `${p.name} — ${rowName}`)
+                      : `<span class="scoring-cell--read" data-score-cell="${i}-${r}" aria-label="${escapeAttr(`${p.name} — ${rowName}`)}">${escapeHtml(getCell(p, r))}</span>`}
                   </td>
                 `).join("")}
               </tr>`;
             }).join("")}
-            <tr class="scoring-total-row">
-              <th>Total</th>
-              ${safePlayers.map((p, i) => renderTotalsCell(p, i, mode, getTotal(p), host, editable)).join("")}
-            </tr>
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="rg__foot" data-rg-sync>
+          <table class="scoring-table scoring-table--foot">
+            ${cols}
+            <tbody>
+              <tr class="scoring-total-row">
+                <th scope="row">Total</th>
+                ${safePlayers.map((p, i) => renderTotalsCell(p, i, mode, getTotal(p), host, editable)).join("")}
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       ${editable ? `
         <div class="scoring-actions">
@@ -180,6 +217,17 @@
         </div>
       ` : ""}
     `;
+  }
+
+  // The column contract, and the whole of it. Three tables have to agree on
+  // their columns to the pixel; they do it by sharing this markup and
+  // `table-layout: fixed` rather than by anyone measuring anyone else. Widths
+  // come from --rg-label-w / --rg-col-min on .rg (styles.css), so a repaint
+  // cannot land them out of step and there is no resize pass to forget.
+  function renderColGroup(n) {
+    let cols = `<col class="rg-col--label" />`;
+    for (let i = 0; i < n; i++) cols += `<col class="rg-col--player" />`;
+    return `<colgroup>${cols}</colgroup>`;
   }
 
   // The row's own label, and — on a template row whose author wrote a
@@ -218,7 +266,7 @@
   // `type=number` strips it on some engines) plus an optional +/− sign button.
   // The sign button is gated by the host's "± Negative" toggle so that, by
   // default, phones whose keyboard already has a minus key aren't cluttered.
-  function renderEditableCell(rawValue, i, r, host, showSign) {
+  function renderEditableCell(rawValue, i, r, host, showSign, label) {
     const val = rawValue == null ? "" : String(rawValue);
     const neg = val.charAt(0) === "-";
     return `<div class="scoring-cell-wrap${neg ? " is-neg" : ""}">
@@ -230,6 +278,7 @@
       <input type="text" inputmode="numeric" pattern="-?[0-9]*"
              id="rg-${host}-${i}-${r}" data-score-cell="${i}-${r}"
              class="scoring-cell"
+             aria-label="${escapeAttr(label || "Score")}"
              value="${escapeAttr(val)}"
              oninput="window.${host}._setRoundScore(${i}, ${r}, this.value)" />
     </div>`;
@@ -242,10 +291,14 @@
     // Co-op: the whole table wins or loses together, no per-player trophy.
     const negClass = Number(total) < 0 ? " is-neg" : "";
     const tdClass = p.is_winner ? "scoring-total-cell--winner" : "";
+    // Labelled for the same reason the score cells are: the Total row is its
+    // own table now, so "which column is this" is no longer answerable from
+    // the markup around it.
+    const totalLabel = escapeAttr(`${p.name} total`);
     if (mode === "coop") {
       return `<td class="${tdClass}">
         <div class="scoring-total-cell">
-          <span class="scoring-total${negClass}">${escapeHtml(total)}</span>
+          <span class="scoring-total${negClass}" aria-label="${totalLabel}">${escapeHtml(total)}</span>
         </div>
       </td>`;
     }
@@ -254,11 +307,12 @@
         ${showWinner
           ? `<button class="scoring-winner-btn ${p.is_winner ? "is-winner" : ""}"
                      title="${p.is_winner ? "Winner" : "Mark as winner"}"
+                     aria-label="${escapeAttr(p.name)} — ${p.is_winner ? "winner" : "mark as winner"}"
                      onclick="window.${host}._toggleWinner(${i})">
               <i data-icon="${p.is_winner ? "trophy" : "circle"}" class="w-4 h-4"></i>
             </button>`
           : (p.is_winner ? `<i data-icon="trophy" class="w-4 h-4"></i>` : "")}
-        <span class="scoring-total${negClass}">${escapeHtml(total)}</span>
+        <span class="scoring-total${negClass}" aria-label="${totalLabel}">${escapeHtml(total)}</span>
       </div>
     </td>`;
   }
@@ -339,7 +393,7 @@
   // Still no host method and still no re-render, for the same reason it never
   // had one: the two states differ by a single class, so there is nothing to
   // rebuild. Routing the tap through a host's `outerHTML` repaint instead
-  // would reset `.scoring-table-wrap`'s scrollLeft — on a 5-6 player grid the
+  // would reset `.rg__body`'s scrollLeft — on a 5-6 player grid the
   // table snaps back to column 1 — blur whatever cell was being typed in, and
   // give the read-only spectator mirror a host contract it has never needed.
   //
@@ -390,62 +444,74 @@
     return s.charAt(0) === "-" ? s.slice(1) : "-" + s;
   }
 
-  // ── Pane scroll continuity ─────────────────────────────────────────
-  // .scoring-table-wrap is a bounded scrollport now (styles.css — that is what
-  // lets the header row pin), which turns the hosts' full re-renders into a
-  // visible problem they never had while the pane was unbounded:
+  // ── Horizontal continuity, and the new round ───────────────────────
+  // Two jobs, both of them consequences of the grid being three tables and one
+  // page scroll rather than one table in a bounded pane.
   //
-  //   * every host repaints the whole grid on _addRound / _removeRoundAt /
-  //     _toggleWinner, and the spectator mirror repaints on every realtime
-  //     score echo — each one resetting scrollTop to 0, i.e. yanking the view
-  //     back to round 1 mid-game, sometimes while the host is simply typing;
-  //   * "Add round" appends a row BELOW the fold of a scrolled-out pane, so
-  //     the button would read as doing nothing at all.
+  // 1. KEEPING THE THREE REGIONS IN COLUMN. .rg__body is the only real
+  //    scroller; .rg__head and .rg__foot are `overflow: hidden` boxes whose
+  //    scrollLeft is settable, so they are driven from the body rather than
+  //    transformed — a transform would carry their sticky-left round-label
+  //    cell along with everything else, which is the one cell that must not
+  //    move. Nothing here measures anything: the columns themselves are held
+  //    in step by the shared colgroup (renderColGroup) and `table-layout:
+  //    fixed`, and this only mirrors the offset.
   //
-  // So the pane's offsets are remembered per host and reapplied on the next
-  // render — unless the round count grew, in which case the new last row is
-  // what the user just asked for and the pane scrolls to it. scrollLeft rides
-  // along for free, which also settles the wide-table half of the same wart
-  // (see the note on renderScoringHead about repaints losing the column you
-  // were on).
+  // 2. SURVIVING THE HOSTS' REPAINTS. Every host replaces the whole scoring
+  //    card on _addRound / _removeRoundAt / _toggleWinner, and the spectator
+  //    mirror repaints on every realtime score echo. Each one resets the
+  //    body's scrollLeft — on a 5-6 player grid that snaps the table back to
+  //    column 1, sometimes while the host is simply typing (the same wart the
+  //    note on renderScoringHead describes). So the offset is remembered per
+  //    host and reapplied on the next render.
+  //
+  //    The scrollTop half of this is gone with the pane: the page holds its own
+  //    position across an innerHTML swap. What the page cannot do by itself is
+  //    the "Add round" case — the new row lands below the fold and the button
+  //    reads as doing nothing — so when the round count grew we scroll the new
+  //    last row into view. `block: "nearest"` so a grid already on screen does
+  //    not jump, and the row's own scroll-margin (styles.css) is what keeps it
+  //    clear of the band pinned above it and the docked CTA below it.
   //
   // The restore runs in a rAF because the renderer hands back a STRING: the
   // host injects it synchronously in the same task, so the next frame is the
-  // first moment the pane exists. If a host ever injects late the restore
-  // simply finds nothing and the pane starts at the top, exactly as before.
+  // first moment the regions exist. If a host ever injects late the restore
+  // simply finds nothing and the grid starts at column 1, exactly as before.
   const _paneScroll = Object.create(null);
   const RoundGridScroll = {
-    /** @param {string} host @param {HTMLElement} el */
-    remember(host, el) {
+    /**
+     * Mirror the body's column offset onto the two hidden regions, and
+     * remember it for the next repaint. Wired to .rg__body's inline onscroll.
+     * @param {string} host @param {HTMLElement} el
+     */
+    sync(host, el) {
       if (!el) return;
       const prev = _paneScroll[host];
-      _paneScroll[host] = {
-        top: el.scrollTop,
-        left: el.scrollLeft,
-        rounds: prev ? prev.rounds : 0,
-      };
+      _paneScroll[host] = { left: el.scrollLeft, rounds: prev ? prev.rounds : 0 };
+      const rg = el.closest(".rg");
+      if (!rg) return;
+      const mirrors = rg.querySelectorAll("[data-rg-sync]");
+      for (let i = 0; i < mirrors.length; i++) mirrors[i].scrollLeft = el.scrollLeft;
     },
     /** @param {string} host @param {number} roundCount */
     schedule(host, roundCount) {
       const prev = _paneScroll[host];
       const grew = !!prev && roundCount > prev.rounds;
-      _paneScroll[host] = {
-        top: prev ? prev.top : 0,
-        left: prev ? prev.left : 0,
-        rounds: roundCount,
-      };
+      _paneScroll[host] = { left: prev ? prev.left : 0, rounds: roundCount };
       if (typeof requestAnimationFrame !== "function") return;
       requestAnimationFrame(() => {
-        const el = document.querySelector(
-          `.scoring-table-wrap[data-round-grid="${host}"]`
-        );
+        const rg = document.querySelector(`.rg[data-round-grid="${host}"]`);
+        if (!rg) return;
+        const el = rg.querySelector("[data-rg-scroller]");
         if (!el) return;
-        const at = _paneScroll[host] || { top: 0, left: 0 };
-        // scrollHeight, not a row measurement: the pane clamps whatever it is
-        // given, so this lands on the last round whatever its height.
-        el.scrollTop = grew ? el.scrollHeight : at.top;
-        el.scrollLeft = at.left;
-        this.remember(host, el);
+        el.scrollLeft = (_paneScroll[host] || { left: 0 }).left;
+        this.sync(host, el);
+        if (!grew) return;
+        const rows = rg.querySelectorAll(".scoring-table--body tbody tr");
+        const last = rows[rows.length - 1];
+        if (last && typeof last.scrollIntoView === "function") {
+          last.scrollIntoView({ block: "nearest" });
+        }
       });
     },
   };
@@ -544,12 +610,12 @@
   };
 
   // Opening one row's description. The project's one-button information modal
-  // rather than a popover: the header cell lives in a table with its own
-  // bounded scrollport (RoundGridScroll below), so anything positioned against
-  // it would be clipped by the pane it is anchored in — the same geometry
-  // argument .claude/rules/overlays.md §1 makes for sheets over dropdowns. A
-  // modal has no anchor to be clipped by, and PolaroidPopup.alert already
-  // handles the backdrop tap, the device back press and the focus.
+  // rather than a popover: the label cell lives inside .rg__body, which is a
+  // horizontal scrollport with `overflow-x: auto`, so anything positioned
+  // against that cell would be clipped by the region it is anchored in — the
+  // same geometry argument .claude/rules/overlays.md §1 makes for sheets over
+  // dropdowns. A modal has no anchor to be clipped by, and PolaroidPopup.alert
+  // already handles the backdrop tap, the device back press and the focus.
   const RoundGridNotes = {
     /** @param {Element} el the info button that was tapped */
     show(el) {

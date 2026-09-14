@@ -25,6 +25,11 @@
      next band a hairline UNDER the back row, where a fraction long would open
      a sub-pixel seam for list content to show through. */
   --bgb-spoke-head-height: 59px;
+  /* The cascade step header ("Play · Step 2 of 3"), which pins under the
+     global header the way .spoke-head does. A token because three rules
+     derive an offset from it: the aside pane, the scoring grid's pinned
+     column headers, and the band itself. */
+  --bgb-cascade-head-height: 55px;
 
   /* Layout tiers. <html data-bgb-layout="phone|tablet|wide"> is set before
      first paint by the inline boot in index.html and owned after that by
@@ -2652,9 +2657,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 /* The preview is a picture, not a control: it must not steal a tap meant for
    the row editor above it, and its own scrollport would fight the editor's. */
-.tmpl-preview .scoring-table-wrap {
+.tmpl-preview .rg {
   pointer-events: none;
-  max-height: none;
 }
 
 /* ── Step 2: the head start ──────────────────────────────────────────────── */
@@ -8161,45 +8165,117 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    --well is declared only on chrome surfaces, so the fallback in
    `var(--well, …)` is what a paper surface actually gets.
    ────────────────────────────────────────────────────────────────────────── */
-/* The grid's scrollport — horizontal for a 6-player table, and, once a game
-   runs long, vertical too, so the header row can pin over it.
+/* ── The grid's three regions ───────────────────────────────────
+   ONE scroll. The grid renders every round it has, and the column headers are
+   picked up by the PAGE as they leave the top of the screen, held under the
+   global header, and handed back at the last round row.
 
-   Vertical scrolling lives HERE rather than on the page by necessity, not by
-   preference: `overflow-x: auto` already made this box a scroll container on
-   BOTH axes (an absent overflow-y computes to `auto` beside a scrollable
-   overflow-x, CSS Overflow 3 §3 — the same rule the feed rails call out), and
-   a sticky thead resolves against its nearest scroll container. So the header
-   could never have pinned to the viewport from in here whatever the page did;
-   the only way it pins at all is if the box it sits in is the box that
-   scrolls. Hence the ceiling below.
+   This was a bounded pane until it wasn't — a max-height plus `overflow: auto`,
+   which is what let a sticky thead pin inside it. The cost was two competing
+   scrolls, a pane scroll nested in the page scroll, with a flick landing on
+   whichever one the thumb happened to start over.
 
-   The ceiling only bites once the table outgrows it — roughly 8+ rounds on a
-   phone — so every short grid renders exactly as it always has, page-scrolled
-   and unbounded in feel.
+   The header cannot simply move its `top` onto the page, because the grid
+   still needs a horizontal scroller for a 6-player table and `position:
+   sticky` resolves against the nearest scrolling ancestor. `overflow-x: auto`
+   makes a box a scroll container on BOTH axes (an absent overflow-y computes
+   to `auto` beside it, CSS Overflow 3 §3 — the same rule the feed rails call
+   out; `clip` computes to `hidden`, which is a scrollport too), so a thead
+   inside that box can only ever pin to a scrollport that never scrolls
+   vertically, which is to say never pin. The header has to live OUTSIDE the
+   horizontal scroller. That is the whole reason there are three tables.
 
-   Sized off --bgb-vv-h (ui/viewport-lock.js), not dvh alone, because the whole
-   point of the pane is typing into it: iOS overlays the keyboard WITHOUT
-   shrinking the layout viewport, so a dvh-tall pane would run past the bottom
-   of what is actually on screen and the header pinned to its top would sit
-   above the fold — pinned, but nowhere the user can see. The 11rem term is the
-   chrome the pane shares its visible box with (the card's label row and
-   padding, plus the docked CTA bar that :root.bgb-kb-open parks on top of the
-   keyboard). The max() floor keeps a landscape phone at a workable few rows
-   instead of collapsing to the header alone. */
-.scoring-table-wrap {
-  overflow: auto;
+   Splitting it out is also what buys the release. A sticky box is bounded by
+   its containing block, so:
+
+     .rg__pinzone   the header + the round rows   ← the header's containing block
+     .rg__foot      the Total row                 ← outside it
+
+   and the header is handed back exactly as the last round row leaves. No
+   scroll position exists at which it covers the Total row — not because a
+   release point was calibrated, but because there is nowhere for it to go.
+   (Web-frontend.md makes the mirror-image argument for docked chrome: fixed,
+   not sticky, because a sticky bottom bar's release point drifts out of sync
+   with every other bottom offset in the app. Here a release point is WANTED,
+   which is why it is built out of the structure rather than tuned.)
+
+   The three tables are kept in column structurally too: one <colgroup> from
+   renderColGroup(), `table-layout: fixed`, and the two width tokens below. No
+   width is ever measured on one table and copied onto another, so there is
+   nothing to fall out of sync — and nothing to re-measure after the hosts'
+   wholesale repaints (play-flow-view.js:2040 replaces the whole card's
+   outerHTML on every add round / remove round / sign toggle).
+
+   The pane's --bgb-vv-h ceiling went with it, and does not need replacing.
+   It existed because the header pinned to the top of a box the stylesheet
+   sized, so on iOS — which overlays the keyboard WITHOUT shrinking the layout
+   viewport — a dvh-tall box would have put its pinned header above the fold.
+   A page-level sticky has no box to mis-size: it rides the same scrollport as
+   .bgb-global-header and .spoke-head and behaves exactly as they do with a
+   keyboard up. Whatever remains here is the app's existing sticky-chrome
+   behaviour, not a new bug class in the grid. */
+.rg {
+  --rg-label-w: 6.6rem;
+  --rg-col-min: 4.3rem;
+  /* The pinned band's height, as an ALLOWANCE rather than a constraint: the
+     scroll-margin below has to reserve room for it, but nothing sets it. The
+     band is sized by its content — 64px, held at one value across the bubble
+     and name states by the 44px tap-target floor on .scoring-head__toggle
+     (see there) — and the offer preview deliberately shrinks it, which a
+     `height` here would silently undo. Being a few px out only affects a
+     scroll-into-view that block:"nearest" already aligns to the other edge. */
+  --rg-head-h: 64px;
+  --rg-pin-top: 0px;
+}
+/* Park under the global header, the way a pinned sub-header does. The token is
+   0px on the tiers that fold the header into the side rail, so this collapses
+   for free instead of needing a tier rule of its own. Inside the play-detail
+   popup the nearest scrollport is .play-detail-popup__scroll, which starts
+   below that card's topbar — so the default 0px is already right there and the
+   band pins to the top of the card. */
+:is([data-view="play-flow"], [data-view="session-viewer"]) .rg {
+  --rg-pin-top: calc(var(--bgb-header-height) + var(--bgb-cascade-head-height));
+}
+.rg__pinzone { position: relative; }
+.rg__head {
+  position: sticky;
+  top: var(--rg-pin-top);
+  /* The documented ladder: above view content, below the pinned sub-header
+     (20), the docked footers (35) and the global header (30). */
+  z-index: 15;
+  /* Load-bearing, not tidiness. `hidden` keeps this box a scroll container,
+     which is what lets the round-label cell inside it stay `sticky; left: 0`,
+     and what makes scrollLeft settable — the two hidden regions are driven off
+     the body's scrollLeft rather than transformed, because a transform would
+     carry that sticky-left cell along with everything else. */
+  overflow: hidden;
+  background: var(--polaroid-bg);
+}
+.rg__body {
+  overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  /* Stated, not inherited: a max-height caps the CONTENT box, so a padding or
-     border added here later would land outside the cap (mobile-web.md §7). */
+  /* Stated, not inherited (mobile-web.md §7). */
   box-sizing: border-box;
-  max-height: 62vh;                                                  /* no-dvh fallback */
-  max-height: max(11rem, min(62dvh, calc(var(--bgb-vv-h, 100dvh) - 11rem)));
+}
+.rg__foot { overflow: hidden; background: var(--polaroid-bg); }
+/* A round appended past the fold has to clear BOTH the band pinned over it and
+   the docked CTA under it, or scrollIntoView lands it beneath one of them. */
+.scoring-table--body tr {
+  scroll-margin-top: calc(var(--rg-pin-top) + var(--rg-head-h) + 8px);
+  scroll-margin-bottom: calc(var(--cascade-bottom-pad, 24px) + 8px);
 }
 .scoring-table {
-  width: 100%;
+  table-layout: fixed;
+  /* Fills the card while the columns fit and holds their floor once they do
+     not — which is exactly the width at which .rg__body starts scrolling
+     sideways, i.e. the same 5-6 player configurations as before. */
+  width: max(100%, calc(var(--rg-label-w) + var(--rg-cols, 4) * var(--rg-col-min)));
   border-collapse: separate; border-spacing: 0;
   font-size: 0.8rem;
 }
+.rg-col--label  { width: var(--rg-label-w); }
+.rg-col--player { width: calc((100% - var(--rg-label-w)) / var(--rg-cols, 4)); }
 .scoring-table th, .scoring-table td {
   padding: 0.3rem 0.4rem;
   text-align: center;
@@ -8233,25 +8309,19 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-table td:nth-child(n + 3) {
   border-left: 1px solid color-mix(in srgb, var(--polaroid-line) 60%, transparent);
 }
-/* The column headers pin to the top of the scrollport above, so a 20-round
-   game still tells you whose column you are typing into. `top: 0` is the top
-   of .scoring-table-wrap, which is why that box has to be the vertical
-   scroller — see the note there.
+/* The column headers, so a 20-round game still tells you whose column you are
+   typing into. The PIN is on .rg__head above, not here — these cells are in
+   ordinary flow inside the box that pins.
 
-   Two things a sticky row cannot do without: an OPAQUE background (the round
-   rows travel under it) and a paint order above them. Hence the explicit
-   --polaroid-bg — the same value the card underneath paints, so a header that
-   is not currently pinned looks untouched — and the drop of the 0.75 opacity
-   this rule used to carry, which would have let the rows show straight
-   through. That fade only ever reached the empty corner cell in practice:
-   every player header already reset it to 1 for its colour bubble. */
+   The OPAQUE background is still required, and for the original reason: the
+   round rows travel under the band. Hence the explicit --polaroid-bg — the
+   same value the card underneath paints, so an unpinned header looks
+   untouched — and no return of the 0.75 opacity this rule used to carry, which
+   would let the rows show straight through. */
 .scoring-table thead th {
   font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 5;
   background: var(--polaroid-bg);
 }
 /* ── The pinned round-label column ────────────────────────────────────────
@@ -8261,28 +8331,31 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    digits with nothing saying which row is Prosperity and which is Events, on
    the one surface where getting that wrong silently mis-scores the game.
 
-   ONE Z LADDER for the whole table, because three of these cells are sticky on
-   two axes at once and equal-z cells settle on document order — which is the
-   wrong answer for every corner:
+   ONE Z LADDER, still, even though each of these cells now lives in its own
+   region: a region is `overflow: hidden` or `overflow-x: auto` and therefore a
+   scroll container, which is what keeps sticky-left working in all three — but
+   it also means equal-z cells settle on document order, the wrong answer for a
+   corner. The vertical half of the old ladder is gone with the pane; what is
+   left is the label column and the two corner cells above and below it:
 
      (auto)  score cells
-       2     the round-label column      sticky left
-       3     the totals band             sticky bottom
-       4     the totals band's label     sticky bottom + left
-       5     the column headers          sticky top
-       6     the corner cell             sticky top + left
+       2     the round-label column      sticky left, in .rg__body
+       4     the Total row's label       sticky left, in .rg__foot
+       6     the header row's corner     sticky left, in .rg__head
 
    Every pinned cell also has to be OPAQUE — the same requirement the header
-   row has, for the same reason — which is why `.scoring-table tbody th` moved
+   band has, for the same reason — which is why `.scoring-table tbody th` moved
    its 0.7 fade onto the ink rather than the whole cell (see there). */
-.scoring-round-th {
+.scoring-round-th,
+.scoring-head-corner,
+.scoring-table tbody tr.scoring-total-row th {
   position: sticky;
   left: 0;
-  z-index: 2;
   background: var(--polaroid-bg);
 }
-.scoring-table thead th:first-child { z-index: 6; left: 0; }
-.scoring-table tbody tr.scoring-total-row th { z-index: 4; left: 0; }
+.scoring-round-th { z-index: 2; }
+.scoring-table tbody tr.scoring-total-row th { z-index: 4; }
+.scoring-head-corner { z-index: 6; }
 /* Column-header bubble. Sized between user-badge `sm` (28/12) and `md`
    (40/16) so the player's initials are easily legible in a dense scoring
    grid without blowing out column widths in 4–6 player tables. The
@@ -8335,7 +8408,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 .scoring-cell {
   width: 100%;
-  min-width: 3.4rem;
+  /* The COLUMN sets the width now (--rg-col-min on .rg, through the shared
+     colgroup); a min-width here would only overflow its own fixed-layout cell. */
+  min-width: 0;
   padding: 0.25rem 0.4rem;
   background: var(--well, var(--polaroid-bg));
   border: 1px solid var(--polaroid-line);
@@ -8612,7 +8687,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    which is the only thing being chosen here: two ghost columns of zeros, 38px
    of it, on every card. The editor's own preview keeps it — there the author is
    checking the whole table, not picking between four of them. */
-.tmpl-offer__preview .scoring-total-row { display: none; }
+.tmpl-offer__preview .rg__foot { display: none; }
 /* The rows the slice left out (PREVIEW_ROWS). On paper, so it reads as part of
    the picture rather than as chrome around it. */
 .tmpl-offer__rest {
@@ -8775,19 +8850,19 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    units of the card and the band disappeared. On cream this lands within three
    units of the tan it replaces. */
 .scoring-total-row { background: color-mix(in srgb, var(--polaroid-line) 55%, transparent); }
-/* The other half of the pinned header: with the grid in a bounded scrollport,
-   the running total would otherwise sit below the fold for exactly the rounds
-   you are still entering. So the band pins to the bottom the way the headers
-   pin to the top — and, like them, has to be opaque to do it, which is what
-   the second color-mix is for: the same wash as the row rule above, resolved
-   over the paper instead of over transparency. The sticky background lands on
-   the CELLS (a <tr> can't be positioned), so the winner cell restates its own
-   over the same band or it would lose its highlight to this rule. */
+/* The band used to pin to the bottom of the pane the way the headers pinned to
+   its top — with the grid bounded, the running total would otherwise have sat
+   below the fold for exactly the rounds you were still entering. There is no
+   pane now: the Total row is the last row of the grid, reached by scrolling,
+   and it is the point the header band is handed back at (.rg__foot sits
+   outside .rg__pinzone). It stays OPAQUE regardless, because the label cell in
+   it is still sticky-left and the score columns travel under it — which is
+   what the second color-mix is for: the same wash as the row rule above,
+   resolved over the paper instead of over transparency. The background lands
+   on the CELLS (a <tr> can't be positioned), so the winner cell restates its
+   own over the same band or it would lose its highlight to this rule. */
 .scoring-total-row th,
 .scoring-total-row td {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
   background: color-mix(in srgb, var(--polaroid-line) 55%, var(--polaroid-bg));
 }
 .scoring-total {
@@ -9774,6 +9849,37 @@ main[data-view="session-viewer"].hidden {
   margin-bottom: 4px;
   padding-top: 4px;
 }
+/* PINNED, for the same reason .spoke-head is: the back chevron and the End
+   session × used to scroll away with the title, so partway down a long
+   scoring grid the only way out of the step was the OS back gesture. Parks
+   directly under .bgb-global-header — which is itself sticky at top:0 and
+   --bgb-header-height tall — so the two read as one stack of chrome and "back
+   a step" is always one tap.
+
+   Direct children only, on purpose: a .cascade-screen__header rendered inside
+   a card, a sheet or a modal on one of these screens must not pin.
+
+   The negative inline margin plus matching padding is .cascade-screen's own
+   16px gutter, given back: the band bleeds to the app column's edges exactly
+   like the header above it, so cards cannot slide past it through the
+   gutters. Only one screen is ever unlocked at a time (the other two are
+   `is-locked`, height 0), so these never stack.
+
+   z-index 20 clears view content and the scoring grid's own pinned header
+   (15), and stays below the global header (30), the docked CTA (35) and the
+   nav (40). */
+.cascade-screen > .cascade-screen__header {
+  position: sticky;
+  top: var(--bgb-header-height);
+  z-index: 20;
+  margin-inline: -16px;
+  padding-inline: 16px;
+  padding-block: 4px 6px;
+  background: oklch(var(--b1) / 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid oklch(var(--b3));
+}
 .cascade-screen__header--read .cascade-screen__step::before {
   content: "";
 }
@@ -9943,11 +10049,12 @@ main[data-view="session-viewer"].hidden {
 }
 :root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .cascade-col--aside {
   position: sticky;
-  top: calc(var(--bgb-header-height) + 12px);
-  /* Everything between the header and the docked bar, minus the screen's own
-     12px top padding. --cascade-bottom-pad differs between the host and the
-     spectator's mirror, and this follows it either way. */
-  max-height: calc(100dvh - var(--bgb-header-height) - var(--bgb-nav-height)
+  top: calc(var(--bgb-header-height) + var(--bgb-cascade-head-height) + 12px);
+  /* Everything between the two pinned bands and the docked bar, minus the
+     screen's own 12px top padding. --cascade-bottom-pad differs between the
+     host and the spectator's mirror, and this follows it either way. */
+  max-height: calc(100dvh - var(--bgb-header-height) - var(--bgb-cascade-head-height)
+                   - var(--bgb-nav-height)
                    - env(safe-area-inset-bottom) - var(--cascade-bottom-pad) - 12px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -14840,14 +14947,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    the read-only cell mirrors the editable cell's METRICS so a spectator's grid
    lines up column-for-column with the host's. Bump one without the other and
    that contract breaks.
-   Columns do not widen. min-width, not the text, is what sets column width for
-   every realistic score: .scoring-cell is min-width:3.4rem (54.4px) and a
-   4-digit score at 16px measures ~38px + 12.8px padding + 2px border ~= 53px,
-   still under it. Measured at 390px across 4/5/6 players with the ± sign toggle
-   both off and on: table width is byte-identical before and after (390/416,
-   390/513, 423/610px), and .scoring-table-wrap's overflow-x:auto engages on
-   exactly the same configurations as before. Only row height moves, +3px, from
-   the taller line box. */
+   Columns do not widen, and since the split they cannot: the grid is
+   `table-layout: fixed` off one shared colgroup, so --rg-col-min on .rg is the
+   column width and the text inside a cell has no say in it. A 4-digit score at
+   16px measures ~38px + 12.8px padding + 2px border ~= 53px, comfortably inside
+   the 4.3rem (68.8px) floor. Only row height moves, +3px, from the taller line
+   box. */
 .scoring-cell,
 .scoring-cell--read,
 .scroll-panel__search,
