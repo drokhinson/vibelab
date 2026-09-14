@@ -216,7 +216,23 @@
 
     /**
      * The templates worth offering: the ones this viewer has not adopted,
-     * minus the ones they have already turned down for this game.
+     * minus the ones they have said no to — in either of the two ways there
+     * are to say it.
+     *
+     * TWO refusals, and they are not the same refusal. `disliked` is the
+     * durable, server-side one (migration 033): the viewer has turned the grid
+     * down for good, on every device, and it is also gone from their pool and
+     * their chapter count. The localStorage list below is the soft one: "not
+     * now", per device, and only ever about this offer. A grid needs to clear
+     * both to be worth putting in front of somebody.
+     *
+     * Disliked rows reach this function at all because the chapter pool ships
+     * them TAGGED rather than dropping them — the guide builder needs them for
+     * its Turned-down section. So the filter belongs here, in the one function
+     * both offer surfaces already go through (the guide's notice via
+     * widgets/reference-guide-scroll.js#_pendingTemplates, and the play
+     * cascade via views/play-flow-view.js#_maybeOfferTemplates), rather than
+     * in each of them.
      *
      * @param {Array<any>} rows a chapter-pool response
      * @param {string} gameId the BASE game the pool was fetched for — the same
@@ -224,7 +240,7 @@
      *   down against the game it was offered beside, not against itself.
      */
     pendingTemplates(rows, gameId) {
-      const unowned = (rows || []).filter((t) => !t.in_my_guide);
+      const unowned = (rows || []).filter((t) => !t.in_my_guide && !t.disliked);
       if (!unowned.length) return [];
       const seen = readDismissed()[gameId] || [];
       return unowned.filter((t) => seen.indexOf(t.id) < 0);
@@ -293,6 +309,29 @@
     },
     remove(gameId, chapterId) {
       return window.api.del(`/games/${gameId}/my-chapters/${chapterId}`);
+    },
+
+    // ── Dislikes (migration 033) ────────────────────────────────────────────
+    //
+    // The inverse of add/remove above, and NOT the same thing as
+    // dismissTemplates() further up this file. A dismissal is a per-device
+    // "not now" that suppresses one offer sheet; a dislike is a per-USER,
+    // server-side "stop recommending this", which takes the chapter out of the
+    // pool, off the guide's "N of M" denominator and out of the template offer
+    // on every device the user signs in on. Both exist because they answer
+    // different questions, and neither reads the other's store.
+    //
+    // Disliking a chapter the user had added drops it from their guide in the
+    // same write — one row, one state — so a caller must treat a dislike as a
+    // potential removal and invalidate accordingly.
+    dislike(gameId, chapterId) {
+      return window.api.post(`/games/${gameId}/disliked-chapters`, { chapter_id: chapterId });
+    },
+    // Undo. Deliberately does NOT re-add: taking back a dislike puts the
+    // chapter back in the pool where it can be considered again, which is a
+    // different act from adopting it.
+    undislike(gameId, chapterId) {
+      return window.api.del(`/games/${gameId}/disliked-chapters/${chapterId}`);
     },
     update(chapterId, payload) {
       return window.api.patch(`/chapters/${chapterId}`, payload);

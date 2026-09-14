@@ -167,11 +167,17 @@ def build_guides(sb: Client, user_id: str, _ctx: dict[str, Any]) -> list[CsvFile
     dropped from your own guide. Exporting only the selections loses text the
     user typed, so both reads are unioned on chapter id and the two flags say
     which case each row is.
+
+    `state='kept'` (migration 033) keeps "in your guide" meaning what the two
+    flags below say it means. A disliked chapter is a row in the same table
+    saying the opposite, and exporting it as a selection would put chapters the
+    user refused into the file as chapters they keep.
     """
     selected = page_all(
         lambda: sb.table("boardgamebuddy_user_chapters")
         .select(f"chapter_id, created_at, boardgamebuddy_guide_chapters({_CHAPTER_FIELDS})")
-        .eq("user_id", user_id),
+        .eq("user_id", user_id)
+        .eq("state", "kept"),
         "chapter_id", label="guide selections",
     )
     authored = page_all(

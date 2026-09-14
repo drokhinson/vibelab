@@ -237,22 +237,33 @@ GRANT SELECT ON public.boardgamebuddy_chapter_reports TO boardgamebuddy_role;
 
 
 -- ── Per-user chapter selections ───────────────────────────────────────────────
--- Which chapters a user keeps, hides or reorders for a given game.
+-- One row per (user, chapter): this viewer's opinion of that chapter, in both
+-- directions. `state='kept'` is the chapter in their guide — what a row meant
+-- outright before migration 033 — and `state='disliked'` is the inverse: turned
+-- down, so it is filtered out of their chapter pool, their pool count and the
+-- scoring-template offer, and shows only in the guide builder's Turned-down
+-- section. Per-viewer and one-directional; the author is never told.
+--
+-- The UNIQUE below is what makes "kept and disliked" unrepresentable, which is
+-- why 033 put the state on this row rather than in a table of its own.
 CREATE TABLE IF NOT EXISTS public.boardgamebuddy_user_chapters (
   id UUID DEFAULT gen_random_uuid() NOT NULL,
   user_id UUID NOT NULL,
   game_id UUID NOT NULL,
   chapter_id UUID NOT NULL,
+  state TEXT DEFAULT 'kept'::text NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now(),
   CONSTRAINT boardgamebuddy_guide_selections_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_guide_selections_user_id_chunk_id_key UNIQUE (user_id, chapter_id),
   CONSTRAINT boardgamebuddy_guide_selections_chunk_id_fkey FOREIGN KEY (chapter_id) REFERENCES boardgamebuddy_guide_chapters(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_guide_selections_game_id_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE CASCADE,
-  CONSTRAINT boardgamebuddy_guide_selections_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE
+  CONSTRAINT boardgamebuddy_guide_selections_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT bgb_user_chapters_state_chk CHECK ((state = ANY (ARRAY['kept'::text, 'disliked'::text])))
 );
 ALTER TABLE public.boardgamebuddy_user_chapters ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_chapter ON public.boardgamebuddy_user_chapters USING btree (chapter_id);
 CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_user_game ON public.boardgamebuddy_user_chapters USING btree (user_id, game_id);
+CREATE INDEX IF NOT EXISTS idx_bgb_user_chapters_disliked ON public.boardgamebuddy_user_chapters USING btree (user_id, game_id) WHERE (state = 'disliked'::text);
 GRANT SELECT ON public.boardgamebuddy_user_chapters TO boardgamebuddy_role;
 
 

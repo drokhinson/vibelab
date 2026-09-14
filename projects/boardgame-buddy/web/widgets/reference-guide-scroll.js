@@ -554,7 +554,18 @@
      */
     _renderCreateTemplate() {
       if (!this._showScoringGrids) return "";
-      if (!this._templatesLoaded || this._templates.length) return "";
+      // "Grids exist" means grids that still exist FOR THIS VIEWER: a grid
+      // they have turned down (migration 033) is one they have already
+      // decided about, and leaving it to suppress this button is how somebody
+      // who refused the only bad grid for a game ends up on a screen that
+      // offers them nothing at all. Refusing it is exactly the moment writing
+      // your own becomes the useful next step.
+      //
+      // NOT pendingTemplates(), which also drops the grids the viewer has
+      // ADOPTED — those must keep this button away, and this is the one
+      // reader that cares about the difference.
+      if (!this._templatesLoaded) return "";
+      if ((this._templates || []).some((t) => !t.disliked)) return "";
       return `
         <button class="scroll-panel__notice scroll-panel__notice--create" type="button"
                 onclick="window.referenceGuideScroll._openCreateTemplate(event)">

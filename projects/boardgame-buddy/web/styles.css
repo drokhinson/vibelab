@@ -1453,6 +1453,106 @@ body {
 }
 .chapter-add__pool-toggle--in:hover [data-icon-name] { color: var(--rust); }
 
+/* ── Turning a chapter down ─────────────────────────────────────────────────
+   views/reference-guide-add-view.js#_renderPoolRow and
+   #_renderDislikedSection. The thumbs-down beside Add, and the section at the
+   foot of the scroll that is the only way back from it.
+
+   The ink is the parchment's #6B4A1A, the literal every sibling in this row
+   already carries (.scroll-chapter__submeta, .scroll-section__header,
+   .scroll-panel__empty). It is a literal on purpose and it is not a theming
+   bug: the scroll is PAPER, which is light in both themes
+   (.claude/rules/theming.md §6), so an ink chosen for it is right in both and
+   a ground token here would invert. Quiet by default, because Add is the
+   answer this screen is for — a refusal drawn with equal weight would make a
+   browse list read as a survey. */
+.chapter-add__pool-dislike {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  color: #6B4A1A;
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.chapter-add__pool-dislike [data-icon-name] { color: #6B4A1A; }
+/* 28px visible, 44×44 tappable: -8px on each side of a 28px box is exactly the
+   floor (.claude/rules/mobile-web.md §5). Done with a pseudo-element so the
+   glyph stays quiet while the thumb still lands — inflating the button itself
+   would give a secondary action the visual weight of Add. The 8px gap to Add
+   is the sibling margin the same rule asks for, and comes from the summary
+   row's own `gap: var(--s-2)`. */
+.chapter-add__pool-dislike::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+}
+/* Touch has no hover, so :active is the mandatory one and hover is the
+   enhancement on top. */
+.chapter-add__pool-dislike:active {
+  opacity: 1;
+  background: rgba(107, 74, 26, 0.14);
+}
+@media (hover: hover) {
+  .chapter-add__pool-dislike:hover {
+    opacity: 1;
+    background: rgba(107, 74, 26, 0.10);
+  }
+}
+.chapter-add__pool-dislike:focus-visible {
+  opacity: 1;
+  outline: 2px solid #6B4A1A;
+  outline-offset: -3px;   /* the scroll clips an outset ring */
+}
+
+/* The section itself. Separated from the type sections above by a rule rather
+   than by spacing alone: it is a different kind of thing, not one more type. */
+.chapter-add__disliked {
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid rgba(107, 74, 26, 0.22);
+}
+.chapter-add__disliked-note {
+  margin: calc(var(--s-1) * -1) var(--s-1) 0;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #6B4A1A;
+  opacity: 0.75;
+}
+/* Faded, so the pile reads as set aside rather than as a second list to shop
+   from — but not so faint that the titles stop being legible, which is the
+   whole reason the section exists. The Undo button inside stays at full
+   strength: it is the one thing here anyone taps. */
+.scroll-chapter--disliked .scroll-chapter__title { opacity: 0.7; }
+.scroll-chapter--disliked .scroll-chapter__submeta { opacity: 0.7; }
+/* A flat row, not an accordion — no <details>, so nothing supplies the
+   summary's cursor or its marker, and the padding has to come from here. */
+.scroll-chapter--disliked .scroll-chapter__summary {
+  cursor: default;
+  list-style: none;
+}
+/* Undo is the ONLY way back out of a dislike, so unlike the --compact buttons
+   it sits beside in the browse list it gets the full 44px hit area rather than
+   the 28px box it is drawn as. Same pseudo-element trick, same reason: the
+   pill is sized to the row it lives in, and the thumb is not. */
+.scroll-chapter--disliked .chapter-add__pool-toggle { position: relative; }
+.scroll-chapter--disliked .chapter-add__pool-toggle::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+}
+
 /* Horizontally-scrollable chip filter. Fits any phone screen without
    overflowing into other UI. Native scroll, snap-x, hidden scrollbar. */
 .chapter-add__filter-chips {

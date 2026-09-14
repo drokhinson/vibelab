@@ -495,12 +495,33 @@ components above.
       }
     }
 
+    /**
+     * The pool minus the chapters this viewer has turned down.
+     *
+     * ONE predicate, in one place, because three separate readers below draw
+     * from the pool — the list, the type chips and the section grouping — and
+     * a chapter hidden from the list but still counted by the chips gives you
+     * a filter pill that leads nowhere. The disliked rows are still in
+     * `_allPool`: the backend ships them tagged rather than dropping them, so
+     * _renderDislikedSection has them without a second request.
+     */
+    _activePool() {
+      return this._allPool.filter((c) => !c.disliked);
+    }
+
+    /** The other half: what the Disliked section draws. */
+    _dislikedPool() {
+      return this._allPool.filter((c) => c.disliked);
+    }
+
     // Apply the current search needle and type chip to the cached pool.
     // Search matches title or content substring; chapter_type is exact.
+    // Disliked chapters are already gone via _activePool — a search is not a
+    // way back to them, the Disliked section is.
     _filteredPool() {
       const needle = (this._search || "").trim().toLowerCase();
       const type = this._typeFilter || "";
-      return this._allPool.filter((c) => {
+      return this._activePool().filter((c) => {
         if (type && c.chapter_type !== type) return false;
         if (!needle) return true;
         return (c.title || "").toLowerCase().includes(needle)
@@ -513,7 +534,7 @@ components above.
     // filter pill that leads to an empty list.
     _distinctTypes() {
       const seen = new Map();
-      for (const c of this._allPool) {
+      for (const c of this._activePool()) {
         if (!c.chapter_type || seen.has(c.chapter_type)) continue;
         seen.set(c.chapter_type, {
           id: c.chapter_type,
@@ -874,18 +895,38 @@ components above.
       `)].join("");
 
       const filtered = this._filteredPool();
+      const dislikedCount = this._dislikedPool().length;
+      // Three reasons the list can be empty and they are not the same
+      // sentence. "Yet" claims nobody has written one, which is a lie when the
+      // viewer has turned every chapter down — and the fix for that case is
+      // the section below, not the Create button, so say which it is. The
+      // filter case is unchanged and asked first: a needle that matches
+      // nothing is about the needle, whatever else is in the pool.
+      const emptyLine = (this._search || this._typeFilter)
+        ? "No chapters available for this filter."
+        : dislikedCount
+          ? `You've turned down ${dislikedCount === 1 ? "the only chapter" : `all ${dislikedCount} chapters`} written for this game. They're below if you want one back.`
+          : "No chapters available yet.";
       const scrollBody = this._poolLoading
         ? `<div class="scroll-panel__loading">${window.buddyLoader({ size: 60 })}</div>`
         : filtered.length === 0
           ? `<div class="scroll-panel__empty">
-               No chapters available${this._search || this._typeFilter ? " for this filter" : " yet"}.
+               ${escapeHtml(emptyLine)}
                <br/><button class="chapter-edit__fbtn chapter-edit__fbtn--save mt-3"
                             onclick="window.referenceGuideAddView._enterCreate()">
-                 Create the first one
+                 ${dislikedCount && !this._search && !this._typeFilter ? "Write your own" : "Create the first one"}
                </button>
              </div>`
           : this._groupPoolByType(filtered)
               .map((g) => this._renderPoolSection(g)).join("");
+
+      // Appended AFTER the type sections rather than folded in among them: a
+      // disliked chapter is not a kind of chapter, it is the pile the viewer
+      // has put to one side, and it belongs at the bottom of the scroll where
+      // it is findable without being in the way. It also ignores the search
+      // field and the type chips above — the pile is small, and narrowing a
+      // list you only visit to undo something is chrome with nothing to do.
+      const dislikedSection = this._renderDislikedSection();
 
       const backLabel = this._backLabel();
       const backOnClick = "window.referenceGuideAddView._backAction()";
@@ -911,6 +952,7 @@ components above.
           </div>
           <div class="scroll-panel__body">
             ${scrollBody}
+            ${dislikedSection}
           </div>
         </div>
         <div class="chapter-add__fab-spacer"></div>
@@ -978,6 +1020,27 @@ components above.
         </button>
       `;
 
+      // The other answer, beside Add, and only on a chapter the viewer has NOT
+      // added: with one in the guide, Remove is already the control that says
+      // "not this one", and a second reject button beside it would be two
+      // affordances for one decision (.claude/rules/ui-object-design.md §3b).
+      // Removing then disliking is two taps, which is the right price for the
+      // rarer act.
+      //
+      // Icon-only, and narrow, because Add is the answer this screen is for:
+      // giving the refusal equal weight would make a browse list read as a
+      // survey. `aria-label` carries what the glyph cannot, and the 44×44 hit
+      // area comes from the CSS rather than from the button's own box.
+      const dislikeBtn = inGuide ? "" : `
+        <button class="chapter-add__pool-dislike"
+                type="button"
+                title="Stop recommending this"
+                aria-label="Stop recommending ${escapeAttr(c.title)}"
+                onclick="event.preventDefault();event.stopPropagation();window.referenceGuideAddView._dislikeChapter('${c.id}')">
+          <i data-icon="thumbs-down" class="w-4 h-4"></i>
+        </button>
+      `;
+
       return `
         <li class="scroll-chapter" data-chapter-id="${c.id}">
           <details>
@@ -993,6 +1056,7 @@ components above.
                 </div>
               </div>
               ${toggleBtn}
+              ${dislikeBtn}
             </summary>
             <div class="scroll-chapter__content">${chapterBodyHtml(c, this._gameId)}</div>
             <div class="scroll-chapter__actions">
@@ -1018,6 +1082,121 @@ components above.
           </details>
         </li>
       `;
+    }
+
+    /**
+     * The pile the viewer has put to one side — and the only way back out of
+     * it.
+     *
+     * A dislike is reversible or it is a trap: it removes a chapter from the
+     * list, the type chips, the guide's "N of M" and the scoring-template
+     * offer all at once, so a mis-tap with nowhere to undo it would silently
+     * cost the viewer a chapter they wanted with no way to find out.
+     *
+     * Rows are flat, not accordions. The section exists to answer "which ones
+     * did I turn down, and do I want one back", which is a question about
+     * titles — and a chapter the viewer has already judged does not need its
+     * body reprinted to be recognised. Anyone who does want to re-read one
+     * restores it and finds it back in its type section above.
+     *
+     * Absent entirely at zero. An empty "Disliked (0)" heading is an invitation
+     * to a feature rather than a record of anything.
+     */
+    _renderDislikedSection() {
+      const rows = this._dislikedPool();
+      if (!rows.length) return "";
+      return `
+        <section class="scroll-section chapter-add__disliked" data-type="__disliked">
+          <h4 class="scroll-section__header">
+            <i data-icon="thumbs-down" class="w-4 h-4"></i>
+            Turned down (${rows.length})
+          </h4>
+          <p class="chapter-add__disliked-note">
+            Hidden from this list, from your chapter count and from scoring-template
+            suggestions. Only you can see this.
+          </p>
+          <ul class="scroll-chapter-list">
+            ${rows.map((c) => `
+              <li class="scroll-chapter scroll-chapter--disliked" data-chapter-id="${c.id}">
+                <div class="scroll-chapter__summary scroll-chapter__summary--rich">
+                  <div class="scroll-chapter__summary-text">
+                    <div class="scroll-chapter__title">${escapeHtml(c.title)}</div>
+                    <div class="scroll-chapter__submeta">
+                      <span class="scroll-chapter__author">
+                        ${escapeHtml(c.chapter_type_label || c.chapter_type || "Chapter")}
+                      </span>
+                      ${c.created_by_name ? `<span class="scroll-chapter__author">by ${escapeHtml(c.created_by_name)}</span>` : ""}
+                    </div>
+                  </div>
+                  <button class="chapter-add__pool-toggle chapter-add__pool-toggle--compact"
+                          type="button"
+                          title="Put this back in the list"
+                          aria-label="Undo turning down ${escapeAttr(c.title)}"
+                          onclick="window.referenceGuideAddView._undislikeChapter('${c.id}')">
+                    <i data-icon="rotate-ccw" class="w-4 h-4"></i><span>Undo</span>
+                  </button>
+                </div>
+              </li>
+            `).join("")}
+          </ul>
+        </section>
+      `;
+    }
+
+    /**
+     * Turn a chapter down. Optimistic, like every other mutation on this
+     * screen: the row leaves the list in the same frame as the tap and the
+     * write flows through behind it
+     * (.claude/rules/web-frontend.md, "Mutations feel instantaneous").
+     *
+     * The local patch is the one field, and the rollback restores exactly that
+     * field — not a snapshot of the whole pool, which would erase a concurrent
+     * add on some other row.
+     *
+     * `invalidateChaptersCache()` is not optional here even though the guide's
+     * own chapter list is untouched: a dislike changes the pool count behind
+     * the guide's "N of M", and the scoring-template list the play screen
+     * offers from. Both are cached, and both are cleared by that one call.
+     */
+    async _dislikeChapter(chapterId) {
+      const row = this._allPool.find((c) => c.id === chapterId);
+      if (!row || row.disliked) return;
+      const targetGameId = row.source_game_id || row.game_id || this._gameId;
+      row.disliked = true;
+      this.render();
+      try {
+        await window.Chapter.dislike(targetGameId, chapterId);
+        window.Chapter.invalidateChaptersCache();
+        document.dispatchEvent(new CustomEvent("chapters-changed", {
+          detail: { gameId: targetGameId },
+        }));
+        showToast("Won't suggest that again", "info");
+      } catch (e) {
+        row.disliked = false;
+        this.render();
+        showToast(e.message || "Failed to turn down that chapter", "error");
+      }
+    }
+
+    /** Undo the above. Puts the chapter back in the pool; does NOT adopt it. */
+    async _undislikeChapter(chapterId) {
+      const row = this._allPool.find((c) => c.id === chapterId);
+      if (!row || !row.disliked) return;
+      const targetGameId = row.source_game_id || row.game_id || this._gameId;
+      row.disliked = false;
+      this.render();
+      try {
+        await window.Chapter.undislike(targetGameId, chapterId);
+        window.Chapter.invalidateChaptersCache();
+        document.dispatchEvent(new CustomEvent("chapters-changed", {
+          detail: { gameId: targetGameId },
+        }));
+        showToast("Back in the list", "success");
+      } catch (e) {
+        row.disliked = true;
+        this.render();
+        showToast(e.message || "Failed to undo that", "error");
+      }
     }
 
     // In-view edit transition: no routing, no _arrivedByRoute flag → Cancel
@@ -1126,6 +1305,12 @@ components above.
           await window.Chapter.remove(targetGameId, chapterId);
         }
         row.in_my_guide = targetState;
+        // Adding is the act that contradicts a dislike, so the backend clears
+        // one when it lands (see _add_chapter_to_my_guide_sync). Mirrored here
+        // rather than left to the next fetch: the two flags are one row's
+        // state and a client holding both true would draw the chapter into the
+        // guide AND into the Turned-down section at once.
+        if (targetState) row.disliked = false;
         window.Chapter.invalidateChaptersCache();
         document.dispatchEvent(new CustomEvent("chapters-changed", {
           detail: { gameId: targetGameId },

@@ -40,6 +40,10 @@
    * @property {string} [created_by_name]
    * @property {number} [popularity]   chapter-pool only: how many guides hold it
    * @property {boolean} [in_my_guide] chapter-pool only
+   * @property {boolean} [disliked]    chapter-pool only: the viewer has turned
+   *   this grid down (migration 033). Never true on anything that reaches this
+   *   sheet — Chapter.pendingTemplates filters them out upstream — but the
+   *   flag rides on the rows, so the shape says so.
    */
 
   // How many candidates the offer shows. A SAMPLE, not the pool: each one draws

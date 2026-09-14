@@ -1,6 +1,16 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 031_feed_scoring_template.sql (re-emits bgb_feed_plays with
+-- Last updated: 033_chapter_dislikes.sql (re-emits bgb_sync_achievements so its
+--               three boardgamebuddy_user_chapters subqueries say WHICH rows
+--               they mean. That table now carries a `state`, and a disliked
+--               chapter is a row in it saying the opposite of "adopted" — so
+--               without the filter a chapter the reader turned down would
+--               count toward their own Librarian tier, a chapter somebody else
+--               turned down would count as them borrowing the author's work,
+--               and a refused grid would inflate its author's Gold Standard
+--               high-water mark. Body only; signature and return shape
+--               unchanged, so CREATE OR REPLACE and the existing grants stand.)
+--               Before that: 031_feed_scoring_template.sql (re-emits bgb_feed_plays with
 --               scoring_template, reversing the call 018 made below. The
 --               play-detail popup does revalidate through GET /plays/{id}, but
 --               it paints from a seed projected off the feed card FIRST — and
@@ -1184,7 +1194,14 @@
 --               (body replaced by 068_location_achievements.sql, which carries
 --                plays.country_code through the my_plays CTE and adds the
 --                countries / continents metrics)
---   Last updated in: db/migrations/boardgamebuddy/019_scoring_grid_achievements.sql
+--   Last updated in: db/migrations/boardgamebuddy/033_chapter_dislikes.sql
+--               (scopes all three user_chapters subqueries — guide_chapters,
+--                chapters_borrowed and grid_adopters — to state='kept'. That
+--                table now holds both halves of a viewer's opinion, so a row
+--                no longer means "adopted" on its own, and a disliked chapter
+--                counting toward any of the three would be counting a refusal
+--                as an adoption.)
+--               Before that: 019_scoring_grid_achievements.sql
 --               (adds the plays_with_grid and grid_adopters metrics behind the
 --                two scoring-grid badges. grid_adopters is a MAX over the
 --                user's own grids rather than a SUM — "gold standard" names one
