@@ -328,6 +328,28 @@
     }
 
     /**
+     * The WHOLE cached bundle, not just its accounts — the shape
+     * toPlayerCandidates() takes. A player picker's list is buddies AND the
+     * accounts you have shared a table with AND the ghost names from past
+     * plays; a surface seeding one off cachedAccounts() offers only the first
+     * third of that and silently drops every guest the user has ever logged.
+     *
+     * Same peek() and the same trade as cachedAccounts: a bundle a few hours
+     * old beats a spinner, and allBuddies() is what corrects it. All three keys
+     * are always present, so a caller can destructure without guarding.
+     *
+     * @returns {{accounts: any[], ghosts: any[], recent: any[]}}
+     */
+    static cachedPartners() {
+      const bundle = window.bgbCache ? window.bgbCache.peek(CACHE_NS, ALL_KEY) : null;
+      return {
+        accounts: (bundle && bundle.accounts) || [],
+        ghosts: (bundle && bundle.ghosts) || [],
+        recent: (bundle && bundle.recent) || [],
+      };
+    }
+
+    /**
      * The partner bundle as PLAYER PICKER CANDIDATES — one shape, one place.
      *
      * Worth its own function because the bundle speaks three dialects and the

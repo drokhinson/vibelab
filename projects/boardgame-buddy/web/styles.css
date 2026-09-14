@@ -5923,7 +5923,10 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-detail__edit-player-name { flex: 1; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .play-detail__edit-score { width: 4.5rem; }
 .play-detail__edit-winner { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.78rem; }
-.play-detail__add-player { display: flex; gap: 0.35rem; margin-top: 0.5rem; }
+/* The add-player affordance is .cascade-add-player — Gather's, reused whole,
+   because both surfaces open the same player picker sheet for the same roster.
+   No .play-detail__add-player rule: it would be a second visual family for one
+   action (.claude/rules/ui-object-design.md §3b). */
 /* Push the destructive action to the far left so it's visibly separated
    from the positive Cancel/Save pair on the right (now lives in the
    sticky popup footer, see .play-detail-popup__footer below). */
