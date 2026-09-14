@@ -9165,6 +9165,20 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 .buddies-add__qr:active { background: var(--bg-2); }
 .buddies-add__qr:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+/* The one filter over both long lists, under the pair above rather than beside
+   them: it acts on what is BELOW the band, while Add and QR both bring someone
+   new into it, so sharing their row would file it with the wrong two controls.
+   The gap matches .buddies-add__row's own, and the height and radius are the
+   Add button's, so the three controls read as one block rather than a field
+   that happens to have landed under two buttons. No colours of its own: the
+   spoke screen re-points --well and --ink-muted at the theme's own ground
+   tokens, so the shared .input and .search-field__icon rules are already
+   right in both themes. */
+.buddies-add__search { margin-top: 0.5rem; }
+.buddies-add__search .search-field__input {
+  min-height: 44px;
+  border-radius: 12px;
+}
 .buddies-section { padding: 0.75rem 0; border-top: 1px solid oklch(var(--b3)); }
 /* Drop the divider that would otherwise sit immediately below the add row —
    that band is deliberately free of horizontal lines. Subsequent sections
