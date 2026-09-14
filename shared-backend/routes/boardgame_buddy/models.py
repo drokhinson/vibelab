@@ -1005,6 +1005,34 @@ class ChapterGenerateResponse(BaseModel):
     content: str
 
 
+class ChapterGridGenerateRequest(BaseModel):
+    """Ask the AI to rough out a scoring grid for the game in the path.
+
+    No `chapter_type`, unlike ChapterGenerateRequest: a grid is one type by
+    definition (services/chapter_grid.SCORING_GRID_CHAPTER_TYPE) and asking for
+    it would only invite a caller to name a different one.
+    """
+
+    # Optional free-text steer from the grid wizard's head-start step ("we play
+    # with Pearlbrook"). Same cap, and the same reasons, as the chapter drafter
+    # above: an oversized body is a 422 rather than a token bill, and the
+    # service truncates again defensively.
+    prompt: str | None = Field(None, max_length=500)
+
+
+class ChapterGridGenerateResponse(BaseModel):
+    """A draft only — the wizard loads these rows into its editor and the author
+    renames, recolours, reorders and deletes before saving. Nothing is persisted
+    by the generate call itself.
+
+    Carries a whole `ScoringGrid` rather than a bare row list so the draft is
+    the same shape ChapterCreate.grid takes: the client can hand it back
+    unchanged, and a row that would 422 on save cannot come out of here.
+    """
+
+    grid: ScoringGrid
+
+
 class ChapterUpdate(BaseModel):
     chapter_type: str | None = None
     # None means "not supplied". A scoring grid's title is derived from its game

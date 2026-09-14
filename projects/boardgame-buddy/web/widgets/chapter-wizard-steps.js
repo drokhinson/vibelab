@@ -88,18 +88,38 @@
   // the type is one tap from either step. (The device back gesture still steps
   // back too — _wizBack is unchanged.)
   //
+  // A SCORING GRID gets this step too, and gets it from here rather than from a
+  // step of its own: the decision is identical ("draft me something, or let me
+  // start empty"), only the noun changes — rows instead of prose — and two
+  // screens that ask one question are two screens to keep agreeing
+  // (.claude/rules/ui-object-design.md §2). What `grid` switches is the copy
+  // and nothing else; the caller (_onGenerateGrid vs _onGenerateAi) decides
+  // which drafter the footer's Generate reaches.
+  //
+  // The grid lede says out loud that the model is small. It is a mini model on
+  // a task it will sometimes get wrong, and an author who expects a finished
+  // scorepad reads a half-right one as a broken feature, while an author who
+  // expects a rough cut reads the same rows as ten seconds saved.
+  //
   // @param {{typeLabel: string, typeIcon: string, genPrompt: string,
-  //          generating: boolean, saving: boolean, error: ?string}} s
+  //          generating: boolean, saving: boolean, error: ?string,
+  //          grid?: boolean}} s
   function renderDraftStep(s) {
     const busy = s.generating || s.saving;
+    const grid = !!s.grid;
+
+    const lede = grid
+      ? `Have the AI rough out the scoring rows, or skip and build them
+         yourself. It's a small model, so expect a starting point rather than a
+         finished scorepad — every row is yours to rename, recolour, reorder or
+         delete. Nothing is saved until you hit Save on the next step.`
+      : `Have the AI draft this chapter for you, or skip and write it yourself.
+         Nothing is saved until you hit Save on the next step.`;
 
     return `
       <div class="chapter-wiz__step">
         <h3 class="chapter-wiz__title font-display">Want a head start?</h3>
-        <p class="chapter-wiz__lede">
-          Have the AI draft this chapter for you, or skip and write it yourself.
-          Nothing is saved until you hit Save on the next step.
-        </p>
+        <p class="chapter-wiz__lede">${lede}</p>
 
         <div class="chapter-wiz__picked">
           <span class="chapter-wiz__typechip">
@@ -112,16 +132,23 @@
         </div>
 
         <label class="chapter-wiz__field">
-          <span class="chapter-wiz__label">What should it focus on? <em>(optional)</em></span>
+          <span class="chapter-wiz__label">
+            ${grid ? "Anything it should know?" : "What should it focus on?"}
+            <em>(optional)</em>
+          </span>
           <textarea id="chapter-gen-prompt"
                     class="chapter-wiz__prompt"
                     rows="3" maxlength="500"
                     ${busy ? "disabled" : ""}
                     spellcheck="true"
                     oninput="${V}._genPrompt = this.value"
-                    placeholder="e.g. just the endgame trigger and how final scoring works">${escapeHtml(s.genPrompt)}</textarea>
+                    placeholder="${grid
+                      ? "e.g. we play with the Pearlbrook expansion"
+                      : "e.g. just the endgame trigger and how final scoring works"}">${escapeHtml(s.genPrompt)}</textarea>
           <span class="chapter-wiz__hint">
-            Leave it blank for a general ${escapeHtml(s.typeLabel.toLowerCase())} chapter.
+            ${grid
+              ? "Leave it blank for the rows the base game scores."
+              : `Leave it blank for a general ${escapeHtml(s.typeLabel.toLowerCase())} chapter.`}
           </span>
         </label>
 

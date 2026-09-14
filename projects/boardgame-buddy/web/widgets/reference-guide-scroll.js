@@ -567,13 +567,16 @@
     }
 
     /**
-     * Straight into the grid builder, on the row editor.
+     * Straight into the grid builder, on its head-start step.
      *
      * Not into Browse (there is nothing to browse — that is the state this
      * button is for) and not onto the wizard's first step: step 0 asks for a
-     * chapter type and this button has already said which, step 1 is the AI
-     * head start a grid skips in both directions, so both would be a tap on a
-     * question already answered. `mode=create&layout=scoring_grid` is read by
+     * chapter type and this button has already said which, so it would be a tap
+     * on a question already answered. Step 1 is NOT that — it offers to draft
+     * the rows, which on a game nobody has written a grid for is the most
+     * useful thing the wizard can do, and Skip is beside it. The builder lands
+     * there with a blank row already seeded, so skipping costs nothing.
+     * `mode=create&layout=scoring_grid` is read by
      * views/reference-guide-add-view.js#onMount, which also makes Cancel and
      * Save return here rather than to Browse.
      *

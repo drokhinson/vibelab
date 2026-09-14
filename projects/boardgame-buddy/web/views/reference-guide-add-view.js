@@ -17,6 +17,14 @@
 // Step 2 stays here because it is not a pure function of state — the toolbar
 // reads and writes the live textarea's selection.
 //
+// A SCORING GRID walks the same three. It used to skip step 1 — there was no
+// grid drafter, and that step drafts markdown against an authoring guide a grid
+// has no use for — but the drafter now exists (Chapter.generateGrid → the
+// backend's services/chapter_grid_ai.py), so the question the step asks is a
+// real one for a grid too: rough the rows out, or start from one blank row.
+// Only the copy and the handler differ (ChapterWizardSteps.draft's `grid` flag,
+// and _onGenerateGrid in place of _onGenerateAi).
+//
 // Editing an existing chapter does NOT enter the wizard: it opens straight on
 // step 2 with no step bar and keeps the type pill scroller, because the
 // chapter already has a type and a body and re-drafting over it is not what
@@ -392,16 +400,19 @@ components above.
         // game that has no scoring grid at all, offers "tap to build one" and
         // routes here.
         //
-        // It lands on the ROW EDITOR, not on step 0. A grid's wizard has
-        // nothing to ask before it: step 0 picks a chapter type, and the type
-        // is the very thing the caller has already said; step 1 is the AI head
-        // start, which a grid skips in both directions (see _wizNext). So both
-        // steps would be a forced tap on a question already answered. _pickType
-        // is what seeds the first blank row, exactly as tapping the type pill
-        // would — the editor must never open on its own empty state.
+        // It lands on the HEAD START — not on step 0, and no longer on the row
+        // editor. Step 0 picks a chapter type, which is the very thing the
+        // caller has already said, so that one is still a forced tap on an
+        // answered question and is still skipped. Step 1 is not: this route is
+        // reached from "No scoring template yet", so there is nothing to build
+        // on, which is exactly when a drafted set of rows is worth ten seconds
+        // — and Skip sits right beside it for an author who would rather type
+        // their own. _pickType is what seeds the first blank row, exactly as
+        // tapping the type pill would, so Skip lands on something to fill in
+        // rather than on the editor's own empty state.
         this._tab = "create";
         this._pickType(GRID_TYPE);
-        this._step = 2;
+        this._step = 1;
         this._arrivedByRoute = true;
         // NO wizard guard here, unlike _enterCreate. The guard's whole job is
         // to give a mode that has no history entry one of its own, so the back
@@ -736,13 +747,11 @@ components above.
     // whatever the current step requires (a chapter type on step 0).
     _wizNext() {
       if (this._tab !== "create") return;
-      // A scoring grid skips step 1 in both directions. That step is the AI
-      // head start, which drafts MARKDOWN against CHAPTER_AUTHORING_GUIDE — and
-      // a grid is six labels the author already knows. Skipping keeps
-      // services/chapter_ai.py and the guide string out of this feature
-      // entirely, so the sync obligation between them is undisturbed.
-      const jump = this._isGridLayout() && this._step === 0 ? 2 : this._step + 1;
-      this._step = Math.min(2, jump);
+      // Every layout walks all three steps. A grid used to jump 0 → 2 past the
+      // AI head start, because that step drafted markdown and a grid holds no
+      // markdown; it has a drafter of its own now (_onGenerateGrid), so there
+      // is nothing left to skip here and no asymmetry to mirror in _wizBack.
+      this._step = Math.min(2, this._step + 1);
       this._error = null;
       this.render();
     }
@@ -775,9 +784,7 @@ components above.
         this._exitEditor();
         return;
       }
-      // Mirror of the forward jump in _wizNext: a grid never lands on step 1,
-      // so backing out of its editor goes straight to the type picker.
-      this._step = this._isGridLayout() && this._step === 2 ? 0 : this._step - 1;
+      this._step -= 1;
       this._error = null;
       this.render();
     }
@@ -1130,15 +1137,12 @@ components above.
     _renderEditor(isEditing) {
       // Edit is not a wizard — no step bar, and the editor is the only body.
       const step = isEditing ? 2 : this._step;
-      // A grid wizard has two steps, not three — it never visits the AI head
-      // start (see _wizNext), so counting it would leave the bar reading
-      // "Step 3 of 3" on what is really the second thing the author does.
-      const grid = this._isGridLayout();
+      // Three steps whatever the layout. The grid wizard used to count two,
+      // because it skipped the AI head start; it visits that step now
+      // (_onGenerateGrid), so a two-step bar would be undercounting.
       const bar = isEditing
         ? ""
-        : window.BgbWizardProgress.render(
-            grid ? { step: step === 2 ? 1 : 0, total: 2 } : { step, total: 3 }
-          );
+        : window.BgbWizardProgress.render({ step, total: 3 });
 
       let body;
       if (step === 0) {
@@ -1159,6 +1163,10 @@ components above.
           generating: this._generating,
           saving: this._saving,
           error: this._error,
+          // Same step and the same decision, different noun — the flag swaps
+          // the copy from "draft this chapter" to "rough out the rows", and
+          // says out loud that the grid drafter is a small model.
+          grid: this._isGridLayout(),
         });
       } else {
         body = this._renderEditStep(isEditing);
@@ -1266,6 +1274,11 @@ components above.
       // above, which is on this step exactly like every other one.
       if (step === 1) {
         const busy = this._generating || this._saving;
+        // Which drafter Generate reaches is the layout's business, not the
+        // button's: a grid's body is rows and a chapter's is markdown, and the
+        // two ride different endpoints. Same slot, same word, same pending
+        // state — one decision on screen, two ways to answer it underneath.
+        const gen = this._isGridLayout() ? "_onGenerateGrid" : "_onGenerateAi";
         return `
           <div class="chapter-edit__footer">
             <button type="button" class="chapter-edit__fbtn chapter-edit__fbtn--cancel chapter-wiz__fbtn--alt"
@@ -1276,7 +1289,7 @@ components above.
             <button type="button"
                     class="chapter-edit__fbtn chapter-edit__fbtn--save ${this._generating ? "chapter-wiz__fbtn--busy" : ""}"
                     ${busy ? "disabled" : ""}
-                    onclick="window.referenceGuideAddView._onGenerateAi()">
+                    onclick="window.referenceGuideAddView.${gen}()">
               <i data-icon="sparkles" class="w-4 h-4"></i>
               <span>${this._generating ? "Drafting…" : "Generate"}</span>
             </button>
@@ -2091,6 +2104,89 @@ components above.
         // Stays on whatever step asked, so the error lands next to the button
         // that produced it and the prompt is still there to adjust.
         this._error = e.message || "Couldn't draft a chapter";
+        this._generating = false;
+        this.render();
+      }
+    }
+
+    /**
+     * The grid half of the head start: AI-draft the ROWS and load them into the
+     * row editor. Deliberately NOT a save — same contract as _onGenerateAi
+     * above, and the author still has to hit Save chapter on step 3.
+     *
+     * A sibling of _onGenerateAi rather than a branch inside it. The two share
+     * the shape (guard, confirm, seq, blur, advance) and nothing else: a
+     * different endpoint, a different reply, and a different part of the form
+     * buffer to drop it into. Folding them together would be one function whose
+     * every line was an `isGrid ?`.
+     *
+     * `_genSeq` IS shared, and has to be: a wizard is one layout at a time, and
+     * a stamp of its own here would let a stale chapter draft land on top of a
+     * grid the author switched to (or the reverse) — the very thing the token
+     * exists to stop.
+     */
+    async _onGenerateGrid() {
+      if (!this._isGridLayout() || this._generating || this._saving) return;
+
+      // A generated grid REPLACES the rows, so anything already named would be
+      // lost — the project's one confirm surface, same as _onGenerateAi. The
+      // seeded blank row (_pickType) is not a draft: a row with no label is the
+      // editor's starting state, not the author's work.
+      const hasDraft = (this._formRows || []).some((r) => (r.label || "").trim());
+      if (hasDraft) {
+        const ok = await window.PolaroidPopup.confirm({
+          title: "Replace the rows you've built?",
+          body: "Generating a template overwrites every row currently in the grid. This can't be undone.",
+          confirmLabel: "Replace",
+          cancelLabel: "Keep mine",
+        });
+        if (!ok) return;
+        // The confirm stole focus and the author may have typed while it was
+        // open — re-check before committing to the overwrite.
+        if (!this._isGridLayout() || this._generating) return;
+      }
+
+      // Drop the software keyboard so the pending state is what's on screen
+      // rather than a keyboard over a frozen form (same as _onGenerateAi).
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+
+      const seq = ++this._genSeq;
+      const targetGameId = this._createTargetGameId || this._gameId;
+      const focus = this._genPrompt;
+      this._error = null;
+      this._generating = true;
+      this.render();
+      try {
+        const draft = await window.Chapter.generateGrid(targetGameId, focus);
+        if (seq !== this._genSeq) return;
+        const rows = (draft && draft.grid && draft.grid.rows) || [];
+        // Normalized into the editor's own row shape rather than held as the
+        // server sent it: the editor writes `note` in place on every keystroke
+        // and reads `row.color` unguarded, so an absent note (the backend omits
+        // it rather than sending "") has to become "" here or the first edit of
+        // an un-noted row starts from undefined.
+        this._formRows = rows.map((r) => ({
+          label: r.label || "",
+          color: r.color || "neutral",
+          note: r.note || "",
+        }));
+        // No picker left hanging open on a row the author has not looked at
+        // yet: _pickType opens one on the blank row it seeds, and that row is
+        // gone now.
+        this._tmplColorOpen = null;
+        this._tmplNoteOpen = null;
+        this._generating = false;
+        // Straight to the editor, like the chapter drafter: the rows exist to
+        // be read and corrected, and Back returns here with _genPrompt intact
+        // so tweak-and-regenerate is two taps.
+        if (this._tab === "create") this._step = 2;
+        this.render();
+        showToast("Rows drafted — check them over before saving", "success");
+      } catch (e) {
+        if (seq !== this._genSeq) return;
+        // Stays on the step that asked, so the error lands next to the button
+        // that produced it and the prompt is still there to adjust.
+        this._error = e.message || "Couldn't draft a scoring template";
         this._generating = false;
         this.render();
       }

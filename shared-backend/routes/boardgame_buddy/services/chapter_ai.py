@@ -84,12 +84,16 @@ _SYSTEM = (
 )
 
 
-def _banner(n: int, title: str) -> str:
+def banner(n: int, title: str) -> str:
     """A section header for the prompt.
 
     Plain "=" rules rather than a markdown heading on purpose: section 2 pastes
     the authoring guide verbatim, and that guide is itself full of "##"
     headings — markdown scaffolding would be indistinguishable from its content.
+
+    Public because chapter_grid_ai.py builds its prompt out of the same four
+    numbered sections and refers to those numbers from inside section 3 — two
+    spellings of one convention would let the two drift.
     """
     rule = "=" * 40
     return f"{rule}\n{n}. {title}\n{rule}"
@@ -110,7 +114,7 @@ def _build_prompt(
     knows the game or is being told (below) to write a skeleton instead — the
     most expensive part of the prompt and the least load-bearing.
     """
-    lines = [_banner(1, "WHAT TO WRITE"), f"Game: {game_name}"]
+    lines = [banner(1, "WHAT TO WRITE"), f"Game: {game_name}"]
     if game_year:
         lines.append(f"Year published: {game_year}")
     lines.append(f"Chapter type to write: {chapter_type_label}")
@@ -127,7 +131,7 @@ def _build_prompt(
     )
 
     lines.append("")
-    lines.append(_banner(2, "SUPPORTED FORMATTING AND PREFERENCES"))
+    lines.append(banner(2, "SUPPORTED FORMATTING AND PREFERENCES"))
     lines.append(_AUTHORING_GUIDE.strip())
 
     # Section 3 is untrusted text a player typed into a form. It used to sit
@@ -141,7 +145,7 @@ def _build_prompt(
     # Emitted even when blank, so the section numbers the other sections refer
     # to are the same in every prompt.
     lines.append("")
-    lines.append(_banner(3, "THE PLAYER'S GUIDANCE"))
+    lines.append(banner(3, "THE PLAYER'S GUIDANCE"))
     if focus:
         lines.append(
             "The player asked this chapter to focus on the following. Treat it "
@@ -158,7 +162,7 @@ def _build_prompt(
         )
 
     lines.append("")
-    lines.append(_banner(4, "OUTPUT FORMAT"))
+    lines.append(banner(4, "OUTPUT FORMAT"))
     lines.append(
         "Respond with exactly this JSON shape, and nothing else:\n"
         '{"title": "short chapter title, under 60 characters, no game name",\n'
