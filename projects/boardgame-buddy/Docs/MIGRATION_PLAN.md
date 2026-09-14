@@ -103,16 +103,22 @@ comment in the code explaining why; read the comment before changing the line.
 |---|---|---|---|---|
 | 1 | Extract to a standalone repo | no change | none | yes — old monorepo still deploys |
 | 2 | Vercel → Cloudflare Pages | −$0, unblocks revenue | none (DNS swap) | yes — Vercel project until deleted |
-| 3a | Supabase custom domain + SMTP | +$10/mo | none, **no logout** | yes — revert `supabaseUrl` |
+| 3 | **Decide the auth path** (§ Stage 3) | — | — | — |
+| 3a | Path A: Supabase custom domain + SMTP | +$10/mo | none, **no logout** | yes — revert `supabaseUrl` |
+| 3-ALT | Path B: auth on GCP Identity Platform | **$0** to 50k MAU | one window, **everyone re-signs in** | hard |
 | 3b | Own Supabase project | +$25/mo when needed | one window, **everyone re-signs in** | hard — old project is read-only fallback |
 | 4 | Photos → R2 | ~$0, kills the growth curve | none (dual-read) | yes — Supabase objects stay |
 | 5 | API → Hetzner VPS | ~−$0 to −$15/mo | none (DNS swap) | yes — Railway service until deleted |
 | 6 | Full Hetzner (Appendix D) | flat ~€35/mo | one window | hard |
 
 **Stages 1, 2 and 4 are pure wins with no user-visible risk. Do those three
-first regardless of anything else.** Stage 3b is the only one that gets *more
-expensive the longer you wait* — it forces a global re-login, which costs
-nothing at 50 users and is a support incident at 5,000.
+first regardless of anything else** — between them they settle two of the three
+deciding needs (photo-storage growth, and the ability to monetize) for $0.
+
+**Any stage that forces a global re-login gets more expensive the longer you
+wait** — 3b and 3-ALT both do, and it costs nothing at 50 users while being a
+support incident at 5,000. That is the argument for settling the auth path early
+rather than deferring it.
 
 ---
 
@@ -364,6 +370,40 @@ and finding a new `BUILD_ID`. The bundled JS/CSS are content-hashed by
 
 ---
 
+## Stage 3 — Pick the auth path first
+
+*(Added 2026-09-14. The three deciding needs are photo-storage growth, branded
+custom-domain auth "ideally free", and the ability to monetize. Needs 1 and 3 are
+settled by Stages 2 and 4. Need 2 is a fork, and it has to be decided before
+either Stage 3a or 3b is worth starting.)*
+
+The auth surface is far smaller than the 254-call-site data layer implies, which
+is what makes a free path viable:
+
+| Surface | Size | Where |
+|---|---|---|
+| Frontend auth call sites | **8** | `views/auth-view.js` (3), `init.js` (3), `domain/api.js` (2) |
+| Distinct SDK methods | 7 | `signUp`, `signInWithPassword`, `signInWithOAuth`, `signOut`, `getSession`, `refreshSession`, `onAuthStateChange` |
+| Backend files | **2** | `jwt_auth.py`, `routes/dependencies.py` |
+| `REFERENCES auth.users` | **1** | `boardgamebuddy_profiles.id` (`001_baseline.sql:116`) |
+| RLS policies using `auth.uid()` | **3** | live play-session tables — the realtime spectator mirror, read client-side with the anon key |
+
+| Path | Monthly | Work | Forced re-logins on the way to Hetzner | Run it |
+|---|---|---|---|---|
+| **A · Supabase custom domain** | $10 | ~1 hour, zero code | **two** (Stage 3b, then Stage 6) | Stage 3a, then 3b |
+| **B · GCP Identity Platform**, branded via a free Firebase Hosting auth handler, wired to Supabase as third-party auth | **$0** to 50k MAU | ~1 day | **one** (now) | Stage 3-ALT, then 3b |
+| **C · Self-hosted GoTrue** on the Stage-5 VPS | $0 | ~1 day + ops | one | Appendix D, early |
+
+**Recommendation: path B if "$0" is a real requirement or Hetzner is a real
+destination; path A if you would rather pay $120/year than add a vendor.** Path B
+is the only one that satisfies "ideally free" literally, and the only one where
+auth stops moving — Identity Platform does not care where Postgres lives, so the
+eventual Hetzner migration never touches it.
+
+Do not run 3a and 3-ALT both. Pick one.
+
+---
+
 ## Stage 3a — Supabase custom domain + branded email
 
 **Goal:** the Google consent screen reads "continue to
@@ -412,6 +452,108 @@ Stage 3b.
 - Password reset and magic-link flows both land on the right host.
 
 ---
+
+---
+
+## Stage 3-ALT — Auth on GCP Identity Platform (the free branded path)
+
+*(Alternative to Stage 3a. Skip this if you took path A.)*
+
+**Goal:** a branded consent screen on your own domain for **$0**, with auth
+permanently decoupled from where the database lives. Free to 50,000 MAU for
+tier-1 providers (email, phone, social); $0.0055/MAU from 50k–100k.
+
+**Cost:** one forced re-login, now. Do it at the lowest user count you will ever
+have.
+
+### 3-ALT.1 Stand it up
+
+1. Enable **Identity Platform** in a GCP project. Enable Email/Password and
+   Google as providers.
+2. Enabling it auto-creates a Firebase Hosting subdomain
+   (`<project>.firebaseapp.com`) which handles OAuth redirects by default — and
+   which is exactly the unbranded string you are trying to get rid of. So:
+   connect a **custom domain** in the Firebase console (`auth.boardgamebuddy.com`),
+   add it to **Authorized Domains** under Identity Platform → Identity providers,
+   and update the Google OAuth client's redirect URI to
+   `https://auth.boardgamebuddy.com/__/auth/handler`. Firebase Hosting's free tier
+   covers this — it is serving one auth handler, not a site.
+3. Configure the OAuth consent screen branding (name, logo, support email) and
+   verify the domain in Google Search Console, same as Stage 3a.5.
+
+### 3-ALT.2 Keep RLS working
+
+**Wire Identity Platform into Supabase as a third-party auth provider.** Supabase
+trusts externally-issued JWTs the same way it trusts its own, so the 3
+`auth.uid()` policies on the live play-session tables keep working and the
+realtime spectator mirror is unaffected. Without this step those 3 policies fail
+closed and the spectator mirror goes blank — it is not optional.
+
+**Check Supabase's TP-MAU (third-party monthly active user) billing line before
+assuming $0 on the Supabase side.** Third-party auth is metered separately from
+Supabase Auth MAU. This is the one number in this stage worth confirming against
+the current pricing page rather than trusting this document.
+
+### 3-ALT.3 Import the users
+
+Supabase stores passwords as **bcrypt** in `auth.users.encrypted_password`.
+Firebase's Admin SDK `importUsers()` accepts bcrypt hashes directly, so **nobody
+has to reset a password**:
+
+```js
+await admin.auth().importUsers(
+  users.map(u => ({ uid: u.id, email: u.email, passwordHash: Buffer.from(u.encrypted_password) })),
+  { hash: { algorithm: 'BCRYPT' } }
+);
+```
+
+**Preserve the UUIDs.** Pass Supabase's `auth.users.id` as Firebase's `uid`.
+`boardgamebuddy_profiles.id` FKs `auth.users(id)`, and every play, buddy edge and
+achievement hangs off that column — a regenerated id orphans the entire account.
+
+Then drop the FK, since `auth.users` is no longer the authority:
+
+```sql
+ALTER TABLE public.boardgamebuddy_profiles
+  DROP CONSTRAINT boardgamebuddy_profiles_id_fkey;
+```
+
+Keep the column, the type, and every value. You lose the `ON DELETE CASCADE`
+that FK provided, so account deletion becomes explicit backend work — write it
+before you need it.
+
+### 3-ALT.4 Change the code
+
+- **Frontend, 8 call sites in 3 files.** The 7 Supabase methods map nearly
+  one-to-one onto the Firebase JS SDK (`createUserWithEmailAndPassword`,
+  `signInWithEmailAndPassword`, `signInWithPopup`, `signOut`,
+  `onIdTokenChanged`/`onAuthStateChanged`, `getIdToken`). The one that needs care
+  is `domain/api.js:79-82`, which calls `getSession()` then `refreshSession()` on
+  expiry — Firebase's `getIdToken()` refreshes on its own, so that ladder
+  simplifies rather than ports.
+- **Backend, 2 files.** `jwt_auth.py`: point `_JWKS_URL` at Google's
+  (`https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com`),
+  change `audience` from `"authenticated"` to the GCP project id, and start
+  verifying `issuer` (`https://securetoken.google.com/<project-id>`) — Firebase
+  tokens should be checked on both, and the current code checks neither issuer nor
+  a project-scoped audience. `routes/dependencies.py` reads `sub`, `email` and
+  `role` off the payload; `sub` and `email` carry over, and `role` has no Firebase
+  equivalent — BGB's admin check reads the **profile** row, not the JWT claim, so
+  nothing authorization-shaped depends on it.
+- Keep the `SupabaseUser` model shape, or the change leaks into 30 route files
+  for no reason. Rename it later, separately, if at all.
+
+### 3-ALT.5 Acceptance
+
+- Consent screen reads "continue to **auth.boardgamebuddy.com**".
+- An **existing** user signs in with their **existing** password — proves the
+  bcrypt import worked.
+- That user lands on their **own** profile with their real play count — proves
+  the UUID survived. If it creates a fresh profile, stop and roll back.
+- Join a live play session as a spectator and watch the grid update — proves the
+  3 RLS policies still evaluate under a third-party JWT.
+- A signed-in session survives an hour idle — proves the token-refresh path.
+- Supabase usage report: confirm what the TP-MAU line actually bills.
 
 ## Stage 3b — Move to a dedicated Supabase project
 
