@@ -1453,6 +1453,145 @@ body {
 }
 .chapter-add__pool-toggle--in:hover [data-icon-name] { color: var(--rust); }
 
+/* ── Turning a chapter down ─────────────────────────────────────────────────
+   views/reference-guide-add-view.js#_renderPoolRow and
+   #_renderDislikedSection. The thumbs-down beside Add, and the section at the
+   foot of the scroll that is the only way back from it.
+
+   The ink is the parchment's #6B4A1A, the literal every sibling in this row
+   already carries (.scroll-chapter__submeta, .scroll-section__header,
+   .scroll-panel__empty). It is a literal on purpose and it is not a theming
+   bug: the scroll is PAPER, which is light in both themes
+   (.claude/rules/theming.md §6), so an ink chosen for it is right in both and
+   a ground token here would invert. Quiet by default, because Add is the
+   answer this screen is for — a refusal drawn with equal weight would make a
+   browse list read as a survey. */
+.chapter-add__pool-dislike {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  color: #6B4A1A;
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.chapter-add__pool-dislike [data-icon-name] { color: #6B4A1A; }
+/* 28px visible, 44×44 tappable: -8px on each side of a 28px box is exactly the
+   floor (.claude/rules/mobile-web.md §5). Done with a pseudo-element so the
+   glyph stays quiet while the thumb still lands — inflating the button itself
+   would give a secondary action the visual weight of Add. The 8px gap to Add
+   is the sibling margin the same rule asks for, and comes from the summary
+   row's own `gap: var(--s-2)`. */
+.chapter-add__pool-dislike::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+}
+/* Touch has no hover, so :active is the mandatory one and hover is the
+   enhancement on top. */
+.chapter-add__pool-dislike:active {
+  opacity: 1;
+  background: rgba(107, 74, 26, 0.14);
+}
+@media (hover: hover) {
+  .chapter-add__pool-dislike:hover {
+    opacity: 1;
+    background: rgba(107, 74, 26, 0.10);
+  }
+}
+.chapter-add__pool-dislike:focus-visible {
+  opacity: 1;
+  outline: 2px solid #6B4A1A;
+  outline-offset: -3px;   /* the scroll clips an outset ring */
+}
+
+/* The section itself — a <details>, collapsed by default. Separated from the
+   type sections above by a rule rather than by spacing alone: it is a
+   different kind of thing, not one more type.
+
+   Left at display:block on purpose. The section's flex column lives on
+   __body below, because putting it here would have to lay out across
+   ::details-content, which is not the same box in every engine. */
+.chapter-add__disliked {
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid rgba(107, 74, 26, 0.22);
+}
+/* The <summary>. Carries .scroll-section__header too, so the type, the ink and
+   the uppercase come from there and only the disclosure behaviour is here. */
+.chapter-add__disliked-head {
+  min-height: 44px;              /* it is a control now (mobile-web.md §5) */
+  padding-block: var(--s-1);
+  cursor: pointer;
+  list-style: none;              /* Firefox's marker */
+  user-select: none;
+}
+.chapter-add__disliked-head::-webkit-details-marker { display: none; }
+.chapter-add__disliked-head::marker { content: ""; }
+.chapter-add__disliked-head:focus-visible {
+  outline: 2px solid #6B4A1A;
+  outline-offset: -3px;          /* the scroll clips an outset ring */
+  border-radius: var(--r-xs);
+}
+/* The affordance. Pushed to the trailing edge by the auto margin rather than
+   by justify-content, so the glyph and the label stay together on the left. */
+.chapter-add__disliked-caret {
+  margin-left: auto;
+  opacity: 0.7;
+  transition: transform 160ms var(--ease);
+}
+.chapter-add__disliked[open] .chapter-add__disliked-caret { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .chapter-add__disliked-caret { transition: none; }
+}
+/* What .scroll-section used to supply when this was a <section>. */
+.chapter-add__disliked-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-top: var(--s-2);
+}
+.chapter-add__disliked-note {
+  margin: 0 var(--s-1);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #6B4A1A;
+  opacity: 0.75;
+}
+/* Faded, so the pile reads as set aside rather than as a second list to shop
+   from — but not so faint that the titles stop being legible, which is the
+   whole reason the section exists. The Undo button inside stays at full
+   strength: it is the one thing here anyone taps. */
+.scroll-chapter--disliked .scroll-chapter__title { opacity: 0.7; }
+.scroll-chapter--disliked .scroll-chapter__submeta { opacity: 0.7; }
+/* A flat row, not an accordion — no <details>, so nothing supplies the
+   summary's cursor or its marker, and the padding has to come from here. */
+.scroll-chapter--disliked .scroll-chapter__summary {
+  cursor: default;
+  list-style: none;
+}
+/* Undo is the ONLY way back out of a dislike, so unlike the --compact buttons
+   it sits beside in the browse list it gets the full 44px hit area rather than
+   the 28px box it is drawn as. Same pseudo-element trick, same reason: the
+   pill is sized to the row it lives in, and the thumb is not. */
+.scroll-chapter--disliked .chapter-add__pool-toggle { position: relative; }
+.scroll-chapter--disliked .chapter-add__pool-toggle::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+}
+
 /* Horizontally-scrollable chip filter. Fits any phone screen without
    overflowing into other UI. Native scroll, snap-x, hidden scrollbar. */
 .chapter-add__filter-chips {
@@ -8507,6 +8646,54 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 /* Inset, for the same scroller-clipping reason as the rows above. */
 .tmpl-offer__use:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+/* The card's two answers about ITSELF, side by side: take this grid, or stop
+   being offered it (migration 033). "Continue without" stays at the foot of
+   the sheet, because it is an answer about the whole question rather than
+   about one card. */
+.tmpl-offer__answers { display: flex; align-items: stretch; gap: 0.5rem; }
+.tmpl-offer__answers .tmpl-offer__use { flex: 1; min-width: 0; }
+/* Square, icon-only and outlined against the filled commit button beside it —
+   the weighting says which one the sheet is for, exactly as the thumbs-down
+   beside Add does in the guide builder.
+
+   The tokens are the one thing that does NOT carry over from there. The builder
+   draws on the parchment scroll, which is paper and light in both themes, so
+   its control takes the #6B4A1A literal. This sheet is CHROME — .tmpl-sheet is
+   in the theme re-point list at the top of this file — so it reads the ground
+   vocabulary instead, and the parchment ink would go muddy on it in dark. Same
+   control, different surface, different palette (.claude/rules/theming.md §6). */
+.tmpl-offer__dislike {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Square on the commit button's own 52px, so the two read as one row and the
+     refusal clears the commit-button floor too (.claude/rules/mobile-web.md §5). */
+  width: 52px;
+  min-height: 52px;
+  margin-top: 0.6rem;          /* matches .tmpl-offer__use */
+  border: 1px solid var(--sheet-line);
+  border-radius: 12px;
+  background: transparent;
+  color: oklch(var(--bc) / 0.55);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+/* Touch has no hover, so :active is the mandatory one. */
+.tmpl-offer__dislike:active {
+  background: oklch(var(--bc) / 0.10);
+  color: oklch(var(--bc) / 0.9);
+}
+@media (hover: hover) {
+  .tmpl-offer__dislike:hover {
+    background: oklch(var(--bc) / 0.07);
+    color: oklch(var(--bc) / 0.9);
+  }
+}
+.tmpl-offer__dislike:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -3px;
 }

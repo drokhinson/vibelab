@@ -416,16 +416,54 @@ browse pool sorted by popularity.
 | created_at / updated_at | TIMESTAMPTZ | |
 
 ### boardgamebuddy_user_chapters
-Presence row: this chapter is in the user's guide for that game.
+One row per (user, chapter): this viewer's opinion of that chapter, in either
+direction. Until migration 033 the row's mere presence meant "in my guide"; it
+now carries a `state`, and presence means "this viewer has decided about it".
+
+`disliked` is the thumbs-down the guide builder offers beside Add. It is the
+missing middle between "this is fine" and the Report button: a chapter that is
+merely bad — a sloppy scoring grid, a rules summary you disagree with — used to
+come back forever, in the pool on every visit, in the "N of M" denominator that
+could then never close, and in the scoring-template offer at the table. A
+dislike takes it out of all three. It is per-viewer and one-directional: the
+author is never told, `popularity` is unaffected, and nothing is removed for
+anybody else. Set from two surfaces: the thumbs-down beside Add on an un-added
+row in the guide builder, and the one beside "Use this one" on each card of the
+scoring-template offer sheet (`widgets/scoring-template-sheet.js`). The sheet's
+is the only answer there that does not close it — three grids you do not want
+are three refusals, and being asked again next round about the two you did not
+reach is the problem the feature exists to fix — so the card goes, the next
+candidate is promoted into the gap from the full pool, and the sheet closes
+itself only when the last one is turned down.
+
+Reversible from the builder's Turned-down section — a `<details>`
+collapsed by default, since it is a record of decisions already made and the
+browse list is what the screen is for; the count rides in its header so the
+collapsed state still answers "did I turn anything down here?" — and cleared
+automatically by adding the chapter — the act that contradicts it — exactly as
+sending a buddy request clears a `buddy_suggestion_dismissals` row.
+
+The `state` lives on this row rather than in a `chapter_dislikes` table of its
+own because the `UNIQUE` below is then what makes "kept and disliked at once"
+unrepresentable, and because disliking a chapter already in the guide is one
+`UPDATE` rather than a delete plus an insert.
+
 | Column | Type | Notes |
 |--------|------|-------|
 | id | UUID PK | |
 | user_id | UUID FK | → profiles |
 | game_id | UUID FK | → games |
 | chapter_id | UUID FK | → guide_chapters |
+| state | TEXT | `kept` (in my guide — the pre-033 meaning of a row) or `disliked`. CHECK-constrained; defaults to `kept`, which is also the backfill |
 | display_order | INT | reserved for future reorder UI; V1 sorts by `created_at` |
-| created_at | TIMESTAMPTZ | when the user added the chapter |
-| UNIQUE(user_id, chapter_id) | | one row per user-chapter pair |
+| created_at | TIMESTAMPTZ | when the user added the chapter. Deliberately NOT reset when a dislike flips back to kept — it is when this viewer first had an opinion |
+| UNIQUE(user_id, chapter_id) | | one row per user-chapter pair, which is what makes the two states exclusive |
+| INDEX (user_id, game_id) WHERE state='disliked' | | partial — the Turned-down section reads only the small tail |
+
+Every read of this table has to say which half it means. Guide reads and the
+popularity tally filter `state='kept'`; so do the three `user_chapters`
+subqueries inside `bgb_sync_achievements` (`guide_chapters`,
+`chapters_borrowed`, `grid_adopters`) and both halves of the GDPR export.
 
 ### boardgamebuddy_achievement_groups (lookup)
 The five section headings on the Achievements spoke. Seeded by migration 062;
@@ -536,8 +574,8 @@ Outbound queue for BgB→BGG (migration 070). One planned change per game per us
 - `GET /api/v1/boardgame_buddy/games` — paginated, search, filter. Supports `players`, `playtime_min/max`, `mechanics` (AND logic), `sort` (`newest` — the default, `created_at DESC` — or `alphabetical`, which the Add Games page uses), and `owned_only=true` (requires bearer token; intersected with the caller's `boardgamebuddy_collections` rows where `status='owned'`)
 - `GET /api/v1/boardgame_buddy/games/{game_id}` — detail (includes derived `bgg_url`)
 - `GET /api/v1/boardgame_buddy/games/{game_id}/bundle` — single-call Game Detail: the game, its base game, the viewer's collection status, recent plays, expansions and the viewer's own record with the game in one `bgb_game_detail_bundle` RPC. Supersedes the separate status / plays / expansions fetches. `viewer_stats` (migration 030) is `{plays, wins, decided_plays, scored_plays, avg_winning_score, your_avg_score, your_best_score, play_mode, first_played_at, last_played_at}`, or `null` when the viewer has never played the game — the same row `bgb_user_stats_detail`'s `games[]` carries, under migration 020's semantics, because both feed `web/ui/game-stats-panel.js`. Computed here rather than read from the Stats spoke's payload, which is the whole play history and self-only.
-- `GET /api/v1/boardgame_buddy/games/{game_id}/chapter-pool` — browse the pool of existing chapters for a game. Each row carries `popularity` (count of users who have it) and `in_my_guide` (whether the caller has it). Sorted by `popularity DESC, created_at DESC`. Supports `?q=` (title+content ILIKE), `?chapter_type=`, `?layout=text|scoring_grid` (migration 018 — `?layout=scoring_grid`, paired with `?chapter_type=scoring_grid`, plus each row's `in_my_guide` is how the reference guide answers "does this game have scoring templates I haven't added?", which is why there is no separate scoring-templates endpoint), and `?expansion_ids=a,b,c` (comma-separated game UUIDs to merge into the pool — each merged row carries `source_game_id` / `source_game_name` / `source_color` so the FE can render colored dots tying chapters to their expansion). Auth optional — anon callers always see `in_my_guide=false`.
-- `GET /api/v1/boardgame_buddy/games/{game_id}/chapter-pool/count` — how many chapters exist for a game, as `{total}`. Supports the same `?expansion_ids=a,b,c` scoping as `/chapter-pool`, so the two always agree. Exists because the reference guide's Edit-chapters button shows "N of M" on every mount, and `/chapter-pool` would carry every chapter's full markdown body to produce that one integer. No auth — the pool size is the same for everybody, and the viewer's own N comes from `my-chapters`.
+- `GET /api/v1/boardgame_buddy/games/{game_id}/chapter-pool` — browse the pool of existing chapters for a game. Each row carries `popularity` (count of users who have it) and `in_my_guide` (whether the caller has it). Sorted by `popularity DESC, created_at DESC`. Supports `?q=` (title+content ILIKE), `?chapter_type=`, `?layout=text|scoring_grid` (migration 018 — `?layout=scoring_grid`, paired with `?chapter_type=scoring_grid`, plus each row's `in_my_guide` is how the reference guide answers "does this game have scoring templates I haven't added?", which is why there is no separate scoring-templates endpoint), and `?expansion_ids=a,b,c` (comma-separated game UUIDs to merge into the pool — each merged row carries `source_game_id` / `source_game_name` / `source_color` so the FE can render colored dots tying chapters to their expansion). Each row also carries `disliked` (migration 033 — whether the caller has turned it down). Disliked rows stay ON the wire rather than being dropped server-side: the guide builder needs them for its Turned-down section, and shipping them tagged with the pool it already fetches is one round trip where a second endpoint would be two. Every client-side reader therefore has to filter them — the browse list via `_activePool()`, both scoring-template offer surfaces via the single `Chapter.pendingTemplates()` they share. Auth optional — anon callers always see `in_my_guide=false` and `disliked=false`.
+- `GET /api/v1/boardgame_buddy/games/{game_id}/chapter-pool/count` — how many chapters exist for a game that the caller has not turned down, as `{total}`. Supports the same `?expansion_ids=a,b,c` scoping as `/chapter-pool`, so the two always agree. Exists because the reference guide's Edit-chapters button shows "N of M" on every mount, and `/chapter-pool` would carry every chapter's full markdown body to produce that one integer. Auth is OPTIONAL and viewer-scoping is the only thing it buys: since migration 033 the caller's own dislikes come off the total, because a chapter they refused is not one their guide is missing. An anonymous caller gets the unfiltered pool size, as this endpoint always returned. The viewer's own N still comes from `my-chapters`.
 - `GET /api/v1/boardgame_buddy/games/{game_id}/expansions` — list expansions linked to this base game; `is_enabled` reflects the caller's own toggle when authenticated, `false` otherwise. Each item includes the expansion's `rulebook_url`, plus both `thumbnail_url` and full-size `image_url` (the reel's polaroids crop at 132×110, which upscaled the ~200px thumbnail).
 - `GET /api/v1/boardgame_buddy/collection/expansion-catalog` — every expansion BgB has for every base game on a user's owned shelf, as `{items}` of `ExpansionListItem` (each carrying `base_game_bgg_id` so the caller can group them). Params: `user_id`. Two bounded queries; backs the Expansions tree's **Show all expansions** switch, which would otherwise need one `/games/{id}/expansions` call per base game — 40 requests to paint one screen. Deliberately returns no `owned` flag: the only caller is the Collection spoke, which already has its own shelf and marks the rows itself.
 - `GET /api/v1/boardgame_buddy/games/{base_id}/expansions/available` — (signed-in) expansions BGG links to this base game that BgB hasn't imported yet. Backs the "Import expansions" popup: already-imported bgg_ids are filtered out and each `name` has the base game's name stripped off the front ("Catan: Cities & Knights" → "Cities & Knights"), with BGG's original string kept in `full_name`. Rows are ordered by **BGG owner count descending** (`bgg_owned`, from a batched `/thing?stats=1` lookup), with unknown counts appended alphabetically — the candidates are by definition absent from BgB's catalog, so nobody here owns or has played them and there is no local popularity signal to rank on. The stats lookup is best-effort and budgeted: a BGG failure or timeout returns the list alphabetically with `bgg_owned: null` rather than erroring. 400 when the target is itself an expansion.
@@ -655,7 +693,11 @@ Outbound queue for BgB→BGG (migration 070). One planned change per game per us
 - `POST /api/v1/boardgame_buddy/chapters/{chapter_id}/report` — body `{reason?}`; flag a chapter for admin moderation. Idempotent per user.
 - `GET /api/v1/boardgame_buddy/games/{game_id}/my-chapters` — chapters the caller has added to their guide for this game (empty list when none). Supports `?expansion_ids=a,b,c` to also merge in chapters from the listed expansions in one round-trip; each row carries `source_game_id` / `source_game_name` / `source_color` for FE colored-dot rendering.
 - `POST /api/v1/boardgame_buddy/games/{game_id}/my-chapters` — body `{chapter_id}`; add an existing pool chapter to my guide (idempotent)
-- `DELETE /api/v1/boardgame_buddy/games/{game_id}/my-chapters/{chapter_id}` — remove from my guide (does NOT delete the chapter)
+- `DELETE /api/v1/boardgame_buddy/games/{game_id}/my-chapters/{chapter_id}` — remove from my guide (does NOT delete the chapter). Scoped to `state='kept'`, so it can never silently clear a dislike.
+- `POST /api/v1/boardgame_buddy/games/{game_id}/disliked-chapters` — body `{chapter_id}`; turn a chapter down (migration 033). Hides it from the caller's chapter pool, from the `/chapter-pool/count` denominator and from the scoring-template offer, and drops it from their guide if it was in it — one row, one state, so all four follow from the single write. Per-viewer, never shown to the author, and NOT a report (`POST /chapters/{id}/report` is still the moderation path). Idempotent, and 200 rather than 201 because a second tap creates nothing — the same call `POST /plays/reactions` makes. 404 if the chapter does not belong to that game.
+- `DELETE /api/v1/boardgame_buddy/games/{game_id}/disliked-chapters/{chapter_id}` — undo a dislike. The chapter returns to the caller's pool and counts; it is NOT added to their guide, because taking back a refusal is a different act from adopting. Scoped to `state='disliked'`, so it can never drop a chapter out of the guide. Idempotent.
+
+  There is deliberately no `GET` for dislikes: the rows come back tagged on the chapter pool the builder already fetches.
 - `POST /api/v1/boardgame_buddy/games/{base_id}/expansions/{expansion_id}/toggle` — body `{is_enabled}`; per-user expansion toggle. Read back by this module's expansion list and joined into `bgb_game_detail_bundle`; the chapter system does not consume it, and the web client does not call it (kept for the bundle's `is_enabled` column)
 - `GET /api/v1/boardgame_buddy/admin/chapter-reports?status=open|resolved` — *admin-only* list chapter moderation reports
 - `POST /api/v1/boardgame_buddy/admin/chapter-reports/{report_id}/resolve` — *admin-only* mark a report resolved with no further action

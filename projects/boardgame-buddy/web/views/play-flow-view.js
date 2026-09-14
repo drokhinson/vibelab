@@ -2907,7 +2907,49 @@
         baseGameName: this._baseGameName(),
         onAdopt: (tpl) => this._adoptTemplate(tpl),
         onSkip: (shown) => this._declineTemplates(shown),
+        onDislike: (tpl) => this._dislikeTemplate(tpl),
       });
+    }
+
+    /**
+     * Turn one offered grid down for good (migration 033), from the table.
+     *
+     * The sheet has already dropped the card and stays open, so this is only
+     * the write plus the local bookkeeping behind it. Distinct from
+     * _declineTemplates below in the same way it is in the guide: that one is a
+     * per-device "not now" about the whole offer, this is a durable refusal of
+     * one grid.
+     *
+     * `_poolTemplates` is spliced rather than refetched. The host is mid-play
+     * with a sheet open on top of the scorepad — a guide reload here would
+     * repaint the screen underneath them — and the pool is re-read on the next
+     * mount anyway. The guide widget below gets the same treatment it gets for
+     * a decline: a notice repaint, not a reload.
+     */
+    async _dislikeTemplate(tpl) {
+      const gameId = this._ps.gameId;
+      const targetGameId = tpl.source_game_id || tpl.game_id || gameId;
+      const idx = this._poolTemplates.findIndex((t) => t.id === tpl.id);
+      if (idx >= 0) this._poolTemplates.splice(idx, 1);
+      try {
+        await window.Chapter.dislike(targetGameId, tpl.id);
+        window.Chapter.invalidateChaptersCache();
+        if (typeof showToast === "function") showToast("Won't suggest that again", "info");
+        // Same reason _declineTemplates does it: the guide's own notice is on
+        // this screen, reading the answer that just changed.
+        if (this._guideWidget && this._guideWidget.refreshTemplateNotice) {
+          this._guideWidget.refreshTemplateNotice();
+        }
+      } catch (e) {
+        // Put it back in the pool so a later offer on this screen still has it.
+        // The sheet is not restored — see the note on the guide's own copy of
+        // this handler; a card reappearing under the host's thumb mid-pass is
+        // worse than the grid simply being offered again next time.
+        if (idx >= 0) this._poolTemplates.splice(idx, 0, tpl);
+        if (typeof showToast === "function") {
+          showToast((e && e.message) || "Couldn't turn that grid down", "error");
+        }
+      }
     }
 
     /**

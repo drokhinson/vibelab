@@ -213,10 +213,15 @@ def _browse_chapter_pool_sync(
 
     # Popularity: count user_chapters rows per chapter in one round trip.
     # Bounded at 1000 adopter rows until the tally moves to an RPC GROUP BY.
+    #
+    # `state='kept'` since migration 033: a row can now also mean "this viewer
+    # turned it down", and counting those would let a chapter climb the
+    # popularity sort on the strength of the people who refused it.
     popularity: dict[str, int] = {cid: 0 for cid in chapter_ids}
     pop_rows = (
         sb.table("boardgamebuddy_user_chapters")
         .select("chapter_id")
+        .eq("state", "kept")
         .in_("chapter_id", chapter_ids)
         .limit(1000)
         .execute()
@@ -224,16 +229,23 @@ def _browse_chapter_pool_sync(
     for r in pop_rows:
         popularity[r["chapter_id"]] = popularity.get(r["chapter_id"], 0) + 1
 
+    # The viewer's own opinion of each chapter, both signs, from ONE query.
+    # `state` is selected rather than filtered so the kept and the disliked
+    # sets come back together — they are mutually exclusive by the table's
+    # UNIQUE (user_id, chapter_id), so a second round trip would only be
+    # re-asking the question this one already answered.
     in_my_guide: set[str] = set()
+    disliked: set[str] = set()
     if viewer_id is not None:
         mine = (
             sb.table("boardgamebuddy_user_chapters")
-            .select("chapter_id")
+            .select("chapter_id, state")
             .eq("user_id", viewer_id)
             .in_("chapter_id", chapter_ids)
             .execute()
         ).data or []
-        in_my_guide = {r["chapter_id"] for r in mine}
+        in_my_guide = {r["chapter_id"] for r in mine if r.get("state") != "disliked"}
+        disliked = {r["chapter_id"] for r in mine if r.get("state") == "disliked"}
 
     # Two-pass stable sort: secondary key (created_at desc) first, then
     # primary (popularity desc). Python's sort is stable, so popularity
@@ -246,6 +258,7 @@ def _browse_chapter_pool_sync(
             **_chapter_row_to_response(row, source_map if exp_ids else None).model_dump(),
             popularity=popularity.get(row["id"], 0),
             in_my_guide=row["id"] in in_my_guide,
+            disliked=row["id"] in disliked,
         )
         for row in pool_rows
     ]
@@ -283,8 +296,9 @@ async def browse_chapter_pool(
     """Browse every chapter that exists for this game (optionally + expansions).
 
     Sorted by `popularity DESC, created_at DESC`. Each row includes
-    a `popularity` count (how many users have it in their guide) and
-    `in_my_guide` (whether the caller already has it).
+    a `popularity` count (how many users have it in their guide),
+    `in_my_guide` (whether the caller already has it) and `disliked`
+    (whether the caller has turned it down).
     """
     sb = get_supabase()
     su_user = await maybe_supabase_user(authorization)
@@ -301,7 +315,7 @@ async def browse_chapter_pool(
 
 
 def _chapter_pool_count_sync(
-    sb: Client, game_id: str, expansion_ids: Optional[str]
+    sb: Client, game_id: str, viewer_id: Optional[str], expansion_ids: Optional[str]
 ) -> int:
     exp_ids = parse_csv_param(expansion_ids)
     all_game_ids = [game_id, *exp_ids]
@@ -314,7 +328,32 @@ def _chapter_pool_count_sync(
     count_q = (
         count_q.in_("game_id", all_game_ids) if exp_ids else count_q.eq("game_id", game_id)
     )
-    return count_q.execute().count or 0
+    total = count_q.execute().count or 0
+
+    if viewer_id is None or not total:
+        return total
+
+    # Migration 033: a chapter this viewer has turned down is not one their
+    # guide is missing, so it comes off the denominator of the guide's
+    # "N of M" — which is the whole point of the dislike. Counted, not
+    # fetched, for the same reason the total above is.
+    #
+    # Scoped by game rather than by chapter id: this endpoint deliberately
+    # never pulls the chapter rows, so it has no id list to filter on, and
+    # game_id is on the dislike row anyway. The partial index from 033 serves
+    # exactly this shape.
+    dis_q = (
+        sb.table("boardgamebuddy_user_chapters")
+        .select("chapter_id", count="exact", head=True)
+        .eq("user_id", viewer_id)
+        .eq("state", "disliked")
+    )
+    dis_q = dis_q.in_("game_id", all_game_ids) if exp_ids else dis_q.eq("game_id", game_id)
+    disliked = dis_q.execute().count or 0
+
+    # A dislike row can outlive nothing here — it cascades with its chapter —
+    # but clamp anyway: a negative total would render as "3 of -1".
+    return max(total - disliked, 0)
 
 
 @router.get(
@@ -333,17 +372,27 @@ async def count_chapter_pool(
             " same parameters."
         ),
     ),
+    authorization: Optional[str] = Header(None),
 ) -> ChapterPoolCountResponse:
-    """Count every chapter written for this game (optionally + expansions).
+    """Count the chapters written for this game (optionally + expansions) that
+    the caller has not turned down.
 
     The same number `GET /games/{game_id}/chapter-pool` would return the length
-    of, without the chapter bodies. No auth: the pool size is the same for
-    everybody, and the caller's own guide is counted client-side from
-    `my-chapters`.
+    of once its disliked rows are dropped, without the chapter bodies. Auth is
+    OPTIONAL and viewer-scoping is the only thing it buys: since migration 033
+    the caller's own dislikes come off the total, because a chapter they have
+    refused is not one their guide is missing. An anonymous caller gets the
+    unfiltered pool size, as this endpoint always returned. The caller's own
+    guide is still counted client-side from `my-chapters`.
     """
     sb = get_supabase()
+    su_user = await maybe_supabase_user(authorization)
     total = await asyncio.to_thread(
-        _chapter_pool_count_sync, sb, game_id, expansion_ids
+        _chapter_pool_count_sync,
+        sb,
+        game_id,
+        su_user.sub if su_user is not None else None,
+        expansion_ids,
     )
     return ChapterPoolCountResponse(total=total)
 
@@ -406,13 +455,18 @@ def _create_chapter_sync(
         raise HTTPException(status_code=500, detail="Chapter insert returned no row")
     new_id = insert.data[0]["id"]
 
-    # Auto-add to creator's guide.
+    # Auto-add to creator's guide. `state` is written out rather than left to
+    # the column default (migration 033) because this row is the one place the
+    # table is populated by something other than a deliberate add/dislike, and
+    # a reader working out what a row means should not have to go and look up
+    # what the default is.
     sel = (
         sb.table("boardgamebuddy_user_chapters")
         .insert({
             "user_id": user_id,
             "game_id": game_id,
             "chapter_id": new_id,
+            "state": "kept",
         })
         .execute()
     )
@@ -620,10 +674,15 @@ def _get_my_chapters_sync(
     exp_ids = parse_csv_param(expansion_ids)
     all_game_ids = [game_id, *exp_ids]
 
+    # `state='kept'` (migration 033): the guide is the kept half of this table.
+    # Its disliked half is the builder's Disliked section, which reads it off
+    # the chapter pool rather than from here — this endpoint answers "what is
+    # in my guide", and a chapter turned down is the opposite of that.
     sel_q = (
         sb.table("boardgamebuddy_user_chapters")
         .select("chapter_id, game_id, created_at")
         .eq("user_id", user_id)
+        .eq("state", "kept")
         .order("created_at")
     )
     sel_q = sel_q.in_("game_id", all_game_ids) if exp_ids else sel_q.eq("game_id", game_id)
@@ -699,13 +758,36 @@ def _add_chapter_to_my_guide_sync(
 
     existing = (
         sb.table("boardgamebuddy_user_chapters")
-        .select("created_at")
+        .select("created_at, state")
         .eq("user_id", user_id)
         .eq("chapter_id", body.chapter_id)
         .execute()
     )
-    if existing.data:
+    if existing.data and existing.data[0].get("state") != "disliked":
         added_at = existing.data[0]["created_at"]
+    elif existing.data:
+        # The row is a DISLIKE and the caller is adding the chapter. Adding is
+        # the act that contradicts the dislike, so it clears it rather than
+        # colliding with it — the same rule as
+        # boardgamebuddy_buddy_suggestion_dismissals, where sending somebody a
+        # buddy request undoes having dismissed them. Without this the UNIQUE
+        # (user_id, chapter_id) would make the add a 409 on a chapter the user
+        # is looking at and asking for.
+        #
+        # `created_at` is deliberately left alone: the guide orders by it, and
+        # the dislike row's timestamp is when this viewer first had an opinion
+        # about the chapter, which is a truer "added" than now would be for a
+        # chapter they had adopted, disliked and re-adopted.
+        upd = (
+            sb.table("boardgamebuddy_user_chapters")
+            .update({"state": "kept", "game_id": game_id})
+            .eq("user_id", user_id)
+            .eq("chapter_id", body.chapter_id)
+            .execute()
+        )
+        added_at = (
+            upd.data[0]["created_at"] if upd.data else existing.data[0]["created_at"]
+        )
     else:
         ins = (
             sb.table("boardgamebuddy_user_chapters")
@@ -713,6 +795,7 @@ def _add_chapter_to_my_guide_sync(
                 "user_id": user_id,
                 "game_id": game_id,
                 "chapter_id": body.chapter_id,
+                "state": "kept",
             })
             .execute()
         )
@@ -761,6 +844,119 @@ async def remove_chapter_from_my_guide(
         .eq("user_id", user.user_id)
         .eq("game_id", game_id)
         .eq("chapter_id", chapter_id)
+        # Scoped to the kept half (migration 033). Removing a chapter from the
+        # guide is not un-disliking one, and without this filter the two
+        # endpoints would share a delete: a client that fired both would clear
+        # a dislike the user had not touched.
+        .eq("state", "kept")
+        .execute
+    )
+    return Response(status_code=204)
+
+
+# ── Dislikes ──────────────────────────────────────────────────────────────────
+#
+# The inverse of the my-chapters pair above, on the same table and against the
+# same UNIQUE (user_id, chapter_id) — see migration 033 for why a dislike is a
+# state on that row rather than a table of its own.
+#
+# Only the two writes live here. There is no GET: a disliked chapter comes back
+# tagged on the chapter pool the builder already fetches, so a third endpoint
+# would be a second round trip for rows that are already on the wire.
+
+
+def _dislike_chapter_sync(
+    sb: Client, game_id: str, body: AddChapterRequest, user_id: str
+) -> MessageResponse:
+    chapter = (
+        sb.table("boardgamebuddy_guide_chapters")
+        .select("id")
+        .eq("id", body.chapter_id)
+        .eq("game_id", game_id)
+        .execute()
+    )
+    if not chapter.data:
+        raise HTTPException(status_code=404, detail="Chapter not found for this game")
+
+    existing = (
+        sb.table("boardgamebuddy_user_chapters")
+        .select("state")
+        .eq("user_id", user_id)
+        .eq("chapter_id", body.chapter_id)
+        .execute()
+    )
+    if existing.data:
+        # Either it is already disliked — in which case this is the idempotent
+        # second tap and the UPDATE is a no-op — or it is in the caller's guide
+        # and the dislike takes it out, which is one write rather than a delete
+        # and an insert precisely because the row is the opinion.
+        (
+            sb.table("boardgamebuddy_user_chapters")
+            .update({"state": "disliked", "game_id": game_id})
+            .eq("user_id", user_id)
+            .eq("chapter_id", body.chapter_id)
+            .execute()
+        )
+    else:
+        (
+            sb.table("boardgamebuddy_user_chapters")
+            .insert({
+                "user_id": user_id,
+                "game_id": game_id,
+                "chapter_id": body.chapter_id,
+                "state": "disliked",
+            })
+            .execute()
+        )
+    return MessageResponse(message="Chapter disliked")
+
+
+@router.post(
+    "/games/{game_id}/disliked-chapters",
+    response_model=MessageResponse,
+    status_code=200,
+    summary="Turn down a chapter so it stops being recommended",
+)
+async def dislike_chapter(
+    body: AddChapterRequest,
+    game_id: str = Path(..., description="Game UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MessageResponse:
+    """Hide a chapter from the caller's pool, pool count and template offers, and
+    drop it from their guide if it was in it. Per-viewer, never shown to the
+    author, and not a report. Idempotent."""
+    # 200 rather than 201: the write is idempotent and a second tap creates
+    # nothing, so "Created" would be a lie half the time — the same call made
+    # by POST /plays/reactions.
+    sb = get_supabase()
+    return await asyncio.to_thread(
+        _dislike_chapter_sync, sb, game_id, body, user.user_id
+    )
+
+
+@router.delete(
+    "/games/{game_id}/disliked-chapters/{chapter_id}",
+    status_code=204,
+    summary="Un-dislike a chapter",
+)
+async def undislike_chapter(
+    game_id: str = Path(..., description="Game UUID"),
+    chapter_id: str = Path(..., description="Chapter UUID"),
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    """Undo a dislike: the chapter returns to the caller's pool and counts, and
+    is NOT added to their guide. Idempotent."""
+    sb = get_supabase()
+    await asyncio.to_thread(
+        sb.table("boardgamebuddy_user_chapters")
+        .delete()
+        .eq("user_id", user.user_id)
+        .eq("game_id", game_id)
+        .eq("chapter_id", chapter_id)
+        # Deleting the row is what un-dislikes, so the state filter is load
+        # bearing rather than defensive: without it this endpoint would drop a
+        # chapter out of the caller's guide.
+        .eq("state", "disliked")
         .execute
     )
     return Response(status_code=204)

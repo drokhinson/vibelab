@@ -1097,6 +1097,16 @@ class ChapterPoolItem(ChapterResponse):
     # Frontend hides rows where this is true. Anon callers always see
     # `in_my_guide=false`.
     in_my_guide: bool = False
+    # Whether the calling user has turned this chapter down (migration 033).
+    # Mutually exclusive with in_my_guide — one row in
+    # boardgamebuddy_user_chapters carries one state, so both can never be
+    # true. Anon callers always see `disliked=false`.
+    #
+    # Disliked rows stay ON the wire rather than being dropped server-side:
+    # the builder needs them for its Disliked section, and shipping them with
+    # the pool it already fetches is one round trip where a second endpoint
+    # would be two. The client is what hides them from the browse list.
+    disliked: bool = False
 
 
 class ChapterPoolCountResponse(BaseModel):
@@ -1104,6 +1114,10 @@ class ChapterPoolCountResponse(BaseModel):
     # reference guide needs the number to say "3 of 12" on its Edit-chapters
     # button; pulling /chapter-pool for it would carry every chapter's full
     # markdown body to render one integer.
+    #
+    # Viewer-scoped since migration 033: the caller's own disliked chapters
+    # are subtracted, because a chapter they have turned down is not one their
+    # guide is missing. An anonymous caller gets the unfiltered total.
     total: int = 0
 
 

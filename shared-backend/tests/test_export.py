@@ -220,7 +220,10 @@ def _store(**overrides):
                                              "group_id": "guides"}},
         ],
         "boardgamebuddy_user_chapters": [
-            {"user_id": ME, "chapter_id": "c1", "created_at": "2026-02-02T00:00:00Z",
+            # `state` since migration 033: the table now holds both halves of
+            # the viewer's opinion, and the export reads only the kept one.
+            {"user_id": ME, "chapter_id": "c1", "state": "kept",
+             "created_at": "2026-02-02T00:00:00Z",
              "boardgamebuddy_guide_chapters": {
                  "title": "Setup", "chapter_type": "setup", "content": "Deal 8 cards.",
                  "created_by": ME, "created_at": "2026-02-02T00:00:00Z",

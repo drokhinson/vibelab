@@ -53,18 +53,30 @@ def _count_guides(sb: Client, user_id: str) -> int:
     The third count is the overlap — chapters they wrote that ARE still in
     their guide — subtracted so the number matches the unioned file rather than
     counting an authored-and-kept chapter twice.
+
+    Both selection counts carry `state='kept'` (migration 033), matching
+    export_reads.build_guides — the tick beside the file has to count the rows
+    the file actually holds, and a disliked chapter is in neither.
+    `_count` cannot express the second filter, so these two are spelled out.
     """
-    selected = _count(sb, "boardgamebuddy_user_chapters", "user_id", user_id)
+    selected = (
+        sb.table("boardgamebuddy_user_chapters")
+        .select("chapter_id", count="exact", head=True)
+        .eq("user_id", user_id)
+        .eq("state", "kept")
+        .execute()
+    ).count or 0
     authored = _count(sb, "boardgamebuddy_guide_chapters", "created_by", user_id)
     both = (
         sb.table("boardgamebuddy_user_chapters")
         .select("chapter_id, boardgamebuddy_guide_chapters!inner(created_by)",
                 count="exact", head=True)
         .eq("user_id", user_id)
+        .eq("state", "kept")
         .eq("boardgamebuddy_guide_chapters.created_by", user_id)
         .execute()
     ).count or 0
-    return selected + authored - int(both)
+    return int(selected) + authored - int(both)
 
 
 @dataclass(frozen=True)

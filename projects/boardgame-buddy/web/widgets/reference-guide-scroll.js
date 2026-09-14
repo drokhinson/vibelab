@@ -554,7 +554,18 @@
      */
     _renderCreateTemplate() {
       if (!this._showScoringGrids) return "";
-      if (!this._templatesLoaded || this._templates.length) return "";
+      // "Grids exist" means grids that still exist FOR THIS VIEWER: a grid
+      // they have turned down (migration 033) is one they have already
+      // decided about, and leaving it to suppress this button is how somebody
+      // who refused the only bad grid for a game ends up on a screen that
+      // offers them nothing at all. Refusing it is exactly the moment writing
+      // your own becomes the useful next step.
+      //
+      // NOT pendingTemplates(), which also drops the grids the viewer has
+      // ADOPTED — those must keep this button away, and this is the one
+      // reader that cares about the difference.
+      if (!this._templatesLoaded) return "";
+      if ((this._templates || []).some((t) => !t.disliked)) return "";
       return `
         <button class="scroll-panel__notice scroll-panel__notice--create" type="button"
                 onclick="window.referenceGuideScroll._openCreateTemplate(event)">
@@ -685,7 +696,43 @@
         returnFocus: (event && event.currentTarget) || null,
         onAdopt: (tpl) => this._adoptTemplate(tpl),
         onSkip: (shown) => this._dismissTemplates(shown),
+        onDislike: (tpl) => this._dislikeTemplate(tpl),
       });
+    }
+
+    /**
+     * Turn one offered grid down for good (migration 033).
+     *
+     * The sheet has already dropped the card; this is the write behind it. Not
+     * _dismissTemplates: that is the per-device "not now" that only quiets this
+     * notice, where a dislike takes the grid out of the pool, off the guide's
+     * "N of M" and out of every future offer on every device.
+     *
+     * refresh() rather than a local splice, and only once the write lands: the
+     * scroll holds three lists the dislike changes (the pool, the pending
+     * templates behind the notice, and the count on the Edit-chapters button),
+     * and re-reading them in one pass is what keeps the notice, the Scoring
+     * section and the button agreeing with each other.
+     */
+    async _dislikeTemplate(tpl) {
+      const targetGameId = tpl.source_game_id || tpl.game_id || this._baseGameId;
+      try {
+        await window.Chapter.dislike(targetGameId, tpl.id);
+        window.Chapter.invalidateChaptersCache();
+        document.dispatchEvent(new CustomEvent("chapters-changed", {
+          detail: { gameId: targetGameId },
+        }));
+        if (typeof showToast === "function") showToast("Won't suggest that again", "info");
+        await this.refresh();
+      } catch (e) {
+        if (typeof showToast === "function") {
+          showToast((e && e.message) || "Couldn't turn that grid down", "error");
+        }
+        // No rollback into the sheet: it is a transient surface the viewer is
+        // still standing in front of, and re-inserting a card under their thumb
+        // mid-pass is worse than the grid simply being back next time. The
+        // refresh above is skipped, so nothing local claims the write landed.
+      }
     }
 
     /**
