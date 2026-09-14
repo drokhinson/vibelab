@@ -241,28 +241,46 @@
 
 
   // ── Render ────────────────────────────────────────────────────────────────
-  // Preserve focus + caret across the innerHTML replace so the edit-form's
-  // text inputs don't lose them on every keystroke.
+  //
+  // Two guards, in increasing cost, and the card is only ever rebuilt whole on
+  // the first paint.
+  //
+  // Nothing changed at all -> the byte-identity check below returns without
+  // building a tree. That is what a revalidation confirming what the popup
+  // already showed costs: zero.
+  //
+  // Something changed -> BgbDomPatch writes only the nodes that differ. The
+  // card element itself survives, and with it the photo <img> (no re-decode, no
+  // blink), the entrance animation (it does not replay), the scroll offset of
+  // .play-detail-popup__scroll, the :active state under a finger mid-press, and
+  // the focus and caret of whatever field is being typed into. Before this, one
+  // differing byte anywhere cost a full teardown of every node on the card —
+  // which a user watching it read as the card reloading a second after it
+  // opened.
   function render() {
     const root = _modal.el;
     if (!root) return;
     const html = renderCard();
-    // Nothing about the card changed — leave the DOM alone. This is what a
-    // revalidation that confirms what the popup already showed now costs:
-    // zero repaints, so no image blink, no lost scroll position, no reset
-    // <details>. It also makes an edit-mode keystroke that doesn't move the
-    // draft a no-op instead of a full rebuild.
     if (html === _lastHtml) return;
 
     const focus = captureFocus();
+    const focused = document.activeElement;
 
-    root.innerHTML = html;
+    // First paint, or a re-mount after PolaroidPopup.confirm handed us a brand
+    // new backdrop: there is nothing to patch against.
+    if (_lastHtml === null || !root.firstElementChild) {
+      root.innerHTML = html;
+      window.BgbIcons.render(root);
+    } else {
+      window.BgbDomPatch.morph(root, html);
+    }
     _lastHtml = html;
-    window.BgbIcons.render(root);
     // The × needs no listener of its own: the shell's delegated click owns it
     // via closeSelector, and its onClose is this popup's reset.
 
-    restoreFocus(focus);
+    // Only when the patch actually cost us the focus. restoreFocus collapses a
+    // selection to a caret, and after a morph the field usually still has both.
+    if (document.activeElement !== focused) restoreFocus(focus);
   }
 
   function renderCard() {
@@ -377,6 +395,21 @@
     return players.some((pl) => Array.isArray(pl[k]) && pl[k].length >= min);
   }
 
+  /**
+   * Expansions in name order — the order the feed RPC already sorts them into
+   * (migration 031) and the REST row does not, so without this the chips
+   * reshuffle when the confirming fetch lands. Same argument as
+   * Play.rankPlayers, one list down.
+   *
+   * @param {any[]} exps
+   * @returns {any[]} a sorted copy
+   */
+  function byName(exps) {
+    return (exps || []).slice().sort(
+      (a, b) => String(a.name || "").localeCompare(String(b.name || ""))
+    );
+  }
+
   /** A play's template rows, or [] — defensive against a row cached pre-018. */
   function templateRows(template) {
     return (template && Array.isArray(template.rows)) ? template.rows : [];
@@ -403,18 +436,17 @@
 
   // ── View mode ─────────────────────────────────────────────────────────────
   function renderView(p) {
-    // Players sorted by score descending so the scoreboard reads top-down
-    // by rank. Stable for equal scores (Array.sort is stable in modern JS).
-    const ranked = (p.players || []).slice().sort((a, b) => {
-      const sa = a.score == null ? -Infinity : a.score;
-      const sb = b.score == null ? -Infinity : b.score;
-      return sb - sa;
-    });
+    // Score descending, so the scoreboard reads top-down by rank. Via
+    // Play.rankPlayers because the ranking has to be a TOTAL order: the feed
+    // seed and the row the confirming fetch brings back disagree about the
+    // order of tied players, and a sort that leaves that disagreement intact
+    // repaints the card for a difference nobody made.
+    const ranked = window.Play.rankPlayers(p.players);
     const me = window.store && window.store.get && window.store.get("user");
     const photoSlot = p.photo_url
-      ? `<img class="play-detail-popup__photo" src="${escapeAttr(p.photo_url)}" alt="" />`
+      ? `<img data-morph-key="photo" class="play-detail-popup__photo" src="${escapeAttr(p.photo_url)}" alt="" />`
       : (p.is_own
-          ? `<button class="play-detail-popup__add-photo" type="button"
+          ? `<button data-morph-key="photo" class="play-detail-popup__add-photo" type="button"
                      onclick="window.PlayDetailPopup._enterEditWithPhotoPicker()">
               <i data-icon="image-plus" class="w-6 h-6"></i>
               <span class="play-detail-popup__add-photo-title">Add a photo</span>
@@ -427,12 +459,12 @@
         ${renderGameBubble(p, { editing: false })}
 
         ${(p.expansions || []).length > 0 ? `
-          <section class="play-detail__section">
+          <section data-morph-key="expansions" class="play-detail__section">
             <h3 class="play-detail__section-title">
               <i data-icon="puzzle" class="w-4 h-4"></i> Expansions
             </h3>
             <ul class="play-detail__expansions">
-              ${(p.expansions || []).map((e) => `
+              ${byName(p.expansions).map((e) => `
                 <li onclick="${escapeAttr(gameDetailJs(e.expansion_game_id, e.name, { before: "window.PlayDetailPopup.dismiss();" }))}"
                     title="${escapeAttr(e.name || "")}"
                     style="${e.color ? `--exp-color:${escapeAttr(e.color)}` : ""}">
@@ -446,14 +478,14 @@
         ${photoSlot}
 
         ${p.notes ? `
-          <section class="play-detail__section">
+          <section data-morph-key="notes" class="play-detail__section">
             <h3 class="play-detail__section-title">
               <i data-icon="sticky-note" class="w-4 h-4"></i> Notes
             </h3>
             <p class="play-detail__notes">${escapeHtml(p.notes)}</p>
           </section>` : ""}
 
-        <section class="play-detail__section">
+        <section data-morph-key="players" class="play-detail__section">
           <h3 class="play-detail__section-title">
             <i data-icon="users" class="w-4 h-4"></i> Players
           </h3>
@@ -510,12 +542,17 @@
         </section>
 
         ${hasRoundGrid(p.players, null, p.scoring_template) ? `
-          <section class="play-detail__section">
+          <section data-morph-key="rounds" class="play-detail__section">
             <h3 class="play-detail__section-title">
               <i data-icon="layers" class="w-4 h-4"></i> Rounds
             </h3>
+            <!-- \`ranked\`, not \`p.players\`: the grid's columns and the
+                 scoreboard rows immediately above are the same list of people,
+                 and drawing one in ranked order and the other in whatever order
+                 the payload arrived in made them disagree with each other on
+                 screen — as well as re-ordering between the seed and the fetch. -->
             ${window.renderRoundGrid(
-              (p.players || []).map((pl) => ({
+              ranked.map((pl) => ({
                 name: pl.name,
                 is_winner: !!pl.is_winner,
                 user_id: pl.user_id || null,
@@ -583,7 +620,7 @@
                 onchange="window.PlayDetailPopup._setDraft('played_at', this.value)" />`
       : `<div class="play-detail__game-when">${playWhenLine(p)}</div>`;
     return `
-      <div class="play-detail__meta">
+      <div data-morph-key="meta" class="play-detail__meta">
         <div class="play-detail__game-row">
           ${thumb
             ? `<img class="play-detail__game-thumb" src="${escapeAttr(thumb)}" alt="" />`

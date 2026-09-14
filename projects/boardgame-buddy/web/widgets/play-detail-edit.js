@@ -103,7 +103,15 @@
       game_name: p.game_name,
       game_thumbnail: p.game_thumbnail || null,
       notes: p.notes || "",
-      players: (p.players || []).map((pl) => ({
+      // Ranked once, here, for the same reason the expansions below are sorted
+      // once: view mode lists these players in Play.rankPlayers order, so a
+      // draft built from the raw payload order made tapping Edit visibly
+      // reshuffle the roster. Sorting at RENDER time instead would be worse
+      // than either — resyncScores and autoSelectWinners rewrite scores on
+      // every keystroke, so rows would jump under the user's finger as they
+      // typed. The indices the grid and the row handlers address are assigned
+      // after this sort and never move again.
+      players: window.Play.rankPlayers(p.players).map((pl) => ({
         name: pl.name,
         is_winner: !!pl.is_winner,
         score: pl.score != null ? String(pl.score) : "",
@@ -118,11 +126,17 @@
       // named chips, so a bare id list would mean holding a second lookup
       // in parallel with the thing the user is actually editing. The save
       // maps back down to ids, which is all PUT /plays/{id} takes.
-      expansions: (p.expansions || []).map((e) => ({
-        expansion_game_id: e.expansion_game_id,
-        name: e.name,
-        color: e.color || null,
-      })),
+      // Sorted ONCE, here, rather than at render time: the edit list is a
+      // draft the user adds to and removes from, and re-sorting on every paint
+      // would move a chip out from under the finger reaching for its ×. Name
+      // order matches what view mode shows, so tapping Edit does not reshuffle.
+      expansions: (p.expansions || []).slice()
+        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+        .map((e) => ({
+          expansion_game_id: e.expansion_game_id,
+          name: e.name,
+          color: e.color || null,
+        })),
       play_mode: p.play_mode,
       // Carried so the edit grid labels its rows the same way the view grid
       // does. Never edited here, and never sent back: PUT /plays/{id} leaves
@@ -251,7 +265,12 @@
           <h3 class="play-detail__section-title">
             <i data-icon="sticky-note" class="w-4 h-4"></i> Notes
           </h3>
-          <textarea class="textarea textarea-bordered w-full" rows="2"
+          <!-- id, because a surface that restores focus by id cannot find a
+               field without one (web-frontend.md, "Async state"). The morph
+               normally preserves this node and its caret outright; the id is
+               what makes the captureFocus/restoreFocus backstop work on the
+               paints that do replace it, such as leaving edit mode. -->
+          <textarea id="play-popup-notes" class="textarea textarea-bordered w-full" rows="2"
                     oninput="window.PlayDetailPopup._setDraft('notes', this.value)">${escapeHtml(d.notes)}</textarea>
         </section>
 

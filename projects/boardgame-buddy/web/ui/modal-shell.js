@@ -118,7 +118,22 @@
         // containment test against the fresh card reads the press that caused
         // the repaint as a tap outside. `closest` still walks the detached
         // node's own subtree and answers correctly.
+        //
+        // The dispatch path is asked FIRST, because `closest` only answers
+        // correctly while the target is detached together with the whole card.
+        // A card that repaints SURGICALLY (ui/dom-patch.js) detaches small
+        // subtrees instead, so a button that removes itself — "Track per-round
+        // scores", "Add a photo" — leaves its own click target in an orphan
+        // fragment whose ancestor chain no longer reaches the card, and the
+        // press that caused the repaint would close the overlay. composedPath()
+        // is computed at dispatch, before any handler ran, so no mutation a
+        // handler makes can rewrite it.
+        const path = typeof e.composedPath === "function" ? e.composedPath() : null;
         const inCard =
+          (path && path.some((n) => n
+            && n.nodeType === 1
+            && /** @type {any} */ (n).matches
+            && /** @type {any} */ (n).matches(this._cardSelector))) ||
           t.closest(this._cardSelector) ||
           // Nothing in the backdrop matches the selector at all: that is a
           // mis-set cardSelector, not a tap outside. Fall back to the
