@@ -21,11 +21,21 @@
 // replacement is not a choice the host should have to remember to make every
 // game. So the two questions are separated here:
 //
-//   split()   — which grids are CANDIDATES for the scorepad (rivals, and the
-//               only thing the picker sheet ever shows), and which are ADD-ONS
-//               that fold into whichever candidate wins.
+//   split()   — which grids are CANDIDATES for the scorepad (the pills the host
+//               picks between: the base game, then each replace expansion) and
+//               which are ADD-ONS that fold into whichever candidate is chosen.
+//   preferredBase() — which candidate wins when nobody has picked: a replace
+//               expansion on the table, else the base game's single grid. This
+//               is "replaces the base game template when the expansion is being
+//               played with", expressed once.
 //   compose() — one candidate + the add-ons -> the flat row list the grid
 //               renders, plus the seam list that says where each row came from.
+//
+// Add-ons are appended in ASCENDING BGG ID, not in the order the host ticked
+// their expansions or the order the guide returned them. Two people scoring the
+// same game with the same two boxes get the same scorepad, and adding a third
+// expansion later drops its block into publication order rather than at the
+// end — which is also how the physical scorepads are laid out.
 //
 // Pure functions of their arguments — no fetch, no DOM, no store. That is what
 // lets the play screen, the picker sheet and the reference guide all describe
@@ -40,6 +50,7 @@
    * @property {string} [source_game_id]
    * @property {string} [source_game_name]
    * @property {string} [source_color]
+   * @property {number} [source_bgg_id]
    * @property {string} [title]
    * @property {{v?: number, mode?: string|null,
    *             rows: Array<{label: string, color?: string, note?: string}>}} grid
@@ -113,52 +124,55 @@
     return (c && c.source_game_name) || null;
   }
 
+  /** A grid's ordering key: its game's BGG id, with unknown ids sorting last. */
+  function bggIdOf(c) {
+    const n = c && c.source_bgg_id;
+    return typeof n === "number" && isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+  }
+
   /**
-   * Sort expansion grids into the order their expansions sit in on the play.
+   * Order expansion grids by BGG id, ascending.
    *
-   * The guide's my-chapters response merges base + expansions and orders by
-   * chapter type, which is right for a reference scroll and arbitrary for a
-   * scorepad. Composing in the play's own expansion order instead means two
-   * hosts with the same box on the table get the same rows in the same order,
-   * and that adding a third expansion appends its rows rather than
-   * reshuffling the two already there.
+   * NOT by the order the host ticked their expansions, and not by the order the
+   * guide's merged response happened to arrive in (which is by chapter type —
+   * right for a reference scroll, arbitrary for a scorepad). A BGG id is a
+   * stable, publication-ordered number every client can see, so two people at
+   * the same table with the same two boxes get the same rows in the same order,
+   * and adding a third expansion next month drops its block into place rather
+   * than reshuffling the two already there.
    *
-   * Grids for a game not in `order` sort last, keeping their relative order —
-   * that is the guide showing a grid for an expansion the host has since
-   * unticked, which _activeAddOns filters out before it ever gets here.
+   * Ties — two expansions BGG has never heard of — fall back to the game's
+   * name, so the order is still total and still the same on both phones.
+   * Array#sort is stable, so grids for one game keep their relative order.
    */
-  function byExpansionOrder(order) {
-    const rank = new Map((order || []).map((id, i) => [id, i]));
-    return (a, b) => {
-      const ra = rank.has(gameIdOf(a)) ? rank.get(gameIdOf(a)) : Number.MAX_SAFE_INTEGER;
-      const rb = rank.has(gameIdOf(b)) ? rank.get(gameIdOf(b)) : Number.MAX_SAFE_INTEGER;
-      return ra - rb;
-    };
+  function byBggId(a, b) {
+    const d = bggIdOf(a) - bggIdOf(b);
+    if (d) return d;
+    return (gameNameOf(a) || "").localeCompare(gameNameOf(b) || "");
   }
 
   /**
    * Sort the adopted grids into scorepad candidates and add-ons.
    *
-   * The rule the two modes come down to: a REPLACE grid in play is a scorepad
-   * in its own right, so it does not compete with the base game's grid — it
-   * DISPLACES it. With one on the table the base game's grids are not
-   * candidates at all, which is what "completely replaces the base game
-   * template" has to mean if it means anything.
+   * A CANDIDATE is a grid that can be the whole scorepad: the base game's own,
+   * and every replace-mode expansion on the table. Those are the pills the host
+   * picks between, in that order — the base game first, then the replacements
+   * by BGG id — because that is the order they read in ("Everdell, Pearlbrook,
+   * Legacy") and the base game is the one everybody recognises.
    *
-   * That leaves `bases` as a genuine list of rivals only in two cases: several
-   * community grids adopted for one base game (the case the picker sheet was
-   * written for), or two expansions on the table each bringing a replacement.
-   * The second is a real ambiguity — two boxes that each claim the whole score
-   * sheet — and it is answered the same way as the first, by asking, rather
-   * than by a rule nobody would be able to predict.
+   * A replace grid does not remove the base game from the list. "Replaces the
+   * base game template when the expansion is being played with" is about which
+   * one is CHOSEN by default (preferredBase below), not about which ones can
+   * be chosen: a host who wants the base scorepad back with the big box still
+   * on the table is asking for something reasonable, and a rule that made it
+   * unreachable would be the picker refusing to pick.
    *
    * @param {GridChapter[]} templates every adopted scoring grid, base + expansions
-   * @param {{baseGameId: string, expansionIds?: string[]}} opts
+   * @param {{baseGameId: string}} opts
    * @returns {{bases: GridChapter[], addOns: GridChapter[], replacing: boolean}}
    */
   function split(templates, opts) {
     const baseGameId = (opts && opts.baseGameId) || null;
-    const order = (opts && opts.expansionIds) || [];
     const usable = (templates || []).filter((c) => rowsOf(c));
 
     const base = [];
@@ -170,13 +184,40 @@
       else if (mode === MODE_REPLACE) replace.push(c);
       else addOns.push(c);
     }
-    replace.sort(byExpansionOrder(order));
-    addOns.sort(byExpansionOrder(order));
+    replace.sort(byBggId);
+    addOns.sort(byBggId);
     return {
-      bases: replace.length ? replace : base,
+      bases: base.concat(replace),
       addOns,
       replacing: replace.length > 0,
     };
+  }
+
+  /**
+   * Which candidate is the scorepad when the host has not said.
+   *
+   * This is the whole of "replace" in one function: a replace-mode expansion on
+   * the table takes the scorepad, and the base game's grid sits the game out.
+   * With several — two big boxes each claiming the whole score sheet — the
+   * lowest BGG id wins rather than nothing winning, because `bases` is already
+   * in that order and the pills are right there to correct it; leaving the
+   * table blank in front of a host who has one obvious answer and one
+   * unobvious one is worse than picking the obvious one.
+   *
+   * Returns null only when the base game itself is ambiguous — two community
+   * grids adopted for it and no replacement in play. That is the one case
+   * where guessing reshapes the table on a coin flip, so nothing auto-applies
+   * and the pills ask.
+   *
+   * @param {{bases: GridChapter[]}} sp a split() result
+   * @param {string} baseGameId
+   * @returns {GridChapter|null}
+   */
+  function preferredBase(sp, baseGameId) {
+    const bases = (sp && sp.bases) || [];
+    const replacing = bases.filter((c) => modeOf(c, baseGameId) === MODE_REPLACE);
+    if (replacing.length) return replacing[0];
+    return bases.length === 1 ? bases[0] : null;
   }
 
   /**
@@ -211,6 +252,17 @@
 
     for (const layer of layers) {
       const src = rowsOf(layer.c) || [];
+      // The expansion this block came from, stamped onto every row it
+      // contributes. It draws the coloured rule down the left edge of the row
+      // header, which is how a scorer tells "this row came with Pearlbrook"
+      // from "this row is the base game's" without reading the labels — the
+      // seam is otherwise invisible once the rows are one flat list.
+      //
+      // Only on an ADD-ON: the leading grid's rows are the scorepad, not a
+      // block appended to it, so marking them would say the whole table came
+      // from somewhere else. A replace-mode grid leads, so its rows are
+      // unmarked for exactly that reason.
+      const from = layer.mode === MODE_ADD_ON ? (layer.c.source_color || null) : null;
       // The ceiling is applied per LAYER as the rows go on, so a composition
       // that overruns keeps every earlier grid whole and loses only the tail
       // of the last one to fit — rather than the whole last grid, or a
@@ -225,6 +277,9 @@
           label: r.label,
           color: r.color || "neutral",
           ...(r.note ? { note: r.note } : {}),
+          // Absent rather than null on an unmarked row: the snapshot is stored
+          // verbatim and every reader tests for the key's presence.
+          ...(from ? { source_color: from } : {}),
         });
       }
       parts.push({
@@ -324,6 +379,7 @@
     gameIdOf,
     modeOf,
     split,
+    preferredBase,
     compose,
     composedTitle,
     snapshot,

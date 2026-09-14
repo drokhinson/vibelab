@@ -39,7 +39,7 @@
 //                     play-flow-view overlay live realtime scores when a
 //                     player has a real user_id. Defaults to reading from
 //                     player.roundScores.
-//   rowLabels       — optional [{label, color, note}], index-aligned to round
+//   rowLabels       — optional [{label, color, note, source_color}], index-aligned to round
 //                     index. Row r takes rowLabels[r].label when one is present
 //                     and `R${r+1}` when it isn't, so a scoring template's rows
 //                     and the extras a scorer appends under them are ONE list of
@@ -131,9 +131,18 @@
           <tbody>
             ${Array.from({ length: roundCount }).map((_, r) => {
               const tpl = rowLabels[r] || null;
+              // A row contributed by an ADD-ON expansion carries that
+              // expansion's colour (domain/scoring-template.js), which draws the
+              // rule down the left edge of the header cell in place of the row's
+              // own tint — one channel for what the row IS (the author's
+              // palette wash) and one for where it CAME FROM. Set as a custom
+              // property, never as a literal, which is the one legitimate
+              // inline-colour case in .claude/rules/theming.md §10.
+              const src = (tpl && tpl.source_color) || null;
               return `
               <tr>
-                <th class="scoring-round-th${tpl ? " scoring-round-th--tpl" : ""}"
+                <th class="scoring-round-th${tpl ? " scoring-round-th--tpl" : ""}${src ? " scoring-round-th--exp" : ""}"
+                    ${src ? `style="--exp-accent: ${escapeAttr(src)}"` : ""}
                     ${tpl ? `data-row-color="${escapeAttr(tpl.color || "neutral")}"` : ""}
                     ${tpl ? `title="${escapeAttr(tpl.label)}"` : ""}>
                   <span class="scoring-round-label">

@@ -148,6 +148,34 @@ class ScoringGrid(BaseModel):
     )
 
 
+class ScoringSnapshotRow(ScoringRow):
+    """A row as it lands on a COMPOSED scorepad (migration 032).
+
+    `source_color` is the `boardgamebuddy_games.expansion_color` of the
+    expansion whose grid contributed the row, and None for a row from whichever
+    grid leads the composition. It draws the coloured rule down the left edge of
+    the row's header cell, which is how a scorer tells "this row came with
+    Pearlbrook" from "this row is the base game's" at a glance.
+
+    A SECOND channel from `color`, not a replacement for it: `color` is the
+    author's tint for what the row IS (a palette slug the stylesheet owns), and
+    this is the provenance of where it came FROM. They are independent, so they
+    get independent marks — the wash stays the author's, the left rule is the
+    expansion's.
+
+    Deliberately not on ScoringRow itself: an authored grid has no provenance to
+    record — every one of its rows is its own — so the field would be a
+    permanently-null column on the authoring path and something the editor could
+    be talked into sending.
+    """
+
+    # A hex from the games table, not a palette slug: expansion colours are
+    # per-game data assigned at import, not one of the ten row tints. The client
+    # sets it as a custom property and never as a literal `color:`, which is the
+    # one legitimate inline-colour case in .claude/rules/theming.md §10.
+    source_color: str | None = Field(None, max_length=32)
+
+
 class ScoringTemplatePart(BaseModel):
     """One chapter that contributed rows to a COMPOSED template (migration 032).
 
@@ -196,6 +224,12 @@ class PlayScoringTemplate(ScoringGrid):
     chapter_id: str | None = None
     title: str | None = None
     parts: list[ScoringTemplatePart] | None = None
+    # Widened from ScoringGrid's `list[ScoringRow]`: a composed row carries the
+    # colour of the expansion it came from. Same ceiling, since composition is
+    # capped at it where it happens.
+    rows: list[ScoringSnapshotRow] = Field(
+        ..., min_length=1, max_length=MAX_SCORING_TEMPLATE_ROWS
+    )
     # Inherited from ScoringGrid and meaningless here: a COMPOSED template has
     # no single mode — its parts each have one, and they are in `parts`. Kept
     # (rather than made an error) so a client sending a chapter's document
@@ -1008,6 +1042,14 @@ class ChapterResponse(BaseModel):
     source_game_id: str | None = None
     source_game_name: str | None = None
     source_color: str | None = None
+    # The source game's BoardGameGeek id, populated alongside the rest of the
+    # source tagging. It is the ORDERING key when several add-on expansions
+    # contribute rows to one scorepad (migration 032): BGG ids ascend roughly
+    # with publication, every client sorts the same way, and the alternative —
+    # whatever order the guide's merged response happened to arrive in — would
+    # give two people at the same table different scorepads. None for a game
+    # this app knows about but BGG does not.
+    source_bgg_id: int | None = None
 
 
 class ChapterPoolItem(ChapterResponse):

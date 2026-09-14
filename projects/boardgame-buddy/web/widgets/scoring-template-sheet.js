@@ -1,41 +1,28 @@
 // @ts-check
-// widgets/scoring-template-sheet.js — the two questions a scoring grid asks.
+// widgets/scoring-template-sheet.js — "this game has scoring grids you have
+// not adopted; want one?"
 //
-// open()  — pick WHICH SCOREPAD this play uses. Only opens when the host has
-//   more than one CANDIDATE for it — two community grids for the base game, or
-//   two expansions on the table each bringing a replacement. With exactly one,
-//   play-flow-view applies it silently; with none, that question does not
-//   exist.
+// ONE QUESTION, asked in one place. offer() opens when the host has NO scoring
+// grid in their guide for a game that has some — once on the Play step
+// (views/play-flow-view.js#_maybeOfferTemplates) and from the reference guide's
+// own notice (widgets/reference-guide-scroll.js). It cannot be answered without
+// SEEING the rows, so each candidate draws its real grid rather than a
+// one-line summary of it.
 //
-//   Add-on expansion grids are NOT candidates and never appear as rows here.
-//   Their rows join whichever candidate wins (domain/scoring-template.js), so
-//   listing them as options would be offering a choice between a scorepad and
-//   a fragment of one. The panel says where they went instead — a host who
-//   ticked Pearlbrook and then opened this sheet should not have to guess.
+// This file used to carry a second mode, open(), for picking between the grids
+// a host had ALREADY adopted. That question moved to the pill row in the
+// scoring card's own bar (views/play-flow-view.js#_renderTemplatePills): two or
+// three options that reshape the table directly beneath them want to be visible
+// beside it, not behind a sheet covering the very grid they change. The sheet
+// stays for the offer, where the choice is between things the host has never
+// seen and each option needs a picture.
 //
-// offer() — the OTHER end of the same range: the host has NONE in their guide
-//   and the game has some. Opened once, on the Play step, by
-//   views/play-flow-view.js#_maybeOfferTemplates. Same object, so it is one
-//   widget with a mode rather than two files that drift
-//   (.claude/rules/ui-object-design.md §2) — but a genuinely different question,
-//   so it gets its own panel: "which of mine" is a list of one-line rows, while
-//   "adopt one of these" cannot be answered without SEEING the rows, and so
-//   draws each candidate's real grid.
+// Whether a template is on the table at all is neither question — that is the
+// switch on the same bar, one control per question per
+// .claude/rules/ui-object-design.md §3b.
 //
-// Which one, and nothing else. Whether a template is on the table at all is the
-// switch on the scoring card's template bar — one control, one question, per
-// .claude/rules/ui-object-design.md §3b. This sheet used to carry a "Plain
-// rounds" row as a third option, which was the same action reachable two ways
-// and, once the bar grew a switch, a row that turned the switch off from inside
-// a sheet the host had opened to choose a grid.
-//
-// A sheet rather than a dropdown, per .claude/rules/overlays.md §1 — and this
-// one would have been a textbook case for the geometry that rule is about: the
-// control lives in the scoring card's head, which on a six-player table already
-// sits under a grid tall enough to have its own scrollport.
-//
-// NO FETCH. The rows come from the reference-guide scroll's own my-chapters
-// load, handed over on the `guide-chapters-loaded` event — the same list the
+// NO FETCH. The candidates come from the reference-guide scroll's own pool
+// load, handed over on the `guide-templates-loaded` event — the same list the
 // host can see behind this sheet, which is what stops the sheet and the guide
 // disagreeing about what is in it.
 //
@@ -55,8 +42,6 @@
    * @property {boolean} [in_my_guide] chapter-pool only
    */
 
-  const LIST_SEL = "[data-tmpl-list]";
-
   // How many candidates the offer shows. A SAMPLE, not the pool: each one draws
   // a real grid, and the host is standing at a table with the game already set
   // up. The pool arrives sorted by popularity, so three is the three most
@@ -75,15 +60,9 @@
     constructor() {
       /** @type {TemplateChapter[]} */
       this._templates = [];
-      /** The add-on grids folding into whichever candidate wins. Named in the
-       *  panel, never listed as options — see the header note. */
-      /** @type {TemplateChapter[]} */
-      this._addOns = [];
-      /** @type {string|null} */
-      this._activeId = null;
-      /** The play's BASE game, so an expansion's grid can be labelled with the
-       *  mode it acts in. Only the offer needs it; the picker's candidates are
-       *  already known to be scorepads. */
+      /** The play's BASE game, so an expansion's grid can be badged with the
+       *  mode it would act in — the one thing about an unfamiliar grid that
+       *  changes what adopting it does to the table. */
       /** @type {string|null} */
       this._baseGameId = null;
       this._onPick = /** @type {any} */ (null);
@@ -97,42 +76,6 @@
     }
 
     get isOpen() { return this._sheet.isOpen; }
-
-    /**
-     * @param {{templates: TemplateChapter[], activeId?: string|null,
-     *          addOns?: TemplateChapter[],
-     *          returnFocus?: Element|null,
-     *          onPick: (t: TemplateChapter) => void}} opts
-     */
-    open(opts) {
-      this._templates = opts.templates || [];
-      this._addOns = opts.addOns || [];
-      this._activeId = opts.activeId || null;
-      this._onPick = opts.onPick;
-      this._onSkip = null;
-
-      this._sheet.open({
-        html: this._renderPanel(),
-        label: "Scoring template",
-        returnFocus: opts.returnFocus || null,
-        onClick: (e) => {
-          const row = e.target.closest("[data-tmpl-id]");
-          if (row) this._pick(row.dataset.tmplId);
-        },
-        onOpen: (root) => {
-          // Focus the current selection, else the first row — never a text
-          // input, of which this sheet has none anyway (overlays.md §5). It
-          // gives a screen reader the dialog's label and puts Tab inside the
-          // sheet rather than on the page behind it.
-          const list = root.querySelector(LIST_SEL);
-          if (!list) return;
-          const current = list.querySelector('[aria-selected="true"]');
-          const first = list.querySelector("[data-tmpl-id]");
-          const target = /** @type {HTMLElement|null} */ (current || first);
-          if (target) target.focus();
-        },
-      });
-    }
 
     /**
      * The offer: this game HAS scoring grids and the host has adopted none.
@@ -152,7 +95,6 @@
      */
     offer(opts) {
       this._baseGameId = opts.baseGameId || null;
-      this._addOns = [];
       // Sorted here, not trusted. The pool arrives popularity-first from the
       // backend and pendingTemplates only filters, so this is usually a no-op —
       // but OFFER_MAX below throws the rest away, and "the three most players
@@ -164,7 +106,6 @@
         .slice()
         .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
         .slice(0, OFFER_MAX);
-      this._activeId = null;
       this._onPick = opts.onAdopt;
       this._onSkip = opts.onSkip;
       const total = (opts.templates || []).length;
@@ -209,80 +150,6 @@
       // what makes the change read as "the table I just chose".
       this._sheet.close();
       if (this._onPick) this._onPick(picked);
-    }
-
-    _renderPanel() {
-      // Every grid for one game carries the SAME derived title (the game's name
-      // plus "scoring" — services/chapter_grid.grid_title), because a grid is
-      // not named by its author. So the row leads with WHO wrote it, which is
-      // the thing that actually tells two of them apart, and the title never
-      // appears here at all.
-      const rows = this._templates.map((t) => {
-        const on = t.id === this._activeId;
-        const n = ((t.grid && t.grid.rows) || []).length;
-        const from = t.source_game_name
-          ? ` · ${t.source_game_name}`
-          : "";
-        const who = window.ScoringTemplateEditor.authorLabel(t);
-        return `
-          <button type="button" role="option" aria-selected="${on ? "true" : "false"}"
-                  class="tmpl-sheet__row ${on ? "tmpl-sheet__row--on" : ""}"
-                  data-tmpl-id="${escapeAttr(t.id)}">
-            <span class="tmpl-sheet__mark">
-              <i data-icon="table" class="w-5 h-5"></i>
-            </span>
-            <span class="tmpl-sheet__text">
-              ${escapeHtml(who)}
-              <span class="tmpl-sheet__meta">${n} row${n === 1 ? "" : "s"}${escapeHtml(from)}</span>
-            </span>
-            <span class="tmpl-sheet__tick">
-              ${on ? `<i data-icon="check" class="w-4 h-4"></i>` : ""}
-            </span>
-          </button>
-        `;
-      }).join("");
-
-      return `
-        <div class="bgb-sheet__panel">
-          <div class="bgb-sheet__grip" aria-hidden="true"></div>
-          <h3 class="bgb-sheet__title">Scoring template</h3>
-          <p class="bgb-sheet__sub">From your reference guide for this game</p>
-          <div class="bgb-sheet__list" role="listbox" aria-label="Scoring template"
-               data-tmpl-list>
-            ${rows}
-          </div>
-          ${this._renderAddOnNote()}
-          <button class="bgb-sheet__cancel" type="button" data-action="close">Cancel</button>
-        </div>
-      `;
-    }
-
-    /**
-     * "Pearlbrook's 2 rows are added to whichever you pick."
-     *
-     * The one place the sheet talks about add-ons at all. It sits UNDER the
-     * list rather than in the subtitle above it because it is not a
-     * qualification of the choice — it is true of every row equally, and
-     * whichever one the host taps. Silent when there are none, which is every
-     * play without expansions.
-     */
-    _renderAddOnNote() {
-      const adds = this._addOns || [];
-      if (!adds.length) return "";
-      const rows = adds.reduce(
-        (n, t) => n + (((t.grid && t.grid.rows) || []).length), 0
-      );
-      const names = adds.map((t) => t.source_game_name).filter(Boolean);
-      const who = names.length && names.length <= 2
-        ? names.join(" and ")
-        : `${adds.length} expansion${adds.length === 1 ? "" : "s"}`;
-      return `
-        <p class="tmpl-sheet__addon">
-          <i data-icon="plus" class="w-3.5 h-3.5"></i>
-          <span>${escapeHtml(who)} add${names.length === 1 ? "s" : ""}
-            ${rows} row${rows === 1 ? "" : "s"} to whichever you pick.</span>
-        </p>
-      `;
     }
 
     /**
@@ -351,7 +218,7 @@
               : `${total} scoring grids have been written for this game.`}
             Pick one and it joins your reference guide, ready for next time.
           </p>
-          <div class="bgb-sheet__list tmpl-offer" data-tmpl-list>
+          <div class="bgb-sheet__list tmpl-offer">
             ${cards}
             ${more > 0
               ? `<p class="tmpl-offer__more">${more} more in your reference guide.</p>`

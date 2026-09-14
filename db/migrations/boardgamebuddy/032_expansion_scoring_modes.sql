@@ -19,6 +19,16 @@
 -- BOTH modes: an add-on's rows are not an alternative to the base game's, and a
 -- replacement is not a choice the host should have to remember to make.
 --
+-- WHAT THE MODE DECIDES, AND WHAT IT DOES NOT. A replace-mode expansion on the
+-- table is what the scorepad DEFAULTS to; it does not remove the base game as
+-- an option. The play screen shows the base game and every replace expansion as
+-- a row of pills and the host can pick any of them, which is the difference
+-- between a default and a lockout — a host who wants the base scorepad back
+-- with the big box still on the table is asking for something reasonable.
+-- Add-on grids are never pills: their rows fold into whichever pill is chosen,
+-- and the rows say so themselves by drawing the expansion's colour down the
+-- left edge of their header cell.
+--
 -- WHY INSIDE `grid` AND NOT A COLUMN. `grid` is a versioned document
 -- ({"v":1,"rows":[…]}) and 018 put `v` there precisely so it could grow; the
 -- mode is part of what the grid IS, travels with it into the play snapshot's
@@ -103,10 +113,13 @@ COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS
   'ON DELETE SET NULL loses the labels and CASCADE deletes plays, so neither constraint tells the truth. '
   'chapter_id rides INSIDE the document as provenance: a bare uuid column would imply an integrity the '
   'database is not enforcing. Same reasoning as game_name / game_thumbnail_url on this table. '
-  '`rows` may be COMPOSED from several grids (migration 032) — a base game''s plus each add-on expansion''s — '
-  'in which case `chapter_id` names the grid that supplied the leading rows and `parts` lists every '
-  'contributor in row order as {chapter_id,game_id,game_name,mode,row_count}. `parts` is absent when one '
-  'grid supplied the whole thing, so a pre-032 snapshot reads exactly as it always did.';
+  '`rows` may be COMPOSED from several grids (migration 032) — a base game''s plus each add-on expansion''s, '
+  'the add-ons appended in ascending BGG id so every client composes the same scorepad — in which case '
+  '`chapter_id` names the grid that supplied the leading rows and `parts` lists every contributor in row '
+  'order as {chapter_id,game_id,game_name,mode,row_count}. A row an add-on contributed also carries that '
+  'expansion''s `source_color` (boardgamebuddy_games.expansion_color), which draws the rule down the left '
+  'edge of its header cell; the leading grid''s rows carry none. `parts` is absent, and no row carries a '
+  'source_color, when one grid supplied the whole thing — so a pre-032 snapshot reads exactly as it always did.';
 
 COMMENT ON COLUMN public.boardgamebuddy_play_sessions.scoring_template IS
   'The template the host applied to this live grid, same shape as '

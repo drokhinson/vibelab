@@ -54,6 +54,20 @@
       // stores the template a play WAS scored on, and a play scored on plain
       // rounds is a null template there, with nothing more to say.
       this.scoringTemplateOff = !!initial.scoringTemplateOff;
+      // Whether the host has PICKED the scorepad from the bar's pill row
+      // (migration 032), as opposed to it having been derived for them.
+      //
+      // The two need telling apart for the same reason as the switch above.
+      // Deriving is not a one-time act: ticking a replace-mode expansion
+      // re-derives the scorepad to that expansion's grid, which is the whole
+      // meaning of "replace", and unticking it derives back. A host who has
+      // reached for the pills has overruled that, and their choice must survive
+      // the next tick — so the pill row writes this, and _recomposeTemplate
+      // re-derives only while it is false.
+      //
+      // Local to the draft, like the switch: the server stores the rows a play
+      // WAS scored on and has no use for how they were arrived at.
+      this.scoringTemplatePicked = !!initial.scoringTemplatePicked;
       // Where this is being played, ISO 3166-1 alpha-2 (migration 065). Seeded
       // from the device the moment the draft is born rather than read at Save:
       // Settle Up shows it and the host can correct it, so it has to be a real
@@ -113,6 +127,7 @@
         playMode: this.playMode,
         scoringTemplate: this.scoringTemplate,
         scoringTemplateOff: this.scoringTemplateOff,
+        scoringTemplatePicked: this.scoringTemplatePicked,
         countryCode: this.countryCode,
         code: this.code,
         sessionId: this.sessionId,

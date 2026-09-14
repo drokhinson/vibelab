@@ -40,7 +40,7 @@
    *   parchment scroll, the cream scorepad.
    * @property {boolean} [compact]   Smaller track for a dense strip. Keeps the
    *   44px target with an inset ::before rather than by growing the row —
-   *   the same move `.scoring-tplbar__btn` beside it makes.
+   *   the same move `.scoring-tplpill` under it makes.
    * @property {string} [cls]        Extra classes on the button.
    */
 

@@ -125,11 +125,18 @@ def test_snapshot_drops_the_inherited_mode():
     assert sum(p["row_count"] for p in snap["parts"]) == len(snap["rows"])
 
 
-def test_uncomposed_snapshot_is_unchanged_by_032():
-    """One grid, no parts — byte-identical to what shipped before the modes.
+def test_uncomposed_snapshot_grows_no_seams():
+    """One grid: no parts list, and no provenance on any row.
 
-    Every reader of a pre-032 snapshot keeps reading it, and a play scored on a
-    single grid does not grow a one-element seam list.
+    A play scored on a single grid must not grow a one-element seam list, and
+    its rows must not claim to have come from an expansion — those two absences
+    are what keep every pre-032 reader reading a new snapshot unchanged.
+
+    The keys are PRESENT and null rather than missing, which is the same shape
+    `note` has had since migration 018: this model re-serializes a document on
+    the PUT /plays/{id} path, and it emits its optional fields. The client's own
+    composer (web/domain/scoring-template.js) omits both, so the document a play
+    is CREATED with is byte-identical to a pre-032 one.
     """
     snap = PlayScoringTemplate(
         chapter_id="c1", title="Everdell score sheet", rows=[{"label": "Cards"}]
@@ -138,6 +145,39 @@ def test_uncomposed_snapshot_is_unchanged_by_032():
         "v": 1,
         "chapter_id": "c1",
         "title": "Everdell score sheet",
-        "rows": [{"label": "Cards", "color": "neutral", "note": None}],
+        "rows": [
+            {"label": "Cards", "color": "neutral", "note": None, "source_color": None}
+        ],
         "parts": None,
     }
+
+
+def test_composed_rows_carry_their_expansion():
+    """An add-on's rows say which box they came from; the scorepad's do not.
+
+    The colour draws the rule down the left edge of the row header, so marking
+    the leading grid's rows too would say the whole table came from somewhere
+    else — see ScoringSnapshotRow.
+    """
+    snap = PlayScoringTemplate(
+        chapter_id="c1",
+        title="Everdell score sheet + Pearlbrook",
+        rows=[
+            {"label": "Cards"},
+            {"label": "Pearls", "source_color": "#4A6F94"},
+        ],
+    ).model_dump(mode="json")
+    assert [r["source_color"] for r in snap["rows"]] == [None, "#4A6F94"]
+
+
+def test_authored_grid_has_no_row_provenance():
+    """ScoringGrid drops it: an authored grid's rows are all its own.
+
+    The field lives on the SNAPSHOT row, so the chapter-authoring path cannot be
+    talked into storing a provenance colour that would then be wrong the moment
+    the grid was adopted somewhere else.
+    """
+    doc = ScoringGrid(rows=[{"label": "Pearls", "source_color": "#4A6F94"}]).model_dump(
+        mode="json"
+    )
+    assert "source_color" not in doc["rows"][0]

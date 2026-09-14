@@ -670,6 +670,11 @@
       }
       window.BgbScoringTemplateSheet.offer({
         templates: pending,
+        // So an expansion's grid is badged with the mode it would act in
+        // (migration 032) — the guide's pool merges base + expansions, and
+        // "adds two rows" and "is the whole score sheet instead" are not the
+        // same offer.
+        baseGameId: this._baseGameId,
         returnFocus: (event && event.currentTarget) || null,
         onAdopt: (tpl) => this._adoptTemplate(tpl),
         onSkip: (shown) => this._dismissTemplates(shown),

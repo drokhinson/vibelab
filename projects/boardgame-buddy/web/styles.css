@@ -8233,13 +8233,21 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    one. Paper tokens, because it sits inside the scorepad card. */
 .scoring-tplbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.35rem;
   margin-bottom: 0.45rem;
   padding: 0.3rem 0.45rem;
   border-radius: 0.5rem;
   background: color-mix(in srgb, var(--polaroid-line) 40%, transparent);
+}
+/* The bar's first line: what is on the table, and the switch. The pill row,
+   when there is one, sits under it — which is why the bar is a column now and
+   this line carries the name/switch justification it used to. */
+.scoring-tplbar__line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 .scoring-tplbar__name {
   display: inline-flex;
@@ -8252,28 +8260,77 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: color-mix(in srgb, var(--polaroid-ink) 82%, transparent);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.scoring-tplbar__btn {
-  flex: none;
-  position: relative;
-  border: none;
-  background: transparent;
-  padding: 0 0.2rem;
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--polaroid-accent);
-  cursor: pointer;
-}
-/* 44x44 without inflating a two-word link inside a 0.74rem bar. */
-.scoring-tplbar__btn::before { content: ""; position: absolute; inset: -12px -10px; }
-.scoring-tplbar__btn:active { opacity: 0.65; }
-/* Change and the on/off switch, as one trailing cluster. The gap is wider than
-   the bar's own so the two don't read as one control — Change picks WHICH grid,
-   the switch decides WHETHER. */
 .scoring-tplbar__actions {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 0.7rem;
+}
+/* ── The scorepad pills ──────────────────────────────────────────────────────
+   Which grid the table is built on: the base game, then each replace-mode
+   expansion in play (migration 032). A radiogroup in normal flow, not a sheet —
+   two or three options that change the table right below them, so the pick and
+   its effect want to be visible at once.
+
+   Scrolls rather than wraps: a wrapped second line would push the grid down by
+   a row height every time a third expansion joins, on the one screen where
+   vertical space is already the scarce thing. */
+.scoring-tplpills {
+  display: flex;
+  gap: 0.3rem;
+  overflow-x: auto;
+  /* The pills are the last thing before the table, so let their focus rings and
+     :active scale breathe without the scroller clipping them. */
+  padding: 0.1rem 0.1rem 0.15rem;
+  margin: 0 -0.1rem;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.scoring-tplpills::-webkit-scrollbar { display: none; }
+.scoring-tplpill {
+  flex: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 11rem;
+  padding: 0.24rem 0.6rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--polaroid-line);
+  background: var(--polaroid-bg);
+  color: color-mix(in srgb, var(--polaroid-ink) 70%, transparent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+/* 44px of hit area out of a 26px pill, without inflating the pill — the same
+   inset-::before trick the bar's Change link used to use
+   (.claude/rules/mobile-web.md §5). Adjacent pills keep the row's 0.3rem gap
+   plus 2×9px of inset, so the hit zones do not overlap. */
+.scoring-tplpill::before { content: ""; position: absolute; inset: -9px -2px; }
+.scoring-tplpill:active { transform: scale(0.97); }
+.scoring-tplpill--on {
+  border-color: var(--polaroid-accent);
+  background: color-mix(in srgb, var(--polaroid-accent) 12%, var(--polaroid-bg));
+  color: var(--polaroid-ink);
+  font-weight: 700;
+}
+.scoring-tplpill:focus-visible {
+  outline: 2px solid var(--polaroid-accent);
+  outline-offset: -3px;
+}
+/* The expansion's own colour, so a pill matches the coloured rule its rows draw
+   down the left of the grid. Data-derived, set inline as a custom property
+   (.claude/rules/theming.md §10); the base game's pill has none and shows no
+   dot, which is the same convention as the reference guide's chapter dots. */
+.scoring-tplpill__dot {
+  flex: none;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--exp-color, var(--polaroid-muted));
 }
 /* Switched off, the name is still the name of this game's template — it says
    what the switch would turn on. Dimmed, because those rows are not what the
@@ -8283,71 +8340,10 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   font-weight: 600;
 }
 
-/* ── The scoring-template picker sheet ────────────────────────────────────── */
-.tmpl-sheet__row {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  width: 100%;
-  /* 56px: sheet rows sit flush, so a slightly-off thumb lands on the
-     neighbour (.claude/rules/mobile-web.md §5). */
-  min-height: 56px;
-  padding: 8px 12px;
-  text-align: left;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  color: oklch(var(--bc) / 0.9);
-  font-size: 0.92rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.tmpl-sheet__mark {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 34px; height: 34px;
-  border-radius: 11px;
-  background: oklch(var(--b3));
-  color: oklch(var(--bc) / 0.7);
-}
-.tmpl-sheet__text { flex: 1; min-width: 0; }
-.tmpl-sheet__meta {
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: oklch(var(--bc) / 0.6);
-  margin-top: 1px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* Reserved whether or not the row is picked, so picking doesn't reflow the
-   label beside it (.claude/rules/overlays.md §6). */
-.tmpl-sheet__tick {
-  flex: none; width: 20px;
-  display: grid; place-items: center;
-  color: var(--accent);
-}
-.tmpl-sheet__row--on { background: var(--accent-quiet); }
-.tmpl-sheet__row--on .tmpl-sheet__mark {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-}
-@media (hover: hover) {
-  .tmpl-sheet__row:hover { background: oklch(var(--b3)); }
-  .tmpl-sheet__row--on:hover { background: var(--accent-quiet); }
-}
-.tmpl-sheet__row:active { transform: scale(0.995); }
-/* Inset, because the list is a scroller and an outset ring gets clipped
-   (.claude/rules/overlays.md §3). */
-.tmpl-sheet__row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -3px;
-}
-
 /* ── The Play step's "score on a shared grid?" offer ──────────────────────────
-   The same sheet object as the picker above (widgets/scoring-template-sheet.js
-   — one widget, two questions), so it inherits .tmpl-sheet's place in the theme
-   re-point list at the top of this file and needs no entry of its own.
+   The sheet's one panel (widgets/scoring-template-sheet.js), so it inherits
+   .tmpl-sheet's place in the theme re-point list at the top of this file and
+   needs no entry of its own.
 
    Cards rather than rows, because "6 rows · Everdell" is not enough to choose a
    scorepad by with your friends waiting: each candidate draws its real grid,
@@ -8509,18 +8505,6 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   background: var(--rust-soft);
   color: var(--rust);
 }
-/* Under the candidate list: what the add-ons do to whichever row is picked. */
-.tmpl-sheet__addon {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.35rem;
-  margin: 0.5rem 0.2rem 0;
-  font-size: 0.75rem;
-  line-height: 1.4;
-  color: oklch(var(--bc) / 0.6);
-}
-.tmpl-sheet__addon i, .tmpl-sheet__addon svg { flex: none; margin-top: 0.12rem; }
-
 .scoring-cell-wrap {
   display: flex; align-items: center; gap: 0.25rem; min-width: 0;
 }
@@ -8641,6 +8625,19 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-round-th--tpl {
   background: color-mix(in srgb, var(--row-accent) 14%, var(--polaroid-bg));
   box-shadow: inset 3px 0 0 var(--row-accent);
+}
+/* A row an ADD-ON EXPANSION contributed (migration 032): the left rule takes
+   the EXPANSION's colour instead of the row's own, which is what marks the seam
+   in a scorepad whose rows came from two boxes. The 14% wash above is untouched
+   and still the author's — two independent facts, two independent channels, so
+   a green Pearlbrook row still reads green and still reads as Pearlbrook's.
+
+   `--exp-accent` is set inline from boardgamebuddy_games.expansion_color, the
+   data-derived custom property .claude/rules/theming.md §10 allows. Doubled to
+   out-specify the (0,1,0) rule above rather than relying on source order
+   (.claude/rules/mobile-web.md §3), and it inherits that rule's background. */
+.scoring-round-th--tpl.scoring-round-th--exp {
+  box-shadow: inset 3px 0 0 var(--exp-accent, var(--row-accent));
 }
 /* A tinted row wants a stronger ink than the base rule's 70%: it is read
    against its own 14% wash rather than against bare paper. Matched to the
@@ -11146,7 +11143,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* Compact: for a dense strip whose own type is smaller than the switch's, where
    a 44px-tall control would set the height of the whole row. The target comes
-   back as an inset ::before, exactly as .scoring-tplbar__btn does it — 20 + 2×12
+   back as an inset ::before, exactly as .scoring-tplpill does it — 20 + 2×12
    vertically, so the finger still gets its 44px. Travel: 34 − 2 − 4 − 16 = 12. */
 .bgb-switch--compact { min-height: 0; position: relative; padding: 0; }
 .bgb-switch--compact::before { content: ""; position: absolute; inset: -12px -10px; }

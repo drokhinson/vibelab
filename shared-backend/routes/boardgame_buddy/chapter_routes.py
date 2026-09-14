@@ -58,17 +58,22 @@ _CHAPTER_SELECT = (
 
 
 def _build_source_map(sb, game_ids: list[str]) -> dict[str, dict[str, Any]]:
-    """Fetch (name, expansion_color) for a list of game ids in one round-trip.
+    """Fetch (name, expansion_color, bgg_id) for a list of game ids in one trip.
 
     The chapter response uses this to populate source_game_name / source_color
     so the FE can render colored dots tying each chapter to its expansion (or
     leave the dot blank for base-game chapters).
+
+    `bgg_id` rides along for migration 032: when several add-on expansions
+    contribute rows to one scorepad, their blocks are ordered by BGG id
+    ascending — a stable, publication-ordered key every client agrees on, where
+    the order the guide happens to return them in is not.
     """
     if not game_ids:
         return {}
     rows = (
         sb.table("boardgamebuddy_games")
-        .select("id, name, expansion_color, is_expansion")
+        .select("id, name, expansion_color, is_expansion, bgg_id")
         .in_("id", game_ids)
         .execute()
     ).data or []
@@ -77,6 +82,7 @@ def _build_source_map(sb, game_ids: list[str]) -> dict[str, dict[str, Any]]:
             "name": r.get("name") or "",
             # Base games get None — the FE skips the colored dot.
             "color": r.get("expansion_color") if r.get("is_expansion") else None,
+            "bgg_id": r.get("bgg_id"),
         }
         for r in rows
     }
@@ -110,12 +116,14 @@ def _chapter_row_to_response(
     source_game_id = None
     source_game_name = None
     source_color = None
+    source_bgg_id = None
     if source_map is not None:
         entry = source_map.get(row["game_id"])
         source_game_id = row["game_id"]
         if entry:
             source_game_name = entry.get("name")
             source_color = entry.get("color")
+            source_bgg_id = entry.get("bgg_id")
 
     return ChapterResponse(
         id=row["id"],
@@ -137,6 +145,7 @@ def _chapter_row_to_response(
         source_game_id=source_game_id,
         source_game_name=source_game_name,
         source_color=source_color,
+        source_bgg_id=source_bgg_id,
     )
 
 
