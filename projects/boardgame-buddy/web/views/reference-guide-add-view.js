@@ -1167,6 +1167,17 @@ components above.
           // the copy from "draft this chapter" to "rough out the rows", and
           // says out loud that the grid drafter is a small model.
           grid: this._isGridLayout(),
+          // The expansion mode question (migration 032), from the editor's own
+          // renderer so there is one of it. On this step it is an input to the
+          // draft rather than a property of the document: an add-on's rows are
+          // the two the box brings, a replacement's are a whole reprinted
+          // sheet, and the drafter has to be told which before it writes. Empty
+          // for a base game's grid, which has no mode to pick.
+          modeControl: this._isGridLayout()
+            ? window.ScoringTemplateEditor.renderMode(
+                this._gridExpansionName(), this._formGridMode
+              )
+            : "",
         });
       } else {
         body = this._renderEditStep(isEditing);
@@ -1637,8 +1648,16 @@ components above.
     /**
      * Pick the mode an EXPANSION's grid acts in (migration 032). A full render
      * rather than the `#tmpl-rows-host` patch the row handlers use: the control
-     * is above the row list, not inside it, and nothing in this editor holds a
-     * caret when a mode button is tapped.
+     * is above the row list, not inside it.
+     *
+     * The control now also rides on the head-start step, where the focus prompt
+     * IS a text field — so the full render can land while one holds a caret.
+     * That is safe rather than merely tolerable: the textarea writes through to
+     * `_genPrompt` on every keystroke and re-renders from it, so the words
+     * survive; only the caret moves, and it moves because the author tapped a
+     * button outside the field, which blurs it anyway. Patching that step in
+     * place would mean a host element and a second paint path for the rarest
+     * interaction in the wizard.
      */
     _tmplSetMode(mode) {
       this._formGridMode = mode === window.ScoringTemplateEditor.MODE_REPLACE
@@ -2153,11 +2172,16 @@ components above.
       const seq = ++this._genSeq;
       const targetGameId = this._createTargetGameId || this._gameId;
       const focus = this._genPrompt;
+      // The author's add_on / replace choice, which is what the drafter writes
+      // TO. Sent the same way _submitForm sends it — unconditionally, letting
+      // the backend resolve it against the game — so the rows are drafted for
+      // the shape they will be saved in.
+      const mode = this._formGridMode;
       this._error = null;
       this._generating = true;
       this.render();
       try {
-        const draft = await window.Chapter.generateGrid(targetGameId, focus);
+        const draft = await window.Chapter.generateGrid(targetGameId, focus, mode);
         if (seq !== this._genSeq) return;
         const rows = (draft && draft.grid && draft.grid.rows) || [];
         // Normalized into the editor's own row shape rather than held as the
@@ -2170,6 +2194,13 @@ components above.
           color: r.color || "neutral",
           note: r.note || "",
         }));
+        // `draft.grid.mode` is deliberately NOT copied back over
+        // `_formGridMode`. It is the server's resolution of the value this
+        // request just sent, so on the only path that reaches here it says what
+        // the author already chose — and letting a reply write the control
+        // would mean a late draft could move a radio the author had changed
+        // while it was in flight.
+        //
         // No picker left hanging open on a row the author has not looked at
         // yet: _pickType opens one on the blank row it seeds, and that row is
         // gone now.

@@ -51,20 +51,64 @@ _DRAFT_FAILED = "Couldn't draft that right now — try again in a moment."
 
 
 def _game_row_sync(sb: Client, game_id: str) -> dict[str, Any]:
-    """The game's name and year — all either prompt needs about it.
+    """The game's name and year — and, for the grid drafter, what it is TO.
+
+    `is_expansion` and `base_game_bgg_id` are what the grid prompt reads: an
+    expansion's grid is either the rows that box adds to somebody else's sheet
+    or a sheet that stands in for it, and neither can be drafted by a prompt
+    that thinks it is looking at a base game. The chapter drafter ignores both;
+    three narrow columns in a lookup it was making anyway is cheaper than a
+    second helper.
 
     The BGG `description` is deliberately not selected; see the note in
     chapter_ai._build_prompt for why it left the prompt.
     """
     game = (
         sb.table("boardgamebuddy_games")
-        .select("id, name, year_published")
+        .select("id, name, year_published, is_expansion, base_game_bgg_id")
         .eq("id", game_id)
         .execute()
     )
     if not game.data:
         raise HTTPException(status_code=404, detail="Game not found")
     return game.data[0]
+
+
+def _base_game_name_sync(sb: Client, base_game_bgg_id: int | None) -> str | None:
+    """The name of the game an expansion is played with, or None.
+
+    One extra round trip, taken only on the expansion path and only to put a
+    NAME in the prompt — "do not repeat Everdell's rows" is a rule a model can
+    follow, "do not repeat the base game's rows" is one it can talk itself out
+    of. Failing to find it is not an error: `base_game_bgg_id` is a soft
+    reference by design (an expansion can be imported before its base game), so
+    the prompt falls back to "the base game" and drafts a slightly vaguer sheet
+    rather than 404ing a wizard step that is optional anyway.
+    """
+    if not base_game_bgg_id:
+        return None
+    row = (
+        sb.table("boardgamebuddy_games")
+        .select("name")
+        .eq("bgg_id", base_game_bgg_id)
+        .eq("is_expansion", False)
+        .limit(1)
+        .execute()
+    )
+    return (row.data[0].get("name") or None) if row.data else None
+
+
+def _generate_grid_before_sync(
+    sb: Client, game_id: str
+) -> tuple[dict[str, Any], str | None]:
+    """The game row, plus its base game's name when the game is an expansion."""
+    row = _game_row_sync(sb, game_id)
+    base_name = (
+        _base_game_name_sync(sb, row.get("base_game_bgg_id"))
+        if row.get("is_expansion")
+        else None
+    )
+    return row, base_name
 
 
 def _chapter_type_label(sb: Client, chapter_type: str) -> str:
@@ -154,14 +198,23 @@ async def generate_scoring_grid(
     # No chapter_type on the body and none checked: a grid is one type by
     # definition (chapter_grid.SCORING_GRID_CHAPTER_TYPE), so there is no type
     # lookup here and, unlike the chapter drafter above, no 400 for an unknown
-    # one. One game lookup, one model call.
+    # one.
     sb = get_supabase()
-    row = await asyncio.to_thread(_game_row_sync, sb, game_id)
+    row, base_name = await asyncio.to_thread(_generate_grid_before_sync, sb, game_id)
+
+    # Resolved by the SAME rule the write path uses, against the row we just
+    # read rather than against what the client believes: a mode on a base game's
+    # grid is dropped, and an expansion that named none drafts as an add-on —
+    # which is exactly what a save would store, so the rows cannot be drafted
+    # for one shape and filed under the other (migration 032).
+    mode = chapter_grid.resolve_mode(body.mode, bool(row.get("is_expansion")))
 
     try:
         grid = await chapter_grid_ai.generate_grid(
             game_name=row.get("name") or "",
             game_year=row.get("year_published"),
+            mode=mode,
+            base_game_name=base_name,
             focus=body.prompt,
         )
     except GeminiError as exc:

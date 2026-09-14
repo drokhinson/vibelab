@@ -64,6 +64,24 @@ def validate_layout_pairing(
     raise HTTPException(status_code=400, detail=detail)
 
 
+def resolve_mode(
+    mode: ScoringGridMode | None,
+    is_expansion: bool,
+) -> ScoringGridMode | None:
+    """The rule itself, over a bare mode value.
+
+    Split out of resolve_grid_mode below so the AI drafter can ask the same
+    question BEFORE there is a grid to ask it of: it needs to know which shape
+    to draft — an expansion's extra rows, or a whole reprinted sheet — and the
+    default for an expansion that named nothing has to be the same default the
+    write path will store, or the rows would be drafted for one mode and saved
+    under the other. See chapter_ai_routes.generate_scoring_grid.
+    """
+    if not is_expansion:
+        return None
+    return mode or ScoringGridMode.ADD_ON
+
+
 def resolve_grid_mode(
     grid: ScoringGrid | None,
     is_expansion: bool,
@@ -90,9 +108,7 @@ def resolve_grid_mode(
     """
     if grid is None:
         return None
-    if not is_expansion:
-        return None
-    return grid.mode or ScoringGridMode.ADD_ON
+    return resolve_mode(grid.mode, is_expansion)
 
 
 def apply_grid_mode(grid: ScoringGrid, is_expansion: bool) -> dict:

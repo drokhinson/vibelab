@@ -1018,6 +1018,14 @@ class ChapterGridGenerateRequest(BaseModel):
     # above: an oversized body is a 422 rather than a token bill, and the
     # service truncates again defensively.
     prompt: str | None = Field(None, max_length=500)
+    # The mode the author has picked for an EXPANSION's grid (migration 032),
+    # and the one field here that changes what gets drafted rather than merely
+    # steering it: an add-on wants the two or three rows the expansion BRINGS,
+    # a replacement wants the whole reprinted sheet. Resolved against the game
+    # exactly as the write path resolves it (services/chapter_grid.resolve_mode)
+    # — ignored for a base game, defaulted to add_on for an expansion that names
+    # none — so the rows cannot be drafted for one mode and saved under another.
+    mode: ScoringGridMode | None = None
 
 
 class ChapterGridGenerateResponse(BaseModel):
