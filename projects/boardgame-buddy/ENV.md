@@ -49,6 +49,21 @@ Settings → Secrets and variables → Actions.
 | `CLOUDFLARE_API_TOKEN` | secret | `wrangler pages deploy`. Scope: **Cloudflare Pages: Edit** |
 | `CLOUDFLARE_ACCOUNT_ID` | secret | Same |
 | `BGB_API_BASE` | **variable** | API origin baked into `config.js`. A variable, not a secret, so the backend can be re-pointed without editing a workflow. No trailing slash. |
+| `BGB_COMING_SOON` | **variable** | `true` serves `views/landing-view.js` (waitlist) instead of the app. Unset or anything else boots normally. Going live is flipping this and re-running the workflow, not a commit. `?preview=1` bypasses it for one tab — see `init.js`. |
+| `BGB_FIREBASE_API_KEY` | **variable** | GCP Identity Platform. **Not a secret** — it identifies the project and authorizes nothing; access is decided by Authorized Domains and the provider config. |
+| `BGB_FIREBASE_AUTH_DOMAIN` | **variable** | `auth.bgbuddy.app`. The whole point of the custom-domain work: this field is what decides the hostname the user sees during Google sign-in. Left at `<project-id>.firebaseapp.com` the branding is unbranded. |
+| `BGB_FIREBASE_PROJECT_ID` | **variable** | `boardgamebuddy-508716`. Must equal the API host's `GCP_PROJECT_ID` and the project ID given to Supabase third-party auth — it is the token `aud`, so a mismatch fails every request. |
+| `BGB_FIREBASE_APP_ID` | **variable** | From Firebase → Project settings → Your apps. |
+
+`storageBucket` and `messagingSenderId` from the Firebase snippet are
+deliberately **not** carried: photos go to Supabase Storage and then R2, and web
+push uses this project's own VAPID keypair rather than FCM. Wiring either in
+would add a backend nothing reads.
+
+`build.sh` emits all four Firebase values or none. `deploy-bgb-web.yml` **fails**
+on a partial set and only **warns** on an empty one — an empty set is the correct
+state until the frontend swaps off the Supabase Auth SDK (Stage 3-ALT.4), while
+three-of-four looks configured and breaks at sign-in.
 
 Actions secrets are **repo-wide** — these sit in the same store as the other
 apps'. That is not a security boundary, and it is the one real argument for
