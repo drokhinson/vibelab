@@ -296,12 +296,51 @@ Android passes the **web** client ID as its `serverClientId`.
 
 ## 3. Cloudflare — DNS and Pages
 
-### 3.1 DNS
+### 3.1 DNS — moving the zone to Cloudflare
 
-If `bgbuddy.app` is registered elsewhere, add the site to Cloudflare first
-(**Add a site** → it reads your existing records → change the nameservers at
-your registrar). Transferring the registration is optional; only the DNS has to
-be here.
+Transferring the *registration* is optional. Moving the *DNS* is not, and not
+only for the apex:
+
+| Need | Possible on a registrar's own DNS? |
+|---|---|
+| apex → Pages | only via an `ALIAS`/`ANAME` record, off the documented path |
+| **§3.5 www→apex redirect rule** | **No** — Redirect Rules exist only for zones on Cloudflare |
+| **`img.bgbuddy.app` → R2 (Stage 4)** | **No** — an R2 custom domain requires the zone in the same account |
+
+The last one settles it. R2's $0 egress *on a custom domain* is the whole
+economic argument for this stack, and the fallback (`r2.dev`) is rate-limited
+and not for production use.
+
+**The risk is the flip, not the destination.** The moment the nameservers
+change, Cloudflare is authoritative and **any record not already in Cloudflare
+stops resolving**. By this point `auth` and `api` are both live and load-bearing.
+Cloudflare's import scan usually catches them, but it is not guaranteed, and it
+defaults CNAMEs to **proxied** — which is wrong for both, and for `auth` breaks
+the certificate challenge.
+
+Order, and step 4 is the one that matters:
+
+1. **Inventory the registrar's records first** — every host, type and value.
+   That list is both the checklist for step 4 and the rollback reference.
+2. **Look for `MX` and any SPF/DKIM `TXT`.** A registrar's email forwarding
+   uses its own MX and **stops at the flip** unless carried over. If there are
+   none, there is no mail on the domain yet — see the note under §3.5 about
+   Cloudflare Email Routing, which is how `privacy@`/`support@` get to exist for
+   §2.4.
+3. **Add the site to Cloudflare** (Add a site → Free plan → it scans).
+4. **Audit the scan against the inventory and set the proxy flags**, *before*
+   touching the nameservers. `auth` and `api` both grey. Fixing this afterwards
+   means an outage window you chose not to avoid.
+5. **Change the nameservers at the registrar** to the two Cloudflare supplies.
+6. **Wait for Cloudflare to report the zone Active.**
+7. **Re-verify** before moving on — both CNAMEs resolve via `8.8.8.8`, the API
+   health endpoint answers, and `https://auth.bgbuddy.app` still serves the
+   Firebase handler rather than a certificate error. A cert error there means
+   the record got proxied.
+8. **Leave the old records at the registrar.** They are inert once the
+   nameservers move, and they are the written record of what was there.
+
+§3.2, §3.3 and §3.5 all require the zone to be Active. Do not start them early.
 
 Records you will end up with:
 
@@ -355,6 +394,13 @@ query string.
 Serving the app on both hosts instead would mean two origins in
 `ALLOWED_ORIGINS`, two service-worker registrations and split `localStorage`.
 Redirect, don't serve.
+
+**Email Routing, while you are here.** §2.4 needs a reachable support address
+and both legal pages name `privacy@bgbuddy.app` and `support@bgbuddy.app`. With
+the zone on Cloudflare, **Email Routing** (free) creates both as forwards to a
+real mailbox and writes the MX records itself. Do it before submitting the
+consent screen — Google checks the support address, and a bounce is a rejection
+for a reason that has nothing to do with the app.
 
 ### 3.6 Do NOT touch yet
 
