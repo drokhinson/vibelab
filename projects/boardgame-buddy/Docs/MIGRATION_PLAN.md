@@ -97,19 +97,145 @@ comment in the code explaining why; read the comment before changing the line.
 
 ---
 
+## Decided design (2026-09-15)
+
+The domain is bought and three questions are settled. These decisions override
+anything below that contradicts them.
+
+### One origin, forever: the app lives at the apex
+
+`web/index.html` carries `<base href="/">`, `manifest.json` declares
+`start_url: "/"` and `scope: "/"`, and `sw.js` derives its entire precache from
+root-relative `src=`/`href=` references. **The app must sit at an origin root —
+never a subpath.** So the apex serves the real app from day one, gated by a
+`COMING_SOON` flag, and cutover is dropping that flag rather than moving a
+domain. The apex never moves again.
+
+Native apps are planned later, with links to the respective stores. Those links
+are landing-page content, and they go in the same place the coming-soon copy
+goes — see the landing view below. The app staying at the apex is what makes
+that free: a marketing page at the apex *and* an app at the apex would otherwise
+collide, forcing the app onto `app.<domain>` and costing a second cutover.
+
+Three hostnames total:
+
+| Host | Serves | Set up in |
+|---|---|---|
+| `<domain>` (apex) | the app, Cloudflare Pages | Stage 2 |
+| `auth.<domain>` | GCP Identity Platform auth handler, on Firebase Hosting | Stage 3-ALT |
+| `img.<domain>` | R2 custom domain for photos and cover art | Stage 4 |
+
+### The landing is a new view, not the splash
+
+**`views/splash-view.js` is the boot loader** — the spinner that paints while the
+session resolves — and the signed-out destination is `views/auth-view.js`, a bare
+login form. Neither is a landing surface, so one has to be built: a
+`views/landing-view.js` registered as the signed-out root, carrying the
+coming-soon copy now and the store badges later, with the sign-in affordance on
+it. `auth-view.js` stays exactly what it is, one tap deeper.
+
+Waitlist capture on that view writes to its own table and **creates no identity**
+— see the signup decision below.
+
+### No per-user migration gateway
+
+A self-service "migrate my data" screen on first sign-in was considered and
+**rejected**. Nothing needs migrating per user, because both credential types
+survive a bulk import:
+
+- **Email/password** — Supabase stores bcrypt in `auth.users.encrypted_password`;
+  Firebase's `importUsers` accepts bcrypt hashes directly. Same password.
+- **Google** — `importUsers` takes `providerData` with `providerId: 'google.com'`
+  and the provider's own `uid`. Supabase holds the Google `sub` in
+  `auth.identities`, so importing the linkage makes the same Google account
+  resolve to the same Firebase user.
+
+Import the Supabase UUID as the Firebase `uid` and a user signs in exactly as
+before, on their own account, with their own plays. What the gateway would have
+cost instead:
+
+1. **An account-takeover surface.** Matching a new GCP identity to an old
+   Supabase account means matching on email — so anyone who signs up with an
+   existing user's email claims that account and its history. Defending it means
+   Google-verified-email-only or a challenge against the old password, i.e.
+   rebuilding by hand what the import gives for free.
+2. **Dual auth in the hot path.** `jwt_auth.py` would verify two issuers on every
+   request for the whole window.
+3. **N cutovers instead of one**, with both systems live indefinitely — the
+   opposite of the goal.
+4. **It cannot cover the cover art anyway.** The plays bucket is
+   `{user_id}/{uuid}.{ext}` and is per-user separable; the games bucket is
+   `{bgg_id}_{kind}.{ext}`, shared across all users. That half needs a bulk copy
+   regardless.
+
+**Keep one small fallback claim flow** for the real edge case — someone who used
+email/password before and clicks Google after, landing on a fresh profile. That
+is an escape hatch on a support page, not a step in the happy path.
+
+### Waitlist only before launch: no pre-import accounts
+
+The public landing captures emails and **writes no identity**. Auth is rehearsed
+on a `staging.` hostname against a throwaway GCP project.
+
+This is a correctness constraint, not caution. Firebase's import "processes users
+without checking for uid, email, phoneNumber or other identifier duplication" —
+it will cheerfully create a second account for an email that already exists. Any
+real signup taken before the user import becomes a duplicate identity to
+reconcile by hand. Waitlist-only removes the collision entirely and decouples
+"when is the landing up" from "when is the import ready".
+
+---
+
 ## Stage order and what each one costs
 
 | Stage | Does | Cost after | Downtime | Reversible? |
 |---|---|---|---|---|
 | 1 | Extract to a standalone repo | no change | none | yes — old monorepo still deploys |
-| 2 | Vercel → Cloudflare Pages | −$0, unblocks revenue | none (DNS swap) | yes — Vercel project until deleted |
+| 2 | Vercel → Cloudflare Pages, apex, `COMING_SOON` on | −$0, unblocks revenue | none (DNS swap) | yes — Vercel project until deleted |
+| 2b | Landing view + waitlist capture | $0 | none | yes — it is one view |
 | 3 | **Decide the auth path** (§ Stage 3) | — | — | — |
 | 3a | Path A: Supabase custom domain + SMTP | +$10/mo | none, **no logout** | yes — revert `supabaseUrl` |
 | 3-ALT | Path B: auth on GCP Identity Platform | **$0** to 50k MAU | one window, **everyone re-signs in** | hard |
 | 3b | Own Supabase project | +$25/mo when needed | one window, **everyone re-signs in** | hard — old project is read-only fallback |
 | 4 | Photos → R2 | ~$0, kills the growth curve | none (dual-read) | yes — Supabase objects stay |
 | 5 | API → Hetzner VPS | ~−$0 to −$15/mo | none (DNS swap) | yes — Railway service until deleted |
-| 6 | Full Hetzner (Appendix D) | flat ~€35/mo | one window | hard |
+| 6 | Cutover: URL rewrite, drop `COMING_SOON` | — | none | yes — re-raise the flag |
+| 7 | Full Hetzner (Appendix D) | flat ~€35/mo | one window | hard |
+
+**Revised order, given the decided design.** Two constraints reorder the stages:
+the landing and auth code live in the new repo, so **extraction comes first**;
+and Google's brand review takes business days, so **start it early and let it run
+in the background**.
+
+1. **Stage 1 — extract.** Zero risk, unblocks everything else.
+2. **Stage 4 — R2 + bulk `rclone`**, while the old app is still live on Supabase.
+   The copy is incremental and re-runnable, so it can be verified at leisure
+   instead of inside a cutover window. Only the URL rewrite waits for Stage 6.
+3. **Stage 3-ALT — GCP Identity Platform**: auth handler on `auth.<domain>`,
+   branding, domain verification in Search Console. **Kick off the Google brand
+   review on day one of this stage** — it is the only item with a queue you do
+   not control.
+4. **Stage 2 — Cloudflare Pages on the apex**, `COMING_SOON` on. Then **2b**, the
+   landing view and waitlist table.
+5. **Wire Supabase third-party auth** so the three `auth.uid()` policies keep
+   evaluating under a GCP-issued JWT. Non-negotiable — see the four traps below.
+6. **Import the users** — bcrypt hashes, Google `providerData`, preserved UUIDs —
+   and verify the whole app against it on `staging.`.
+7. **Stage 6 — cut over**: run the URL-rewrite migration, drop `COMING_SOON`.
+
+### Four things that break silently if missed
+
+1. **Wire GCP Identity into Supabase as a third-party auth provider.** Three
+   `auth.uid()` RLS policies sit on the live play-session tables, which the
+   client reads directly with the anon key. Skip this and they fail closed — the
+   spectator mirror goes blank, and nothing else looks wrong.
+2. **Preserve the UUIDs.** `boardgamebuddy_profiles.id` FKs `auth.users(id)` and
+   every play, buddy edge and achievement hangs off that column. A regenerated
+   id orphans the entire account, silently, at import time.
+3. **Dropping that FK loses `ON DELETE CASCADE`.** Account deletion becomes
+   explicit backend work. Write it before you need it, not after someone asks.
+4. **`views/auth-view.js:101` hardcodes `redirectTo: window.location.origin`.**
+   That has to become the Firebase auth handler on `auth.<domain>`.
 
 **Stages 1, 2 and 4 are pure wins with no user-visible risk. Do those three
 first regardless of anything else** — between them they settle two of the three
