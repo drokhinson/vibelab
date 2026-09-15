@@ -1,0 +1,56 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Dream Team badge — two Buddies under a shared trophy">
+  <title>Dream Team badge — two Buddies under a shared trophy</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold. -->
+  <defs>
+    <linearGradient id="dream-team-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="dream-team-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="dream-team-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#dream-team-disc)"/>
+  <g clip-path="url(#dream-team-clip)">
+    <!-- One trophy, held between the two of them: the whole point of the badge
+         is that the win is shared, so there is not one per Buddy. -->
+    <g transform="translate(64 12)">
+      <path d="M6 2 H26 V14 A10 10 0 0 1 6 14 Z" fill="url(#dream-team-gold)"/>
+      <path d="M6 5 C-2 5 -2 17 6 17" fill="none" stroke="#C9922A" stroke-width="3" stroke-linecap="round"/>
+      <path d="M26 5 C34 5 34 17 26 17" fill="none" stroke="#C9922A" stroke-width="3" stroke-linecap="round"/>
+      <rect x="13" y="24" width="6" height="8" fill="#C9922A"/>
+      <rect x="5" y="31" width="22" height="6" rx="2.6" fill="url(#dream-team-gold)"/>
+    </g>
+    <!-- Both arms up, both Buddies smiling: the same pose twice. -->
+    <g transform="translate(10.00 46.00) scale(0.44)">
+    <circle cx="100" cy="148" r="14" fill="url(#dream-team-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#dream-team-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#dream-team-gold)"/>
+    <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M78 100 Q100 124 122 100" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+    <g transform="translate(62.00 46.00) scale(0.44)">
+    <circle cx="100" cy="148" r="14" fill="url(#dream-team-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#dream-team-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#dream-team-gold)"/>
+    <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M78 100 Q100 124 122 100" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+    <!-- The bar that makes them one side rather than two players. -->
+    <path d="M40 56 Q80 44 120 56" fill="none" stroke="#F0C662" stroke-width="3.4" stroke-linecap="round" opacity="0.85"/>
+    <path d="M30 40 Q31.3 44.7 36 46 Q31.3 47.3 30 52 Q28.7 47.3 24 46 Q28.7 44.7 30 40 Z" fill="#F0C662" opacity="0.9"/>
+    <path d="M130 40 Q131.3 44.7 136 46 Q131.3 47.3 130 52 Q128.7 47.3 124 46 Q128.7 44.7 130 40 Z" fill="#F0C662" opacity="0.9"/>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#A9682F" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#A9682F" stroke-width="1.4" opacity="0.34"/>
+</svg>

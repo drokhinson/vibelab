@@ -1,6 +1,13 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 033_chapter_dislikes.sql (re-emits bgb_sync_achievements so its
+-- Last updated: 034_team_coop_win_achievements.sql (re-emits bgb_sync_achievements
+--               with team_wins and coop_wins — the same win narrowed to the
+--               mode the table was playing in, behind four new Victories
+--               badges. Both are strict subsets of the existing `wins`, which
+--               is deliberately left counting every mode. my_plays carries
+--               p.play_mode to make them expressible; the signature and the
+--               return shape do not move.)
+--               Before that: 033_chapter_dislikes.sql (re-emits bgb_sync_achievements so its
 --               three boardgamebuddy_user_chapters subqueries say WHICH rows
 --               they mean. That table now carries a `state`, and a disliked
 --               chapter is a row in it saying the opposite of "adopted" — so
@@ -1194,7 +1201,17 @@
 --               (body replaced by 068_location_achievements.sql, which carries
 --                plays.country_code through the my_plays CTE and adds the
 --                countries / continents metrics)
---   Last updated in: db/migrations/boardgamebuddy/033_chapter_dislikes.sql
+--   Last updated in: db/migrations/boardgamebuddy/034_team_coop_win_achievements.sql
+--               (adds the team_wins and coop_wins metrics behind Dream Team,
+--                United Front, Against the Machine and Machine Breaker, and
+--                carries plays.play_mode through the my_plays CTE so they are
+--                expressible. Both are strict SUBSETS of `wins`, which keeps
+--                counting every mode: the tier badges are about how often you
+--                come first, whoever or whatever you came first against, and
+--                narrowing them would un-earn badges people already wear. The
+--                mode is read off the PLAY, not the game — a co-op game played
+--                in a competitive variant is a competitive play.)
+--               Before that: 033_chapter_dislikes.sql
 --               (scopes all three user_chapters subqueries — guide_chapters,
 --                chapters_borrowed and grid_adopters — to state='kept'. That
 --                table now holds both halves of a viewer's opinion, so a row
@@ -1210,8 +1227,9 @@
 --   Called by:  shared-backend/routes/boardgame_buddy/achievement_routes.py
 --               (GET /achievements, POST /achievements/installed)
 --   Purpose:    Everything on the Achievements spoke (/profile/achievements) in
---               one call. Computes all fourteen metrics behind the twenty-one
---               badges (plays logged, wins, biggest table, two-player-only
+--               one call. Computes all sixteen metrics behind the twenty-five
+--               badges (plays logged, wins, wins in team plays, wins in co-op
+--               plays, biggest table, two-player-only
 --               games played, buddies, guide chapters, chapters of yours
 --               another player kept, plays you wrote notes on, whether BGG is
 --               linked, whether the PWA is installed, distinct countries and
@@ -1229,6 +1247,10 @@
 --               the "logged it OR appeared on it" visibility rule shared with
 --               bgb_play_stats (045) and bgb_user_stats_detail (058); wins are
 --               necessarily narrower, since a win needs a player row.
+--               team_wins and coop_wins read play_mode off the PLAY row, which
+--               is NOT NULL DEFAULT 'competitive', so the equality is exact
+--               without a COALESCE — unlike bgb_user_stats_detail, which reads
+--               the same column off CTEs that can widen it to NULL.
 --               two_player_games is the one metric that reaches the games
 --               table — 020 denormalized name and thumbnail onto plays, never
 --               the player counts. `continents` joins
