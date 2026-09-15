@@ -322,15 +322,35 @@ Order, and step 4 is the one that matters:
 
 1. **Inventory the registrar's records first** — every host, type and value.
    That list is both the checklist for step 4 and the rollback reference.
-2. **Look for `MX` and any SPF/DKIM `TXT`.** A registrar's email forwarding
-   uses its own MX and **stops at the flip** unless carried over. If there are
-   none, there is no mail on the domain yet — see the note under §3.5 about
-   Cloudflare Email Routing, which is how `privacy@`/`support@` get to exist for
-   §2.4.
+2. **Find out whether mail is live, and do not trust the registrar's DNS panel
+   to tell you.** Namecheap's Advanced DNS list shows only the forwarder's SPF
+   `TXT` while its Email Forwarding preset is on; the five
+   `eforward*.registrar-servers.com` **MX records are not in that list** and
+   surface only in Cloudflare's scan. Reading the panel alone says "no mail on
+   this domain", which is wrong.
+
+   Then **do not carry those MX records over.** A registrar's free forwarding
+   requires the domain to be on *its* nameservers, so moving the records moves
+   the records and not the service: mail resolves and then vanishes, which is
+   worse than no MX at all. **Cloudflare Email Routing** replaces it (§3.5) with
+   no nameserver dependency.
+
+   Before flipping, open the registrar's **Email Forwarding** tab and write down
+   every alias and its destination — that config does not come across, and
+   after the flip the panel is no longer the place it lives.
 3. **Add the site to Cloudflare** (Add a site → Free plan → it scans).
 4. **Audit the scan against the inventory and set the proxy flags**, *before*
    touching the nameservers. `auth` and `api` both grey. Fixing this afterwards
    means an outage window you chose not to avoid.
+
+   The scan marks CNAMEs **Proxied**, which draws *"This hostname is not covered
+   by a certificate"* on both. That warning is about the proxy, not the record:
+   a proxied hostname needs Cloudflare to hold a cert for it, and Universal SSL
+   is not issued until the zone is Active. Setting the record to **DNS only**
+   retires the question — Cloudflare then never terminates TLS and the origin
+   serves its own certificate. (Universal SSL's `*.<zone>` does cover a
+   single-level host like `api`, so proxying later is available; it is just one
+   more variable than a cutover needs.)
 5. **Change the nameservers at the registrar** to the two Cloudflare supplies.
 6. **Wait for Cloudflare to report the zone Active.**
 7. **Re-verify** before moving on — both CNAMEs resolve via `8.8.8.8`, the API
