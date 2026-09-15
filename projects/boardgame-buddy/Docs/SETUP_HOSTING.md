@@ -64,6 +64,18 @@ registered elsewhere.
    CNAME target; add it in Cloudflare (§3.1) as **DNS-only (grey cloud)** for
    now — proxying an API through Cloudflare is fine later, but one variable at a
    time.
+
+   **Set the target port on every domain to match what uvicorn bound**, which
+   the startup line names: `Uvicorn running on http://0.0.0.0:8080` means 8080.
+   Each domain carries its own port and Railway guesses it — a wrong guess
+   yields a 502 that looks identical to a dead app, because the *internal*
+   healthcheck does not go through the edge and keeps passing. Both domains
+   need it set, not just the custom one.
+
+   **The internal-200 / external-502 split is the whole diagnostic.** A
+   `GET /api/v1/health 200` from a `100.64.x.x` client in the deploy log beside
+   a 502 from curl means the app is fine and the edge is dialling the wrong
+   port. Read it that way rather than going back through the app's env vars.
 5. **Variables** — copy every value from the existing service, and **do not
    regenerate any of them**:
 
