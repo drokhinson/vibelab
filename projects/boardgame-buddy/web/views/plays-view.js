@@ -18,6 +18,14 @@
 // Shared mode is the same request with buddy_id set. The filter reads "this
 // person appears in play_players", so the id sent is the VIEWER's, not the
 // target's — see _buddyId().
+//
+// REACHING THE END LOADS THE NEXT PAGE BY GESTURE. The list used to end in a
+// "Load more" button, which is three steps (stop the flick, find the target,
+// travel to it) to carry on doing the one thing the thumb was already doing.
+// Carrying the same flick past the last row instead is none of them —
+// ui/pull-to-load-more.js owns the gesture, _renderFooter() below owns the
+// strip that says it is there, and that strip stays a real button so a
+// pointer, a keyboard and a screen reader keep the path they had.
 
 (function () {
   const PER_PAGE = 20;
@@ -28,11 +36,16 @@
       // Survives _resetState on purpose: a load still in flight from the
       // previous target must find the counter moved on, not reset to zero.
       this._loadSeq = 0;
+      // The pull-to-load-more controller, built on first mount and re-attached
+      // on every later one. Held rather than rebuilt because it binds to
+      // `this.container`, which the router keeps across mounts.
+      this._ptl = null;
       this._resetState();
     }
 
     onUnmount() {
       clearTimeout(this._searchTimer);
+      if (this._ptl) this._ptl.detach();
     }
 
     _resetState() {
@@ -109,6 +122,21 @@
         this.render();
       });
       await this._initFromParams();
+      this._attachPull();
+    }
+
+    _attachPull() {
+      if (!window.PullToLoadMore || !window.PullToLoadMore.supported) return;
+      this._ptl = this._ptl || new window.PullToLoadMore({
+        host: this.container,
+        onLoadMore: () => this._loadMore(),
+        // Asked at the start of every touch rather than driving attach() and
+        // detach() as the list grows, so the controller has exactly one
+        // lifetime — this view's — and can't be torn down out from under a
+        // page it is already loading.
+        canLoad: () => this._hasMore() && !this._loading,
+      });
+      this._ptl.attach();
     }
 
     async onParamsChange() {
@@ -246,7 +274,7 @@
         ${this._renderHead()}
         ${this._renderSearch()}
         ${this._renderBody()}
-        ${this._renderLoadMore()}
+        ${this._renderFooter()}
       `;
       this.refreshIcons();
 
@@ -305,7 +333,12 @@
     }
 
     _renderBody() {
-      if (this._error) {
+      // Only when there is nothing else to show. A page that failed PART WAY
+      // down the list — much more reachable now that getting to the end loads
+      // by gesture — has rows on screen worth keeping, and taking the whole
+      // list away to report it costs the user their place as well as the rows.
+      // _renderFooter() reports that one, where the load was asked for.
+      if (this._error && this._plays.length === 0) {
         return `<div class="text-error text-sm">${escapeHtml(this._error)}</div>`;
       }
       if (!this._loaded) {
@@ -390,17 +423,71 @@
       `;
     }
 
-    _renderLoadMore() {
-      const hasMore = this._plays.length < this._total;
-      if (!hasMore) return "";
+    /**
+     * Is there a NEXT page to continue with — which is not the same question as
+     * "are there more plays than are on screen". An empty list next to a
+     * non-zero total is what a failed refresh leaves behind (_load clears the
+     * rows before the request goes out and _total keeps the old answer), and
+     * continuing from there would ask for page 2 and paint rows 21-40 as if
+     * they were the whole log. Nothing to continue from means the way forward
+     * is a reset, which is what the error branch offers.
+     */
+    _hasMore() {
+      return this._plays.length > 0 && this._plays.length < this._total;
+    }
+
+    /**
+     * The strip at the end of the list — the same .shelf-more strip the
+     * windowed grids use, in one of four states.
+     *
+     * The last state is the one that matters: on touch the way to the next page
+     * is the upward pull, and the strip's job is to say so before the user has
+     * to guess. It stays a <button> anyway, because the gesture is touch-only.
+     *
+     * The end label is not decoration either. A gesture with no visible target
+     * gives no answer to "is that everything?" — without the label, the end of
+     * the list and a pull that silently did nothing look identical.
+     */
+    _renderFooter() {
+      if (this._error && this._plays.length) {
+        return `
+          <div class="shelf-more shelf-more--error" role="alert">
+            <span>${escapeHtml(this._error)}</span>
+            <button class="btn btn-ghost btn-sm shelf-more__retry"
+                    onclick="window.playsView._loadMore()">Retry</button>
+          </div>
+        `;
+      }
+      if (!this._hasMore()) {
+        // Nothing under an empty list: the body is already saying what there is
+        // to say, and "that's all of them" under "No plays logged yet" is noise.
+        if (!this._plays.length) return "";
+        return `<p class="shelf-more shelf-more--end">${this._endLabel()}</p>`;
+      }
+      if (this._loading) {
+        return `
+          <div class="shelf-more" aria-live="polite">
+            <span class="shelf-more__spinner" aria-hidden="true"></span>
+            <span>Loading more…</span>
+          </div>
+        `;
+      }
+      const pull = !!(window.PullToLoadMore && window.PullToLoadMore.supported);
       return `
-        <div class="text-center mt-3">
-          <button class="btn btn-ghost btn-xs" ${this._loading ? "disabled" : ""}
-                  onclick="window.playsView._loadMore()">
-            ${this._loading ? "Loading…" : "Load more"}
-          </button>
-        </div>
+        <button class="shelf-more shelf-more--pull"
+                onclick="window.playsView._loadMore()">
+          ${pull
+            ? `<i data-icon="chevron-up" class="w-4 h-4"></i> Pull up for more`
+            : "Load more"}
+        </button>
       `;
+    }
+
+    _endLabel() {
+      if (this._query) return "No more matches.";
+      if (this._sharedOnly) return "That's every play you two have logged.";
+      if (this._isOther()) return "That's the whole log.";
+      return "That's all your plays.";
     }
 
     async _load({ reset = false } = {}) {
@@ -437,7 +524,16 @@
       }
     }
 
-    _loadMore() { this._load({ reset: false }); }
+    /**
+     * Returns the promise so the pull gesture can hold its spinner up for as
+     * long as the page is actually out. The in-flight guard is what stops a
+     * second pull landing on top of the first — the seq guard in _load would
+     * drop the loser anyway, but only after a second request had gone out.
+     */
+    _loadMore() {
+      if (this._loading) return Promise.resolve();
+      return this._load({ reset: false });
+    }
 
     _onSearchInput(value) {
       this._query = value;
