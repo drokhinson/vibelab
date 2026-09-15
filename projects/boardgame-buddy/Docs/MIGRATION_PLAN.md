@@ -190,7 +190,7 @@ reconcile by hand. Waitlist-only removes the collision entirely and decouples
 
 | Stage | Does | Cost after | Downtime | Reversible? |
 |---|---|---|---|---|
-| 1 | Extract to a standalone repo | no change | none | yes — old monorepo still deploys |
+| 1 | **Isolate in place** (one tree, own workflows + Railway service) | no change | none | yes — it is a file move |
 | 2 | Vercel → Cloudflare Pages, apex, `COMING_SOON` on | −$0, unblocks revenue | none (DNS swap) | yes — Vercel project until deleted |
 | 2b | Landing view + waitlist capture | $0 | none | yes — it is one view |
 | 3 | **Decide the auth path** (§ Stage 3) | — | — | — |
@@ -207,7 +207,9 @@ the landing and auth code live in the new repo, so **extraction comes first**;
 and Google's brand review takes business days, so **start it early and let it run
 in the background**.
 
-1. **Stage 1 — extract.** Zero risk, unblocks everything else.
+1. **Stage 1 — isolate in place.** Consolidate the three trees into
+   `projects/boardgame-buddy/`. Zero risk, unblocks everything else, and turns a
+   future standalone repo into one `git` command instead of a port.
 2. **Stage 4 — R2 + bulk `rclone`**, while the old app is still live on Supabase.
    The copy is incremental and re-runnable, so it can be verified at leisure
    instead of inside a cutover window. Only the URL rewrite waits for Stage 6.
@@ -248,13 +250,152 @@ rather than deferring it.
 
 ---
 
-## Stage 1 — Extract to a standalone repo
+## Stage 1 — Isolate in place (not a new repo)
+
+**Revised 2026-09-15.** This stage originally said "create a standalone repo".
+Isolating BoardgameBuddy *inside* vibelab is the better first move, and a
+standalone repo becomes an optional `git` command afterwards rather than a port.
+
+### Why in-place first
+
+**It is the same work either way.** BoardgameBuddy currently lives in **three
+separate trees** — `projects/boardgame-buddy/` (4.9 MB),
+`shared-backend/routes/boardgame_buddy/` (820 KB) and
+`db/migrations/boardgamebuddy/` (1.4 MB). Consolidating those into one directory
+is the bulk of the effort, and it has to happen whether the destination is this
+repo or a new one.
+
+**It is what makes a clean extraction possible.** `git subtree split` operates on
+**one** prefix. A project spread across three trees cannot be split — which is
+why extracting today would be a copy-paste port that abandons history.
+Consolidate first and extraction becomes mechanical:
+
+```bash
+# after consolidation — one prefix, history for that path preserved
+git subtree split -P projects/boardgame-buddy -b bgb-standalone
+```
+
+One caveat, stated precisely: `subtree split` carries the history of commits that
+touched *that path*, so the backend's history from before the move (under
+`shared-backend/…`) does not come along — those files appear as of the move
+commit. If you want that history too, use `git filter-repo` with explicit
+renames instead:
+
+```bash
+git filter-repo \
+  --path projects/boardgame-buddy \
+  --path shared-backend/routes/boardgame_buddy \
+  --path-rename shared-backend/routes/boardgame_buddy:projects/boardgame-buddy/api/routes
+```
+
+Either way it is a command, not a migration.
+
+**The seam is already clean.** Nothing in the monorepo depends on
+BoardgameBuddy's code — it is a leaf. The only inbound references are
+registration wiring, and there are nine lines of them:
+
+| Where | Lines | What |
+|---|---|---|
+| `shared-backend/main.py` | 4 | import, `openapi_tags` entry, api-logger prefix map, `include_router` |
+| `shared-backend/routes/admin.py` | 4 | `_delete_boardgamebuddy_user` + the `APPS_WITH_USERS` entry |
+| `shared-backend/gemini.py` | 1 | a docstring reference |
+| `landing/app.js`, `landing/registry.json` | — | the landing card |
+
+**And the duplication argument inverts.** The objection to in-place isolation is
+that BoardgameBuddy would carry its own copy of the ~1,078 lines of shared
+modules, which could drift. But Stage 3-ALT *requires* that drift:
+`jwt_auth.py` has to start verifying Google-issued tokens, and the other eight
+apps must keep verifying Supabase ones. The module has to fork regardless. A
+duplicate that is *supposed* to diverge is not debt.
+
+**Everything downstream is indifferent to repo layout.** R2, GCP Identity, the
+Pages project, the landing view and the Supabase project split all work
+identically either way. Nothing later in this plan depends on a separate repo.
+
+### Target layout — one tree
+
+```
+projects/boardgame-buddy/
+├── CLAUDE.md               ← NEW: nested, BGB-only context (root CLAUDE.md still loads)
+├── ENV.md                  ← NEW: BGB's variables only (Appendix A)
+├── api/                    ← from shared-backend/
+│   ├── main.py             ← REWRITE: own FastAPI app, one router
+│   ├── db.py  jwt_auth.py  cache.py  api_logger.py  gemini.py  auth.py  shared_models.py
+│   ├── requirements.txt    ← REWRITE: drop the 3 sauceboss deps
+│   ├── Procfile  railway.toml
+│   ├── routes/             ← from routes/boardgame_buddy/, flattened (`..models` → `.models`)
+│   └── tests/
+├── db/migrations/          ← from db/migrations/boardgamebuddy/ + the 2 _shared files
+├── scripts/
+│   └── bgb-bundle.mjs      ← from .github/scripts/
+├── web/                    ← unchanged
+├── Docs/  tools/           ← unchanged
+```
+
+The rest of §1.2–1.4 below still applies verbatim — the `main.py` rewrite, the
+seven shared modules, the import flattening, the `_shared` migrations, the
+`requirements.txt` trim. Only the destination changed.
+
+### What stays shared, and it is not optional
+
+**`.github/workflows/` cannot be isolated.** GitHub only reads workflows from
+that one directory at the repo root, so BoardgameBuddy's two workflows live
+there alongside the others, scoped by path filter:
+
+```yaml
+on:
+  push:
+    branches: [main]
+    paths:
+      - projects/boardgame-buddy/**
+```
+
+Add the inverse exclusion to the existing `deploy-frontend.yml` and
+`deploy-backend.yml` (`paths-ignore`, or drop `boardgame-buddy` from the detect
+matrix) so a BoardgameBuddy commit stops redeploying the other eight apps and
+vice versa. Without that, isolation is only on disk.
+
+**GitHub Actions secrets are repo-wide.** BoardgameBuddy's Cloudflare and R2
+credentials sit in the same store as everything else. That is not a security
+boundary, and it is the one honest argument for eventually splitting the repo —
+worth acting on when there is revenue to protect, not now.
+
+**Two backend services from one repo.** The isolated `api/` needs its own
+Railway service with Root Directory `projects/boardgame-buddy/api`, beside the
+existing one pointed at `shared-backend`. Railway supports this directly.
+
+### Monorepo cleanup
+
+Remove the nine wiring lines above in a **separate commit** from the move, so a
+revert is cheap. Keep `supabase-keepalive.yml` pointed at a non-BGB table.
+Update `ENV.md` in the same commit that moves the eight `BGB_*` / `BGG_*` rows
+into the project's own `ENV.md`. The landing card can stay until cutover.
+
+### Acceptance
+
+- `uvicorn main:app` boots from `projects/boardgame-buddy/api/`; `/api/v1/health`
+  returns 200; `/docs` lists only BGB routes; tests pass.
+- `shared-backend` still boots with the other eight apps and no BGB references.
+- A commit touching only `projects/boardgame-buddy/**` triggers **only** the BGB
+  workflows. A commit touching only `shared-backend/**` does not trigger them.
+- The live app still works after a deploy from the isolated tree — and
+  **verify the bundle ran**: one hashed JS file in the page source, not 121 tags.
+- `git subtree split -P projects/boardgame-buddy -b bgb-standalone` succeeds and
+  the branch contains a complete, buildable project. Do not push it anywhere —
+  this is the check that the isolation is real.
+
+### The original standalone-repo layout, for reference
+
 
 **Goal:** a new repo that builds, runs locally, and deploys the same app to the
 same Vercel + Railway + Supabase it uses today. Zero infrastructure change. This
 stage is only about the code moving house.
 
-### 1.1 Create the repo
+### 1.1 Repo skeleton (superseded — kept because §1.2–1.6 reference it)
+
+*This was the layout when Stage 1 created a new repo. It is still the shape of
+the isolated tree, one level down under `projects/boardgame-buddy/`, and the
+sub-sections after it are unchanged and still correct.*
 
 ```
 boardgamebuddy/
