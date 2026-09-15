@@ -20,7 +20,7 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
-from routes.boardgame_buddy.bgg_write import (
+from routes.bgg_write import (
     BGB_OWNED_FLAGS,
     BGG_PRESERVED_FLAGS,
     build_status_form,

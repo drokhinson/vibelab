@@ -3,7 +3,7 @@
 One place for "ask Gemini for a JSON object" so every app that needs a small
 LLM task shares the same endpoint, model alias, error type, and api_logs
 plumbing. Currently used by BoardgameBuddy chapter generation
-(travel-scrapbook's `services/llm.py`).
+(`routes/boardgame_buddy/services/chapter_ai.py`).
 
 Travel Trove's place extraction (`routes/travel_scrapbook/services/llm.py`)
 predates this module and keeps its own copy of the call — it carries a lot of

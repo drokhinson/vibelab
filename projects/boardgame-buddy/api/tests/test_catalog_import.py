@@ -19,7 +19,7 @@ import asyncio
 
 import pytest
 
-from routes.boardgame_buddy import bgg_link_routes as L
+from routes import bgg_link_routes as L
 
 
 class _Table:

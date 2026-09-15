@@ -1,29 +1,15 @@
 name: Deploy BoardgameBuddy Web
 
 # BoardgameBuddy is isolated under projects/boardgame-buddy/ and deploys to
-# Cloudflare Pages, not Vercel.
-#
-# THIS COPY IS DEPLOYMENT MACHINERY LANDING AHEAD OF THE CODE IT DEPLOYS.
-# GitHub shows the "Run workflow" button only for a workflow whose file is on
-# the default branch, so until this file is on main the Pages deploy cannot be
-# triggered at all — not even manually, and not even against another branch.
-# Merging it here makes the button appear; selecting a branch in that dropdown
-# then runs THAT branch's copy of this file against THAT branch's checkout, so
-# the Pages deploy can be exercised while the isolation work is still on
-# claude/boardgamebuddy-deployment-strategy-8t1exu.
-#
-# It is deliberately dispatch-only while main still feeds Vercel. With the
-# push trigger present, any commit to main touching
-# projects/boardgame-buddy/web/** would publish MAIN's tree to Pages
-# production, and once bgbuddy.app points at Pages that would replace a good
-# deploy with one built before the privacy/terms routes existed — while
-# Google's brand review is loading those exact URLs.
-#
-# At cutover the isolation branch merges its own copy of this file, which
-# carries the push trigger and the paths filter. Git will flag that as an
-# add/add conflict on this one file; resolve it by taking the branch's version
-# wholesale. Nothing else here diverges.
+# Cloudflare Pages, not Vercel. deploy-frontend.yml filters this project out of
+# its change detection, so this is the only workflow that ships the web app.
 on:
+  push:
+    branches: [main]
+    paths:
+      - projects/boardgame-buddy/web/**
+      - projects/boardgame-buddy/scripts/**
+      - .github/workflows/deploy-bgb-web.yml
   workflow_dispatch:
 
 env:
@@ -47,36 +33,12 @@ jobs:
           API_BASE: ${{ vars.BGB_API_BASE }}
           SUPABASE_URL: ${{ secrets.VIBELAB_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.VIBELAB_SUPABASE_ANON_KEY }}
-          COMING_SOON: ${{ vars.BGB_COMING_SOON }}
-          FIREBASE_API_KEY: ${{ vars.BGB_FIREBASE_API_KEY }}
-          FIREBASE_AUTH_DOMAIN: ${{ vars.BGB_FIREBASE_AUTH_DOMAIN }}
-          FIREBASE_PROJECT_ID: ${{ vars.BGB_FIREBASE_PROJECT_ID }}
-          FIREBASE_APP_ID: ${{ vars.BGB_FIREBASE_APP_ID }}
         run: |
           if [ -z "$API_BASE" ]; then
             echo "::error::Repo variable BGB_API_BASE is unset. Set it to the"
             echo "::error::BoardgameBuddy API origin (no trailing slash) under"
             echo "::error::Settings -> Secrets and variables -> Actions -> Variables."
             exit 1
-          fi
-          # Firebase is a WARNING, not an error: the app still signs in through
-          # the Supabase Auth SDK until Stage 3-ALT.4, so an unset variable here
-          # is the expected state before the auth swap. A PARTIAL set is the
-          # real hazard -- three of four values present looks configured and
-          # fails at sign-in -- so complain about that specifically.
-          fb_set=0; fb_unset=0
-          for v in "$FIREBASE_API_KEY" "$FIREBASE_AUTH_DOMAIN" \
-                   "$FIREBASE_PROJECT_ID" "$FIREBASE_APP_ID"; do
-            if [ -n "$v" ]; then fb_set=$((fb_set + 1)); else fb_unset=$((fb_unset + 1)); fi
-          done
-          if [ "$fb_set" -gt 0 ] && [ "$fb_unset" -gt 0 ]; then
-            echo "::error::BGB_FIREBASE_* is partially set ($fb_set of 4). Set all"
-            echo "::error::four (API_KEY, AUTH_DOMAIN, PROJECT_ID, APP_ID) or none."
-            exit 1
-          fi
-          if [ "$fb_set" -eq 0 ]; then
-            echo "::warning::BGB_FIREBASE_* unset - config.js ships without"
-            echo "::warning::Firebase Auth. Expected until Stage 3-ALT.4."
           fi
           bash build.sh
 

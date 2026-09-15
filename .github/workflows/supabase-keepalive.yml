@@ -22,4 +22,4 @@ jobs:
           curl --fail-with-body --silent --show-error \
             -H "apikey: ${{ secrets.VIBELAB_SUPABASE_ANON_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.VIBELAB_SUPABASE_ANON_KEY }}" \
-            "${{ secrets.VIBELAB_SUPABASE_URL }}/rest/v1/boardgamebuddy_games?select=id&limit=1"
+            "${{ secrets.VIBELAB_SUPABASE_URL }}/rest/v1/plantplanner_plant_cache?select=id&limit=1"
