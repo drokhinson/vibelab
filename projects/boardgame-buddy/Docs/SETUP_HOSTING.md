@@ -373,26 +373,66 @@ is the thing to look at, not this list.
 
 ## 6. Order of operations
 
+### Why the merge is the dangerous step
+
+Merging changes `shared-backend/**`, so Railway redeploys that service **without
+BoardgameBuddy's routes**. Meanwhile the live app is still the last build Vercel
+received, and its `config.js` has the *old* Railway origin baked in. So at the
+moment of merge, the live app points at an API that no longer serves it — and
+because `deploy-frontend.yml` no longer builds this project, CI will not push a
+corrected `config.js` to Vercel either.
+
+**The fix is one switch: turn OFF auto-deploy on the existing `shared-backend`
+Railway service before merging.** It then keeps serving its current image —
+BoardgameBuddy routes included — until you deliberately redeploy it. That gives
+you a window where old and new both work, and nothing is racing DNS.
+
 ```
 BEFORE MERGING
-  1. §1  Railway service for projects/boardgame-buddy/api
-  2. §4  BGB_API_BASE = https://api.bgbuddy.app
-  3. §5.1 ALLOWED_ORIGINS on the new service (old Vercel origin included)
-  4. Verify api.bgbuddy.app/api/v1/health
+  1. Railway → existing shared-backend service → Settings → disable Auto Deploy.
+     It keeps running the image it has, still serving BGB. This is what makes
+     the merge safe.
+  2. §1  Create the BGB Railway service (Root Directory
+         projects/boardgame-buddy/api), copy every variable, never regenerating
+         the VAPID pair, BGB_QR_SECRET or BGG_CREDENTIAL_KEY.
+  3. §4  Set BGB_API_BASE, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
+         Without these the web workflow fails on the merge commit — harmless,
+         but it means no Pages deploy.
+  4. §3.2 Create the Pages project named exactly `bgbuddy`.
+  5. §5.1 ALLOWED_ORIGINS on the NEW service, old Vercel origin included.
+  6. Verify: curl https://api.bgbuddy.app/api/v1/health
 
-ANY TIME (start §2.5 immediately — days of queue)
-  5. §2.5 Search Console domain verification
-  6. §2.1-2.4 Identity Platform, auth.bgbuddy.app, branding
-  7. §3  Cloudflare DNS, Pages project, token, redirect rule
-  8. §2.7 Supabase third-party auth + check the TP-MAU line
+ANY TIME — start §2.5 first, it is days of queue you do not control
+  7. §2.5 Search Console domain verification
+  8. §2.1-2.4 Identity Platform, auth.bgbuddy.app, branding
+  9. §3.1 DNS in Cloudflare (nameservers first if the domain is elsewhere)
+ 10. §2.7 Supabase third-party auth + check the TP-MAU billing line
 
-THEN
-  9. Merge. CI deploys web → Pages and tests the API.
- 10. Verify on bgbuddy.pages.dev before pointing DNS at it.
- 11. Point bgbuddy.app at Pages. Watch 24h.
- 12. Delete the Vercel project; drop its origin from ALLOWED_ORIGINS;
-     delete BGB_*/BGG_* from the old Railway service.
+MERGE
+ 11. Merge. CI deploys web → Pages and runs the API tests.
+ 12. Verify on bgbuddy.pages.dev against the NEW api. The old Vercel app is
+     still up and still working — that is the point of step 1.
+ 13. Point bgbuddy.app at Pages (§3.3). Watch 24h.
+
+AFTER THE CUTOVER HOLDS
+ 14. Re-enable Auto Deploy on shared-backend and let it redeploy. It loses the
+     BoardgameBuddy routes here, which is now fine — nothing points at it.
+ 15. Delete the Vercel project; drop its origin from ALLOWED_ORIGINS; delete
+     the BGB_*/BGG_* variables from the old Railway service.
 ```
+
+Steps 1 and 14 are a matched pair. If you skip step 1, you are relying on
+finishing steps 11-13 faster than Railway finishes a deploy, which is not a
+plan.
+
+### One local-only caveat
+
+`pip install` of `pywebpush` fails in some sandboxes with
+`AttributeError: install_layout` while building `http-ece`, which ships no
+wheel. That is Debian's patched setuptools, not a packaging problem — GitHub
+Actions and Railway both build it fine, which the existing shared-backend
+deploys already prove. If you hit it locally, install the rest of
+`requirements.txt` without `pywebpush`; only the push tests need it.
 
 Still to come, and not in this file: the landing view with the `COMING_SOON`
 gate, R2 (`img.bgbuddy.app`), the frontend swap from the Supabase Auth SDK to
