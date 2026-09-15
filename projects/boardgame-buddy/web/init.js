@@ -11,6 +11,8 @@
   // Hoist instances onto window so view onclick handlers can find them.
   window.splashView      = new window.SplashView();
   window.landingView     = new window.LandingView();
+  window.privacyView     = new window.PrivacyView();
+  window.termsView       = new window.TermsView();
   window.authView        = new window.AuthView();
   window.feedView        = new window.FeedView();
   window.logPlayView     = new window.LogPlayView();
@@ -46,6 +48,8 @@
 
   window.router.register("splash",        window.splashView);
   window.router.register("landing",       window.landingView);
+  window.router.register("privacy",       window.privacyView);
+  window.router.register("terms",         window.termsView);
   window.router.register("auth",          window.authView);
   window.router.register("feed",          window.feedView);
   window.router.register("log-play",      window.logPlayView);
@@ -913,7 +917,14 @@
     // and /bootstrap, and there is nothing here for it to wait on.
     if (comingSoonActive()) {
       document.documentElement.setAttribute("data-bgb-coming-soon", "1");
-      window.router.go("landing", {}, { skipPush: true });
+      // The legal documents are the ONE exception to the gate. Google gates the
+      // OAuth brand review on the privacy and terms URLs actually loading, and
+      // the reviewer necessarily arrives before launch — redirecting them to
+      // the waitlist reads as "no policy" and fails the review. Neither view
+      // touches auth or the API, so serving them here costs nothing the gate
+      // was protecting. skipPush keeps the pasted URL in the address bar.
+      const legal = initialMatch && (initialMatch.name === "privacy" || initialMatch.name === "terms");
+      window.router.go(legal ? initialMatch.name : "landing", {}, { skipPush: true });
       clearBootBackstop();
       return;
     }
