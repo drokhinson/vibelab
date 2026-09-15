@@ -184,6 +184,13 @@
         // that now indexes the three spokes, instead of a 404-ish blank.
         { name: "admin",               pattern: /^\/admin\/?$/,                   build: () => "/admin",
           alias: "settings" },
+        // The two legal documents. Real routes rather than static .html files
+        // (see views/legal-view.js), and they must resolve BEFORE launch —
+        // Google gates the OAuth brand review on these URLs loading, and the
+        // reviewer arrives while COMING_SOON is still on. init.js's pre-launch
+        // gate lets exactly these two through.
+        { name: "privacy",             pattern: /^\/privacy\/?$/,                 build: () => "/privacy" },
+        { name: "terms",               pattern: /^\/terms\/?$/,                   build: () => "/terms" },
         { name: "feed",                pattern: /^\/(feed)?\/?$/,                 build: () => "/feed" },
       ];
     }

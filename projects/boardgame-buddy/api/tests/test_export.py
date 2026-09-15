@@ -33,9 +33,9 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test")
 
 import pytest
 
-from routes.boardgame_buddy.constants import DB_PAGE_SIZE, ExportDataset
-from routes.boardgame_buddy.services import export_service as S
-from routes.boardgame_buddy.services.export_csv import CsvFile, _cell, render_csv
+from routes.constants import DB_PAGE_SIZE, ExportDataset
+from routes.services import export_service as S
+from routes.services.export_csv import CsvFile, _cell, render_csv
 
 
 ME = "user-me"
@@ -533,9 +533,9 @@ def client(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from routes import boardgame_buddy as bb
-    from routes.boardgame_buddy import export_routes
-    from routes.boardgame_buddy.dependencies import CurrentUser, get_current_user
+    import routes as bb
+    from routes import export_routes
+    from routes.dependencies import CurrentUser, get_current_user
 
     app = FastAPI()
     app.include_router(bb.router)

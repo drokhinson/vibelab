@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test")
 
-from routes.boardgame_buddy.bgg_client import (  # noqa: E402
+from routes.bgg_client import (  # noqa: E402
     _DESCRIPTION_MAX_CHARS,
     bgg_description_text,
 )
