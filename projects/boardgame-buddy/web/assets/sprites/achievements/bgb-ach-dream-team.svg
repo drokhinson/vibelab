@@ -51,6 +51,6 @@
     <path d="M30 40 Q31.3 44.7 36 46 Q31.3 47.3 30 52 Q28.7 47.3 24 46 Q28.7 44.7 30 40 Z" fill="#F0C662" opacity="0.9"/>
     <path d="M130 40 Q131.3 44.7 136 46 Q131.3 47.3 130 52 Q128.7 47.3 124 46 Q128.7 44.7 130 40 Z" fill="#F0C662" opacity="0.9"/>
   </g>
-  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#A9682F" stroke-width="4"/>
-  <circle cx="80" cy="80" r="65" fill="none" stroke="#A9682F" stroke-width="1.4" opacity="0.34"/>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#E0A94A" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#E0A94A" stroke-width="1.4" opacity="0.34"/>
 </svg>

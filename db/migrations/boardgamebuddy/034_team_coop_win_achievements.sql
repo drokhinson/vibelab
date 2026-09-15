@@ -1,4 +1,4 @@
--- 034_team_coop_win_achievements.sql — four Victories badges for the two modes
+-- 034_team_coop_win_achievements.sql — two Victories badges for the two modes
 -- that are not one player against the rest of the table.
 --
 -- The Victories group has only ever counted wins in the aggregate: Crowned
@@ -8,10 +8,15 @@
 -- the whole table beat the box, lands on the shelf as exactly the same fact as
 -- beating three friends at Catan.
 --
---   Dream Team          — you won a play logged as a TEAM game.
---   United Front        — 20 of them.
---   Against the Machine — you won a play logged as CO-OP: the table beat the game.
---   Machine Breaker     — 20 of those.
+--   Dream Team      — you won 20 plays logged as TEAM games.
+--   Machine Breaker — you won 20 plays logged as CO-OP: the table beat the box.
+--
+-- BOTH SIT AT 20, and neither has a first-win tier under it. A badge for the
+-- very first team or co-op win would fire on the night somebody first ticks a
+-- box on the log screen, which is a fact about the app's UI and not about how
+-- the evening went; 20 is a habit. The two modes therefore get one badge each
+-- rather than a ladder, which is also why the art on both wears the gold rim
+-- the set reserves for the top of a group.
 --
 -- WHY `wins` IS LEFT ALONE. team_wins and coop_wins are strict subsets of the
 -- existing `wins` metric, and that is on purpose: the three tier badges are
@@ -56,11 +61,10 @@ ALTER TABLE public.boardgamebuddy_achievements
 -- (and in the unlock polaroid); `requirement` is the same fact in the
 -- imperative, printed while it is still locked.
 --
--- display_order 82–88 sits after Dynasty (80) and before First Page (90), so
--- the catalog's global order keeps all four inside the Victories rail, with
--- each pair's first tier ahead of its second. The rail itself re-sorts
--- done → in progress → not started at render time; this is the order WITHIN
--- each of those buckets.
+-- display_order 82 and 84 sit after Dynasty (80) and before First Page (90), so
+-- the catalog's global order keeps both inside the Victories rail, after the
+-- three tiers they narrow. The rail itself re-sorts done → in progress → not
+-- started at render time; this is the order WITHIN each of those buckets.
 --
 -- Deliberately NOT added to 002_seed.sql, for the reason 019 gives: that file
 -- is the post-collapse baseline and a fresh database runs it BEFORE the CHECK
@@ -70,22 +74,14 @@ ALTER TABLE public.boardgamebuddy_achievements
 INSERT INTO public.boardgamebuddy_achievements
   (id, group_id, name, tagline, requirement, metric, threshold, icon, display_order)
 VALUES
-  ('team_wins_1', 'victories', 'Dream Team',
-   'Won a game played in teams.',
-   'Win a game played in teams',
-   'team_wins', 1, 'dream-team', 82),
-  ('team_wins_20', 'victories', 'United Front',
+  ('team_wins_20', 'victories', 'Dream Team',
    'Won 20 games played in teams.',
    'Win 20 games played in teams',
-   'team_wins', 20, 'united-front', 84),
-  ('coop_wins_1', 'victories', 'Against the Machine',
-   'Beat the game itself — won a co-op play.',
-   'Win a co-op game',
-   'coop_wins', 1, 'against-the-machine', 86),
+   'team_wins', 20, 'dream-team', 82),
   ('coop_wins_20', 'victories', 'Machine Breaker',
    'Beat the game itself 20 times.',
    'Win 20 co-op games',
-   'coop_wins', 20, 'machine-breaker', 88)
+   'coop_wins', 20, 'machine-breaker', 84)
 ON CONFLICT (id) DO NOTHING;
 
 

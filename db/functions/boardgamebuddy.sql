@@ -2,8 +2,9 @@
 -- BoardgameBuddy — RPC function inventory
 -- Last updated: 034_team_coop_win_achievements.sql (re-emits bgb_sync_achievements
 --               with team_wins and coop_wins — the same win narrowed to the
---               mode the table was playing in, behind four new Victories
---               badges. Both are strict subsets of the existing `wins`, which
+--               mode the table was playing in, behind the Dream Team and
+--               Machine Breaker badges (20 wins each, no first-win tier under
+--               either). Both are strict subsets of the existing `wins`, which
 --               is deliberately left counting every mode. my_plays carries
 --               p.play_mode to make them expressible; the signature and the
 --               return shape do not move.)
@@ -1202,8 +1203,8 @@
 --                plays.country_code through the my_plays CTE and adds the
 --                countries / continents metrics)
 --   Last updated in: db/migrations/boardgamebuddy/034_team_coop_win_achievements.sql
---               (adds the team_wins and coop_wins metrics behind Dream Team,
---                United Front, Against the Machine and Machine Breaker, and
+--               (adds the team_wins and coop_wins metrics behind Dream Team
+--                (20 team wins) and Machine Breaker (20 co-op wins), and
 --                carries plays.play_mode through the my_plays CTE so they are
 --                expressible. Both are strict SUBSETS of `wins`, which keeps
 --                counting every mode: the tier badges are about how often you
@@ -1227,7 +1228,7 @@
 --   Called by:  shared-backend/routes/boardgame_buddy/achievement_routes.py
 --               (GET /achievements, POST /achievements/installed)
 --   Purpose:    Everything on the Achievements spoke (/profile/achievements) in
---               one call. Computes all sixteen metrics behind the twenty-five
+--               one call. Computes all sixteen metrics behind the twenty-three
 --               badges (plays logged, wins, wins in team plays, wins in co-op
 --               plays, biggest table, two-player-only
 --               games played, buddies, guide chapters, chapters of yours
