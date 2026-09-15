@@ -39,9 +39,26 @@ registered elsewhere.
 2. The new service → **Settings → Source**:
    - **Root Directory**: `projects/boardgame-buddy/api`
    - **Branch**: `main`
-3. **Settings → Deploy**: confirm it picked up `railway.toml` — start command
-   `uvicorn main:app --host 0.0.0.0 --port $PORT`, healthcheck
-   `/api/v1/health`. Set the start command by hand if not.
+3. **Settings → Deploy → Custom Start Command.** Paste exactly this:
+
+   ```
+   uvicorn main:app --host 0.0.0.0 --port $PORT
+   ```
+
+   **Never put a filename in that field.** `railway.toml` is a config file, not
+   a script — it is mode 644 and bash cannot execute it. A start command of
+   `railway.toml` produces
+   `/bin/bash: line 1: ./railway.toml: Permission denied`, restarting forever,
+   which the edge reports as a 502 "Application failed to respond" with nothing
+   about the real cause. There is no Python in that log at all.
+
+   The repo does ship `railway.toml` (and a `Procfile`) declaring the same
+   command, and Railway may pick one up on its own — but **set the field
+   explicitly anyway.** Config-file discovery depends on the Root Directory and
+   the config-path setting, and an explicit command works either way. When the
+   field is set, `railway.toml`'s `healthcheckPath` and `restartPolicy` may not
+   be applied, so set **Healthcheck Path** to `/api/v1/health` by hand in the
+   same screen.
 4. **Settings → Networking → Generate Domain** for a `*.up.railway.app` URL to
    test against, then **Custom Domain** → `api.bgbuddy.app`. Railway gives you a
    CNAME target; add it in Cloudflare (§3.1) as **DNS-only (grey cloud)** for
