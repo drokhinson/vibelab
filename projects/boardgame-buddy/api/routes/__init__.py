@@ -50,3 +50,7 @@ from . import bgg_push_routes  # noqa: F401, E402
 from . import bootstrap_routes  # noqa: F401, E402
 from . import export_routes  # noqa: F401, E402
 from . import admin_routes  # noqa: F401, E402
+# Pre-launch only: the landing page's email capture. No ordering constraint
+# (one literal path) and no dependency on anything else here, so removing it
+# at launch is this line plus the file.
+from . import waitlist_routes  # noqa: F401, E402

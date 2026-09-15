@@ -10,6 +10,7 @@
 (function () {
   // Hoist instances onto window so view onclick handlers can find them.
   window.splashView      = new window.SplashView();
+  window.landingView     = new window.LandingView();
   window.authView        = new window.AuthView();
   window.feedView        = new window.FeedView();
   window.logPlayView     = new window.LogPlayView();
@@ -44,6 +45,7 @@
   window.joinPanel       = new window.JoinPanel();
 
   window.router.register("splash",        window.splashView);
+  window.router.register("landing",       window.landingView);
   window.router.register("auth",          window.authView);
   window.router.register("feed",          window.feedView);
   window.router.register("log-play",      window.logPlayView);
@@ -72,6 +74,35 @@
   // Supabase boot. We model this as a global helper (used by views directly)
   // because Supabase's auth state listener fires async outside the view
   // lifecycle.
+  // Pre-launch gate. With COMING_SOON on, bgbuddy.app serves the landing view
+  // and nothing else: no Supabase client, no session lookup, no auth screen —
+  // which is the point, because a signup taken before the user import becomes a
+  // duplicate identity (importUsers does not dedupe on email). See
+  // Docs/MIGRATION_PLAN.md "Waitlist only before launch".
+  //
+  // ?preview=1 bypasses it and sticks for the tab, so the real app can be
+  // smoke-tested on the live domain BEFORE DNS is cut over to it. sessionStorage
+  // rather than localStorage: a preview should not outlive the window it was
+  // opened in, or you forget it is on and mistake the app for being live.
+  const PREVIEW_KEY = "bgb.preview";
+
+  function comingSoonActive() {
+    const cfg = window.APP_CONFIG;
+    const on = cfg && (cfg.comingSoon === true || cfg.comingSoon === "1" || cfg.comingSoon === "true");
+    if (!on) return false;
+    try {
+      if (new URLSearchParams(location.search).get("preview") === "1") {
+        sessionStorage.setItem(PREVIEW_KEY, "1");
+      }
+      if (sessionStorage.getItem(PREVIEW_KEY) === "1") return false;
+    } catch (_) {
+      // Private mode can throw on sessionStorage. Failing closed keeps the
+      // gate on, which is the safe direction for a page that must not sign
+      // anyone up.
+    }
+    return true;
+  }
+
   function initSupabase() {
     const cfg = window.APP_CONFIG;
     if (!cfg || !cfg.supabaseUrl || !cfg.supabaseAnonKey) {
@@ -874,6 +905,19 @@
     // One document-wide icon pass for the static shell (bottom nav, header).
     // Views refresh their own subtree via View.refreshIcons() from here on.
     window.BgbIcons.render();
+
+    // Pre-launch: the landing view replaces the whole app. Returning before
+    // initSupabase() is deliberate — no auth client is constructed, so no
+    // session is resolved and no account can be created. The boot watchdog is
+    // skipped too: it exists to rescue a boot that stalls waiting on Supabase
+    // and /bootstrap, and there is nothing here for it to wait on.
+    if (comingSoonActive()) {
+      document.documentElement.setAttribute("data-bgb-coming-soon", "1");
+      window.router.go("landing", {}, { skipPush: true });
+      clearBootBackstop();
+      return;
+    }
+
     initSupabase();
     setTimeout(bootWatchdog, bootWatchdogDelay());
     // Hand off from index.html's boot backstop, which reloads the page when no
