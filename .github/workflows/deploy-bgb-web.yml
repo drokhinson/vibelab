@@ -1,0 +1,121 @@
+name: Deploy BoardgameBuddy Web
+
+# BoardgameBuddy is isolated under projects/boardgame-buddy/ and deploys to
+# Cloudflare Pages, not Vercel. deploy-frontend.yml filters this project out of
+# its change detection, so this is the only workflow that ships the web app.
+on:
+  push:
+    branches: [main]
+    paths:
+      - projects/boardgame-buddy/web/**
+      - projects/boardgame-buddy/scripts/**
+      - .github/workflows/deploy-bgb-web.yml
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./projects/boardgame-buddy
+    steps:
+      - uses: actions/checkout@v4
+
+      # config.js is gitignored and generated per environment. API_BASE is a
+      # repo VARIABLE so the backend can be re-pointed (shared Railway service
+      # -> BGB's own -> Hetzner) without editing this file.
+      - name: Generate config.js
+        working-directory: ./projects/boardgame-buddy/web
+        env:
+          API_BASE: ${{ vars.BGB_API_BASE }}
+          SUPABASE_URL: ${{ secrets.VIBELAB_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VIBELAB_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$API_BASE" ]; then
+            echo "::error::Repo variable BGB_API_BASE is unset. Set it to the"
+            echo "::error::BoardgameBuddy API origin (no trailing slash) under"
+            echo "::error::Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          fi
+          bash build.sh
+
+      # Deploy-artifact-only Tailwind precompile. The checked-in index.html
+      # keeps the DaisyUI/Tailwind CDN pair because the runtime JIT must run
+      # before first paint in local dev; this builds a minified static sheet and
+      # swaps the CDN block for it in the checkout being uploaded. Nothing is
+      # committed back.
+      - name: Precompile Tailwind + DaisyUI
+        working-directory: ./projects/boardgame-buddy/web
+        run: |
+          # tailwind.config.js's require("daisyui") must resolve, so install
+          # both packages into a scratch dir OUTSIDE web/ — a node_modules here
+          # would ship to Pages with the static site.
+          SCRATCH=$(mktemp -d)
+          npm install --prefix "$SCRATCH" --no-audit --no-fund tailwindcss@3 daisyui@4
+          cat > tailwind.config.js << 'TWCONFIG'
+          module.exports = {
+            content: ["./**/*.{html,js}"],
+            plugins: [require("daisyui")],
+            // index.html pins data-theme="luxury"; no other themes are used.
+            daisyui: { themes: ["luxury"] },
+          };
+          TWCONFIG
+          # The @tailwind directives are REQUIRED: without -i the CLI emits
+          # utilities only — no DaisyUI component classes and no theme vars.
+          printf '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n' > tailwind.input.css
+          NODE_PATH="$SCRATCH/node_modules" "$SCRATCH/node_modules/.bin/tailwindcss" \
+            -c tailwind.config.js -i tailwind.input.css -o assets/bgb-tw.css --minify
+          # Sanity gate: fail the deploy if the DaisyUI layer is missing.
+          grep -q ".btn-primary" assets/bgb-tw.css || { echo "bgb-tw.css missing DaisyUI components"; exit 1; }
+          rm tailwind.config.js tailwind.input.css
+          # Swap the CDN <link> + <script> pair for the precompiled sheet.
+          # Anchored on the CDN URLs; fails loudly if index.html drifted.
+          node << 'SWAP'
+          const fs = require("fs");
+          let html = fs.readFileSync("index.html", "utf8");
+          const linkRe = /<link[^>]*href="https:\/\/cdn\.jsdelivr\.net\/npm\/daisyui[^"]*"[^>]*\/?>/;
+          const scriptRe = /[ \t]*<script src="https:\/\/cdn\.tailwindcss\.com"><\/script>\n?/;
+          if (!linkRe.test(html) || !scriptRe.test(html)) {
+            console.error("DaisyUI/Tailwind CDN block not found in index.html — aborting swap");
+            process.exit(1);
+          }
+          html = html.replace(linkRe, '<link rel="stylesheet" href="assets/bgb-tw.css" />');
+          html = html.replace(scriptRe, "");
+          fs.writeFileSync("index.html", html);
+          console.log("index.html now uses precompiled assets/bgb-tw.css");
+          SWAP
+
+      # Runs AFTER Tailwind (so it sees the CDN-swapped shell) and BEFORE the
+      # sw.js stamp (so the worker's precache sweep reads the final shell).
+      # That order is load-bearing — see the script's own header.
+      - name: Bundle + minify JS/CSS
+        run: node scripts/bgb-bundle.mjs web
+
+      # sw.js keys its cache on this id, so a fresh SHA per deploy means the new
+      # build lands in a new cache and activate() deletes the old one. Left
+      # literal in the repo, which sw.js reads as "local dev" and disables
+      # itself — so the grep is a real guard, not a formality.
+      - name: Stamp service-worker build id
+        working-directory: ./projects/boardgame-buddy/web
+        run: |
+          grep -q "__BGB_BUILD_ID__" sw.js || { echo "sw.js build-id placeholder missing"; exit 1; }
+          sed -i "s/__BGB_BUILD_ID__/${GITHUB_SHA}/" sw.js
+          echo "sw.js cache stamped with ${GITHUB_SHA}"
+
+      # Direct Upload, not the Pages Git integration: the three steps above
+      # generate the artifact and Cloudflare's own build step cannot reproduce
+      # them. --commit-dirty is required because those steps deliberately
+      # modify the checkout.
+      - name: Deploy to Cloudflare Pages
+        working-directory: ./projects/boardgame-buddy/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler@latest pages deploy . \
+            --project-name=bgbuddy \
+            --branch=main \
+            --commit-dirty=true

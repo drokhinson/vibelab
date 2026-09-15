@@ -42,15 +42,15 @@ def _b64(raw: bytes) -> str:
 from fastapi import BackgroundTasks
 from types import SimpleNamespace
 
-from routes.boardgame_buddy.constants import PushEvent, PushTier, push_tier_admits
-from routes.boardgame_buddy.services import push_notify as N
-from routes.boardgame_buddy.services import push_service as P
+from routes.constants import PushEvent, PushTier, push_tier_admits
+from routes.services import push_notify as N
+from routes.services import push_service as P
 
 # The keys are written onto the MODULE, not into os.environ, and that is not a
 # shortcut — it is the only thing that works. push_service reads the three env
 # vars into module constants at import time (the same pattern BGB_QR_SECRET
 # uses), and by the time this file is collected another test module has usually
-# already imported routes.boardgame_buddy, which imports push_routes, which
+# already imported routes, which imports push_routes, which
 # imports push_service. Setting os.environ here would then be writing to a
 # value nothing reads again, and every delivery test would silently assert
 # against a feature that had switched itself off — passing alone, failing in

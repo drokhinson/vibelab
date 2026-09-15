@@ -28,9 +28,9 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test")
 
 import pytest
 
-from routes.boardgame_buddy.constants import ScoringGridMode
-from routes.boardgame_buddy.models import PlayScoringTemplate, ScoringGrid
-from routes.boardgame_buddy.services import chapter_grid
+from routes.constants import ScoringGridMode
+from routes.models import PlayScoringTemplate, ScoringGrid
+from routes.services import chapter_grid
 
 
 def _grid(mode=None):

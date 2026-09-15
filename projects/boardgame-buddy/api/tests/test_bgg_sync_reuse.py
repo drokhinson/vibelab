@@ -29,17 +29,17 @@ import httpx
 import pytest
 
 import cache
-from routes.boardgame_buddy.bgg_client import (
+from routes.bgg_client import (
     BggRefusedError,
     _cloudflare_block,
     _refused,
 )
-from routes.boardgame_buddy.bgg_collection_read import (
+from routes.bgg_collection_read import (
     BggCollectionItem,
     collection_rows_from_items,
 )
-from routes.boardgame_buddy.services import bgg_check_cache
-from routes.boardgame_buddy.services.bgg_compare_service import ComparePlan
+from routes.services import bgg_check_cache
+from routes.services.bgg_compare_service import ComparePlan
 
 USER = "user-1"
 STAMP = datetime(2026, 9, 2, 12, 15, tzinfo=timezone.utc)

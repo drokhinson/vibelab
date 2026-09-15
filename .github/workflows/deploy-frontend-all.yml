@@ -24,8 +24,6 @@ jobs:
             projectKey: SPOTME
           - project: wealthmate
             projectKey: WEALTHMATE
-          - project: boardgame-buddy
-            projectKey: BOARDGAME_BUDDY
           - project: travel-scrapbook
             projectKey: TRAVEL_SCRAPBOOK
     steps:
@@ -39,80 +37,6 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.VIBELAB_SUPABASE_ANON_KEY }}
         run: |
           if [ -f build.sh ]; then bash build.sh; fi
-
-      # Deploy-artifact-only Tailwind precompile for boardgame-buddy — keep
-      # in sync with the identical step in deploy-frontend.yml. The
-      # checked-in index.html keeps the DaisyUI/Tailwind CDN pair for local
-      # dev; this swaps it for a minified static stylesheet in the checkout
-      # that `vercel deploy` uploads. Nothing is committed back.
-      - name: Precompile Tailwind + DaisyUI (boardgame-buddy only)
-        if: matrix.project == 'boardgame-buddy'
-        working-directory: ./projects/${{ matrix.project }}/web
-        run: |
-          # tailwind.config.js's require("daisyui") must resolve, so install
-          # both packages into a scratch dir OUTSIDE web/ — a node_modules
-          # here would ship to Vercel with the static site.
-          SCRATCH=$(mktemp -d)
-          npm install --prefix "$SCRATCH" --no-audit --no-fund tailwindcss@3 daisyui@4
-          cat > tailwind.config.js << 'TWCONFIG'
-          module.exports = {
-            content: ["./**/*.{html,js}"],
-            plugins: [require("daisyui")],
-            // index.html pins data-theme="luxury"; no other themes are used.
-            daisyui: { themes: ["luxury"] },
-          };
-          TWCONFIG
-          # The @tailwind directives are REQUIRED: without -i the CLI emits
-          # utilities only — no DaisyUI component classes and no theme vars.
-          printf '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n' > tailwind.input.css
-          NODE_PATH="$SCRATCH/node_modules" "$SCRATCH/node_modules/.bin/tailwindcss" \
-            -c tailwind.config.js -i tailwind.input.css -o assets/bgb-tw.css --minify
-          # Sanity gate: fail the deploy if the DaisyUI layer is missing.
-          grep -q ".btn-primary" assets/bgb-tw.css || { echo "bgb-tw.css missing DaisyUI components"; exit 1; }
-          rm tailwind.config.js tailwind.input.css
-          # Swap the CDN <link> + <script> pair for the precompiled sheet.
-          # Anchored on the CDN URLs; fail loudly if index.html drifted.
-          node << 'SWAP'
-          const fs = require("fs");
-          let html = fs.readFileSync("index.html", "utf8");
-          const linkRe = /<link[^>]*href="https:\/\/cdn\.jsdelivr\.net\/npm\/daisyui[^"]*"[^>]*\/?>/;
-          const scriptRe = /[ \t]*<script src="https:\/\/cdn\.tailwindcss\.com"><\/script>\n?/;
-          if (!linkRe.test(html) || !scriptRe.test(html)) {
-            console.error("DaisyUI/Tailwind CDN block not found in index.html — aborting swap");
-            process.exit(1);
-          }
-          html = html.replace(linkRe, '<link rel="stylesheet" href="assets/bgb-tw.css" />');
-          html = html.replace(scriptRe, "");
-          fs.writeFileSync("index.html", html);
-          console.log("index.html now uses precompiled assets/bgb-tw.css");
-          SWAP
-
-      # Deploy-artifact-only JS/CSS bundle for boardgame-buddy. Same posture as
-      # the Tailwind step above: the repo keeps its ~120 <script src> tags (the
-      # authoring model in .claude/rules/web-frontend.md) and local dev is
-      # untouched; this rewrites only the checkout `vercel deploy` uploads, and
-      # nothing is committed back. Runs AFTER Tailwind so it sees the
-      # CDN-swapped index.html, and BEFORE the sw.js stamp so the worker's
-      # precache sweep reads the final shell.
-      # The script is shared with deploy-frontend-all.yml rather than duplicated
-      # as a heredoc — see .github/scripts/bgb-bundle.mjs for what it does and,
-      # more importantly, what it deliberately does not do.
-      - name: Bundle + minify JS/CSS (boardgame-buddy only)
-        if: matrix.project == 'boardgame-buddy'
-        run: node .github/scripts/bgb-bundle.mjs projects/${{ matrix.project }}/web
-
-      # Stamp the service worker's cache version. sw.js keys its cache on this,
-      # so a fresh SHA per deploy means the new build lands in a new cache and
-      # activate() deletes the old one — the answer to the stale-bundle risk
-      # that made travel-scrapbook's sw.js refuse to cache at all. Left literal
-      # in the repo, which sw.js reads as "local dev" and disables itself.
-      - name: Stamp service-worker build id (boardgame-buddy only)
-        if: matrix.project == 'boardgame-buddy'
-        working-directory: ./projects/${{ matrix.project }}/web
-        run: |
-          grep -q "__BGB_BUILD_ID__" sw.js || { echo "sw.js build-id placeholder missing"; exit 1; }
-          sed -i "s/__BGB_BUILD_ID__/${GITHUB_SHA}/" sw.js
-          echo "sw.js cache stamped with ${GITHUB_SHA}"
 
       - name: Deploy ${{ matrix.project }} web frontend
         working-directory: ./projects/${{ matrix.project }}/web

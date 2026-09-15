@@ -17,9 +17,9 @@ import asyncio
 
 import pytest
 
-from routes.boardgame_buddy import constants as K
-from routes.boardgame_buddy.bgg_collection_read import BggCollectionItem
-from routes.boardgame_buddy.services import bgg_compare_service as S
+from routes import constants as K
+from routes.bgg_collection_read import BggCollectionItem
+from routes.services import bgg_compare_service as S
 
 
 # ── Fakes ───────────────────────────────────────────────────────────────────

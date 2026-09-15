@@ -26,7 +26,7 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test")
 
 import asyncio
 
-from routes.boardgame_buddy.services import search_service as S
+from routes.services import search_service as S
 
 
 VIEWER = "user-me"
