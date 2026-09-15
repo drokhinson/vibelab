@@ -376,15 +376,24 @@ easy to overlook because it is not the record doing the serving: Railway issues
 a `TXT _railway-verify.<host>` alongside the CNAME, and losing it un-verifies
 the custom domain.
 
-**A CNAME at the apex is the specific thing to look for.** Adding an apex
-domain to Firebase Hosting when only the `auth` subdomain was wanted leaves
-`CNAME @` plus `_acme-challenge` behind, and a `CNAME @` **cannot legally
-coexist with the `TXT @`** that SPF or a Search Console token needs (RFC 1034 —
-a CNAME excludes every other type at that name). Registrar panels create both
-without complaint and resolution is then undefined. Remove the apex from
-Firebase Hosting → Custom domains *before* the move; keeping only
-`auth.bgbuddy.app` there is the intent. Until `CNAME @` is gone, §2.5's
-apex TXT cannot be added either.
+**A CNAME at the apex is the specific thing to look for.** A `CNAME @`
+**cannot legally coexist with the `TXT @`** that SPF or a Search Console token
+needs — RFC 1034: a CNAME excludes every other type at that name. Registrar
+panels create both without complaint, and resolution is then undefined. The
+live zone had exactly that, plus a matching `_acme-challenge` CNAME, both
+pointing at the Firebase site.
+
+**Check what actually claims such a record before assuming.** The obvious
+reading — that the apex had been added to Firebase Hosting — was wrong:
+Hosting → Domains listed only `auth.bgbuddy.app`, so both records were orphans
+from an earlier round of setup with nothing renewing against them. One glance
+at the provider's own domain list settles it, and the answer changes the work:
+an orphan needs no de-registration, a live claim does.
+
+Either way the records do not come across, and Cloudflare's scan skips an apex
+CNAME on its own. Two consequences worth knowing: the illegal `CNAME @` is also
+why the scan cannot see `TXT @` (it reads as undefined), and §2.5's apex TXT
+cannot be added until that CNAME is gone.
 
 §3.2, §3.3 and §3.5 all require the zone to be Active. Do not start them early.
 
