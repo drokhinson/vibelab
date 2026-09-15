@@ -190,17 +190,39 @@ is still days, which is why it goes first.
 
 ### 2.6 Get the client config
 
-Firebase console → **Project settings → General → Your apps → Add app → Web**.
-It gives you the config the frontend needs:
+This one is the **Firebase** console, not the GCP console — §2.3 was GCP, and
+the web-app config only exists on the Firebase side.
+
+**Project settings** (gear next to Project Overview) → **General** → scroll to
+**Your apps**. If a web app is already listed, open it and pick the **Config**
+radio rather than adding a second one. Otherwise **`</>`** → nickname
+`bgbuddy-web` → Register.
+
+**Leave "Also set up Firebase Hosting for this app" unchecked** — Hosting is
+already configured for `auth.bgbuddy.app` in §2.2, and checking it can
+provision a second site with the auth handler on only one of them.
+
+Four of the six values it prints are the ones that matter:
 
 ```js
 { apiKey, authDomain: "auth.bgbuddy.app", projectId, appId }
 ```
 
-Set `authDomain` to `auth.bgbuddy.app`, **not** the default
-`<project-id>.firebaseapp.com` — that field is what decides the host the user
-sees. `apiKey` is not a secret (it identifies the project; it authorizes
-nothing), so it can live in `config.js`.
+`authDomain` should already read `auth.bgbuddy.app` — once Hosting has a
+connected custom domain, the console substitutes it into the snippet. **Check
+it anyway.** If it still reads `<project-id>.firebaseapp.com`, override it by
+hand: that field alone decides the hostname the user sees during Google
+sign-in, and leaving it at the default wastes the whole of §2.2.
+
+`apiKey` is **not** a secret — it identifies the project and authorizes nothing
+(Authorized Domains and the provider config are what gate access), so all four
+live in `config.js` as repo **variables**, not secrets.
+
+**Do not carry `storageBucket` or `messagingSenderId`.** The first is Firebase
+Storage, and photos live on Supabase Storage today and R2 after Stage 4 — a
+third storage backend nobody reads. The second is FCM, and BoardgameBuddy does
+web push directly with its own VAPID keypair, which is why `BGB_VAPID_*` must be
+copied verbatim and never regenerated.
 
 ### 2.7 Wire it into Supabase — not optional
 
@@ -332,6 +354,17 @@ reused.
 | Name | Value |
 |---|---|
 | `BGB_API_BASE` | `https://api.bgbuddy.app` |
+| `BGB_COMING_SOON` | `true` until launch — serves the waitlist landing instead of the app |
+| `BGB_FIREBASE_API_KEY` | from §2.6 |
+| `BGB_FIREBASE_AUTH_DOMAIN` | `auth.bgbuddy.app` |
+| `BGB_FIREBASE_PROJECT_ID` | from §2.6 |
+| `BGB_FIREBASE_APP_ID` | from §2.6 |
+
+The four `BGB_FIREBASE_*` values are variables rather than secrets because none
+of them is one — see §2.6. Set **all four or none**: the workflow fails on a
+partial set, because three-of-four looks configured and breaks at sign-in. An
+empty set only warns, since the app still uses the Supabase Auth SDK until the
+frontend swap.
 
 A variable rather than a secret deliberately: it is not sensitive, and the
 backend gets re-pointed several times across this migration (shared Railway →
@@ -454,6 +487,19 @@ Actions and Railway both build it fine, which the existing shared-backend
 deploys already prove. If you hit it locally, install the rest of
 `requirements.txt` without `pywebpush`; only the push tests need it.
 
-Still to come, and not in this file: the landing view with the `COMING_SOON`
-gate, R2 (`img.bgbuddy.app`), the frontend swap from the Supabase Auth SDK to
-Firebase, and the user import. See `MIGRATION_PLAN.md`.
+Still to come, and not in this file: R2 (`img.bgbuddy.app`), the frontend swap
+from the Supabase Auth SDK to Firebase, and the user import. See
+`MIGRATION_PLAN.md`.
+
+### The two pages Google's review needs
+
+§2.4 asks for a privacy policy and terms URL, and **Google gates the brand
+review on both actually resolving.** Neither page exists yet. That makes the
+real critical path:
+
+```
+Pages live (§3.2-3.3) -> /privacy + /terms resolve -> submit §2.4 -> days of queue
+```
+
+The Search Console TXT in §2.5 can go in today, since it needs only DNS. The
+consent-screen *submission* cannot.

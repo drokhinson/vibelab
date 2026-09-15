@@ -15,7 +15,21 @@ window.APP_CONFIG = {
   // app; anything else (including unset) boots normally. Set from the
   // BGB_COMING_SOON repo variable, so going live is flipping a variable and
   // redeploying rather than a code change. ?preview=1 bypasses it — see init.js.
-  comingSoon: ${COMING_SOON:-false}
+  comingSoon: ${COMING_SOON:-false},
+  // GCP Identity Platform / Firebase Auth. Set from BGB_FIREBASE_* repo
+  // variables, none of which are secrets: apiKey identifies the project and
+  // authorizes nothing, and the other three are public identifiers. Empty
+  // until the frontend swaps off the Supabase Auth SDK (Stage 3-ALT.4) --
+  // init.js must treat a blank apiKey as "Firebase not configured" and keep
+  // using Supabase Auth, or a half-set variable silently breaks every login.
+  // storageBucket and messagingSenderId are deliberately absent: photos go to
+  // R2, and push uses this project's own VAPID keypair, not FCM.
+  firebase: {
+    apiKey: "${FIREBASE_API_KEY}",
+    authDomain: "${FIREBASE_AUTH_DOMAIN:-auth.bgbuddy.app}",
+    projectId: "${FIREBASE_PROJECT_ID}",
+    appId: "${FIREBASE_APP_ID}"
+  }
 };
 EOF
 
