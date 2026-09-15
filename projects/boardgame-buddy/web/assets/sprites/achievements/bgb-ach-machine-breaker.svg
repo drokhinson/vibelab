@@ -1,0 +1,90 @@
+<svg viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Machine Breaker badge — two Buddies over a gear split in half">
+  <title>Machine Breaker badge — two Buddies over a gear split in half</title>
+  <!-- BoardgameBuddy achievement badge. The medallion keeps its own dark
+       ground in both themes on purpose (.claude/rules/assets.md): it is a coin
+       on the table, not a mark drawn against the page. The rim colour is the
+       tier — bronze, silver, gold. -->
+  <defs>
+    <linearGradient id="machine-breaker-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0C662"/>
+      <stop offset="55%" stop-color="#E0A94A"/>
+      <stop offset="100%" stop-color="#C9922A"/>
+    </linearGradient>
+    <radialGradient id="machine-breaker-disc" cx="0.34" cy="0.26" r="0.86">
+      <stop offset="0%" stop-color="#3C2A1E"/>
+      <stop offset="100%" stop-color="#160F0A"/>
+    </radialGradient>
+    <clipPath id="machine-breaker-clip">
+      <circle cx="80" cy="80" r="70"/>
+    </clipPath>
+    <!-- The two halves are the SAME gear drawn twice, each clipped to its own
+         side of x=80 in root space and then pushed apart inside that clip — so
+         the break line stays dead straight however far the halves travel. -->
+    <clipPath id="machine-breaker-half-l">
+      <rect x="0" y="0" width="80" height="160"/>
+    </clipPath>
+    <clipPath id="machine-breaker-half-r">
+      <rect x="80" y="0" width="80" height="160"/>
+    </clipPath>
+  </defs>
+  <circle cx="80" cy="80" r="76" fill="url(#machine-breaker-disc)"/>
+  <g clip-path="url(#machine-breaker-clip)">
+    <g clip-path="url(#machine-breaker-half-l)">
+      <g transform="translate(-9 4) rotate(-9 80 108)">
+        <g transform="translate(80 108)">
+          <g fill="#8A5A32">
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(45)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(90)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(135)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(180)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(225)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(270)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(315)"/>
+          </g>
+          <circle r="21" fill="#5A3A20" stroke="#8A5A32" stroke-width="4"/>
+          <circle r="7" fill="#160F0A"/>
+        </g>
+      </g>
+    </g>
+    <g clip-path="url(#machine-breaker-half-r)">
+      <g transform="translate(9 4) rotate(9 80 108)">
+        <g transform="translate(80 108)">
+          <g fill="#8A5A32">
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(45)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(90)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(135)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(180)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(225)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(270)"/>
+            <rect x="-4.5" y="-30" width="9" height="12" rx="2.3" transform="rotate(315)"/>
+          </g>
+          <circle r="21" fill="#5A3A20" stroke="#8A5A32" stroke-width="4"/>
+          <circle r="7" fill="#160F0A"/>
+        </g>
+      </g>
+    </g>
+    <path d="M80 76 L74 94 L86 102 L78 140" fill="none" stroke="#F0C662" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(23.80 16.00) scale(0.36)">
+    <circle cx="100" cy="148" r="14" fill="url(#machine-breaker-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#machine-breaker-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#machine-breaker-gold)"/>
+    <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M78 100 Q100 124 122 100" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+    <g transform="translate(64.20 16.00) scale(0.36)">
+    <circle cx="100" cy="148" r="14" fill="url(#machine-breaker-gold)"/>
+    <rect x="84" y="158" width="32" height="22" rx="9" fill="url(#machine-breaker-gold)"/>
+    <rect x="55" y="40" width="90" height="90" rx="20" fill="url(#machine-breaker-gold)"/>
+    <circle cx="80" cy="80" r="6" fill="#1A0F0B"/>
+    <circle cx="120" cy="80" r="6" fill="#1A0F0B"/>
+    <path d="M78 100 Q100 124 122 100" stroke="#1A0F0B" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+    <path d="M36 92 Q37.1 95.9 41 97 Q37.1 98.1 36 102 Q34.9 98.1 31 97 Q34.9 95.9 36 92 Z" fill="#F0C662" opacity="0.9"/>
+    <path d="M124 92 Q125.1 95.9 129 97 Q125.1 98.1 124 102 Q122.9 98.1 119 97 Q122.9 95.9 124 92 Z" fill="#F0C662" opacity="0.9"/>
+  </g>
+  <circle cx="80" cy="80" r="72.5" fill="none" stroke="#E0A94A" stroke-width="4"/>
+  <circle cx="80" cy="80" r="65" fill="none" stroke="#E0A94A" stroke-width="1.4" opacity="0.34"/>
+</svg>
