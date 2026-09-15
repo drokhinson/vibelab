@@ -340,6 +340,32 @@ Order, and step 4 is the one that matters:
 8. **Leave the old records at the registrar.** They are inert once the
    nameservers move, and they are the written record of what was there.
 
+**Do not carry every record across — three kinds must be dropped.** The
+registrar's zone accumulates records for hosts that are moving to a different
+provider, and carrying them forward is how the apex ends up claimed by two
+services at once:
+
+| Drop | Why |
+|---|---|
+| any record at the **apex** pointing somewhere other than Pages | §3.3 writes the apex itself; a leftover CNAME there wins |
+| `_acme-challenge` for a host that is moving | it delegates certificate validation to the OLD provider, which can block the new one from issuing |
+| the registrar's own SPF (`include:spf.*.registrar-servers.com` and friends) | it authorizes a forwarder that is no longer in the path, and Email Routing writes its own — two SPF records at one name is itself broken |
+
+Carry anything that proves ownership of a host that is **staying**, which is
+easy to overlook because it is not the record doing the serving: Railway issues
+a `TXT _railway-verify.<host>` alongside the CNAME, and losing it un-verifies
+the custom domain.
+
+**A CNAME at the apex is the specific thing to look for.** Adding an apex
+domain to Firebase Hosting when only the `auth` subdomain was wanted leaves
+`CNAME @` plus `_acme-challenge` behind, and a `CNAME @` **cannot legally
+coexist with the `TXT @`** that SPF or a Search Console token needs (RFC 1034 —
+a CNAME excludes every other type at that name). Registrar panels create both
+without complaint and resolution is then undefined. Remove the apex from
+Firebase Hosting → Custom domains *before* the move; keeping only
+`auth.bgbuddy.app` there is the intent. Until `CNAME @` is gone, §2.5's
+apex TXT cannot be added either.
+
 §3.2, §3.3 and §3.5 all require the zone to be Active. Do not start them early.
 
 Records you will end up with:
