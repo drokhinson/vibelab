@@ -98,13 +98,33 @@ it:
 
 1. **Firebase console** (same project) → **Hosting** → **Add custom domain** →
    `auth.bgbuddy.app`.
-2. It gives you a TXT record to verify ownership, then an A/AAAA or CNAME target.
-   Add both in Cloudflare (§3.1). **Set these records to DNS-only (grey
-   cloud)** — Firebase provisions its own certificate and Cloudflare proxying in
-   front of that fails the challenge.
-3. Wait for Firebase to report the domain **Connected** and the certificate
+2. **Read the Record type column it shows you — it differs by domain shape, and
+   guessing costs a day.** For a **subdomain** like `auth.bgbuddy.app` the flow
+   gives a single **CNAME** whose value is the site's own hostname
+   (`<site-id>.web.app`); that one record both verifies ownership and serves the
+   handler. An **apex** domain instead gets a `hosting-site=<site-id>` **TXT**
+   to verify, followed by A/AAAA records to go live.
+
+   For the CNAME case: Host `auth`, value `<site-id>.web.app`.
+
+   **Do not leave a TXT record on the same name as the CNAME.** A CNAME may not
+   coexist with other record types at one name — resolution becomes undefined,
+   and Firebase's check can keep failing even after the CNAME is right. Most DNS
+   panels will let you create both without warning. Delete the TXT first.
+
+3. **Set the record to DNS-only (grey cloud)** if DNS is in Cloudflare. Firebase
+   provisions its own certificate and Cloudflare proxying in front of that
+   challenge fails it. This is the one record that must not be proxied.
+4. Verify the record resolves before clicking Verify:
+   `nslookup -type=CNAME auth.bgbuddy.app 8.8.8.8`. A short TTL makes this
+   minutes rather than the 24 hours the console's failure message quotes.
+5. Wait for Firebase to report the domain **Connected** and the certificate
    issued. This is usually under an hour but can take up to 24.
-4. GCP console → **Identity Platform → Settings → Authorized Domains** → add
+
+   **Never delete the record Firebase asked for**, after verification or ever.
+   It is what authorises certificate renewal, not just the initial check —
+   removing it breaks SSL months later, in a way that is miserable to diagnose.
+6. GCP console → **Identity Platform → Settings → Authorized Domains** → add
    `auth.bgbuddy.app` and `bgbuddy.app`.
 
 Firebase Hosting's free tier covers this — it is serving one auth handler, not a
@@ -239,7 +259,7 @@ Records you will end up with:
 | `bgbuddy.app` | CNAME | the Pages project | **Proxied** (orange) |
 | `www` | CNAME | the Pages project | **Proxied** |
 | `api` | CNAME | Railway's target | **DNS only** (grey) at first |
-| `auth` | per Firebase | Firebase Hosting | **DNS only** — required |
+| `auth` | **CNAME** (subdomain flow) | `<site-id>.web.app` | **DNS only** — required |
 | `@` | TXT | Google Search Console token | n/a |
 
 Pages adds the apex and `www` records itself in §3.3.
