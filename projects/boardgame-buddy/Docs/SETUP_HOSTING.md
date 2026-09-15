@@ -112,20 +112,39 @@ site.
 
 ### 2.3 Point the OAuth client at your domain
 
-**APIs & Services → Credentials** → the OAuth 2.0 Client ID that Identity
-Platform created → **Authorized redirect URIs**:
+**Check for an existing client first.** Enabling the Google provider in §2.1
+auto-creates a web OAuth client — look in **APIs & Services → Credentials** for
+*"Web client (auto created by Google Service)"* and edit that one. Creating a
+second leaves you with two client IDs and no clear answer about which is
+canonical.
+
+If you do create one: **Application type = Web application.** Not Android — the
+package-name and SHA-1-fingerprint fields only appear under Android, and
+BoardgameBuddy is a PWA with no native app. A web client must never be used for
+a native app later either; each platform gets its own (see §2.8).
+
+**Name**: `bgbuddy-web`. This is an **internal label** that users never see —
+the name on the consent screen is the App name in §2.4. Naming it per-platform
+keeps it straight once `bgbuddy-android` exists.
+
+**Authorized JavaScript origins**:
+
+```
+https://bgbuddy.app
+https://www.bgbuddy.app
+https://bgbuddy.pages.dev
+http://localhost:5500
+```
+
+**Authorized redirect URIs**:
 
 ```
 https://auth.bgbuddy.app/__/auth/handler
 ```
 
 Keep the auto-created `https://<project-id>.firebaseapp.com/__/auth/handler`
-alongside it until the rollout is confirmed. **Authorized JavaScript origins**:
-
-```
-https://bgbuddy.app
-https://www.bgbuddy.app
-```
+alongside it until the custom domain is confirmed working — it is the fallback
+while `auth.bgbuddy.app` is still provisioning.
 
 ### 2.4 Branding
 
@@ -177,6 +196,32 @@ its own auth MAU, and it is the one line that could stop this path from being
 $0 on the Supabase side.
 
 ---
+
+### 2.8 When native apps arrive
+
+Each platform needs its **own** OAuth client; the web one is not reused as the
+app's client — though it *is* still needed, because Firebase's Google Sign-In on
+Android passes the **web** client ID as its `serverClientId`.
+
+**Android** asks for two things the web client does not:
+
+- **Package name** — `app.bgbuddy`, the reverse-DNS of the domain. Choose it
+  once: it is **immutable after the first Play release**.
+- **SHA-1 certificate fingerprint** — one per signing certificate that will ever
+  produce a build, and all of them must be registered:
+
+  | Certificate | Where to get it |
+  |---|---|
+  | Debug keystore (local dev) | `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android` |
+  | Upload key | `eas credentials`, if Expo manages the keystore |
+  | **Play App Signing certificate** | Play Console → Test and release → Setup → App signing |
+
+  The last one is the trap: **Google re-signs the AAB**, so the certificate on
+  users' devices is Google's, not the upload key's. Register only the upload key
+  and Google Sign-In works perfectly in development and fails for every real
+  user in production.
+
+**iOS** asks for a bundle ID (`app.bgbuddy`) and no fingerprint.
 
 ## 3. Cloudflare — DNS and Pages
 
