@@ -6174,6 +6174,118 @@ html.bgb-ptr-armed body {
   .bgb-ptr__disc { transition-duration: 1ms; }
 }
 
+/* ── Pull to load more ───────────────────────────────────────────────────── */
+/* The bottom-edge twin of pull-to-refresh above: same disc, same numbers, same
+   two-token contract (--ptl-pull / --ptl-progress written by the module), only
+   anchored to the end of the list instead of the top. See
+   ui/pull-to-load-more.js for the JS half.
+
+   ONLY ONE HALF HERE, unlike pull-to-refresh: there is no
+   `overscroll-behavior-y` rule to match `html.bgb-ptr-armed`, because nothing
+   native owns the upward drag at the bottom of a page. Containing the
+   overscroll anyway would disarm the browser's top-of-page reload on a screen
+   that has no replacement for it — see the module header. */
+
+/* z-index 25 matches .bgb-ptr for the same reason: below the bottom nav's 40,
+   so the disc slides out from BEHIND the nav the way the refresh disc slides
+   from behind the header. Anchored on the nav's own height token plus the safe
+   area so it cannot drift from the bar it emerges from. */
+.bgb-ptl {
+  position: fixed;
+  bottom: calc(var(--bgb-nav-height) + env(safe-area-inset-bottom));
+  left: var(--bgb-col-center);   /* the column's centre, not the viewport's */
+  transform: translateX(-50%);
+  z-index: 25;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms var(--ease);
+}
+/* --bgb-nav-height is 0px wherever the nav is folded into the rail, which would
+   pin the disc flush to the bottom edge, half of it cropped as it grows. Give
+   it the gap the nav used to provide. */
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .bgb-ptl {
+  bottom: 12px;
+}
+.bgb-ptl.is-pulling,
+.bgb-ptl.is-loading { opacity: 1; }
+
+.bgb-ptl__disc {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-1);
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  box-shadow: var(--sh-2);
+  /* Parked 46px down — behind the nav — and pushed up by exactly what the
+     finger gave it, so the disc tracks the thumb rather than easing after it. */
+  transform: translateY(calc(46px - var(--ptl-pull, 0px)));
+  transition: transform 240ms var(--ease), color 160ms var(--ease),
+              border-color 160ms var(--ease);
+}
+/* No transition WHILE the finger is down: an eased transform lags the thumb,
+   which reads as the gesture not being registered. The snap back gets the
+   transition because by then the class is gone. */
+.bgb-ptl.is-pulling .bgb-ptl__disc { transition: none; }
+
+/* Armed — releasing now will load. The arrow has swept from pointing down (the
+   direction the rows are coming from) round to pointing the way the thumb is
+   travelling, which is the actual signal; the accent just confirms it. */
+.bgb-ptl.is-armed .bgb-ptl__disc,
+.bgb-ptl.is-loading .bgb-ptl__disc {
+  color: var(--accent);
+  border-color: var(--accent-quiet);
+}
+
+/* Both glyphs live in the disc and CSS picks one, so the swap costs no icon
+   re-hydration mid-gesture. The rotation is on the glyph rather than the disc
+   so the disc's own translate is untouched — a transform on the parent would
+   compose with it. */
+.bgb-ptl__arrow {
+  transform: rotate(calc(var(--ptl-progress, 0) * 180deg));
+}
+.bgb-ptl__spin { display: none; }
+.bgb-ptl.is-loading .bgb-ptl__arrow { display: none; }
+.bgb-ptl.is-loading .bgb-ptl__spin {
+  display: block;
+  animation: bgb-ptr-spin 720ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The spin is the only signal that a request is out, so it slows rather than
+     stops — the disc itself carries no other "working" state. */
+  .bgb-ptl.is-loading .bgb-ptl__spin { animation-duration: 2400ms; }
+  .bgb-ptl__disc { transition-duration: 1ms; }
+}
+
+/* The strip at the end of the list that says the gesture is there. It is a real
+   <button> wearing .shelf-more, not a caption: the gesture is touch-only, and a
+   mouse, a keyboard and a screen reader all still need the way forward. Quiet
+   by design — it reads as the end of the list rather than as a CTA — and the
+   64px floor .shelf-more already sets covers the 44px tap target. */
+.shelf-more--pull {
+  display: flex;
+  width: 100%;
+  background: none;
+  border: 0;
+  /* `font: inherit` to drop the UA button font entirely, then .shelf-more's own
+     scale back on top — the shorthand resets font-size with everything else, so
+     without the line after it this one strip reads a size larger than every
+     other .shelf-more in the app. */
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--polaroid-muted, #8B7E68);
+  cursor: pointer;
+}
+.shelf-more--pull:active { color: var(--accent); }
+@media (hover: hover) {
+  .shelf-more--pull:hover { color: var(--accent); }
+}
+.shelf-more--pull svg { opacity: 0.7; }
+
 /* ── Unified status tag (every game tile) ─────────────────────────────────── */
 .status-tag {
   display: inline-flex; align-items: center; gap: 0.25rem;
