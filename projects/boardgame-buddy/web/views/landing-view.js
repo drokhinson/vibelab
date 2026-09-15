@@ -116,6 +116,17 @@
           <p class="text-base-content/50 text-xs mt-8">
             One email when it opens. Nothing else, ever.
           </p>
+
+          <!-- Not decoration: Google gates the OAuth brand review on these two
+               URLs being reachable, and this is the only page live before
+               launch. init.js lets both routes through the COMING_SOON gate. -->
+          <nav class="text-base-content/50 text-xs mt-6">
+            <a class="link" href="/privacy"
+               onclick="window.router.go('privacy'); return false;">Privacy</a>
+            <span aria-hidden="true"> · </span>
+            <a class="link" href="/terms"
+               onclick="window.router.go('terms'); return false;">Terms</a>
+          </nav>
         </div>`;
     }
   }

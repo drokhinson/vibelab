@@ -1065,6 +1065,13 @@
                   ${this._deleting ? "disabled" : ""} onclick="window.handleLogout()">
             <i data-icon="log-out" class="w-4 h-4"></i> Log out
           </button>
+          <p class="settings-account__note">
+            <a class="link" href="/privacy"
+               onclick="window.router.go('privacy'); return false;">Privacy Policy</a>
+            <span aria-hidden="true"> · </span>
+            <a class="link" href="/terms"
+               onclick="window.router.go('terms'); return false;">Terms of Service</a>
+          </p>
           <div class="settings-account__danger">
             <button class="btn btn-sm settings-account__delete"
                     ${this._deleting ? "disabled" : ""}

@@ -494,12 +494,35 @@ from the Supabase Auth SDK to Firebase, and the user import. See
 ### The two pages Google's review needs
 
 §2.4 asks for a privacy policy and terms URL, and **Google gates the brand
-review on both actually resolving.** Neither page exists yet. That makes the
-real critical path:
+review on both actually resolving.** That makes the real critical path:
 
 ```
 Pages live (§3.2-3.3) -> /privacy + /terms resolve -> submit §2.4 -> days of queue
 ```
 
 The Search Console TXT in §2.5 can go in today, since it needs only DNS. The
-consent-screen *submission* cannot.
+consent-screen *submission* cannot — it needs the pages on a live host.
+
+Both now exist, at `https://bgbuddy.app/privacy` and `https://bgbuddy.app/terms`
+(`web/views/privacy-view.js` and `terms-view.js`, sharing `legal-view.js`). Two
+things about them:
+
+- **They resolve while `BGB_COMING_SOON` is on.** The pre-launch gate in
+  `init.js` lets exactly these two routes through instead of redirecting to the
+  waitlist. Without that, the reviewer would see the waitlist and read it as
+  "no policy". Do not "simplify" that branch.
+- **`terms-view.js` will not publish cleanly until `JURISDICTION` is set.** It
+  is empty on purpose and the page renders a warning banner where the
+  governing-law clause belongs, so an unset value is visible rather than
+  silent. Set it to the state or country whose law applies.
+
+Two facts in the privacy policy are disclosures of current behaviour rather
+than of intent, and both should be **fixed in code** rather than left described:
+
+| Disclosed | The code | Fix |
+|---|---|---|
+| Play photos are readable by anyone with the link | `play_routes.py` uses `get_public_url()` on an unguessable `uuid4` path | signed URLs, or a private bucket behind the API |
+| Deleting a play or an account leaves the image file | `delete_play` / `delete_profile` remove rows only; no `storage.remove()` exists anywhere | delete the object alongside the row |
+
+When either lands, simplify the matching paragraph in §4 or §7 of the policy —
+not before.
