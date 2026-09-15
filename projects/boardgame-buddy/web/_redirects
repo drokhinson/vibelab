@@ -1,0 +1,15 @@
+# Cloudflare Pages routing. The app is a History-API SPA: every view has a real
+# path (/privacy, /play/{code}, /profile/collection), and none of those paths is
+# a file on disk. Without this line Pages 404s all of them — a refresh, a
+# bookmark, a shared session link, and the two legal URLs Google's brand review
+# has to load.
+#
+# vercel.json's "rewrites" block does the same job on Vercel and Pages does NOT
+# read it, so the rule has to exist twice while both hosts are live. Keep them
+# in step; deleting vercel.json is part of the Vercel teardown, not before.
+#
+# 200, not 301/302: the browser must keep the URL it asked for so the router can
+# resolve it. A redirect would rewrite the address bar to / and lose the route.
+# Pages serves a real static asset first and only falls through to this, so the
+# bundle, assets/ and config.js are unaffected.
+/*  /index.html  200
