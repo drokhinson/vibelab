@@ -28,18 +28,30 @@
  * would fire once, at signup, and leave a user created during an outage
  * broken forever.
  */
-const { setGlobalOptions } = require("firebase-functions/v2");
+// IMPORT THE NARROW PATH, NEVER `firebase-functions/v2`. That barrel eagerly
+// requires every v2 provider, including firestore.js -> firebase-admin's
+// firestore -> `@google-cloud/firestore`, which is an OPTIONAL peer of
+// firebase-admin. A local `npm install` pulls optional peers in, so the module
+// loads on a laptop and in the CLI's own source analysis; the deployed image
+// installs without them, so it dies at load with:
+//
+//   Error: Cannot find module '@google-cloud/firestore'
+//   Require stack: ... firebase-functions/lib/v2/index.js - /workspace/index.js
+//
+// which Cloud Run reports as "the user-provided container failed to start and
+// listen on the port" — a message that names neither the module nor the
+// import. Cost: three failed deploys. `firebase-functions/v2/identity` pulls
+// in none of it.
 const { beforeUserSignedIn } = require("firebase-functions/v2/identity");
-
-// Blocking functions only run in certain regions, and an unset region picks up
-// whatever global default the CLI has. Pinned so a deploy cannot land somewhere
-// Identity Platform will not call.
-setGlobalOptions({ region: "us-central1" });
 
 const ROLE_CLAIM = "role";
 const ROLE_VALUE = "authenticated";
 
-exports.supabaseRole = beforeUserSignedIn((event) => {
+// Region as a per-function option rather than setGlobalOptions(), which lives
+// in that same poisoned barrel. Blocking functions only run in certain
+// regions, and an unset region takes whatever default the CLI holds, so it is
+// pinned either way.
+exports.supabaseRole = beforeUserSignedIn({ region: "us-central1" }, (event) => {
   try {
     // `event.data` is optional in the SDK's own types, so it is read
     // defensively rather than trusted.

@@ -199,7 +199,7 @@ Blocking functions**. `supabaseRole` should be listed against *Before sign-in*.
 **should be committed** (`.gitignore` has an exception for it), so a later
 deploy installs the same versions this one did.
 
-### B3b. If the first deploy fails with "container failed to start"
+### B3b. If the deploy fails with "container failed to start"
 
 ```
 Could not create or update Cloud Run service supabaserole, Container
@@ -208,43 +208,81 @@ the port defined provided by the PORT=8080 environment variable within the
 allocated timeout.
 ```
 
-**Run the deploy again before debugging anything.** On a project that has
-never had a Cloud Function, that same deploy enables five APIs on the way
-through — `artifactregistry`, `cloudbuild`, `run`, `eventarc`,
-`firebaseextensions` — and mints service identities for two of them. Those
-grants propagate asynchronously, so the build can finish and produce an image
-that the Cloud Run service account cannot yet pull. The container then never
-starts, and the symptom is a healthcheck timeout that says nothing about
-permissions. A retry a few minutes later usually just works, and the CLI is
-idempotent.
-
-It is worth knowing that the code is almost certainly not the problem here:
-the deploy's own `Loading and analyzing source code` step (`Serving at port
-8172` in its output) already loaded the module without error, and that step is
-the one that catches a broken `index.js`.
-
-If a second attempt fails the same way, get the actual reason from the
-container rather than guessing — the Logs URL the CLI printed, or:
+**That message is about a port and is almost never about a port.** It is what
+Cloud Run says when the module throws while loading, and it names neither the
+module nor the reason. Do not retry it more than once and do not guess: read
+the container's own log, which says exactly what happened.
 
 ```
 gcloud run services logs read supabaserole --region us-central1 --limit 50 --project boardgamebuddy-508716
 ```
 
-The two causes worth knowing:
+(Cloud Shell has `gcloud` already. Or use the Logs URL the CLI printed.)
 
-* **A missing role on the compute service account.** A first-ever deploy
-  sometimes leaves `<project-number>-compute@developer.gserviceaccount.com`
-  without **Artifact Registry Reader**, so it cannot pull its own image. Grant
-  it in IAM and redeploy.
-* **The runtime.** `functions/package.json` pins `engines.node` to `22`.
-  It was briefly `20`, which the deploy itself warned about —
-  *"Runtime Node.js 20 was deprecated on 2026-04-30 and will be decommissioned
-  on 2026-10-30"* — so a function deployed on it would have stopped building
-  within weeks. If you see that warning again, the pin has regressed.
+**The one that has already happened here**, on the first three deploys:
 
-Node 22 also means a local `npm install` on Node 24 prints
-`EBADENGINE ... required: { node: '22' }`. Harmless: `engines.node` here
-selects the **cloud** runtime, and is not a constraint on your machine.
+```
+Error: Cannot find module '@google-cloud/firestore'
+Require stack:
+  .../firebase-admin/lib/firestore/index.js
+  .../firebase-functions/lib/common/providers/firestore.js
+  .../firebase-functions/lib/v2/providers/firestore.js
+  .../firebase-functions/lib/v2/index.js
+  /workspace/index.js
+```
+
+`index.js` imported `firebase-functions/v2` for `setGlobalOptions`. That
+barrel eagerly requires **every** v2 provider, Firestore included, which
+reaches `@google-cloud/firestore` — an *optional* peer of `firebase-admin`.
+A local `npm install` resolves optional peers, so the module loads on a laptop
+**and in the CLI's own `Loading and analyzing source code` step**; the
+deployed image installs without them and dies at load.
+
+That is why the local checks all passed while the deploy failed three times,
+and it is the lesson worth keeping: **in `functions/`, import the narrow path
+(`firebase-functions/v2/identity`) and never the barrel.** Region is a
+per-function option for the same reason — `setGlobalOptions` lives in the
+barrel.
+
+Two others worth knowing if the log says something different:
+
+* **A first-ever deploy on the project** enables five APIs and mints service
+  identities in the same run, and those grants propagate asynchronously. If
+  the log shows an image-pull or permission failure rather than a module
+  error, grant `<project-number>-compute@developer.gserviceaccount.com` the
+  **Artifact Registry Reader** role and redeploy.
+* **The runtime.** `engines.node` is pinned to `22`. It was briefly `20`,
+  which the deploy itself warned about — *"deprecated on 2026-04-30 and will
+  be decommissioned on 2026-10-30"*. If that warning reappears, the pin has
+  regressed. A local `npm install` on Node 24 printing
+  `EBADENGINE ... required: { node: '22' }` is harmless: that field selects
+  the **cloud** runtime and constrains nothing on your machine.
+
+### B3c. "Deploy complete!" can be a lie
+
+```
+i  functions: Skipping the deploy of unchanged functions.
++  functions[supabaseRole(us-central1)] Skipped (No changes detected)
++  Deploy complete!
+```
+
+The CLI compares your source against what it last **uploaded**, not against
+whether the deployed revision is *healthy*. After a failed deploy, an
+unchanged retry prints this and exits 0 while the broken revision stays
+exactly as broken. `firebase functions:list` showing the function proves it is
+**registered**, not that it serves.
+
+So after any failed deploy, change the source (or
+`firebase functions:delete supabaseRole --region us-central1`) before
+retrying, and confirm success by the deploy actually saying
+`creating`/`updating` — then by B4.
+
+> **A registered blocking function whose service will not start is the worst
+> of the three states.** Identity Platform has been told to call it on every
+> sign-in. If sign-in starts failing after a deploy, clear the *Before
+> sign-in* function in Firebase console → Authentication → Settings →
+> Blocking functions immediately; it takes effect at once and deletes
+> nothing. Fix the deploy afterwards.
 
 ### B4. Verify with a throwaway account
 
