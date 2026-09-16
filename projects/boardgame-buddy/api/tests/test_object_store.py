@@ -173,6 +173,42 @@ def test_a_jurisdiction_that_is_not_a_hostname_label_disables_r2(monkeypatch, ba
         object_store.reload()
 
 
+def test_put_failure_names_the_bucket_and_jurisdiction(monkeypatch):
+    """An AccessDenied with no context is three different bugs at once."""
+    for name, value in R2_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("R2_JURISDICTION", "us")
+    object_store.reload()
+
+    class _Boom:
+        def put_object(self, **kwargs):
+            raise RuntimeError("Access Denied")
+
+    monkeypatch.setattr(object_store, "_s3", lambda: _Boom())
+    try:
+        with pytest.raises(object_store.ObjectStoreError) as err:
+            object_store.put(object_store.PLAYS, "uid-1/x.jpg", b"x", "image/jpeg")
+        message = str(err.value)
+        assert "bucket=bgb-plays" in message
+        assert "jurisdiction=us" in message
+    finally:
+        object_store.reload()
+
+
+def test_put_failure_says_default_when_no_jurisdiction_is_set(configured, monkeypatch):
+    """`(default)` is the reading that means "the env var is missing"."""
+
+    class _Boom:
+        def put_object(self, **kwargs):
+            raise RuntimeError("Access Denied")
+
+    monkeypatch.setattr(object_store, "_s3", lambda: _Boom())
+    with pytest.raises(object_store.ObjectStoreError) as err:
+        object_store.put(object_store.GAMES, "13_cover.jpg", b"x", "image/jpeg")
+    assert "jurisdiction=(default)" in str(err.value)
+    assert "bucket=bgb-games" in str(err.value)
+
+
 def test_public_url_is_the_base_plus_the_key(configured):
     assert (
         object_store.public_url(object_store.PLAYS, "uid-1/deadbeef.jpg")
