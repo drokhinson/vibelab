@@ -86,9 +86,11 @@ origins the app's JS is served from.
 https://bgbuddy.app,https://www.bgbuddy.app,https://bgbuddy.pages.dev,http://localhost:5500,http://127.0.0.1:5500
 ```
 
-During the Vercel→Pages window, **keep the old Vercel origin in the list** until
-that project is deleted, or the first client on stale DNS gets an opaque
-"Failed to fetch". Drop it afterwards.
+The old Vercel origin used to belong here too, so that a client on stale DNS
+got a debuggable CORS error rather than an opaque "Failed to fetch". It was
+dropped at the cutover: that origin now serves a static notice
+(`projects/boardgame-buddy/moved/`) which makes no API calls, so nothing on it
+can produce a preflight.
 
 ## 5. Not a secret, and not normally set
 

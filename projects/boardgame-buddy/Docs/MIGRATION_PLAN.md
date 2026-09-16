@@ -12,6 +12,36 @@
 >
 > Written 2026-09-10 against `9a6d60b`.
 
+## Status — 2026-09-16
+
+**Stages 1, 2, 2b and 3-ALT are done and live.** The app serves from Cloudflare
+Pages at `bgbuddy.app`, the API from its own Railway service at
+`api.bgbuddy.app`, and auth from GCP Identity Platform at `auth.bgbuddy.app`
+with all 23 accounts imported under their original Supabase UUIDs. The
+pre-launch gate and the landing view are removed; the old Vercel origin serves
+a static notice. Console-by-console detail, including every correction that
+doing it for real produced, is in `SETUP_HOSTING.md`.
+
+**Two pieces of the migration are deliberately still in the tree**, and both
+are the rollback path rather than leftovers:
+
+* `api/jwt_auth.py` verifies **both** issuers, Supabase and Identity Platform.
+* `web/domain/auth.js` keeps its Supabase Auth branch, selected when the four
+  `BGB_FIREBASE_*` variables are unset.
+
+Together they mean rollback is unsetting four repo variables and re-running the
+deploy. **Remove them when that stops being true**, which is when post-cutover
+signups exist only in Identity Platform in numbers you would not hand-migrate
+back — rolling back would orphan those accounts, so the escape hatch has
+already stopped working and is then only extra verifier surface. Delete both
+sides in one commit, with `test_jwt_auth_dual_issuer.py` reduced to the
+Identity Platform cases.
+
+**Still open:** Email Routing (§3.8 of `SETUP_HOSTING.md`), the waitlist table's
+launch email, Stage 4 (R2 on `img.bgbuddy.app`), and the two photo gaps the
+privacy policy discloses — play photos readable by anyone with the link, and
+image files surviving the row that referenced them.
+
 ---
 
 ## 0. Context brief

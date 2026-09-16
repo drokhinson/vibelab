@@ -25,6 +25,33 @@
   <base href="/" />
   <title>Boardgame Buddy</title>
   <link rel="icon" type="image/svg+xml" href="assets/brand/bgb-logo.svg" />
+
+  <!-- Link preview. The app is shared by URL constantly — a session link into
+       a group chat is a core flow — and with none of this a paste renders as a
+       bare address with no card at all.
+       Absolute URLs, not relative: a scraper resolves these against nothing.
+       A raster og:image, not the SVG beside it: Facebook, X, iMessage, Slack
+       and Discord all decline an SVG preview, most of them silently.
+       Two things worth knowing before editing these.
+       * assets/ is immutable for a year (_headers), and scrapers cache
+         aggressively on top of that, so REPLACING the banner in place will not
+         change the card. Ship a new filename and point og:image at it.
+       * og:url is the site root on every route. This is a static SPA, so the
+         scraper that fetches /play/ABCD gets the same index.html the router
+         gets — there is no per-play card without rendering one at the edge.
+         The generic card is the honest answer, not a placeholder. -->
+  <meta name="description" content="A log for the games you actually played. Track plays, keep a reference guide your table can read mid-game, and see what your buddies have been playing." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Boardgame Buddy" />
+  <meta property="og:title" content="Boardgame Buddy" />
+  <meta property="og:description" content="A log for the games you actually played." />
+  <meta property="og:url" content="https://bgbuddy.app/" />
+  <meta property="og:image" content="https://bgbuddy.app/assets/brand/bgb-og-banner.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Boardgame Buddy — a log for the games you actually played." />
+  <meta name="twitter:card" content="summary_large_image" />
   <!-- Installable PWA. The point isn't the home-screen icon, it's that sw.js
        precaches the shell so the app opens with no signal — which is what
        makes offline hosting work for someone who closed the tab. -->
