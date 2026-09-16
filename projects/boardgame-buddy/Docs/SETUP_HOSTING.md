@@ -608,6 +608,23 @@ Steps 1 and 14 are a matched pair. If you skip step 1, you are relying on
 finishing steps 11-13 faster than Railway finishes a deploy, which is not a
 plan.
 
+### The Vercel bridge, and why there is no dress rehearsal
+
+`deploy-bgb-web.yml` carries a `workflow_dispatch` trigger, but that does
+**not** let you deploy Pages before merging. GitHub only offers the Run
+workflow button for a workflow whose file exists on the *default* branch, so
+while this work sits on a feature branch the workflow is invisible in the
+Actions list — it has never run and it is not on `main`. Step 11 is therefore
+the first Pages deploy, with no rehearsal.
+
+`deploy-bgb-web-vercel.yml` is the counterweight: the same four build steps
+ending at Vercel instead of Pages, dispatch-only. After step 11 it is the only
+path left that can ship a frontend fix to the old host, because that same merge
+removes boardgame-buddy from `deploy-frontend.yml`'s change detection and moves
+the bundler to `projects/boardgame-buddy/scripts/`. It must never gain a push
+trigger — two hosts building the same commit is not a fallback, it is a
+coin flip. Delete it at step 15 alongside the Vercel project.
+
 ### One local-only caveat
 
 `pip install` of `pywebpush` fails in some sandboxes with
