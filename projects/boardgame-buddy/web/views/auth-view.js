@@ -6,9 +6,43 @@
   class AuthView extends window.View {
     constructor() {
       super("auth");
+      this._resetFormState();
+    }
+
+    /**
+     * Single source of truth for this screen's transient state, per
+     * .claude/rules/web-frontend.md § Async state — called from the
+     * constructor, the top of onMount, and onUnmount.
+     *
+     * Nothing here may outlive the visit, and each field has its own reason:
+     *
+     *   • `_oauthBusy` disables the provider buttons, and the app comes BACK
+     *     to this screen on paths that are nothing to do with the tap that set
+     *     it (the boot watchdog, a rejected token, a later sign-out). Left
+     *     set, it is two permanently dead buttons and no way in but a reload.
+     *   • `_email` is the address the LAST person typed. This screen is where
+     *     a shared tab changes hands, so it does not carry over.
+     *   • `_error` and `_mode` are one attempt's; a stale "check your email"
+     *     has no business greeting the next arrival.
+     */
+    _resetFormState() {
       this._mode = "login";
       this._error = null;
       this._email = "";
+      // True from the tap that opens the Google popup until we know what came
+      // of it. The provider buttons are the only thing it disables, and that
+      // is the point: a second tap while the first popup is open is what
+      // Firebase reports as auth/cancelled-popup-request, which kills the
+      // sign-in already in progress.
+      this._oauthBusy = false;
+    }
+
+    onMount() {
+      this._resetFormState();
+    }
+
+    onUnmount() {
+      this._resetFormState();
     }
 
     setError(msg) {
@@ -94,7 +128,7 @@
            </div>`
         : "";
       const oauth = window.oauthButtons({
-        disabled: configMissing,
+        disabled: configMissing || this._oauthBusy,
         onGoogle: "window.authView.oauth('google')",
         onApple: "window.authView.oauth('apple')",
       });
@@ -140,21 +174,65 @@
       this.render();
     }
 
+    /**
+     * THE POPUP CLOSING IS NOT THE SIGN-IN FINISHING, and this method's whole
+     * job is to stop the screen from saying otherwise.
+     *
+     * signInWithPopup resolves the moment the credential comes back over
+     * postMessage. What happens after that is init.js's auth state listener:
+     * bind the cache, and — for an account this device has never seen, which
+     * is every new signup — wait on /bootstrap before it routes anywhere. This
+     * method used to resolve into that gap and do nothing, so the popup
+     * vanished and the login form was simply still there, complete with a live
+     * "Continue with Google" button. It reads as a failure, and the obvious
+     * response to it (press the button again) is the one thing that actually
+     * can break the sign-in: the second popup cancels the first.
+     *
+     * So the form hands over to the boot loader the instant a credential
+     * exists, as the email LOGIN path already did (its signup twin had the
+     * same gap and is fixed below). Nothing here waits for the profile — the
+     * splash is the screen that covers that leg, and every
+     * way out of it is already handled (routeAfterBoot on success, /auth on a
+     * genuinely bad token, the boot watchdog if the whole thing stalls).
+     */
     async oauth(provider) {
+      if (this._oauthBusy) return;
       this._error = null;
       if (!window.BgbAuth || !window.BgbAuth.backend) {
         this.setError("Auth is not configured.");
         return;
       }
+      this._oauthBusy = true;
+      // Disabling the buttons costs a full re-render, which rebuilds the email
+      // field — so carry what is in it across, the way submit() does. Somebody
+      // who typed an address and then chose Google should not come back from a
+      // cancelled popup to an empty form.
+      const typed = document.getElementById("auth-email");
+      if (typed) this._email = typed.value;
+      this.render();
+      let outcome;
       try {
         // Google is the only provider the auth screen offers, and the Firebase
         // path is Google-specific (GoogleAuthProvider), so anything else would
         // silently sign the user in with the wrong one rather than failing.
         if (provider !== "google") throw new Error(`Unsupported provider: ${provider}`);
-        await window.BgbAuth.signInWithGoogle();
+        outcome = await window.BgbAuth.signInWithGoogle();
       } catch (e) {
+        this._oauthBusy = false;
         this.setError(this._authErrorMessage(e, `${provider} sign-in failed`));
+        return;
       }
+      // A shut popup is not an error and not a sign-in. Give the buttons back
+      // and say nothing: the user closed a window they opened.
+      if (outcome === "cancelled") {
+        this._oauthBusy = false;
+        this.render();
+        return;
+      }
+      // "signed-in", or "redirecting" and this document is on its way out.
+      // Either way the form has nothing left to offer. onUnmount clears the
+      // latch as the router swaps the screens.
+      window.router.go("splash");
     }
 
     async submit(event) {
@@ -183,9 +261,19 @@
             this._mode = "login";
             this.setError("An account with this email already exists. Sign in with your existing password to link Boardgame Buddy.");
           } else if (session) {
-            // Signed in immediately — no email confirmation configured. The
-            // auth state listener lands the user on the feed.
-            this.setError(null);
+            // Signed in immediately — no email confirmation configured.
+            //
+            // Hand over to the loader rather than waiting for the auth state
+            // listener to land the user on the feed, for the same reason the
+            // Google path does (see oauth): the listener's first move for an
+            // account this device has never seen is to wait on /bootstrap,
+            // and a brand-new signup is never a device that has seen it. This
+            // branch used to fall through to the `finally` below, which put
+            // the Sign Up button back exactly as it was — on the longest wait
+            // in the app, in front of the person least able to tell that it
+            // had worked.
+            this._error = null;
+            window.router.go("splash");
           } else {
             // Truly new email + email confirmation is enabled.
             this._mode = "login";

@@ -265,6 +265,24 @@
      *
      * Redirect stays as the fallback because a popup blocker, or an embedded
      * webview with no window.open, leaves no other route.
+     *
+     * WHAT IT RETURNS, AND WHY IT HAS TO RETURN ANYTHING. This used to resolve
+     * with nothing on all three of its outcomes, which made a credential in
+     * hand indistinguishable from a popup the user shut. The caller could
+     * therefore do nothing but re-render the form it was already showing — so
+     * the popup closed, the sign-in screen came back, and the person who had
+     * just signed in successfully was looking at the login button again while
+     * /bootstrap ran. Several of them pressed it.
+     *
+     *   "signed-in"    the credential is in hand. The auth state listener in
+     *                  init.js is already running; the caller's job is to get
+     *                  off the form and let the loader cover the rest.
+     *   "cancelled"    the user shut the popup, or a second click superseded
+     *                  the first. Nothing is coming. Stay where you are.
+     *   "redirecting"  this document is navigating away. Whatever the caller
+     *                  does next is moot, and it must not be "show an error".
+     *
+     * @returns {Promise<"signed-in"|"cancelled"|"redirecting">}
      */
     async signInWithGoogle() {
       if (_backend === "firebase") {
@@ -278,22 +296,23 @@
             code === "auth/operation-not-supported-in-this-environment"
           ) {
             await _fbAuth.signInWithRedirect(provider);
-            return;
+            return "redirecting";
           }
           // A user who closes the popup has not failed at anything; swallow it
           // rather than painting an error under the button they just dismissed.
           if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
-            return;
+            return "cancelled";
           }
           throw e;
         }
-        return;
+        return "signed-in";
       }
       const { error } = await window.supabaseClient.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: window.location.origin },
       });
       if (error) throw error;
+      return "redirecting";
     },
 
     /**
