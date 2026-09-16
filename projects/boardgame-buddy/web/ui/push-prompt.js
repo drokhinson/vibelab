@@ -164,10 +164,10 @@
           <i data-icon="x" class="w-5 h-5"></i>
         </button>
         <span class="bgb-pushask__mark"><i data-icon="bell" class="w-7 h-7"></i></span>
-        <div class="polaroid-popup__title" id="bgb-pushask-title">Don't miss your table</div>
+        <div class="polaroid-popup__title" id="bgb-pushask-title">Turn on notifications</div>
         <p class="polaroid-popup__body bgb-pushask__blurb">
           Get a nudge when a buddy adds you to a play, sends you a request or
-          accepts yours. You can change how much you hear — or switch it off
+          accepts yours. You can adjust which notifications you receive — or switch them off
           again — in Settings.
         </p>
         <div class="polaroid-popup__actions bgb-pushask__actions">
@@ -234,9 +234,24 @@
     _el = _render();
   }
 
-  /** Re-read the three states the ask depends on, then re-run the gates. */
+  /**
+   * Re-read the three states the ask depends on, then re-run the gates.
+   *
+   * The sign-out check is FIRST, and it is load-bearing: the `user` subscriber
+   * this runs from also fires on store.reset(), which is a step of logging out
+   * and of deleting an account. BgbPush.state() reads /push/config through the
+   * API client, and by that point window.session is already null — so the
+   * request went out with no Authorization header and came back 401, in the
+   * console, on every sign-out. _shouldShow() does test _authed(), but it runs
+   * AFTER this fetch resolves, which is too late to not have made it.
+   *
+   * The last read is dropped with it rather than left standing: whoever signs
+   * in next on this device gets asked from their own state, not the previous
+   * account's.
+   */
   function _readState() {
     if (!window.BgbPush) return;
+    if (!_authed()) { _state = null; return; }
     window.BgbPush.state().then(
       (st) => { _state = st; _sync(); },
       // A failed read is "we don't know", which is not a reason to ask: the

@@ -17,6 +17,17 @@
 # hash of the contents, so a changed file is a different URL. Nothing else at
 # the root is named bgb-*.
 
+# NO Cross-Origin-Opener-Policy HERE, DELIBERATELY. Google sign-in runs
+# signInWithPopup against auth.bgbuddy.app (domain/auth.js explains why popup
+# and not redirect), and the credential comes back over postMessage from that
+# popup. COOP: same-origin severs the opener relationship that carries it, so
+# adding one in a hardening pass would break sign-in on every browser.
+# Chrome logs "Cross-Origin-Opener-Policy policy would block the window.close
+# call" during that flow regardless: it comes from Firebase's own auth handler
+# closing its window, on an origin whose headers are Firebase Hosting's to
+# send. It is a console warning, not a failure — the popup closes and the
+# sign-in completes.
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

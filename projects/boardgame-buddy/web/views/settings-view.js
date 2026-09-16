@@ -12,13 +12,41 @@
   class SettingsView extends window.View {
     constructor() {
       super("settings");
-      this._adminFormOpen = false;
-      this._adminPromoting = false;
-      this._adminError = null;
 
       // Admin queue counts live in the store (domain/admin-review.js), not on
       // this view: the gear's dot needs them too, and it is painted by
       // init.js while Settings is not even mounted.
+      //
+      // The BGG comparison and syncs live in domain/bgg-sync-flow.js: they
+      // outlive this screen, so a sync keeps running once the flow is closed.
+      //
+      // Everything this screen owns is one account's or one visit's, so it is
+      // all owned by _resetFormState() and initialised from there.
+      this._resetFormState();
+    }
+
+    /**
+     * Single source of truth for this screen's transient state, per
+     * .claude/rules/web-frontend.md § Async state — called from the
+     * constructor, the top of onMount, and onUnmount.
+     *
+     * This view is a singleton (init.js builds one per tab) and logging out is
+     * a route change, not a reload, so every field below outlives both the
+     * visit and the ACCOUNT unless something drops it. Two ways that bit:
+     *
+     *   • `_deleting` is set between the confirm and the sign-out that follows
+     *     a successful delete, and that path used to end at the sign-out with
+     *     the flag still up. The next account on the tab opened Settings to a
+     *     disabled "Deleting…" button and a Log out it could not click.
+     *   • `_bgg` and `_imports` are one account's BGG handle and one account's
+     *     import history. onMount refetches both, but render() runs first, so
+     *     the frame after a switch painted the PREVIOUS account's.
+     */
+    _resetFormState() {
+      // The admin-key escalation form, shown only to non-admins.
+      this._adminFormOpen = false;
+      this._adminPromoting = false;
+      this._adminError = null;
 
       this._bgg = null;
       this._bggLoading = false;
@@ -30,9 +58,6 @@
       // on and says so: a user who has just asked for something permanent
       // must not be left unsure whether it happened.
       this._deleting = false;
-
-      // The BGG comparison and syncs live in domain/bgg-sync-flow.js: they
-      // outlive this screen, so a sync keeps running once the flow is closed.
 
       // Past imports (migration 007). null = not loaded yet, so the section is
       // absent rather than flashing an empty card on the first paint.
@@ -47,9 +72,13 @@
       // True while a tier change is in flight. Disables the segments so a
       // double-tap cannot race two permission prompts.
       this._pushBusy = false;
+
+      // True while the "Refresh cached data" button is working.
+      this._cacheRefreshing = false;
     }
 
     async onMount() {
+      this._resetFormState();
       this.listen("user", () => this.render());
       // A background flush (boot, `online`, tab focus) can drain the queue
       // while this screen is open; connectivity returning also swaps the
@@ -94,6 +123,10 @@
       // Re-arm whatever was still running when the user last left. Idempotent
       // and cheap when there is nothing to resume.
       if (window.BggSyncFlow) window.BggSyncFlow.resume();
+    }
+
+    onUnmount() {
+      this._resetFormState();
     }
 
     async _loadBggStatus() {
@@ -1119,6 +1152,12 @@
         });
         return;
       }
+      // Cleared on the way out, not left standing — see _resetFormState for
+      // what a latch surviving the sign-out did to the next account. Cleared
+      // HERE as well as there because this is the one path that sets it and
+      // then navigates: nothing about the fix should depend on which screen
+      // the router happens to unmount next.
+      this._deleting = false;
       // The row is gone but this device still holds a token that looks valid
       // and a cache full of the account's data. handleLogout is what clears
       // both and returns to /auth — deleting without it would leave the app
