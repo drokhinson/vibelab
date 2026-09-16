@@ -560,8 +560,23 @@ v=DMARC1; p=reject; rua=mailto:dev.rokhinson@gmail.com
 
 `p=reject` is the correct posture for a domain with no legitimate sender — it
 tells every receiver to discard mail claiming to be from `bgbuddy.app`, which is
-the whole spoofing surface of a brand-new domain. Cloudflare's **DMARC
-Management** wizard in the same Email panel writes it for you.
+the whole spoofing surface of a brand-new domain.
+
+Cloudflare's **DMARC Management** wizard, one item below Email Routing in the
+same **Email** section, writes the record and gives you a dashboard of who is
+sending as the domain. Two notes on it:
+
+* **Run it after Email Routing is enabled**, not before. It ingests the
+  aggregate reports through a routing rule, so with routing off it has nowhere
+  to deliver them.
+* It writes the policy as `p=none` — report-only, the right default for a domain
+  that already has senders to discover. This one has none, so edit the `_dmarc`
+  TXT record to `p=reject` afterwards and keep the `rua=` value the wizard
+  generated.
+
+The third item in that section, **Email Security**, is the paid Area 1 product:
+inbound threat filtering for mailboxes you host yourself. It cannot protect a
+Gmail inbox and has nothing to do with forwarding. Skip it.
 
 The trap is in the future: the day a transactional sender is added (password
 resets, session invites — the app has none today and will), `p=reject` rejects
