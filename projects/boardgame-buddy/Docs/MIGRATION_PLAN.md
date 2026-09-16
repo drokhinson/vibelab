@@ -1123,7 +1123,10 @@ pure prefix substitution.
    Cloudflare; Cloudflare's terms have historically discouraged serving a
    disproportionate share of non-HTML content on free plans.
 3. Create an R2 API token (Object Read & Write, scoped to those buckets).
-4. Seven Railway variables, already documented in `ENV.md`: `R2_ACCOUNT_ID`,
+4. Seven Railway variables, already documented in `ENV.md` — plus
+   `R2_JURISDICTION` if and only if the buckets were created in a jurisdiction,
+   which changes the S3 endpoint HOST and is reported as `AccessDenied` when
+   missing: `R2_ACCOUNT_ID`,
    `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PLAYS_BUCKET`,
    `R2_GAMES_BUCKET`, `R2_PLAYS_PUBLIC_BASE`, `R2_GAMES_PUBLIC_BASE`.
    **Set them only once the buckets AND their custom domains resolve.** All
