@@ -1,7 +1,7 @@
 {
   "name": "Boardgame Buddy",
   "short_name": "BgB",
-  "description": "Log board game plays, build reference guides, and host a session your table can join.",
+  "description": "Games Played, Nights Remembered. Keep score, build reference guides your table can read mid-game, and see what your buddies played.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

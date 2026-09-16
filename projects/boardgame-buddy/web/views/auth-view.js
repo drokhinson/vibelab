@@ -105,7 +105,7 @@
           <div class="mb-8 text-center">
             <img src="assets/brand/bgb-logo.svg" alt="" class="w-16 h-16 mx-auto rounded-2xl mb-3" />
             <h1 class="text-3xl font-bold font-display text-base-content">Boardgame Buddy</h1>
-            <p class="text-base-content/60 mt-2">Plays, buddies, and the games you reach for.</p>
+            <p class="text-base-content/60 mt-2">Games Played, Nights Remembered.</p>
           </div>
           <div class="card bg-base-200 w-full max-w-sm">
             <div class="card-body">

@@ -33,9 +33,9 @@
 
     _body() {
       return `
-        <p>Boardgame Buddy is a log for the games you played. This page says
-        exactly what it stores, what leaves our servers, and how to get your
-        data back or delete it.</p>
+        <p>Boardgame Buddy records the games you play and who you played them
+        with. This page says exactly what it stores, what leaves our servers,
+        and how to get your data back or delete it.</p>
 
         <p>It is written to be specific rather than broad. Where something is
         imperfect, it says so.</p>
