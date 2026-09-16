@@ -133,9 +133,9 @@
   --bgb-header-height: 0px;
 }
 /* --bgb-col-max is a CAP THAT NEVER BINDS here, not a column width, and it has
-   to stay a real length rather than `none`: three rules feed it into a calc()
-   — the rail's own `left:` below, and both .chapter-add__fab offsets — and
-   `calc(none / 2)` is invalid, which drops the whole declaration silently.
+   to stay a real length rather than `none`: two rules feed it into a calc()
+   — both .chapter-add__fab offsets — and `calc(none / 2)` is invalid, which
+   drops the whole declaration silently.
    1024px can never bind on this tier, since the tier itself stops at 1023px
    wide and the rail takes 64 off that, so the column always fills the space
    beside the rail and every existing formula keeps working untouched. */
@@ -3271,11 +3271,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    then the bell and the gear sunk to the bottom. The header itself is hidden
    here, and --bgb-header-height is 0px with it.
 
-   The rail hugs the CONTENT COLUMN, not the window edge: #app centres in the
-   space right of the rail (body's padding-left, see #app above), so on a
-   monitor wider than rail + column the rail slides in to sit against the
-   column's left edge, where the eye already is. On a screen narrower than
-   that, max() pins it to the edge.
+   The rail sits on the WINDOW's left edge, not against the content column.
+   It used to slide inward to hug the column on a monitor wider than rail +
+   column, which left it floating in the middle of the screen with empty ground
+   to its left — a navigation bar that is not at any edge reads as a stray
+   toolbar. #app still centres in the space right of it (body's padding-left,
+   see #app above), so nothing sits under it.
+
+   The rest of the file already assumed this: every other rail-aware rule
+   (.chapter-add__fab and its mirror, the locked chapter editor, --bgb-col-center)
+   derives the column's edges as `rail + the centring gap`, which is only the
+   truth when the rail is flush left.
 
    Everything hidden by data-auth-only stays hidden: .hidden is display:none
    !important (the hiding contract at the top of the file), so none of the
@@ -3289,7 +3295,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   top: 0;
   bottom: 0;
   right: auto;
-  left: max(0px, calc(50% - (var(--bgb-col-max) + var(--bgb-rail-width)) / 2));
+  left: 0;
   width: var(--bgb-rail-width);
   height: auto;              /* --bgb-nav-height is 0px on this tier */
   flex-direction: column;
@@ -3689,20 +3695,54 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    would run into the gap. */
 :root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .game-detail__plays-scroll { margin: 0; padding-inline: 0; }
 
-/* Profile hubs (own and other): the account card, the stats block and any
-   back row span; the preview cards pair up two to a row. */
+/* Profile hubs (own and other): every card that has a partner pairs up two to
+   a row — on the hub that is the account card beside the stats block, then
+   Collection beside Achievements and Recent plays beside Buddies. A back row,
+   an error alert or the trailing spacer has no partner and spans.
+
+   `.preview-card-host` in the pairing list is load-bearing. The Achievements
+   and Recent plays cards repaint in place rather than through render(), so
+   each is wrapped in a host div instead of being a bare .preview-card — and a
+   host div matched only the span rule below. Those two took a full row each,
+   which stranded Collection and Buddies alone on theirs: the pairing was in
+   this file all along, but only two of the hub's six cards ever reached it.
+
+   Row spacing is the grid's here, not the cards' own. .preview-card and
+   .statsblock each carry `margin-top: .75rem` and .set-card carries none — and
+   a grid item's margin is measured from ITS row, not from the item above it,
+   so two cards sharing a row with different top margins start at different
+   heights. Zeroed on the children and re-added as row-gap, which is one
+   number for the whole grid. */
 :root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   column-gap: 16px;
+  row-gap: 0.75rem;
   align-content: start;
 }
 :root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > * {
   grid-column: 1 / -1;
+  margin-top: 0;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > .preview-card {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > :is(.set-card, .statsblock, .preview-card, .preview-card-host) {
   grid-column: auto;
 }
+/* The host is a bare wrapper — it has no box of its own, so the card inside it
+   has to fill it for two paired rows to line up top and bottom. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > .preview-card-host {
+  display: flex;
+}
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) :is(main[data-view="profile-self"], main[data-view="profile-other"]) > .preview-card-host > .preview-card {
+  margin-top: 0;
+  flex: 1;
+}
+/* The account card is one short row, and the grid stretches it to the height of
+   the stats block beside it — which left the name and avatar pinned to the top
+   of a mostly empty card, reading as a header for it rather than its content.
+   .set-card__acct already centres its own contents; it just has to fill the
+   card first. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) main[data-view="profile-self"] > .set-card { display: flex; }
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) main[data-view="profile-self"] > .set-card > .set-card__acct { flex: 1; }
 
 /* Stats: the head, the podium and the career strip span; the stat cards pair
    up. Loading, empty and error states render one child, which spans. */

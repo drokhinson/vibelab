@@ -312,9 +312,9 @@
       if (!a || !Array.isArray(a.achievements) || !a.achievements.length) {
         // Nothing cached and nothing fetched yet: render the host empty rather
         // than a skeleton. The card slides in when the payload lands.
-        return `<div id="${ACH_HOST_ID}"></div>`;
+        return `<div id="${ACH_HOST_ID}" class="preview-card-host"></div>`;
       }
-      return `<div id="${ACH_HOST_ID}">${this._achCardInner(a)}</div>`;
+      return `<div id="${ACH_HOST_ID}" class="preview-card-host">${this._achCardInner(a)}</div>`;
     }
 
     _paintAchievements() {
@@ -393,7 +393,7 @@
     }
 
     _renderPlaysPreview(b) {
-      return `<div id="${PLAYS_HOST_ID}">${this._playsCardInner(b)}</div>`;
+      return `<div id="${PLAYS_HOST_ID}" class="preview-card-host">${this._playsCardInner(b)}</div>`;
     }
 
     _paintPlays() {
