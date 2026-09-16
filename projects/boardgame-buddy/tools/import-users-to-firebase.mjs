@@ -22,16 +22,18 @@
 //
 //        node import-users-to-firebase.mjs --sql
 //
-//      Download the result as JSON. auth.users is NOT reachable over PostgREST,
-//      which is why this is a manual export rather than a fetch.
+//      It returns ONE cell. Copy it into users.json. auth.users is not
+//      reachable over PostgREST, which is why this is a manual export.
 //
-//   2. Get a service-account key: Firebase console -> Project settings ->
-//      Service accounts -> Generate new private key.
+//   2. Dry run. Needs no key and no npm install — it reads the export, reports
+//      what it found, and calls nothing:
 //
-//   3. Dry run, which calls nothing and only reports what it found:
+//        node import-users-to-firebase.mjs --users ./users.json
+//
+//   3. Get a service-account key: Firebase console -> Project settings ->
+//      Service accounts -> Generate new private key. Then:
 //
 //        npm install firebase-admin
-//        node import-users-to-firebase.mjs --users ./users.json --key ./sa.json
 //
 //   4. Commit to it:
 //
@@ -58,24 +60,31 @@
 
 import { readFileSync } from "node:fs";
 
+// Returns the whole export as ONE JSON cell rather than a row per user.
+// The SQL editor's own JSON download has moved around between Supabase
+// versions (and sometimes only offers CSV, which mangles the nested identities
+// array), whereas copying a single cell works in every version of it.
 const EXPORT_SQL = `-- Accounts to migrate, with their bcrypt hashes and linked providers.
--- Run in Supabase -> SQL Editor, then download as JSON.
-select
-  u.id,
-  u.email,
-  u.encrypted_password,
-  u.email_confirmed_at,
-  coalesce(
-    jsonb_agg(
-      jsonb_build_object('provider', i.provider, 'sub', i.identity_data->>'sub')
-    ) filter (where i.provider is not null and i.provider <> 'email'),
-    '[]'::jsonb
-  ) as identities
-from auth.users u
-left join auth.identities i on i.user_id = u.id
-where u.deleted_at is null
-group by u.id
-order by u.created_at;`;
+-- Supabase -> SQL Editor -> Run, then copy the single result cell into a file.
+select jsonb_pretty(coalesce(jsonb_agg(t), '[]'::jsonb)) as users
+from (
+  select
+    u.id,
+    u.email,
+    u.encrypted_password,
+    u.email_confirmed_at,
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object('provider', i.provider, 'sub', i.identity_data->>'sub')
+      ) filter (where i.provider is not null and i.provider <> 'email'),
+      '[]'::jsonb
+    ) as identities
+  from auth.users u
+  left join auth.identities i on i.user_id = u.id
+  where u.deleted_at is null
+  group by u.id
+  order by u.created_at
+) t;`;
 
 // Supabase's provider slugs are not Firebase's provider ids.
 const PROVIDER_IDS = {
@@ -143,6 +152,25 @@ function toFirebaseUser(row) {
   return user;
 }
 
+/**
+ * Accept the export however the SQL editor handed it over.
+ *
+ * The query returns one cell, so copying it gives a bare array — but "copy as
+ * JSON" on the result GRID wraps that in a row object, as
+ * `[{ "users": [ ... ] }]`, and a copied cell can arrive as a JSON string of
+ * the array. All three are the same data and all three are easy to produce by
+ * accident, so none of them should be a confusing parse error.
+ */
+function unwrap(parsed) {
+  if (typeof parsed === "string") return unwrap(JSON.parse(parsed));
+  if (!Array.isArray(parsed)) return parsed;
+  if (parsed.length === 1 && parsed[0] && !parsed[0].id) {
+    const values = Object.values(parsed[0]);
+    if (values.length === 1) return unwrap(values[0]);
+  }
+  return parsed;
+}
+
 function classify(users) {
   const password = users.filter((u) => u.passwordHash).length;
   const federated = users.filter((u) => u.providerData).length;
@@ -157,15 +185,21 @@ async function main() {
     console.log(EXPORT_SQL);
     return;
   }
-  if (!args.users || !args.key) {
-    console.error("Need --users <export.json> and --key <service-account.json>.");
+  if (!args.users) {
+    console.error("Need --users <export.json>.");
     console.error("Run with --sql for the export query, or read the header.");
     process.exit(2);
   }
+  // A key is only needed to talk to Firebase. Leaving it optional is what lets
+  // the dry run check the export before anything is installed or downloaded.
+  if ((args.commit || args.verify) && !args.key) {
+    console.error("--commit and --verify need --key <service-account.json>.");
+    process.exit(2);
+  }
 
-  const rows = JSON.parse(readFileSync(args.users, "utf8"));
+  const rows = unwrap(JSON.parse(readFileSync(args.users, "utf8")));
   if (!Array.isArray(rows) || !rows.length) {
-    console.error("Export is empty or not a JSON array.");
+    console.error("Export is empty, or not a JSON array of accounts.");
     process.exit(1);
   }
 
@@ -194,6 +228,12 @@ async function main() {
   }
   console.log("");
 
+  if (!args.commit && !args.verify) {
+    console.log("Dry run — nothing was written and Firebase was not contacted.");
+    console.log("Re-run with --key <sa.json> --commit when the numbers look right.");
+    return;
+  }
+
   const { default: admin } = await import("firebase-admin");
   admin.initializeApp({
     credential: admin.credential.cert(JSON.parse(readFileSync(args.key, "utf8"))),
@@ -217,11 +257,6 @@ async function main() {
     console.log(`Verified ${ok}/${users.length} accounts present under their original UUID.`);
     for (const p of problems) console.log(`  FAIL ${p}`);
     process.exit(problems.length ? 1 : 0);
-  }
-
-  if (!args.commit) {
-    console.log("Dry run — nothing was written. Re-run with --commit.");
-    return;
   }
 
   // importUsers caps at 1000 per call. "A handful" will never hit this, but a
