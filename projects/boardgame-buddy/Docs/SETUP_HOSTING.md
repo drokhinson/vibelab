@@ -343,7 +343,7 @@ Order, and step 4 is the one that matters:
    Then **do not carry those MX records over.** A registrar's free forwarding
    requires the domain to be on *its* nameservers, so moving the records moves
    the records and not the service: mail resolves and then vanishes, which is
-   worse than no MX at all. **Cloudflare Email Routing** replaces it (§3.5) with
+   worse than no MX at all. **Cloudflare Email Routing** replaces it (§3.8) with
    no nameserver dependency.
 
    Before flipping, open the registrar's **Email Forwarding** tab and write down
@@ -417,6 +417,9 @@ Records you will end up with:
 | `api` | CNAME | Railway's target | **DNS only** (grey) at first |
 | `auth` | **CNAME** (subdomain flow) | `<site-id>.web.app` | **DNS only** — required |
 | `@` | TXT | Google Search Console token | n/a |
+| `@` | MX × 3 | the three `*.mx.cloudflare.net` hosts Email Routing picks | n/a |
+| `@` | TXT | `v=spf1 include:_spf.mx.cloudflare.net ~all` | n/a |
+| `_dmarc` | TXT | `v=DMARC1; p=reject; …` (§3.8) | n/a |
 
 Pages adds the apex and `www` records itself in §3.3.
 
@@ -461,12 +464,9 @@ Serving the app on both hosts instead would mean two origins in
 `ALLOWED_ORIGINS`, two service-worker registrations and split `localStorage`.
 Redirect, don't serve.
 
-**Email Routing, while you are here.** §2.4 needs a reachable support address
-and both legal pages name `privacy@bgbuddy.app` and `support@bgbuddy.app`. With
-the zone on Cloudflare, **Email Routing** (free) creates both as forwards to a
-real mailbox and writes the MX records itself. Do it before submitting the
-consent screen — Google checks the support address, and a bounce is a rejection
-for a reason that has nothing to do with the app.
+**Mail on the domain is §3.8**, and it is not optional: both legal pages print
+`privacy@bgbuddy.app` and `support@bgbuddy.app`, and with no MX at the apex both
+of those bounce.
 
 ### 3.6 Do NOT touch yet
 
@@ -505,6 +505,84 @@ serve differently. Worth enabling once the domain has been stable for a while,
 not during a cutover.
 
 ---
+
+### 3.8 Email Routing — free, receive-only, and that last word matters
+
+Both legal pages print an address (`privacy-view.js` → `privacy@bgbuddy.app`,
+`terms-view.js` → `support@bgbuddy.app`). Until this is done the apex has no MX
+at all, so both bounce — a privacy policy naming a contact that rejects mail is
+worse than one naming none.
+
+**Cloudflare dashboard → the `bgbuddy.app` zone → Email → Email Routing.**
+
+1. **Destination address** — the real mailbox the aliases forward to:
+   `dev.rokhinson@gmail.com`. Cloudflare emails it a verification link and
+   forwards *nothing* until that link is clicked; the link expires, and the
+   resend button lives under **Email Routing → Destination addresses**.
+2. **Enable** — Cloudflare offers to add the DNS records itself. Take that: it
+   writes three `MX` at the apex and the `TXT` SPF record
+   `v=spf1 include:_spf.mx.cloudflare.net ~all`. Hand-adding them is how you end
+   up with two SPF records at one name, which is itself a broken state.
+3. **Custom addresses** — create `privacy@` and `support@`, both → the
+   destination above. Two aliases, one mailbox.
+4. **Catch-all: leave it off.** These two addresses are about to be printed on
+   two public web pages, which is exactly the input a dictionary spam run wants.
+   Off means anything else addressed to the domain is rejected at Cloudflare;
+   on means it lands in a personal Gmail inbox.
+
+**Why the MX records are legal here at all.** §3.1 spends a page on the fact
+that a `CNAME` at the apex excludes every other type at that name — and §3.3
+puts the Pages record on the apex. Both are true, and mail still works, because
+Cloudflare **flattens** an apex CNAME: it resolves the target itself and answers
+`bgbuddy.app` with `A`/`AAAA` records, so there is no CNAME in the response and
+`MX`, SPF `TXT` and the Search Console token coexist beside it normally. On a
+registrar's own DNS, with a literal CNAME at the apex, adding MX would be the
+RFC 1034 violation. One more thing the zone move bought.
+
+**Receive-only is the part to decide now, not on the first reply.** Email
+Routing forwards inbound mail and cannot send. Hitting reply in Gmail answers
+from `dev.rokhinson@gmail.com` — it does not look like `support@bgbuddy.app`,
+and it discloses a personal address to whoever wrote in. Two ways out:
+
+* **Accept it.** Reversible, costs nothing, and for a pre-launch app answering a
+  handful of mails a week it is a defensible choice. Just make it knowingly.
+* **Send as the alias.** Gmail → Settings → Accounts → *Send mail as* needs SMTP
+  credentials for a relay that will authenticate for the domain (Resend,
+  Postmark, SES). That relay's SPF `include:` goes into the **existing** SPF
+  record as a second `include:`, never as a second record, and its DKIM keys get
+  their own `CNAME`s.
+
+**DMARC, while the domain sends nothing.** Publish `_dmarc` as `TXT`:
+
+```
+v=DMARC1; p=reject; rua=mailto:dev.rokhinson@gmail.com
+```
+
+`p=reject` is the correct posture for a domain with no legitimate sender — it
+tells every receiver to discard mail claiming to be from `bgbuddy.app`, which is
+the whole spoofing surface of a brand-new domain. Cloudflare's **DMARC
+Management** wizard in the same Email panel writes it for you.
+
+The trap is in the future: the day a transactional sender is added (password
+resets, session invites — the app has none today and will), `p=reject` rejects
+*your own* mail until that sender's SPF include and DKIM are aligned. Get those
+in place before the first send, not after the first support ticket about a
+missing email.
+
+**Verify before moving on.** `nslookup -type=mx bgbuddy.app 8.8.8.8` should list
+three `*.mx.cloudflare.net` hosts, and a test message sent from an unrelated
+account to `support@bgbuddy.app` should arrive in the destination inbox. Email
+Routing's **Overview** tab logs every forward and every rejection, which is the
+first place to look if it does not.
+
+**It is not the consent screen's support email.** An earlier draft of this file
+said to finish Email Routing before submitting the OAuth consent screen because
+"Google checks the support address". That was wrong on both counts: Google's
+support-email field is a **dropdown of addresses attached to the signed-in
+Google account** — the account's own address, or a Google Group it owns — so a
+forwarded alias on a domain cannot be selected there at all, and verification
+went through on the Gmail address with no MX on the domain whatsoever. The
+deadline for this section is the legal pages going public, not §2.
 
 ## 4. GitHub — secrets and the API base
 
@@ -631,6 +709,9 @@ ANY TIME — start §2.5 first, it is days of queue you do not control
   8. §2.1-2.4 Identity Platform, auth.bgbuddy.app, branding
   9. §3.1 DNS in Cloudflare (nameservers first if the domain is elsewhere)
  10. §2.7 Supabase third-party auth + check the TP-MAU billing line
+ 10a. §3.8 Email Routing. Needs the zone Active, and needs doing before the
+      legal pages are reachable — they print two addresses that bounce until it
+      exists.
 
 MERGE
  11. Merge. CI deploys web → Pages and runs the API tests.
@@ -651,12 +732,24 @@ plan.
 
 ### The Vercel bridge, and why there is no dress rehearsal
 
-`deploy-bgb-web.yml` carries a `workflow_dispatch` trigger, but that does
-**not** let you deploy Pages before merging. GitHub only offers the Run
-workflow button for a workflow whose file exists on the *default* branch, so
-while this work sits on a feature branch the workflow is invisible in the
-Actions list — it has never run and it is not on `main`. Step 11 is therefore
-the first Pages deploy, with no rehearsal.
+`deploy-bgb-web.yml` carries a `workflow_dispatch` trigger, and on its own that
+does **not** let you deploy Pages before merging: GitHub offers the Run workflow
+button only for a workflow whose file exists on the *default* branch, so while
+this work sits on a feature branch the workflow is invisible in the Actions list.
+
+That is what the separate `claude/bgb-pages-workflow-on-main` PR exists for — it
+lands a dispatch-only copy of the same workflow on `main`, which makes the
+button appear; dispatching it against this branch then builds *this* branch's
+tree. So there IS a rehearsal, and it has been run: `bgbuddy.pages.dev` and the
+custom domains were live well before the cutover merge.
+
+Two consequences. The copy on `main` must stay **dispatch-only** while `main`
+still feeds Vercel: with a `push:` trigger, any commit to `main` touching
+`projects/boardgame-buddy/web/**` would publish main's tree to Pages production
+and replace a good deploy with one built before the privacy and terms routes
+existed. And the cutover merge will raise an **add/add conflict on this one
+file** — resolve it by taking the feature branch's version wholesale, since that
+is the copy with the real triggers.
 
 `deploy-bgb-web-vercel.yml` is the counterweight: the same four build steps
 ending at Vercel instead of Pages, dispatch-only. After step 11 it is the only
