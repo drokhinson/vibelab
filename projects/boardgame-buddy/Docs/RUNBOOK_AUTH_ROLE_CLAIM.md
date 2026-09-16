@@ -43,12 +43,41 @@ Create new key → JSON**.
 > backstop, not as permission. This is the same credential the user import
 > needed and the same reason that one was deleted afterwards.
 
-### A2. Dry-run the backfill
+### A2. Install the SDK and point at the key
 
-```bash
-npm install firebase-admin            # deliberately not a repo dependency
-export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/sa.json
+`firebase-admin` is deliberately not a repo dependency — nothing at runtime
+uses it. Install it for this run only, from the repo root:
 
+```
+npm install --no-save firebase-admin
+```
+
+`--no-save` matters: this repo has no root `package.json`, and a plain
+`npm install` would create one. With `--no-save` the only thing written is
+`node_modules/`, which `.gitignore` already covers.
+
+Then set the credential path. **Pick your shell** — `export` is bash-only and
+fails on Windows with *"'export' is not recognized as an internal or external
+command"*:
+
+| Shell | Command |
+|---|---|
+| cmd.exe | `set GOOGLE_APPLICATION_CREDENTIALS=C:/path/to/sa.json` |
+| PowerShell | `$env:GOOGLE_APPLICATION_CREDENTIALS = "C:/path/to/sa.json"` |
+| bash / zsh | `export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/sa.json` |
+
+In **cmd** specifically: no quotes around the value (cmd keeps them as part of
+the string) and no spaces around `=`. Forward slashes are fine on Windows —
+Node accepts them. The variable lives only in that terminal window, which is a
+feature here: close it and the credential is no longer in any environment.
+
+Check it took before blaming the script: `echo %GOOGLE_APPLICATION_CREDENTIALS%`
+in cmd, `$env:GOOGLE_APPLICATION_CREDENTIALS` in PowerShell, or
+`echo $GOOGLE_APPLICATION_CREDENTIALS` in bash.
+
+### A2b. Dry-run the backfill
+
+```
 node projects/boardgame-buddy/tools/set-authenticated-claim.mjs --dry-run
 ```
 
@@ -59,7 +88,7 @@ Expect roughly `23 users, 0 already correct, would update 23`.
 
 ### A3. Apply it
 
-```bash
+```
 node projects/boardgame-buddy/tools/set-authenticated-claim.mjs --apply
 ```
 
@@ -70,10 +99,17 @@ exits non-zero if any account failed, and names them.
 
 ### A4. Delete the key
 
-```bash
-unset GOOGLE_APPLICATION_CREDENTIALS
-rm /absolute/path/to/sa.json
-```
+| Shell | Commands |
+|---|---|
+| cmd.exe | `set GOOGLE_APPLICATION_CREDENTIALS=` then `del C:\path\to\sa.json` |
+| PowerShell | `Remove-Item Env:\GOOGLE_APPLICATION_CREDENTIALS` then `Remove-Item C:\path\to\sa.json` |
+| bash / zsh | `unset GOOGLE_APPLICATION_CREDENTIALS` then `rm /absolute/path/to/sa.json` |
+
+In cmd, `set VAR=` with nothing after the `=` is how you clear a variable.
+Closing the window does it too. The file is the part that matters — the
+variable is just a pointer at it.
+
+`node_modules/` from A2 can stay or go; it is ignored either way.
 
 ### A5. Refresh a token and verify
 
@@ -145,7 +181,7 @@ export const supabaseRole = beforeUserSignedIn((event) => {
 
 ### B3. Deploy
 
-```bash
+```
 firebase deploy --only functions
 ```
 
