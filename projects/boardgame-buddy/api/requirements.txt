@@ -8,4 +8,7 @@ python-multipart>=0.0.9
 httpx[http2]>=0.27.0  # http2 extra: db.py builds the PostgREST transport itself (h2 GOAWAY retry)
 cryptography>=42.0.0
 pywebpush>=2.0.0  # Web Push (VAPID + aes128gcm) for BoardgameBuddy notifications
+# S3 client for Cloudflare R2 (object_store.py). 1.36 is the floor, not a whim:
+# Config(request_checksum_calculation=...) does not exist before it.
+boto3>=1.36
 truststore>=0.9.0  # use OS certificate store (fixes SSL errors on Windows/corporate proxies)

@@ -15,6 +15,7 @@ from typing import Optional
 from fastapi import BackgroundTasks, Depends, Path, Query, HTTPException, UploadFile, File
 from supabase import Client
 
+import object_store
 from db import get_supabase
 
 from . import router
@@ -46,9 +47,18 @@ _SELECT_PLAY = (
     "boardgamebuddy_profiles!user_id(display_name)"
 )
 
+# The Supabase Storage bucket. Still here because it is the fallback when R2
+# is unconfigured — see object_store.py — and because the objects it holds
+# stay readable forever: rows written before 038_r2_photo_urls.sql keep their
+# supabase.co URLs, and the client loads whatever absolute URL the row holds.
 PLAYS_BUCKET = "boardgamebuddy-plays"
 _ALLOWED_PHOTO_MIME = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 _MAX_PHOTO_BYTES = 5 * 1024 * 1024  # mirrors the bucket's file_size_limit
+# A photo's path carries a uuid4, so the bytes at a path never change. Set on
+# the R2 branch only: the Supabase upload accepts a `cache-control` option too,
+# but that branch is the unchanged fallback and giving it a new header would
+# make the rollback behave differently from what it is rolling back to.
+_PHOTO_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
 
 def _build_play_response(
@@ -611,14 +621,32 @@ async def update_play(
 def _upload_play_photo_sync(
     sb: Client, path: str, data: bytes, content_type: str
 ) -> PlayPhotoResponse:
+    """Store the bytes and hand back the URL to save on the play.
+
+    Two backends, chosen per request rather than at boot: R2 when it is
+    configured, Supabase Storage when it is not. The fallback is what lets
+    this deploy before the buckets exist and lets one unset variable roll it
+    back after they do; it is not a retry, so a configured R2 that fails is a
+    502 and does not quietly write a Supabase URL into a play.
+    """
     try:
-        sb.storage.from_(PLAYS_BUCKET).upload(
-            path, data, {"content-type": content_type, "upsert": "true"}
-        )
-    except Exception as exc:  # storage SDK raises a custom exception type
+        if object_store.configured(object_store.PLAYS):
+            url = object_store.put(
+                object_store.PLAYS,
+                path,
+                data,
+                content_type,
+                cache_control=_PHOTO_CACHE_CONTROL,
+            )
+        else:
+            sb.storage.from_(PLAYS_BUCKET).upload(
+                path, data, {"content-type": content_type, "upsert": "true"}
+            )
+            url = sb.storage.from_(PLAYS_BUCKET).get_public_url(path)
+    except Exception as exc:  # ObjectStoreError, or the storage SDK's own type
         logger.warning("Play photo upload failed %s: %s", path, exc)
         raise HTTPException(status_code=502, detail="Upload failed")
-    return PlayPhotoResponse(photo_url=sb.storage.from_(PLAYS_BUCKET).get_public_url(path))
+    return PlayPhotoResponse(photo_url=url)
 
 
 @router.post(

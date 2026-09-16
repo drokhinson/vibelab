@@ -10,6 +10,7 @@ from fastapi import Depends, Header, Query, Path, HTTPException
 from supabase import Client
 
 import cache
+import object_store
 from db import get_supabase
 from shared_models import HealthResponse
 
@@ -63,11 +64,26 @@ def _invalidate_game_caches() -> None:
 
 logger = logging.getLogger(__name__)
 
+# The Supabase Storage bucket, kept as the fallback when R2 is unconfigured
+# (see object_store.py) and because pre-migration rows keep their supabase.co
+# URLs, which the client loads unchanged.
 STORAGE_BUCKET = "boardgamebuddy-games"
+# A cover's path is `{bgg_id}_{kind}.{ext}`, which a re-import overwrites in
+# place — so unlike a play photo this is NOT immutable, and a year-long TTL
+# would pin a stale cover in every edge cache. A day is long enough that the
+# cache does its job and short enough that a corrected cover lands. R2 branch
+# only, for the same reason as the photo header: the fallback stays as it was.
+_COVER_CACHE_CONTROL = "public, max-age=86400"
 
 
 async def _upload_to_storage(sb: Client, bgg_id: int, url: str | None, kind: str) -> str | None:
-    """Download a BGG image and re-host it in Supabase Storage; returns the permanent public URL."""
+    """Download a BGG image and re-host it; returns the permanent public URL.
+
+    Re-hosts to R2 when it is configured and to Supabase Storage when it is
+    not (see object_store.py for why the fallback exists). Unchanged either
+    way: a failure anywhere here returns the original BGG URL rather than
+    raising, so an import never fails over cover art.
+    """
     if not url:
         return None
     try:
@@ -85,6 +101,14 @@ async def _upload_to_storage(sb: Client, bgg_id: int, url: str | None, kind: str
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(content_type, "jpg")
     path = f"{bgg_id}_{kind}.{ext}"
     try:
+        if object_store.configured(object_store.GAMES):
+            return object_store.put(
+                object_store.GAMES,
+                path,
+                resp.content,
+                content_type,
+                cache_control=_COVER_CACHE_CONTROL,
+            )
         sb.storage.from_(STORAGE_BUCKET).upload(
             path, resp.content, {"content-type": content_type, "upsert": "true"}
         )

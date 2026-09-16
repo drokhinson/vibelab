@@ -30,13 +30,34 @@ Supersedes the root `ENV.md` for anything BoardgameBuddy. Domain: **bgbuddy.app*
 
 | Variable | Stage | Purpose |
 |---|---|---|
-| `R2_ACCOUNT_ID` | 4 | Cloudflare account, for the S3 endpoint |
-| `R2_ACCESS_KEY_ID` | 4 | R2 API token |
-| `R2_SECRET_ACCESS_KEY` | 4 | R2 API token |
-| `R2_PLAYS_BUCKET` | 4 | Play photos (was Supabase `boardgamebuddy-plays`) |
-| `R2_GAMES_BUCKET` | 4 | Cover-art cache (was Supabase `boardgamebuddy-games`) |
-| `R2_PUBLIC_BASE` | 4 | `https://img.bgbuddy.app` — the origin stored URLs are built from |
+| `R2_ACCOUNT_ID` | 4 | Cloudflare account ID. `object_store.py` builds the S3 endpoint from it: `https://<id>.r2.cloudflarestorage.com`. |
+| `R2_ACCESS_KEY_ID` | 4 | R2 API token. Scope: **Object Read & Write**, limited to the two buckets. |
+| `R2_SECRET_ACCESS_KEY` | 4 | The other half of that token. Shown once at creation. |
+| `R2_PLAYS_BUCKET` | 4 | Play photos (was Supabase `boardgamebuddy-plays`). Object keys are unchanged: `{user_id}/{uuid4hex}.{ext}`. |
+| `R2_GAMES_BUCKET` | 4 | Cover-art cache (was Supabase `boardgamebuddy-games`). Keys unchanged: `{bgg_id}_{kind}.{ext}`. |
+| `R2_PLAYS_PUBLIC_BASE` | 4 | e.g. `https://img.bgbuddy.app` — the custom domain on the plays bucket. **This is what gets stored in `boardgamebuddy_plays.photo_url`**, so changing it after the fact needs another data migration. Trailing slash optional; it is stripped. |
+| `R2_GAMES_PUBLIC_BASE` | 4 | e.g. `https://covers.bgbuddy.app` — the custom domain on the games bucket. Stored in `boardgamebuddy_games.image_url`/`.thumbnail_url`. |
 | `GCP_PROJECT_ID` | 3-ALT | `boardgamebuddy-508716`. Read by `api/jwt_auth.py` as the Firebase token `aud`, with the issuer derived as `https://securetoken.google.com/<id>`. **Set it on the Railway service before the frontend swap.** Until it is set, the verifier still accepts Supabase tokens normally but answers 500 to any Identity Platform token — deliberately, since an unset value is an operator error, not a bad credential. Must equal `BGB_FIREBASE_PROJECT_ID`. |
+
+**All seven or none, per store.** `object_store.configured(kind)` requires the
+account, both token halves, that store's bucket AND its public base. Miss any
+one and the API silently keeps writing to Supabase Storage — which is the
+intended fallback, so nothing breaks and nothing tells you either. There is no
+status endpoint for this by design (`/health` is a liveness check with a fixed
+shape shared across projects). The check is to attach one photo to a play and
+read the URL that comes back: it names the origin that actually took the bytes.
+
+**Why two public bases and not one.** A play photo is user content; cover art
+is a cache of public BGG images. The privacy policy discloses that a play
+photo's URL is open to anyone holding the link, and the fix is signed URLs —
+which means taking the public custom domain *off* the plays bucket. Behind one
+shared hostname that fix would cost a re-key and a second URL rewrite. Split,
+it costs a console change that never touches cover art.
+
+**Do not set these before the buckets and their custom domains exist.** An
+upload with credentials but no working domain succeeds and then stores a URL
+nobody can load: the bytes land in the right place and the row points nowhere.
+Requiring the base in `configured()` is what prevents that.
 
 ## 2. GitHub Actions
 

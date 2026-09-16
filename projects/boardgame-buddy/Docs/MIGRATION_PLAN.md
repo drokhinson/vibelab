@@ -37,8 +37,15 @@ already stopped working and is then only extra verifier surface. Delete both
 sides in one commit, with `test_jwt_auth_dual_issuer.py` reduced to the
 Identity Platform cases.
 
-**Still open:** Email Routing (§3.8 of `SETUP_HOSTING.md`), Stage 4 (R2 on
-`img.bgbuddy.app`), and the two photo gaps the privacy policy discloses — play photos readable by anyone with the link, and
+**Stage 4's code has landed and is inert.** `api/object_store.py`, both upload
+call sites and `038_r2_photo_urls.sql` are in the tree; with the R2 variables
+unset the API still writes to Supabase Storage, so nothing changed in
+production. What remains is console work and a data copy: two buckets, two
+custom domains, one API token, seven Railway variables, `rclone`, then the
+migration. §4.2 onward is the order.
+
+**Still open:** Email Routing (§3.8 of `SETUP_HOSTING.md`), Stage 4's console
+half, and the two photo gaps the privacy policy discloses — play photos readable by anyone with the link, and
 image files surviving the row that referenced them.
 
 ---
@@ -1065,45 +1072,72 @@ pure prefix substitution.
 ### 4.2 Cloudflare setup
 
 1. Create two R2 buckets: `bgb-plays`, `bgb-games`.
-2. Attach a custom domain to each — e.g. `img.boardgamebuddy.com/plays/…` via one
-   bucket with a prefix, or two subdomains. **Serve images from the R2 custom
-   domain, not through Pages.** R2 is a paid product and is the clean way to
-   push a lot of image bytes through Cloudflare; Cloudflare's terms have
-   historically discouraged serving a disproportionate share of non-HTML content
-   on free plans.
+2. Attach **a custom domain to each** — `img.bgbuddy.app` → `bgb-plays`,
+   `covers.bgbuddy.app` → `bgb-games`. Two hostnames rather than one bucket
+   with `plays/` and `games/` prefixes, and that is the decision in this stage
+   most worth not reversing: a play photo is user content whose URL the privacy
+   policy discloses as open to anyone holding the link, and the fix for that is
+   signed URLs — i.e. taking the public domain off the plays bucket. Behind a
+   shared hostname that fix costs a re-key and a second URL rewrite. Split, it
+   costs a console change that never touches cover art.
+   **Serve images from the R2 custom domain, not through Pages.** R2 is a paid
+   product and is the clean way to push a lot of image bytes through
+   Cloudflare; Cloudflare's terms have historically discouraged serving a
+   disproportionate share of non-HTML content on free plans.
 3. Create an R2 API token (Object Read & Write, scoped to those buckets).
-4. New Railway variables — add all five to `ENV.md` in the same commit:
-   `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-   `R2_PLAYS_BUCKET`, `R2_GAMES_PUBLIC_BASE` (and `R2_PLAYS_PUBLIC_BASE`).
+4. Seven Railway variables, already documented in `ENV.md`: `R2_ACCOUNT_ID`,
+   `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PLAYS_BUCKET`,
+   `R2_GAMES_BUCKET`, `R2_PLAYS_PUBLIC_BASE`, `R2_GAMES_PUBLIC_BASE`.
+   **Set them only once the buckets AND their custom domains resolve.** All
+   seven are required per store; with any one missing the API goes on writing
+   to Supabase Storage and says nothing, because that is the designed
+   fallback.
 
-### 4.3 Code
+### 4.3 Code — DONE, and what it actually looks like
 
-Add `api/object_store.py` — a small S3-compatible wrapper, well under the
-300-line convention:
+`api/object_store.py` exists: 220 lines, `put()` and `public_url()`, `boto3`
+against `https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com` at region `auto`,
+with `boto3>=1.36` in `requirements.txt` (1.36 is the floor because
+`Config(request_checksum_calculation=…)` does not exist before it, and
+botocore's default CRC32 on every PUT is worth turning off across
+S3-compatible providers).
 
-```python
-"""object_store.py — S3-compatible object storage (Cloudflare R2).
+Both upload blocks now branch on `object_store.configured(kind)` and keep
+every guard that was already there — the MIME allowlist, the 5 MiB cap, the
+empty-file check, the `logger.warning` + `502`, and `_upload_to_storage`'s
+fallback of returning the original BGG URL.
 
-Replaces Supabase Storage for image objects. Paths are unchanged from the
-Supabase layout so the migration is a prefix rewrite, not a re-key.
-"""
-```
+Three things the original sketch did not anticipate, all of which changed the
+design:
 
-It needs exactly two operations — `put(bucket, path, data, content_type)` and
-`public_url(bucket, path)`. Use `boto3` against the R2 endpoint
-(`https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, region `auto`) and add
-`boto3>=1.34` to `requirements.txt`.
+**1. Unconfigured is a supported state.** The plan implied a cutover: code
+ships, variables get set, Supabase Storage is dead. In practice the merge and
+the console session are hours apart and a deploy is not something you hold. So
+`configured()` answers False when the variables are absent and both call sites
+use Supabase Storage exactly as before. That removes the ordering constraint
+entirely and makes rollback "unset one variable", the same lever Stage 3-ALT
+uses.
 
-Then replace the two upload blocks. Keep every guard that is already there —
-the MIME allowlist, the 5 MiB cap, the empty-file check, the `logger.warning` +
-`502` on failure, and `_upload_to_storage`'s fallback of returning the original
-BGG URL when the re-host fails. Only the two lines that talk to
-`sb.storage.from_(…)` change.
+**2. A configured-but-failing R2 must NOT fall back.** The fallback is for an
+absent R2, never a broken one. Falling back on error would write a
+supabase.co URL into a play *after* `038` has rewritten every other row —
+new data quietly landing back on the origin this whole stage exists to leave.
+So a failing R2 is a 502 on the photo path and the untouched BGG URL on the
+cover path. `tests/test_object_store.py` pins exactly this.
 
-**Read path must tolerate both.** Old rows hold `…supabase.co/storage/v1/…`
-URLs; new rows hold `img.boardgamebuddy.com/…`. Both are absolute URLs the
-client just loads, so nothing needs a code branch — but do not delete the
-Supabase buckets until §4.5 confirms every row is rewritten.
+**3. Cache-Control differs per store, because the two path shapes differ.** A
+photo path carries a uuid4, so its bytes never change: `max-age=31536000,
+immutable`. A cover path is `{bgg_id}_{kind}.{ext}`, which a re-import
+**overwrites in place** — a year-long TTL there would pin a stale cover in
+every edge cache, so covers get `max-age=86400`. Supabase's upload accepts a
+`cache-control` option too and neither call site ever passed one; the headers
+go on the R2 branch only, so the fallback behaves exactly as it did before.
+
+**Read path tolerates both.** Old rows hold `…supabase.co/storage/v1/…` URLs;
+new rows hold `img.bgbuddy.app/…`. Both are absolute URLs the client just
+loads, so nothing needs a code branch — but do not delete the Supabase buckets
+until §4.5 confirms every row is rewritten. The buckets staying up *are* the
+rollback.
 
 ### 4.4 Copy the objects
 
@@ -1112,33 +1146,39 @@ rclone copy supabase:boardgamebuddy-plays r2:bgb-plays --progress
 rclone copy supabase:boardgamebuddy-games r2:bgb-games --progress
 ```
 
-Then rewrite the stored URLs — three columns, one migration
-(`024_r2_photo_urls.sql`):
+Then rewrite the stored URLs — three columns, one migration, which is written
+and lives at `db/migrations/038_r2_photo_urls.sql`. **Edit the four prefixes at
+the top before running it**; it refuses to run while a placeholder is still in
+place, and the refusal survives a global find/replace (the guard looks for a
+double underscore, not for the placeholder text, precisely so editing it the
+obvious way does not neuter the check).
 
-```sql
-UPDATE public.boardgamebuddy_plays
-   SET photo_url = replace(photo_url, :old_plays_prefix, :new_plays_prefix)
- WHERE photo_url LIKE :old_plays_prefix || '%';
+Two departures from the sketch above, both of which matter:
 
-UPDATE public.boardgamebuddy_games
-   SET image_url     = replace(image_url,     :old_games_prefix, :new_games_prefix),
-       thumbnail_url = replace(thumbnail_url, :old_games_prefix, :new_games_prefix)
- WHERE image_url     LIKE :old_games_prefix || '%'
-    OR thumbnail_url LIKE :old_games_prefix || '%';
-```
+* `starts_with(col, prefix)`, not `col LIKE prefix || '%'`. A `LIKE` pattern
+  reads `_` as a single-character wildcard, and a Supabase project ref or a
+  path can carry one.
+* `new || substr(col, length(old) + 1)`, not `replace(col, old, new)`.
+  `replace()` substitutes *every* occurrence; this only ever rewrites the front
+  of the string.
 
-Run the `rclone copy` **before** the UPDATE and re-run it after (it is
+Run the `rclone copy` **before** the migration and re-run it after (it is
 incremental) to catch uploads that landed mid-flight. Order matters: a rewritten
-URL whose object has not copied yet is a broken image.
+URL whose object has not copied yet is a broken image. The migration is
+re-runnable — every UPDATE is guarded on the row still carrying the old prefix,
+so a second run reports zero rows instead of double-rewriting.
 
 Note that `boardgamebuddy_games.image_url` may also hold un-rehosted BGG URLs
-(the `_upload_to_storage` fallback), and those must be left alone — the `LIKE`
+(the `_upload_to_storage` fallback), and those must be left alone — the prefix
 guards handle it.
 
 ### 4.5 Acceptance
 
 - Upload a new play photo → the returned URL is on the R2 domain, and the image
-  loads.
+  loads. This one is worth doing **before** the migration, with old rows still
+  pointing at Supabase: new writes on R2 while old reads stay on Supabase is
+  the expected intermediate state, and seeing it work is what says the
+  variables are right before any row is rewritten.
 - An **old** play's photo still loads (pre-rewrite rows).
 - After the migration: `SELECT count(*) FROM boardgamebuddy_plays WHERE photo_url
   LIKE '%supabase.co%'` returns **0**. Same for both game columns.
