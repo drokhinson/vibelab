@@ -43,8 +43,29 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Supabase JS Client (deferred — only used from DOMContentLoaded onward) -->
+  <!-- Supabase JS Client (deferred — only used from DOMContentLoaded onward).
+       Still loaded after the auth swap: Identity Platform replaces Supabase
+       Auth, not Supabase. Realtime and the live-session tables go through this
+       client either way — see domain/auth.js#init. -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Firebase Auth (GCP Identity Platform), deferred for the same reason.
+       The COMPAT build on purpose: it exposes a `firebase` global usable from a
+       classic script, which is the authoring model here (~121 plain <script
+       src> tags, no bundler — .claude/rules/web-frontend.md). The modular v9+
+       SDK is ESM-only and would need a module script the bundler does not fold.
+
+       Version is PINNED rather than floating, unlike the supabase line above.
+       This one sits on the sign-in path with no fallback: a breaking change in
+       a minor release locks every user out, and there is no way to notice
+       before they do.
+
+       Loads on every page even pre-launch. That is ~90 KB gzip of parked
+       bytes behind the COMING_SOON gate, which is the trade for not having a
+       conditional script tag the bundler and sw.js precache list would both
+       have to learn about. -->
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 
   <!-- Google Fonts: Geist (UI) + Fraunces (display + polaroid) + JetBrains Mono (scores).
        Crimson Text was dropped — --font-display is aliased to Fraunces in styles.css. -->
@@ -369,6 +390,7 @@
   <script src="helpers.js"></script>
 
   <!-- Domain -->
+  <script src="domain/auth.js"></script>
   <script src="domain/api.js"></script>
   <script src="domain/store.js"></script>
   <script src="domain/notifications.js"></script>

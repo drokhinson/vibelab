@@ -90,22 +90,19 @@
       return tok ? { Authorization: "Bearer " + tok } : {};
     }
 
-    // Refresh the Supabase access token and re-publish it on window.session.
-    // Returns true when a usable session is in hand afterwards. Used to recover
+    // Refresh the access token and re-publish it on window.session. Returns
+    // true when a usable session is in hand afterwards. Used to recover
     // transparently from a 401 (e.g. a token that expired while the phone was
     // asleep) so a stale token never cascades into a forced sign-out.
+    //
+    // `force` is passed because the token we just sent was REJECTED: a
+    // provider that hands back its cached token would return the same dead
+    // string and the retry would 401 identically. The per-provider ladder
+    // lives in domain/auth.js#refresh.
     async _refreshSession() {
-      const client = window.supabaseClient;
-      if (!client) return false;
+      if (!window.BgbAuth || !window.BgbAuth.backend) return false;
       try {
-        // getSession() auto-refreshes an expired token from the refresh token.
-        let { data } = await client.auth.getSession();
-        let sess = data && data.session;
-        if (!sess) {
-          const r = await client.auth.refreshSession();
-          if (r.error) return false;
-          sess = r.data && r.data.session;
-        }
+        const sess = await window.BgbAuth.refresh(true);
         if (sess) {
           window.session = sess;
           if (window.store) window.store.set("session", sess);

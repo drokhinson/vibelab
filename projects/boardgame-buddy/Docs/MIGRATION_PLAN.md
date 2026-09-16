@@ -751,10 +751,37 @@ have.
 ### 3-ALT.2 Keep RLS working
 
 **Wire Identity Platform into Supabase as a third-party auth provider.** Supabase
-trusts externally-issued JWTs the same way it trusts its own, so the 3
-`auth.uid()` policies on the live play-session tables keep working and the
-realtime spectator mirror is unaffected. Without this step those 3 policies fail
-closed and the spectator mirror goes blank — it is not optional.
+trusts externally-issued JWTs the same way it trusts its own, so the
+`auth.uid()` predicates on the live play-session tables keep working and the
+realtime spectator mirror is unaffected. Without this step they fail closed and
+the spectator mirror goes blank — it is not optional. (The count here used to
+read "3 policies"; the schema snapshot carries 12 `auth.uid()` predicates
+across the session tables. Same conclusion, larger blast radius.)
+
+**The dashboard setting is only half of it — the client has to send the token.**
+`window.supabaseClient` must still be created after the swap, because Identity
+Platform replaces Supabase *Auth*, not Supabase: `domain/live-scores.js` and
+`domain/session-phase.js` subscribe to realtime channels and read and write the
+live-session tables through that client directly. Both are written as
+`if (!window.supabaseClient) return;`, so a build that stops creating it does
+not error — live scores silently stop updating with nothing in the console.
+
+`domain/auth.js#init` therefore creates it on both paths, and on the Firebase
+path passes an `accessToken` callback instead of letting supabase-js own a
+session:
+
+```js
+window.supabaseClient = window.supabase.createClient(url, anonKey, {
+  accessToken: async () => {
+    const user = firebase.auth().currentUser;
+    return user ? await user.getIdToken() : null;
+  },
+});
+```
+
+Returning `null` when signed out rather than throwing is deliberate: reads fall
+back to the anon key, which is what a spectator opening a public session link
+needs.
 
 **Check Supabase's TP-MAU (third-party monthly active user) billing line before
 assuming $0 on the Supabase side.** Third-party auth is metered separately from
@@ -778,35 +805,92 @@ await admin.auth().importUsers(
 `boardgamebuddy_profiles.id` FKs `auth.users(id)`, and every play, buddy edge and
 achievement hangs off that column — a regenerated id orphans the entire account.
 
-Then drop the FK, since `auth.users` is no longer the authority:
+The script is `tools/import-users-to-firebase.mjs`. It defaults to a dry run,
+has a `--verify` pass that reads every uid back and fails on a mismatch, and
+handles the case this snippet does not: a **Google account has no usable
+password**, so it needs `providerData` carrying the Google `sub` or Firebase
+mints a brand-new uid at first sign-in and orphans the profile just as surely
+as a regenerated UUID would.
 
-```sql
-ALTER TABLE public.boardgamebuddy_profiles
-  DROP CONSTRAINT boardgamebuddy_profiles_id_fkey;
-```
+Then drop the FK, since `auth.users` is no longer the authority. That is
+migration `036_drop_profiles_auth_users_fk.sql`, and it has to run BEFORE the
+frontend swap: a user who signs up through Identity Platform has no
+`auth.users` row, so the profile insert violates the constraint and signup
+fails as a generic error.
 
-Keep the column, the type, and every value. You lose the `ON DELETE CASCADE`
-that FK provided, so account deletion becomes explicit backend work — write it
-before you need it.
+Keep the column, the type, and every value.
+
+**An earlier version of this section warned that dropping the FK loses the
+`ON DELETE CASCADE` and that "account deletion becomes explicit backend work —
+write it before you need it". That was wrong.** `DELETE /profile`
+(`api/routes/profile_routes.py`) already deletes the *profile* row, and the ~20
+child tables cascade from their own FKs to `boardgamebuddy_profiles(id)`. None
+of it touches this constraint. What actually changes is that deleting a user
+from the Supabase dashboard no longer removes their profile — and, after the
+swap, that the identity record in Identity Platform survives an account
+deletion, exactly as the `auth.users` row does today.
 
 ### 3-ALT.4 Change the code
 
-- **Frontend, 8 call sites in 3 files.** The 7 Supabase methods map nearly
-  one-to-one onto the Firebase JS SDK (`createUserWithEmailAndPassword`,
-  `signInWithEmailAndPassword`, `signInWithPopup`, `signOut`,
-  `onIdTokenChanged`/`onAuthStateChanged`, `getIdToken`). The one that needs care
-  is `domain/api.js:79-82`, which calls `getSession()` then `refreshSession()` on
-  expiry — Firebase's `getIdToken()` refreshes on its own, so that ladder
-  simplifies rather than ports.
-- **Backend, 2 files.** `jwt_auth.py`: point `_JWKS_URL` at Google's
-  (`https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com`),
-  change `audience` from `"authenticated"` to the GCP project id, and start
-  verifying `issuer` (`https://securetoken.google.com/<project-id>`) — Firebase
-  tokens should be checked on both, and the current code checks neither issuer nor
-  a project-scoped audience. `routes/dependencies.py` reads `sub`, `email` and
-  `role` off the payload; `sub` and `email` carry over, and `role` has no Firebase
-  equivalent — BGB's admin check reads the **profile** row, not the JWT claim, so
-  nothing authorization-shaped depends on it.
+**Neither half is a swap. Both providers stay live, selected at runtime.** A
+swap has no rollback shorter than another deploy, and on the backend it 401s
+every signed-in browser the moment it lands.
+
+- **Frontend: one new module, `domain/auth.js`.** It presents `init`,
+  `onChange`, `signInWithPassword`, `signUp`, `signInWithGoogle`, `signOut` and
+  `refresh`, and picks Firebase or Supabase from whether `config.js` carries a
+  complete `firebase` block — so rollback is flipping the `BGB_FIREBASE_*` repo
+  variables off, and local dev (which has no Firebase config) keeps working.
+  The six call sites in `init.js`, `views/auth-view.js` and `domain/api.js` go
+  through it and know nothing about either provider.
+
+  It publishes ONE session shape, `{ access_token, user: { id, email } }`,
+  because that is what `domain/api.js#_authHeader` and `domain/outbox.js`
+  already read off `window.session`. Three things needed real handling rather
+  than a rename:
+
+  - `domain/api.js`'s `getSession()` → `refreshSession()` ladder collapses to
+    `refresh(true)`. The `force` is not optional: the token that just got a 401
+    is the one Firebase would hand back from cache, so the retry would fail
+    identically.
+  - **Signup's "already registered" signal is completely different.** Firebase
+    throws `auth/email-already-in-use`; Supabase *resolves* with a synthetic
+    user carrying an empty `identities` array. `signUp` normalises both to an
+    `existing` flag.
+  - **Google sign-in uses `signInWithPopup`, not redirect.** With a custom
+    `authDomain` the handler is on another origin, and `signInWithRedirect`
+    needs to read state back from that origin's storage — which Safari's ITP
+    and Firefox's total cookie protection block, returning the user to a
+    signed-out app with no error. A popup runs that origin first-party and
+    posts the credential back. Redirect stays as the fallback for a blocked
+    popup.
+
+  `views/auth-view.js` also maps Firebase's `auth/*` codes to plain sentences —
+  its raw strings look like `Firebase: Error (auth/invalid-credential).` — with
+  wrong-password and unknown-account deliberately sharing one message so the
+  form is not an account-enumeration oracle.
+
+- **Backend: one file, `jwt_auth.py`, verifying both issuers.** Select the
+  verifier from the token's `iss`, then check the signature against that
+  provider's JWKS: Supabase's with `aud=authenticated`, or Google's shared set
+  (`https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com`)
+  with `aud` AND `iss` both scoped to `GCP_PROJECT_ID`.
+
+  **Both claims are required, and this is the part to get right.** Every
+  Firebase project signs with the same Google keys, so a verifier that checks
+  the signature without a project-scoped `aud` accepts a token minted by
+  anyone's free Firebase project — a full authentication bypass that passes a
+  naive "valid signature" test. `tests/test_jwt_auth_dual_issuer.py` mints
+  exactly that token and requires a 401.
+
+  Reading `iss` unverified to route is safe *because* the selected verifier
+  re-checks it under the signature. An unset `GCP_PROJECT_ID` answers 500, not
+  401: it is an operator error, and 401 would send a correctly signed-in user
+  to the login screen while hiding the cause.
+
+  `role` has no Firebase equivalent, and grep across `api/` finds **nothing**
+  reading it — this document previously said `routes/dependencies.py` does; it
+  does not. BGB's admin check reads the profile row.
 - Keep the `SupabaseUser` model shape, or the change leaks into 30 route files
   for no reason. Rename it later, separately, if at all.
 

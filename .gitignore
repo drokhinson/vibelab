@@ -20,6 +20,13 @@ local_dev/.env
 projects/*/web/config.js
 projects/*/app/.env
 
+# Auth-migration inputs (projects/boardgame-buddy/tools/import-users-to-firebase.mjs).
+# A backstop, not permission: *.users.json carries bcrypt password hashes and
+# *.sa.json is a service-account key that can mint a token for any user in the
+# project. Keep both outside the repo and delete them once the import is done.
+*.users.json
+*.sa.json
+
 # Node / Expo
 node_modules/
 .expo/
