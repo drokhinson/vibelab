@@ -26,9 +26,10 @@ projects/boardgame-buddy/
 │   ├── db.py jwt_auth.py cache.py api_logger.py gemini.py auth.py shared_models.py
 │   ├── object_store.py     Cloudflare R2 uploads (see below)
 │   └── tests/
-├── db/migrations/          001–036, plus _shared/ (analytics + api_logs)
+├── db/migrations/          001–037, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  one-off generators + operator scripts, never deploy steps
+├── functions/              ONE Identity Platform blocking function (see below)
 ├── web/                    the static PWA
 ├── moved/                  the retired Vercel origin's notice (see below)
 └── Docs/
@@ -47,6 +48,7 @@ forty of them for nothing.
 | `web/` | Cloudflare Pages (`bgbuddy`) | `.github/workflows/deploy-bgb-web.yml` |
 | `api/` | Railway, Root Directory `projects/boardgame-buddy/api` | `.github/workflows/deploy-bgb-api.yml` |
 | `moved/` | the retired Vercel project — a static notice, dispatch-only | `.github/workflows/deploy-bgb-moved-notice.yml` |
+| `functions/` | GCP Identity Platform blocking function | **manual** — `firebase deploy --only functions` from `projects/boardgame-buddy` |
 
 Workflows live at the repo root because GitHub only reads them from there.
 `deploy-frontend.yml` filters this project out of its change detection — if that
@@ -89,7 +91,19 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    registered on that origin serves same-origin subresources cache-first with
    revalidation off, so any file the notice referenced could come back as the
    old app's bytes. Its deploy workflow fails on any external reference.
-11. **Both image uploads still carry a Supabase Storage branch**, and
+11. **`functions/` looks unused and is load-bearing.** Nothing in the repo
+   imports it and no test covers it — it runs inside Google's auth flow. It
+   puts two claims on every ID token: `role: "authenticated"`, without which
+   the `TO authenticated` RLS policies on the live-session tables are not
+   evaluated at all, and `app_uid`, **the UUID this codebase knows the user
+   by**. A Firebase uid is not a UUID and 35 columns here are, so without that
+   claim a new account 500s on every endpoint (`037_app_uid_claim.sql`).
+   Delete this directory and every account created afterwards loses live
+   scoring, both Realtime channels, and — once the transitional `sub`
+   fallback goes — the ability to load anything at all. Silently, because the
+   API is service-role and bypasses RLS, so only the browser-direct paths
+   notice. `Docs/RUNBOOK_AUTH_ROLE_CLAIM.md` is the whole story.
+12. **Both image uploads still carry a Supabase Storage branch**, and
    `object_store.py` treats an unconfigured R2 as normal rather than as an
    error. That is the Stage 4 rollout: the R2 code deploys before the buckets
    exist, and unsetting one variable rolls it back after they do. What is NOT

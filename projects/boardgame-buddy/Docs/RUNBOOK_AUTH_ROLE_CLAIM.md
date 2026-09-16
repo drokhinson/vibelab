@@ -43,12 +43,41 @@ Create new key → JSON**.
 > backstop, not as permission. This is the same credential the user import
 > needed and the same reason that one was deleted afterwards.
 
-### A2. Dry-run the backfill
+### A2. Install the SDK and point at the key
 
-```bash
-npm install firebase-admin            # deliberately not a repo dependency
-export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/sa.json
+`firebase-admin` is deliberately not a repo dependency — nothing at runtime
+uses it. Install it for this run only, from the repo root:
 
+```
+npm install --no-save firebase-admin
+```
+
+`--no-save` matters: this repo has no root `package.json`, and a plain
+`npm install` would create one. With `--no-save` the only thing written is
+`node_modules/`, which `.gitignore` already covers.
+
+Then set the credential path. **Pick your shell** — `export` is bash-only and
+fails on Windows with *"'export' is not recognized as an internal or external
+command"*:
+
+| Shell | Command |
+|---|---|
+| cmd.exe | `set GOOGLE_APPLICATION_CREDENTIALS=C:/path/to/sa.json` |
+| PowerShell | `$env:GOOGLE_APPLICATION_CREDENTIALS = "C:/path/to/sa.json"` |
+| bash / zsh | `export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/sa.json` |
+
+In **cmd** specifically: no quotes around the value (cmd keeps them as part of
+the string) and no spaces around `=`. Forward slashes are fine on Windows —
+Node accepts them. The variable lives only in that terminal window, which is a
+feature here: close it and the credential is no longer in any environment.
+
+Check it took before blaming the script: `echo %GOOGLE_APPLICATION_CREDENTIALS%`
+in cmd, `$env:GOOGLE_APPLICATION_CREDENTIALS` in PowerShell, or
+`echo $GOOGLE_APPLICATION_CREDENTIALS` in bash.
+
+### A2b. Dry-run the backfill
+
+```
 node projects/boardgame-buddy/tools/set-authenticated-claim.mjs --dry-run
 ```
 
@@ -59,7 +88,7 @@ Expect roughly `23 users, 0 already correct, would update 23`.
 
 ### A3. Apply it
 
-```bash
+```
 node projects/boardgame-buddy/tools/set-authenticated-claim.mjs --apply
 ```
 
@@ -70,10 +99,17 @@ exits non-zero if any account failed, and names them.
 
 ### A4. Delete the key
 
-```bash
-unset GOOGLE_APPLICATION_CREDENTIALS
-rm /absolute/path/to/sa.json
-```
+| Shell | Commands |
+|---|---|
+| cmd.exe | `set GOOGLE_APPLICATION_CREDENTIALS=` then `del C:\path\to\sa.json` |
+| PowerShell | `Remove-Item Env:\GOOGLE_APPLICATION_CREDENTIALS` then `Remove-Item C:\path\to\sa.json` |
+| bash / zsh | `unset GOOGLE_APPLICATION_CREDENTIALS` then `rm /absolute/path/to/sa.json` |
+
+In cmd, `set VAR=` with nothing after the `=` is how you clear a variable.
+Closing the window does it too. The file is the part that matters — the
+variable is just a pointer at it.
+
+`node_modules/` from A2 can stay or go; it is ignored either way.
 
 ### A5. Refresh a token and verify
 
@@ -116,50 +152,149 @@ here is nil — one invocation per sign-in, far inside the free tier — but the
 account has to exist. Identity Platform itself usually already implies one; if
 it does not, and attaching one is unacceptable, use the alternative in B5.
 
-### B2. The function
+### B2. The function is already written
 
-`beforeUserSignedIn`, not `beforeUserCreated`. It fires on every sign-in, so it
-also self-heals any account that somehow lacks the claim — including anyone
-created before this function existed, which makes Part A a convenience rather
-than a dependency.
+`projects/boardgame-buddy/functions/index.js`, committed. Read it before
+deploying — the comments say why it is `beforeUserSignedIn` rather than
+`beforeUserCreated`, why it returns both `customClaims` and `sessionClaims`,
+and why it must never throw.
 
-```js
-// functions/index.js
-import { beforeUserSignedIn } from "firebase-functions/v2/identity";
+The short version of that last one: **a blocking function that errors blocks
+the sign-in it is attached to.** A bug in there does not degrade the app, it
+locks every user out of it. So the body is wrapped in try/catch and returns
+nothing on failure — failing open costs one account its claim until its next
+sign-in repairs it.
 
-export const supabaseRole = beforeUserSignedIn((event) => {
-  try {
-    const existing = (event.data && event.data.customClaims) || {};
-    if (existing.role === "authenticated") return;
-    // Merge: the return value REPLACES the stored claims.
-    return { customClaims: { ...existing, role: "authenticated" } };
-  } catch (_) {
-    // NEVER let this throw. A blocking function that errors blocks the
-    // sign-in it is attached to, so a bug here locks every user out of the
-    // app. Failing open costs one account its claim until its next sign-in;
-    // failing closed costs everyone their account.
-    return;
-  }
-});
+`firebase.json` and `.firebaserc` sit beside it in `projects/boardgame-buddy/`,
+with the project pinned to `boardgamebuddy-508716` so a deploy cannot land on
+the wrong one.
+
+### B3. Install the CLI and deploy
+
+From **`projects/boardgame-buddy`** — the Firebase CLI reads `firebase.json`
+from the working directory, and the one that matters is there, not at the repo
+root:
+
 ```
-
-### B3. Deploy
-
-```bash
+npm install -g firebase-tools
+firebase login
+cd projects\boardgame-buddy
+cd functions && npm install && cd ..
 firebase deploy --only functions
 ```
 
-Deploying a `beforeUserSignedIn` function registers the blocking trigger.
-Confirm it under Firebase console → **Authentication → Settings → Blocking
-functions**.
+`firebase login` opens a browser; sign in as the Google account that owns the
+GCP project. Deploying a `beforeUserSignedIn` function registers the blocking
+trigger as part of the deploy — there is no separate registration step.
+
+Confirm it afterwards under Firebase console → **Authentication → Settings →
+Blocking functions**. `supabaseRole` should be listed against *Before sign-in*.
+
+> **Not automated, deliberately.** Every other deploy in this project runs from
+> a GitHub workflow. This one does not, because it changes approximately never
+> and automating it would mean parking a credential for the auth project in CI
+> — a much larger standing risk than a manual deploy nobody has to repeat.
+
+`functions/package-lock.json` is generated by the `npm install` above and
+**should be committed** (`.gitignore` has an exception for it), so a later
+deploy installs the same versions this one did.
+
+### B3b. If the deploy fails with "container failed to start"
+
+```
+Could not create or update Cloud Run service supabaserole, Container
+Healthcheck failed. The user-provided container failed to start and listen on
+the port defined provided by the PORT=8080 environment variable within the
+allocated timeout.
+```
+
+**That message is about a port and is almost never about a port.** It is what
+Cloud Run says when the module throws while loading, and it names neither the
+module nor the reason. Do not retry it more than once and do not guess: read
+the container's own log, which says exactly what happened.
+
+```
+gcloud run services logs read supabaserole --region us-central1 --limit 50 --project boardgamebuddy-508716
+```
+
+(Cloud Shell has `gcloud` already. Or use the Logs URL the CLI printed.)
+
+**The one that has already happened here**, on the first three deploys:
+
+```
+Error: Cannot find module '@google-cloud/firestore'
+Require stack:
+  .../firebase-admin/lib/firestore/index.js
+  .../firebase-functions/lib/common/providers/firestore.js
+  .../firebase-functions/lib/v2/providers/firestore.js
+  .../firebase-functions/lib/v2/index.js
+  /workspace/index.js
+```
+
+`index.js` imported `firebase-functions/v2` for `setGlobalOptions`. That
+barrel eagerly requires **every** v2 provider, Firestore included, which
+reaches `@google-cloud/firestore` — an *optional* peer of `firebase-admin`.
+A local `npm install` resolves optional peers, so the module loads on a laptop
+**and in the CLI's own `Loading and analyzing source code` step**; the
+deployed image installs without them and dies at load.
+
+That is why the local checks all passed while the deploy failed three times,
+and it is the lesson worth keeping: **in `functions/`, import the narrow path
+(`firebase-functions/v2/identity`) and never the barrel.** Region is a
+per-function option for the same reason — `setGlobalOptions` lives in the
+barrel.
+
+Two others worth knowing if the log says something different:
+
+* **A first-ever deploy on the project** enables five APIs and mints service
+  identities in the same run, and those grants propagate asynchronously. If
+  the log shows an image-pull or permission failure rather than a module
+  error, grant `<project-number>-compute@developer.gserviceaccount.com` the
+  **Artifact Registry Reader** role and redeploy.
+* **The runtime.** `engines.node` is pinned to `22`. It was briefly `20`,
+  which the deploy itself warned about — *"deprecated on 2026-04-30 and will
+  be decommissioned on 2026-10-30"*. If that warning reappears, the pin has
+  regressed. A local `npm install` on Node 24 printing
+  `EBADENGINE ... required: { node: '22' }` is harmless: that field selects
+  the **cloud** runtime and constrains nothing on your machine.
+
+### B3c. "Deploy complete!" can be a lie
+
+```
+i  functions: Skipping the deploy of unchanged functions.
++  functions[supabaseRole(us-central1)] Skipped (No changes detected)
++  Deploy complete!
+```
+
+The CLI compares your source against what it last **uploaded**, not against
+whether the deployed revision is *healthy*. After a failed deploy, an
+unchanged retry prints this and exits 0 while the broken revision stays
+exactly as broken. `firebase functions:list` showing the function proves it is
+**registered**, not that it serves.
+
+So after any failed deploy, change the source (or
+`firebase functions:delete supabaseRole --region us-central1`) before
+retrying, and confirm success by the deploy actually saying
+`creating`/`updating` — then by B4.
+
+> **A registered blocking function whose service will not start is the worst
+> of the three states.** Identity Platform has been told to call it on every
+> sign-in. If sign-in starts failing after a deploy, clear the *Before
+> sign-in* function in Firebase console → Authentication → Settings →
+> Blocking functions immediately; it takes effect at once and deletes
+> nothing. Fix the deploy afterwards.
 
 ### B4. Verify with a throwaway account
 
 Sign up a new account, then decode its token as in A5 and confirm
-`role === "authenticated"`. If the very first token after signup lacks it but a
-forced refresh has it, the claim is landing one token late — acceptable, and
-the client picks it up within the hour, but worth knowing before you debug it
-as a failure. Delete the throwaway account afterwards.
+`role === "authenticated"`. Because the function returns `sessionClaims` as
+well as `customClaims`, the claim should be in the **first** token, with no
+refresh needed — that is what `sessionClaims` is for. If it is missing there
+but present after a forced refresh, the session-claims half is not taking
+effect; the account still works from its second token on, so this is worth
+knowing rather than urgent.
+
+Then delete the throwaway account.
 
 ### B5. Alternative, if you will not attach billing
 
@@ -175,12 +310,93 @@ session still lacks the claim until the refresh lands. Prefer B2.
 
 ---
 
+## Part C — the app's user id (`app_uid`)
+
+**Symptom.** A brand-new account signs in successfully and then every
+authenticated endpoint answers **500**: `/bootstrap`, `/feed`, `/push/config`,
+`/collection/status-map`. The app lands on "Couldn't load your feed". Existing
+accounts are completely unaffected.
+
+**Cause.** The 23 accounts migrated from Supabase kept their original UUIDs as
+their Identity Platform uid, so `sub` was always a UUID — and this schema is
+built on that: **35 user-id columns across 20 tables, 58 uuid-typed RPC
+parameters.** A brand-new account gets a Firebase-generated uid instead, 28
+characters and no dashes. Every query naming that user dies on `invalid input
+syntax for type uuid`, which `main.py`'s PostgREST error handler returns as a
+500.
+
+This has been broken since the auth cutover. Nobody had created a new account
+until Part B's verification step asked for one, which is the only reason it was
+found before a stranger did.
+
+**Fix.** The token carries the id the app should use. The blocking function
+resolves it at sign-in into an `app_uid` claim — the uid unchanged when it is
+already a UUID, otherwise a deterministic `uuid5` of it — and nothing
+downstream has to know which case it got. No column changes type and no RPC
+signature changes.
+
+### C1. Deploy in this order
+
+1. **The blocking function** (Part B, redeploy) — tokens start carrying
+   `app_uid`.
+2. **`db/migrations/037_app_uid_claim.sql`** in the Supabase SQL editor — the
+   seven RLS policies stop reading `auth.uid()` and read the claim.
+3. **The API** (merge to main; Railway redeploys) — `jwt_auth.py` reads the
+   claim instead of `sub`.
+
+The order is not arbitrary. Both 2 and 3 accept a UUID-shaped `sub` when the
+claim is absent, so tokens minted before step 1 keep working through the
+rollout rather than everybody being signed out for an hour. Going the other
+way round — API or policies first — leaves a new account broken until the
+function lands, which is the state you are already in, so it is not dangerous,
+just pointless.
+
+### C2. The already-broken test account heals itself
+
+Nothing to clean up. Its next sign-in runs the blocking function, which mints
+its `app_uid`, and the API then creates its profile under that UUID. You can
+keep it or delete it; it is no longer a special case either way.
+
+### C3. Verify
+
+```js
+const t = await window.firebase.auth().currentUser.getIdToken(true);
+const c = JSON.parse(atob(t.split(".")[1]));
+console.log(c.role, c.app_uid);      // "authenticated"  "<a uuid>"
+```
+
+For a **migrated** account, `app_uid` should equal `sub`. For a **new** one it
+should be a UUID that is not `sub`. Then load the feed, log a play, and have a
+spectator watch a live session — that last one is what proves RLS is reading
+the claim rather than failing closed.
+
+The SQL-side check, which must return zero rows:
+
+```sql
+SELECT policyname, tablename FROM pg_policies
+ WHERE schemaname = 'public'
+   AND (qual LIKE '%auth.uid()%' OR with_check LIKE '%auth.uid()%');
+```
+
+### C4. Two things never to change
+
+**The uuid5 namespace** in `functions/index.js`. It is the input to every
+derived id; a new namespace re-keys every non-migrated account and orphans all
+of their data. It is a constant with a comment saying exactly this.
+
+**The narrowness of the `sub` fallback.** It accepts a UUID-shaped `sub` and
+nothing else, in both `jwt_auth.py` and `bgb_app_uid()`. Widening it to accept
+any `sub` would put a 28-character string back into a uuid column and restore
+the original bug. It exists only so pre-rollout tokens survive, and it can be
+deleted once none can still be valid — they last an hour.
+
 ## Verification checklist
 
 - [ ] A token decoded in the browser shows `role: "authenticated"`
 - [ ] The host's direct upsert returns no error
 - [ ] Host types a score → the spectator's grid shows it within a few seconds
-- [ ] A **new** signup's token also carries the claim (Part B is live)
+- [ ] A **new** signup's token carries BOTH claims — `role` and `app_uid`
+- [ ] A **new** account can load its feed at all (Part C; this was a 500)
 - [ ] No more `42501` on `boardgamebuddy_play_session_scores` in the Supabase log
 - [ ] Realtime is back: the spectator updates in under a second, not on the
       4–10s poll cadence

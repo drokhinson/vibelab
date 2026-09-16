@@ -2,10 +2,17 @@
 // set-authenticated-claim.mjs — give every Identity Platform user the
 // `role: "authenticated"` custom claim Supabase's RLS needs.
 //
-//     npm install firebase-admin          # not a repo dependency; see below
-//     export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/sa.json
+//     npm install --no-save firebase-admin     # not a repo dependency; see below
+//     <set GOOGLE_APPLICATION_CREDENTIALS — see the table below>
 //     node projects/boardgame-buddy/tools/set-authenticated-claim.mjs --dry-run
 //     node projects/boardgame-buddy/tools/set-authenticated-claim.mjs --apply
+//
+// Setting the variable is shell-specific, and `export` is bash-only:
+//     cmd.exe     set GOOGLE_APPLICATION_CREDENTIALS=C:/path/to/sa.json
+//     PowerShell  $env:GOOGLE_APPLICATION_CREDENTIALS = "C:/path/to/sa.json"
+//     bash/zsh    export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa.json
+// In cmd: no quotes around the value and no spaces around the `=`. Forward
+// slashes are fine on Windows.
 //
 // WHY THIS IS NEEDED. Every RLS policy on the live-session tables is declared
 // `TO authenticated`. A request's role comes from the JWT's `role` claim, and
@@ -92,7 +99,13 @@ async function main() {
     process.exit(2);
   }
   if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    console.error("GOOGLE_APPLICATION_CREDENTIALS is not set. See the header.");
+    console.error(
+      "GOOGLE_APPLICATION_CREDENTIALS is not set. Set it in THIS shell:\n" +
+      "  cmd.exe     set GOOGLE_APPLICATION_CREDENTIALS=C:/path/to/sa.json\n" +
+      "  PowerShell  $env:GOOGLE_APPLICATION_CREDENTIALS = \"C:/path/to/sa.json\"\n" +
+      "  bash/zsh    export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa.json\n" +
+      "`export` is bash-only; in cmd use no quotes and no spaces around the =.\n"
+    );
     process.exit(2);
   }
 
@@ -104,7 +117,8 @@ async function main() {
     console.error(
       "firebase-admin is not installed. It is deliberately not a repo\n" +
       "dependency — nothing at runtime uses it. Install it just for this run:\n" +
-      "  npm install firebase-admin\n"
+      "  npm install --no-save firebase-admin\n" +
+      "--no-save keeps it out of a package.json this repo root does not have.\n"
     );
     process.exit(2);
   }
