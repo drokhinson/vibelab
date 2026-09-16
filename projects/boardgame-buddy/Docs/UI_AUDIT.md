@@ -8,7 +8,10 @@ A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code a
 > Pass 3 (feed-card rework) 2026-08-29, Pass 4 (theme system + sheet system)
 > 2026-08-30, Pass 5 (Wishlist → a shelf) 2026-09-01, Pass 6 (first-run deck)
 > 2026-09-01, Pass 7 (one picker for "who is this person?") 2026-09-02,
-> **Pass 8 (the header's upload button retires) 2026-09-02**.
+> Pass 8 (the header's upload button retires) 2026-09-02,
+> Pass 9 (notifications) 2026-09-03, Pass 10 (BGG import) 2026-09-03,
+> Pass 11 (review sweep) 2026-09-10,
+> **Pass 12 (two importers become one) 2026-09-16**.
 >
 > ⚠️ Every `file:line` citation in §§2-8 dates from 2026-05-23 and has drifted.
 > Treat the *claims* as current only where a later pass confirms them; re-grep
@@ -1118,3 +1121,64 @@ spectator mirror both drew); and in `helpers.js`, `gameDetailJs`,
 `captureFocus`/`restoreFocus`, `formatDateShort` and `parseDate`.
 `PolaroidPopup.prompt()` joins `confirm()` and `alert()` so no screen reaches
 for `window.prompt` again.
+
+## Cleanup log — Pass 12 (two importers become one), 2026-09-16
+
+**Two screens merged into one wizard**, at `/settings/import`. The end of this
+one is the point: both importers already shared their chrome, their progress
+bar, their pickers and their write, and what they had NOT shared was the screen
+the user sees last. The two `renderImport`s were ~85% the same file, differing
+in one summary tile and the wording of two warnings — the textbook shape of
+`ui-object-design.md` §4, caught at instance #2 and left there.
+
+**Deleted:** `views/import-plays-view.js` (643), `views/photo-import-view.js`
+(577). **Their step modules were split rather than deleted:**
+`widgets/import-plays-steps.js` → `import-notes-steps.js` (six step bodies to
+four), `widgets/photo-import-steps.js` → `import-photos-steps.js` (three to
+two) — the review, summary and progress renderers left both files for one
+shared implementation.
+
+**Extracted, not copied:**
+- `widgets/import-review-step.js` — the review, the summary and the progress
+  bar EVERY source ends on. Renders any draft that answers the `ImportSource`
+  interface, so nothing in it asks which importer it is serving.
+- `widgets/import-review-host.js` — that review's handler half, separate from
+  the shell so the shell's own header ("owns the lifecycle and nothing about
+  how a source's steps look") stays true.
+- `domain/import-people.js` — `loadPartners` / `viewerRow` / `viewerSeat` /
+  `candidates` / `ghostsIn` / `recent` / `closestTo` / `searchEveryone`. Both
+  views had carried their own copy of "who was at this table": `_searchEveryone`
+  was byte-identical in both, `_playerCandidates` agreed on the viewer row and
+  then diverged, and only one of them knew about the ghosts a run invents.
+  ~180 lines to one module. (A THIRD byte-identical `_searchEveryone` survives
+  in `views/buddies-view.js` — out of scope here, and the next thing to fold in
+  if that module is ever generalised past the importers.)
+- `widgets/import-notes-branch.js` / `widgets/import-photos-branch.js` — each
+  source's own handlers and step bodies, behind one contract. Lifecycle vs
+  appearance: `views/import-wizard-view.js` owns the first, they own the second.
+
+**One component where there were two:** `.imp-seat` is now the editable seat,
+with a score field, a winner toggle and a remove — the photo pager's
+`.pimp-seat__toggle` / `__x` geometry, promoted into the family every source
+reads rather than borrowed from one branch's.
+
+**Fixed on the way past:** both seat mutators were keyed on the DISPLAY NAME,
+so an account and a same-named ghost — exactly what the seats collapse exists
+to keep apart — were one target. They take a `whoOf()` key now.
+`PhotoImportView._resetFormState` reset its sequence guards to `0` rather than
+advancing them, so a read still in flight from a previous mount matched the new
+mount's first seq and painted over it; every guard in the wizard advances.
+
+**Kept alive:** `/settings/import-plays` and `/settings/import-photos` resolve
+as route aliases onto the wizard with their branch preselected, and drafts
+written by either old importer are adopted once and offered as a resume row.
+Neither `DRAFT_VERSION` was bumped — both new fields are additive and optional
+with a null default and an explicit normalisation in `restore()` — so nobody
+loses an in-flight import to the deploy.
+
+**Gate added:** `tools/check-import-wizard.mjs`, 80 assertions. The one that
+earns its place is the handler-name sweep: every `onclick="window.thing._m()"`
+in a step file must name a method that exists, because those resolve at click
+time and a renamed one is a dead button with no build-time error. Splitting the
+photo step module cut `thumb()` and `emptyStep()` out of it — both files still
+parsed, both still exported — and nothing else would have said so.
