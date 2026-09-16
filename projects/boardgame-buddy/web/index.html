@@ -119,24 +119,21 @@
 
   <!-- Layout boot. Same contract as the theme boot above, for the layout
        tier (phone / tablet / wide / land — see domain/layout.js, which owns
-       every change after this): a stored pin wins, otherwise the viewport.
+       every change after this): the viewport decides, and nothing overrides it.
        Before first paint so a tablet never flashes the phone column, and so a
        phone picked up sideways never flashes the bottom bar. Keep the
-       breakpoints, the 600px floor and the land query in step with
-       domain/layout.js — this block deliberately duplicates that ladder, and
-       the deploy bundler ships it verbatim. -->
+       breakpoints and the land query in step with domain/layout.js — this
+       block deliberately duplicates that ladder, and the deploy bundler ships
+       it verbatim. It no longer reads `bgb.layout`: the Settings pin that wrote
+       that key is gone, and a leftover value must not keep steering the layout
+       with nothing left to clear it. -->
   <script>
     (function () {
-      var stored = null;
-      try { stored = localStorage.getItem("bgb.layout"); } catch (e) {}
       var mm = window.matchMedia ? function (q) { return window.matchMedia(q).matches; } : function () { return false; };
       // Height first — a phone on its side passes the tablet width test too.
       var tier = mm("(orientation: landscape) and (max-height: 560px) and (min-width: 640px)")
         ? "land"
         : mm("(min-width: 1024px)") ? "wide" : mm("(min-width: 768px)") ? "tablet" : "phone";
-      // A pin outranks orientation: a pinned phone keeps the bottom bar.
-      if (stored === "phone") tier = "phone";
-      else if (stored === "tablet") tier = mm("(max-width: 599px)") ? "phone" : "tablet";
       document.documentElement.setAttribute("data-bgb-layout", tier);
     })();
   </script>
@@ -303,8 +300,7 @@
     <main data-view="achievements" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="notifications" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="settings" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
-    <main data-view="import-plays" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
-    <main data-view="photo-import" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
+    <main data-view="import-wizard" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="bgg-sync" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="admin-reports" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="admin-images" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
@@ -441,8 +437,10 @@
   <script src="domain/notification-feed.js"></script>
   <script src="domain/push.js"></script>
   <script src="domain/name-match.js"></script>
+  <script src="domain/import-people.js"></script>
   <script src="domain/play-import.js"></script>
   <script src="domain/photo-import.js"></script>
+  <script src="domain/import-draft.js"></script>
   <script src="domain/play-session.js"></script>
   <script src="domain/score-write-queue.js"></script>
   <script src="domain/live-scores.js"></script>
@@ -545,8 +543,13 @@
   <script src="widgets/onboarding-deck-slides.js"></script>
   <script src="widgets/onboarding-deck.js"></script>
   <script src="widgets/import-expansions-modal.js"></script>
-  <script src="widgets/import-plays-steps.js"></script>
-  <script src="widgets/photo-import-steps.js"></script>
+  <script src="widgets/import-notes-steps.js"></script>
+  <script src="widgets/import-photos-steps.js"></script>
+  <script src="widgets/import-source-step.js"></script>
+  <script src="widgets/import-review-step.js"></script>
+  <script src="widgets/import-review-host.js"></script>
+  <script src="widgets/import-notes-branch.js"></script>
+  <script src="widgets/import-photos-branch.js"></script>
   <script src="widgets/chapter-wizard-steps.js"></script>
   <script src="widgets/scoring-template-editor.js"></script>
   <script src="widgets/chapter-import-sheet.js"></script>
@@ -584,8 +587,7 @@
   <script src="views/achievements-view.js"></script>
   <script src="views/notifications-view.js"></script>
   <script src="views/settings-view.js"></script>
-  <script src="views/import-plays-view.js"></script>
-  <script src="views/photo-import-view.js"></script>
+  <script src="views/import-wizard-view.js"></script>
   <script src="views/bgg-sync-view.js"></script>
   <script src="widgets/admin-backfill-panel.js"></script>
   <script src="views/admin-reports-view.js"></script>

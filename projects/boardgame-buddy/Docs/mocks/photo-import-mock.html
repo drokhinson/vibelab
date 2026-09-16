@@ -11,7 +11,9 @@
    phone is judged against a page that isn't pretending to be the app.
 
    The phone is NOT a picture of the screen — it is the screen, driven by the
-   same three-step state machine views/photo-import-view.js runs, with the
+   same state machine the importer's photos branch runs (that was
+   views/photo-import-view.js; it is widgets/import-photos-branch.js inside
+   views/import-wizard-view.js now, and the pager it draws is unchanged), with the
    token palettes copied verbatim from web/styles.css (both themes) so this
    board cannot flatter the real thing. The photographs are drawn SVG, since
    the point of them here is the metadata, not the picture.
@@ -446,7 +448,7 @@ code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
 
 <div class="page">
   <header class="masthead">
-    <p class="eyebrow">BoardgameBuddy &middot; Settings &rarr; Import plays from photos</p>
+    <p class="eyebrow">BoardgameBuddy &middot; Settings &rarr; Play importer &rarr; Photos</p>
     <h1>Thirty photos, thirty plays</h1>
     <p class="standfirst">
       The camera roll already knows <strong>when</strong> and <strong>where</strong>. It cannot know

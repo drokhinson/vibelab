@@ -1,11 +1,9 @@
 // domain/layout.js — phone / tablet / wide layout tier.
 //
-// The same shape as domain/theme.js, for the same reasons. The initial
-// attribute is set by an inline script in index.html so it lands before first
-// paint (the "Layout boot" block there); this module owns every change after
-// that. Two sources of truth, in order: an explicit stored choice, otherwise
-// the viewport width — and while the user has made no explicit choice we keep
-// following the viewport live (a rotation, a resized window).
+// The initial attribute is set by an inline script in index.html so it lands
+// before first paint (the "Layout boot" block there); this module owns every
+// change after that. One source of truth: the viewport, followed live — a
+// rotation, a resized window, a foreground after either.
 //
 // The attribute is `data-bgb-layout` on <html>. styles.css re-declares the
 // column and rail tokens under it (the "Layout tiers" block at the top), which
@@ -25,17 +23,17 @@
 // Width cannot tell an iPad standing up (768×1024) from a phone lying down;
 // height can, which is why LAND_QUERY leads with it and is asked first.
 //
-// A stored choice is `phone` or `tablet`, never `wide` or `land`: pinning a
-// tier is for a device that lands on the wrong side of a breakpoint, and a rail
-// is not something a 700px screen can hold. And a stored `tablet` still floors
-// to `phone` below MIN_TABLET_PX — a two-pane play cascade on a real phone is
-// two panes nobody can read. A pin outranks orientation: someone who asked for
-// the phone layout keeps the bottom bar when they turn the device.
+// There is no pin. Settings used to offer Auto / Phone / Tablet, which stored
+// `bgb.layout` and let that outrank the viewport; the card is gone and so is
+// every reader of that key. Nothing removes it on the way past on purpose —
+// once nothing reads it, a leftover value is inert, and anyone who had pinned a
+// tier is released by the next load rather than by a migration that would then
+// have to live here forever. Do not reintroduce a reader without also
+// reintroducing the control that clears it: a stored override with no UI to
+// undo it strands whoever set it.
 
 (function () {
-  const LS_KEY = "bgb.layout";
   const BREAKPOINTS = { tablet: 768, wide: 1024 };
-  const MIN_TABLET_PX = 600;
 
   // A phone on its side. Three clauses, each ruling something out:
   //   orientation  — portrait is never this tier, whatever its size.
@@ -56,21 +54,12 @@
   let mqlWide = null;
   let mqlLand = null;
 
-  function stored() {
-    try {
-      const v = localStorage.getItem(LS_KEY);
-      return v === "phone" || v === "tablet" ? v : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
   function matches(query) {
     if (!window.matchMedia) return false;
     return window.matchMedia(query).matches;
   }
 
-  /** The tier the viewport alone asks for, ignoring any stored choice. */
+  /** The tier the viewport asks for. */
   function auto() {
     // Reuse the retained lists once start() has made them, so the reads that
     // resync() does can't be answered by a stale throwaway object.
@@ -84,14 +73,6 @@
     return tablet ? "tablet" : "phone";
   }
 
-  /** The tier we should be laying out right now: explicit choice, else auto. */
-  function resolved() {
-    const pick = stored();
-    if (pick === null) return auto();
-    if (pick === "tablet" && matches("(max-width: " + (MIN_TABLET_PX - 1) + "px)")) return "phone";
-    return pick;
-  }
-
   function apply(tier) {
     document.documentElement.setAttribute("data-bgb-layout", tier);
     if (window.store) window.store.set("layout", tier);
@@ -100,7 +81,7 @@
   // Re-derive and re-lay-out. Cheap and idempotent, so it is safe to call on
   // every resize and foreground event.
   function resync() {
-    const want = resolved();
+    const want = auto();
     if (want !== BgbLayout.current()) apply(want);
   }
 
@@ -119,42 +100,18 @@
       return v === "tablet" || v === "wide" || v === "land" ? v : "phone";
     },
 
-    /** The viewport's own answer, ignoring any stored choice. Use this for
-     *  "is this a phone-sized device" questions (the install prompt), where a
-     *  desktop user who pinned the phone layout must not count as a phone. */
+    /** The viewport's answer, read live off the media queries rather than off
+     *  the attribute `current()` reports. The two agree except in the window
+     *  between a resize and its resync, which is why the install prompt asks
+     *  this one. */
     auto,
-
-    /** @returns {"phone"|"tablet"|null} the pinned tier, or null on Auto */
-    stored,
-
-    /** @returns {boolean} true when following the viewport rather than a pin */
-    isAuto() {
-      return stored() === null;
-    },
-
-    /** @param {"phone"|"tablet"} tier */
-    set(tier) {
-      if (tier !== "phone" && tier !== "tablet") return;
-      try {
-        localStorage.setItem(LS_KEY, tier);
-      } catch (_) {}
-      apply(resolved());
-    },
-
-    /** Drop the pin and go back to following the viewport. */
-    clear() {
-      try {
-        localStorage.removeItem(LS_KEY);
-      } catch (_) {}
-      apply(auto());
-    },
 
     /** Exposed for the listeners below; also useful from the console. */
     resync,
 
     /** Called once from init.js. */
     start() {
-      apply(resolved());
+      apply(auto());
 
       // Foreground resync, for the same reason theme.js has one: a rotation
       // or a window resize that lands while the page is hidden or in the
@@ -170,8 +127,6 @@
       mqlTablet = window.matchMedia("(min-width: " + BREAKPOINTS.tablet + "px)");
       mqlWide = window.matchMedia("(min-width: " + BREAKPOINTS.wide + "px)");
       mqlLand = window.matchMedia(LAND_QUERY);
-      // Not gated on isAuto(): a pinned tablet still floors to phone under
-      // MIN_TABLET_PX, so a resize can change the answer either way.
       for (const m of [mqlTablet, mqlWide, mqlLand]) {
         if (m.addEventListener) m.addEventListener("change", resync);
         else if (m.addListener) m.addListener(resync);

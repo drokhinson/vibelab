@@ -185,10 +185,18 @@
           consume: ["userId"],
           extract: (m) => ({ userId: decodeURIComponent(m[1]) }),
           build: (p) => `/u/${encodeURIComponent(p.userId || "")}` },
+        { name: "import-wizard",       pattern: /^\/settings\/import\/?$/,
+          build: () => "/settings/import" },
+        // The two importers were separate screens at separate paths for
+        // months, so both live in bookmarks and home-screen shortcuts. Aliased
+        // rather than dropped — same trick /admin uses above — so an old link
+        // lands on the wizard with its branch already picked. No `build`:
+        // nothing navigates TO these names any more, and the view replaces the
+        // url with the canonical one on the way in.
         { name: "import-plays",        pattern: /^\/settings\/import-plays\/?$/,
-          build: () => "/settings/import-plays" },
+          alias: "import-wizard", aliasParams: { source: "notes" } },
         { name: "photo-import",        pattern: /^\/settings\/import-photos\/?$/,
-          build: () => "/settings/import-photos" },
+          alias: "import-wizard", aliasParams: { source: "photos" } },
         { name: "bgg-sync",            pattern: /^\/settings\/bgg\/?$/,
           build: () => "/settings/bgg" },
         { name: "notifications",       pattern: /^\/notifications\/?$/,           build: () => "/notifications" },

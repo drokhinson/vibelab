@@ -1,8 +1,15 @@
 // views/settings-view.js — account settings & integrations.
 //
-// Admin tools, Appearance, Connections, Pending uploads, Data management,
-// Logout and BGG attribution, in the warm-cream card aesthetic. Admin tools
-// surfaces a live "open chapter reports" badge count.
+// Appearance, Notifications, Connections, Import (+ pending uploads), Data
+// management, Admin tools, then the account actions, the BGG attribution and
+// the legal links, in the warm-cream card aesthetic. Admin tools surfaces a
+// live "open chapter reports" badge count.
+//
+// The order is what somebody actually comes here for: the two sections every
+// account touches lead, the setup-once ones follow, and Admin tools — which
+// most accounts never see at all — sits last rather than first. Below the
+// labelled sections come the three unlabelled trailers, in descending
+// consequence: Log out / Delete account, the BGG credit, and the legal links.
 //
 // The identity/"Edit profile" account card moved to the Profile hub
 // (views/profile-self-view.js). What is left under "Account" here is the
@@ -154,16 +161,8 @@
 
       this.container.innerHTML = `
         ${this._renderHead()}
-        ${me.is_admin ? `
-          <div class="set-card-label">Admin tools</div>
-          ${this._renderAdminCard()}
-        ` : `
-          <div class="set-card-label">Account</div>
-          <div class="set-card">${this._renderBecomeAdminBlock()}</div>
-        `}
         <div class="set-card-label">Appearance</div>
         ${this._renderAppearanceCard()}
-        ${this._renderLayoutCard()}
         <div class="set-card-label">Notifications</div>
         ${this._renderNotificationsCard()}
         <div class="set-card-label">Connections</div>
@@ -175,8 +174,16 @@
         <div class="set-card-label">Data management</div>
         ${this._renderExportCard()}
         ${this._renderCacheCard()}
+        ${me.is_admin ? `
+          <div class="set-card-label">Admin tools</div>
+          ${this._renderAdminCard()}
+        ` : `
+          <div class="set-card-label">Account</div>
+          <div class="set-card">${this._renderBecomeAdminBlock()}</div>
+        `}
         ${this._renderAccountActions()}
         ${this._renderBggAttribution()}
+        ${this._renderLegalLinks()}
         <div style="height: 1rem"></div>
       `;
       this.refreshIcons();
@@ -272,59 +279,6 @@
     _setTheme(value) {
       if (value === "auto") window.BgbTheme.clear();
       else window.BgbTheme.set(value);
-      this.render();
-    }
-
-    // ── Layout ────────────────────────────────────────────────────────────────
-    // The same three-way control as Theme, for the same reason: the tier
-    // follows the screen by default (Auto), and a pin exists for a device that
-    // lands on the wrong side of a breakpoint — a small tablet that wants the
-    // phone column, a big phone in landscape that wants the tablet one. There
-    // is no "Wide" segment on purpose: the rail is what a wide screen gets on
-    // Auto and is not something a narrow one can hold (domain/layout.js).
-    _renderLayoutCard() {
-      const L = window.BgbLayout;
-      const auto = L.isAuto();
-      const tier = L.current();
-      const pick = L.stored();
-      // Tier names are about geometry; this copy is about the thing in the
-      // person's hands. "wide" is the monitor in front of them, and "land" is
-      // the phone they just turned on its side.
-      const WORDS = { wide: "desktop", land: "sideways" };
-      const word = WORDS[tier] || tier;
-      const seg = (value, label) => {
-        const on = value === "auto" ? auto : (!auto && pick === value);
-        return `
-          <button class="theme-seg__opt${on ? " is-on" : ""}"
-                  aria-pressed="${on ? "true" : "false"}"
-                  onclick="window.settingsView._setLayout('${value}')">${label}</button>`;
-      };
-      return `
-        <div class="set-card">
-          <div class="set-card__row set-card__row--static">
-            <span class="set-card__row-icon"><i data-icon="maximize-2" class="w-4 h-4"></i></span>
-            <span class="set-card__row-body">
-              <span class="set-card__row-title">Layout</span>
-              <span class="set-card__row-sub">
-                ${auto
-                  ? `Following your screen \u2014 currently ${word}.`
-                  : pick === tier
-                    ? `Always the ${word} layout.`
-                    : `Pinned to ${pick}, showing ${word} \u2014 this screen is too narrow for it.`}
-              </span>
-            </span>
-          </div>
-          <div class="theme-seg" role="group" aria-label="Layout">
-            ${seg("auto", "Auto")}${seg("phone", "Phone")}${seg("tablet", "Tablet")}
-          </div>
-        </div>
-      `;
-    }
-
-    /** @param {"auto"|"phone"|"tablet"} value */
-    _setLayout(value) {
-      if (value === "auto") window.BgbLayout.clear();
-      else window.BgbLayout.set(value);
       this.render();
     }
 
@@ -710,42 +664,36 @@
     }
 
     /**
-     * The two importers' front door (views/import-plays-view.js and
-     * views/photo-import-view.js).
+     * The play importer's front door (views/import-wizard-view.js).
      *
-     * Their own section rather than rows under Connections: BGG sync links an
-     * account and keeps two libraries in step, and these read something the
+     * Its own section rather than a row under Connections: BGG sync links an
+     * account and keeps two libraries in step, and this reads something the
      * user already has, once. Filing them together would suggest an importer
      * needs an account somewhere, which is the whole point of it not doing.
      *
-     * Two rows rather than one screen with a source picker, because they are
-     * not two sources for one flow — they ask for different things (a note to
-     * be read and checked; a photo to be captioned) and they end up somewhere
-     * different (plays; plays with their photographs). Which one somebody
-     * wants is decided by what they have, and that is a decision they can make
-     * from these two lines without opening either.
+     * ONE row, where there used to be two. The old pair argued that a note and
+     * a camera roll are not two sources for one flow — they ask for different
+     * things and end somewhere different — and that the choice was better made
+     * from two lines here than from a picker inside. That was true while the
+     * two flows ended on two different screens. They end on the same review and
+     * the same summary now, so which record you happen to have is a question
+     * about your evening rather than a question about which wizard to open,
+     * and it belongs on the first step of the one that exists.
+     *
+     * The wizard also names the sources it does not have yet, which two rows
+     * here could not: a door that says "Board Game Arena, coming soon" is worth
+     * more than the absence of one.
      */
     _renderImportCard() {
       return `
         <div class="set-card">
-          <button class="set-card__row" onclick="window.router.go('import-plays')">
+          <button class="set-card__row" onclick="window.router.go('import-wizard')">
             <span class="set-card__row-icon"><i data-icon="upload" class="w-4 h-4"></i></span>
             <span class="set-card__row-body">
-              <span class="set-card__row-title">Import plays from notes</span>
+              <span class="set-card__row-title">Play importer</span>
               <span class="set-card__row-sub">
-                Paste a list or a page of tally marks — you review every play
-                before anything is saved.
-              </span>
-            </span>
-            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
-          </button>
-          <button class="set-card__row" onclick="window.router.go('photo-import')">
-            <span class="set-card__row-icon"><i data-icon="camera" class="w-4 h-4"></i></span>
-            <span class="set-card__row-body">
-              <span class="set-card__row-title">Import plays from photos</span>
-              <span class="set-card__row-sub">
-                Pick photos of games you've played — each one keeps its date and
-                its country, and you add the game and the players.
+                Import plays from photos, notes or another app — you review every
+                play before anything is saved.
               </span>
             </span>
             <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
@@ -1098,13 +1046,6 @@
                   ${this._deleting ? "disabled" : ""} onclick="window.handleLogout()">
             <i data-icon="log-out" class="w-4 h-4"></i> Log out
           </button>
-          <p class="settings-account__note">
-            <a class="link" href="/privacy"
-               onclick="window.router.go('privacy'); return false;">Privacy Policy</a>
-            <span aria-hidden="true"> · </span>
-            <a class="link" href="/terms"
-               onclick="window.router.go('terms'); return false;">Terms of Service</a>
-          </p>
           <div class="settings-account__danger">
             <button class="btn btn-sm settings-account__delete"
                     ${this._deleting ? "disabled" : ""}
@@ -1173,6 +1114,29 @@
             Game data, box art, and metadata are sourced from BoardGameGeek via the BGG XML API.
           </p>
         </div>
+      `;
+    }
+
+    /**
+     * The two legal pages, last thing on the screen.
+     *
+     * They used to sit between Log out and the delete-account rule, which put
+     * a pair of read-only links inside the one block on this screen whose
+     * whole job is to separate what you can undo from what you cannot. They
+     * are not account actions and they are not part of that warning, so they
+     * are the footer they always read as — below the BGG credit, where the
+     * rest of the web keeps its policy links and where nobody scanning for
+     * something to *do* has to step over them.
+     */
+    _renderLegalLinks() {
+      return `
+        <nav class="settings-legal" aria-label="Legal">
+          <a class="link" href="/privacy"
+             onclick="window.router.go('privacy'); return false;">Privacy Policy</a>
+          <span aria-hidden="true"> · </span>
+          <a class="link" href="/terms"
+             onclick="window.router.go('terms'); return false;">Terms of Service</a>
+        </nav>
       `;
     }
 

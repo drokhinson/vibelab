@@ -25,7 +25,7 @@ Each object has a JS file in `web/domain/` that wraps its API surface, normalize
 | Object | File | Role in the experience |
 | --- | --- | --- |
 | **Game** | `domain/game.js` | The thing being played. Owns metadata (name, year, players, playtime, BGG link, image). Also owns the relationship to Chapters (rules excerpts) and Expansions. |
-| **Play** | `domain/play.js` | A single recorded session of a Game by one or more Users (and possibly ghost players). Owns players, scores, winner, notes, photo, duration, and the country it was played in (migration 065, resolved by `domain/geo.js` from the device's timezone, or by `domain/geo-grid.js` from a photo's own coordinate when the play came in through the photo importer). |
+| **Play** | `domain/play.js` | A single recorded session of a Game by one or more Users (and possibly ghost players). Owns players, scores, winner, notes, photo, duration, and the country it was played in (migration 065, resolved by `domain/geo.js` from the device's timezone, or by `domain/geo-grid.js` from a photo's own coordinate when the play came in through the importer's photos branch). |
 | **Buddy** | `domain/buddy.js` | A directed friendship between two Users. Carries request state (pending in/out, accepted) and recent-play history together. Ghost buddies are placeholders for non-account players. |
 | **User** | `domain/user.js` | A profile (display name, avatar customization, BGG link). The viewer is the implicit `User.current()`. |
 | **Session** | `domain/play-session.js` + `domain/session-phase.js` + `domain/live-scores.js` | The live state of a game-in-progress. Phases (`gather` → `play` → `settle`) drive the cascading host UX; Realtime keeps joiners in sync. When the host saves, the Session finalizes into a Play and is discarded. |
@@ -481,7 +481,7 @@ this the same person?". A pasted note writes people as they are said out loud �
 "Jas", "dave r", "@marcus" — and the play importer has to answer that against a
 buddy list twice: once to pre-fill each parsed name (`PlayImport.suggestPlayers`,
 above `MIN_AUTO`) and once to rank the picker sheet it opens
-(`views/import-plays-view.js`, above `MIN_SUGGEST`). The score is a ladder of
+(`domain/import-people.js#closestTo`, above `MIN_SUGGEST`). The score is a ladder of
 named cases, not an edit distance: "Jas"/"Jasmine" is a confident match at three
 characters while "Sean"/"Shea" is four characters apart the other way and is not
 a match at all, and only a PREFIX rung can tell those apart. Both the display
@@ -552,8 +552,8 @@ The app is drawn for a phone and has to hold on an iPad, a monitor, and a phone 
 
 `land` is the one tier that is not a width, and it is asked first because a phone held sideways (852×393) satisfies the `tablet` width test too. Width cannot tell an iPad standing up (768×1024) from a phone lying down; height can. Without it a landscape phone spends 117px of a 393px screen — a sticky header and a bottom bar, a third of the short axis — on chrome it has a better place for. The query reads the **layout** viewport, which iOS does not shrink for the software keyboard, so focusing a field cannot flip the tier.
 
-- **The lever is `<html data-bgb-layout="…">`.** An inline boot in `index.html` sets it before first paint (a stored pin, else the viewport); `domain/layout.js` (`window.BgbLayout`) owns it after that — three `MediaQueryList`s held at module scope — the two width breakpoints and `LAND_QUERY`, a resync on `orientationchange` and every foreground event, and `store.set("layout", tier)` on each change so a view can `this.listen("layout", …)`. Per-tier CSS goes through two named, greppable selector groups documented at the top of `styles.css` — **split tiers** (`tablet`, `wide`, `land`: enough room for two panes) and **rail tiers** (`wide`, `land`: the bar is a left rail and the header is folded into it, so both height tokens are 0px). There are no `min-width` media queries, so a pin and the viewport go through the same rules.
-- **A pin is `phone` or `tablet`, never `wide` or `land`.** Settings → Layout is Auto / Phone / Tablet, and a pin outranks orientation — someone who asked for the phone layout keeps the bottom bar when they turn the device. The rail is what a wide screen gets on Auto and not something a 700px screen can hold; and a pinned `tablet` floors to `phone` under 600px, because a two-pane play cascade on a real phone is two panes nobody can read. Auto is the absence of the `bgb.layout` key, exactly like the theme.
+- **The lever is `<html data-bgb-layout="…">`.** An inline boot in `index.html` sets it before first paint from the viewport; `domain/layout.js` (`window.BgbLayout`) owns it after that — three `MediaQueryList`s held at module scope — the two width breakpoints and `LAND_QUERY`, a resync on `orientationchange` and every foreground event, and `store.set("layout", tier)` on each change so a view can `this.listen("layout", …)`. Per-tier CSS goes through two named, greppable selector groups documented at the top of `styles.css` — **split tiers** (`tablet`, `wide`, `land`: enough room for two panes) and **rail tiers** (`wide`, `land`: the bar is a left rail and the header is folded into it, so both height tokens are 0px). There are no `min-width` media queries, so every tier goes through the same rules.
+- **The tier is the viewport's, and nothing overrides it.** There was a Settings → Layout control (Auto / Phone / Tablet) that stored `bgb.layout` and let it outrank the viewport, plus a 600px floor under a pinned `tablet` so a two-pane play cascade never landed on a real phone. The card is gone and so is every reader of that key — `resolved()`, `stored()`, `isAuto()`, `set()` and `clear()` with it, in both `domain/layout.js` and the inline boot. If a pin is ever wanted back, it comes back **with** its control: a stored override and no UI to clear it strands whoever set it. `wide` and `land` were never pinnable anyway — a rail is not something a 700px screen can hold.
 - **The rail is the same `nav.bgb-nav`,** restyled under the rail tiers: fixed at the window's left edge (`left: 0`), `body` padded by `--bgb-rail-width` so `#app` centres in what is left. It used to slide inward to hug the content column on a monitor wider than rail + column, which floated it in open ground with nothing to its left; every other rail-aware rule (`--bgb-col-center`, both `.chapter-add__fab` offsets, the locked chapter editor) already derived the column's edges as rail + the centring gap, which is only true of a flush-left rail. Its brand link and its two utility buttons (`.bgb-nav__tab--util`, `data-toggle="notifications|settings"`) are `display: none` on the bar tiers. The header's bell and gear carry the same `data-toggle` names, and `view.js#go` and `init.js#syncHeaderDots` select by that attribute across every copy — so whichever copy is on screen lights and wears the dot.
 - **What each screen does with the width** — the cascade's `.cascade-cols > .cascade-col + .cascade-col--aside` wrappers (`display: contents` on a phone, a two-pane grid with a sticky aside from tablet up, and the docked CTA bar taking the same column template); the feed's JS partition of the rail cards into `<aside class="feed-aside">`; the Play tab's Host | Join grid; 4- then 6-column polaroid grids with the collection batch and explorer page sized in rows × columns; game detail's sticky cover column; the profile hubs' and Stats' paired cards (on the hub: the account card beside the stats block, Collection beside Achievements, Recent plays beside Buddies — the two cards that repaint in place carry a `.preview-card-host` wrapper, which has to be named in the pairing selector or those two take a full row each); wrapping achievement rails; and a 720px cap for reading screens on wide — is all in one block of `styles.css` ("Every other screen on the tablet and wide tiers") plus the cascade and feed blocks beside their families. `land` joins each of those splits and takes the six-column grid, but not the 720px reading cap or the feed's centred 560+300 pair: both hand width back to a monitor, and a phone on its side has none to give. Its `--bgb-col-max` is 1024px — a cap that can never bind, kept a real length because two rules feed it into a `calc()` that `none` would make invalid. The design boards are `Docs/mocks/tablet-layout-mock.html` and, for `land`, the live `Docs/mocks/landscape-phone-mock.html`.
 - **Sheets and modals do not change.** `.bgb-sheet__panel` is already capped at 520px and centred; the polaroid popups are centred already. They hold at 393px tall because every one of them sizes off the `--bgb-vv-h` ladder (§1 of `.claude/rules/mobile-web.md`) rather than a fixed height — cramped on a landscape phone, but never overflowing.
@@ -810,8 +810,11 @@ projects/boardgame-buddy/web/
 │   │     photo. Generated by tools/build-geo-grid.py; the data half is lazy-loaded
 │   │     (ui/lazy-script.js) on the same terms as the QR codecs
 │   ├── exif.js             ← a photo's own date and coordinate, read on the device
-│   ├── play-import.js      ← the notes importer's draft (Settings → Import from notes)
-│   ├── photo-import.js     ← the photo importer's draft (Settings → Import from photos)
+│   ├── play-import.js      ← the import wizard's NOTES draft
+│   ├── photo-import.js     ← the import wizard's PHOTOS draft
+│   ├── import-draft.js     ← which source is live, + the ImportSource typedef
+│   │     both models answer — it is what lets one review render either
+│   ├── import-people.js    ← who an importer can seat (shared by both branches)
 │   ├── bgg-import.js       ← the BGG catalog-import queue: outlives the sheet that
 │   │                          started a job, and keeps importing apart from shelving
 │   ├── shelf-controller.js, shelf-filter.js               ← Client-side shelf paging
@@ -865,8 +868,14 @@ projects/boardgame-buddy/web/
 │   │     still shares the deck's promote logic (domain/buddy-network.js)
 │   │     (widgets/onboarding-bgg-modal.js was deleted here — the deck's slide 3
 │   │      replaced its only caller, and Settings could already link and sync)
-│   ├── import-plays-steps.js        → the notes importer's six step bodies
-│   ├── photo-import-steps.js        → the photo importer's three step bodies
+│   ├── import-notes-steps.js        → the notes branch's four step bodies
+│   ├── import-photos-steps.js       → the photos branch's two step bodies
+│   ├── import-notes-branch.js       → the notes branch's handlers + contract
+│   ├── import-photos-branch.js      → the photos branch's handlers + contract
+│   ├── import-source-step.js        → the wizard's source picker
+│   ├── import-review-step.js        → the review, summary and progress EVERY
+│   │     source ends on — one implementation, three screens
+│   ├── import-review-host.js        → that review's handler half
 │   ├── play-detail-popup.js         → PlayDetailPopup namespace (full Play detail modal):
 │   │     the modal, the fetch, and the read-only card
 │   └── play-detail-edit.js          → the same popup's edit half — draft, form, write
@@ -876,9 +885,9 @@ projects/boardgame-buddy/web/
 ├── views/                  ← One file per screen / route
 │   ├── feed-view.js, log-play-view.js, play-flow-view.js, stats-view.js, …
 │   ├── add-games-view.js   → the catalog scroll behind both spokes' "+ Add"
-│   ├── import-plays-view.js  → Settings → Import plays from notes (six steps)
-│   ├── photo-import-view.js  → Settings → Import plays from photos (three steps,
-│   │     the middle one a pager over the picked camera roll)
+│   ├── import-wizard-view.js → Settings → Play importer. One shell over two
+│   │     branches: a source picker, that source's own steps, then the shared
+│   │     review and summary. Owns the lifecycle only — see its header.
 │
 └── assets/                 ← Brand, illustrations, credits, sprites (per .claude/rules/assets.md)
     └── sprites/achievements/  ← bgb-ach-<slug>.svg — one medallion per badge

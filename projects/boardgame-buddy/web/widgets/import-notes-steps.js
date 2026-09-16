@@ -7,13 +7,13 @@
 // along the seam that matters: what a step IS versus how the wizard moves
 // between them.
 //
-// Handlers are inline `onclick="window.importPlaysView._foo()"` strings — the
+// Handlers are inline `onclick="window.importNotesBranch._foo()"` strings — the
 // project idiom, and what keeps these functions pure. Anything carrying a name
 // the user typed goes through jsStr THEN escapeAttr; see helpers.js for why
 // both layers are needed.
 
 (function () {
-  const V = "window.importPlaysView";
+  const V = "window.importNotesBranch";
   /** A handler attribute for a call with one user-typed string argument. */
   const call = (method, arg) => escapeAttr(`${V}.${method}('${jsStr(arg)}')`);
 
@@ -253,261 +253,6 @@
 
   // ── Step 5: Plays ──────────────────────────────────────────────────────────
 
-  function renderPlays(draft, opts) {
-    const groups = draft.groups();
-    const shown = (opts && opts.shownGroups) || groups.length;
-    const expanded = (opts && opts.expanded) || {};
-    if (!groups.length) {
-      return emptyStep("Nothing left to import", "Every play has been dropped. Go back a step, or start over.");
-    }
-    const body = groups.slice(0, shown).map((group) =>
-      renderGroup(draft, group, expanded)
-    ).join("");
-    return `
-      <div class="imp-step">
-        <h3 class="imp-step__title font-display">${draft.liveCount} play${draft.liveCount === 1 ? "" : "s"}</h3>
-        ${draft.warnings.length ? `
-          <div class="imp-warnings">
-            <div class="imp-warnings__label">Worth checking</div>
-            <ul>${draft.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>
-          </div>
-        ` : ""}
-        <div class="imp-bulkdate">
-          <label class="imp-bulkdate__label" for="imp-bulk-date">Date for plays without one</label>
-          <input id="imp-bulk-date" class="imp-date" type="date" max="${window.PlayImport.today}"
-                 value="${escapeAttr(draft.bulkDate || window.PlayImport.today)}"
-                 onchange="${V}._onBulkDate(this.value)" />
-        </div>
-        <div class="imp-groups">${body}</div>
-        ${shown < groups.length ? `<div data-imp-sentinel class="imp-sentinel" aria-hidden="true"></div>` : ""}
-      </div>
-    `;
-  }
-
-  function renderGroup(draft, group, expanded) {
-    const rows = draft.rows(group.plays);
-    return `
-      <section class="imp-group">
-        <header class="imp-group__head">
-          <span class="imp-group__name">${escapeHtml(group.name)}</span>
-          <span class="imp-group__count">${group.plays.length}</span>
-        </header>
-        ${rows.map((row) => renderRow(draft, row, expanded)).join("")}
-      </section>
-    `;
-  }
-
-  /**
-   * One review row. Everything indistinguishable is one row carrying all of
-   * it — a 58-play run as 58 rows is a list nobody scrolls, and every row
-   * would say the same thing. What counts as indistinguishable is decided
-   * AFTER the Players and Games steps (see PlayImport#rowKeyFor), so two
-   * spellings of one buddy read as the one player the user said they were.
-   */
-  function renderRow(draft, row, expanded) {
-    const first = row.plays[0];
-    const n = row.plays.length;
-    const open = !!expanded[first.id];
-    // Off the WRITTEN seats (PlayImport#seats), not the note's raw player list:
-    // two spellings of one buddy are one player by this step, and a tie caption
-    // naming the same person twice is the tell that they weren't.
-    const seats = draft.seats(first);
-    const winners = seats.filter((p) => p.is_winner);
-    const summary = seats.length === 0
-      ? "Nobody at the table"
-      : (winners.length === 0
-        ? "No winner recorded"
-        : (winners.length > 1
-          ? `Tie — ${winners.map((p) => escapeHtml(p.name)).join(" & ")}`
-          : `${escapeHtml(winners[0].name)} won`));
-    return `
-      <div class="imp-play${open ? " is-open" : ""}${seats.length ? "" : " imp-play--seatless"}">
-        <button class="imp-play__head" type="button" aria-expanded="${open}"
-                onclick="${call("_toggleRow", first.id)}">
-          <span class="imp-play__chev"><i data-icon="${open ? "chevron-down" : "chevron-right"}" class="w-4 h-4"></i></span>
-          <span class="imp-play__body">
-            <span class="imp-play__title">
-              ${n > 1 ? `${n} identical plays` : formatDate(draft.dateFor(first))}
-            </span>
-            <span class="imp-play__sub">
-              ${summary}${n > 1 ? ` · ${formatDate(draft.dateFor(first))}` : ""}
-            </span>
-          </span>
-          <span class="imp-play__drop" role="button" tabindex="0"
-                aria-label="Remove ${n > 1 ? `these ${n} plays` : "this play"}"
-                onclick="event.stopPropagation();${call("_dropRow", first.id)}">
-            <i data-icon="trash-2" class="w-4 h-4"></i>
-          </span>
-        </button>
-        ${open ? renderRowDetail(draft, row) : ""}
-      </div>
-    `;
-  }
-
-  function renderRowDetail(draft, row) {
-    const first = row.plays[0];
-    const game = draft.playGame(first);
-    const seats = draft.seats(first);
-    const players = seats.map((p) => `
-        <li class="imp-seat${p.is_winner ? " is-winner" : ""}">
-          ${window.BgbBadge.render({
-            displayName: p.name,
-            size: "xs",
-            isGhost: !p.user_id,
-            extraClass: "imp-seat__badge",
-          })}
-          <span class="imp-seat__name">${escapeHtml(p.name)}</span>
-          ${p.score != null ? `<span class="imp-seat__score">${p.score}</span>` : ""}
-          ${p.is_winner ? `<span class="imp-seat__win"><i data-icon="trophy" class="w-3.5 h-3.5"></i></span>` : ""}
-        </li>
-      `).join("");
-    return `
-      <div class="imp-play__detail">
-        ${seats.length
-          ? `<ul class="imp-seats">${players}</ul>`
-          : `<p class="imp-warn">
-               Nobody came out of your notes for this one, so it can't be
-               imported — a play needs at least one player. Drop it, or go back
-               and check what the line said.
-             </p>`}
-        ${first.notes ? `<p class="imp-play__notes">${escapeHtml(first.notes)}</p>` : ""}
-        <div class="imp-play__fields">
-          <label class="imp-field">
-            <span class="imp-field__label">Date</span>
-            <input class="imp-date" type="date" max="${window.PlayImport.today}"
-                   value="${escapeAttr(draft.dateFor(first))}"
-                   onchange="${escapeAttr(`${V}._onRowDate('${jsStr(first.id)}', this.value)`)}" />
-          </label>
-          <button class="imp-field imp-field--btn" type="button"
-                  onclick="${call("_openRowGameSheet", first.id)}">
-            <span class="imp-field__label">Game</span>
-            <span class="imp-field__value">${escapeHtml(game ? game.name : "Not matched")}</span>
-          </button>
-        </div>
-        ${row.plays.length > 1 ? `
-          <label class="imp-field imp-field--count">
-            <span class="imp-field__label">How many plays</span>
-            <input class="imp-count-input" type="number" min="1" max="300" step="1"
-                   value="${row.plays.length}"
-                   aria-label="Number of plays in this row"
-                   onchange="${escapeAttr(`${V}._onRowCount('${jsStr(first.id)}', this.value)`)}" />
-          </label>
-          <p class="imp-note">
-            Editing anything else here changes all ${row.plays.length} —
-            ${row.runId
-              ? `they came from one run of repeats in your notes.`
-              : `your notes wrote them as separate entries that came out
-                 identical — same game, same day, same players.`}
-            If that's wrong, correct the number above.
-          </p>
-        ` : ""}
-      </div>
-    `;
-  }
-
-  // ── Step 6: Import ─────────────────────────────────────────────────────────
-
-  function renderImport(draft, opts) {
-    const busy = !!(opts && opts.importing);
-    const done = draft.progress && draft.progress.done >= draft.progress.total;
-    const ready = draft.importable();
-    const importable = ready.length;
-    const seatless = draft.seatless().length;
-    // Two reasons a live play is being left behind, counted apart because they
-    // have different fixes — one is a step back to Games, the other is a line
-    // the note never named anybody on.
-    const gameless = draft.liveCount - importable - seatless;
-    // The by-game breakdown counts THE PLAYS THAT WILL LAND, not the review
-    // list's groups: a group is every live play of one game, seatless ones
-    // included, so reading the breakdown off it would print a per-game tally
-    // that doesn't add up to the number above it.
-    const byGame = new Map();
-    for (const play of ready) {
-      const game = draft.playGame(play);
-      const row = byGame.get(game.id);
-      if (row) { row.plays++; continue; }
-      byGame.set(game.id, { name: game.name, plays: 1 });
-    }
-    const buddies = draft.playerNames.filter((n) => draft.playerMapping(n).kind === "buddy").length;
-    const ghosts = draft.playerNames.length - buddies;
-
-    if (draft.progress && (busy || done)) {
-      return renderProgress(draft, busy);
-    }
-    return `
-      <div class="imp-step">
-        <h3 class="imp-step__title font-display">Ready to import</h3>
-        <dl class="imp-summary">
-          <div><dt>Plays</dt><dd>${importable}</dd></div>
-          <div><dt>Games</dt><dd>${byGame.size}</dd></div>
-          <div>
-            <dt>Players</dt><dd>${buddies + ghosts}</dd>
-            <div class="imp-summary__note">
-              ${buddies} ${buddies === 1 ? "buddy" : "buddies"} ·
-              ${ghosts} ghost${ghosts === 1 ? "" : "s"}
-            </div>
-          </div>
-        </dl>
-        <ul class="imp-bygame">
-          ${Array.from(byGame.values()).map((g) => `
-            <li><span>${escapeHtml(g.name)}</span><span>${g.plays}</span></li>
-          `).join("")}
-        </ul>
-        ${gameless ? `
-          <p class="imp-warn">
-            ${gameless} play${gameless === 1 ? "" : "s"} won't be imported — no game matched.
-            Go back to Games to match ${gameless === 1 ? "it" : "them"}.
-          </p>
-        ` : ""}
-        ${seatless ? `
-          <p class="imp-warn">
-            ${seatless} play${seatless === 1 ? "" : "s"} won't be imported — nobody
-            at the table. A play needs at least one player, or it counts towards
-            nobody's record and no ghost can ever claim it. Go back to Plays to
-            check ${seatless === 1 ? "it" : "them"}.
-          </p>
-        ` : ""}
-        <button class="imp-cta" type="button" ${importable ? "" : "disabled"}
-                onclick="${V}._startImport()">
-          Import ${importable} play${importable === 1 ? "" : "s"}
-        </button>
-      </div>
-    `;
-  }
-
-  function renderProgress(draft, busy) {
-    const p = draft.progress;
-    const pct = p.total ? Math.round((p.done / p.total) * 100) : 100;
-    const failed = p.failed > 0;
-    return `
-      <div class="imp-step">
-        <h3 class="imp-step__title font-display">${busy ? "Importing…" : (failed ? "Import finished" : "Imported")}</h3>
-        <div class="imp-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
-             aria-valuenow="${pct}" aria-label="Import progress">
-          <div class="imp-progress__fill" style="width:${pct}%"></div>
-        </div>
-        <p class="imp-progress__label">${p.done} of ${p.total}</p>
-        ${busy ? "" : `
-          <dl class="imp-summary">
-            <div><dt>Added</dt><dd>${p.imported}</dd></div>
-            ${p.duplicate ? `<div><dt>Already there</dt><dd>${p.duplicate}</dd></div>` : ""}
-            ${failed ? `<div><dt>Failed</dt><dd>${p.failed}</dd></div>` : ""}
-          </dl>
-          ${failed ? `
-            <p class="imp-warn">
-              ${p.failed} play${p.failed === 1 ? "" : "s"} didn't land. Everything else did —
-              running the import again picks up only what's missing.
-            </p>
-            <button class="imp-cta imp-cta--ghost" type="button" onclick="${V}._startImport()">Try the rest again</button>
-          ` : ""}
-          <button class="imp-cta" type="button" onclick="${V}._finish()">
-            ${failed ? "Done" : "See your plays"}
-          </button>
-        `}
-      </div>
-    `;
-  }
-
   // ── Shared ─────────────────────────────────────────────────────────────────
 
   function emptyStep(title, body) {
@@ -520,12 +265,10 @@
     `;
   }
 
-  window.ImportPlaysSteps = {
+  window.ImportNotesSteps = {
     source: renderSource,
     details: renderDetails,
     players: renderPlayers,
     games: renderGames,
-    plays: renderPlays,
-    import: renderImport,
   };
 })();

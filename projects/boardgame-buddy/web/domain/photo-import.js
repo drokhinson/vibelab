@@ -50,13 +50,19 @@
   const MAX_SHOTS = 30;
   const IMPORT_TIMEOUT_MS = 60000;
 
-  const STEPS = ["photos", "assign", "import"];
+  // `review` is new: the pager used to run straight into the summary, and the
+  // shared review now sits between them, so a photo import gets the same
+  // considered last pass over its plays that a note always had.
+  const STEPS = ["photos", "assign", "review", "import"];
 
   /**
    * @typedef {Object} DraftSeat
    * @property {string} name      What the play row records.
    * @property {string|null} userId  Set when this seat is a real account.
    * @property {boolean} isWinner
+   * @property {number|null} [score]  Final score, entered in the review.
+   *   Absent on every seat nobody typed a number into, which is most of them —
+   *   a photo carries no score of its own the way a note can.
    */
 
   /**
@@ -225,24 +231,67 @@
      * user is still assigning — mis-tapped, about to re-pick — but a shot left
      * with nobody at it is no longer importable (see importable), and both the
      * assign step and the last step say so.
+     *
+     * Addressed by whoOf(), not by the display name. An account and a ghost can
+     * legitimately carry the same name — which is exactly what seats()'
+     * collapse exists to keep apart — and a name-keyed handler unseats both.
+     * @param {string} id @param {string} who A whoOf() key.
      */
-    removeSeat(id, name) {
+    removeSeat(id, who) {
       const s = this.shotFor(id);
       if (!s) return;
-      s.players = s.players.filter((p) => p.name !== name);
+      s.players = s.players.filter((p) => PhotoImport.whoOf(p) !== who);
     }
 
     /**
      * Toggle who won. Several winners is a tie and a legitimate answer, so
      * this is a toggle rather than a radio — the play flow's Settle Up screen
      * treats it the same way.
+     * @param {string} id @param {string} who A whoOf() key.
      */
-    toggleWinner(id, name) {
+    toggleWinner(id, who) {
       const s = this.shotFor(id);
       if (!s) return;
       for (const p of s.players) {
-        if (p.name === name) p.isWinner = !p.isWinner;
+        if (PhotoImport.whoOf(p) === who) p.isWinner = !p.isWinner;
       }
+    }
+
+    /**
+     * One final score for one seat, entered in the review.
+     *
+     * Blank clears it back to null rather than writing 0 — a game nobody
+     * recorded a score for is not a game everybody scored nothing in.
+     * @param {string} id @param {string} who @param {string|number} value
+     */
+    setScore(id, who, value) {
+      const s = this.shotFor(id);
+      if (!s) return false;
+      const raw = String(value == null ? "" : value).trim();
+      const score = raw === "" ? null : Math.trunc(Number(raw));
+      if (score != null && !Number.isFinite(score)) return false;
+      for (const p of s.players) {
+        if (PhotoImport.whoOf(p) === who) p.score = score;
+      }
+      return true;
+    }
+
+    /**
+     * Seat more people at one table, from picker rows. Appends rather than
+     * replaces — the sheet answers "who else" — and seats() collapses anyone
+     * picked who is already there.
+     * @param {string} id @param {any[]} picks PlayerCandidate rows.
+     */
+    addSeats(id, picks) {
+      const s = this.shotFor(id);
+      if (!s || !picks || !picks.length) return false;
+      s.players = s.players.concat(picks.map((pick) => ({
+        name: pick.name,
+        userId: pick.user_id || null,
+        isWinner: false,
+        score: null,
+      })));
+      return true;
     }
 
     /**
@@ -285,7 +334,7 @@
      * Winning on either row is winning. A row that names nobody is dropped —
      * it would land as a blank line on the scoreboard.
      * @param {DraftShot} shot
-     * @returns {Array<{name: string, is_winner: boolean, score: null, user_id: string|null}>}
+     * @returns {Array<{name: string, is_winner: boolean, score: number|null, user_id: string|null}>}
      */
     seats(shot) {
       const out = [];
@@ -294,22 +343,37 @@
         if (!p) continue;
         const name = String(p.name || "").trim();
         if (!p.userId && !name) continue;
-        const who = p.userId ? `u:${p.userId}` : `g:${name.toLowerCase()}`;
+        const who = PhotoImport.whoOf({ name, user_id: p.userId || null });
         const taken = byWho.get(who);
         if (taken) {
           taken.is_winner = taken.is_winner || !!p.isWinner;
+          // First number wins, so a merge cannot overwrite a score with a
+          // blank — same rule the notes importer collapses on.
+          if (taken.score == null && (p.score === 0 || p.score)) taken.score = p.score;
           continue;
         }
         const seat = {
           name,
           is_winner: !!p.isWinner,
-          score: null,
+          score: (p.score === 0 || p.score) ? p.score : null,
           user_id: p.userId || null,
         };
         byWho.set(who, seat);
         out.push(seat);
       }
       return out;
+    }
+
+    /**
+     * WHO a seat is, with nothing about how this play went — the stable key
+     * every seat handler addresses a seat by. Same shape as
+     * PlayImport.whoOf(), because the shared review calls one of them without
+     * knowing which source it is looking at.
+     * @param {{name: string, user_id?: string|null, userId?: string|null}} seat
+     */
+    static whoOf(seat) {
+      const id = seat.user_id || seat.userId || null;
+      return id ? `u:${id}` : `g:${String(seat.name || "").trim().toLowerCase()}`;
     }
 
     /**
@@ -348,6 +412,158 @@
         (s) => s.game && s.game.id && this.seats(s).length === 0,
       );
     }
+
+    // ── The shared review adapter ────────────────────────────────────────────
+    //
+    // The same surface PlayImport exposes, so widgets/import-review-step.js
+    // renders both without knowing which it has. What differs is only what
+    // genuinely differs: a photo has a thumbnail and a country and is always
+    // exactly one play; a note has runs, a bulk date and warnings.
+
+    /** @returns {"notes"|"photos"} */
+    get sourceKey() { return "photos"; }
+
+    /** Every photo carries its own date, out of its own EXIF. */
+    get supportsBulkDate() { return false; }
+
+    /** Nothing reads a photo, so nothing can flag anything about it. */
+    reviewWarnings() { return []; }
+
+    /**
+     * The review list, one group per game, one row per shot.
+     *
+     * Grouped even though a photo is never one of the indistinguishable
+     * repeats a note collapses: the grouping is what makes the two sources
+     * read as the same screen, and "four photos of Wingspan" is a useful
+     * heading on a camera roll from one evening.
+     *
+     * Unassigned shots get a group of their own rather than being left out —
+     * the review is where a user fixes them, so hiding them there would mean
+     * the only fix was to walk back to the pager.
+     */
+    reviewGroups() {
+      /** @type {Array<{key: string, name: string, game: any, rows: any[]}>} */
+      const out = [];
+      const byKey = new Map();
+      for (const shot of this.shots) {
+        const game = shot.game && shot.game.id ? shot.game : null;
+        const k = game ? `id:${game.id}` : "unmatched";
+        let group = byKey.get(k);
+        if (!group) {
+          group = { key: k, name: game ? game.name : "No game yet", game, rows: [] };
+          byKey.set(k, group);
+          out.push(group);
+        }
+        group.rows.push(this._reviewRow(shot));
+      }
+      return out;
+    }
+
+    /** @param {DraftShot} shot */
+    _reviewRow(shot) {
+      return {
+        id: shot.id,
+        count: 1,
+        // One photo is one table. There is nothing here to be a count OF.
+        countEditable: false,
+        game: shot.game && shot.game.id ? shot.game : null,
+        playedAt: shot.playedAt,
+        notes: shot.notes || null,
+        thumbUrl: shot.url || shot.photoUrl || null,
+        countryCode: shot.countryCode || null,
+        seats: this.seats(shot),
+        // No global mapping to be detached from — every photo's table was
+        // always its own.
+        edited: false,
+        runNote: null,
+      };
+    }
+
+    /** The third summary tile. Plays and Games are the same for every source. */
+    summaryTile() {
+      const ready = this.importable();
+      const withPhoto = ready.filter((s) => s.file || s.photoUrl).length;
+      return {
+        label: "Photos",
+        value: withPhoto,
+        note: withPhoto < ready.length ? `${ready.length - withPhoto} without one` : null,
+      };
+    }
+
+    /**
+     * Why a shot is being left behind. Two reasons, counted apart because they
+     * have different fixes.
+     */
+    reviewNotices() {
+      const missing = this.unassigned().length;
+      const seatless = this.seatless().length;
+      const out = [];
+      if (missing) {
+        out.push({
+          count: missing,
+          text: `${missing} photo${missing === 1 ? "" : "s"} still `
+              + `${missing === 1 ? "has" : "have"} no game, so `
+              + `${missing === 1 ? "it won't" : "they won't"} be imported. `
+              + `Match ${missing === 1 ? "it" : "them"} in the review above.`,
+        });
+      }
+      if (seatless) {
+        out.push({
+          count: seatless,
+          text: `${seatless} photo${seatless === 1 ? "" : "s"} `
+              + `${seatless === 1 ? "has" : "have"} a game but nobody at the table, `
+              + `so ${seatless === 1 ? "it won't" : "they won't"} be imported — a play `
+              + `with no players counts towards nobody's record and leaves no ghost `
+              + `for anyone to claim. Seat ${seatless === 1 ? "it" : "them"} above.`,
+        });
+      }
+      return out;
+    }
+
+    ctaNote() {
+      return "The photos go up first, then the plays. Leaving the screen "
+           + "mid-run stops it; everything already saved stays saved.";
+    }
+
+    /**
+     * Two phases behind one bar — `progress.total` is `shots * 2` because an
+     * upload and a write are each a step — so the heading says which half is
+     * running rather than leaving a bar that stalls at 50% unexplained.
+     * @param {any} p @param {boolean} busy
+     */
+    progressHeading(p, busy) {
+      if (!busy) return p && p.failed ? "Import finished" : "Imported";
+      // The first half of the bar is photos, the second is plays — worth
+      // saying, because the two halves move at very different speeds and a bar
+      // that crawls then sprints reads as a bar that is stuck.
+      return p && p.done < p.total / 2 ? "Uploading photos…" : "Saving plays…";
+    }
+
+    /** @param {any} p */
+    progressNote(p) {
+      const n = p && p.photosFailed;
+      if (!n) return null;
+      return `${n} photo${n === 1 ? "" : "s"} didn't upload. `
+           + `${n === 1 ? "That play" : "Those plays"} landed without `
+           + `${n === 1 ? "it" : "them"} — you can add a photo from the play `
+           + `itself later.`;
+    }
+
+    // ── Row edits the shared review drives ───────────────────────────────────
+    // A row IS a shot here, so these are the per-shot setters under the names
+    // the shared review calls them by.
+
+    /** @param {string} id @param {any} game */
+    setRowGame(id, game) { this.setGame(id, game); return true; }
+
+    /** @param {string} id @param {string} iso */
+    setRowDate(id, iso) { this.setDate(id, iso); return true; }
+
+    /** @param {string} id */
+    dropRow(id) { this.removeShot(id); return true; }
+
+    /** Never offered: one photo is one play. @returns {false} */
+    setRowCount() { return false; }
 
     /**
      * One shot as the PlayCreate body the API takes.
@@ -503,7 +719,18 @@
         countryCode: s.countryCode || null,
         countrySource: s.countrySource || null,
         game: s.game || null,
-        players: Array.isArray(s.players) ? s.players : [],
+        // Normalised seat by seat rather than assigned wholesale, so a draft
+        // saved before scores existed restores with the field explicitly
+        // absent instead of undefined. That is what lets `score` stay an
+        // ADDITIVE change and keeps DRAFT_VERSION where it is — bumping it
+        // would throw away every in-flight import on deploy day. Changing the
+        // meaning of an existing field would need the bump.
+        players: (Array.isArray(s.players) ? s.players : []).map((pl) => ({
+          name: pl.name,
+          userId: pl.userId || null,
+          isWinner: !!pl.isWinner,
+          score: (pl.score === 0 || pl.score) ? pl.score : null,
+        })),
         notes: s.notes || null,
         photoUrl: s.photoUrl || null,
       }));

@@ -5543,8 +5543,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0;
 }
 
-/* BGG attribution block under logout — small logo + neutral blurb so it
-   reads as a footer credit rather than another actionable section. */
+/* BGG attribution block under the account actions — small logo + neutral blurb
+   so it reads as a footer credit rather than another actionable section. The
+   legal links sit below it; see .settings-legal. */
 .settings-bgg-credit {
   display: flex; flex-direction: column; align-items: center; gap: 0.55rem;
   padding: 0.5rem 1rem 1.5rem;
@@ -5564,6 +5565,39 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   max-width: 30ch;
   margin: 0;
 }
+
+/* The legal links, last thing on Settings — under the BGG credit, where the
+   rest of the web keeps them. They were inside .settings-account, between Log
+   out and the delete rule, which is the one block on that screen whose whole
+   job is separating what you can undo from what you cannot; two read-only
+   links have no business inside it. Same 0.72rem muted ink they had there, so
+   only their position changed. Row-wrapped rather than a paragraph: each link
+   is a tap target, and the 44px hit area comes from the inset ::before so the
+   footer does not grow a 44px-tall band of its own. */
+.settings-legal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 1rem 1.25rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+  text-align: center;
+}
+.settings-legal .link {
+  position: relative;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0 0.15rem;
+}
+/* Vertical only. Widening the hit area sideways would run the two links'
+   zones into each other across the middot — they need 8px of clearance
+   (.claude/rules/mobile-web.md §5), and each label is already wide enough. */
+.settings-legal .link::before { content: ""; position: absolute; inset: -14px 0; }
+.settings-legal .link:active { opacity: 0.6; }
 .profile-stat { text-align: center; }
 .profile-empty { text-align: center; padding: 1.5rem; opacity: 0.6; font-size: 0.9rem; }
 .profile-collection-grid {
@@ -13902,6 +13936,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .bgb-spoke-screen .set-card-label { color: var(--accent-ink); }
 .bgb-spoke-screen .settings-bgg-credit { color: var(--polaroid-muted, #8B7E68); }
 .bgb-spoke-screen .settings-bgg-credit__text { color: var(--polaroid-muted, #8B7E68); }
+.bgb-spoke-screen .settings-legal { color: var(--polaroid-muted, #8B7E68); }
 
 /* The two account actions sit below the cards, on the spoke's own surface.
    Both take a slightly heavier hairline so their outlines read against cream;
@@ -15153,6 +15188,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .imp-textarea,
 .imp-date,
 .imp-count-input,
+/* The review's per-seat score field. 0.82rem from .imp-seat otherwise, so
+   every tap into a score on a fourteen-seat table would zoom the page. */
+.imp-seat__score-input,
 .cascade-exp-filter__input,
 /* The chapter wizard's AI focus prompt. Its own rule sets no size, so without
    this it inherits the page's ~14px and every tap into it zooms — on the one
@@ -16651,6 +16689,25 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .imp-row__chev { flex: none; color: var(--polaroid-muted); }
 .imp-row--unset .imp-row__sub { color: var(--accent-ink); font-weight: 600; }
 
+/* A source the wizard names but cannot import from yet. A disabled <button>,
+   not a styled <div>: it stays out of the tab order and is announced as
+   unavailable rather than as a row that simply does nothing when tapped. */
+.imp-row--soon { opacity: 0.55; cursor: default; }
+.imp-row--soon:active { background: transparent; }
+.imp-row__soon {
+  flex: none;
+  align-self: center;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--polaroid-line);
+  border-radius: var(--r-pill, 999px);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted);
+  white-space: nowrap;
+}
+
 /* ── Step 5: the review list ──────────────────────────────────────────────── */
 .imp-bulkdate {
   display: flex;
@@ -16768,8 +16825,90 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .imp-seat__badge { flex: none; }
 .imp-seat__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .imp-seat__score { font-family: var(--font-score); font-weight: 700; font-variant-numeric: tabular-nums; }
-.imp-seat__win { color: var(--accent-ink); display: inline-flex; }
 .imp-seat.is-winner .imp-seat__name { font-weight: 700; }
+
+/* The seat is editable in the review, so three of its parts are controls. The
+   review is the one screen every source ends on, which is why they live in the
+   .imp-* family rather than being borrowed from the photo pager's .pimp-seat —
+   the pager is one branch's, this is everybody's. Geometry is the pager's,
+   because the two sit two taps apart and should feel like one control. */
+.imp-seat__score-input {
+  /* No font-size here: it is declared in the 16px floor block near the end of
+     this file, which is what stops iOS zooming the page on focus. Setting one
+     here would tie with that rule and win on source order. */
+  width: 4.2rem;
+  flex: none;
+  min-height: 44px;
+  padding: 0.3rem 0.4rem;
+  text-align: right;
+  border: 1px solid var(--polaroid-line);
+  border-radius: 0.45rem;
+  background: var(--well);
+  color: var(--polaroid-ink);
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.imp-seat__score-input:disabled {
+  opacity: 0.45;
+  /* Not `not-allowed`: the field is disabled for a reason the note beneath the
+     list explains and the count control above it fixes, so the cursor should
+     not read as a refusal. */
+  cursor: default;
+}
+/* A 14px glyph with a 44x44 hit area rather than a 44px button — inflating the
+   visible control would put a pair of chunky buttons on every seat of a
+   fourteen-seat table (.claude/rules/mobile-web.md §5). */
+.imp-seat__win,
+.imp-seat__x {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--polaroid-muted);
+}
+.imp-seat__win::before,
+.imp-seat__x::before { content: ""; position: absolute; inset: -8px; }
+.imp-seat__win:active,
+.imp-seat__x:active { background: var(--polaroid-bg-soft); }
+/* 8px of clear space between the two hit zones, which the -8px insets above
+   would otherwise close up. */
+.imp-seat__x { margin-left: 8px; }
+.imp-seat__win[aria-pressed="true"] { color: var(--accent-ink); }
+.imp-seat.is-winner .imp-seat__win { color: var(--accent-ink); }
+
+/* "Add players" — a seat-shaped row rather than a button under the list, so a
+   table with nobody at it still reads as a table with a way to fill it. */
+.imp-seat--add {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.3rem 0.4rem;
+  border: 1px dashed var(--polaroid-line);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-align: left;
+  margin-top: 0.35rem;
+}
+.imp-seat--add:active { background: var(--polaroid-bg-soft); }
+.imp-seat__addmark { flex: none; display: inline-flex; }
+
+/* A photo row carries its picture into the review. Small: the review is a list
+   to scan, and the pager is where a photo is looked AT. */
+.imp-play__thumb {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 0.45rem;
+  object-fit: cover;
+  background: var(--well);
+}
 .imp-play__notes { font-size: 0.76rem; color: var(--polaroid-muted); margin: 0; }
 .imp-play__fields { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .imp-field {
