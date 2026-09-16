@@ -1,0 +1,38 @@
+-- 036_drop_profiles_auth_users_fk.sql — release the profile row from auth.users.
+--
+-- Stage 3-ALT moves token issuance to GCP Identity Platform, so `auth.users`
+-- stops being the authority on who exists. This constraint is what makes that
+-- impossible today:
+--
+--   CONSTRAINT boardgamebuddy_profiles_id_fkey
+--     FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
+--
+-- A user who signs up through Identity Platform has no `auth.users` row, so
+-- inserting their profile violates the FK and the signup fails. Nothing in the
+-- app surfaces that as anything but a generic error, which is why this runs
+-- BEFORE the frontend swap rather than after the first bug report.
+--
+-- Safe to run early and on its own. It only removes a constraint: every
+-- existing id keeps its value, the column keeps its type, and while the app is
+-- still on Supabase Auth the ids continue to match `auth.users` anyway — just
+-- without the database enforcing it.
+--
+-- MIGRATION_PLAN.md 3-ALT.3 warns that dropping this loses the ON DELETE
+-- CASCADE and that "account deletion becomes explicit backend work — write it
+-- before you need it". That warning is out of date: `DELETE /profile`
+-- (api/routes/profile_routes.py) already deletes the PROFILE row itself, and
+-- the ~20 child tables cascade from their own FKs to
+-- boardgamebuddy_profiles(id). None of that touches this constraint, so
+-- account deletion is unaffected.
+--
+-- What is genuinely lost: deleting a user from the Supabase Auth dashboard no
+-- longer removes their BoardgameBuddy profile. Deleting an account is the
+-- app's job now, through Settings, and post-swap the identity record in
+-- Identity Platform has to be removed too — the endpoint does not do that,
+-- just as it does not delete the `auth.users` row today.
+--
+-- Not reversible once Identity Platform users exist: re-adding the FK would
+-- require an `auth.users` row for every profile id.
+
+ALTER TABLE public.boardgamebuddy_profiles
+  DROP CONSTRAINT IF EXISTS boardgamebuddy_profiles_id_fkey;

@@ -36,7 +36,7 @@ Supersedes the root `ENV.md` for anything BoardgameBuddy. Domain: **bgbuddy.app*
 | `R2_PLAYS_BUCKET` | 4 | Play photos (was Supabase `boardgamebuddy-plays`) |
 | `R2_GAMES_BUCKET` | 4 | Cover-art cache (was Supabase `boardgamebuddy-games`) |
 | `R2_PUBLIC_BASE` | 4 | `https://img.bgbuddy.app` — the origin stored URLs are built from |
-| `GCP_PROJECT_ID` | 3-ALT | Firebase token `aud`; issuer is `https://securetoken.google.com/<id>` |
+| `GCP_PROJECT_ID` | 3-ALT | `boardgamebuddy-508716`. Read by `api/jwt_auth.py` as the Firebase token `aud`, with the issuer derived as `https://securetoken.google.com/<id>`. **Set it on the Railway service before the frontend swap.** Until it is set, the verifier still accepts Supabase tokens normally but answers 500 to any Identity Platform token — deliberately, since an unset value is an operator error, not a bad credential. Must equal `BGB_FIREBASE_PROJECT_ID`. |
 
 ## 2. GitHub Actions
 

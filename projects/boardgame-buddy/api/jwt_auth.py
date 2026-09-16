@@ -1,9 +1,14 @@
 """
-jwt_auth.py — Shared Supabase Auth JWT verification for the vibelab backend.
+jwt_auth.py — JWT verification for BoardgameBuddy's API.
 
-Verifies JWTs issued by Supabase Auth using the project's published JWKS
-(asymmetric signing keys). This is the pilot pattern — all future apps
-should use this instead of custom JWT auth.
+Verifies JWTs from EITHER issuer, selected per-token by its `iss` claim:
+
+  * Supabase Auth, against the project's published JWKS, `aud=authenticated`
+  * GCP Identity Platform (Firebase Auth), against Google's shared JWKS, with
+    `aud` and `iss` both scoped to GCP_PROJECT_ID
+
+Both are live at once on purpose — a hard swap would 401 every signed-in
+browser the moment it deployed. See the block above _is_firebase_token.
 
 Usage in route dependencies:
     from jwt_auth import get_current_supabase_user, SupabaseUser
@@ -37,6 +42,45 @@ _JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json" if SUPABASE_URL else
 # failure surfaces as a 401 the client retries rather than a hung request.
 _JWKS_TIMEOUT_S = 5
 _jwks_client = PyJWKClient(_JWKS_URL, timeout=_JWKS_TIMEOUT_S) if _JWKS_URL else None
+
+# --- GCP Identity Platform (Firebase Auth) -----------------------------------
+#
+# Both issuers are accepted, and that is deliberate rather than transitional
+# sloppiness. MIGRATION_PLAN.md 3-ALT.4 says to "point _JWKS_URL at Google's",
+# i.e. swap. A swap cannot be deployed safely: the instant it lands, every
+# signed-in browser holding a Supabase token starts getting 401s, and the only
+# way back is a second deploy. Accepting both means the frontend swap and the
+# backend swap do not have to be simultaneous, and a rollback of the frontend
+# needs no backend change at all.
+#
+# Routing by issuer is safe because the issuer is then VERIFIED by the verifier
+# it selected. A token claiming Google's issuer is checked against Google's
+# keys, Google's `iss` and this project's `aud` — a forged claim just picks the
+# verifier that rejects it. What must never happen is selecting a verifier and
+# then not enforcing the issuer, which is why `issuer=` is passed below.
+GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "").strip()
+_FB_JWKS_URL = (
+    "https://www.googleapis.com/service_accounts/v1/jwk/"
+    "securetoken@system.gserviceaccount.com"
+)
+_FB_ISSUER_PREFIX = "https://securetoken.google.com/"
+_FB_ISSUER = f"{_FB_ISSUER_PREFIX}{GCP_PROJECT_ID}" if GCP_PROJECT_ID else ""
+_fb_jwks_client = (
+    PyJWKClient(_FB_JWKS_URL, timeout=_JWKS_TIMEOUT_S) if GCP_PROJECT_ID else None
+)
+
+
+def _is_firebase_token(token: str) -> bool:
+    """Read `iss` WITHOUT verifying, purely to choose a verifier.
+
+    Nothing is trusted from this decode. See the note above: the selected
+    verifier re-checks the issuer under a signature.
+    """
+    try:
+        claims = jwt.decode(token, options={"verify_signature": False})
+    except jwt.InvalidTokenError:
+        return False
+    return str(claims.get("iss", "")).startswith(_FB_ISSUER_PREFIX)
 
 
 class SupabaseUser(BaseModel):
@@ -74,8 +118,20 @@ async def get_current_supabase_user(
 
     token = extract_bearer_token(authorization)
 
-    if not _jwks_client:
-        raise HTTPException(status_code=500, detail="SUPABASE_URL not configured")
+    # Firebase's audience is the project id and its issuer is project-scoped, so
+    # both are required: without `audience` any Google-issued token from any
+    # project would verify, since every Firebase project signs with the same
+    # shared Google keys.
+    if _is_firebase_token(token):
+        if not _fb_jwks_client:
+            raise HTTPException(status_code=500, detail="GCP_PROJECT_ID not configured")
+        jwks_client = _fb_jwks_client
+        decode_kwargs = {"audience": GCP_PROJECT_ID, "issuer": _FB_ISSUER}
+    else:
+        if not _jwks_client:
+            raise HTTPException(status_code=500, detail="SUPABASE_URL not configured")
+        jwks_client = _jwks_client
+        decode_kwargs = {"audience": "authenticated"}
 
     try:
         # to_thread because get_signing_key_from_jwt does a BLOCKING urllib
@@ -83,12 +139,12 @@ async def get_current_supabase_user(
         # Called inline, that stalls the single event loop this service runs on
         # — every app, every in-flight request — once every five minutes and
         # again on every cold start.
-        signing_key = await asyncio.to_thread(_jwks_client.get_signing_key_from_jwt, token)
+        signing_key = await asyncio.to_thread(jwks_client.get_signing_key_from_jwt, token)
         payload = jwt.decode(
             token,
             signing_key.key,
             algorithms=["ES256", "RS256"],
-            audience="authenticated",
+            **decode_kwargs,
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
