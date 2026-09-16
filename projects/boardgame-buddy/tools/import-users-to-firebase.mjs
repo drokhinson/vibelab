@@ -234,28 +234,52 @@ async function main() {
     return;
   }
 
-  const { default: admin } = await import("firebase-admin");
-  admin.initializeApp({
-    credential: admin.credential.cert(JSON.parse(readFileSync(args.key, "utf8"))),
-  });
-  const auth = admin.auth();
+  // The MODULAR subpaths, not the root namespace. Under ESM,
+  // firebase-admin@14's root export carries `initializeApp` but its default
+  // export has NO `credential` — the legacy `admin.credential.cert()` spelling
+  // that every older tutorial uses throws "Cannot read properties of undefined
+  // (reading 'cert')" and looks like a bad install rather than a wrong import.
+  // firebase-admin/app and firebase-admin/auth have been the documented API
+  // since v10 and are stable across v10-v14.
+  const { initializeApp, cert } = await import("firebase-admin/app");
+  const { getAuth } = await import("firebase-admin/auth");
+  initializeApp({ credential: cert(JSON.parse(readFileSync(args.key, "utf8"))) });
+  const auth = getAuth();
 
   if (args.verify) {
     let ok = 0;
     const problems = [];
+    const codes = new Set();
     for (const u of users) {
       try {
         const got = await auth.getUser(u.uid);
         // The uid matching is the whole point; email is checked too because a
         // mismatch there means the export and the project have drifted.
         if (got.email === u.email) ok += 1;
-        else problems.push(`${u.uid}: email is ${got.email}, expected ${u.email}`);
+        else {
+          codes.add("email-mismatch");
+          problems.push(`${u.uid}: email is ${got.email}, expected ${u.email}`);
+        }
       } catch (e) {
-        problems.push(`${u.uid} (${u.email}): ${e.code || e.message}`);
+        const code = e.code || e.message;
+        codes.add(code);
+        problems.push(`${u.uid} (${u.email}): ${code}`);
       }
     }
     console.log(`Verified ${ok}/${users.length} accounts present under their original UUID.`);
     for (const p of problems) console.log(`  FAIL ${p}`);
+    // EVERY account failing the same way is not the failure this check exists
+    // to catch. A bad key or the wrong project fails all of them identically,
+    // and a wall of FAILs reads as "every account orphaned" at the exact moment
+    // that would be the worst possible news. Say which it is.
+    if (problems.length === users.length && codes.size === 1) {
+      const only = [...codes][0];
+      console.log("");
+      console.log(`Every account failed with the same error (${only}), which points at`);
+      console.log("the key or the project rather than at the import. Check that sa.json");
+      console.log("belongs to the same project as BGB_FIREBASE_PROJECT_ID before");
+      console.log("concluding anything about the accounts themselves.");
+    }
     process.exit(problems.length ? 1 : 0);
   }
 
