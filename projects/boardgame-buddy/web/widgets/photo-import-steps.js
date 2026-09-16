@@ -249,12 +249,18 @@
   function renderSeats(shot) {
     return `
       <ul class="pimp-seats">
-        ${shot.players.map((p) => `
+        ${shot.players.map((p) => {
+          // Addressed by who they ARE, not by what the row says: an account and
+          // a ghost can share a display name, and a name-keyed handler hits
+          // both. window.PhotoImport.whoOf is the same key the model collapses
+          // seats on and the same one the shared review uses.
+          const who = window.PhotoImport.whoOf(p);
+          return `
           <li class="pimp-seat${p.isWinner ? " is-winner" : ""}">
             <button class="pimp-seat__toggle" type="button"
                     aria-pressed="${p.isWinner ? "true" : "false"}"
                     aria-label="${escapeAttr(p.isWinner ? `${p.name} won` : `Mark ${p.name} the winner`)}"
-                    onclick="${call("_toggleWinner", p.name)}">
+                    onclick="${call("_toggleWinner", who)}">
               ${window.BgbBadge.render({
                 displayName: p.name,
                 size: "xs",
@@ -266,11 +272,12 @@
             </button>
             <button class="pimp-seat__x" type="button"
                     aria-label="${escapeAttr(`Remove ${p.name} from this table`)}"
-                    onclick="${call("_removeSeat", p.name)}">
+                    onclick="${call("_removeSeat", who)}">
               <i data-icon="x" class="w-3.5 h-3.5"></i>
             </button>
           </li>
-        `).join("")}
+        `;
+        }).join("")}
       </ul>
       <p class="imp-note">Tap a player to mark them the winner — several is a tie. × takes them off this table.</p>
     `;

@@ -387,18 +387,18 @@
       // and repainting it would drop the caret.
     }
 
-    _removeSeat(name) {
+    _removeSeat(who) {
       const shot = this._draft.current;
       if (!shot) return;
-      this._draft.removeSeat(shot.id, name);
+      this._draft.removeSeat(shot.id, who);
       this._draft.save();
       this.render();
     }
 
-    _toggleWinner(name) {
+    _toggleWinner(who) {
       const shot = this._draft.current;
       if (!shot) return;
-      this._draft.toggleWinner(shot.id, name);
+      this._draft.toggleWinner(shot.id, who);
       this._draft.save();
       this.render();
     }

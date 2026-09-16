@@ -89,6 +89,11 @@
    * @property {DraftPlayer[]} players
    * @property {string|null} runId  Set when this play came out of a `count`
    *   run. Identical plays share one, which is what the review list collapses.
+   * @property {Array<{name: string, is_winner: boolean, score: number|null,
+   *   user_id: string|null}>|null} [seatsOverride]  This table, exactly — set
+   *   the first time the user edits the seats of this play, after which it no
+   *   longer follows the global Players mapping. Null on every play the user
+   *   has not touched, which is nearly all of them. See _materialise().
    * @property {boolean} dropped   Kept rather than spliced, so undo is possible
    *   and a run's counts stay stable while the user trims it.
    */
@@ -513,29 +518,77 @@
      * @returns {Array<{name: string, is_winner: boolean, score: number|null, user_id: string|null}>}
      */
     seats(play) {
+      // An edited table answers for itself. See _materialise(): once the user
+      // has changed the seats of one play, the global Players mapping is no
+      // longer the truth about THAT play, and re-deriving through it would
+      // silently undo what they just did.
+      if (play && play.seatsOverride) return this._collapse(play.seatsOverride);
+      return this._collapse(
+        ((play && play.players) || []).map((pl) => {
+          const m = this.playerMapping(pl.name);
+          return {
+            name: m.label || pl.name,
+            is_winner: !!pl.isWinner,
+            score: (pl.score === 0 || pl.score) ? pl.score : null,
+            user_id: m.userId || null,
+          };
+        }));
+    }
+
+    /**
+     * Merge seats that are the same person, whatever they were called.
+     *
+     * The collapse point for migration 023's uq_bgb_play_players_play_user:
+     * the Players step exists to say that "Jas" and "Jasmine" are one person,
+     * and the write has to honour that or the server refuses the play. Seats
+     * added by hand in the review go through the same merge, so picking
+     * somebody already at the table cannot seat them twice.
+     *
+     * The winner flag ORs and the first non-null score wins — a merge must not
+     * lose a win, and it must not overwrite a number with a blank.
+     *
+     * A seat that names nobody at all is dropped rather than merged: the model
+     * can emit one from an unreadable line, and it would land as a blank row
+     * on the scoreboard.
+     * @param {Array<{name: string, is_winner: boolean, score: number|null, user_id: string|null}>} seats
+     */
+    _collapse(seats) {
       const out = [];
       const byWho = new Map();
-      for (const pl of (play && play.players) || []) {
-        const m = this.playerMapping(pl.name);
-        const label = m.label || pl.name;
-        if (!m.userId && !key(label)) continue;
-        const who = m.userId ? `u:${m.userId}` : `g:${key(label)}`;
+      for (const seat of seats || []) {
+        if (!seat) continue;
+        const label = seat.name;
+        if (!seat.user_id && !key(label)) continue;
+        const who = PlayImport.whoOf(seat);
         const taken = byWho.get(who);
         if (taken) {
-          taken.is_winner = taken.is_winner || !!pl.isWinner;
-          if (taken.score == null && (pl.score === 0 || pl.score)) taken.score = pl.score;
+          taken.is_winner = taken.is_winner || !!seat.is_winner;
+          if (taken.score == null && (seat.score === 0 || seat.score)) taken.score = seat.score;
           continue;
         }
-        const seat = {
+        const next = {
           name: label,
-          is_winner: !!pl.isWinner,
-          score: (pl.score === 0 || pl.score) ? pl.score : null,
-          user_id: m.userId || null,
+          is_winner: !!seat.is_winner,
+          score: (seat.score === 0 || seat.score) ? seat.score : null,
+          user_id: seat.user_id || null,
         };
-        byWho.set(who, seat);
-        out.push(seat);
+        byWho.set(who, next);
+        out.push(next);
       }
       return out;
+    }
+
+    /**
+     * WHO a seat is, with nothing about how this play went.
+     *
+     * seatKey() below is the row identity and so carries the win and the
+     * score, which means it changes the moment either is edited — it cannot
+     * address a seat across the edit that changes it. This can: it is the
+     * stable half, and it is what every seat handler takes.
+     * @param {{name: string, user_id: string|null}} seat
+     */
+    static whoOf(seat) {
+      return seat.user_id ? `u:${seat.user_id}` : `g:${key(seat.name)}`;
     }
 
     /**
@@ -546,8 +599,8 @@
      * @param {{name: string, is_winner: boolean, score: number|null, user_id: string|null}} seat
      */
     seatKey(seat) {
-      const who = seat.user_id ? `u:${seat.user_id}` : `g:${key(seat.name)}`;
-      return `${who}#${seat.is_winner ? "w" : ""}#${seat.score == null ? "" : seat.score}`;
+      return `${PlayImport.whoOf(seat)}#${seat.is_winner ? "w" : ""}`
+           + `#${seat.score == null ? "" : seat.score}`;
     }
 
     /**
@@ -655,6 +708,243 @@
     dropPlays(ids) {
       const set = new Set(ids);
       for (const p of this.plays) if (set.has(p.id)) p.dropped = true;
+    }
+
+    // ── The shared review adapter ────────────────────────────────────────────
+    //
+    // widgets/import-review-step.js renders every source through this surface,
+    // so the review and the summary are one screen rather than two that look
+    // alike. What is source-specific is the handful of values below — a photo
+    // has a thumbnail and a country and no run to collapse; a note has a bulk
+    // date, warnings the model raised, and runs. The SHAPE is identical, which
+    // is the whole point.
+
+    /** @returns {"notes"|"photos"} */
+    get sourceKey() { return "notes"; }
+
+    /** A note can leave a play undated; every photo carries its own date. */
+    get supportsBulkDate() { return true; }
+
+    /** Things the model flagged while reading. Nothing else raises any. */
+    reviewWarnings() { return this.warnings || []; }
+
+    /**
+     * The review list: live plays, per catalog game, each group's plays
+     * collapsed into rows. `rows` is the only shape the shared step renders.
+     */
+    reviewGroups() {
+      return this.groups().map((group) => ({
+        key: group.key,
+        name: group.name,
+        game: group.game,
+        rows: this.rows(group.plays).map((row) => this._reviewRow(row)),
+      }));
+    }
+
+    /** @param {{key: string, runId: string|null, plays: DraftPlay[]}} row */
+    _reviewRow(row) {
+      const first = row.plays[0];
+      const n = row.plays.length;
+      return {
+        id: first.id,
+        count: n,
+        // A note is the one source where several plays can be one row, so it
+        // is the one source where the count is a control.
+        countEditable: n > 1,
+        game: this.playGame(first),
+        playedAt: this.dateFor(first),
+        notes: first.notes || null,
+        thumbUrl: null,
+        countryCode: null,
+        seats: this.seats(first),
+        edited: !!first.seatsOverride,
+        runNote: n > 1
+          ? (row.runId
+            ? `they came from one run of repeats in your notes.`
+            : `your notes wrote them as separate entries that came out identical `
+              + `— same game, same day, same players.`)
+          : null,
+      };
+    }
+
+    /** The third summary tile. Plays and Games are the same for every source. */
+    summaryTile() {
+      const buddies = this.playerNames
+        .filter((n) => this.playerMapping(n).kind === "buddy").length;
+      const ghosts = this.playerNames.length - buddies;
+      return {
+        label: "Players",
+        value: buddies + ghosts,
+        note: `${buddies} ${buddies === 1 ? "buddy" : "buddies"} · `
+            + `${ghosts} ghost${ghosts === 1 ? "" : "s"}`,
+      };
+    }
+
+    /**
+     * Why a live play is being left behind, counted apart because the two have
+     * different fixes — one is a step back to Games, the other is a line the
+     * note never named anybody on. "12 plays won't import" without saying
+     * which problem to go and solve is not a warning.
+     */
+    reviewNotices() {
+      const seatless = this.seatless().length;
+      const gameless = this.liveCount - this.importable().length - seatless;
+      const out = [];
+      if (gameless) {
+        out.push({
+          count: gameless,
+          text: `${gameless} play${gameless === 1 ? "" : "s"} won't be imported — `
+              + `no game matched. Go back to Games to match `
+              + `${gameless === 1 ? "it" : "them"}.`,
+        });
+      }
+      if (seatless) {
+        out.push({
+          count: seatless,
+          text: `${seatless} play${seatless === 1 ? "" : "s"} won't be imported — `
+              + `nobody at the table. A play needs at least one player, or it counts `
+              + `towards nobody's record and no ghost can ever claim it. Go back to `
+              + `the review to check ${seatless === 1 ? "it" : "them"}.`,
+        });
+      }
+      return out;
+    }
+
+    /** A line under the CTA. The note importer has nothing to add. */
+    ctaNote() { return null; }
+
+    /** @param {any} p @param {boolean} busy */
+    progressHeading(p, busy) {
+      return busy ? "Importing…" : (p && p.failed ? "Finished with errors" : "Imported");
+    }
+
+    progressNote() { return null; }
+
+    // ── Row edits the shared review drives ───────────────────────────────────
+
+    /** @param {string} playId @param {any} game */
+    setRowGame(playId, game) {
+      const row = this.rowFor(playId);
+      if (!row || !game) return false;
+      for (const play of row.plays) play.gameId = game.id;
+      // The global mapping too: the row said what this game name means, and
+      // leaving the Games step disagreeing with the row is how a later edit
+      // silently reverts this one.
+      this.setGame(game.name, game);
+      return true;
+    }
+
+    /** @param {string} playId @param {string} iso */
+    setRowDate(playId, iso) {
+      const row = this.rowFor(playId);
+      if (!row) return false;
+      for (const play of row.plays) play.playedAt = iso || null;
+      return true;
+    }
+
+    /** @param {string} playId */
+    dropRow(playId) {
+      const row = this.rowFor(playId);
+      if (!row) return false;
+      this.dropPlays(row.plays.map((p) => p.id));
+      return true;
+    }
+
+    // ── Per-play seat editing ────────────────────────────────────────────────
+    //
+    // Every edit below applies to the WHOLE ROW, which is the established
+    // semantics of this screen — setRowDate and the per-row game override
+    // already loop the row, and the detail panel already says "editing
+    // anything else here changes all N". An identical change to N plays
+    // produces N identical new keys, so the row survives as one row of N.
+    //
+    // Two consequences worth knowing rather than discovering:
+    //   • Two rows can MERGE, when an edit makes their keys equal. That is
+    //     correct — they are now indistinguishable — and is already what the
+    //     per-row game override does. The caller has to re-resolve its open-row
+    //     anchor afterwards, because a merge orphans one of the two ids.
+    //   • groupKeyFor IS rowKeyFor, so these also move feed grouping. Also
+    //     already true of a date or a game edit, and intended: the row the user
+    //     reviewed and the card the feed shows must not disagree.
+
+    /**
+     * Detach a play's table from the global Players mapping, seeding it with
+     * what that mapping currently says.
+     *
+     * Seats are DERIVED — `seats()` runs play.players through this.playerMap —
+     * and that map is one entry per name across the whole note. So taking Sean
+     * off one play by editing the map would take him off every play, and
+     * editing play.players would edit the note as parsed, which is the thing
+     * the mapping exists to translate. The override is a third layer: it says
+     * "this table, exactly", and from here the play no longer follows the
+     * Players step. The review row says so where the user can see it.
+     * @param {DraftPlay} play
+     */
+    _materialise(play) {
+      if (!play.seatsOverride) play.seatsOverride = this.seats(play);
+      return play.seatsOverride;
+    }
+
+    /**
+     * Apply one edit to every play in a row.
+     * @param {string} playId Any play in the row (the row's anchor).
+     * @param {(seats: any[]) => any[]|void} fn
+     */
+    _editRow(playId, fn) {
+      const row = this.rowFor(playId);
+      if (!row) return false;
+      for (const play of row.plays) {
+        const next = fn(this._materialise(play).map((s) => ({ ...s })));
+        if (next) play.seatsOverride = next;
+      }
+      return true;
+    }
+
+    /** @param {string} playId @param {any[]} picks PlayerCandidate rows. */
+    addSeats(playId, picks) {
+      if (!picks || !picks.length) return false;
+      return this._editRow(playId, (seats) => seats.concat(picks.map((pick) => ({
+        name: pick.name,
+        is_winner: false,
+        score: null,
+        user_id: pick.user_id || null,
+      }))));
+    }
+
+    /** @param {string} playId @param {string} who A whoOf() key. */
+    removeSeat(playId, who) {
+      return this._editRow(playId,
+        (seats) => seats.filter((s) => PlayImport.whoOf(s) !== who));
+    }
+
+    /**
+     * Several winners is a tie, so this toggles one seat rather than moving a
+     * single crown — the same contract the photo importer's seat toggle has.
+     * @param {string} playId @param {string} who A whoOf() key.
+     */
+    toggleWinner(playId, who) {
+      return this._editRow(playId, (seats) => seats.map((s) => (
+        PlayImport.whoOf(s) === who ? { ...s, is_winner: !s.is_winner } : s
+      )));
+    }
+
+    /**
+     * One final score for one seat. Blank clears it back to null rather than
+     * writing 0 — a game nobody recorded a score for is not a game everybody
+     * scored nothing in.
+     *
+     * The caller must not offer this on a row standing for more than one play:
+     * fifty-eight plays that all scored 112 is not a thing that happened, and
+     * this would write it to all of them.
+     * @param {string} playId @param {string} who @param {string|number} value
+     */
+    setScore(playId, who, value) {
+      const raw = String(value == null ? "" : value).trim();
+      const score = raw === "" ? null : Math.trunc(Number(raw));
+      if (score != null && !Number.isFinite(score)) return false;
+      return this._editRow(playId, (seats) => seats.map((s) => (
+        PlayImport.whoOf(s) === who ? { ...s, score } : s
+      )));
     }
 
     // ── The write ────────────────────────────────────────────────────────────
@@ -849,7 +1139,17 @@
       // recognises that shape and says so rather than showing a blank box.
       this.clearPhotos();
       this.hint = String(data.hint || "");
-      this.plays = data.plays;
+      // Normalised rather than assigned, so a draft saved before seat editing
+      // existed restores with the field explicitly absent instead of
+      // undefined. That is what lets this stay an ADDITIVE change and keeps
+      // DRAFT_VERSION where it is: an optional field with a null default and
+      // an explicit normalisation here does not need a version bump, and
+      // bumping would throw away every in-flight import on deploy day.
+      // Changing the meaning of an existing field would.
+      this.plays = (data.plays || []).map((p) => ({
+        ...p,
+        seatsOverride: p.seatsOverride || null,
+      }));
       this.playerNames = data.playerNames || [];
       this.playerMap = data.playerMap || {};
       this.gameRefs = data.gameRefs || [];
