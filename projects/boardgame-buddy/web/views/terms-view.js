@@ -1,11 +1,12 @@
 // views/terms-view.js — the terms of service.
 //
 // One thing here cannot be derived from the code and has to be set by a human:
-// JURISDICTION below. It is left empty on purpose and the page renders a loud
-// banner in its place, so an unset value is visible to the first person who
-// opens the page rather than shipping as a governing-law clause that names
-// nowhere. Set it to the state or country whose law applies and the banner goes
-// away.
+// JURISDICTION below. While it is empty the page renders a loud banner in place
+// of the governing-law clause, so an unset value is visible to the first person
+// who opens the page rather than shipping as a clause that names nowhere. It is
+// set to Minnesota, where the operator is based. "United States" would not do:
+// contract and consumer law there is state law, so a federal-only clause leaves
+// both the governing law and the venue undetermined.
 //
 // The content claims that overlap the privacy policy are deliberately worded to
 // match it — the published-chapter licence in §4 mirrors "guide chapters you
@@ -17,13 +18,13 @@
 
 (function () {
   // e.g. "the State of New York, USA" or "England and Wales".
-  const JURISDICTION = "";
+  const JURISDICTION = "the State of Minnesota, USA";
 
   class TermsView extends window.LegalView {
     constructor() { super("terms"); }
 
     _title() { return "Terms of Service"; }
-    _updated() { return "2026-09-15"; }
+    _updated() { return "2026-09-16"; }
 
     _governingLaw() {
       if (!JURISDICTION) {
