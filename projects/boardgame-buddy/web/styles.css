@@ -5543,8 +5543,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0;
 }
 
-/* BGG attribution block under logout — small logo + neutral blurb so it
-   reads as a footer credit rather than another actionable section. */
+/* BGG attribution block under the account actions — small logo + neutral blurb
+   so it reads as a footer credit rather than another actionable section. The
+   legal links sit below it; see .settings-legal. */
 .settings-bgg-credit {
   display: flex; flex-direction: column; align-items: center; gap: 0.55rem;
   padding: 0.5rem 1rem 1.5rem;
@@ -5564,6 +5565,39 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   max-width: 30ch;
   margin: 0;
 }
+
+/* The legal links, last thing on Settings — under the BGG credit, where the
+   rest of the web keeps them. They were inside .settings-account, between Log
+   out and the delete rule, which is the one block on that screen whose whole
+   job is separating what you can undo from what you cannot; two read-only
+   links have no business inside it. Same 0.72rem muted ink they had there, so
+   only their position changed. Row-wrapped rather than a paragraph: each link
+   is a tap target, and the 44px hit area comes from the inset ::before so the
+   footer does not grow a 44px-tall band of its own. */
+.settings-legal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 1rem 1.25rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+  text-align: center;
+}
+.settings-legal .link {
+  position: relative;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0 0.15rem;
+}
+/* Vertical only. Widening the hit area sideways would run the two links'
+   zones into each other across the middot — they need 8px of clearance
+   (.claude/rules/mobile-web.md §5), and each label is already wide enough. */
+.settings-legal .link::before { content: ""; position: absolute; inset: -14px 0; }
+.settings-legal .link:active { opacity: 0.6; }
 .profile-stat { text-align: center; }
 .profile-empty { text-align: center; padding: 1.5rem; opacity: 0.6; font-size: 0.9rem; }
 .profile-collection-grid {
@@ -13902,6 +13936,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .bgb-spoke-screen .set-card-label { color: var(--accent-ink); }
 .bgb-spoke-screen .settings-bgg-credit { color: var(--polaroid-muted, #8B7E68); }
 .bgb-spoke-screen .settings-bgg-credit__text { color: var(--polaroid-muted, #8B7E68); }
+.bgb-spoke-screen .settings-legal { color: var(--polaroid-muted, #8B7E68); }
 
 /* The two account actions sit below the cards, on the spoke's own surface.
    Both take a slightly heavier hairline so their outlines read against cream;

@@ -1,8 +1,15 @@
 // views/settings-view.js — account settings & integrations.
 //
-// Admin tools, Appearance, Connections, Pending uploads, Data management,
-// Logout and BGG attribution, in the warm-cream card aesthetic. Admin tools
-// surfaces a live "open chapter reports" badge count.
+// Appearance, Notifications, Connections, Import (+ pending uploads), Data
+// management, Admin tools, then the account actions, the BGG attribution and
+// the legal links, in the warm-cream card aesthetic. Admin tools surfaces a
+// live "open chapter reports" badge count.
+//
+// The order is what somebody actually comes here for: the two sections every
+// account touches lead, the setup-once ones follow, and Admin tools — which
+// most accounts never see at all — sits last rather than first. Below the
+// labelled sections come the three unlabelled trailers, in descending
+// consequence: Log out / Delete account, the BGG credit, and the legal links.
 //
 // The identity/"Edit profile" account card moved to the Profile hub
 // (views/profile-self-view.js). What is left under "Account" here is the
@@ -154,13 +161,6 @@
 
       this.container.innerHTML = `
         ${this._renderHead()}
-        ${me.is_admin ? `
-          <div class="set-card-label">Admin tools</div>
-          ${this._renderAdminCard()}
-        ` : `
-          <div class="set-card-label">Account</div>
-          <div class="set-card">${this._renderBecomeAdminBlock()}</div>
-        `}
         <div class="set-card-label">Appearance</div>
         ${this._renderAppearanceCard()}
         ${this._renderLayoutCard()}
@@ -175,8 +175,16 @@
         <div class="set-card-label">Data management</div>
         ${this._renderExportCard()}
         ${this._renderCacheCard()}
+        ${me.is_admin ? `
+          <div class="set-card-label">Admin tools</div>
+          ${this._renderAdminCard()}
+        ` : `
+          <div class="set-card-label">Account</div>
+          <div class="set-card">${this._renderBecomeAdminBlock()}</div>
+        `}
         ${this._renderAccountActions()}
         ${this._renderBggAttribution()}
+        ${this._renderLegalLinks()}
         <div style="height: 1rem"></div>
       `;
       this.refreshIcons();
@@ -1098,13 +1106,6 @@
                   ${this._deleting ? "disabled" : ""} onclick="window.handleLogout()">
             <i data-icon="log-out" class="w-4 h-4"></i> Log out
           </button>
-          <p class="settings-account__note">
-            <a class="link" href="/privacy"
-               onclick="window.router.go('privacy'); return false;">Privacy Policy</a>
-            <span aria-hidden="true"> · </span>
-            <a class="link" href="/terms"
-               onclick="window.router.go('terms'); return false;">Terms of Service</a>
-          </p>
           <div class="settings-account__danger">
             <button class="btn btn-sm settings-account__delete"
                     ${this._deleting ? "disabled" : ""}
@@ -1173,6 +1174,29 @@
             Game data, box art, and metadata are sourced from BoardGameGeek via the BGG XML API.
           </p>
         </div>
+      `;
+    }
+
+    /**
+     * The two legal pages, last thing on the screen.
+     *
+     * They used to sit between Log out and the delete-account rule, which put
+     * a pair of read-only links inside the one block on this screen whose
+     * whole job is to separate what you can undo from what you cannot. They
+     * are not account actions and they are not part of that warning, so they
+     * are the footer they always read as — below the BGG credit, where the
+     * rest of the web keeps its policy links and where nobody scanning for
+     * something to *do* has to step over them.
+     */
+    _renderLegalLinks() {
+      return `
+        <nav class="settings-legal" aria-label="Legal">
+          <a class="link" href="/privacy"
+             onclick="window.router.go('privacy'); return false;">Privacy Policy</a>
+          <span aria-hidden="true"> · </span>
+          <a class="link" href="/terms"
+             onclick="window.router.go('terms'); return false;">Terms of Service</a>
+        </nav>
       `;
     }
 
