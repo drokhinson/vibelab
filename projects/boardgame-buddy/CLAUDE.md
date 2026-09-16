@@ -24,7 +24,7 @@ projects/boardgame-buddy/
 │   ├── db.py jwt_auth.py cache.py api_logger.py gemini.py auth.py shared_models.py
 │   ├── object_store.py     Cloudflare R2 uploads (see below)
 │   └── tests/
-├── db/migrations/          001–038, plus _shared/ (analytics + api_logs)
+├── db/migrations/          001–036, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  one-off generators, not deploy steps
 ├── web/                    the static PWA

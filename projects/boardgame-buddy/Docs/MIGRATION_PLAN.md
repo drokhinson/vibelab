@@ -38,7 +38,7 @@ sides in one commit, with `test_jwt_auth_dual_issuer.py` reduced to the
 Identity Platform cases.
 
 **Stage 4's code has landed and is inert.** `api/object_store.py`, both upload
-call sites and `038_r2_photo_urls.sql` are in the tree; with the R2 variables
+call sites and `036_r2_photo_urls.sql` are in the tree; with the R2 variables
 unset the API still writes to Supabase Storage, so nothing changed in
 production. What remains is console work and a data copy: two buckets, two
 custom domains, one API token, seven Railway variables, `rclone`, then the
@@ -176,9 +176,12 @@ Waitlist capture on that view writes to its own table and **creates no identity*
 > **What shipped, and what is gone.** The view and the `COMING_SOON` gate were
 > built, did their job through the DNS and auth cutover, and were **removed at
 > cutover** — the merge now lands the app live, so a permanent conditional in
-> the boot path bought nothing. `boardgamebuddy_waitlist` (migration 035) and
+> the boot path bought nothing. `boardgamebuddy_waitlist` and
 > `api/routes/waitlist_routes.py` briefly outlived the view and are **also gone
-> now**, dropped by migration `037_drop_waitlist.sql` — see below.
+> now** — see below. Both of its migrations, the create and the drop, were
+> applied to production and then **deleted from the tree as a pair**, which is
+> why there is no waitlist migration to find: on a fresh database a create
+> followed by a drop is a no-op, so the numbering closed over the gap.
 >
 > The store badges this section parks on the landing view need a new home when
 > the native apps ship. The app's own root is the obvious one.
@@ -238,9 +241,10 @@ reconcile by hand. Waitlist-only removes the collision entirely and decouples
 > **The capture half of this was wasted effort, and that is the better
 > outcome.** The waitlist took **zero** addresses: the gate was up for hours,
 > not weeks, and nobody found the form. So there was no launch email to send
-> and no list to export — migration `037_drop_waitlist.sql` dropped the table
-> empty, and the route, its test and the privacy policy's two clauses about it
-> went with it. The constraint still earned its place: it was insurance against
+> and no list to export — the table was dropped empty, and the route, its test
+> and the privacy policy's two clauses about it went with it. Both migrations
+> were later removed from the tree for the reason above: they cancel out, so
+> replaying them would build a table only to drop it again. The constraint still earned its place: it was insurance against
 > a duplicate identity, and insurance that pays out nothing is insurance that
 > worked.
 
@@ -875,7 +879,7 @@ mints a brand-new uid at first sign-in and orphans the profile just as surely
 as a regenerated UUID would.
 
 Then drop the FK, since `auth.users` is no longer the authority. That is
-migration `036_drop_profiles_auth_users_fk.sql`, and it has to run BEFORE the
+migration `035_drop_profiles_auth_users_fk.sql`, and it has to run BEFORE the
 frontend swap: a user who signs up through Identity Platform has no
 `auth.users` row, so the profile insert violates the constraint and signup
 fails as a generic error.
@@ -1120,7 +1124,7 @@ uses.
 
 **2. A configured-but-failing R2 must NOT fall back.** The fallback is for an
 absent R2, never a broken one. Falling back on error would write a
-supabase.co URL into a play *after* `038` has rewritten every other row —
+supabase.co URL into a play *after* `036` has rewritten every other row —
 new data quietly landing back on the origin this whole stage exists to leave.
 So a failing R2 is a 502 on the photo path and the untouched BGG URL on the
 cover path. `tests/test_object_store.py` pins exactly this.
@@ -1147,7 +1151,7 @@ rclone copy supabase:boardgamebuddy-games r2:bgb-games --progress
 ```
 
 Then rewrite the stored URLs — three columns, one migration, which is written
-and lives at `db/migrations/038_r2_photo_urls.sql`. **Edit the four prefixes at
+and lives at `db/migrations/036_r2_photo_urls.sql`. **Edit the four prefixes at
 the top before running it**; it refuses to run while a placeholder is still in
 place, and the refusal survives a global find/replace (the guard looks for a
 double underscore, not for the placeholder text, precisely so editing it the

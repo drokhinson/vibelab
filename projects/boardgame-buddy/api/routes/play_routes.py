@@ -49,7 +49,7 @@ _SELECT_PLAY = (
 
 # The Supabase Storage bucket. Still here because it is the fallback when R2
 # is unconfigured — see object_store.py — and because the objects it holds
-# stay readable forever: rows written before 038_r2_photo_urls.sql keep their
+# stay readable forever: rows written before 036_r2_photo_urls.sql keep their
 # supabase.co URLs, and the client loads whatever absolute URL the row holds.
 PLAYS_BUCKET = "boardgamebuddy-plays"
 _ALLOWED_PHOTO_MIME = {"image/jpeg", "image/png", "image/webp", "image/gif"}

@@ -1,4 +1,4 @@
--- 038_r2_photo_urls.sql — repoint stored image URLs at Cloudflare R2.
+-- 036_r2_photo_urls.sql — repoint stored image URLs at Cloudflare R2.
 --
 -- Stage 4 of Docs/MIGRATION_PLAN.md. The object KEY is identical on both sides
 -- (`{user_id}/{uuid4hex}.{ext}` for photos, `{bgg_id}_{kind}.{ext}` for covers
@@ -62,7 +62,7 @@ BEGIN
   IF strpos(old_plays, '__') > 0 OR strpos(new_plays, '__') > 0
      OR strpos(old_games, '__') > 0 OR strpos(new_games, '__') > 0 THEN
     RAISE EXCEPTION
-      'Fill in the Supabase project ref and the R2 hostnames at the top of 038_r2_photo_urls.sql first';
+      'Fill in the Supabase project ref and the R2 hostnames at the top of 036_r2_photo_urls.sql first';
   END IF;
 
   -- starts_with(), not LIKE: a LIKE pattern would read `_` in the project ref

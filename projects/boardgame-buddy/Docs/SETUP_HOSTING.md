@@ -18,11 +18,13 @@ Domain: **bgbuddy.app**. Written 2026-09-15, cutover completed 2026-09-16.
 >   them. The Cloudflare panel did not offer Email Routing on this zone;
 >   ImprovMX or Zoho on the same DNS is the fallback.
 >
-> **The waitlist is gone** (migration `037_drop_waitlist.sql`). It was the
-> other open item, and it closed without the launch email it was waiting on:
-> the gate was up for hours rather than weeks, nobody ever found the form, and
-> the table was dropped empty. The table, `waitlist_routes.py`, its test and
-> the two privacy-policy clauses describing it came out in one commit.
+> **The waitlist is gone.** It was the other open item, and it closed without
+> the launch email it was waiting on: the gate was up for hours rather than
+> weeks, nobody ever found the form, and the table was dropped empty. The
+> table, `waitlist_routes.py`, its test and the two privacy-policy clauses
+> describing it came out in one commit. Its two migrations were both applied
+> here and then deleted from the tree together, since on a fresh database a
+> create followed by a drop is a no-op.
 >
 > Read it for *why* a thing is the way it is — most sections carry the
 > correction that doing it for real produced. Do not read it as a to-do list.

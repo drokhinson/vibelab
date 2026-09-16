@@ -1,4 +1,4 @@
--- 036_drop_profiles_auth_users_fk.sql — release the profile row from auth.users.
+-- 035_drop_profiles_auth_users_fk.sql — release the profile row from auth.users.
 --
 -- Stage 3-ALT moves token issuance to GCP Identity Platform, so `auth.users`
 -- stops being the authority on who exists. This constraint is what makes that

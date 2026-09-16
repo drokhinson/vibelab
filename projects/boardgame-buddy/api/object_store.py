@@ -15,7 +15,7 @@ PATHS ARE UNCHANGED FROM THE SUPABASE LAYOUT.
   plays: `{user_id}/{uuid4hex}.{ext}`     games: `{bgg_id}_{kind}.{ext}`
 That is deliberate and it is what makes the data migration cheap: the object
 key is identical on both sides, so rewriting the stored URLs is one prefix
-substitution per column (`038_r2_photo_urls.sql`) rather than a re-key. Do not
+substitution per column (`036_r2_photo_urls.sql`) rather than a re-key. Do not
 "tidy" these into a new shape — the tidying cost is a second data migration.
 
 TWO BUCKETS, TWO HOSTNAMES, ON PURPOSE. Play photos are user content; cover

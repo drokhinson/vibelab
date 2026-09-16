@@ -11,7 +11,7 @@ the original BGG URL on the cover path, never a silent second attempt.
 Also pinned: the public URL is built from the env-driven base rather than from
 the S3 endpoint (the S3 endpoint is not publicly readable), and the object key
 is byte-identical to the Supabase layout, which is what makes
-038_r2_photo_urls.sql a prefix substitution instead of a re-key.
+036_r2_photo_urls.sql a prefix substitution instead of a re-key.
 """
 
 import asyncio
