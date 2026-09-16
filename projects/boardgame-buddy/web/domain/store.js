@@ -64,7 +64,7 @@
         // a row already asked for comes back with claim_status='pending'.
         ghostClaimSuggestionCount: 0,
         // Admin review queues, published by domain/admin-review.js from one
-        // /admin/review-counts call. Three slots rather than one total for the
+        // /admin/review-counts call. Four slots rather than one total for the
         // same reason as the ghost-claim pair above: the gear's dot only needs
         // "something is waiting", but each row of the Settings admin card
         // names its own count. All three stay 0 for non-admins, which is what
@@ -72,6 +72,12 @@
         adminChapterReportCount: 0,
         adminMissingImageCount: 0,
         adminMissingDescriptionCount: 0,
+        adminMissingStatsCount: 0,
+        // The last /discover bundle, published by domain/discovery.js so the
+        // Discover view repaints when a background SWR refresh lands. Declared
+        // here for the reason profileBundle's comment gives: an undeclared
+        // slot is one reset() cannot see.
+        discover: null,
         // Everything that has happened TO this account and it hasn't looked at
         // yet: plays somebody seated it in, buddy requests received, requests
         // of its own that were accepted. Published by
@@ -164,6 +170,10 @@
         adminChapterReportCount: 0,
         adminMissingImageCount: 0,
         adminMissingDescriptionCount: 0,
+        adminMissingStatsCount: 0,
+        // Zeroed: the picks are one account's taste, and the next account's
+        // Discover tab must not open on them.
+        discover: null,
         // Zeroed too, and for the plainest reason of the lot: these are things
         // that happened TO this account. NotificationFeed re-seeds it from the
         // next boot's bundle.

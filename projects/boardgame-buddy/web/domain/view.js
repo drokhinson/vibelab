@@ -162,6 +162,7 @@
         // active-session list are the bottom half of the Play tab now. Kept as
         // an alias so shared links and bookmarks still land somewhere sane.
         { name: "log-play",            pattern: /^\/(play|join)\/?$/,             build: () => "/play" },
+        { name: "discovery",           pattern: /^\/discover\/?$/,               build: () => "/discover" },
         { name: "add-games",           pattern: /^\/games\/add\/?$/,              build: () => "/games/add" },
         { name: "game-explorer",       pattern: /^\/games\/?$/,                   build: () => "/games" },
         { name: "game-detail",         pattern: /^\/game\/([^/]+)\/?$/,
@@ -204,6 +205,7 @@
         { name: "admin-reports",       pattern: /^\/admin\/reports\/?$/,          build: () => "/admin/reports" },
         { name: "admin-images",        pattern: /^\/admin\/images\/?$/,           build: () => "/admin/images" },
         { name: "admin-descriptions",  pattern: /^\/admin\/descriptions\/?$/,     build: () => "/admin/descriptions" },
+        { name: "admin-stats",         pattern: /^\/admin\/stats\/?$/,            build: () => "/admin/stats" },
         // The admin tools used to be one stacked screen at /admin. Aliased
         // rather than dropped so an old bookmark lands on the Settings card
         // that now indexes the three spokes, instead of a 404-ish blank.

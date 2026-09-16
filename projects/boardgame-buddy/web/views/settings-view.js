@@ -474,6 +474,13 @@
           title: "Missing descriptions",
           sub: "Backfill game descriptions from BoardGameGeek.",
         },
+        {
+          route: "admin-stats",
+          tool: "stats",
+          icon: "star",
+          title: "Missing BGG stats",
+          sub: "Sync ratings, ranks and weights from BoardGameGeek for the Discover tab.",
+        },
       ];
     }
 

@@ -1,7 +1,7 @@
 // views/admin-backfill-view.js — a catalog-backfill spoke.
 //
-// ONE class, TWO instances: "Games missing images" and "Games missing
-// descriptions". The tools are identical in shape — list what's missing, fix
+// ONE class, THREE instances: "Games missing images", "Games missing
+// descriptions" and "Games missing BGG stats". The tools are identical in shape — list what's missing, fix
 // one row, fix them all — so they are a parameter, not two screens
 // (ui-object-design.md §2). All the behaviour lives in the AdminBackfillPanel
 // widget; this view is the route, the header, and the count refresh.
@@ -103,6 +103,28 @@
       list: () => window.Game.adminMissingDescriptions(),
       refreshOne: (id) => window.Game.adminRefreshOneDescription(id),
       refreshAll: () => window.Game.adminBackfillDescriptions(),
+    },
+  });
+
+  AdminBackfillView.stats = () => new AdminBackfillView({
+    route: "admin-stats",
+    title: "Missing BGG stats",
+    global: "adminStatsView",
+    panel: {
+      key: "stats",
+      title: "Games missing BGG stats",
+      icon: "star",
+      emptyText: "Every catalog game has its BGG rating and rank.",
+      bulkLabel: "Sync all",
+      busyLabel: "Syncing\u2026",
+      oneOkToast: "Stats refreshed",
+      rowStatus: () => "Not synced",
+      bulkConfirm: (n) => (n > 0
+        ? `Fetch BGG ratings, ranks and weights for ${n} game${n === 1 ? "" : "s"}? BGG is called in throttled batches of 20 and the run continues automatically until every game is done \u2014 a cold catalog takes a few minutes.`
+        : "Fetch BGG stats for every game that has none? BGG is called in throttled batches of 20."),
+      list: () => window.Game.adminMissingStats(),
+      refreshOne: (id) => window.Game.adminRefreshOneStats(id),
+      refreshAll: () => window.Game.adminBackfillStats(),
     },
   });
 

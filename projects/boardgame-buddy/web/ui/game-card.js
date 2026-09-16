@@ -38,6 +38,10 @@
    *   it over the caption.
    * @param {boolean} [opts.pending] Collection map still loading — the status
    *   tag renders empty rather than guessing "not owned".
+   * @param {string} [opts.reason] One-line caption under the name saying WHY
+   *   the tile is here ("Because you play Wingspan"). The Discover picks pass
+   *   it; every other surface leaves it off. A variant parameter, not a second
+   *   tile — see .claude/rules/ui-object-design.md §2.
    * @param {boolean} [opts.eager] Load the photo eagerly instead of lazily.
    *   Callers that render a single-viewport grid (the explorer's 3x3) pass
    *   this: a lazy image is not loaded synchronously on insertion, so a
@@ -103,6 +107,7 @@
     pending = false,
     showStatus = true,
     interactive = true,
+    reason = "",
   } = {}) {
     const players = game.min_players
       ? `${game.min_players}${game.max_players && game.max_players !== game.min_players ? "–" + game.max_players : ""}P`
@@ -131,6 +136,7 @@
         <div class="game-polaroid__caption">
           <div class="game-polaroid__name"><span class="game-polaroid__name-text">${escapeHtml(game.name || "Unknown game")}</span></div>
           ${meta ? `<div class="game-polaroid__meta">${escapeHtml(meta)}</div>` : ""}
+          ${reason ? `<div class="game-polaroid__reason" title="${escapeAttr(reason)}">${escapeHtml(reason)}</div>` : ""}
         </div>
       </article>
     `;

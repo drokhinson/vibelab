@@ -1,8 +1,8 @@
 // domain/admin-review.js — the admin review queues behind the Settings gear.
 //
-// Publishes three store slots (see domain/store.js) from ONE
+// Publishes four store slots (see domain/store.js) from ONE
 // /admin/review-counts call: open chapter reports, games missing images, games
-// missing descriptions. domain/notifications.js turns them into the gear's dot
+// missing descriptions, games missing BGG stats. domain/notifications.js turns them into the gear's dot
 // and the per-row badges in the Settings admin card.
 //
 // One call rather than three, and counts rather than lists: the dot is on the
@@ -49,6 +49,7 @@
       window.store.set("adminChapterReportCount", n(counts.chapter_reports));
       window.store.set("adminMissingImageCount", n(counts.missing_images));
       window.store.set("adminMissingDescriptionCount", n(counts.missing_descriptions));
+      window.store.set("adminMissingStatsCount", n(counts.missing_stats));
     },
 
     /**

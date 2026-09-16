@@ -3142,7 +3142,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 
 /* Flat rectangular tab bar — square corners, edge-to-edge, nothing
-   protruding above the top edge. Three equal-width tabs; the active one is
+   protruding above the top edge. Four equal-width tabs; the active one is
    marked by a gold top rule plus gold icon/label, so the bar's silhouette
    stays a clean rectangle. */
 .bgb-nav {
@@ -3357,9 +3357,9 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* ── The rail, drawn compact (land tier) ────────────────────────────────────
    Same rail, sized for the short axis instead of a monitor. The wide rail does
    not fit here and the arithmetic is the whole reason this block exists: a
-   64px brand plus five 64px tabs plus its padding is 396px, and a phone on its
-   side is 375–430px tall — so on the shortest of them the gear falls off the
-   bottom edge. At 38 + 5 × 46 it comes to 268px and clears every phone with
+   64px brand plus six 64px tabs plus its padding is 460px, and a phone on its
+   side is 375–430px tall — so on every one of them the gear falls off the
+   bottom edge. At 38 + 6 × 46 it comes to 314px and clears every phone with
    room to spare. The rail scrolls (`overflow-y: auto`, set above) as a
    backstop, but a nav you have to scroll is a nav with a hidden item. */
 :root[data-bgb-layout="land"] .bgb-nav {
@@ -4607,6 +4607,78 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    padding from .feed-rail__scroll so their focus rings aren't clipped. */
 .feed-rail--flush .feed-rail__header { padding-left: 0; padding-right: 0; }
 .feed-rail--flush .feed-rail__scroll { padding-left: 0; padding-right: 0; }
+/* A muted line under a rail's title — Discover's "Owned, and not played in
+   60 days." Sits inside the header's gutter so it lines up with the h3. */
+.feed-rail__sub {
+  margin: -0.25rem 0 0.5rem;
+  padding: 0 1rem;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.feed-rail--flush .feed-rail__sub { padding-left: 0; padding-right: 0; }
+
+/* ── Discover ──────────────────────────────────────────────────────────────
+   Four game rails on the ground, in the feed's rail family (see the token
+   re-point above — this screen and the feed share the `[data-view]` scope).
+   Nothing here is a new tile; the rail and the tile are ui/game-rail.js and
+   ui/game-card.js. This family is only the page around them. */
+.discover { display: flex; flex-direction: column; gap: 1.25rem; }
+.discover__head { padding: 0.25rem 0 0; }
+.discover__title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.15;
+}
+.discover__blurb {
+  margin-top: 0.3rem;
+  font-size: 13.5px;
+  color: var(--ink-muted);
+  max-width: 34rem;
+}
+.discover__section:empty { display: none; }
+.discover__empty {
+  font-size: 13px;
+  color: var(--ink-muted);
+  padding: 0.75rem 0.9rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+}
+.discover__rail-error {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  font-size: 13px;
+  color: var(--ink-muted);
+  padding: 0.6rem 0.9rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+}
+.discover__rail-error p { margin: 0; }
+.discover__footnote {
+  font-size: 11px;
+  color: var(--ink-faint);
+  padding-bottom: 0.5rem;
+}
+/* Skeleton rail while the first bundle is in the air: four tile-sized blocks
+   breathing, sized to the rail tile (112px wide, 112px of art plus a caption)
+   so the real rail lands without a reflow. */
+.discover__skeleton-tile {
+  flex: 0 0 112px;
+  height: 172px;
+  border-radius: var(--r-md);
+  background: oklch(var(--b3) / 0.6);
+  animation: discoverPulse 1.4s ease-in-out infinite;
+}
+.discover__skeleton-tile:nth-child(2) { animation-delay: 120ms; }
+.discover__skeleton-tile:nth-child(3) { animation-delay: 240ms; }
+.discover__skeleton-tile:nth-child(4) { animation-delay: 360ms; }
+@keyframes discoverPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .discover__skeleton-tile { animation: none; opacity: 0.7; }
+}
 
 /* Feed-rail tiles are chrome, not photographs.
    A rail tile and a `.collection-tile` are the same object — a game in a grid —
@@ -4629,7 +4701,8 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    bare `.feed-rail` selector would out-specify it and quietly restyle that
    screen's buddy tiles too. The play cards stacked around these rails are real
    paper and keep their cream. */
-[data-view="feed"] .feed-rail {
+[data-view="feed"] .feed-rail,
+[data-view="discovery"] .feed-rail {
   --polaroid-bg:       var(--bg-1);
   --polaroid-bg-soft:  var(--bg-1);
   --polaroid-ink:      var(--ink);
@@ -4703,6 +4776,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .game-polaroid.game-polaroid--rail .game-polaroid__meta {
   font-size: 10.5px; color: var(--polaroid-muted); margin-top: 3px;
   font-variant-numeric: tabular-nums;
+}
+/* Why the tile is here — "Because you play Wingspan". One line, ellipsised:
+   the tile is 112px wide and the reason is a caption, not a paragraph. */
+.game-polaroid.game-polaroid--rail .game-polaroid__reason {
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--polaroid-ink-soft);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .buddy-tile {
