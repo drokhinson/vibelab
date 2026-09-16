@@ -109,6 +109,21 @@
   // is what keeps the pair one list rather than two that can disagree.
   window.BgbHeaderScreens = HEADER_TOGGLES.map(([, view]) => view);
 
+  // The only screens a signed-out visitor belongs on. Everything else in the
+  // route table reads account data, so replaying one from history after a
+  // sign-out paints an empty shell of somebody's app — see _gateBack.
+  //
+  // privacy and terms are here because they have to resolve for a stranger:
+  // Google's consent screen links to both permanently. They are NOT in
+  // CHROMELESS_VIEWS below — a signed-in user opens them from Settings, and
+  // taking the nav away there would strand the reader.
+  const PUBLIC_VIEWS = ["auth", "privacy", "terms", "splash"];
+
+  // Screens that deliberately show no app chrome: the splash covers boot, and
+  // the sign-in screen must not offer a nav bar into an app nobody is signed
+  // in to. index.html marks the header and the nav [data-auth-only].
+  const CHROMELESS_VIEWS = ["splash", "auth"];
+
   class Router {
     constructor() {
       this._views = new Map();
@@ -117,6 +132,8 @@
       this._maxStack = 20;
       this._routes = this._buildRoutes();
       window.addEventListener("popstate", (ev) => this._onPopstate(ev));
+      // The `user` subscription is NOT taken here — see go().
+      this._chromeSub = null;
     }
 
     _buildRoutes() {
@@ -306,14 +323,33 @@
       if (!skipPush && !fromPopstate) {
         const url = this.pathFor(name, params);
         if (url) {
+          // A SUCCESSFUL SIGN-IN SPENDS THE LOGIN SCREEN'S HISTORY ENTRY
+          // rather than stacking the app on top of it. Pushing left /auth
+          // sitting directly under the first screen the user landed on, so
+          // one back gesture on Android put a signed-in account back on the
+          // login form — with the app's own header and nav around it, since
+          // the entry is replayed through this same function.
+          //
+          // Read off the CURRENT PATH, not off `prev`: the handover goes
+          // auth → splash → feed, and splash has no URL of its own (pathFor
+          // returns null for it), so /auth is still the entry being stood on
+          // when the destination finally resolves. _onPopstate holds the
+          // other half of this for entries that predate the sign-in.
+          //
+          // Only a route INTO the app spends it. Walking from the login
+          // screen to the privacy policy (which a signed-out stranger must be
+          // able to read — Google's consent screen links to it) has to leave
+          // that entry where it is, or the × on the document has nothing to
+          // go back to.
+          const leavingAuth = !PUBLIC_VIEWS.includes(name) && this._onAuthPath();
           // Only here, so the stack never holds an entry history does not.
-          if (prev && prev !== next && prev.name !== "splash") {
+          if (prev && prev !== next && prev.name !== "splash" && !leavingAuth) {
             this._stack.push({ name: prev.name, params: prev.params || {} });
             if (this._stack.length > this._maxStack) this._stack.shift();
           }
           const current = window.location.pathname + window.location.search;
           try {
-            if (current === url) {
+            if (current === url || leavingAuth) {
               history.replaceState({ name, params: params || {} }, "", url);
             } else {
               history.pushState({ name, params: params || {} }, "", url);
@@ -355,10 +391,16 @@
         catch (_) { window.scrollTo(0, 0); }   // older Safari rejects the options form
       }
 
-      const authed = !!window.store.get("user");
-      shell.authOnly.forEach((el) => {
-        el.classList.toggle("hidden", !authed);
-      });
+      // Who is signed in is not a navigation event — see _applyAuthChrome for
+      // the bug that fact caused. Subscribed on the first navigation rather
+      // than in the constructor, so this module keeps no load-order
+      // dependency on store.js and the subscriber can never run before the
+      // shell below has been queried.
+      if (!this._chromeSub) {
+        this._chromeSub = window.store.subscribe(
+          "user", () => this._applyAuthChrome());
+      }
+      this._applyAuthChrome(name);
 
       shell.navButtons.forEach((btn) => {
         const views = btn.dataset.navViews
@@ -395,6 +437,65 @@
       if (next.refreshIcons) next.refreshIcons();
       else window.BgbIcons.render();
       if (window.api) window.api.trackEvent("view:" + name);
+    }
+
+    // Whether the entry currently being stood on is the sign-in screen.
+    // Resolved through the route table rather than a second copy of its
+    // pattern, with an empty search so a querystring cannot change the answer.
+    _onAuthPath() {
+      const match = this.matchPath(window.location.pathname, "");
+      return !!match && match.name === "auth";
+    }
+
+    /**
+     * Show or hide the app chrome — the global header and the bottom nav.
+     *
+     * WHO IS SIGNED IN IS NOT A NAVIGATION EVENT, and treating it as one is
+     * what shipped a feed with no bottom nav. This used to run only inside
+     * go(), off whatever `user` happened to be at that instant — but the
+     * profile lands on its own schedule, and several paths route BEFORE it
+     * does: init.js routes a valid session forward even when /bootstrap has
+     * not answered yet (a signed-in user must never be stranded on the
+     * splash) and recovers the profile in the background, and the boot
+     * watchdog does the same with nothing but a session in hand. Both left
+     * the chrome hidden with nothing to turn it back on until the NEXT
+     * navigation — which is exactly why the reported bug healed the moment
+     * the user pressed back.
+     *
+     * So this is a `user` subscriber too (taken on the first navigation, see
+     * go()), and it is idempotent: whichever of the two runs last is right.
+     */
+    _applyAuthChrome(viewName) {
+      const name = viewName || window.store.get("currentView");
+      const show = !!window.store.get("user") && !CHROMELESS_VIEWS.includes(name);
+      this._shell().authOnly.forEach((el) => el.classList.toggle("hidden", !show));
+    }
+
+    /**
+     * Keep a back press from crossing the session boundary.
+     *
+     * History entries outlive the session that created them, and there is no
+     * API for deleting one. go() spends the login screen's own entry on the
+     * way out, which covers the ordinary sign-in; this covers the entries
+     * that pushState cannot reach — an /auth pushed by a mid-session sign-out
+     * with the previous account's screens still stacked underneath it, and
+     * those screens themselves once the store has been reset.
+     *
+     * Returns the route to honour, which may not be the one the browser
+     * popped. Being signed in means the login screen is not a destination;
+     * being signed out means the app's screens are not either.
+     *
+     * Mid-boot it honours everything: nothing is settled yet, `user` is null
+     * for a session that is merely still restoring, and answering "signed
+     * out" there would bounce a signed-in user to the login screen over a
+     * back press.
+     */
+    _gateBack(target) {
+      if (!this._current || this._current.name === "splash") return target;
+      const authed = !!window.store.get("user");
+      if (authed && target.name === "auth") return { name: "feed", params: {} };
+      if (!authed && !PUBLIC_VIEWS.includes(target.name)) return { name: "auth", params: {} };
+      return target;
     }
 
     async back(fallback = "feed", fallbackParams = {}) {
@@ -489,6 +590,21 @@
         target = this.matchPath(window.location.pathname);
       }
       if (!target) return;
+      // A back press must not cross the session boundary. The entry has
+      // already been popped by the browser, so the substitute takes its place
+      // rather than stacking on top of it — otherwise a second press walks
+      // straight back into the screen we just refused.
+      const gated = this._gateBack(target);
+      if (gated !== target) {
+        const url = this.pathFor(gated.name, gated.params);
+        if (url) {
+          try {
+            history.replaceState(
+              { name: gated.name, params: gated.params }, "", url);
+          } catch (_) {}
+        }
+        target = gated;
+      }
       // Mirror the browser's pop on our internal stack so peekBack stays
       // accurate. Use fromPopstate to suppress the duplicate pushState.
       this._stack.pop();

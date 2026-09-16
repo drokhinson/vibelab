@@ -58,11 +58,55 @@
    */
   const REDIRECT_PENDING_KEY = "bgb.auth.redirectPending";
 
+  /**
+   * How many interactive sign-ins are waiting on the provider right now.
+   *
+   * Read by init.js's boot watchdog, and it has to be: the sign-in screen
+   * hands the screen over to the splash the moment the popup opens
+   * (views/auth-view.js#oauth), so a watchdog that fired during the exchange
+   * would find "on the splash with no session yet", conclude auth never
+   * resolved, and put the login form back underneath a popup the user is
+   * still standing in front of.
+   *
+   * A counter rather than a boolean so it cannot be left latched by two
+   * overlapping attempts — though the screen no longer permits a second one.
+   */
+  let _signInPending = 0;
+
   // Storage throws outright in Safari private mode, and nothing here is worth
   // taking sign-in down for. A tab that cannot mark a redirect simply never
   // consumes its result, which is the behaviour before any of this existed.
   function _safeStorage(fn, fallback) {
     try { return fn(); } catch (_) { return fallback; }
+  }
+
+  /**
+   * The popup-then-redirect ladder. The public signInWithGoogle wraps this
+   * with the in-flight counter and nothing else — see _signInPending.
+   *
+   * @returns {Promise<"signed-in"|"cancelled"|"redirecting">}
+   */
+  async function _signInWithGoogle(provider) {
+    try {
+      await _fbAuth.signInWithPopup(provider);
+    } catch (e) {
+      const code = (e && e.code) || "";
+      if (
+        code === "auth/popup-blocked" ||
+        code === "auth/operation-not-supported-in-this-environment"
+      ) {
+        _safeStorage(() => sessionStorage.setItem(REDIRECT_PENDING_KEY, "1"));
+        await _fbAuth.signInWithRedirect(provider);
+        return "redirecting";
+      }
+      // A user who closes the popup has not failed at anything; swallow it
+      // rather than painting an error under the button they just dismissed.
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        return "cancelled";
+      }
+      throw e;
+    }
+    return "signed-in";
   }
 
   function _cfg() {
@@ -272,7 +316,9 @@
      *                  init.js is already running; the caller's job is to get
      *                  off the form and let the loader cover the rest.
      *   "cancelled"    the user shut the popup, or a second click superseded
-     *                  the first. Nothing is coming. Stay where you are.
+     *                  the first. Nothing is coming; the caller puts its form
+     *                  back (the screen is the splash by then — see
+     *                  views/auth-view.js#oauth) and says nothing.
      *   "redirecting"  this document is navigating away. Whatever the caller
      *                  does next is moot, and it must not be "show an error".
      *
@@ -280,26 +326,24 @@
      */
     async signInWithGoogle() {
       const provider = new window.firebase.auth.GoogleAuthProvider();
+      _signInPending++;
       try {
-        await _fbAuth.signInWithPopup(provider);
-      } catch (e) {
-        const code = (e && e.code) || "";
-        if (
-          code === "auth/popup-blocked" ||
-          code === "auth/operation-not-supported-in-this-environment"
-        ) {
-          _safeStorage(() => sessionStorage.setItem(REDIRECT_PENDING_KEY, "1"));
-          await _fbAuth.signInWithRedirect(provider);
-          return "redirecting";
-        }
-        // A user who closes the popup has not failed at anything; swallow it
-        // rather than painting an error under the button they just dismissed.
-        if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
-          return "cancelled";
-        }
-        throw e;
+        return await _signInWithGoogle(provider);
+      } finally {
+        // Not on the redirect path's conscience: that one leaves the document
+        // and takes this counter with it.
+        _signInPending--;
       }
-      return "signed-in";
+    },
+
+    /**
+     * Whether a sign-in is in flight with the provider — the popup is open, or
+     * the redirect has been handed over. See _signInPending.
+     *
+     * @returns {boolean}
+     */
+    signInPending() {
+      return _signInPending > 0;
     },
 
     /**

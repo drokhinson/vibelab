@@ -48,6 +48,21 @@
 //      cross-origin authDomain, which would put an error in front of people
 //      whose popup sign-in worked perfectly.
 //
+// AND THE BOUNDARY IS A PROPERTY OF THE SHELL, NOT OF A NAVIGATION (7):
+//
+//   7. Two halves of one report — "then to feed but with bottom bar missing.
+//      And then i was able to do the back gesture and it returned me to the
+//      initial login screen but with a functional bottom nav bar and header."
+//      The chrome was computed only inside router.go(), off whatever `user`
+//      happened to be at that instant, and init.js routes a valid session
+//      forward before /bootstrap has answered rather than strand it on the
+//      splash. So the feed painted with no nav, and the back press — a
+//      navigation — was what finally turned it on. Meanwhile the login
+//      screen's own history entry sat directly under the first screen of the
+//      session, so one back gesture put a signed-in account on the login
+//      form. Signing in spends that entry now, and a back press that would
+//      cross the session boundary either way is refused.
+//
 import fs from "node:fs";
 import vm from "node:vm";
 
@@ -288,7 +303,27 @@ function newAuth(outcome, redirect = { err: null }) {
 
   const calls = { popups: 0, routes: [], htmlDuringPopup: null, consumes: 0 };
   win.BgbIcons = { render() {} };
-  win.router = { go: (name) => calls.routes.push(name) };
+  // Not just a recorder: routing AWAY from the form unmounts it and coming
+  // back mounts it again, which is what clears every transient field. The
+  // handover now happens before the outcome is known, so a cancel returns
+  // through a real navigation — and _backToForm has to re-apply the address
+  // AFTER that mount, not before. A recorder-only router cannot tell the two
+  // orderings apart.
+  let view;
+  win.router = {
+    go: async (name) => {
+      calls.routes.push(name);
+      if (name === "auth") { await view.mount({}); return; }
+      // Modelled on the real go(): the outgoing screen's unmount is a
+      // FLOATING microtask, and only the awaited mount of the destination
+      // guarantees it has landed by the time go() resolves. That unmount is
+      // what clears this screen's fields, so the caller awaiting it is the
+      // difference between the return trip being the last word and being
+      // overwritten by it.
+      Promise.resolve().then(() => view.unmount());
+      await Promise.resolve();
+    },
+  };
   win.BgbAuth = {
     backend: "firebase",
     consumeRedirectResult() {
@@ -302,7 +337,7 @@ function newAuth(outcome, redirect = { err: null }) {
       return typeof outcome === "function" ? outcome() : Promise.resolve(outcome);
     },
   };
-  const view = new win.AuthView();
+  view = new win.AuthView();
   win.authView = view;
   return { win, view, calls, el, fields };
 }
@@ -326,7 +361,9 @@ const googleDisabled = (html) =>
 {
   const { view, calls, el } = newAuth("cancelled");
   await view.oauth("google");
-  ok("a shut popup routes nowhere", calls.routes.length === 0);
+  // The handover happens when the popup OPENS, so a cancel is a return trip
+  // now rather than a screen that never moved.
+  ok("a shut popup puts the form back", calls.routes.join() === "splash,auth");
   ok("a shut popup says nothing", view._error === null);
   ok("a shut popup gives the button back", !googleDisabled(el.innerHTML));
 }
@@ -335,10 +372,37 @@ const googleDisabled = (html) =>
   const err = Object.assign(new Error("nope"), { code: "auth/too-many-requests" });
   const { view, calls, el } = newAuth(() => Promise.reject(err));
   await view.oauth("google");
-  ok("a real failure routes nowhere", calls.routes.length === 0);
+  ok("a real failure puts the form back", calls.routes.join() === "splash,auth");
   ok("a real failure is explained in our own words",
      view._error === "Too many attempts. Wait a minute, then try again.");
   ok("a real failure gives the button back", !googleDisabled(el.innerHTML));
+}
+
+{
+  // THE REPORT: "when the google auth popup closes the app goes back to the
+  // login screen instead of going to the animated buddy loading screen".
+  // On Android the popup is a tab, so the app is visible again the moment it
+  // closes — before the credential arrives. The form must already be gone.
+  let release;
+  const { view, calls } = newAuth(() => new Promise((r) => { release = r; }));
+  const signIn = view.oauth("google");
+  await Promise.resolve();
+  ok("the loader is up while the popup is still open",
+     calls.routes.join() === "splash");
+  release("signed-in");
+  await signIn;
+  ok("...and stays up once the credential lands",
+     calls.routes.join() === "splash");
+}
+
+{
+  // And the popup must be opened in the tap's own task — a window.open one
+  // task later is a blocked popup, i.e. every Google sign-in handed to the
+  // redirect fallback.
+  const { view, calls } = newAuth("signed-in");
+  const signIn = view.oauth("google");
+  ok("the popup is opened before anything is awaited", calls.popups === 1);
+  await signIn;
 }
 
 {
@@ -355,11 +419,18 @@ const googleDisabled = (html) =>
 }
 
 {
+  // The whole round trip with the lifecycle actually running, which is how
+  // the app always calls this: mounted screen, handover, unmount, cancel,
+  // navigate back, mount again. Every transient field is cleared twice in
+  // there, so _backToForm has to re-apply AFTER the navigation, not before.
   const { view, fields } = newAuth("cancelled");
+  await view.mount({});
   fields["auth-email"].value = "someone@example.com";
   await view.oauth("google");
-  ok("a typed address survives the busy repaint",
+  ok("a typed address survives a cancelled sign-in",
      view._email === "someone@example.com");
+  ok("...and the screen comes back mounted", view._mounted === true);
+  ok("...with its buttons live", view._oauthBusy === false);
 }
 
 {
@@ -528,6 +599,241 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
   land(Object.assign(new Error("late"), { code: "auth/too-many-requests" }));
   await settle();
   ok("a late answer does not repaint a screen they left", view._error === null);
+}
+
+// 7 ── The session boundary is a property of the SHELL, not of a navigation ──
+console.log("\n7. the app chrome and the back stack cross the boundary");
+
+/**
+ * The real Router over a fake shell, a fake history and the REAL store.
+ *
+ * The store is the real one on purpose: what is under test is that the chrome
+ * follows `user`, and a fake store's notification behaviour is the thing that
+ * would make the test pass while the app stayed broken.
+ */
+function newRouter({ path = "/" } = {}) {
+  const el = (dataset = {}) => {
+    const classes = new Set();
+    return {
+      dataset,
+      attrs: {},
+      classList: {
+        toggle(c, on) {
+          if (on === undefined) { if (classes.has(c)) classes.delete(c); else classes.add(c); }
+          else if (on) classes.add(c);
+          else classes.delete(c);
+        },
+        add: (c) => classes.add(c),
+        remove: (c) => classes.delete(c),
+        contains: (c) => classes.has(c),
+      },
+      setAttribute(k, v) { this.attrs[k] = v; },
+      get isHidden() { return classes.has("hidden"); },
+    };
+  };
+  // The two [data-auth-only] nodes from index.html: the global header and the
+  // bottom nav. Everything this section calls "the chrome" is these.
+  const chrome = [el(), el()];
+  const listeners = new Map();
+  const win = {
+    location: { pathname: path.split("?")[0], search: path.includes("?") ? "?" + path.split("?")[1] : "" },
+    addEventListener(type, fn) {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(fn);
+    },
+    removeEventListener() {},
+    matchMedia: () => ({ matches: false }),
+    scrollTo() {},
+    BgbIcons: { render() {} },
+  };
+  const fire = async (type, ev) => {
+    for (const fn of listeners.get(type) || []) await fn(ev);
+  };
+  // A history that actually walks: entries, an index, and a popstate on back.
+  const entries = [{ state: null, url: path }];
+  let idx = 0;
+  const apply = (url) => {
+    const [p, q] = String(url).split("?");
+    win.location.pathname = p;
+    win.location.search = q ? "?" + q : "";
+  };
+  const history = {
+    get urls() { return entries.map((e) => e.url); },
+    get length() { return entries.length; },
+    pushState(state, _t, url) {
+      entries.splice(idx + 1);
+      entries.push({ state, url });
+      idx = entries.length - 1;
+      apply(url);
+    },
+    replaceState(state, _t, url) { entries[idx] = { state, url }; apply(url); },
+    async back() {
+      if (idx === 0) return;
+      idx--;
+      apply(entries[idx].url);
+      await fire("popstate", { state: entries[idx].state });
+    },
+  };
+  const sandbox = {
+    window: win, console, Date, Promise, Map, Set, URLSearchParams,
+    setTimeout, clearTimeout, history,
+    document: {
+      addEventListener() {}, removeEventListener() {},
+      querySelector: () => null,
+      querySelectorAll: (sel) => (sel === "[data-auth-only]" ? chrome : []),
+    },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(`${W}/domain/store.js`, "utf8"), sandbox,
+                  { filename: "domain/store.js" });
+  vm.runInContext(fs.readFileSync(`${W}/domain/view.js`, "utf8"), sandbox,
+                  { filename: "domain/view.js" });
+  const router = win.router;
+  for (const name of ["splash", "auth", "feed", "settings", "privacy"]) {
+    router.register(name, {
+      name,
+      async mount() {}, async unmount() {},
+      refreshIcons() {},
+    });
+  }
+  return { win, router, store: win.store, history, chrome };
+}
+
+const chromeShown = (chrome) => chrome.every((n) => !n.isHidden);
+const chromeHidden = (chrome) => chrome.every((n) => n.isHidden);
+
+{
+  // THE REPORT: "then to feed but with bottom bar missing … i was able to do
+  // the back gesture and it returned me to the initial login screen but with
+  // a functional bottom nav bar and header."
+  //
+  // Both halves are one fact: the chrome was only ever computed inside go(),
+  // and init.js routes a valid session forward even when /bootstrap has not
+  // answered yet. So the feed painted with no nav, and the next navigation —
+  // the back press — was what finally turned it on.
+  const { router, store, chrome } = newRouter();
+  await router.go("splash", {}, { skipPush: true });
+  ok("the splash shows no chrome", chromeHidden(chrome));
+
+  await router.go("feed");
+  ok("a feed reached before the profile landed shows no chrome yet",
+     chromeHidden(chrome));
+
+  store.set("user", { id: "u1" });
+  ok("the profile landing turns the chrome on, with no navigation at all",
+     chromeShown(chrome));
+
+  await router.go("settings");
+  ok("and it stays on across navigation", chromeShown(chrome));
+
+  await router.go("auth");
+  ok("the sign-in screen shows no chrome even with a user in the store",
+     chromeHidden(chrome));
+
+  await router.go("feed");
+  ok("coming back off it restores the chrome", chromeShown(chrome));
+
+  store.reset();
+  ok("a sign-out takes the chrome with it", chromeHidden(chrome));
+}
+
+{
+  // THE OTHER HALF OF THE REPORT: "when i'm logged in, i should not be able
+  // to back into the login screen."
+  const { router, store, history } = newRouter();
+  await router.go("splash", {}, { skipPush: true });
+  await router.go("auth");
+  ok("the login screen has its own entry while it is the screen",
+     history.urls.join() === "/,/auth");
+
+  // Signing in: the form hands over to the splash (no URL of its own), and
+  // the profile lands us on the feed. The /auth entry must be SPENT, not
+  // buried — it is still the entry being stood on when the feed arrives.
+  await router.go("splash");
+  store.set("user", { id: "u1" });
+  await router.go("feed");
+  ok("signing in spends the login screen's entry",
+     history.urls.join() === "/,/feed");
+  ok("...and never puts it on the back stack",
+     router.peekBack("feed") !== "auth");
+}
+
+{
+  // Reading the privacy policy from the login screen is not signing in, so
+  // that entry stays where it is — the document's × has to have somewhere to
+  // go back to, and a signed-out stranger has to be able to read it.
+  const { router, history } = newRouter();
+  await router.go("splash", {}, { skipPush: true });
+  await router.go("auth");
+  await router.go("privacy");
+  ok("walking off to the legal pages keeps the login screen underneath",
+     history.urls.join() === "/,/auth,/privacy");
+  await history.back();
+  ok("...so back returns to it", router._current.name === "auth");
+}
+
+{
+  // And once signed in, walking back down the stack never reaches it — this
+  // is the reported gesture: one press from the first screen after sign-in.
+  const { router, store, history } = newRouter();
+  await router.go("splash", {}, { skipPush: true });
+  await router.go("auth");
+  await router.go("splash");
+  store.set("user", { id: "u1" });
+  await router.go("feed");
+  await router.go("settings");
+
+  await history.back();
+  ok("back from a spoke lands on the screen under it",
+     router._current.name === "feed");
+  await history.back();
+  ok("and back again cannot reach the login screen",
+     router._current.name !== "auth");
+}
+
+{
+  // The belt to that brace: entries pushState cannot reach. A mid-session
+  // sign-out pushes /auth on top of the previous account's screens, and those
+  // screens are still down there with a store that has been reset.
+  const { router, store, history } = newRouter();
+  await router.go("splash", {}, { skipPush: true });
+  store.set("user", { id: "u1" });
+  await router.go("feed");
+  await router.go("settings");
+  store.reset();                 // what handleLogout does
+  await router.go("auth");
+  ok("a sign-out leaves the login screen on top",
+     history.urls.join() === "/,/feed,/settings,/auth");
+
+  await history.back();
+  ok("a back press cannot walk into the signed-out app",
+     router._current.name === "auth");
+  ok("...and the entry it refused is replaced, not stacked",
+     history.urls[history.urls.length - 1] === "/auth");
+}
+
+{
+  // The gate itself, both directions and the one case it must keep its hands
+  // off: mid-boot, where `user` is null only because the session is still
+  // being restored.
+  const { router, store } = newRouter();
+  await router.go("splash", {}, { skipPush: true });
+  ok("mid-boot it honours whatever was popped",
+     router._gateBack({ name: "feed", params: {} }).name === "feed");
+
+  store.set("user", { id: "u1" });
+  await router.go("feed");
+  ok("signed in, the login screen is not a destination",
+     router._gateBack({ name: "auth", params: {} }).name === "feed");
+  ok("signed in, anything else is honoured",
+     router._gateBack({ name: "settings", params: {} }).name === "settings");
+
+  store.reset();
+  await router.go("auth");
+  ok("signed out, an app screen is not a destination",
+     router._gateBack({ name: "settings", params: {} }).name === "auth");
+  ok("signed out, the legal pages still resolve",
+     router._gateBack({ name: "privacy", params: {} }).name === "privacy");
 }
 
 console.log(fails ? `\n${fails} FAILED\n` : "\nAll checks passed.\n");
