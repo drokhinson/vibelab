@@ -474,6 +474,36 @@ Leave **Auto Minify**, **Rocket Loader** and **Mirage** off. `bgb-bundle.mjs`
 already minifies and content-hashes, and Rocket Loader defers scripts in a way
 that breaks the pre-paint inline theme/layout boot in `index.html`.
 
+### 3.7 SSL — two settings, and neither is on by default
+
+**SSL/TLS → Overview → encryption mode** must be **Full (strict)**.
+
+`Flexible` is the one to avoid, and its symptom is that there is no symptom:
+the browser still shows a padlock, because browser→Cloudflare is genuinely
+HTTPS. What it does is make Cloudflare→origin plain HTTP, so every request
+crosses the public internet unencrypted on the far side of the edge while
+looking perfectly secure in the address bar. Full (strict) is correct for
+Pages, and for anything on Railway, because both present a valid certificate.
+
+**SSL/TLS → Edge Certificates → Always Use HTTPS** must be **On**.
+
+Off is the default on a new zone. With it off, `http://bgbuddy.app` is served
+over HTTP rather than redirected, and the browser marks the page **Not
+secure** — which is what a bare `bgbuddy.app` typed into an address bar can
+still resolve to. Turn on **Automatic HTTPS Rewrites** in the same panel while
+you are there.
+
+Neither setting reaches `api` or `auth`. Both are DNS-only (§3.1), so their
+traffic never touches the Cloudflare edge — Railway and Firebase Hosting each
+issue their own certificate and do their own HTTP→HTTPS redirect. That is
+expected, not a gap.
+
+**Leave HSTS off for now.** It is the one setting here that is genuinely hard
+to undo: browsers cache the policy for its full max-age and will refuse to
+load the domain over HTTP at all, including any hostname you later want to
+serve differently. Worth enabling once the domain has been stable for a while,
+not during a cutover.
+
 ---
 
 ## 4. GitHub — secrets and the API base
