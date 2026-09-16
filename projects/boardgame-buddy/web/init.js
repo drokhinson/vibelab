@@ -269,6 +269,17 @@
   function bootWatchdog() {
     if (_bootRouted) return;
     if (window.store.get("currentView") !== "splash") return;
+    // A sign-in the user is in the middle of is not a boot that stalled. The
+    // sign-in screen hands over to the splash as soon as the popup opens
+    // (views/auth-view.js#oauth), so without this the deadline would expire
+    // mid-exchange and put the login form back under a popup that is still
+    // open — which is the bug that handover exists to fix, arriving twelve
+    // seconds later instead. Every way out of the exchange routes on its own,
+    // so there is nothing for the watchdog to cover here.
+    if (window.BgbAuth && window.BgbAuth.signInPending
+        && window.BgbAuth.signInPending()) {
+      return;
+    }
     if (window.session) {
       console.warn("Boot watchdog: session in hand but never routed — going anyway.");
       routeAfterBoot();

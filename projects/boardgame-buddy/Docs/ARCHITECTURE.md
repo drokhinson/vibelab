@@ -578,6 +578,51 @@ class FeedView extends window.View {
 
 The router calls `mount(hostEl)` → `onMount()` → `render()` synchronously when the user navigates. **Navigation is instantaneous** (per `.claude/rules/web-frontend.md`): the destination view's `render()` paints an empty/loading shell before any `await` fires.
 
+### 5.1a The session boundary
+
+Signing in and out is a **route change, not a reload** — every view and `ui/`
+module is constructed once per tab. Three consequences are wired into the
+router rather than left to each screen, and all three come from one reported
+sequence: *login screen → Google account picker → login screen again → loader
+→ feed with no bottom bar → back gesture → the login screen, with a working
+nav bar on it.*
+
+**The chrome follows the account, not the navigation.** The global header and
+the bottom nav are `[data-auth-only]` in `index.html`, and
+`Router._applyAuthChrome` is both called from `go()` and subscribed to the
+`user` store key. It has to be both: `init.js` routes a valid session forward
+even when `/bootstrap` has not answered yet (a signed-in user must never be
+stranded on the splash) and recovers the profile in the background, so the
+first screen of a session can paint before there is a user to read. Computed
+only at navigation time, that screen got no nav — and the next navigation,
+whatever it happened to be, was what turned it on.
+
+**The sign-in screen hands over when the popup OPENS.** On Android the popup is
+a whole tab, so the app is visible again the moment Google's closes — which is
+before the credential arrives over `postMessage`. Handing over on the resolved
+promise still left the login form on screen for that leg, which reads as a
+failure and invites the one response that breaks a working sign-in: a second
+popup makes Firebase reject the first with `auth/cancelled-popup-request`.
+`views/auth-view.js#oauth` therefore routes to the splash as soon as the popup
+is open, and `_backToForm` navigates back on a cancel or a failure. The
+provider call itself stays in the tap's own task — a `window.open` one task
+later is a blocked popup, i.e. every Google sign-in handed to the redirect
+fallback. `BgbAuth.signInPending()` exists so the boot watchdog does not mistake
+that splash for a stalled boot.
+
+**Back cannot cross the boundary.** A route into the app from `/auth` spends
+that history entry (`replaceState`, not `pushState`), so the login screen is
+not sitting under the first screen of the session; walking off to `/privacy`
+does not, because that document's × needs somewhere to return to. For entries
+`pushState` cannot reach — an `/auth` pushed by a mid-session sign-out with the
+previous account's screens still stacked below it — `Router._gateBack` refuses
+the popped route and replaces it: the login screen is not a destination while
+signed in, and an app screen is not one while signed out. It honours everything
+mid-boot, where `user` is null only because the session is still restoring.
+
+`tools/check-session-handoff.mjs` §7 drives the real router over a fake shell
+and a walking history for all of it.
+
 ### 5.2 The three "tab" routes
 
 The bottom nav has three slots — they are the user's home base. On the wide layout tier the same nav is a left rail (§4.6); the slots and their routes are unchanged.

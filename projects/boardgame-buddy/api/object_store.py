@@ -264,5 +264,20 @@ def put(
             **extra,
         )
     except Exception as exc:  # botocore raises ClientError, BotoCoreError, …
-        raise ObjectStoreError(f"R2 put failed for {kind}/{path}: {exc}") from exc
+        # The bucket and the jurisdiction ride along because without them an
+        # `AccessDenied` here is unactionable: it is the same error for a
+        # mis-scoped token, a bucket that does not exist, and a jurisdiction
+        # bucket addressed on the default host — and the last of those is a
+        # missing env var, not a Cloudflare problem. Naming what was actually
+        # signed for turns three hypotheses into one line.
+        #
+        # The account id is deliberately NOT in here. It would make the
+        # message a complete endpoint and this string ends up pasted into bug
+        # reports; the jurisdiction is the part that varies and the part that
+        # has been wrong.
+        raise ObjectStoreError(
+            f"R2 put failed for {kind}/{path} "
+            f"[bucket={_cfg.buckets[kind]} jurisdiction={_cfg.jurisdiction or '(default)'}]"
+            f": {exc}"
+        ) from exc
     return public_url(kind, path)

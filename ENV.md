@@ -23,8 +23,14 @@ Set in Railway dashboard → backend service → Variables.
 
 **BoardgameBuddy's variables moved** to `projects/boardgame-buddy/ENV.md` — it
 is isolated with its own Railway service (Root Directory
-`projects/boardgame-buddy/api`). The `BGB_*` and `BGG_*` variables belong to that
-service, not this one, and can be deleted here once it is live.
+`projects/boardgame-buddy/api`). That service is live, so **every `BGB_*` and
+`BGG_*` variable on this one is now dead and can be deleted.** The table above
+is the complete list of what this service reads; anything else in its Railway
+variables is stale.
+
+`ALLOWED_ORIGINS` here no longer needs `bgbuddy.app` either: BoardgameBuddy's
+frontend talks to its own API, including its own copy of `/analytics/track`, so
+nothing on that origin calls this service.
 
 Anything else in Railway is stale — `grep -r VAR_NAME shared-backend/` to confirm zero references before deleting.
 

@@ -220,12 +220,27 @@
      * response to it (press the button again) is the one thing that actually
      * can break the sign-in: the second popup cancels the first.
      *
-     * So the form hands over to the boot loader the instant a credential
-     * exists, as the email LOGIN path already did (its signup twin had the
-     * same gap and is fixed below). Nothing here waits for the profile — the
-     * splash is the screen that covers that leg, and every
-     * way out of it is already handled (routeAfterBoot on success, /auth on a
-     * genuinely bad token, the boot watchdog if the whole thing stalls).
+     * HANDING OVER WHEN THE PROMISE RESOLVED WAS STILL TOO LATE. On Android
+     * the "popup" is a whole tab: Chrome brings the app's tab back to the
+     * front the moment Google's closes, and the credential does not arrive
+     * over postMessage until after that. So the login form is what the user
+     * is returned to, for as long as that leg takes — which is exactly the
+     * report ("it makes it feel like the sign in failed"), and pressing the
+     * button in that window is what cancels the sign-in in flight.
+     *
+     * So the handover happens when the popup is OPENED, not when it answers,
+     * and the splash covers the whole exchange. There is nothing left to
+     * double-tap, because there is no longer a form on screen to tap.
+     *
+     * Order is load-bearing: signInWithGoogle() must be called in the tap's
+     * own task, because opening a window is only allowed while the user
+     * gesture is live. Awaiting the navigation first would put the popup one
+     * task later and hand every Google sign-in to the redirect fallback.
+     *
+     * Nothing here waits for the profile — the splash is the screen that
+     * covers that leg, and every way out of it is already handled
+     * (routeAfterBoot on success, /auth on a genuinely bad token, the boot
+     * watchdog if the whole thing stalls).
      */
     async oauth(provider) {
       if (this._oauthBusy) return;
@@ -234,37 +249,96 @@
         this.setError("Auth is not configured.");
         return;
       }
-      this._oauthBusy = true;
-      // Disabling the buttons costs a full re-render, which rebuilds the email
-      // field — so carry what is in it across, the way submit() does. Somebody
-      // who typed an address and then chose Google should not come back from a
-      // cancelled popup to an empty form.
-      const typed = document.getElementById("auth-email");
-      if (typed) this._email = typed.value;
-      this.render();
-      let outcome;
-      try {
+      if (provider !== "google") {
         // Google is the only provider the auth screen offers, and the Firebase
         // path is Google-specific (GoogleAuthProvider), so anything else would
         // silently sign the user in with the wrong one rather than failing.
-        if (provider !== "google") throw new Error(`Unsupported provider: ${provider}`);
-        outcome = await window.BgbAuth.signInWithGoogle();
+        this.setError(`Unsupported provider: ${provider}`);
+        return;
+      }
+      this._oauthBusy = true;
+      // What is in the email field right now, kept for the return trip: a
+      // cancelled sign-in comes back through a real navigation, and this
+      // screen clears itself on every mount. Somebody who typed an address
+      // and then chose Google should not come back to an empty form.
+      const typed = document.getElementById("auth-email");
+      const carried = typed ? typed.value : (this._email || "");
+      this._email = carried;
+      this.render();
+
+      let attempt;
+      try {
+        attempt = window.BgbAuth.signInWithGoogle();
       } catch (e) {
+        // A synchronous throw means no popup was ever opened, so the screen
+        // has not been handed over yet and can just say so.
         this._oauthBusy = false;
         this.setError(this._authErrorMessage(e, `${provider} sign-in failed`));
         return;
       }
-      // A shut popup is not an error and not a sign-in. Give the buttons back
-      // and say nothing: the user closed a window they opened.
+      // The popup is open. Hand the screen to the loader now rather than
+      // leaving a live form under it.
+      //
+      // AWAITED, and not as tidiness: go() unmounts the screen it replaces in
+      // a floating microtask, and this view's unmount CLEARS every transient
+      // field (_resetFormState, by design). Letting that land after
+      // _backToForm below had already put the address and the message back
+      // would wipe both — and leave the view marked unmounted while it is the
+      // screen on display. Awaiting the navigation drains that unmount first,
+      // so the return trip is the last word rather than the first.
+      try {
+        await window.router.go("splash");
+      } catch (e) {
+        // Nothing to do but carry on: the credential is still coming, and the
+        // listener in init.js routes on it whatever screen we are looking at.
+        console.warn("Handing the sign-in over to the loader failed:", e);
+      }
+
+      let outcome;
+      try {
+        outcome = await attempt;
+      } catch (e) {
+        await this._backToForm(carried,
+          this._authErrorMessage(e, `${provider} sign-in failed`));
+        return;
+      }
+      // A shut popup is not an error and not a sign-in. Put the form back and
+      // say nothing: the user closed a window they opened.
       if (outcome === "cancelled") {
-        this._oauthBusy = false;
-        this.render();
+        await this._backToForm(carried, null);
         return;
       }
       // "signed-in", or "redirecting" and this document is on its way out.
-      // Either way the form has nothing left to offer. onUnmount clears the
-      // latch as the router swaps the screens.
-      window.router.go("splash");
+      // Either way the form has nothing left to offer, and the splash it was
+      // swapped for is already on screen.
+    }
+
+    /**
+     * Come back from a sign-in that did not happen.
+     *
+     * oauth() above gives the screen away before it knows the outcome, so a
+     * cancel or a failure has to navigate back — and that re-mounts this view,
+     * which resets every transient field by design. Hence the order: route
+     * first, then re-apply the address and the message, then paint.
+     *
+     * go("auth") is safe when the splash never actually took over (an error
+     * that beat the navigation): the router no-ops a route to the screen it is
+     * already on, and the URL has not moved off /auth either way, so this
+     * replaces that entry rather than stacking another.
+     *
+     * @param {string} email the address to put back in the field
+     * @param {string|null} error what to say, or null to say nothing
+     */
+    async _backToForm(email, error) {
+      try {
+        await window.router.go("auth");
+      } catch (e) {
+        console.warn("Returning to the sign-in form failed:", e);
+      }
+      this._oauthBusy = false;
+      this._email = email || "";
+      this._error = error || null;
+      this.render();
     }
 
     async submit(event) {
