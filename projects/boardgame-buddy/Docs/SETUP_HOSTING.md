@@ -3,15 +3,27 @@
 Console-by-console setup for BoardgameBuddy's own hosting. Everything here is
 work in a web UI or a dashboard — nothing in this file is done by a commit.
 
-Domain: **bgbuddy.app**. Written 2026-09-15.
+Domain: **bgbuddy.app**. Written 2026-09-15, cutover completed 2026-09-16.
 
-> **Read this first.** The isolation commits removed BoardgameBuddy from
-> `shared-backend`. The moment they merge to `main`, Railway redeploys that
-> service **without BoardgameBuddy's routes**, and the live app on Vercel breaks
-> — every request 404s.
+> **This is now a record, not a runbook.** Every section below has been done:
+> the app serves from Cloudflare Pages at `bgbuddy.app`, the API from its own
+> Railway service at `api.bgbuddy.app`, auth from GCP Identity Platform at
+> `auth.bgbuddy.app`, and the retired Vercel origin serves the static notice in
+> `projects/boardgame-buddy/moved/`. The pre-launch `COMING_SOON` gate is gone.
 >
-> So do **§1 (the Railway service) and §5.1 (`BGB_API_BASE`) before merging.**
-> Nothing else in this file is time-critical; those two are.
+> Two things are still open, and neither is a hosting step:
+>
+> * **§3.8 Email Routing.** `privacy@` and `support@` have no MX behind them,
+>   so both bounce — and the privacy policy points deletion requests at one of
+>   them. The Cloudflare panel did not offer Email Routing on this zone;
+>   ImprovMX or Zoho on the same DNS is the fallback.
+> * **The waitlist.** `boardgamebuddy_waitlist` still holds the addresses of
+>   people who asked to be told at launch, and the privacy policy says that
+>   list is deleted after the launch email. The table, `waitlist_routes.py` and
+>   its test come out together once that mail has gone.
+>
+> Read it for *why* a thing is the way it is — most sections carry the
+> correction that doing it for real produced. Do not read it as a to-do list.
 
 ---
 
@@ -643,10 +655,10 @@ unset rather than shipping a `config.js` pointing nowhere.
 This is a **browser-origin allowlist**, so it holds scheme + host (+ port) only:
 no paths, **no trailing slashes**, comma-separated, no spaces.
 
-### 5.1 During the cutover — put this on the new Railway service
+### 5.1 What the Railway service carries
 
 ```
-https://bgbuddy.app,https://www.bgbuddy.app,https://bgbuddy.pages.dev,https://boardgame-buddy.vercel.app,http://localhost:5500,http://127.0.0.1:5500
+https://bgbuddy.app,https://www.bgbuddy.app,https://bgbuddy.pages.dev,http://localhost:5500,http://127.0.0.1:5500
 ```
 
 Line by line:
@@ -655,15 +667,15 @@ Line by line:
 |---|---|
 | `https://bgbuddy.app` | the app |
 | `https://www.bgbuddy.app` | the redirect in §3.5 is a 301, but a preflight can still arrive on this host before it |
-| `https://bgbuddy.pages.dev` | the Pages URL — this is how you test §3.2 before DNS is live |
-| `https://boardgame-buddy.vercel.app` | **the old origin. Keep it until the Vercel project is deleted** — a client on stale DNS otherwise gets an opaque "Failed to fetch" rather than an error anyone can debug. Substitute your real Vercel hostname. |
+| `https://bgbuddy.pages.dev` | the Pages URL — how you test a deploy without touching DNS |
 | `http://localhost:5500` `http://127.0.0.1:5500` | local dev; both, because they are different origins to a browser |
 
-### 5.2 After Vercel is deleted
-
-```
-https://bgbuddy.app,https://www.bgbuddy.app,https://bgbuddy.pages.dev,http://localhost:5500,http://127.0.0.1:5500
-```
+**The old Vercel origin has been dropped**, and the reason it could go is worth
+keeping: it was in the list so that a client on stale DNS got a debuggable CORS
+error rather than an opaque "Failed to fetch". What replaced the app on that
+origin is a static notice that makes **no API calls at all** — nothing there
+can produce a preflight, so the entry stopped protecting anything the day the
+notice went up.
 
 ### 5.3 What does NOT belong in it
 

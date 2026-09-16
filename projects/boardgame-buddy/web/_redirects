@@ -4,9 +4,9 @@
 # bookmark, a shared session link, and the two legal URLs Google's brand review
 # has to load.
 #
-# vercel.json's "rewrites" block does the same job on Vercel and Pages does NOT
-# read it, so the rule has to exist twice while both hosts are live. Keep them
-# in step; deleting vercel.json is part of the Vercel teardown, not before.
+# This is the only copy of the rule now. vercel.json carried the equivalent
+# "rewrites" block while both hosts were live; it was deleted with the rest of
+# the Vercel teardown once the old origin became a static notice.
 #
 # 200, not 301/302: the browser must keep the URL it asked for so the router can
 # resolve it. A redirect would rewrite the address bar to / and lose the route.

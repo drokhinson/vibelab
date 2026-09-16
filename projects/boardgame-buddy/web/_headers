@@ -3,8 +3,19 @@
 # sw.js, index.html and config.js must NOT be edge-cached: the service worker's
 # entire update path depends on the browser re-fetching sw.js and finding a new
 # BUILD_ID, and config.js is regenerated per deploy with the API origin in it.
-# Everything under assets/ is content-hashed by scripts/bgb-bundle.mjs, so it is
-# safe to pin for a year.
+#
+# TWO immutable rules, because the deploy artifact lands in two places.
+# scripts/bgb-bundle.mjs writes bgb-app.<hash>.js and bgb-<hash>.css to the site
+# ROOT, not into assets/ (see the comment at the top of that file: Vercel's
+# zero-config detection treats build/ and dist/ as output directories, so the
+# root was the safe choice). An /assets/* rule alone therefore misses the two
+# largest files on the site — ~274 KB of JS and ~294 KB of CSS revalidating on
+# every navigation. vercel.json used to carry that rule; this is where it lives
+# now that Pages is the host.
+#
+# Safe to pin for a year in both cases for the same reason: the name contains a
+# hash of the contents, so a changed file is a different URL. Nothing else at
+# the root is named bgb-*.
 
 /*
   X-Content-Type-Options: nosniff
@@ -24,4 +35,7 @@
   Cache-Control: public, max-age=3600
 
 /assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/bgb-*
   Cache-Control: public, max-age=31536000, immutable

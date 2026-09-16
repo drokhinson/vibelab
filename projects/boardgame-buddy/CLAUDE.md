@@ -7,8 +7,11 @@ loads and its Git and file-size conventions still apply — but its pipeline
 stages, `shared-backend/` layout and `scaffold.sh` flow **do not describe this
 project**. When the two disagree, this file wins.
 
-Read `Docs/STRUCTURE.md` before touching any feature code, and
-`Docs/MIGRATION_PLAN.md` before touching any infrastructure.
+Read `Docs/STRUCTURE.md` before touching any feature code,
+`Docs/MIGRATION_PLAN.md` before touching any infrastructure, and
+`Docs/BRAND_VOICE.md` before writing any user-facing copy — it carries the
+tagline, the four places it has to stay in sync, and the tone rules that came
+out of choosing it.
 
 ## Layout
 
@@ -20,9 +23,11 @@ projects/boardgame-buddy/
 │   ├── analytics_routes.py own copy — web/domain/api.js pings /analytics/track
 │   ├── db.py jwt_auth.py cache.py api_logger.py gemini.py auth.py shared_models.py
 │   └── tests/
-├── db/migrations/          001–023, plus _shared/ (analytics + api_logs)
+├── db/migrations/          001–036, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
+├── tools/                  one-off generators, not deploy steps
 ├── web/                    the static PWA
+├── moved/                  the retired Vercel origin's notice (see below)
 └── Docs/
 ```
 
@@ -38,6 +43,7 @@ forty of them for nothing.
 |---|---|---|
 | `web/` | Cloudflare Pages (`bgbuddy`) | `.github/workflows/deploy-bgb-web.yml` |
 | `api/` | Railway, Root Directory `projects/boardgame-buddy/api` | `.github/workflows/deploy-bgb-api.yml` |
+| `moved/` | the retired Vercel project — a static notice, dispatch-only | `.github/workflows/deploy-bgb-moved-notice.yml` |
 
 Workflows live at the repo root because GitHub only reads them from there.
 `deploy-frontend.yml` filters this project out of its change detection — if that
@@ -70,6 +76,16 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    `sw.js` resolves root-relative paths. Never a subpath.
 8. **One uvicorn worker.** `cache.py` is per-worker, so more workers means more
    cache misses and a staler 60-second profile cache, not more speed.
+9. **`web/assets/illustrations/bgb-hero.svg` is referenced by nothing in the
+   app.** It was the pre-launch landing view's hero, and that view is gone. It
+   stays because `.claude/rules/assets.md` makes this copy the source of truth
+   for the vibelab landing page's featured card, which bundles its own copy at
+   `landing/assets/illustrations/`. Deleting it as dead code orphans that.
+10. **`moved/index.html` duplicates the logo as inline SVG** rather than linking
+   `assets/brand/bgb-logo.svg`. Required, not lazy: the service worker still
+   registered on that origin serves same-origin subresources cache-first with
+   revalidation off, so any file the notice referenced could come back as the
+   old app's bytes. Its deploy workflow fails on any external reference.
 
 ## Secrets that must never be rotated casually
 

@@ -266,8 +266,8 @@ function isBackend(url) {
  *
  * Network-first because index.html is the one file whose staleness cascades:
  * it names every script, so an old copy pins the whole app to an old build
- * even after the caches rotate. The vercel.json catch-all rewrites every path
- * to index.html, so the cached shell answers /play/{code} and /game/{id} too.
+ * even after the caches rotate. The _redirects catch-all rewrites every path to
+ * index.html, so the cached shell answers /play/{code} and /game/{id} too.
  */
 async function navigationResponse(req) {
   const cache = await caches.open(CACHE);
@@ -409,9 +409,10 @@ async function pooled(items, fn, limit = 6) {
  * Fetch and store one shell file, refusing an HTML body served under a
  * non-HTML URL.
  *
- * That combination is specifically what vercel.json's catch-all rewrite
- * produces for a path that doesn't exist: `/(.*)` → `/index.html`, returned
- * with a 200. Without this check a mistyped or deleted script would be cached
+ * That combination is specifically what the _redirects catch-all produces for
+ * a path that doesn't exist: `/*` → `/index.html`, returned with a 200 (a 200
+ * on purpose — the router needs the URL the browser asked for). Without this
+ * check a mistyped or deleted script would be cached
  * as a .js file containing the whole page, and the app would break on the NEXT
  * boot — long after the deploy that caused it — with a syntax error pointing
  * at markup. Failing the install instead leaves the previous worker in charge
@@ -426,8 +427,8 @@ async function precacheOne(cache, url) {
   //
   // A plain fetch is still correct. The bundle and the stylesheet are
   // content-hashed by the deploy bundler, so their URL either holds exactly the
-  // right bytes or has never been seen — vercel.json marks those two immutable
-  // for a year on that basis. For everything else (the vendored QR codecs,
+  // right bytes or has never been seen — _headers marks those two immutable
+  // for a year on that basis, via its /bgb-* rule. For everything else (the vendored QR codecs,
   // manifest.json, the icons) a normal fetch goes through the browser's own
   // freshness rules, which is at worst the same request `reload` would have
   // made and at best a 304 with no body.
