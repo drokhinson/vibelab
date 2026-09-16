@@ -51,11 +51,12 @@ OUT_PNG = os.path.join(WEB, "assets", "brand", "bgb-og-banner.png")
 
 W, H = 1200, 630
 
-# The wording is the app's own, not new marketing copy: the tagline is the line
-# the pre-launch landing view carried, and the app name is the app name.
+# See Docs/BRAND_VOICE.md for how this line was chosen and what lost to it.
+# Title case is deliberate — it reads as a statement rather than a sentence,
+# and the two halves are meant to balance.
 COPY = {
     "name": "Boardgame Buddy",
-    "tagline": "A log for the games you actually played.",
+    "tagline": "Games Played, Nights Remembered.",
     "domain": "bgbuddy.app",
 }
 
@@ -115,7 +116,7 @@ def build_svg():
     ui = fetch_font(FONT_CSS["ui"])
 
     name_d, name_w = text_path(display, COPY["name"], 96, tracking=-0.5)
-    tag_d, tag_w = text_path(ui, COPY["tagline"], 38)
+    tag_d, tag_w = text_path(ui, COPY["tagline"], 40)
     dom_d, dom_w = text_path(ui, COPY["domain"], 28, tracking=1.5)
 
     # Vertical rhythm. Everything sits inside a 60px band top and bottom,

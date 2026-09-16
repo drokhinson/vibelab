@@ -7,8 +7,11 @@ loads and its Git and file-size conventions still apply — but its pipeline
 stages, `shared-backend/` layout and `scaffold.sh` flow **do not describe this
 project**. When the two disagree, this file wins.
 
-Read `Docs/STRUCTURE.md` before touching any feature code, and
-`Docs/MIGRATION_PLAN.md` before touching any infrastructure.
+Read `Docs/STRUCTURE.md` before touching any feature code,
+`Docs/MIGRATION_PLAN.md` before touching any infrastructure, and
+`Docs/BRAND_VOICE.md` before writing any user-facing copy — it carries the
+tagline, the four places it has to stay in sync, and the tone rules that came
+out of choosing it.
 
 ## Layout
 
