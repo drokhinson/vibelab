@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -23,7 +24,9 @@ from .bgg_client import (
     invalidate_bgg_thing_cache,
     normalize_image_url,
     parse_bgg_xml,
+    parse_thing_stats,
     thing_item_basics,
+    thing_item_stats,
 )
 from .constants import EXPANSION_COLOR_PALETTE, CatalogSort, PlayMode, derive_play_mode
 from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
@@ -537,6 +540,11 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
         "base_game_bgg_id": base_game_bgg_id,
         "expansion_color": expansion_color,
         "play_mode": derive_play_mode(mechanics).value,
+        # The request above already asked for stats=1 (play_mode needs the
+        # mechanics, and the stats ride the same payload), so a fresh import
+        # lands with its rating and rank rather than joining the backfill queue.
+        **thing_item_stats(item),
+        "bgg_stats_synced_at": _now_iso(),
     }
 
     result = (
@@ -827,6 +835,10 @@ async def update_game_rulebook_url(
 _DESC_CHUNK_SIZE = 20
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 async def _hydrate_description_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Optional[str]:
     """Fetch one game's description from BGG and patch the row; returns the text.
 
@@ -991,6 +1003,165 @@ async def backfill_game_descriptions(
     # Once at the end, not per game: _invalidate_game_caches does a namespace
     # -wide clear plus invalidate_bgg_thing_cache(), so calling it per row would
     # defeat the /thing cache for every concurrent user for the whole run.
+    if updated:
+        _invalidate_game_caches()
+
+    return RefreshDescriptionsResponse(
+        updated=updated,
+        failed=failed,
+        remaining=max(0, total_missing - updated),
+    )
+
+
+# ── BGG stats (migration 038) ────────────────────────────────────────────────
+# The Discover tab ranks by BGG rating and "New this year" orders by rank, and
+# neither existed on the catalog before 038. These three mirror the missing-
+# descriptions trio above exactly — same list / one / all shape, same 20-id
+# batches — with one addition: a throttle between chunks. A stats=1 record is
+# several times the size of a stats=0 one and the module has no rate-limit
+# guard, so a 50-chunk cold run at full speed is how the app gets 429'd for
+# every user at once.
+
+_STATS_SELECT = game_select_clause() + ", bgg_stats_synced_at"
+
+
+async def _hydrate_stats_from_bgg(sb: Client, game_id: str, bgg_id: int) -> dict:
+    """Fetch one game's stats from BGG and patch the row; returns the columns.
+
+    Stamps bgg_stats_synced_at even when BGG carries no <statistics> for the
+    id, so a game BGG will never rate leaves the queue instead of being
+    re-requested on every pass. Like descriptions, none of these columns are
+    denormalised onto plays or collections, so there is no fan-out.
+    """
+    body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 1}, timeout=10.0, use_cache=False)
+    root = parse_bgg_xml(body, context=f"hydrate stats bgg_id={bgg_id}")
+    item = root.find("item")
+    if item is None:
+        raise HTTPException(status_code=404, detail="Game not found on BGG")
+    cols = {**thing_item_stats(item), "bgg_stats_synced_at": _now_iso()}
+    sb.table("boardgamebuddy_games").update(cols).eq("id", game_id).execute()
+    _invalidate_game_caches()
+    return cols
+
+
+@router.get(
+    "/games/admin/missing-stats",
+    response_model=list[GameSummary],
+    status_code=200,
+    summary="List games whose BGG stats have never been synced (admin)",
+)
+async def list_games_missing_stats(
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> list[GameSummary]:
+    """Admin-only: catalog games with no BGG rating / rank sync yet."""
+    sb = get_supabase()
+    result = (
+        sb.table("boardgamebuddy_games")
+        .select(game_select_clause())
+        .is_("bgg_stats_synced_at", "null")
+        .not_.is_("bgg_id", "null")
+        .order("name")
+        .limit(_ADMIN_LIST_LIMIT)
+        .execute()
+    )
+    return [GameSummary(**g) for g in (result.data or [])]
+
+
+@router.post(
+    "/games/admin/{game_id}/refresh-stats",
+    response_model=GameSummary,
+    status_code=200,
+    summary="Refresh one game's BGG rating, rank and weight (admin)",
+)
+async def refresh_single_game_stats(
+    game_id: str = Path(..., description="Game UUID"),
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> GameSummary:
+    """Admin-only: re-fetch and store one game's BGG stats."""
+    sb = get_supabase()
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select("id, bgg_id")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    bgg_id = existing.data[0]["bgg_id"]
+    if not bgg_id:
+        raise HTTPException(status_code=400, detail="Game has no bgg_id; cannot refresh from BGG")
+
+    await _hydrate_stats_from_bgg(sb, game_id, bgg_id)
+
+    refreshed = (
+        sb.table("boardgamebuddy_games")
+        .select(game_select_clause())
+        .eq("id", game_id)
+        .execute()
+    )
+    if not refreshed.data:
+        raise HTTPException(status_code=500, detail="Failed to update game row")
+    return GameSummary(**refreshed.data[0])
+
+
+@router.post(
+    "/games/admin/backfill-stats",
+    response_model=RefreshDescriptionsResponse,
+    status_code=200,
+    summary="Backfill BGG stats for unsynced games, in throttled batches (admin)",
+)
+async def backfill_game_stats(
+    limit: int = Query(200, ge=1, le=1000, description="Max games to sync in this call"),
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> RefreshDescriptionsResponse:
+    """Admin-only: fill in rating / rank / weight for games never synced, oldest first."""
+    sb = get_supabase()
+
+    rows = await asyncio.to_thread(
+        page_all,
+        lambda: sb.table("boardgamebuddy_games")
+        .select("id, bgg_id")
+        .is_("bgg_stats_synced_at", "null")
+        .not_.is_("bgg_id", "null"),
+        "id", label="backfill stats",
+    )
+    total_missing = len(rows)
+    batch = rows[:limit]
+    by_bgg_id = {int(r["bgg_id"]): r["id"] for r in batch}
+    chunks = list(chunked(batch, _DESC_CHUNK_SIZE))
+
+    updated = 0
+    failed = 0
+    for i, chunk in enumerate(chunks):
+        # Sequential AND spaced: see the section comment. The first chunk goes
+        # straight out; every later one waits its turn.
+        if i:
+            await asyncio.sleep(BGG_THROTTLE_SECONDS)
+        ids = ",".join(str(r["bgg_id"]) for r in chunk)
+        try:
+            body = await fetch_bgg(
+                "/thing", {"id": ids, "stats": 1}, timeout=20.0, use_cache=False
+            )
+            stats = parse_thing_stats(parse_bgg_xml(body, context=f"backfill stats ({len(chunk)} ids)"))
+        except Exception:
+            logger.warning("Stats backfill chunk failed (%d ids)", len(chunk), exc_info=True)
+            failed += len(chunk)
+            continue
+
+        synced_at = _now_iso()
+        for r in chunk:
+            item_bgg_id = int(r["bgg_id"])
+            # Absent from the response = BGG has nothing for that id. Stamp it
+            # anyway so it leaves the queue; the four stats stay NULL.
+            cols = {**stats.get(item_bgg_id, {c: None for c in ("bgg_rating", "bgg_rank", "bgg_weight", "bgg_owned_count")}),
+                    "bgg_stats_synced_at": synced_at}
+            try:
+                sb.table("boardgamebuddy_games").update(cols).eq("id", by_bgg_id[item_bgg_id]).execute()
+                updated += 1
+            except Exception:
+                logger.warning("Stats write failed for game %s", by_bgg_id[item_bgg_id], exc_info=True)
+                failed += 1
+
     if updated:
         _invalidate_game_caches()
 

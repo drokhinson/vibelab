@@ -397,6 +397,150 @@ async def fetch_owner_counts(bgg_ids: list[int]) -> dict[int, int]:
     return counts
 
 
+# ── /thing statistics ─────────────────────────────────────────────────────────
+# Everything the Discover tab wants off a `stats=1` /thing response, keyed the
+# way boardgamebuddy_games spells it (migration 038). One parser for the
+# import path, the per-game refresh and the batched backfill, so the three
+# cannot disagree about which <rank> is "the" rank.
+
+_STATS_COLUMNS = ("bgg_rating", "bgg_rank", "bgg_weight", "bgg_owned_count")
+
+
+def _stat_float(el: ET.Element | None) -> float | None:
+    if el is None:
+        return None
+    try:
+        v = float(el.get("value", ""))
+    except (TypeError, ValueError):
+        return None
+    # BGG reports 0 for "no ratings yet"; that is an absence, not a rating.
+    return v if v > 0 else None
+
+
+def _stat_int(el: ET.Element | None) -> int | None:
+    if el is None:
+        return None
+    try:
+        return int(el.get("value", ""))
+    except (TypeError, ValueError):
+        # "Not Ranked" is spelled out on the wire, not left blank.
+        return None
+
+
+def thing_item_stats(item: ET.Element) -> dict:
+    """Pull the four stats columns off one /thing <item> (stats=1).
+
+    rating = <bayesaverage> (the "geek rating", which BGG ranks by), not
+    <average>: the raw mean is dominated by ten-vote games. rank = the
+    <rank type="subtype" name="boardgame"> row, never a family rank
+    (strategygames, familygames, …) — those have their own numbering. A
+    missing <statistics> block yields four Nones, which the backfill still
+    stamps as synced so the row leaves its queue.
+    """
+    ratings = item.find("statistics/ratings")
+    if ratings is None:
+        return {c: None for c in _STATS_COLUMNS}
+    rank_el = None
+    for r in ratings.findall("ranks/rank"):
+        if r.get("name") == "boardgame":
+            rank_el = r
+            break
+    rating = _stat_float(ratings.find("bayesaverage"))
+    return {
+        "bgg_rating": round(rating, 2) if rating is not None else None,
+        "bgg_rank": _stat_int(rank_el),
+        "bgg_weight": (lambda w: round(w, 2) if w is not None else None)(
+            _stat_float(ratings.find("averageweight"))
+        ),
+        "bgg_owned_count": _stat_int(ratings.find("owned")),
+    }
+
+
+def parse_thing_stats(root: ET.Element) -> dict[int, dict]:
+    """thing_item_stats for every <item> in a batched /thing response, by bgg_id."""
+    out: dict[int, dict] = {}
+    for item in root.findall("item"):
+        try:
+            item_id = int(item.get("id", "0"))
+        except (TypeError, ValueError):
+            continue
+        if not item_id:
+            continue
+        out[item_id] = thing_item_stats(item)
+    return out
+
+
+# ── /hot — BGG's trending list ───────────────────────────────────────────────
+# `/hot?type=boardgame` is 50 items BGG recomputes about daily, and it is the
+# one catalog read that is not keyed by game — so `_cache_key_for` keeps it
+# out of the /thing cache and this module keeps the PARSED list under its own
+# key, the way fetch_owner_counts keeps its integers. An hour is short enough
+# to follow BGG's refresh and long enough that a busy Discover tab costs one
+# BGG call, not one per viewer.
+_BGG_CACHE_HOT = "bgg.hot"
+_BGG_HOT_TTL_S = 60 * 60
+
+cache.configure(_BGG_CACHE_HOT, max_entries=4)
+
+
+def parse_hot_items(root: ET.Element) -> list[dict]:
+    """<items><item id rank><thumbnail value/><name value/><yearpublished value/>…
+
+    Every field but id and rank is optional on the wire. Items with a
+    non-numeric id or rank are skipped rather than guessed at. Returned in
+    rank order, thumbnails made absolute.
+    """
+    items: list[dict] = []
+    for item in root.findall("item"):
+        try:
+            bgg_id = int(item.get("id", ""))
+            rank = int(item.get("rank", ""))
+        except (TypeError, ValueError):
+            continue
+        name_el = item.find("name")
+        year_el = item.find("yearpublished")
+        thumb_el = item.find("thumbnail")
+        year: int | None = None
+        if year_el is not None:
+            try:
+                year = int(year_el.get("value", ""))
+            except (TypeError, ValueError):
+                year = None
+        items.append({
+            "bgg_id": bgg_id,
+            "rank": rank,
+            "name": (name_el.get("value", "") if name_el is not None else "") or f"BGG #{bgg_id}",
+            "year_published": year,
+            "thumbnail_url": normalize_image_url(thumb_el.get("value") if thumb_el is not None else None),
+        })
+    items.sort(key=lambda i: i["rank"])
+    return items
+
+
+async def fetch_hot_games(*, use_cache: bool = True) -> list[dict]:
+    """BGG's hot board games, parsed, cached an hour.
+
+    Total, like fetch_owner_counts: any BGG failure — refusal, warm-up
+    exhaustion, a parse error — returns [] so the Discover bundle can mark
+    the rail as errored and still ship the personal picks. Nothing here
+    raises past a caller that is assembling a page.
+    """
+    key = "boardgame"
+    if use_cache:
+        hit = cache.get(_BGG_CACHE_HOT, key)
+        if hit is not None:
+            return hit
+    try:
+        body = await fetch_bgg("/hot", {"type": "boardgame"}, timeout=15.0, use_cache=False)
+        items = parse_hot_items(parse_bgg_xml(body, context="hot list"))
+    except Exception as exc:  # noqa: BLE001 — a rail, never the page
+        logger.warning("BGG hot list fetch failed: %s", exc)
+        return []
+    if items:
+        cache.set(_BGG_CACHE_HOT, key, items, ttl_seconds=_BGG_HOT_TTL_S)
+    return items
+
+
 def _cache_key_for(path: str, params: dict) -> tuple[str, ...] | None:
     """Return a stable cache key for cacheable paths, or None to bypass.
 

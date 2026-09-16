@@ -33,6 +33,9 @@ from . import ghost_claim_routes  # noqa: F401, E402
 from . import notification_routes  # noqa: F401, E402
 from . import session_routes   # noqa: F401, E402
 from . import feed_routes      # noqa: F401, E402
+# No ordering constraint: `/discover` is a literal path under its own prefix,
+# with no parameterised sibling to be swallowed by.
+from . import discovery_routes  # noqa: F401, E402
 from . import stats_routes     # noqa: F401, E402
 from . import achievement_routes  # noqa: F401, E402
 from . import search_routes    # noqa: F401, E402

@@ -206,6 +206,20 @@ class _CountQuery:
         self._filters.append(f"or({expr})")
         return self
 
+    @property
+    def not_(self):
+        # PostgREST's negation prefix: `.not_.is_(col, "null")` reads as
+        # "col IS NOT NULL". Recorded with the prefix so the two spellings
+        # cannot collide in the counts map below.
+        outer = self
+
+        class _Not:
+            def is_(self_, col, val):
+                outer._filters.append(f"not {col} is {val}")
+                return outer
+
+        return _Not()
+
     def limit(self, *_a):
         return self
 
@@ -221,6 +235,7 @@ def counts_client(monkeypatch):
         ("boardgamebuddy_chapter_reports", "status=open"): 2,
         ("boardgamebuddy_games", "or(image_url.is.null,thumbnail_url.is.null)"): 5,
         ("boardgamebuddy_games", "description is null"): 40,
+        ("boardgamebuddy_games", "bgg_stats_synced_at is null,not bgg_id is null"): 7,
     }
 
     class _SB:
@@ -248,18 +263,19 @@ def test_review_counts_reports_each_queue(counts_client):
     assert body["chapter_reports"] == 2
     assert body["missing_images"] == 5
     assert body["missing_descriptions"] == 40
+    assert body["missing_stats"] == 7
 
 
 def test_review_counts_total_is_derived_not_sent(counts_client):
     # Computed server-side so the gear's dot and the per-row badges can never
     # disagree about whether there is anything waiting.
-    assert counts_client.get(COUNTS_URL).json()["total"] == 47
+    assert counts_client.get(COUNTS_URL).json()["total"] == 54
 
 
 def test_review_counts_uses_exact_count_not_row_fetches(counts_client):
     counts_client.get(COUNTS_URL)
     selects = [row for row in counts_client.log if row[0] == "select"]
-    assert len(selects) == 3
+    assert len(selects) == 4
     # Every one asks PostgREST for the count header rather than the rows.
     assert all(row[2] == "exact" for row in selects), selects
 
