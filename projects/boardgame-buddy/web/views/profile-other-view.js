@@ -183,7 +183,7 @@
         ${this._renderTogether(b)}
         ${this._renderTopGames(b)}
         ${this._renderCollectionPreview(b)}
-        <div id="${SHARED_HOST_ID}">${this._renderSharedPlays()}</div>
+        <div id="${SHARED_HOST_ID}" class="preview-card-host">${this._renderSharedPlays()}</div>
         <div style="height: 1rem"></div>
       `;
       this.refreshIcons();
