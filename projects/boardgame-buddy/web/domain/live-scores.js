@@ -26,6 +26,35 @@
   // Every PostgREST call here is awaited by the write queue; one that never
   // settles wedges its cell for the session, so each carries a deadline.
   const DB_TIMEOUT_MS = 10000;
+
+  /**
+   * Is this a write that will NEVER succeed, as opposed to one that failed?
+   *
+   * The distinction is the whole point. A timeout or a dead socket is
+   * transient and the queue is right to swallow it — the host keeps typing,
+   * the intent map keeps their value on screen, and the next refresh()
+   * re-applies it. A permission error is not transient: every subsequent
+   * keystroke will fail the same way for the rest of the session, the table
+   * stays empty, and every spectator watches a grid that never fills in.
+   * Swallowing that one hid a misconfigured RLS setup behind a UI that looked
+   * like it was working, on the screen belonging to the one person who could
+   * have fixed it.
+   *
+   * 42501 is Postgres's insufficient_privilege — what an RLS WITH CHECK
+   * failure raises. The PGRST3xx family is PostgREST's own auth class (an
+   * invalid or expired JWT, anonymous access refused), which is what a
+   * browser whose token the database will not accept actually gets back.
+   */
+  function isPermanentWriteFailure(err) {
+    if (!err) return false;
+    const code = String(err.code || "");
+    if (code === "42501") return true;
+    if (/^PGRST3/.test(code)) return true;
+    const msg = String(err.message || "").toLowerCase();
+    return msg.indexOf("row-level security") !== -1
+      || msg.indexOf("permission denied") !== -1
+      || msg.indexOf("jwt") !== -1;
+  }
   /**
    * @typedef {Object} ScoreRow
    * @property {string}  session_id
@@ -35,9 +64,19 @@
    */
 
   class LiveScores {
-    constructor({ sessionId, isHost }) {
+    constructor({ sessionId, isHost, onWriteDenied }) {
       this.sessionId = sessionId;
       this.isHost = !!isHost;
+      // Called once per session the first time a write comes back permanently
+      // refused (see isPermanentWriteFailure). Optional, and only the host
+      // passes one — a spectator never writes.
+      this._onWriteDenied = typeof onWriteDenied === "function" ? onWriteDenied : null;
+      this._deniedReported = false;
+      // When the Realtime channel last actually DELIVERED something, and
+      // whether it has reported itself broken. Both exist so a caller can
+      // tell "quiet" from "dead" — see lastEventAt() and isRealtimeDead().
+      this._lastEventAt = 0;
+      this._realtimeDead = false;
       this._channel = null;
       this._listeners = new Set();
       // Map<participant_id, Map<round_index, score>>
@@ -92,13 +131,33 @@
             } else if (this._writes.accept(key, row.score)) {
               this._ingest(row);
             }
-            // Emit even when the row was ignored: the repaint is idempotent,
-            // and session-viewer-view stamps its "Realtime is alive" timestamp
-            // off this callback to stand the poll fallback down.
+            // A delivery, whatever we did with it. This is the ONLY place the
+            // clock moves: callers gate their poll fallback on it, and
+            // stamping it anywhere else (a backfill, a poll-driven refresh)
+            // claims Realtime is working on the evidence of our own polling.
+            this._lastEventAt = Date.now();
+            // Emit even when the row was ignored: the repaint is idempotent.
             this._emit();
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          // Supabase reports the channel's fate here and nothing used to read
+          // it, so a channel that never connected was indistinguishable from
+          // one that was connected and quiet — the difference between "poll as
+          // a fallback" and "polling is the only thing that will ever work".
+          if (status === "SUBSCRIBED") {
+            this._realtimeDead = false;
+          } else if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            this._realtimeDead = true;
+            // Wake the subscriber so it can drop to the fast cadence now
+            // rather than on its next scheduled tick.
+            this._emit();
+          }
+        });
       // Notify once after backfill so subscribers can paint initial state.
       this._emit();
     }
@@ -114,6 +173,9 @@
       this._byPlayer.clear();
       this._seed.clear();
       this._tableReadable = false;
+      this._lastEventAt = 0;
+      this._realtimeDead = false;
+      this._deniedReported = false;
       this._writes.clear();
     }
 
@@ -223,6 +285,30 @@
      */
     isSeedOnly() {
       return !this._tableReadable;
+    }
+
+    /**
+     * When the Realtime channel last delivered a row, or 0 if it never has.
+     *
+     * A caller standing its poll down because "Realtime has it" must gate on
+     * a real delivery. Anything else — a backfill read, a poll-triggered
+     * refresh — is the poll vouching for the channel it is supposed to be
+     * covering for.
+     */
+    lastEventAt() {
+      return this._lastEventAt;
+    }
+
+    /**
+     * True once the channel has reported CHANNEL_ERROR, TIMED_OUT or CLOSED.
+     *
+     * Distinct from `lastEventAt() === 0`, which is also what a healthy
+     * channel looks like before anybody has scored. This one means Supabase
+     * told us the subscription is not going to deliver, so a caller should
+     * treat polling as the mechanism rather than the fallback.
+     */
+    isRealtimeDead() {
+      return this._realtimeDead;
     }
 
     _cloneSeed() {
@@ -441,6 +527,24 @@
         .then((res) => {
           if (res && res.error) throw res.error;
           return res;
+        })
+        .catch((err) => {
+          // Report a permanently-refused write ONCE, then rethrow so the
+          // queue's own handling is unchanged: the intent stays in the map,
+          // the host's value stays on their screen, and nothing retries the
+          // same value. All three write paths (a keystroke, syncGrid,
+          // removeRoundAt) funnel through here, so this is the one place that
+          // has to notice.
+          //
+          // Once, not per keystroke: the condition is a property of the
+          // session, and a toast per digit typed would be its own outage.
+          if (!this._deniedReported && isPermanentWriteFailure(err)) {
+            this._deniedReported = true;
+            if (this._onWriteDenied) {
+              try { this._onWriteDenied(err); } catch (_) {}
+            }
+          }
+          throw err;
         });
     }
 

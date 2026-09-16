@@ -40,12 +40,17 @@
       this._popupShown = false;
       // One feed re-pull per session watched — see _handlePhaseSideEffects.
       this._feedRefreshed = false;
-      // Poll-gating state: tick counter for the play/settle fallback cadence
-      // and the timestamp of the last Realtime event (phase change or live
-      // score). While Realtime is flowing, the fallback fetches are skipped.
+      // Poll-gating state: tick counter for the play/settle fallback cadence.
+      // "Is Realtime carrying this?" is NOT tracked here any more — it is read
+      // off the channels themselves (LiveScores.lastEventAt() and the phase
+      // channel's status), because this view cannot distinguish its own
+      // poll-driven repaints from a Realtime delivery and used to count them
+      // as evidence the channel was alive.
       this._pollTick = 0;
-      this._lastRealtimeAt = 0;
-      this._refreshingScores = false;
+      // Set from either channel's subscribe status. A channel Supabase has
+      // reported broken will never deliver, so polling stops being a fallback
+      // and becomes the mechanism — which is a different cadence.
+      this._realtimeDead = false;
     }
 
     async onMount() {
@@ -119,7 +124,7 @@
       this._popupShown = false;
       this._feedRefreshed = false;
       this._pollTick = 0;
-      this._lastRealtimeAt = 0;
+      this._realtimeDead = false;
       this._renderedRounds = 0;
     }
 
@@ -249,13 +254,22 @@
         // silent by construction. The poll IS its live scoring, and standing
         // it down would leave the grid frozen. Every other tick (4s) — still
         // half the Gather cadence.
-        const seedOnly = this._liveScores && this._liveScores.isSeedOnly();
+        //
+        // A channel Supabase has REPORTED broken counts the same as the
+        // seeded path: both mean no event is ever arriving, so the poll is
+        // the live scoring rather than a safety net.
+        const live = this._liveScores;
+        const seedOnly = live && live.isSeedOnly();
+        const dead = this._realtimeDead || (live && live.isRealtimeDead());
         this._pollTick++;
-        if (seedOnly && phase === "play") {
+        if ((seedOnly || dead) && phase === "play") {
           if (this._pollTick % 2 !== 0) return;
         } else {
           if (this._pollTick % 5 !== 0) return;
-          if (Date.now() - this._lastRealtimeAt < 10000) return;
+          // Gate on when the SCORE channel last delivered a row, not on any
+          // repaint. A phase event is not evidence that scores are flowing,
+          // and our own refresh() emitting is not evidence of anything.
+          if (live && Date.now() - live.lastEventAt() < 10000) return;
         }
       }
       // Realtime is the fast path for live scores, but it can drop an event
@@ -264,9 +278,7 @@
       // was asleep still surfaces. The refresh _emit()s through
       // _onLiveScoresChange(), which grows the grid if needed.
       if (this._liveScores && this._session && this._session.phase === "play") {
-        this._refreshingScores = true;
-        try { await this._liveScores.refresh(); }
-        finally { this._refreshingScores = false; }
+        await this._liveScores.refresh();
       }
       try {
         const next = await window.PlaySession.fetchLobby(this._code);
@@ -379,8 +391,6 @@
       this._phaseOff = await window.SessionPhase.subscribe(
         this._session.id,
         async (phase) => {
-          // Realtime is alive — the poll's play/settle fallback stands down.
-          this._lastRealtimeAt = Date.now();
           const prevPhase = this._session && this._session.phase;
           // Patch the cached session in place so render() picks up the new
           // phase without waiting on the slow poll.
@@ -396,7 +406,10 @@
           if (phase === "settle" || phase === "finalized" || phase === "abandoned") {
             await this._maybeStopLiveScores();
           }
-        }
+        },
+        // A broken phase channel means every phase change now arrives only on
+        // the poll, so the poll must not be standing itself down.
+        (dead) => { this._realtimeDead = dead; }
       );
     }
 
@@ -417,13 +430,13 @@
       // spectator who arrived after the host had already scored kept staring
       // at the empty grid its first render painted until some later event
       // (the next host keystroke, or the 10s poll fallback) happened to fire.
-      this._liveOff = this._liveScores.subscribe(() => {
-        // Realtime is alive — the poll's play/settle fallback stands down.
-        // Skip the stamp when the emit came from our own poll-triggered
-        // refresh(), which would otherwise defer the next fallback forever.
-        if (!this._refreshingScores) this._lastRealtimeAt = Date.now();
-        this._onLiveScoresChange();
-      });
+      // No "Realtime is alive" stamp here. This fires for every repaint,
+      // including the two emits start() makes off its own backfill and the one
+      // our poll's refresh() triggers — so stamping it told the poll to stand
+      // down on the strength of the poll's own work. LiveScores now records
+      // when the CHANNEL delivered (lastEventAt), which is the only thing that
+      // answers the question the gate is asking.
+      this._liveOff = this._liveScores.subscribe(() => this._onLiveScoresChange());
       await this._liveScores.start();
     }
 
@@ -477,13 +490,7 @@
     // ignores the seed from its first successful read onward.
     _seedLiveScores(session) {
       if (!this._liveScores || !session || !Array.isArray(session.scores)) return;
-      // Any emit this triggers is our own poll's doing, not a Realtime event.
-      // Flag it the same way the refresh() path does, or the poll's
-      // "Realtime is alive, stand down" gate would be fooled by its own tick
-      // and halve the only update cadence a late spectator has.
-      this._refreshingScores = true;
-      try { this._liveScores.seed(session.scores); }
-      finally { this._refreshingScores = false; }
+      this._liveScores.seed(session.scores);
     }
 
     async _maybeStopLiveScores() {

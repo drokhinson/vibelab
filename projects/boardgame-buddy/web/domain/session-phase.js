@@ -14,12 +14,21 @@
    * @param {string} sessionId — boardgamebuddy_play_sessions.id (UUID)
    * @param {(phase: string, row: any) => void} onPhaseChange — invoked
    *        every time the UPDATE payload contains a phase value.
+   * @param {(dead: boolean) => void} [onDead] — invoked with true when the
+   *        channel reports CHANNEL_ERROR / TIMED_OUT / CLOSED, and false when
+   *        it reaches SUBSCRIBED. Optional; a caller with a poll fallback
+   *        wants it, because without it a channel that never connected looks
+   *        exactly like one that connected and has had nothing to say.
    * @returns {() => Promise<void>} unsubscribe
    */
-  async function subscribePhase(sessionId, onPhaseChange) {
+  async function subscribePhase(sessionId, onPhaseChange, onDead) {
     if (!window.supabaseClient || !sessionId) {
       return async () => {};
     }
+    const report = (dead) => {
+      if (typeof onDead !== "function") return;
+      try { onDead(dead); } catch (_) {}
+    };
     const channel = window.supabaseClient
       .channel(`session:${sessionId}`)
       .on(
@@ -37,7 +46,14 @@
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") report(false);
+        else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) report(true);
+      });
     return async () => {
       try { await window.supabaseClient.removeChannel(channel); } catch (_) {}
     };
