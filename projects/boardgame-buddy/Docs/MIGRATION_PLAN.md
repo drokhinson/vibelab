@@ -137,6 +137,18 @@ it. `auth-view.js` stays exactly what it is, one tap deeper.
 Waitlist capture on that view writes to its own table and **creates no identity**
 — see the signup decision below.
 
+> **What shipped, and what is gone.** The view and the `COMING_SOON` gate were
+> built, did their job through the DNS and auth cutover, and were **removed at
+> cutover** — the merge now lands the app live, so a permanent conditional in
+> the boot path bought nothing. `boardgamebuddy_waitlist` (migration 035) and
+> `api/routes/waitlist_routes.py` outlive the view: the table holds addresses
+> from people who asked to be told at launch, and the privacy policy says that
+> list is deleted after the launch email. Drop the table, the route and its
+> test together once that email has gone out.
+>
+> The store badges this section parks on the landing view need a new home when
+> the native apps ship. The app's own root is the obvious one.
+
 ### No per-user migration gateway
 
 A self-service "migrate my data" screen on first sign-in was considered and
@@ -184,6 +196,11 @@ real signup taken before the user import becomes a duplicate identity to
 reconcile by hand. Waitlist-only removes the collision entirely and decouples
 "when is the landing up" from "when is the import ready".
 
+> **Held, and now spent.** The import ran with the gate up: 23 accounts, all
+> under their original Supabase UUIDs, verified 23/23. With the import done the
+> collision this constraint existed to prevent cannot happen again, which is
+> what made removing the gate safe rather than merely convenient.
+
 ---
 
 ## Stage order and what each one costs
@@ -191,7 +208,7 @@ reconcile by hand. Waitlist-only removes the collision entirely and decouples
 | Stage | Does | Cost after | Downtime | Reversible? |
 |---|---|---|---|---|
 | 1 | **Isolate in place** (one tree, own workflows + Railway service) | no change | none | yes — it is a file move |
-| 2 | Vercel → Cloudflare Pages, apex, `COMING_SOON` on | −$0, unblocks revenue | none (DNS swap) | yes — Vercel project until deleted |
+| 2 | Vercel → Cloudflare Pages, apex, `COMING_SOON` on | −$0, unblocks revenue | none (DNS swap) | yes — Pages keeps every deploy, one-click rollback |
 | 2b | Landing view + waitlist capture | $0 | none | yes — it is one view |
 | 3 | **Decide the auth path** (§ Stage 3) | — | — | — |
 | 3a | Path A: Supabase custom domain + SMTP | +$10/mo | none, **no logout** | yes — revert `supabaseUrl` |
@@ -199,7 +216,7 @@ reconcile by hand. Waitlist-only removes the collision entirely and decouples
 | 3b | Own Supabase project | +$25/mo when needed | one window, **everyone re-signs in** | hard — old project is read-only fallback |
 | 4 | Photos → R2 | ~$0, kills the growth curve | none (dual-read) | yes — Supabase objects stay |
 | 5 | API → Hetzner VPS | ~−$0 to −$15/mo | none (DNS swap) | yes — Railway service until deleted |
-| 6 | Cutover: URL rewrite, drop `COMING_SOON` | — | none | yes — re-raise the flag |
+| 6 | Cutover: URL rewrite, remove the gate, moved notice on the old origin | — | none | yes — Pages deployment rollback |
 | 7 | Full Hetzner (Appendix D) | flat ~€35/mo | one window | hard |
 
 **Revised order, given the decided design.** Two constraints reorder the stages:
@@ -223,7 +240,9 @@ in the background**.
    evaluating under a GCP-issued JWT. Non-negotiable — see the four traps below.
 6. **Import the users** — bcrypt hashes, Google `providerData`, preserved UUIDs —
    and verify the whole app against it on `staging.`.
-7. **Stage 6 — cut over**: run the URL-rewrite migration, drop `COMING_SOON`.
+7. **Stage 6 — cut over**: run the URL-rewrite migration, delete the
+   `COMING_SOON` gate and landing view, and replace the old Vercel deployment
+   with `projects/boardgame-buddy/moved/` (SETUP_HOSTING.md §6, step 14).
 
 ### Four things that break silently if missed
 

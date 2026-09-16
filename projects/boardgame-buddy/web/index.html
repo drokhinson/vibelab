@@ -60,10 +60,10 @@
        a minor release locks every user out, and there is no way to notice
        before they do.
 
-       Loads on every page even pre-launch. That is ~90 KB gzip of parked
-       bytes behind the COMING_SOON gate, which is the trade for not having a
-       conditional script tag the bundler and sw.js precache list would both
-       have to learn about. -->
+       Loaded unconditionally, including on the two legal routes that need no
+       auth at all. That is ~90 KB gzip of parked bytes on those pages, which
+       is the trade for not having a conditional script tag that the bundler
+       and sw.js's derived precache list would both have to learn about. -->
   <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 
@@ -252,7 +252,6 @@
         </button>
       </div>
     </main>
-    <main data-view="landing" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="privacy" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="terms" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="auth" class="hidden flex-1 px-4 py-4"></main>
@@ -537,7 +536,6 @@
 
   <!-- Views -->
   <script src="views/splash-view.js"></script>
-  <script src="views/landing-view.js"></script>
   <script src="views/legal-view.js"></script>
   <script src="views/privacy-view.js"></script>
   <script src="views/terms-view.js"></script>

@@ -44,7 +44,6 @@ jobs:
           API_BASE: ${{ vars.BGB_API_BASE }}
           SUPABASE_URL: ${{ secrets.VIBELAB_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.VIBELAB_SUPABASE_ANON_KEY }}
-          COMING_SOON: ${{ vars.BGB_COMING_SOON }}
           FIREBASE_API_KEY: ${{ vars.BGB_FIREBASE_API_KEY }}
           FIREBASE_AUTH_DOMAIN: ${{ vars.BGB_FIREBASE_AUTH_DOMAIN }}
           FIREBASE_PROJECT_ID: ${{ vars.BGB_FIREBASE_PROJECT_ID }}

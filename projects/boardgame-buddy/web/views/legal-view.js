@@ -12,11 +12,13 @@
 // service-worker story, and would fall out of the bundle. A route costs two
 // lines in the path table and inherits all of it.
 //
-// THEY MUST RESOLVE WHILE COMING_SOON IS ON. Google gates the OAuth brand
-// review on the privacy and terms URLs actually loading, and the reviewer
-// arrives before launch by definition. init.js's pre-launch gate therefore lets
-// these two routes through to here instead of redirecting to the waitlist —
-// see the `comingSoonActive()` branch in boot().
+// THEY MUST RESOLVE FOR A SIGNED-OUT STRANGER. Google's OAuth consent screen
+// links to both permanently, and its brand review loads them directly, so a
+// visitor with no account and no session has to be able to read them. That is
+// why they are routes above the auth gate rather than pages inside Settings.
+//
+// A pre-launch COMING_SOON gate used to carve out an exception for exactly
+// these two; the gate is gone, but the requirement it was serving is not.
 
 (function () {
   class LegalView extends window.View {
@@ -37,16 +39,15 @@
     // Reachable from the landing footer, from Settings, and from a cold deep
     // link a reviewer pasted — three entry points, so this is a close × with a
     // fallback rather than a back ← naming one parent (web-frontend.md, "Close
-    // vs back"). The fallback depends on which app the visitor is in: before
-    // launch there is nothing but the landing page to return to.
-    _fallback() {
-      const cfg = window.APP_CONFIG;
-      const preLaunch = cfg && (cfg.comingSoon === true || cfg.comingSoon === "1" || cfg.comingSoon === "true");
-      return preLaunch ? "landing" : "settings";
-    }
-
+    // vs back").
+    //
+    // router.back() only reaches the fallback when there is no history to go
+    // back to, which is the cold-deep-link case: someone who opened /privacy
+    // directly, signed in or not. Settings is where the links live, so it is
+    // the honest parent; an unauthenticated visitor lands on the auth screen
+    // from there, same as any other route.
     close() {
-      window.router.back(this._fallback());
+      window.router.back("settings");
     }
 
     async onMount() {

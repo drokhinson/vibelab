@@ -618,7 +618,6 @@ reused.
 | Name | Value |
 |---|---|
 | `BGB_API_BASE` | `https://api.bgbuddy.app` |
-| `BGB_COMING_SOON` | `true` until launch — serves the waitlist landing instead of the app |
 | `BGB_FIREBASE_API_KEY` | from §2.6 |
 | `BGB_FIREBASE_AUTH_DOMAIN` | `auth.bgbuddy.app` |
 | `BGB_FIREBASE_PROJECT_ID` | from §2.6 |
@@ -690,60 +689,99 @@ is the thing to look at, not this list.
 
 ## 6. Order of operations
 
-### Why the merge is the dangerous step
+### The merge was the dangerous step. It is not any more.
 
-Merging changes `shared-backend/**`, so Railway redeploys that service **without
-BoardgameBuddy's routes**. Meanwhile the live app is still the last build Vercel
-received, and its `config.js` has the *old* Railway origin baked in. So at the
-moment of merge, the live app points at an API that no longer serves it — and
-because `deploy-frontend.yml` no longer builds this project, CI will not push a
-corrected `config.js` to Vercel either.
+Merging changes `shared-backend/**`, so Railway redeploys that service
+**without BoardgameBuddy's routes**. When this section was written that was
+the whole problem: `bgbuddy.app` did not exist yet, the Vercel deployment WAS
+production, and its `config.js` had the old shared Railway origin baked in —
+so the merge pointed the live app at an API that no longer served it, with no
+path to push a corrected `config.js` (`deploy-frontend.yml` no longer builds
+this project).
 
-**The fix is one switch: turn OFF auto-deploy on the existing `shared-backend`
-Railway service before merging.** It then keeps serving its current image —
-BoardgameBuddy routes included — until you deliberately redeploy it. That gives
-you a window where old and new both work, and nothing is racing DNS.
+The advice was to **turn off auto-deploy on `shared-backend` before merging**,
+keeping BoardgameBuddy's routes alive in the running image.
+
+**That is now optional, and the reason it was needed is gone.** `bgbuddy.app`
+serves from Pages against `api.bgbuddy.app` — a different Railway service,
+untouched by anything that happens to `shared-backend`. The only casualty of
+the redeploy is the old Vercel app, which the same cutover replaces with a
+static notice (`projects/boardgame-buddy/moved/`).
+
+Two things to hold onto rather than the pause:
+
+- **Dispatch the moved notice right after the merge.** Between the merge and
+  that dispatch, the old origin serves a live-looking app whose every request
+  404s. Pausing auto-deploy only widens that window; shipping the notice closes
+  it.
+- **Watch `shared-backend`'s own redeploy.** It is shared with six other
+  projects, so the failure that would actually hurt is that service not booting
+  — not BoardgameBuddy's routes leaving it. `shared-backend/main.py` imports
+  and registers seven routers, none of them BoardgameBuddy, and nothing else
+  under `shared-backend/*.py` references the project outside comments, so it
+  should come up clean. Hit one other app's health endpoint and confirm.
 
 ```
-BEFORE MERGING
-  1. Railway → existing shared-backend service → Settings → disable Auto Deploy.
-     It keeps running the image it has, still serving BGB. This is what makes
-     the merge safe.
-  2. §1  Create the BGB Railway service (Root Directory
-         projects/boardgame-buddy/api), copy every variable, never regenerating
-         the VAPID pair, BGB_QR_SECRET or BGG_CREDENTIAL_KEY.
-  3. §4  Set BGB_API_BASE, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
-         Without these the web workflow fails on the merge commit — harmless,
-         but it means no Pages deploy.
-  4. §3.2 Create the Pages project named exactly `bgbuddy`.
-  5. §5.1 ALLOWED_ORIGINS on the NEW service, old Vercel origin included.
-  6. Verify: curl https://api.bgbuddy.app/api/v1/health
+ALREADY DONE — kept here because the order is the argument, not a checklist
+   1. §1   The BGB Railway service (Root Directory projects/boardgame-buddy/api),
+          every variable copied, the VAPID pair / BGB_QR_SECRET /
+          BGG_CREDENTIAL_KEY carried across rather than regenerated.
+   2. §4   BGB_API_BASE, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID. Without
+          these the web workflow fails on the merge commit — harmless, but it
+          means no Pages deploy.
+   3. §3.2 The Pages project, named exactly `bgbuddy`.
+   4. §5.1 ALLOWED_ORIGINS on the NEW service, old Vercel origin included.
+   5. §2.5 Search Console domain verification. Started first: it is days of
+          queue nobody here controls.
+   6. §2.1-2.4 Identity Platform, auth.bgbuddy.app, branding.
+   7. §3.1 DNS in Cloudflare, nameservers first.
+   8. §2.7 Supabase third-party auth + the TP-MAU billing line.
+   9. §3.3 bgbuddy.app and www pointed at Pages, §3.7 SSL set.
+  10. The auth migration and the user import (MIGRATION_PLAN.md 3-ALT): dual
+      issuer live, 23/23 accounts imported under their original UUIDs.
 
-ANY TIME — start §2.5 first, it is days of queue you do not control
-  7. §2.5 Search Console domain verification
-  8. §2.1-2.4 Identity Platform, auth.bgbuddy.app, branding
-  9. §3.1 DNS in Cloudflare (nameservers first if the domain is elsewhere)
- 10. §2.7 Supabase third-party auth + check the TP-MAU billing line
- 10a. §3.8 Email Routing. Needs the zone Active, and needs doing before the
-      legal pages are reachable — they print two addresses that bounce until it
-      exists.
+STILL OPEN
+  11. §3.8 Email Routing. privacy@ and support@ bounce until it exists, and
+      the privacy policy points deletion requests at one of them.
 
-MERGE
- 11. Merge. CI deploys web → Pages and runs the API tests.
- 12. Verify on bgbuddy.pages.dev against the NEW api. The old Vercel app is
-     still up and still working — that is the point of step 1.
- 13. Point bgbuddy.app at Pages (§3.3). Watch 24h.
-
-AFTER THE CUTOVER HOLDS
- 14. Re-enable Auto Deploy on shared-backend and let it redeploy. It loses the
-     BoardgameBuddy routes here, which is now fine — nothing points at it.
- 15. Delete the Vercel project; drop its origin from ALLOWED_ORIGINS; delete
-     the BGB_*/BGG_* variables from the old Railway service.
+THE CUTOVER — one sitting, in this order
+  12. Merge. CI deploys web → Pages (live, ungated) and runs the API tests.
+  13. Switch the BGB Railway service's source branch from the feature branch to
+      `main`. Not before: `main` has no projects/boardgame-buddy/api until the
+      merge lands, so an early switch deploys nothing.
+  14. Dispatch `deploy-bgb-moved-notice.yml`. This is time-sensitive — see
+      below.
+  15. Let `shared-backend` redeploy (or re-enable Auto Deploy if you paused it)
+      and confirm ANOTHER project's health endpoint. That service is shared
+      with six apps; it losing BGB's routes is expected, it failing to boot is
+      the thing to catch.
+  16. Delete the BGB_COMING_SOON repo variable, `deploy-bgb-web-vercel.yml`,
+      and the BGB_*/BGG_* variables on the old Railway service. Drop the Vercel
+      origin from ALLOWED_ORIGINS.
 ```
 
-Steps 1 and 14 are a matched pair. If you skip step 1, you are relying on
-finishing steps 11-13 faster than Railway finishes a deploy, which is not a
-plan.
+**Step 14 is the one with a clock on it.** The old Vercel app's `config.js`
+carries the shared Railway origin, so the moment step 15's redeploy lands, that
+app is serving a live-looking UI whose every request 404s. The notice in
+`projects/boardgame-buddy/moved/` is what a returning visitor gets instead —
+and it is also the only thing that shuts down the service worker still
+registered on that origin, which otherwise keeps booting the old shell from
+cache for anyone who installed the app. Read `moved/sw.js` before changing
+either file.
+
+**The Vercel project is not deleted.** Deleting it answers every bookmark,
+shared session link and installed PWA with Vercel's DEPLOYMENT_NOT_FOUND page,
+and gives up that service-worker shutdown. Retire it by replacing what it
+serves, not by removing it.
+
+**There is no COMING_SOON flag any more.** It existed to hide the app during
+the DNS and auth cutover, and to stop a signup racing the user import
+(`importUsers` does not dedupe on email, so a pre-import signup becomes a
+duplicate identity). Both jobs are finished, so the merge lands the app live.
+What replaces it as an abort switch: **Cloudflare Pages keeps every deployment
+with one-click rollback**, and an auth-specific problem still rolls back by
+unsetting the four `BGB_FIREBASE_*` variables and re-running the web workflow.
+Both are better than showing users a waitlist form.
 
 ### The Vercel bridge, and why there is no dress rehearsal
 
@@ -767,12 +805,18 @@ file** — resolve it by taking the feature branch's version wholesale, since th
 is the copy with the real triggers.
 
 `deploy-bgb-web-vercel.yml` is the counterweight: the same four build steps
-ending at Vercel instead of Pages, dispatch-only. After step 11 it is the only
-path left that can ship a frontend fix to the old host, because that same merge
-removes boardgame-buddy from `deploy-frontend.yml`'s change detection and moves
-the bundler to `projects/boardgame-buddy/scripts/`. It must never gain a push
-trigger — two hosts building the same commit is not a fallback, it is a
-coin flip. Delete it at step 15 alongside the Vercel project.
+ending at Vercel instead of Pages, dispatch-only. Between step 12 and step 14
+it is the only path left that can ship a frontend fix to the old host, because
+that same merge removes boardgame-buddy from `deploy-frontend.yml`'s change
+detection and moves the bundler to `projects/boardgame-buddy/scripts/`. It must
+never gain a push trigger — two hosts building the same commit is not a
+fallback, it is a coin flip.
+
+Step 14 is what retires it: once `deploy-bgb-moved-notice.yml` has overwritten
+that project's production deployment with the static notice, there is no longer
+an old app to ship a fix to. Delete the bridge then (step 16), not before — it
+is the escape hatch for the one window where Pages is production and the notice
+has not gone up yet.
 
 ### One local-only caveat
 
@@ -803,10 +847,10 @@ Both now exist, at `https://bgbuddy.app/privacy` and `https://bgbuddy.app/terms`
 (`web/views/privacy-view.js` and `terms-view.js`, sharing `legal-view.js`). Two
 things about them:
 
-- **They resolve while `BGB_COMING_SOON` is on.** The pre-launch gate in
-  `init.js` lets exactly these two routes through instead of redirecting to the
-  waitlist. Without that, the reviewer would see the waitlist and read it as
-  "no policy". Do not "simplify" that branch.
+- **They resolve for a signed-out stranger**, which is not incidental: the
+  consent screen links to both permanently, so they are loaded by people with
+  no account and no session. They sit above the auth gate for that reason —
+  moving them behind it, or into Settings, breaks the consent screen's links.
 - **`terms-view.js` will not publish cleanly until `JURISDICTION` is set.** It
   is empty on purpose and the page renders a warning banner where the
   governing-law clause belongs, so an unset value is visible rather than

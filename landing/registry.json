@@ -32,8 +32,8 @@
         "hobbies",
         "social"
       ],
-      "webUrl": "https://vibelab-boardgamebuddy.vercel.app",
-      "backendUrl": "https://vibelab-production-2119.up.railway.app",
+      "webUrl": "https://bgbuddy.app",
+      "backendUrl": "https://api.bgbuddy.app",
       "hasNativeApp": false,
       "expoSlug": null,
       "createdAt": "2026-03-27",

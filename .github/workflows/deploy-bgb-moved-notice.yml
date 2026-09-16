@@ -1,0 +1,79 @@
+name: Deploy BoardgameBuddy Moved Notice (Vercel)
+
+# Replaces the retired BoardgameBuddy app on vibelab-boardgamebuddy.vercel.app
+# with the static "we have moved" notice in projects/boardgame-buddy/moved/.
+#
+# Run this immediately after the cutover merge. The old app's config.js points
+# at the shared Railway service, which loses BoardgameBuddy's routes the moment
+# that service redeploys from main — so between the merge and this dispatch,
+# the old origin serves a live-looking app whose every request 404s. This
+# workflow is what closes that window.
+#
+# Deliberately not a delete of the Vercel project. Deleting it answers every
+# bookmark, shared session link and installed PWA with Vercel's
+# DEPLOYMENT_NOT_FOUND page, which tells a returning user nothing. It also
+# gives up the only chance to shut down the old service worker: see moved/sw.js
+# for why that worker outlives the deployment it came from.
+#
+# workflow_dispatch ONLY, and there is nothing to trigger on anyway — this is a
+# one-shot deploy of three static files. Ordering matters (bgbuddy.app has to
+# be serving the real app before this tells people to go there), and ordering
+# is not something a paths filter can express.
+#
+# Two things about moved/vercel.json that its JSON cannot say:
+#   * The blanket rewrite to /index.html does NOT swallow /sw.js. Vercel checks
+#     the filesystem before applying `rewrites`, so real files win — the same
+#     reason web/vercel.json could rewrite everything while still serving the
+#     hashed bundle.
+#   * no-store on everything is so this notice can itself be replaced, or the
+#     project finally deleted, without a cached copy outliving the decision.
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No build step, and no config.js: the notice has no API, no Supabase
+      # client and no auth. If a step ever appears here, something has been
+      # misunderstood about what this page is.
+      - name: Verify the notice is self-contained
+        working-directory: ./projects/boardgame-buddy/moved
+        run: |
+          test -f index.html || { echo "::error::moved/index.html missing"; exit 1; }
+          test -f sw.js      || { echo "::error::moved/sw.js missing — the old worker would survive"; exit 1; }
+          test -f vercel.json || { echo "::error::moved/vercel.json missing"; exit 1; }
+          # The retired worker serves same-origin subresources cache-first
+          # with revalidation off, so ANY same-origin reference here can come
+          # back as the old app's bytes instead of ours. Only data: URIs and
+          # the new domain are allowed. Checked at deploy time rather than
+          # discovered in a browser nobody is watching.
+          refs=$(grep -oE '(src|href)="[^"]*"' index.html \
+                 | sed -E 's/^(src|href)="//; s/"$//')
+          bad=0
+          for ref in $refs; do
+            case "$ref" in
+              data:*|https://bgbuddy.app*) ;;
+              *) echo "::error::index.html references $ref"; bad=1 ;;
+            esac
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::The notice must be self-contained: inline CSS, inline"
+            echo "::error::SVG, inline script. See the header in moved/index.html."
+            exit 1
+          fi
+          echo "notice is self-contained"
+
+      - name: Deploy to Vercel
+        working-directory: ./projects/boardgame-buddy/moved
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_BOARDGAME_BUDDY_PROJECT_ID }}
+        run: |
+          npx vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel@latest deploy --prod --token=${{ secrets.VERCEL_TOKEN }}

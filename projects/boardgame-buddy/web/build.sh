@@ -11,17 +11,14 @@ window.APP_CONFIG = {
   project: "boardgame-buddy",
   supabaseUrl: "${SUPABASE_URL}",
   supabaseAnonKey: "${SUPABASE_ANON_KEY}",
-  // Pre-launch gate. "1"/"true" serves views/landing-view.js instead of the
-  // app; anything else (including unset) boots normally. Set from the
-  // BGB_COMING_SOON repo variable, so going live is flipping a variable and
-  // redeploying rather than a code change. ?preview=1 bypasses it — see init.js.
-  comingSoon: ${COMING_SOON:-false},
   // GCP Identity Platform / Firebase Auth. Set from BGB_FIREBASE_* repo
   // variables, none of which are secrets: apiKey identifies the project and
-  // authorizes nothing, and the other three are public identifiers. Empty
-  // until the frontend swaps off the Supabase Auth SDK (Stage 3-ALT.4) --
-  // init.js must treat a blank apiKey as "Firebase not configured" and keep
-  // using Supabase Auth, or a half-set variable silently breaks every login.
+  // authorizes nothing, and the other three are public identifiers.
+  //
+  // A BLANK apiKey still means "Firebase not configured", and domain/auth.js
+  // still falls back to Supabase Auth on that reading. That is the rollback
+  // path, not a leftover: unsetting these four variables and re-running the
+  // deploy puts sign-in back on Supabase without reverting a commit.
   // storageBucket and messagingSenderId are deliberately absent: photos go to
   // R2, and push uses this project's own VAPID keypair, not FCM.
   firebase: {
