@@ -164,10 +164,10 @@
           <i data-icon="x" class="w-5 h-5"></i>
         </button>
         <span class="bgb-pushask__mark"><i data-icon="bell" class="w-7 h-7"></i></span>
-        <div class="polaroid-popup__title" id="bgb-pushask-title">Don't miss your table</div>
+        <div class="polaroid-popup__title" id="bgb-pushask-title">Turn on notifications</div>
         <p class="polaroid-popup__body bgb-pushask__blurb">
           Get a nudge when a buddy adds you to a play, sends you a request or
-          accepts yours. You can change how much you hear — or switch it off
+          accepts yours. You can adjust which notifications you receive — or switch them off
           again — in Settings.
         </p>
         <div class="polaroid-popup__actions bgb-pushask__actions">
