@@ -106,11 +106,20 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    notice. `Docs/RUNBOOK_AUTH_ROLE_CLAIM.md` is the whole story.
 12. **Both image uploads still carry a Supabase Storage branch**, and
    `object_store.py` treats an unconfigured R2 as normal rather than as an
-   error. That is the Stage 4 rollout: the R2 code deploys before the buckets
-   exist, and unsetting one variable rolls it back after they do. What is NOT
-   allowed is widening that fallback to cover a *failing* R2 — see the
+   error. **R2 is live now**, so that branch is the rollback: unsetting the
+   variables returns uploads to Supabase, whose buckets are still there. What
+   is NOT allowed is widening the fallback to cover a *failing* R2 — see the
    docstrings and `tests/test_object_store.py`, which pin it. A failing R2
    writes a supabase.co URL into a row the migration has already rewritten.
+13. **`R2_JURISDICTION` is not optional here even though the code treats it as
+   optional.** The buckets were created in the US jurisdiction, which puts a
+   label in the S3 endpoint host. Unset, every upload gets `AccessDenied` —
+   indistinguishable from a mis-scoped token, which is why the put error names
+   the jurisdiction it signed for.
+14. **`jwt_auth.py` verifies one issuer and there is no rollback to Supabase
+   Auth.** Both sides were removed once accounts existed only in Identity
+   Platform. A consequence: local dev needs the four `BGB_FIREBASE_*` values in
+   its `config.js` to sign in at all. They are repo variables, not secrets.
 
 ## Secrets that must never be rotated casually
 

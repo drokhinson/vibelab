@@ -1,14 +1,23 @@
 """
 jwt_auth.py — JWT verification for BoardgameBuddy's API.
 
-Verifies JWTs from EITHER issuer, selected per-token by its `iss` claim:
+One issuer: GCP Identity Platform (Firebase Auth), verified against Google's
+shared JWKS with `aud` and `iss` both scoped to GCP_PROJECT_ID. Both are
+required, not belt-and-braces: every Firebase project signs with the same
+Google keys, so without `audience` any Google-issued token from any project
+would verify.
 
-  * Supabase Auth, against the project's published JWKS, `aud=authenticated`
-  * GCP Identity Platform (Firebase Auth), against Google's shared JWKS, with
-    `aud` and `iss` both scoped to GCP_PROJECT_ID
+THE SUPABASE AUTH VERIFIER IS GONE, and with it the migration's rollback path.
+It accepted both issuers so the frontend and backend swaps did not have to be
+simultaneous; that stopped being a safety net once post-cutover accounts
+existed only in Identity Platform, because rolling back would have orphaned
+them. Re-adding it is not a rollback any more — it is a second verifier
+surface for an issuer that mints nothing.
 
-Both are live at once on purpose — a hard swap would 401 every signed-in
-browser the moment it deployed. See the block above _is_firebase_token.
+The names `SupabaseUser` and `get_current_supabase_user` outlived the provider
+they were named for. They are unchanged here on purpose: renaming them is a
+mechanical sweep across forty route modules, and doing it in this commit would
+bury the one diff worth reading closely.
 
 Usage in route dependencies:
     from jwt_auth import get_current_supabase_user, SupabaseUser
@@ -32,33 +41,15 @@ from pydantic import BaseModel
 
 from auth import extract_bearer_token
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-_JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json" if SUPABASE_URL else ""
-
 # PyJWKClient caches the JWK set for `lifespan` seconds and re-fetches it with a
 # blocking urllib.request.urlopen. The default 30s timeout is far too long for
-# something that runs inside a request: this service is one uvicorn worker
-# shared by ten apps, so a slow JWKS response would stall the whole event loop
-# for half a minute. 5s is generous for a CDN-served static document, and a
-# failure surfaces as a 401 the client retries rather than a hung request.
+# something that runs inside a request, so a slow JWKS response cannot stall
+# the event loop for half a minute. 5s is generous for a CDN-served static
+# document, and a failure surfaces as a 503 the client retries rather than a
+# hung request.
 _JWKS_TIMEOUT_S = 5
-_jwks_client = PyJWKClient(_JWKS_URL, timeout=_JWKS_TIMEOUT_S) if _JWKS_URL else None
 
 # --- GCP Identity Platform (Firebase Auth) -----------------------------------
-#
-# Both issuers are accepted, and that is deliberate rather than transitional
-# sloppiness. MIGRATION_PLAN.md 3-ALT.4 says to "point _JWKS_URL at Google's",
-# i.e. swap. A swap cannot be deployed safely: the instant it lands, every
-# signed-in browser holding a Supabase token starts getting 401s, and the only
-# way back is a second deploy. Accepting both means the frontend swap and the
-# backend swap do not have to be simultaneous, and a rollback of the frontend
-# needs no backend change at all.
-#
-# Routing by issuer is safe because the issuer is then VERIFIED by the verifier
-# it selected. A token claiming Google's issuer is checked against Google's
-# keys, Google's `iss` and this project's `aud` — a forged claim just picks the
-# verifier that rejects it. What must never happen is selecting a verifier and
-# then not enforcing the issuer, which is why `issuer=` is passed below.
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "").strip()
 _FB_JWKS_URL = (
     "https://www.googleapis.com/service_accounts/v1/jwk/"
@@ -69,19 +60,6 @@ _FB_ISSUER = f"{_FB_ISSUER_PREFIX}{GCP_PROJECT_ID}" if GCP_PROJECT_ID else ""
 _fb_jwks_client = (
     PyJWKClient(_FB_JWKS_URL, timeout=_JWKS_TIMEOUT_S) if GCP_PROJECT_ID else None
 )
-
-
-def _is_firebase_token(token: str) -> bool:
-    """Read `iss` WITHOUT verifying, purely to choose a verifier.
-
-    Nothing is trusted from this decode. See the note above: the selected
-    verifier re-checks the issuer under a signature.
-    """
-    try:
-        claims = jwt.decode(token, options={"verify_signature": False})
-    except jwt.InvalidTokenError:
-        return False
-    return str(claims.get("iss", "")).startswith(_FB_ISSUER_PREFIX)
 
 
 class SupabaseUser(BaseModel):
@@ -120,8 +98,18 @@ def _app_uid(payload: dict) -> str:
     of signing everybody out for up to an hour. It cannot rescue a new account,
     because a Firebase uid does not match the pattern.
 
-    Remove the fallback once no pre-rollout token can still be valid (they last
-    an hour), and this becomes: no claim, no service.
+    DO NOT remove the fallback on the "ID tokens last an hour" reasoning that
+    first justified it — that reasoning is wrong, and it was nearly acted on.
+    `beforeUserSignedIn` runs at SIGN-IN, not on refresh, so it is the SESSION
+    that has to turn over, not the token: an account that last signed in before
+    the function was deployed and has been refreshing ever since has no
+    persisted `app_uid`, and its refreshed ID tokens carry none either. Its
+    `sub` is a UUID, so this fallback is the only thing serving it.
+
+    The real condition is that every account has signed in at least once since
+    the function was deployed — which happens on its own, since each sign-in
+    persists the claim. Until then, removing this signs those accounts out with
+    a 401 they cannot clear by retrying.
 
     Anything else is a 401, not a 500. An unusable identity is a bad
     credential, not a server fault, and saying so sends the client to its
@@ -143,9 +131,11 @@ async def get_current_supabase_user(
     request: Request = None,  # noqa: RUF013 — optional so non-HTTP callers still work
     authorization: Optional[str] = Header(None),
 ) -> SupabaseUser:
-    """FastAPI dependency: extract and verify a Supabase-issued JWT.
+    """FastAPI dependency: extract and verify an Identity Platform ID token.
 
-    Raises 401 if the token is missing, malformed, or invalid.
+    Raises 401 if the token is missing, malformed, expired, or issued by
+    anything other than this project — which now includes every Supabase Auth
+    token, since that verifier is gone.
     """
     # main.py's api-logger middleware verifies the same token on the way in, to
     # attach the user to the api_logs contextvar. Without this, every
@@ -167,20 +157,11 @@ async def get_current_supabase_user(
 
     token = extract_bearer_token(authorization)
 
-    # Firebase's audience is the project id and its issuer is project-scoped, so
-    # both are required: without `audience` any Google-issued token from any
-    # project would verify, since every Firebase project signs with the same
-    # shared Google keys.
-    if _is_firebase_token(token):
-        if not _fb_jwks_client:
-            raise HTTPException(status_code=500, detail="GCP_PROJECT_ID not configured")
-        jwks_client = _fb_jwks_client
-        decode_kwargs = {"audience": GCP_PROJECT_ID, "issuer": _FB_ISSUER}
-    else:
-        if not _jwks_client:
-            raise HTTPException(status_code=500, detail="SUPABASE_URL not configured")
-        jwks_client = _jwks_client
-        decode_kwargs = {"audience": "authenticated"}
+    # 500 rather than 401, and deliberately: an unset GCP_PROJECT_ID is an
+    # operator error, not a bad credential, and answering 401 would send every
+    # signed-in user to the login screen over a missing variable.
+    if not _fb_jwks_client:
+        raise HTTPException(status_code=500, detail="GCP_PROJECT_ID not configured")
 
     try:
         # to_thread because get_signing_key_from_jwt does a BLOCKING urllib
@@ -188,12 +169,15 @@ async def get_current_supabase_user(
         # Called inline, that stalls the single event loop this service runs on
         # — every app, every in-flight request — once every five minutes and
         # again on every cold start.
-        signing_key = await asyncio.to_thread(jwks_client.get_signing_key_from_jwt, token)
+        signing_key = await asyncio.to_thread(
+            _fb_jwks_client.get_signing_key_from_jwt, token
+        )
         payload = jwt.decode(
             token,
             signing_key.key,
-            algorithms=["ES256", "RS256"],
-            **decode_kwargs,
+            algorithms=["RS256"],
+            audience=GCP_PROJECT_ID,
+            issuer=_FB_ISSUER,
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")

@@ -1,32 +1,31 @@
-// domain/auth.js — the one place that knows which identity provider is live.
+// domain/auth.js — the one place that talks to the identity provider.
 //
-// Two backends, chosen at boot from window.APP_CONFIG:
+// GCP Identity Platform (Firebase Auth), and only that. `init()` stands it up
+// from the firebase block in window.APP_CONFIG and reports false if it cannot,
+// which the app renders as "Auth is not configured".
 //
-//   * `firebase`  when config.js carries a complete firebase block
-//   * `supabase`  otherwise
+// THE SUPABASE AUTH BRANCH IS GONE. It existed so the frontend and backend
+// swaps did not have to be simultaneous and so rollback was flipping four repo
+// variables rather than reverting a commit. That stopped being a rollback once
+// accounts existed only in Identity Platform — going back would orphan them —
+// and `api/jwt_auth.py` dropped the matching verifier in the same commit.
 //
-// Runtime selection rather than a code swap, for three reasons that all cost
-// real time when they go wrong:
-//
-//   1. Rollback is flipping the BGB_FIREBASE_* repo variables off and
-//      re-running the deploy workflow, not reverting a commit and waiting.
-//   2. Local dev has no Firebase config (build.sh reads env vars that only
-//      CI sets), so `python -m http.server` keeps working against Supabase.
-//   3. The old Vercel deployment is still live until the cutover, and it is
-//      built from the same tree.
-//
-// The backend that is NOT selected is never initialised, so there is exactly
-// one source of truth for `window.session` at any moment.
+// ONE CONSEQUENCE WORTH KNOWING: local dev can no longer sign in without the
+// four BGB_FIREBASE_* values in its config.js. They are repo *variables*, not
+// secrets — the API key identifies the project and authorizes nothing, since
+// access is decided by Authorized Domains — so copying them into a local
+// config is fine. Without them the app still boots, still serves a spectator
+// on a public session link through the anon key, and shows the auth screen's
+// "not configured" banner instead of a sign-in form.
 //
 // -----------------------------------------------------------------------------
 // The session shape is a contract, not an implementation detail.
 //
 // Callers across the app read exactly two things off `window.session`:
 // `access_token` (domain/api.js#_authHeader, domain/outbox.js:233) and
-// `user.id` (domain/outbox.js#_currentUid). Supabase's own session object
-// happens to have both; the Firebase path therefore SYNTHESISES the same
-// shape rather than publishing a Firebase user and making ~14 call sites
-// learn a second one:
+// `user.id` (domain/outbox.js#_currentUid). The shape is Supabase's, because
+// ~14 call sites were written against it and a Firebase user object would have
+// made every one of them learn a second one. So it is SYNTHESISED:
 //
 //     { access_token: "<jwt>", user: { id, email } }
 //
@@ -116,7 +115,7 @@
   // ── public surface ─────────────────────────────────────────────────────────
 
   const BgbAuth = {
-    /** "firebase" | "supabase" | null before init(). */
+    /** "firebase", or null when nothing could be initialised. */
     get backend() {
       return _backend;
     },
@@ -124,17 +123,17 @@
     /**
      * Stand up whichever backend is configured.
      *
-     * `window.supabaseClient` is created on BOTH paths, and that is not
-     * leftovers. Identity Platform replaces Supabase *Auth*; it does not
+     * `window.supabaseClient` is still created here, and that is not
+     * leftovers. Identity Platform replaced Supabase *Auth*; it did not
      * replace Supabase. domain/live-scores.js and domain/session-phase.js
      * subscribe to realtime channels and read and write the live-session
      * tables through that client directly, and each of them is written as
-     * `if (!window.supabaseClient) return;` — so a Firebase path that skipped
-     * creating it would not error, it would silently no-op. Live scores stop
-     * updating and the spectator grid goes blank, with nothing in the console.
+     * `if (!window.supabaseClient) return;` — so dropping it would not error,
+     * it would silently no-op. Live scores stop updating and the spectator
+     * grid goes blank, with nothing in the console.
      *
-     * On the Firebase path the client is given an `accessToken` callback
-     * instead of a session of its own. That is what Supabase's third-party
+     * The client is given an `accessToken` callback instead of a session of
+     * its own. That is what Supabase's third-party
      * auth integration reads, so PostgREST and realtime both receive the
      * Identity Platform JWT and the `auth.uid()` predicates on the live
      * session tables keep resolving to the same UUID they always did. Without
@@ -147,52 +146,39 @@
      */
     init() {
       const cfg = _cfg();
-      // The DB client is required either way, so its absence is fatal on both
-      // paths rather than a reason to fall back to Supabase Auth.
+      // The DB client is required whether or not auth stands up: it is what
+      // serves a spectator opening a public session link.
       if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) return false;
       if (!window.supabase || !window.supabase.createClient) return false;
+      // No Firebase config, or a gstatic script that did not load, is now
+      // simply "auth is not configured" — there is nothing to fall back to.
+      // The realistic cause of the second is a cold offline start; sw.js
+      // caches the SDK on the first online load, so it stays rare.
+      if (!_firebaseConfigured()) return false;
+      if (!_initFirebase()) return false;
 
-      // Configured-but-unavailable does NOT fall through to Supabase Auth.
-      // The realistic cause is the gstatic script failing on a cold offline
-      // start, and quietly switching providers there would subscribe to a
-      // Supabase session that the cutover retired — so the app would decide
-      // the user is signed out and route to /auth, which is precisely the
-      // bounce init.js's offline guard exists to prevent, arrived at through a
-      // different door. Reporting the failure keeps the cause visible instead.
-      // sw.js caches the SDK from www.gstatic.com on the first online load so
-      // this stays rare rather than routine.
-      if (_firebaseConfigured()) {
-        if (!_initFirebase()) return false;
-        window.supabaseClient = window.supabase.createClient(
-          cfg.supabaseUrl,
-          cfg.supabaseAnonKey,
-          {
+      window.supabaseClient = window.supabase.createClient(
+        cfg.supabaseUrl,
+        cfg.supabaseAnonKey,
+        {
             // Unforced: Firebase serves the cached token and refreshes it on
             // its own within five minutes of expiry, so this stays cheap on
             // every call while never handing out a dead one. Returning null
             // rather than throwing when signed out lets anonymous reads fall
             // back to the anon key, which is what a spectator opening a public
             // session link needs.
-            accessToken: async () => {
-              const user = _fbAuth.currentUser;
-              if (!user) return null;
-              try {
-                return await user.getIdToken();
-              } catch (_) {
-                return null;
-              }
-            },
-          }
-        );
-        _backend = "firebase";
-        return true;
-      }
-
-      window.supabaseClient = window.supabase.createClient(
-        cfg.supabaseUrl,
-        cfg.supabaseAnonKey
+          accessToken: async () => {
+            const user = _fbAuth.currentUser;
+            if (!user) return null;
+            try {
+              return await user.getIdToken();
+            } catch (_) {
+              return null;
+            }
+          },
+        }
       );
-      _backend = "supabase";
+      _backend = "firebase";
       return true;
     },
 
@@ -211,37 +197,25 @@
      * something forced a refresh.
      */
     onChange(cb) {
-      if (_backend === "firebase") {
-        _fbAuth.onIdTokenChanged(async (user) => {
-          if (!user) {
-            cb("SIGNED_OUT", null);
-            return;
-          }
-          try {
-            cb("SIGNED_IN", _session(await user.getIdToken(), user));
-          } catch (e) {
-            // A token fetch that fails offline is a blip, not a sign-out.
-            // Reporting null here would bounce a mid-game host to /auth, which
-            // is the exact failure init.js's offline guard exists to prevent —
-            // so say nothing and let the next refresh settle it.
-            console.warn("getIdToken failed; holding the last session", e);
-          }
-        });
-        return;
-      }
-      window.supabaseClient.auth.onAuthStateChange((event, sess) => cb(event, sess));
+      _fbAuth.onIdTokenChanged(async (user) => {
+        if (!user) {
+          cb("SIGNED_OUT", null);
+          return;
+        }
+        try {
+          cb("SIGNED_IN", _session(await user.getIdToken(), user));
+        } catch (e) {
+          // A token fetch that fails offline is a blip, not a sign-out.
+          // Reporting null here would bounce a mid-game host to /auth, which
+          // is the exact failure init.js's offline guard exists to prevent —
+          // so say nothing and let the next refresh settle it.
+          console.warn("getIdToken failed; holding the last session", e);
+        }
+      });
     },
 
     async signInWithPassword(email, password) {
-      if (_backend === "firebase") {
-        await _fbAuth.signInWithEmailAndPassword(email, password);
-        return;
-      }
-      const { error } = await window.supabaseClient.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
+      await _fbAuth.signInWithEmailAndPassword(email, password);
     },
 
     /**
@@ -249,31 +223,26 @@
      *
      * @returns {{existing: boolean, session: boolean}}
      *   `existing` true means the address is already registered and the caller
-     *   should flip to sign-in. The two backends signal that completely
-     *   differently: Firebase throws `auth/email-already-in-use`, while
-     *   Supabase RESOLVES with a synthetic user carrying an empty `identities`
-     *   array (its anti-enumeration behaviour). Normalising here is the whole
-     *   point — auth-view.js should not carry both shapes.
+     *   should flip to sign-in. Identity Platform signals it by throwing
+     *   `auth/email-already-in-use`; the shape is normalised here so
+     *   auth-view.js reads one answer rather than a provider's error code.
+     *
+     *   `session: false` is unreachable on this provider and kept in the shape
+     *   because auth-view.js branches on it: Supabase could create an account
+     *   pending email confirmation, and that branch is the difference between
+     *   "check your email" and landing the user on the feed. It is cheap
+     *   insurance against email verification being turned on later.
      */
     async signUp(email, password) {
-      if (_backend === "firebase") {
-        try {
-          await _fbAuth.createUserWithEmailAndPassword(email, password);
-          return { existing: false, session: true };
-        } catch (e) {
-          if (e && e.code === "auth/email-already-in-use") {
-            return { existing: true, session: false };
-          }
-          throw e;
+      try {
+        await _fbAuth.createUserWithEmailAndPassword(email, password);
+        return { existing: false, session: true };
+      } catch (e) {
+        if (e && e.code === "auth/email-already-in-use") {
+          return { existing: true, session: false };
         }
+        throw e;
       }
-      const { data, error } = await window.supabaseClient.auth.signUp({
-        email,
-        password,
-      });
-      if (error) throw error;
-      const existing = !!(data && data.user && (data.user.identities?.length ?? 0) === 0);
-      return { existing, session: !!(data && data.session) };
     },
 
     /**
@@ -310,35 +279,27 @@
      * @returns {Promise<"signed-in"|"cancelled"|"redirecting">}
      */
     async signInWithGoogle() {
-      if (_backend === "firebase") {
-        const provider = new window.firebase.auth.GoogleAuthProvider();
-        try {
-          await _fbAuth.signInWithPopup(provider);
-        } catch (e) {
-          const code = (e && e.code) || "";
-          if (
-            code === "auth/popup-blocked" ||
-            code === "auth/operation-not-supported-in-this-environment"
-          ) {
-            _safeStorage(() => sessionStorage.setItem(REDIRECT_PENDING_KEY, "1"));
-            await _fbAuth.signInWithRedirect(provider);
-            return "redirecting";
-          }
-          // A user who closes the popup has not failed at anything; swallow it
-          // rather than painting an error under the button they just dismissed.
-          if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
-            return "cancelled";
-          }
-          throw e;
+      const provider = new window.firebase.auth.GoogleAuthProvider();
+      try {
+        await _fbAuth.signInWithPopup(provider);
+      } catch (e) {
+        const code = (e && e.code) || "";
+        if (
+          code === "auth/popup-blocked" ||
+          code === "auth/operation-not-supported-in-this-environment"
+        ) {
+          _safeStorage(() => sessionStorage.setItem(REDIRECT_PENDING_KEY, "1"));
+          await _fbAuth.signInWithRedirect(provider);
+          return "redirecting";
         }
-        return "signed-in";
+        // A user who closes the popup has not failed at anything; swallow it
+        // rather than painting an error under the button they just dismissed.
+        if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+          return "cancelled";
+        }
+        throw e;
       }
-      const { error } = await window.supabaseClient.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.origin },
-      });
-      if (error) throw error;
-      return "redirecting";
+      return "signed-in";
     },
 
     /**
@@ -360,7 +321,7 @@
      * @returns {Promise<any|null>}
      */
     async consumeRedirectResult() {
-      if (_backend !== "firebase") return null;
+      if (_backend !== "firebase") return null;   // init() never stood up
       if (!_safeStorage(() => sessionStorage.getItem(REDIRECT_PENDING_KEY))) return null;
       _safeStorage(() => sessionStorage.removeItem(REDIRECT_PENDING_KEY));
       try {
@@ -372,11 +333,7 @@
     },
 
     async signOut() {
-      if (_backend === "firebase") {
-        await _fbAuth.signOut();
-        return;
-      }
-      await window.supabaseClient.auth.signOut();
+      await _fbAuth.signOut();
     },
 
     /**
@@ -389,27 +346,10 @@
      * @returns {Promise<object|null>}
      */
     async refresh(force) {
-      if (_backend === "firebase") {
-        const user = _fbAuth.currentUser;
-        if (!user) return null;
-        try {
-          return _session(await user.getIdToken(!!force), user);
-        } catch (_) {
-          return null;
-        }
-      }
-      const client = window.supabaseClient;
-      if (!client) return null;
+      const user = _fbAuth.currentUser;
+      if (!user) return null;
       try {
-        // getSession() auto-refreshes an expired token from the refresh token.
-        const { data } = await client.auth.getSession();
-        let sess = data && data.session;
-        if (!sess) {
-          const r = await client.auth.refreshSession();
-          if (r.error) return null;
-          sess = r.data && r.data.session;
-        }
-        return sess || null;
+        return _session(await user.getIdToken(!!force), user);
       } catch (_) {
         return null;
       }

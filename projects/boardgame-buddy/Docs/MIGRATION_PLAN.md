@@ -14,40 +14,53 @@
 
 ## Status — 2026-09-16
 
-**Stages 1, 2, 2b and 3-ALT are done and live.** The app serves from Cloudflare
-Pages at `bgbuddy.app`, the API from its own Railway service at
-`api.bgbuddy.app`, and auth from GCP Identity Platform at `auth.bgbuddy.app`
-with all 23 accounts imported under their original Supabase UUIDs. The
-pre-launch gate and the landing view are removed; the old Vercel origin serves
-a static notice. Console-by-console detail, including every correction that
-doing it for real produced, is in `SETUP_HOSTING.md`.
+**The migration is done.** Stages 1, 2, 2b, 3-ALT and 4 are all live. The app
+serves from Cloudflare Pages at `bgbuddy.app`, the API from its own Railway
+service at `api.bgbuddy.app`, auth from GCP Identity Platform at
+`auth.bgbuddy.app`, and every image from Cloudflare R2. Console-by-console
+detail, including every correction that doing it for real produced, is in
+`SETUP_HOSTING.md`; the R2 half is in `RUNBOOK_R2_CUTOVER.md`.
 
-**Two pieces of the migration are deliberately still in the tree**, and both
-are the rollback path rather than leftovers:
+**The rollback paths are gone, deliberately.** `api/jwt_auth.py` verified both
+issuers and `web/domain/auth.js` kept a Supabase Auth branch, so rollback was
+unsetting four repo variables. Both were removed once accounts existed only in
+Identity Platform: going back would have orphaned them, so the escape hatch had
+already stopped working and was only extra verifier surface. Two things follow
+from that and are easy to trip over later:
 
-* `api/jwt_auth.py` verifies **both** issuers, Supabase and Identity Platform.
-* `web/domain/auth.js` keeps its Supabase Auth branch, selected when the four
-  `BGB_FIREBASE_*` variables are unset.
+* **Local dev cannot sign in without the four `BGB_FIREBASE_*` values** in its
+  `config.js`. They are repo *variables*, not secrets, so copying them locally
+  is fine. Without them the app boots, still serves a spectator on a public
+  session link through the anon key, and shows "Auth is not configured".
+* **`jwt_auth.py`'s `app_uid` fallback to a UUID-shaped `sub` stays.** The
+  condition for removing it is NOT "ID tokens last an hour" — that reasoning is
+  wrong and was nearly acted on. `beforeUserSignedIn` runs at sign-in, not on
+  refresh, so an account that last signed in before the blocking function
+  deployed has no persisted claim however often its token refreshes. The real
+  condition is that every account has signed in once since then, which happens
+  on its own.
 
-Together they mean rollback is unsetting four repo variables and re-running the
-deploy. **Remove them when that stops being true**, which is when post-cutover
-signups exist only in Identity Platform in numbers you would not hand-migrate
-back — rolling back would orphan those accounts, so the escape hatch has
-already stopped working and is then only extra verifier surface. Delete both
-sides in one commit, with `test_jwt_auth_dual_issuer.py` reduced to the
-Identity Platform cases.
+**Stage 4 notes worth keeping**, because neither is guessable from the tree:
 
-**Stage 4's code has landed and is inert.** `api/object_store.py`, both upload
-call sites and `036_r2_photo_urls.sql` are in the tree; with the R2 variables
-unset the API still writes to Supabase Storage, so nothing changed in
-production. What remains is console work and a data copy: two buckets, two
-custom domains, one API token, seven Railway variables, `rclone`, then the
-migration. **`RUNBOOK_R2_CUTOVER.md` in this directory is the step-by-step**,
-in the order the steps have to happen; §4 below is the reasoning behind it.
+* The R2 buckets were created in the **US jurisdiction**, which puts a label in
+  the S3 endpoint host (`<account>.us.r2.cloudflarestorage.com`) and requires
+  `R2_JURISDICTION=us` on the API service. A jurisdiction bucket answers
+  `AccessDenied` on the default host — the same error as a mis-scoped token,
+  which is what made it expensive to find.
+* **The Supabase buckets are still there and are the rollback.** They cost
+  storage only now; the egress this stage was about is zero from them. Leave
+  them until R2 has served a full billing cycle.
 
-**Still open:** Email Routing (§3.8 of `SETUP_HOSTING.md`), Stage 4's console
-half, and the two photo gaps the privacy policy discloses — play photos readable by anyone with the link, and
-image files surviving the row that referenced them.
+**Still open**, and neither is Stage work:
+
+* **Email Routing** (§3.8 of `SETUP_HOSTING.md`). `privacy@` and `support@`
+  bounce, and the published privacy policy points deletion requests at one of
+  them — so a GDPR request today gets a bounce. This is the one with real user
+  impact.
+* **The two photo gaps the privacy policy discloses** — a play photo is
+  readable by anyone holding its URL, and an image file survives the row that
+  referenced it. The first is why the plays bucket got its own hostname:
+  signed URLs are a console change now rather than a re-key.
 
 ---
 
@@ -965,7 +978,11 @@ every signed-in browser the moment it lands.
   wrong-password and unknown-account deliberately sharing one message so the
   form is not an account-enumeration oracle.
 
-- **Backend: one file, `jwt_auth.py`, verifying both issuers.** Select the
+- **Backend: one file, `jwt_auth.py`.** *(Historical: it verified both issuers
+  through the cutover. The Supabase verifier and the `iss` routing are gone —
+  see Status above. Everything below about `aud` is still live and still the
+  part to get right; `tests/test_jwt_auth.py` is the renamed test file.)*
+  Select the
   verifier from the token's `iss`, then check the signature against that
   provider's JWKS: Supabase's with `aud=authenticated`, or Google's shared set
   (`https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com`)
@@ -975,8 +992,8 @@ every signed-in browser the moment it lands.
   Firebase project signs with the same Google keys, so a verifier that checks
   the signature without a project-scoped `aud` accepts a token minted by
   anyone's free Firebase project — a full authentication bypass that passes a
-  naive "valid signature" test. `tests/test_jwt_auth_dual_issuer.py` mints
-  exactly that token and requires a 401.
+  naive "valid signature" test. `tests/test_jwt_auth.py` mints exactly that
+  token and requires a 401.
 
   Reading `iss` unverified to route is safe *because* the selected verifier
   re-checks it under the signature. An unset `GCP_PROJECT_ID` answers 500, not

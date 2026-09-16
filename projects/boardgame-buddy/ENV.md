@@ -38,7 +38,7 @@ Supersedes the root `ENV.md` for anything BoardgameBuddy. Domain: **bgbuddy.app*
 | `R2_GAMES_BUCKET` | 4 | Cover-art cache (was Supabase `boardgamebuddy-games`). Keys unchanged: `{bgg_id}_{kind}.{ext}`. |
 | `R2_PLAYS_PUBLIC_BASE` | 4 | e.g. `https://img.bgbuddy.app` — the custom domain on the plays bucket. **This is what gets stored in `boardgamebuddy_plays.photo_url`**, so changing it after the fact needs another data migration. Trailing slash optional; it is stripped. |
 | `R2_GAMES_PUBLIC_BASE` | 4 | e.g. `https://covers.bgbuddy.app` — the custom domain on the games bucket. Stored in `boardgamebuddy_games.image_url`/`.thumbnail_url`. |
-| `GCP_PROJECT_ID` | 3-ALT | `boardgamebuddy-508716`. Read by `api/jwt_auth.py` as the Firebase token `aud`, with the issuer derived as `https://securetoken.google.com/<id>`. **Set it on the Railway service before the frontend swap.** Until it is set, the verifier still accepts Supabase tokens normally but answers 500 to any Identity Platform token — deliberately, since an unset value is an operator error, not a bad credential. Must equal `BGB_FIREBASE_PROJECT_ID`. |
+| `GCP_PROJECT_ID` | 3-ALT | `boardgamebuddy-508716`. Read by `api/jwt_auth.py` as the Firebase token `aud`, with the issuer derived as `https://securetoken.google.com/<id>`. **Required — it is now the only issuer.** Unset, every authenticated request answers 500: an operator error rather than a bad credential, because 401 would send correctly signed-in users to the login screen and hide the cause. Must equal `BGB_FIREBASE_PROJECT_ID`. |
 
 **All seven or none, per store** (`R2_JURISDICTION` is the optional eighth and
 is not part of the count). `object_store.configured(kind)` requires the
