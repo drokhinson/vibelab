@@ -22,6 +22,7 @@ Usage in route dependencies:
 
 import asyncio
 import os
+import re
 from typing import Optional
 
 import jwt
@@ -88,6 +89,54 @@ class SupabaseUser(BaseModel):
     sub: str          # user UUID
     email: str
     role: str = ""    # e.g. "authenticated"
+
+
+# ── The app's user id, which is not always the token's subject ───────────────
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
+)
+
+
+def _app_uid(payload: dict) -> str:
+    """The UUID this account is known by in the database.
+
+    `sub` cannot be trusted to be one. The 23 accounts migrated from Supabase
+    kept their original UUIDs as their Identity Platform uid, but a brand-new
+    account gets a Firebase-generated 28-character uid — and every user-id
+    column and RPC parameter in this schema is typed `uuid`. Handing one of
+    those straight through produced `invalid input syntax for type uuid` on
+    every authenticated endpoint, surfacing as a 500 rather than anything that
+    named the cause.
+
+    So the blocking function in `projects/boardgame-buddy/functions/` resolves
+    it at sign-in and puts the answer in the `app_uid` claim: the uid itself
+    when it is already a UUID, otherwise a deterministic uuid5 of it. This
+    reads that claim.
+
+    THE `sub` FALLBACK IS TRANSITIONAL AND DELIBERATELY NARROW. A token minted
+    before that function was deployed carries no `app_uid`, and every one of
+    those belongs to a migrated account whose `sub` IS a UUID — so accepting a
+    UUID-shaped `sub` keeps existing sessions alive across the rollout instead
+    of signing everybody out for up to an hour. It cannot rescue a new account,
+    because a Firebase uid does not match the pattern.
+
+    Remove the fallback once no pre-rollout token can still be valid (they last
+    an hour), and this becomes: no claim, no service.
+
+    Anything else is a 401, not a 500. An unusable identity is a bad
+    credential, not a server fault, and saying so sends the client to its
+    sign-in path rather than its retry ladder.
+    """
+    claimed = str(payload.get("app_uid") or "").strip()
+    if _UUID_RE.match(claimed):
+        return claimed.lower()
+    sub = str(payload.get("sub") or "").strip()
+    if _UUID_RE.match(sub):
+        return sub.lower()
+    raise HTTPException(
+        status_code=401,
+        detail="Token carries no usable app identity",
+    )
 
 
 async def get_current_supabase_user(
@@ -157,7 +206,7 @@ async def get_current_supabase_user(
         raise HTTPException(status_code=503, detail="Auth keys unavailable") from e
 
     user = SupabaseUser(
-        sub=payload.get("sub", ""),
+        sub=_app_uid(payload),
         email=payload.get("email", ""),
         role=payload.get("role", ""),
     )

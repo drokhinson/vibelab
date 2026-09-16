@@ -43,9 +43,62 @@
 // import. Cost: three failed deploys. `firebase-functions/v2/identity` pulls
 // in none of it.
 const { beforeUserSignedIn } = require("firebase-functions/v2/identity");
+const { createHash } = require("node:crypto");
 
 const ROLE_CLAIM = "role";
 const ROLE_VALUE = "authenticated";
+
+// ── The app's user id ───────────────────────────────────────────────────────
+//
+// SECOND JOB, ADDED AFTER THE FIRST NEW ACCOUNT 500ed EVERY ENDPOINT. The 23
+// accounts migrated from Supabase kept their original UUIDs as their
+// Identity Platform uid, so `sub` was always a UUID and the whole schema —
+// 35 columns, 58 RPC parameters — is typed `uuid`. A brand-new account gets a
+// Firebase-generated uid instead: 28 characters, no dashes, not a UUID. Every
+// query naming that user then dies on `invalid input syntax for type uuid`,
+// which the API returns as a 500 on literally every authenticated endpoint.
+//
+// So the token carries the id the app should use, and nothing downstream has
+// to care where it came from:
+//
+//   * uid already a UUID  -> that UUID, unchanged. The migrated accounts keep
+//     the id every play, buddy edge, achievement and session row hangs off.
+//   * anything else       -> uuid5(NAMESPACE, uid). Deterministic, so the
+//     same account resolves to the same id on every sign-in, forever,
+//     without storing a mapping anywhere.
+//
+// NEVER CHANGE THE NAMESPACE. It is the input to every derived id; a new one
+// re-keys every non-migrated account and orphans all of their data.
+const APP_UID_CLAIM = "app_uid";
+const NAMESPACE = "f61fb828-5954-4b75-b2cb-ab1a0b1cd211";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * RFC 4122 v5 (SHA-1, name-based). Hand-rolled on node:crypto rather than
+ * pulling in the `uuid` package: this file's last outage was a dependency it
+ * did not need being loaded at import time, and a built-in cannot repeat it.
+ */
+function uuid5(name, namespace) {
+  const ns = Buffer.from(namespace.replace(/-/g, ""), "hex");
+  const hash = createHash("sha1")
+    .update(Buffer.concat([ns, Buffer.from(String(name), "utf8")]))
+    .digest();
+  const b = Buffer.from(hash.subarray(0, 16));
+  b[6] = (b[6] & 0x0f) | 0x50; // version 5
+  b[8] = (b[8] & 0x3f) | 0x80; // RFC 4122 variant
+  const h = b.toString("hex");
+  return [
+    h.slice(0, 8), h.slice(8, 12), h.slice(12, 16), h.slice(16, 20), h.slice(20),
+  ].join("-");
+}
+
+/** The UUID this account is known by inside the app. */
+function appUid(uid) {
+  const id = String(uid || "");
+  return UUID_RE.test(id) ? id.toLowerCase() : uuid5(id, NAMESPACE);
+}
+
+exports.appUid = appUid; // for tools/check-auth-claims.mjs
 
 // Region as a per-function option rather than setGlobalOptions(), which lives
 // in that same poisoned barrel. Blocking functions only run in certain
@@ -56,7 +109,19 @@ exports.supabaseRole = beforeUserSignedIn({ region: "us-central1" }, (event) => 
     // `event.data` is optional in the SDK's own types, so it is read
     // defensively rather than trusted.
     const existing = (event.data && event.data.customClaims) || {};
-    if (existing[ROLE_CLAIM] === ROLE_VALUE) return;
+    const uid = (event.data && event.data.uid) || "";
+    const wanted = appUid(uid);
+    if (
+      existing[ROLE_CLAIM] === ROLE_VALUE &&
+      existing[APP_UID_CLAIM] === wanted
+    ) {
+      return;
+    }
+
+    const claims = {
+      [ROLE_CLAIM]: ROLE_VALUE,
+      [APP_UID_CLAIM]: wanted,
+    };
 
     return {
       // Persisted to the user record, so every token from here on carries it
@@ -64,12 +129,12 @@ exports.supabaseRole = beforeUserSignedIn({ region: "us-central1" }, (event) => 
       // return value overwrites the stored claims wholesale, so spreading
       // `existing` is what stops this from deleting any other claim an
       // account has.
-      customClaims: { ...existing, [ROLE_CLAIM]: ROLE_VALUE },
+      customClaims: { ...existing, ...claims },
       // Added to the token being minted for THIS sign-in. Without it the
       // first token of a brand-new account would predate the claim being
       // stored, and that account's first session would fail exactly the way
       // this function exists to prevent — for one session, invisibly.
-      sessionClaims: { [ROLE_CLAIM]: ROLE_VALUE },
+      sessionClaims: claims,
     };
   } catch (err) {
     // NEVER THROW. A blocking function that errors blocks the sign-in it is

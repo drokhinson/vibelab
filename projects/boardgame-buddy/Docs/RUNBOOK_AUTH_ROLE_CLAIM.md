@@ -310,12 +310,93 @@ session still lacks the claim until the refresh lands. Prefer B2.
 
 ---
 
+## Part C — the app's user id (`app_uid`)
+
+**Symptom.** A brand-new account signs in successfully and then every
+authenticated endpoint answers **500**: `/bootstrap`, `/feed`, `/push/config`,
+`/collection/status-map`. The app lands on "Couldn't load your feed". Existing
+accounts are completely unaffected.
+
+**Cause.** The 23 accounts migrated from Supabase kept their original UUIDs as
+their Identity Platform uid, so `sub` was always a UUID — and this schema is
+built on that: **35 user-id columns across 20 tables, 58 uuid-typed RPC
+parameters.** A brand-new account gets a Firebase-generated uid instead, 28
+characters and no dashes. Every query naming that user dies on `invalid input
+syntax for type uuid`, which `main.py`'s PostgREST error handler returns as a
+500.
+
+This has been broken since the auth cutover. Nobody had created a new account
+until Part B's verification step asked for one, which is the only reason it was
+found before a stranger did.
+
+**Fix.** The token carries the id the app should use. The blocking function
+resolves it at sign-in into an `app_uid` claim — the uid unchanged when it is
+already a UUID, otherwise a deterministic `uuid5` of it — and nothing
+downstream has to know which case it got. No column changes type and no RPC
+signature changes.
+
+### C1. Deploy in this order
+
+1. **The blocking function** (Part B, redeploy) — tokens start carrying
+   `app_uid`.
+2. **`db/migrations/037_app_uid_claim.sql`** in the Supabase SQL editor — the
+   seven RLS policies stop reading `auth.uid()` and read the claim.
+3. **The API** (merge to main; Railway redeploys) — `jwt_auth.py` reads the
+   claim instead of `sub`.
+
+The order is not arbitrary. Both 2 and 3 accept a UUID-shaped `sub` when the
+claim is absent, so tokens minted before step 1 keep working through the
+rollout rather than everybody being signed out for an hour. Going the other
+way round — API or policies first — leaves a new account broken until the
+function lands, which is the state you are already in, so it is not dangerous,
+just pointless.
+
+### C2. The already-broken test account heals itself
+
+Nothing to clean up. Its next sign-in runs the blocking function, which mints
+its `app_uid`, and the API then creates its profile under that UUID. You can
+keep it or delete it; it is no longer a special case either way.
+
+### C3. Verify
+
+```js
+const t = await window.firebase.auth().currentUser.getIdToken(true);
+const c = JSON.parse(atob(t.split(".")[1]));
+console.log(c.role, c.app_uid);      // "authenticated"  "<a uuid>"
+```
+
+For a **migrated** account, `app_uid` should equal `sub`. For a **new** one it
+should be a UUID that is not `sub`. Then load the feed, log a play, and have a
+spectator watch a live session — that last one is what proves RLS is reading
+the claim rather than failing closed.
+
+The SQL-side check, which must return zero rows:
+
+```sql
+SELECT policyname, tablename FROM pg_policies
+ WHERE schemaname = 'public'
+   AND (qual LIKE '%auth.uid()%' OR with_check LIKE '%auth.uid()%');
+```
+
+### C4. Two things never to change
+
+**The uuid5 namespace** in `functions/index.js`. It is the input to every
+derived id; a new namespace re-keys every non-migrated account and orphans all
+of their data. It is a constant with a comment saying exactly this.
+
+**The narrowness of the `sub` fallback.** It accepts a UUID-shaped `sub` and
+nothing else, in both `jwt_auth.py` and `bgb_app_uid()`. Widening it to accept
+any `sub` would put a 28-character string back into a uuid column and restore
+the original bug. It exists only so pre-rollout tokens survive, and it can be
+deleted once none can still be valid — they last an hour.
+
 ## Verification checklist
 
 - [ ] A token decoded in the browser shows `role: "authenticated"`
 - [ ] The host's direct upsert returns no error
 - [ ] Host types a score → the spectator's grid shows it within a few seconds
-- [ ] A **new** signup's token also carries the claim (Part B is live)
+- [ ] A **new** signup's token carries BOTH claims — `role` and `app_uid`
+- [ ] A **new** account can load its feed at all (Part C; this was a 500)
 - [ ] No more `42501` on `boardgamebuddy_play_session_scores` in the Supabase log
 - [ ] Realtime is back: the spectator updates in under a second, not on the
       4–10s poll cadence
