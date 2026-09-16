@@ -1,0 +1,23 @@
+-- 037_drop_waitlist.sql — remove the pre-launch email capture.
+--
+-- 035_waitlist.sql created boardgamebuddy_waitlist for the landing page's
+-- email form, to be exported and dropped after a launch email went out. No
+-- launch email was ever sent: nobody joined the list, because the app was
+-- never gated for long enough for anyone to find the form. So there is no
+-- export step here and no data to preserve — the table is dropped empty.
+--
+-- The privacy policy's promise ("used for one email when the app opens, and
+-- the list is deleted after that") is satisfied by this migration rather than
+-- by the email, and the clause making the promise is removed in the same
+-- commit. Dropping the table before that clause goes would leave the policy
+-- describing storage that does not exist.
+--
+-- Its unique index (uq_bgb_waitlist_email_lower), its created_at index and
+-- its RLS enablement all go with the table; DROP TABLE takes dependent
+-- indexes and the row-security setting with it, so they need no lines here.
+--
+-- Also gone in this commit: api/routes/waitlist_routes.py (the POST /waitlist
+-- handler), its registration in api/routes/__init__.py, and
+-- api/tests/test_waitlist.py. Nothing else referenced the table.
+
+DROP TABLE IF EXISTS public.boardgamebuddy_waitlist;

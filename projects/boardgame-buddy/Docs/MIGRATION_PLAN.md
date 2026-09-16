@@ -37,9 +37,8 @@ already stopped working and is then only extra verifier surface. Delete both
 sides in one commit, with `test_jwt_auth_dual_issuer.py` reduced to the
 Identity Platform cases.
 
-**Still open:** Email Routing (§3.8 of `SETUP_HOSTING.md`), the waitlist table's
-launch email, Stage 4 (R2 on `img.bgbuddy.app`), and the two photo gaps the
-privacy policy discloses — play photos readable by anyone with the link, and
+**Still open:** Email Routing (§3.8 of `SETUP_HOSTING.md`), Stage 4 (R2 on
+`img.bgbuddy.app`), and the two photo gaps the privacy policy discloses — play photos readable by anyone with the link, and
 image files surviving the row that referenced them.
 
 ---
@@ -171,10 +170,8 @@ Waitlist capture on that view writes to its own table and **creates no identity*
 > built, did their job through the DNS and auth cutover, and were **removed at
 > cutover** — the merge now lands the app live, so a permanent conditional in
 > the boot path bought nothing. `boardgamebuddy_waitlist` (migration 035) and
-> `api/routes/waitlist_routes.py` outlive the view: the table holds addresses
-> from people who asked to be told at launch, and the privacy policy says that
-> list is deleted after the launch email. Drop the table, the route and its
-> test together once that email has gone out.
+> `api/routes/waitlist_routes.py` briefly outlived the view and are **also gone
+> now**, dropped by migration `037_drop_waitlist.sql` — see below.
 >
 > The store badges this section parks on the landing view need a new home when
 > the native apps ship. The app's own root is the obvious one.
@@ -230,6 +227,15 @@ reconcile by hand. Waitlist-only removes the collision entirely and decouples
 > under their original Supabase UUIDs, verified 23/23. With the import done the
 > collision this constraint existed to prevent cannot happen again, which is
 > what made removing the gate safe rather than merely convenient.
+>
+> **The capture half of this was wasted effort, and that is the better
+> outcome.** The waitlist took **zero** addresses: the gate was up for hours,
+> not weeks, and nobody found the form. So there was no launch email to send
+> and no list to export — migration `037_drop_waitlist.sql` dropped the table
+> empty, and the route, its test and the privacy policy's two clauses about it
+> went with it. The constraint still earned its place: it was insurance against
+> a duplicate identity, and insurance that pays out nothing is insurance that
+> worked.
 
 ---
 

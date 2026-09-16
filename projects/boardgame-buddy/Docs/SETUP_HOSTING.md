@@ -11,16 +11,18 @@ Domain: **bgbuddy.app**. Written 2026-09-15, cutover completed 2026-09-16.
 > `auth.bgbuddy.app`, and the retired Vercel origin serves the static notice in
 > `projects/boardgame-buddy/moved/`. The pre-launch `COMING_SOON` gate is gone.
 >
-> Two things are still open, and neither is a hosting step:
+> One thing is still open, and it is not a hosting step:
 >
 > * **§3.8 Email Routing.** `privacy@` and `support@` have no MX behind them,
 >   so both bounce — and the privacy policy points deletion requests at one of
 >   them. The Cloudflare panel did not offer Email Routing on this zone;
 >   ImprovMX or Zoho on the same DNS is the fallback.
-> * **The waitlist.** `boardgamebuddy_waitlist` still holds the addresses of
->   people who asked to be told at launch, and the privacy policy says that
->   list is deleted after the launch email. The table, `waitlist_routes.py` and
->   its test come out together once that mail has gone.
+>
+> **The waitlist is gone** (migration `037_drop_waitlist.sql`). It was the
+> other open item, and it closed without the launch email it was waiting on:
+> the gate was up for hours rather than weeks, nobody ever found the form, and
+> the table was dropped empty. The table, `waitlist_routes.py`, its test and
+> the two privacy-policy clauses describing it came out in one commit.
 >
 > Read it for *why* a thing is the way it is — most sections carry the
 > correction that doing it for real produced. Do not read it as a to-do list.

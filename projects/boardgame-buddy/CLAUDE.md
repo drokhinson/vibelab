@@ -23,7 +23,7 @@ projects/boardgame-buddy/
 │   ├── analytics_routes.py own copy — web/domain/api.js pings /analytics/track
 │   ├── db.py jwt_auth.py cache.py api_logger.py gemini.py auth.py shared_models.py
 │   └── tests/
-├── db/migrations/          001–036, plus _shared/ (analytics + api_logs)
+├── db/migrations/          001–037, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  one-off generators, not deploy steps
 ├── web/                    the static PWA
