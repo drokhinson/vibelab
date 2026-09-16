@@ -10,19 +10,38 @@ sentence — and because the two halves are meant to balance.
 
 ## Where the line actually lives
 
-Four places, and they have to be changed together or the card and the page
-disagree:
+Eight places, and they have to move together — there is no build step that
+propagates a tagline, so the only thing keeping them in sync is this table:
 
 | Where | What |
 |---|---|
-| `tools/build-og-banner.py` → `COPY["tagline"]` | the banner artwork; re-run the script after editing |
-| `web/assets/brand/bgb-og-banner.{svg,png}` | the generated output, committed |
+| `web/views/auth-view.js` | under the wordmark on the sign-in screen — the only place a *user* reads it |
+| `web/index.html` → `<title>` | `Boardgame Buddy — <tagline>`; the one slot a search result renders |
 | `web/index.html` → `og:description`, `og:image:alt` | the link-preview card |
 | `web/index.html` → `meta name="description"` | the tagline plus the explainer sentence |
+| `web/manifest.json` → `description` | what an install prompt and an app listing show |
+| `tools/build-og-banner.py` → `COPY["tagline"]` | the banner artwork; **re-run the script** after editing |
+| `web/assets/brand/bgb-og-banner.{svg,png}` | that script's output, committed |
+| `landing/registry.json` → BGB's `description` | the vibelab landing page's card, which is outside this project |
 
-The banner's type is **outlines, not text** (see the header of the generator for
-why), so the tagline cannot be edited in the SVG by hand. Change `COPY` and
-re-run.
+Two of those are easy to miss. The **banner** cannot be corrected by editing the
+SVG, because its type is outlines rather than text — change `COPY` and re-run.
+And **`landing/registry.json` lives outside `projects/boardgame-buddy/`**, so a
+grep scoped to this project will not find it.
+
+### Not the tagline, and deliberately so
+
+`web/views/privacy-view.js` opens by defining what the app does. That sentence
+is **not** a place for the tagline: a privacy policy should name the data it is
+about to discuss, so it reads "records the games you play and who you played
+them with" — the second clause is there because who you played with is personal
+data about somebody who never signed up. Keep it factual if the tagline changes.
+
+`web/views/splash-view.js` and the inline splash in `index.html` carry no
+tagline. They could — a boot screen is the "as the app opens" moment — but the
+markup is deliberately duplicated in two files so the loader paints before any
+script runs, which means a line there is two copies to keep in step for a
+surface most users see for under a second.
 
 ## Why this line
 
