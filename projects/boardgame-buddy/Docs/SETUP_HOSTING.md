@@ -210,12 +210,23 @@ Platform → Branding**):
 ### 2.5 Domain verification — start this first
 
 **Google Search Console** → add `bgbuddy.app` as a property → verify by DNS TXT
-(add it in Cloudflare). Until this is verified, the consent screen keeps showing
-an unverified-app warning no matter what else is configured.
+(add it in Cloudflare). This is what lets `bgbuddy.app` be an Authorized domain
+in §2.4 at all, so it gates the branding form rather than the sign-in.
 
-Then in the OAuth consent screen, **submit for verification**. Because this only
-uses basic scopes (email, profile, openid) it should clear quickly — but "quickly"
-is still days, which is why it goes first.
+Then in the OAuth consent screen, **submit for verification**.
+
+**This review is not a launch blocker, and an earlier version of this file said
+it was.** BoardgameBuddy requests only non-sensitive scopes (email, profile,
+openid). An app with those scopes, published to production, serves unlimited
+users with no verification step and does *not* show the "unverified app"
+warning — that screen is for sensitive and restricted scopes (Gmail, Drive,
+contacts). What the review actually gates here is **brand verification**, which
+uploading a logo triggers: until it clears, the consent screen renders without
+the logo.
+
+So submit it and carry on. It takes days, it costs nothing to have running, and
+nothing downstream waits on it. Only add a sensitive scope after re-reading
+this section — that is the change that would turn the review into a real gate.
 
 ### 2.6 Get the client config
 
