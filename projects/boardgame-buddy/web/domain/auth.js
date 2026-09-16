@@ -41,6 +41,31 @@
   let _backend = null;
   let _fbAuth = null;
 
+  /**
+   * One-shot marker that THIS TAB handed a sign-in to the redirect fallback.
+   *
+   * It exists because the redirect leaves the document: the fact that we
+   * started one cannot be held in memory across it, and consumeRedirectResult
+   * below must not ask the SDK about a redirect that never happened. Asking
+   * anyway would be a real regression — getRedirectResult() touches the auth
+   * domain's storage, which is exactly what Safari's ITP and Firefox's total
+   * cookie protection block on a cross-origin authDomain (the reason the popup
+   * is preferred at all, see signInWithGoogle). A storage rejection surfaced
+   * as an error on the sign-in screen would greet every Safari user who had
+   * just signed in successfully by popup.
+   *
+   * sessionStorage, not localStorage: a redirect is one tab's business and it
+   * is finished by the time the tab closes.
+   */
+  const REDIRECT_PENDING_KEY = "bgb.auth.redirectPending";
+
+  // Storage throws outright in Safari private mode, and nothing here is worth
+  // taking sign-in down for. A tab that cannot mark a redirect simply never
+  // consumes its result, which is the behaviour before any of this existed.
+  function _safeStorage(fn, fallback) {
+    try { return fn(); } catch (_) { return fallback; }
+  }
+
   function _cfg() {
     return window.APP_CONFIG || {};
   }
@@ -295,6 +320,7 @@
             code === "auth/popup-blocked" ||
             code === "auth/operation-not-supported-in-this-environment"
           ) {
+            _safeStorage(() => sessionStorage.setItem(REDIRECT_PENDING_KEY, "1"));
             await _fbAuth.signInWithRedirect(provider);
             return "redirecting";
           }
@@ -319,10 +345,24 @@
      * Surface an error left behind by the redirect fallback.
      *
      * A successful redirect sign-in already arrives through onChange, so this
-     * is only about not swallowing the failure case. Safe to call always.
+     * is only about not swallowing the failure case — which, before this was
+     * wired up, meant a popup-blocked browser sent the user to Google and
+     * brought them back to a login screen that said nothing at all.
+     *
+     * Safe to call always, and cheap: with no redirect marked (see
+     * REDIRECT_PENDING_KEY) it answers without touching the SDK. Returns the
+     * error for the caller to word, or null — it never throws, because the one
+     * screen that calls it is the screen someone is trying to sign in on.
+     *
+     * One-shot in both directions: the marker is cleared here whatever the
+     * outcome, and the SDK hands over a pending result only once.
+     *
+     * @returns {Promise<any|null>}
      */
     async consumeRedirectResult() {
       if (_backend !== "firebase") return null;
+      if (!_safeStorage(() => sessionStorage.getItem(REDIRECT_PENDING_KEY))) return null;
+      _safeStorage(() => sessionStorage.removeItem(REDIRECT_PENDING_KEY));
       try {
         await _fbAuth.getRedirectResult();
         return null;

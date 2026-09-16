@@ -39,10 +39,42 @@
 
     onMount() {
       this._resetFormState();
+      // Deliberately not awaited: mount must not wait on the auth SDK, and
+      // this screen is fully usable without an answer. _surfaceRedirectFailure
+      // paints when and if there is something to say.
+      this._surfaceRedirectFailure();
     }
 
     onUnmount() {
       this._resetFormState();
+    }
+
+    /**
+     * Say why the redirect fallback came back empty-handed.
+     *
+     * The popup is the preferred flow (domain/auth.js#signInWithGoogle) but a
+     * popup blocker or an embedded webview leaves redirect as the only route,
+     * and a redirect that FAILS is silent by construction: the document was
+     * replaced, so the rejection has no caller left to report to. The user
+     * went to Google, came back, and landed on the login screen with no error
+     * and no idea whether to try again. BgbAuth.consumeRedirectResult existed
+     * for exactly this and had no callers.
+     *
+     * Asked from here rather than the boot path because this is the screen
+     * that cares and the screen that can show an answer — no cross-module
+     * handoff, and no race against the mount that would have wiped the
+     * message (_resetFormState runs at the top of every mount).
+     *
+     * It no-ops unless this tab actually started a redirect, so the ordinary
+     * popup sign-in and every later visit to this screen cost nothing.
+     */
+    async _surfaceRedirectFailure() {
+      if (!window.BgbAuth || !window.BgbAuth.consumeRedirectResult) return;
+      const err = await window.BgbAuth.consumeRedirectResult();
+      // Nothing to say, or the user has already moved on — a late error must
+      // not repaint a screen they have left.
+      if (!err || !this._mounted) return;
+      this.setError(this._authErrorMessage(err, "Google sign-in failed"));
     }
 
     setError(msg) {

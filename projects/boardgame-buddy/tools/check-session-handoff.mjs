@@ -39,6 +39,14 @@
 //      that actually breaks the sign-in: the second popup cancels the first.
 //   5. The email form's own immediate-session branch had the same gap, on the
 //      longest wait in the app in front of the person least able to read it.
+//   6. And when the popup is BLOCKED, the redirect fallback replaces the
+//      document — so a redirect that fails has no caller left to report to.
+//      BgbAuth.consumeRedirectResult was written for that and never called,
+//      so the user went to Google, came back, and got a login screen with no
+//      error on it. The gating matters as much as the wiring: asking the SDK
+//      when no redirect was started reaches for storage that ITP blocks on a
+//      cross-origin authDomain, which would put an error in front of people
+//      whose popup sign-in worked perfectly.
 //
 import fs from "node:fs";
 import vm from "node:vm";
@@ -52,7 +60,7 @@ const ok = (name, cond) => {
 };
 
 /** A window with just enough of the DOM for these modules to load. */
-function newWindow() {
+function newWindow({ storageThrows = false } = {}) {
   // The one container every view in this harness paints into, plus the form
   // fields a handler may read back out of the DOM.
   const el = { innerHTML: "", childElementCount: 0, querySelector: () => null };
@@ -91,10 +99,24 @@ function newWindow() {
     escapeHtml: (v) => String(v == null ? "" : v),
     escapeAttr: (v) => String(v == null ? "" : v),
     localStorage: { getItem: () => null, setItem() {} },
-    sessionStorage: { getItem: () => null, setItem() {} },
+    // A real in-memory store: the redirect marker is read back through it.
+    // The throwing variant is Safari private mode, where storage is not a
+    // thing sign-in may depend on.
+    sessionStorage: storageThrows
+      ? {
+          getItem() { throw new Error("storage disabled"); },
+          setItem() { throw new Error("storage disabled"); },
+          removeItem() { throw new Error("storage disabled"); },
+        }
+      : {
+          _d: new Map(),
+          getItem(k) { return this._d.has(k) ? this._d.get(k) : null; },
+          setItem(k, v) { this._d.set(k, String(v)); },
+          removeItem(k) { this._d.delete(k); },
+        },
   };
   vm.createContext(sandbox);
-  return { win, sandbox, el, fields };
+  return { win, sandbox, el, fields, storage: sandbox.sessionStorage };
 }
 
 /** A store that records its subscribers so a test can fire them by hand. */
@@ -255,7 +277,7 @@ console.log("\n3. Settings drops one account's data on the way out");
 // 4 ── The sign-in screen hands over to the loader ────────────────────────────
 console.log("\n4. a closed Google popup is not a sign-in screen");
 
-function newAuth(outcome) {
+function newAuth(outcome, redirect = { err: null }) {
   const { win, sandbox, el, fields } = newWindow();
   vm.runInContext(fs.readFileSync(`${W}/domain/view.js`, "utf8"), sandbox,
                   { filename: "domain/view.js" });
@@ -264,11 +286,15 @@ function newAuth(outcome) {
   vm.runInContext(fs.readFileSync(`${W}/views/auth-view.js`, "utf8"), sandbox,
                   { filename: "views/auth-view.js" });
 
-  const calls = { popups: 0, routes: [], htmlDuringPopup: null };
+  const calls = { popups: 0, routes: [], htmlDuringPopup: null, consumes: 0 };
   win.BgbIcons = { render() {} };
   win.router = { go: (name) => calls.routes.push(name) };
   win.BgbAuth = {
     backend: "firebase",
+    consumeRedirectResult() {
+      calls.consumes++;
+      return redirect.promise || Promise.resolve(redirect.err);
+    },
     signInWithGoogle() {
       calls.popups++;
       // What the screen looks like while the popup is open.
@@ -385,6 +411,123 @@ console.log("\n5. the email form hands over too");
   win.BgbAuth.signInWithPassword = () => Promise.resolve({});
   await view.submit({ preventDefault() {} });
   ok("a password login hands over to the loader", calls.routes.join() === "splash");
+}
+
+// 6 ── A failed redirect sign-in is not silent ────────────────────────────────
+console.log("\n6. the redirect fallback reports what happened to it");
+
+/** The real domain/auth.js on its firebase backend, over a fake SDK. */
+function newAuthLayer({ storageThrows = false, redirectResult = null } = {}) {
+  const { win, sandbox, storage } = newWindow({ storageThrows });
+  const calls = { getRedirect: 0, popups: 0, redirects: 0 };
+  const fbAuth = {
+    currentUser: null,
+    signInWithPopup() {
+      calls.popups++;
+      // Every browser that reaches the fallback got here the same way.
+      return Promise.reject(Object.assign(new Error("blocked"),
+                                          { code: "auth/popup-blocked" }));
+    },
+    signInWithRedirect() { calls.redirects++; return Promise.resolve(); },
+    getRedirectResult() {
+      calls.getRedirect++;
+      return typeof redirectResult === "function"
+        ? redirectResult()
+        : Promise.resolve(redirectResult);
+    },
+  };
+  const auth = () => fbAuth;
+  auth.GoogleAuthProvider = function GoogleAuthProvider() {};
+  win.firebase = { initializeApp() {}, apps: [], auth };
+  win.supabase = { createClient: () => ({}) };
+  win.APP_CONFIG = {
+    supabaseUrl: "https://example.supabase.co",
+    supabaseAnonKey: "anon",
+    firebase: { apiKey: "k", authDomain: "auth.example.app", projectId: "p", appId: "a" },
+  };
+  vm.runInContext(fs.readFileSync(`${W}/domain/auth.js`, "utf8"), sandbox,
+                  { filename: "domain/auth.js" });
+  if (!win.BgbAuth.init()) throw new Error("harness: BgbAuth.init() refused");
+  return { win, calls, storage };
+}
+
+{
+  // THE REGRESSION THIS GUARDS: getRedirectResult touches the auth domain's
+  // storage, which is what ITP blocks on a cross-origin authDomain. Asking it
+  // after an ordinary popup sign-in could put a storage error on the screen of
+  // someone who just signed in fine.
+  const { win, calls } = newAuthLayer();
+  ok("a tab that started no redirect answers null",
+     (await win.BgbAuth.consumeRedirectResult()) === null);
+  ok("...without asking the SDK at all", calls.getRedirect === 0);
+}
+
+{
+  const err = Object.assign(new Error("nope"), { code: "auth/unauthorized-domain" });
+  const { win, calls, storage } = newAuthLayer({ redirectResult: () => Promise.reject(err) });
+
+  ok("a blocked popup falls back to redirect",
+     (await win.BgbAuth.signInWithGoogle()) === "redirecting");
+  ok("...having actually redirected", calls.redirects === 1);
+  ok("...and marked the tab", storage.getItem("bgb.auth.redirectPending") === "1");
+
+  // This is the report that did not exist: the document was replaced, so the
+  // rejection had no caller left to tell.
+  ok("the failure comes back to be worded",
+     (await win.BgbAuth.consumeRedirectResult()) === err);
+  ok("...the marker is spent", storage.getItem("bgb.auth.redirectPending") === null);
+  ok("...and a second ask is free", (await win.BgbAuth.consumeRedirectResult()) === null
+                                   && calls.getRedirect === 1);
+}
+
+{
+  const { win } = newAuthLayer({ redirectResult: { user: { uid: "u1" } } });
+  await win.BgbAuth.signInWithGoogle();
+  ok("a redirect that WORKED reports no error",
+     (await win.BgbAuth.consumeRedirectResult()) === null);
+}
+
+{
+  // Safari private mode. Unmarkable, so unconsumable — back to the old
+  // silence, which is worse than a message and better than a broken sign-in.
+  const { win, calls } = newAuthLayer({ storageThrows: true, redirectResult: () => Promise.reject(new Error("x")) });
+  ok("storage being unavailable does not break the redirect",
+     (await win.BgbAuth.signInWithGoogle()) === "redirecting");
+  ok("...and never reaches the SDK on the way back",
+     (await win.BgbAuth.consumeRedirectResult()) === null && calls.getRedirect === 0);
+}
+
+// And the screen end of it: the sign-in screen is where the answer is shown.
+const settle = () => new Promise((r) => setTimeout(r, 0));
+
+{
+  const err = Object.assign(new Error("raw firebase noise"),
+                            { code: "auth/unauthorized-domain" });
+  const { view, calls } = newAuth("signed-in", { err });
+  await view.mount({});
+  await settle();
+  ok("mounting asks once whether a redirect failed", calls.consumes === 1);
+  ok("a failed redirect is explained in our own words",
+     view._error === "Sign-in is not enabled for this address yet.");
+}
+
+{
+  const { view } = newAuth("signed-in", { err: null });
+  await view.mount({});
+  await settle();
+  ok("a clean mount says nothing", view._error === null);
+}
+
+{
+  // The answer can arrive after the user has given up and navigated away.
+  let land;
+  const { view } = newAuth("signed-in",
+    { promise: new Promise((r) => { land = r; }) });
+  await view.mount({});
+  await view.unmount();
+  land(Object.assign(new Error("late"), { code: "auth/too-many-requests" }));
+  await settle();
+  ok("a late answer does not repaint a screen they left", view._error === null);
 }
 
 console.log(fails ? `\n${fails} FAILED\n` : "\nAll checks passed.\n");
