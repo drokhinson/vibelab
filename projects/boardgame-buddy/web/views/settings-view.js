@@ -96,6 +96,34 @@
       if (window.BggSyncFlow) window.BggSyncFlow.resume();
     }
 
+    // Everything on this instance that belongs to ONE account or ONE visit.
+    //
+    // The view is a singleton (init.js constructs one per tab), so without
+    // this the fields below outlive both: sign out, sign in as somebody else,
+    // open Settings, and the first paint shows the PREVIOUS account's BGG
+    // handle and import history until the refetches land a moment later.
+    // onMount re-reads all three unconditionally, so dropping them here costs
+    // nothing on an ordinary navigation away and closes that window.
+    //
+    // The in-flight latches go too. Each one is also cleared by its own
+    // `finally`, so this is not what makes them correct — it is what keeps a
+    // screen that was busy when the user left from reopening busy.
+    onUnmount() {
+      this._bgg = null;
+      this._bggError = null;
+      this._bggLoading = false;
+      this._bggLinkOpen = false;
+      this._imports = null;
+      this._deletingImport = null;
+      this._push = null;
+      this._pushBusy = false;
+      this._deleting = false;
+      this._cacheRefreshing = false;
+      this._adminFormOpen = false;
+      this._adminPromoting = false;
+      this._adminError = null;
+    }
+
     async _loadBggStatus() {
       this._bggLoading = true;
       try {
@@ -1119,6 +1147,15 @@
         });
         return;
       }
+      // Cleared on the way out, not left standing. This view object is
+      // constructed ONCE for the life of the tab (init.js) and logging out is
+      // a route change, not a reload, so a latch still set here is still set
+      // when the next account on this device opens Settings — which is how a
+      // fresh sign-in landed on a disabled "Deleting…" button and a Log out
+      // that could not be clicked. onUnmount() would also catch it now, but
+      // the flag is this method's to clear: nothing about the fix should
+      // depend on which screen the router happens to unmount next.
+      this._deleting = false;
       // The row is gone but this device still holds a token that looks valid
       // and a cache full of the account's data. handleLogout is what clears
       // both and returns to /auth — deleting without it would leave the app

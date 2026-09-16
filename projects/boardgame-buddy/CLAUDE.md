@@ -28,7 +28,8 @@ projects/boardgame-buddy/
 │   └── tests/
 ├── db/migrations/          001–037, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
-├── tools/                  one-off generators + operator scripts, never deploy steps
+├── tools/                  generators, operator scripts, and web/'s only tests —
+│                           `node tools/check-*.mjs`; never deploy steps
 ├── functions/              ONE Identity Platform blocking function (see below)
 ├── web/                    the static PWA
 ├── moved/                  the retired Vercel origin's notice (see below)
