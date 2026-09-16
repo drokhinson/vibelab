@@ -163,7 +163,6 @@
         ${this._renderHead()}
         <div class="set-card-label">Appearance</div>
         ${this._renderAppearanceCard()}
-        ${this._renderLayoutCard()}
         <div class="set-card-label">Notifications</div>
         ${this._renderNotificationsCard()}
         <div class="set-card-label">Connections</div>
@@ -280,59 +279,6 @@
     _setTheme(value) {
       if (value === "auto") window.BgbTheme.clear();
       else window.BgbTheme.set(value);
-      this.render();
-    }
-
-    // ── Layout ────────────────────────────────────────────────────────────────
-    // The same three-way control as Theme, for the same reason: the tier
-    // follows the screen by default (Auto), and a pin exists for a device that
-    // lands on the wrong side of a breakpoint — a small tablet that wants the
-    // phone column, a big phone in landscape that wants the tablet one. There
-    // is no "Wide" segment on purpose: the rail is what a wide screen gets on
-    // Auto and is not something a narrow one can hold (domain/layout.js).
-    _renderLayoutCard() {
-      const L = window.BgbLayout;
-      const auto = L.isAuto();
-      const tier = L.current();
-      const pick = L.stored();
-      // Tier names are about geometry; this copy is about the thing in the
-      // person's hands. "wide" is the monitor in front of them, and "land" is
-      // the phone they just turned on its side.
-      const WORDS = { wide: "desktop", land: "sideways" };
-      const word = WORDS[tier] || tier;
-      const seg = (value, label) => {
-        const on = value === "auto" ? auto : (!auto && pick === value);
-        return `
-          <button class="theme-seg__opt${on ? " is-on" : ""}"
-                  aria-pressed="${on ? "true" : "false"}"
-                  onclick="window.settingsView._setLayout('${value}')">${label}</button>`;
-      };
-      return `
-        <div class="set-card">
-          <div class="set-card__row set-card__row--static">
-            <span class="set-card__row-icon"><i data-icon="maximize-2" class="w-4 h-4"></i></span>
-            <span class="set-card__row-body">
-              <span class="set-card__row-title">Layout</span>
-              <span class="set-card__row-sub">
-                ${auto
-                  ? `Following your screen \u2014 currently ${word}.`
-                  : pick === tier
-                    ? `Always the ${word} layout.`
-                    : `Pinned to ${pick}, showing ${word} \u2014 this screen is too narrow for it.`}
-              </span>
-            </span>
-          </div>
-          <div class="theme-seg" role="group" aria-label="Layout">
-            ${seg("auto", "Auto")}${seg("phone", "Phone")}${seg("tablet", "Tablet")}
-          </div>
-        </div>
-      `;
-    }
-
-    /** @param {"auto"|"phone"|"tablet"} value */
-    _setLayout(value) {
-      if (value === "auto") window.BgbLayout.clear();
-      else window.BgbLayout.set(value);
       this.render();
     }
 

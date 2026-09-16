@@ -119,24 +119,21 @@
 
   <!-- Layout boot. Same contract as the theme boot above, for the layout
        tier (phone / tablet / wide / land — see domain/layout.js, which owns
-       every change after this): a stored pin wins, otherwise the viewport.
+       every change after this): the viewport decides, and nothing overrides it.
        Before first paint so a tablet never flashes the phone column, and so a
        phone picked up sideways never flashes the bottom bar. Keep the
-       breakpoints, the 600px floor and the land query in step with
-       domain/layout.js — this block deliberately duplicates that ladder, and
-       the deploy bundler ships it verbatim. -->
+       breakpoints and the land query in step with domain/layout.js — this
+       block deliberately duplicates that ladder, and the deploy bundler ships
+       it verbatim. It no longer reads `bgb.layout`: the Settings pin that wrote
+       that key is gone, and a leftover value must not keep steering the layout
+       with nothing left to clear it. -->
   <script>
     (function () {
-      var stored = null;
-      try { stored = localStorage.getItem("bgb.layout"); } catch (e) {}
       var mm = window.matchMedia ? function (q) { return window.matchMedia(q).matches; } : function () { return false; };
       // Height first — a phone on its side passes the tablet width test too.
       var tier = mm("(orientation: landscape) and (max-height: 560px) and (min-width: 640px)")
         ? "land"
         : mm("(min-width: 1024px)") ? "wide" : mm("(min-width: 768px)") ? "tablet" : "phone";
-      // A pin outranks orientation: a pinned phone keeps the bottom bar.
-      if (stored === "phone") tier = "phone";
-      else if (stored === "tablet") tier = mm("(max-width: 599px)") ? "phone" : "tablet";
       document.documentElement.setAttribute("data-bgb-layout", tier);
     })();
   </script>

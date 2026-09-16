@@ -98,9 +98,10 @@
       || window.navigator.standalone === true;
   }
 
-  // The viewport's OWN answer (BgbLayout.auto), not the tier on screen: a
-  // desktop user who pinned the phone layout in Settings is still on a desktop,
-  // and must not be offered Add to Home Screen.
+  // The viewport's OWN answer (BgbLayout.auto), read live off the media
+  // queries, rather than the attribute currently painted: the two differ in
+  // the window between a resize and its resync, and this gate should be about
+  // the device, never about a frame the layout has not caught up with yet.
   //
   // `land` counts too, and this is the question that tier exists to answer. A
   // phone held sideways is 852px wide, so before there was a `land` tier it
