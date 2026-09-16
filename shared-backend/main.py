@@ -30,7 +30,6 @@ from routes import wealthmate
 from routes import spotme
 from routes import daywordplay
 from routes import plant_planner
-from routes import boardgame_buddy
 from routes import travel_scrapbook
 from routes import person
 
@@ -52,7 +51,6 @@ app = FastAPI(
         {"name": "daywordplay", "description": "Day Word Play — daily word games with groups"},
         {"name": "plant_planner", "description": "Plant Planner — garden layout and companion planting"},
         {"name": "analytics", "description": "Cross-app analytics tracking"},
-        {"name": "boardgame_buddy", "description": "BoardgameBuddy — board game collection, play logging, and quick-reference guides"},
         {"name": "travel_scrapbook", "description": "Travel Trove — save travel links to trips, AI-extract places, and plan optimized routes"},
         {"name": "person", "description": "David Rokhinson personal page — admin-editable travel trips and stops"},
         {"name": "admin", "description": "Admin dashboard and user management"},
@@ -152,7 +150,6 @@ async def _handle_upstream_transport_error(
 # matches nothing and every request for that app logs an anonymous api_logs row.
 _APP_PREFIX_MAP = [
     ("/api/v1/plant_planner/",    "plant-planner"),
-    ("/api/v1/boardgame_buddy/",  "boardgame-buddy"),
     ("/api/v1/sauceboss/",        "sauceboss"),
     ("/api/v1/wealthmate/",       "wealthmate"),
     ("/api/v1/daywordplay/",      "daywordplay"),
@@ -271,7 +268,6 @@ app.include_router(wealthmate.router)
 app.include_router(spotme.router)
 app.include_router(daywordplay.router)
 app.include_router(plant_planner.router)
-app.include_router(boardgame_buddy.router)
 app.include_router(travel_scrapbook.router)
 app.include_router(person.router)
 

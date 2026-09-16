@@ -26,13 +26,13 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test")
 import pytest
 
 from gemini import GeminiError
-from routes.boardgame_buddy.constants import (
+from routes.constants import (
     MAX_SCORING_ROW_LABEL_CHARS,
     MAX_SCORING_ROW_NOTE_CHARS,
     MAX_SCORING_TEMPLATE_ROWS,
     ScoringGridMode,
 )
-from routes.boardgame_buddy.services import chapter_grid_ai
+from routes.services import chapter_grid_ai
 
 
 def _prompt(mode=None, base="Everdell", game="Pearlbrook", focus=None):
@@ -206,9 +206,9 @@ def client(monkeypatch):
     from fastapi import FastAPI, HTTPException
     from fastapi.testclient import TestClient
 
-    from routes import boardgame_buddy as bb
-    from routes.boardgame_buddy import chapter_ai_routes as car
-    from routes.boardgame_buddy.dependencies import CurrentUser, get_current_user
+    import routes as bb
+    from routes import chapter_ai_routes as car
+    from routes.dependencies import CurrentUser, get_current_user
 
     def _game_row(sb, game_id):
         if game_id not in _GAMES:

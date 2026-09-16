@@ -1,15 +1,24 @@
-name: Deploy BoardgameBuddy Web
+name: Deploy BoardgameBuddy Web (Vercel bridge)
 
-# BoardgameBuddy is isolated under projects/boardgame-buddy/ and deploys to
-# Cloudflare Pages, not Vercel. deploy-frontend.yml filters this project out of
-# its change detection, so this is the only workflow that ships the web app.
+# TEMPORARY ESCAPE HATCH. Delete this file once Cloudflare Pages has served
+# bgbuddy.app without incident for a week or two.
+#
+# Why it exists: merging the isolation branch removes boardgame-buddy from
+# deploy-frontend.yml's change detection AND moves the bundler out of
+# .github/scripts/, so main loses every path that could ship BGB to Vercel.
+# If Pages then breaks, there is no way to push a fix to the old host. This
+# workflow is that way.
+#
+# It is workflow_dispatch ONLY and must stay that way. A push trigger here
+# would race deploy-bgb-web.yml, leaving two live frontends built from the same
+# commit and no way to tell which one a given visitor got.
+#
+# The build steps below are duplicated from deploy-bgb-web.yml deliberately
+# rather than factored into a composite action. A fallback that builds
+# differently from production is a fallback you cannot trust, and this file is
+# scheduled for deletion — the two are meant to be read side by side and
+# thrown away together, not maintained as a shared abstraction.
 on:
-  push:
-    branches: [main]
-    paths:
-      - projects/boardgame-buddy/web/**
-      - projects/boardgame-buddy/scripts/**
-      - .github/workflows/deploy-bgb-web.yml
   workflow_dispatch:
 
 env:
@@ -24,9 +33,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # config.js is gitignored and generated per environment. API_BASE is a
-      # repo VARIABLE so the backend can be re-pointed (shared Railway service
-      # -> BGB's own -> Hetzner) without editing this file.
+      # Same generated config.js as the Pages deploy, BGB_API_BASE included.
+      # Deliberately NOT the shared Railway origin that deploy-frontend.yml
+      # hardcodes: the API has already moved to its own service, so a Vercel
+      # fallback pointed at the old shared backend would serve a frontend
+      # talking to a host that no longer owns BoardgameBuddy's routes.
       - name: Generate config.js
         working-directory: ./projects/boardgame-buddy/web
         env:
@@ -44,11 +55,6 @@ jobs:
             echo "::error::Settings -> Secrets and variables -> Actions -> Variables."
             exit 1
           fi
-          # Firebase is a WARNING, not an error: the app still signs in through
-          # the Supabase Auth SDK until Stage 3-ALT.4, so an unset variable here
-          # is the expected state before the auth swap. A PARTIAL set is the
-          # real hazard -- three of four values present looks configured and
-          # fails at sign-in -- so complain about that specifically.
           fb_set=0; fb_unset=0
           for v in "$FIREBASE_API_KEY" "$FIREBASE_AUTH_DOMAIN" \
                    "$FIREBASE_PROJECT_ID" "$FIREBASE_APP_ID"; do
@@ -59,43 +65,25 @@ jobs:
             echo "::error::four (API_KEY, AUTH_DOMAIN, PROJECT_ID, APP_ID) or none."
             exit 1
           fi
-          if [ "$fb_set" -eq 0 ]; then
-            echo "::warning::BGB_FIREBASE_* unset - config.js ships without"
-            echo "::warning::Firebase Auth. Expected until Stage 3-ALT.4."
-          fi
           bash build.sh
 
-      # Deploy-artifact-only Tailwind precompile. The checked-in index.html
-      # keeps the DaisyUI/Tailwind CDN pair because the runtime JIT must run
-      # before first paint in local dev; this builds a minified static sheet and
-      # swaps the CDN block for it in the checkout being uploaded. Nothing is
-      # committed back.
       - name: Precompile Tailwind + DaisyUI
         working-directory: ./projects/boardgame-buddy/web
         run: |
-          # tailwind.config.js's require("daisyui") must resolve, so install
-          # both packages into a scratch dir OUTSIDE web/ — a node_modules here
-          # would ship to Pages with the static site.
           SCRATCH=$(mktemp -d)
           npm install --prefix "$SCRATCH" --no-audit --no-fund tailwindcss@3 daisyui@4
           cat > tailwind.config.js << 'TWCONFIG'
           module.exports = {
             content: ["./**/*.{html,js}"],
             plugins: [require("daisyui")],
-            // index.html pins data-theme="luxury"; no other themes are used.
             daisyui: { themes: ["luxury"] },
           };
           TWCONFIG
-          # The @tailwind directives are REQUIRED: without -i the CLI emits
-          # utilities only — no DaisyUI component classes and no theme vars.
           printf '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n' > tailwind.input.css
           NODE_PATH="$SCRATCH/node_modules" "$SCRATCH/node_modules/.bin/tailwindcss" \
             -c tailwind.config.js -i tailwind.input.css -o assets/bgb-tw.css --minify
-          # Sanity gate: fail the deploy if the DaisyUI layer is missing.
           grep -q ".btn-primary" assets/bgb-tw.css || { echo "bgb-tw.css missing DaisyUI components"; exit 1; }
           rm tailwind.config.js tailwind.input.css
-          # Swap the CDN <link> + <script> pair for the precompiled sheet.
-          # Anchored on the CDN URLs; fails loudly if index.html drifted.
           node << 'SWAP'
           const fs = require("fs");
           let html = fs.readFileSync("index.html", "utf8");
@@ -111,16 +99,9 @@ jobs:
           console.log("index.html now uses precompiled assets/bgb-tw.css");
           SWAP
 
-      # Runs AFTER Tailwind (so it sees the CDN-swapped shell) and BEFORE the
-      # sw.js stamp (so the worker's precache sweep reads the final shell).
-      # That order is load-bearing — see the script's own header.
       - name: Bundle + minify JS/CSS
         run: node scripts/bgb-bundle.mjs web
 
-      # sw.js keys its cache on this id, so a fresh SHA per deploy means the new
-      # build lands in a new cache and activate() deletes the old one. Left
-      # literal in the repo, which sw.js reads as "local dev" and disables
-      # itself — so the grep is a real guard, not a formality.
       - name: Stamp service-worker build id
         working-directory: ./projects/boardgame-buddy/web
         run: |
@@ -128,17 +109,14 @@ jobs:
           sed -i "s/__BGB_BUILD_ID__/${GITHUB_SHA}/" sw.js
           echo "sw.js cache stamped with ${GITHUB_SHA}"
 
-      # Direct Upload, not the Pages Git integration: the three steps above
-      # generate the artifact and Cloudflare's own build step cannot reproduce
-      # them. --commit-dirty is required because those steps deliberately
-      # modify the checkout.
-      - name: Deploy to Cloudflare Pages
+      # vercel.json in the tree carries the SPA rewrite, so deep paths resolve
+      # here without the _redirects file Pages needs. Both are checked in and
+      # each host ignores the other's.
+      - name: Deploy to Vercel
         working-directory: ./projects/boardgame-buddy/web
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_BOARDGAME_BUDDY_PROJECT_ID }}
         run: |
-          npx wrangler@latest pages deploy . \
-            --project-name=bgbuddy \
-            --branch=main \
-            --commit-dirty=true
+          npx vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel@latest deploy --prod --token=${{ secrets.VERCEL_TOKEN }}

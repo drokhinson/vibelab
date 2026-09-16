@@ -184,6 +184,13 @@
         // that now indexes the three spokes, instead of a 404-ish blank.
         { name: "admin",               pattern: /^\/admin\/?$/,                   build: () => "/admin",
           alias: "settings" },
+        // The two legal documents. Real routes rather than static .html files
+        // (see views/legal-view.js). Google's OAuth brand review loads both of
+        // these URLs, and the consent screen links to them permanently — so
+        // they have to resolve for a signed-out stranger, which is why they sit
+        // above the auth gate rather than inside Settings.
+        { name: "privacy",             pattern: /^\/privacy\/?$/,                 build: () => "/privacy" },
+        { name: "terms",               pattern: /^\/terms\/?$/,                   build: () => "/terms" },
         { name: "feed",                pattern: /^\/(feed)?\/?$/,                 build: () => "/feed" },
       ];
     }

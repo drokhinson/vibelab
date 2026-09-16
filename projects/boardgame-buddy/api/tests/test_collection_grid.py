@@ -36,9 +36,9 @@ import asyncio
 import pytest
 from fastapi import HTTPException
 
-from routes.boardgame_buddy import collection_routes as R
-from routes.boardgame_buddy.constants import CollectionSort, CollectionStatus, PlayMode
-from routes.boardgame_buddy.dependencies import CurrentUser
+from routes import collection_routes as R
+from routes.constants import CollectionSort, CollectionStatus, PlayMode
+from routes.dependencies import CurrentUser
 
 
 ME = "user-me"

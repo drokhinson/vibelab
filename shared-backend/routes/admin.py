@@ -121,10 +121,6 @@ async def _delete_plantplanner_user(sb, user_id: str):
     return await _delete_supabase_auth_user(sb, user_id, "plantplanner_profiles")
 
 
-async def _delete_boardgamebuddy_user(sb, user_id: str):
-    return await _delete_supabase_auth_user(sb, user_id, "boardgamebuddy_profiles")
-
-
 async def _delete_sauceboss_user(sb, user_id: str):
     return await _delete_supabase_auth_user(sb, user_id, "sauceboss_user_profiles")
 
@@ -157,11 +153,6 @@ APPS_WITH_USERS = {
         "kind": "supabase_auth",
         "profile_table": "plantplanner_profiles",
         "delete_handler": _delete_plantplanner_user,
-    },
-    "boardgame-buddy": {
-        "kind": "supabase_auth",
-        "profile_table": "boardgamebuddy_profiles",
-        "delete_handler": _delete_boardgamebuddy_user,
     },
     "sauceboss": {
         "kind": "supabase_auth",

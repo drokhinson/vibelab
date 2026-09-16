@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Boardgame Buddy has moved</title>
+<link rel="canonical" href="https://bgbuddy.app/" />
+<meta name="robots" content="noindex" />
+<!-- Suppresses the favicon request. vercel.json rewrites every unmatched path
+     to this file, so /favicon.ico would otherwise be answered with HTML. -->
+<link rel="icon" href="data:," />
+
+<!--
+  The retirement notice for vibelab-boardgamebuddy.vercel.app.
+
+  BoardgameBuddy now lives at bgbuddy.app on Cloudflare Pages, against its own
+  API at api.bgbuddy.app. This page replaces the app on the old Vercel origin.
+
+  THREE CONSTRAINTS SHAPE THIS FILE, ALL FROM THE APP THAT USED TO LIVE HERE.
+
+  1. It is ONE self-contained file — inline CSS, inline SVG, inline script, no
+     <script src>, no /assets/*. The retired service worker serves same-origin
+     subresources cache-first WITH REVALIDATION OFF (a deliberate choice: under
+     its scheme a same-origin hit is by construction the bytes that build
+     shipped). So any path this page referenced could come back as the old
+     app's bytes instead of ours. Navigations are network-first, which is why
+     the HTML itself arrives — but only the HTML.
+
+  2. It tears the old worker down. Until something unregisters it, that worker
+     keeps controlling this origin and keeps serving the cached shell, so an
+     installed PWA can boot the old app from cache indefinitely. sw.js beside
+     this file is the kill switch; the script below is the same teardown run
+     from the page, because whichever reaches the browser first should win.
+
+  3. It does NOT clear localStorage or IndexedDB. The caches it deletes hold
+     copies of static files this deploy replaces — losing them costs nothing.
+     The other two hold the user's own data, including an outbox that may still
+     carry writes made offline. Those writes can no longer be flushed (they
+     target an API that no longer serves this app), but silently destroying
+     someone's data is not this page's job.
+
+  No auto-redirect, deliberately. A redirect would fire before anyone reads the
+  line about the installed app — which is the one thing here that has no
+  technical fix, since a PWA cannot be migrated across origins.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #faf7f5;
+    --surface: #ffffff;
+    --ink: #1a0f0b;
+    --ink-soft: #6b5d55;
+    --accent: #c2410c;
+    --accent-ink: #ffffff;
+    --line: rgba(26, 15, 11, 0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17100d;
+      --surface: #221713;
+      --ink: #f7f1ed;
+      --ink-soft: #b3a49b;
+      --accent: #f59e0b;
+      --accent-ink: #1a0f0b;
+      --line: rgba(247, 241, 237, 0.14);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main {
+    width: 100%;
+    max-width: 30rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 36px 28px;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px rgba(0, 0, 0, 0.06);
+  }
+  .mark { width: 76px; height: 76px; display: block; margin: 0 auto 20px; }
+  h1 { margin: 0 0 12px; font-size: 1.55rem; line-height: 1.25; letter-spacing: -0.01em; }
+  p { margin: 0 0 16px; color: var(--ink-soft); }
+  p.lead { color: var(--ink); }
+  a.cta {
+    display: block;
+    margin: 24px 0 20px;
+    padding: 14px 20px;
+    border-radius: 12px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+    font-size: 1.05rem;
+    text-decoration: none;
+  }
+  a.cta:hover { filter: brightness(1.08); }
+  a.cta:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .note {
+    margin: 0;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+    text-align: left;
+  }
+  .note strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.95em;
+  }
+</style>
+</head>
+<body>
+<main>
+  <!-- assets/brand/bgb-logo.svg, inlined per constraint 1. Keep the two in
+       step by hand; there is no build step here. -->
+  <svg class="mark" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Boardgame Buddy">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#1a0f0b"/>
+        <stop offset="100%" stop-color="#2a1812"/>
+      </linearGradient>
+      <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#f59e0b"/>
+        <stop offset="100%" stop-color="#f97316"/>
+      </linearGradient>
+    </defs>
+    <rect width="512" height="512" rx="96" fill="url(#bg)" />
+    <g opacity="0.08" stroke="#f59e0b" stroke-width="2">
+      <line x1="128" y1="64" x2="128" y2="448"/>
+      <line x1="256" y1="64" x2="256" y2="448"/>
+      <line x1="384" y1="64" x2="384" y2="448"/>
+      <line x1="64" y1="128" x2="448" y2="128"/>
+      <line x1="64" y1="256" x2="448" y2="256"/>
+      <line x1="64" y1="384" x2="448" y2="384"/>
+    </g>
+    <rect x="176" y="120" width="160" height="160" rx="32" fill="url(#accent)" />
+    <circle cx="220" cy="190" r="10" fill="#1a0f0b"/>
+    <circle cx="292" cy="190" r="10" fill="#1a0f0b"/>
+    <path d="M220 230 Q256 260 292 230" stroke="#1a0f0b" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <g fill="url(#accent)">
+      <circle cx="256" cy="310" r="26"/>
+      <rect x="226" y="330" width="60" height="40" rx="16"/>
+      <rect x="206" y="360" width="100" height="24" rx="12"/>
+    </g>
+    <g transform="translate(300, 260)">
+      <rect x="0" y="0" width="80" height="80" rx="18" fill="#ffffff" opacity="0.95"/>
+      <polygon points="16,80 36,80 22,100" fill="#ffffff" opacity="0.95"/>
+      <g fill="#2a1812">
+        <circle cx="20" cy="20" r="5"/>
+        <circle cx="60" cy="20" r="5"/>
+        <circle cx="40" cy="40" r="5"/>
+        <circle cx="20" cy="60" r="5"/>
+        <circle cx="60" cy="60" r="5"/>
+      </g>
+    </g>
+  </svg>
+
+  <h1>Boardgame Buddy has a new address</h1>
+  <p class="lead">Everything moved to <strong>bgbuddy.app</strong> &mdash; your
+    collection, your plays and your buddies are all there, under the same
+    account and the same password.</p>
+  <p>This address no longer runs the app.</p>
+
+  <a class="cta" href="https://bgbuddy.app/">Open bgbuddy.app</a>
+
+  <p class="note"><strong>If you installed Boardgame Buddy to your home
+    screen</strong>, that copy is tied to this old address and cannot follow
+    the move. Remove it, open <code>bgbuddy.app</code>, and install it again
+    from there. Notifications need turning back on once you do.</p>
+</main>
+
+<script>
+  // The same teardown sw.js performs, run from the page. Both exist because
+  // they reach the browser by different routes: the worker script is
+  // revalidated on navigation, while this runs the moment the notice renders.
+  // Whichever gets there first, the outcome is one uncontrolled origin.
+  (function () {
+    try {
+      if ("caches" in window) {
+        caches.keys().then(function (names) {
+          names.filter(function (n) { return n.indexOf("bgb-shell-") === 0; })
+               .forEach(function (n) { caches.delete(n); });
+        }).catch(function () {});
+      }
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          regs.forEach(function (r) { r.unregister(); });
+        }).catch(function () {});
+      }
+    } catch (_) {
+      // A blocked-storage browser throws on caches. There is nothing to do
+      // about it here, and the page still says what it needs to say.
+    }
+  })();
+</script>
+</body>
+</html>

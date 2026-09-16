@@ -46,6 +46,12 @@ const RUNTIME_ORIGINS = [
   "https://cdn.jsdelivr.net",
   "https://fonts.googleapis.com",
   "https://fonts.gstatic.com",
+  // The Firebase Auth SDK. Here for a sharper reason than the others: a cold
+  // offline start that cannot load it leaves domain/auth.js unable to stand up
+  // the configured provider, and it refuses to switch providers rather than
+  // sign the user out (see its init()). Caching it on the first online load is
+  // what keeps an offline relaunch from landing on the auth screen.
+  "https://www.gstatic.com",
 ];
 
 // How long a navigation waits for the network before falling back to the

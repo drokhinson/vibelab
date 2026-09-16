@@ -2,14 +2,16 @@
 //
 // Loads ahead of anything else once the DOM is ready:
 //   1. Construct singleton views and register them with the router.
-//   2. Initialize Supabase and route to splash / auth / feed based on
-//      session state.
+//   2. Initialize auth (domain/auth.js picks the provider) and route to
+//      splash / auth / feed based on session state.
 //   3. Wire bottom-nav clicks.
 //   4. Restore an in-progress PlaySession from localStorage.
 
 (function () {
   // Hoist instances onto window so view onclick handlers can find them.
   window.splashView      = new window.SplashView();
+  window.privacyView     = new window.PrivacyView();
+  window.termsView       = new window.TermsView();
   window.authView        = new window.AuthView();
   window.feedView        = new window.FeedView();
   window.logPlayView     = new window.LogPlayView();
@@ -44,6 +46,8 @@
   window.joinPanel       = new window.JoinPanel();
 
   window.router.register("splash",        window.splashView);
+  window.router.register("privacy",       window.privacyView);
+  window.router.register("terms",         window.termsView);
   window.router.register("auth",          window.authView);
   window.router.register("feed",          window.feedView);
   window.router.register("log-play",      window.logPlayView);
@@ -69,18 +73,25 @@
   window.router.register("admin-images",       window.adminImagesView);
   window.router.register("admin-descriptions", window.adminDescriptionsView);
 
-  // Supabase boot. We model this as a global helper (used by views directly)
-  // because Supabase's auth state listener fires async outside the view
-  // lifecycle.
-  function initSupabase() {
-    const cfg = window.APP_CONFIG;
-    if (!cfg || !cfg.supabaseUrl || !cfg.supabaseAnonKey) {
-      console.error("Supabase config missing");
+  // A global helper rather than a view concern, because the provider's state
+  // listener fires async, outside the view lifecycle.
+  //
+  // Named for what it does, not for which provider backs it: domain/auth.js
+  // picks Firebase or Supabase from config.js, and everything below is written
+  // against the one session shape it publishes.
+  function initAuth() {
+    if (!window.BgbAuth || !window.BgbAuth.init()) {
+      console.error("Auth config missing");
       window.router.go("auth");
       return;
     }
-    window.supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-    window.supabaseClient.auth.onAuthStateChange(async (event, sess) => {
+    // Only meaningful after the Google redirect fallback; a no-op otherwise.
+    // Not awaited — a successful redirect sign-in arrives through onChange
+    // below, so blocking boot on this would add a round-trip for nothing.
+    window.BgbAuth.consumeRedirectResult().then((err) => {
+      if (err) console.error("Google redirect sign-in failed", err);
+    });
+    window.BgbAuth.onChange(async (event, sess) => {
       window.session = sess;
       window.store.set("session", sess);
 
@@ -89,12 +100,18 @@
       // hiccup while the phone wakes — as a logout, or a mid-session host gets
       // bounced out.
       if (event === "SIGNED_OUT" || !sess) {
-        // Offline, supabase-js can reach the same conclusion for the wrong
+        // Offline, an auth SDK can reach the same conclusion for the wrong
         // reason: it tries to refresh an expired access token, cannot reach
         // the auth server, and gives up. Bouncing to /auth there strands a
         // host mid-game on a screen they physically cannot complete, and
-        // takes their draft's view with it. Hold the last known session
-        // instead; connectivity returning re-runs this callback with a real
+        // takes their draft's view with it.
+        //
+        // domain/auth.js holds the same line on the Firebase side — a failed
+        // getIdToken reports nothing rather than a null session — but this
+        // guard stays, because it is what covers a provider that DOES hand us
+        // one, and supabase-js is still that provider until the cutover.
+        //
+        // Hold the last known session instead; connectivity returning re-runs this callback with a real
         // answer either way, and in the meantime anything the held session
         // cannot actually do says so when it is tried.
         // Same rule as the 401 self-heal in domain/api.js — a blip is not a
@@ -182,13 +199,13 @@
 
   // How long the splash is allowed to be the whole app.
   //
-  // Everything that moves us off it is asynchronous and off-device: Supabase
-  // reading (and often refreshing) the stored session, then /bootstrap. Both
+  // Everything that moves us off it is asynchronous and off-device: the auth
+  // SDK reading (and often refreshing) the stored session, then /bootstrap. Both
   // can stall rather than fail — the first launch of the installed PWA on iOS
   // is where this actually bites — and the splash has no bottom nav, so a
   // stall there leaves the user with a loader and nothing to tap. api.js now
   // puts a deadline on our own calls; this covers the leg we don't own
-  // (supabase-js does its own fetching) and any future one.
+  // (the auth SDK does its own fetching) and any future one.
   //
   // Measured from NAVIGATION, not from DOMContentLoaded — see bootWatchdogDelay.
   const BOOT_WATCHDOG_MS = 12000;
@@ -196,7 +213,7 @@
   // The grace the auth leg gets no matter how late the scripts landed.
   //
   // Without a floor, a boot whose assets already blew the budget would arm the
-  // watchdog at 0ms and fire it before supabase-js has read localStorage — and
+  // watchdog at 0ms and fire it before the auth SDK has restored a session — and
   // a watchdog with no `window.session` in hand goes to /auth, i.e. it would
   // show a login screen to somebody who is signed in. Reading a stored session
   // is local and fast; it is the token REFRESH that needs the network, so a few
@@ -304,9 +321,11 @@
   // between two known parties, not a broadcast, and it stays greppable.
   window.bgbQrFlowEnded = releaseQrHold;
 
-  // Boot navigation happens exactly once per signed-in session. Supabase fires
-  // onAuthStateChange more than once at boot (INITIAL_SESSION, then often
-  // TOKEN_REFRESHED) and each invocation is an un-serialized async function, so
+  // Boot navigation happens exactly once per signed-in session. BOTH providers
+  // report more than once at boot — supabase-js fires INITIAL_SESSION then
+  // often TOKEN_REFRESHED, and Firebase's onIdTokenChanged fires on the
+  // restored user and again on every silent refresh — and each invocation is an
+  // un-serialized async function, so
   // without this latch a second invocation resolves seconds later — after the
   // user has already tapped into the host flow — and yanks them back to the
   // feed mid-typing. Cleared on sign-out so the next login routes again.
@@ -740,8 +759,8 @@
 
   // Logout helper — referenced by ProfileSelfView.
   window.handleLogout = async function () {
-    if (window.supabaseClient) {
-      try { await window.supabaseClient.auth.signOut(); } catch (_) {}
+    if (window.BgbAuth && window.BgbAuth.backend) {
+      try { await window.BgbAuth.signOut(); } catch (_) {}
     }
     window.session = null;
     _bootRouted = false;
@@ -789,8 +808,11 @@
     // Refresh the auth token first so any post-wake API call (or an imminent
     // OS-triggered reload) starts from a valid session rather than a token that
     // expired while the device slept. getSession() refreshes when near expiry.
-    if (window.supabaseClient) {
-      window.supabaseClient.auth.getSession().catch(() => {});
+    if (window.BgbAuth && window.BgbAuth.backend) {
+      // refresh() republishes nothing by itself; the provider's own change
+      // listener does that. Firing it here is what makes the token valid
+      // before the post-wake requests below go out.
+      window.BgbAuth.refresh().catch(() => {});
     }
     if (window.Bootstrap && window.Bootstrap.warmRefresh) {
       window.Bootstrap.warmRefresh().catch(() => {});
@@ -866,7 +888,7 @@
     const initialMatch = qrMatch || window.router.matchPath(window.location.pathname);
     if (initialMatch) window.store.set("pendingRoute", initialMatch);
 
-    // First paint = splash. initSupabase() flips us forward to either
+    // First paint = splash. initAuth() flips us forward to either
     // the pending deep-link route or the feed. skipPush keeps the original
     // URL in the bar (and out of the back-stack) until auth resolves.
     window.router.go("splash", {}, { skipPush: true });
@@ -874,7 +896,8 @@
     // One document-wide icon pass for the static shell (bottom nav, header).
     // Views refresh their own subtree via View.refreshIcons() from here on.
     window.BgbIcons.render();
-    initSupabase();
+
+    initAuth();
     setTimeout(bootWatchdog, bootWatchdogDelay());
     // Hand off from index.html's boot backstop, which reloads the page when no
     // app code arrives at all. Cancelled HERE rather than at the top of this

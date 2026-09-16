@@ -21,9 +21,9 @@ import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from routes.boardgame_buddy import game_routes as G  # noqa: E402
-from routes.boardgame_buddy import router as bgb_router  # noqa: E402
-from routes.boardgame_buddy.dependencies import CurrentUser, get_current_admin  # noqa: E402
+from routes import game_routes as G  # noqa: E402
+from routes import router as bgb_router  # noqa: E402
+from routes.dependencies import CurrentUser, get_current_admin  # noqa: E402
 
 
 class _Query:
@@ -227,7 +227,7 @@ def counts_client(monkeypatch):
         def table(self, name):
             return _CountQuery(name, counts, log)
 
-    from routes.boardgame_buddy import admin_routes as A
+    from routes import admin_routes as A
 
     monkeypatch.setattr(A, "get_supabase", lambda: _SB())
     app = FastAPI()
