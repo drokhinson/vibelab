@@ -29,12 +29,6 @@
   // of screen whether the note holds two games or twenty.
   const GROUP_BATCH = 4;
 
-  // Close matches offered above the full list on the Players step. Enough to
-  // hold the real answer when a note's spelling is ambiguous ("Chris" against
-  // a Christina and a Christopher), short enough that the whole buddy list is
-  // still visible underneath without a scroll.
-  const SUGGEST_MAX = 5;
-
   class ImportPlaysView extends window.View {
     constructor() {
       super("import-plays");
@@ -455,26 +449,17 @@
 
     async _loadPartners() {
       this._loadingPartners = true;
-      let data = null;
-      try {
-        data = await window.Buddy.allBuddies();
-      } catch (_) {
-        // A missing buddy list costs auto-matching, not the import: every row
-        // is still pickable by hand and every name is still importable as a
-        // ghost.
-        data = null;
-      }
+      this._partners = await window.ImportPeople.loadPartners();
       this._loadingPartners = false;
-      this._partners = data || { accounts: [], ghosts: [], recent: [] };
       if (this._draft.playerNames.length) {
         this._draft.suggestPlayers(this._partners);
         this._draft.save();
       }
       // A sheet opened before this landed is showing ghosts and nothing else.
       if (this._sheetName && window.PlayerPickerSheet.isOpen()) {
-        const candidates = this._playerCandidates();
+        const candidates = window.ImportPeople.candidates(this._partners);
         window.PlayerPickerSheet.setCandidates(
-          candidates, null, this._closestTo(this._sheetName, candidates));
+          candidates, null, window.ImportPeople.closestTo(this._sheetName, candidates));
       }
       if (this._draft.stepName === "players") this.render();
     }
@@ -486,12 +471,12 @@
       // and refill it, rather than leaving the user staring at the ghosts-only
       // list this whole change exists to fix.
       this._sheetName = name;
-      const candidates = this._playerCandidates();
+      const candidates = window.ImportPeople.candidates(this._partners);
       // Ranked by the same score that pre-filled the row behind the sheet
       // (domain/name-match.js), so the model's answer is the first row and its
       // runners-up are the next few — a note that says "Jas" opens on Jasmine
       // and Jason rather than on an alphabetical list of ghosts.
-      const close = this._closestTo(name, candidates);
+      const close = window.ImportPeople.closestTo(name, candidates);
       const current = this._draft.playerMapping(name);
 
       window.PlayerPickerSheet.open({
@@ -510,7 +495,7 @@
         // (domain/buddy.js SWRs it for a day) and filters instantly; this is a
         // round trip, so it is a button the user presses rather than something
         // that fires on every keystroke.
-        searchAll: (q) => this._searchEveryone(q),
+        searchAll: (q) => window.ImportPeople.searchEveryone(q),
         searchAllLabel: "Search all of BoardgameBuddy",
         returnFocus: document.activeElement,
         onConfirm: (picks) => {
@@ -523,77 +508,6 @@
           this.render();
         },
       });
-    }
-
-    /**
-     * The rows worth reading first: the buddies whose display name or username
-     * is closest to what the note wrote, scored by domain/name-match.js — the
-     * same score that pre-filled the row behind the sheet, so the two agree.
-     * @param {string} name
-     * @param {any[]} candidates
-     */
-    _closestTo(name, candidates) {
-      return window.BgbNameMatch
-        .rank(name, candidates, window.PlayImport.namesOf)
-        .slice(0, SUGGEST_MAX)
-        .map((hit) => hit.row);
-    }
-
-    /**
-     * Everyone the picker can offer without a round trip: the viewer, their
-     * buddies, everyone they've shared a table with, and their own ghosts.
-     *
-     * YOU come first. GET /play-partners returns buddies and ghosts and never
-     * the viewer, because every other caller has already seated them — in
-     * Gather you are at the table by construction. Here you are not, so a note
-     * recording your own name had no way to become you, and every imported
-     * play landed with the importer absent from their own history. That also
-     * cost them the wins.
-     */
-    _playerCandidates() {
-      const me = window.store.get("user");
-      const rows = [
-        ...(me ? [{
-          source: "account",
-          user_id: me.id,
-          name: me.display_name || "You",
-          username: me.username || null,
-          avatar: me.avatar || null,
-          isViewer: true,
-        }] : []),
-        ...window.Buddy.toPlayerCandidates(this._partners),
-      ].filter((c) => c.name);
-      // A viewer who somehow also appears in their own partner list would
-      // otherwise be offered twice, with only one row marked "You".
-      const seenIds = new Set();
-      return rows.filter((c) => {
-        if (!c.user_id) return true;
-        if (seenIds.has(c.user_id)) return false;
-        seenIds.add(c.user_id);
-        return true;
-      });
-    }
-
-    /**
-     * The whole app, not just the buddy list. Someone can have played with a
-     * person they have never added — an opponent at a club night, a friend of
-     * a friend — and an import is exactly when that turns up. Picking one
-     * links the plays to their real account without a buddy request.
-     * @param {string} q
-     */
-    async _searchEveryone(q) {
-      const hits = await window.Buddy.searchProfiles(q);
-      const me = window.store.get("user");
-      return (hits || [])
-        .filter((h) => h && h.id && (!me || h.id !== me.id))
-        .map((h) => ({
-          source: "account",
-          user_id: h.id,
-          name: h.display_name || h.username || "",
-          username: h.username || null,
-          avatar: h.avatar || null,
-        }))
-        .filter((c) => c.name);
     }
 
     // ── Games step ────────────────────────────────────────────────────────────
