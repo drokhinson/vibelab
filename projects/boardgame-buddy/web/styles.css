@@ -133,9 +133,9 @@
   --bgb-header-height: 0px;
 }
 /* --bgb-col-max is a CAP THAT NEVER BINDS here, not a column width, and it has
-   to stay a real length rather than `none`: three rules feed it into a calc()
-   — the rail's own `left:` below, and both .chapter-add__fab offsets — and
-   `calc(none / 2)` is invalid, which drops the whole declaration silently.
+   to stay a real length rather than `none`: two rules feed it into a calc()
+   — both .chapter-add__fab offsets — and `calc(none / 2)` is invalid, which
+   drops the whole declaration silently.
    1024px can never bind on this tier, since the tier itself stops at 1023px
    wide and the rail takes 64 off that, so the column always fills the space
    beside the rail and every existing formula keeps working untouched. */
@@ -3271,11 +3271,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    then the bell and the gear sunk to the bottom. The header itself is hidden
    here, and --bgb-header-height is 0px with it.
 
-   The rail hugs the CONTENT COLUMN, not the window edge: #app centres in the
-   space right of the rail (body's padding-left, see #app above), so on a
-   monitor wider than rail + column the rail slides in to sit against the
-   column's left edge, where the eye already is. On a screen narrower than
-   that, max() pins it to the edge.
+   The rail sits on the WINDOW's left edge, not against the content column.
+   It used to slide inward to hug the column on a monitor wider than rail +
+   column, which left it floating in the middle of the screen with empty ground
+   to its left — a navigation bar that is not at any edge reads as a stray
+   toolbar. #app still centres in the space right of it (body's padding-left,
+   see #app above), so nothing sits under it.
+
+   The rest of the file already assumed this: every other rail-aware rule
+   (.chapter-add__fab and its mirror, the locked chapter editor, --bgb-col-center)
+   derives the column's edges as `rail + the centring gap`, which is only the
+   truth when the rail is flush left.
 
    Everything hidden by data-auth-only stays hidden: .hidden is display:none
    !important (the hiding contract at the top of the file), so none of the
@@ -3289,7 +3295,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   top: 0;
   bottom: 0;
   right: auto;
-  left: max(0px, calc(50% - (var(--bgb-col-max) + var(--bgb-rail-width)) / 2));
+  left: 0;
   width: var(--bgb-rail-width);
   height: auto;              /* --bgb-nav-height is 0px on this tier */
   flex-direction: column;
