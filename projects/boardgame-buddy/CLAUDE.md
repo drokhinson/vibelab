@@ -9,7 +9,8 @@ project**. When the two disagree, this file wins.
 
 Read `STRUCTURE.md` before touching any feature code,
 `Docs/MIGRATION_PLAN.md` before touching any infrastructure
-(`Docs/RUNBOOK_R2_CUTOVER.md` is the live one — Stage 4's console half), and
+(`Docs/RUNBOOK_R2_CUTOVER.md` and `Docs/RUNBOOK_AUTH_ROLE_CLAIM.md` are the
+live ones), and
 `Docs/BRAND_VOICE.md` before writing any user-facing copy — it carries the
 tagline, the eight places it has to stay in sync, and the tone rules that came
 out of choosing it.

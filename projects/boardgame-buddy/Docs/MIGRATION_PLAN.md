@@ -843,14 +843,15 @@ across the session tables. Same conclusion, larger blast radius.)
 > `42501 new row violates row-level security policy`. A 401 rather than a 403
 > is the tell that the token was not accepted at all.
 >
-> `tools/check-live-scores.mjs` now pins the reporting behaviour so the next
-> occurrence is a toast on the host's screen rather than a silent grid. It does
-> not fix the cause: the `role` claim has to exist. `importUsers()` does not set
-> custom claims, so the 23 imported accounts have none — a backfill covers
-> them, and an Identity Platform **blocking function** on `beforeSignIn`
-> returning `customClaims: { role: "authenticated" }` is what covers everyone
-> who signs up afterwards. Do both; the backfill alone silently excludes every
+> **`RUNBOOK_AUTH_ROLE_CLAIM.md` in this directory is the fix**, in two parts:
+> `tools/set-authenticated-claim.mjs` backfills the imported accounts, and a
+> `beforeUserSignedIn` blocking function covers everyone who signs up
+> afterwards. Both, not either — the backfill alone silently excludes every
 > future user.
+>
+> `tools/check-live-scores.mjs` pins the *reporting* behaviour so the next
+> occurrence is a toast on the host's screen rather than a silent grid. It
+> does not fix the cause.
 
 **The dashboard setting is only half of it — the client has to send the token.**
 `window.supabaseClient` must still be created after the swap, because Identity
