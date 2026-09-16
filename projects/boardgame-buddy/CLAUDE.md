@@ -8,7 +8,8 @@ stages, `shared-backend/` layout and `scaffold.sh` flow **do not describe this
 project**. When the two disagree, this file wins.
 
 Read `STRUCTURE.md` before touching any feature code,
-`Docs/MIGRATION_PLAN.md` before touching any infrastructure, and
+`Docs/MIGRATION_PLAN.md` before touching any infrastructure
+(`Docs/RUNBOOK_R2_CUTOVER.md` is the live one — Stage 4's console half), and
 `Docs/BRAND_VOICE.md` before writing any user-facing copy — it carries the
 tagline, the eight places it has to stay in sync, and the tone rules that came
 out of choosing it.
@@ -26,7 +27,7 @@ projects/boardgame-buddy/
 │   └── tests/
 ├── db/migrations/          001–036, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
-├── tools/                  one-off generators, not deploy steps
+├── tools/                  one-off generators + operator scripts, never deploy steps
 ├── web/                    the static PWA
 ├── moved/                  the retired Vercel origin's notice (see below)
 └── Docs/

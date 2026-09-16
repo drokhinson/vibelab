@@ -42,7 +42,8 @@ call sites and `036_r2_photo_urls.sql` are in the tree; with the R2 variables
 unset the API still writes to Supabase Storage, so nothing changed in
 production. What remains is console work and a data copy: two buckets, two
 custom domains, one API token, seven Railway variables, `rclone`, then the
-migration. §4.2 onward is the order.
+migration. **`RUNBOOK_R2_CUTOVER.md` in this directory is the step-by-step**,
+in the order the steps have to happen; §4 below is the reasoning behind it.
 
 **Still open:** Email Routing (§3.8 of `SETUP_HOSTING.md`), Stage 4's console
 half, and the two photo gaps the privacy policy discloses — play photos readable by anyone with the link, and
@@ -1052,6 +1053,11 @@ deliberately.
 ---
 
 ## Stage 4 — Photos to Cloudflare R2
+
+> **The code half is done; for the console half follow
+> `RUNBOOK_R2_CUTOVER.md`**, which is the click-by-click version of §4.2–§4.5
+> in the order the steps actually have to happen. This section is the
+> reasoning behind it — read it to understand a step, not to execute one.
 
 **Goal:** the only cost line that grows with success goes to $0. **This is the
 highest-value stage in the plan** and it is contained: 4 call sites, one new
