@@ -29,7 +29,7 @@
     constructor() { super("privacy"); }
 
     _title() { return "Privacy Policy"; }
-    _updated() { return "2026-09-15"; }
+    _updated() { return "2026-09-16"; }
 
     _body() {
       return `
@@ -68,11 +68,6 @@
         <p>If you turn on notifications, we store the push address your browser
         issues, the two keys that let us encrypt a message to it, and a label so
         you can tell your own devices apart.</p>
-
-        <h3 class="font-semibold mt-4">Before launch</h3>
-        <p>If you gave us an email address on the waiting list, we store that
-        address and the date. It is used for one email when the app opens, and
-        the list is deleted after that.</p>
 
         <h2 class="text-xl font-semibold mt-8 mb-2">2. What we do not store</h2>
         <ul class="list-disc pl-5 space-y-1">
@@ -168,8 +163,7 @@
 
         <h2 class="text-xl font-semibold mt-8 mb-2">9. How long we keep things</h2>
         <p>Your logs stay until you delete them or your account. Diagnostic
-        request logs are pruned periodically. The pre-launch waiting list is
-        deleted after the launch email.</p>
+        request logs are pruned periodically.</p>
 
         <h2 class="text-xl font-semibold mt-8 mb-2">10. Children</h2>
         <p>The app is not directed at children under 13, and we do not knowingly

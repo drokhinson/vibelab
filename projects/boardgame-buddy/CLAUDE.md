@@ -7,8 +7,10 @@ loads and its Git and file-size conventions still apply — but its pipeline
 stages, `shared-backend/` layout and `scaffold.sh` flow **do not describe this
 project**. When the two disagree, this file wins.
 
-Read `Docs/STRUCTURE.md` before touching any feature code,
-`Docs/MIGRATION_PLAN.md` before touching any infrastructure, and
+Read `STRUCTURE.md` before touching any feature code,
+`Docs/MIGRATION_PLAN.md` before touching any infrastructure
+(`Docs/RUNBOOK_R2_CUTOVER.md` and `Docs/RUNBOOK_AUTH_ROLE_CLAIM.md` are the
+live ones), and
 `Docs/BRAND_VOICE.md` before writing any user-facing copy — it carries the
 tagline, the eight places it has to stay in sync, and the tone rules that came
 out of choosing it.
@@ -22,10 +24,11 @@ projects/boardgame-buddy/
 │   ├── routes/             the project package; routes/services/ under it
 │   ├── analytics_routes.py own copy — web/domain/api.js pings /analytics/track
 │   ├── db.py jwt_auth.py cache.py api_logger.py gemini.py auth.py shared_models.py
+│   ├── object_store.py     Cloudflare R2 uploads (see below)
 │   └── tests/
 ├── db/migrations/          001–036, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
-├── tools/                  one-off generators, not deploy steps
+├── tools/                  one-off generators + operator scripts, never deploy steps
 ├── web/                    the static PWA
 ├── moved/                  the retired Vercel origin's notice (see below)
 └── Docs/
@@ -86,6 +89,13 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    registered on that origin serves same-origin subresources cache-first with
    revalidation off, so any file the notice referenced could come back as the
    old app's bytes. Its deploy workflow fails on any external reference.
+11. **Both image uploads still carry a Supabase Storage branch**, and
+   `object_store.py` treats an unconfigured R2 as normal rather than as an
+   error. That is the Stage 4 rollout: the R2 code deploys before the buckets
+   exist, and unsetting one variable rolls it back after they do. What is NOT
+   allowed is widening that fallback to cover a *failing* R2 — see the
+   docstrings and `tests/test_object_store.py`, which pin it. A failing R2
+   writes a supabase.co URL into a row the migration has already rewritten.
 
 ## Secrets that must never be rotated casually
 

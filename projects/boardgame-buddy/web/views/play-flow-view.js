@@ -1265,6 +1265,22 @@
       this._liveScores = new window.LiveScores({
         sessionId: this._ps.sessionId,
         isHost: true,
+        // The host's score writes go browser-direct to Supabase under RLS, and
+        // a refusal there is silent by construction: the local cell is already
+        // painted and the write queue keeps the value on screen so an offline
+        // host loses nothing. That is right for a dropped socket and wrong for
+        // a permission error, which will refuse every keystroke for the rest
+        // of the session while the table stays empty — so the host's grid
+        // looks perfect and every spectator watches one that never fills in.
+        // Fires once per session; see LiveScores#isPermanentWriteFailure.
+        onWriteDenied: () => {
+          if (typeof showToast === "function") {
+            showToast(
+              "Scores aren't saving — spectators won't see them. Check back later.",
+              "error"
+            );
+          }
+        },
       });
       await this._liveScores.start();
       this._liveOff = this._liveScores.subscribe(() => this._onLiveScoresChange());
