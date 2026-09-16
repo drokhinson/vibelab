@@ -50,7 +50,10 @@
   const MAX_SHOTS = 30;
   const IMPORT_TIMEOUT_MS = 60000;
 
-  const STEPS = ["photos", "assign", "import"];
+  // `review` is new: the pager used to run straight into the summary, and the
+  // shared review now sits between them, so a photo import gets the same
+  // considered last pass over its plays that a note always had.
+  const STEPS = ["photos", "assign", "review", "import"];
 
   /**
    * @typedef {Object} DraftSeat
@@ -529,7 +532,10 @@
      * @param {any} p @param {boolean} busy
      */
     progressHeading(p, busy) {
-      if (!busy) return p && p.failed ? "Finished with errors" : "Imported";
+      if (!busy) return p && p.failed ? "Import finished" : "Imported";
+      // The first half of the bar is photos, the second is plays — worth
+      // saying, because the two halves move at very different speeds and a bar
+      // that crawls then sprints reads as a bar that is stuck.
       return p && p.done < p.total / 2 ? "Uploading photos…" : "Saving plays…";
     }
 
@@ -537,9 +543,10 @@
     progressNote(p) {
       const n = p && p.photosFailed;
       if (!n) return null;
-      return `${n} photo${n === 1 ? "" : "s"} couldn't be uploaded. `
-           + `${n === 1 ? "That play" : "Those plays"} imported without `
-           + `${n === 1 ? "its picture" : "their pictures"}.`;
+      return `${n} photo${n === 1 ? "" : "s"} didn't upload. `
+           + `${n === 1 ? "That play" : "Those plays"} landed without `
+           + `${n === 1 ? "it" : "them"} — you can add a photo from the play `
+           + `itself later.`;
     }
 
     // ── Row edits the shared review drives ───────────────────────────────────

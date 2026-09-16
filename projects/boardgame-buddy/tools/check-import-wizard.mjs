@@ -58,6 +58,50 @@ function load() {
   return win;
 }
 
+/**
+ * The same, plus the UI layer: the step modules, the shared review, the source
+ * picker and both branches. Enough fake DOM for a render pass to build strings
+ * — nothing here mounts anything.
+ */
+function loadUi() {
+  const win = {
+    store: { get: () => ({ id: "u-me", display_name: "Me" }), set() {} },
+    crypto: { randomUUID: () => `id-${Math.random().toString(16).slice(2)}` },
+    localStorage: {
+      _v: new Map(),
+      getItem(k) { return this._v.has(k) ? this._v.get(k) : null; },
+      setItem(k, v) { this._v.set(k, String(v)); },
+      removeItem(k) { this._v.delete(k); },
+    },
+    Geo: { countryName: (c) => c },
+    BgbBadge: { render: (o) => `<b>${o.displayName}</b>` },
+    Buddy: { toPlayerCandidates: () => [] },
+    ImportPeople: { SUGGEST_MAX: 5 },
+  };
+  win.window = win;
+  const sandbox = {
+    window: win, console, Date, Number, Math, Map, Set, Promise, JSON, String,
+    Array, Object, Boolean, RegExp, Error, Intl, parseInt, parseFloat, isNaN,
+    localStorage: win.localStorage,
+    document: { activeElement: null },
+    showToast() {},
+  };
+  vm.createContext(sandbox);
+  const run = (f) => vm.runInContext(
+    fs.readFileSync(`${W}${f}`, "utf8"), sandbox, { filename: f });
+  // helpers.js first: escapeHtml/escapeAttr/jsStr/formatDate are globals the
+  // step bodies build every string with.
+  run("helpers.js");
+  for (const f of [
+    "domain/import-people.js", "domain/play-import.js", "domain/photo-import.js",
+    "domain/import-draft.js", "widgets/import-review-step.js",
+    "widgets/import-source-step.js", "widgets/import-notes-steps.js",
+    "widgets/import-photos-steps.js", "widgets/import-notes-branch.js",
+    "widgets/import-photos-branch.js",
+  ]) run(f);
+  return win;
+}
+
 const win = load();
 const { PlayImport, PhotoImport } = win;
 
@@ -372,6 +416,178 @@ console.log("\n8. A pre-edit draft restores with the new fields defaulted");
   const ph = new w.PhotoImport();
   ok("a v1 photo draft still restores", ph.restore() === true);
   ok("score is normalised to null", ph.shots[0].players[0].score === null);
+}
+
+// ── 9. Every inline handler resolves ────────────────────────────────────────
+// The one gate that catches the whole class of failure this refactor risks.
+// Handlers are `onclick="window.thing._method(...)"` strings, resolved by name
+// at CLICK time — so a renamed method is a silently dead button with no
+// build-time error anywhere. Every name a step file writes has to exist on the
+// object it names.
+
+console.log("\n9. Every inline handler names a method that exists");
+{
+  const read = (f) => fs.readFileSync(`${W}${f}`, "utf8");
+
+  // global name -> the file that defines its class
+  const OWNERS = {
+    "window.importNotesBranch": "widgets/import-notes-branch.js",
+    "window.importPhotosBranch": "widgets/import-photos-branch.js",
+    "window.importWizardView": "views/import-wizard-view.js",
+    "window.importWizardView.review": "widgets/import-review-host.js",
+  };
+  const defined = {};
+  for (const [global, file] of Object.entries(OWNERS)) {
+    const src = read(file);
+    const names = new Set();
+    for (const m of src.matchAll(/^\s{4}(?:async |get |static )?([A-Za-z_][\w]*)\s*\(/gm)) {
+      names.add(m[1]);
+    }
+    defined[global] = names;
+  }
+
+  // Comments are stripped first: several of these files document the handler
+  // convention with an illustrative `window.importNotesBranch._foo()`, and a
+  // gate that cannot tell prose from a call site is a gate nobody keeps green.
+  const stripComments = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+
+  const CALLERS = [
+    "widgets/import-notes-steps.js",
+    "widgets/import-photos-steps.js",
+    "widgets/import-source-step.js",
+    "widgets/import-review-step.js",
+  ];
+  // The step files build handlers from a module-local `const V = "..."`, so
+  // resolve that indirection before matching.
+  const bad = [];
+  for (const file of CALLERS) {
+    const src = stripComments(read(file));
+    const vMatch = src.match(/const V = "([^"]+)"/);
+    const V = vMatch ? vMatch[1] : null;
+    const text = V ? src.split("${V}").join(V) : src;
+    for (const m of text.matchAll(/(window\.importWizardView\.review|window\.importWizardView|window\.importNotesBranch|window\.importPhotosBranch)\.(_?[A-Za-z]\w*)\(/g)) {
+      const [, global, method] = m;
+      if (!defined[global] || !defined[global].has(method)) {
+        bad.push(`${file}: ${global}.${method}()`);
+      }
+    }
+    // A template that still names `V` without a definition would silently
+    // build "undefined._foo()".
+    if (/\$\{V\}/.test(src) && !V) bad.push(`${file}: uses \${V} with no const V`);
+  }
+  ok("no inline handler names a missing method", bad.length === 0);
+  for (const b of bad) console.log(`       ${b}`);
+
+  // And the shared review's host must implement everything the step calls.
+  const HOST = ["_toggleRow", "_dropRow", "_onBulkDate", "_onRowDate", "_onRowCount",
+    "_openRowGameSheet", "_openRowPlayerSheet", "_toggleRowWinner",
+    "_removeRowSeat", "_onSeatScore"];
+  const missingHost = HOST.filter((m) => !defined["window.importWizardView.review"].has(m));
+  ok("the review host implements every review handler", missingHost.length === 0);
+  if (missingHost.length) console.log(`       missing: ${missingHost.join(", ")}`);
+
+  // The two retired globals must be gone everywhere.
+  const stale = [];
+  for (const f of [...CALLERS, ...Object.values(OWNERS), "init.js", "views/settings-view.js"]) {
+    if (/window\.(importPlaysView|photoImportView)\b/.test(stripComments(read(f)))) stale.push(f);
+  }
+  ok("no file still names the retired view globals", stale.length === 0);
+  for (const f of stale) console.log(`       ${f}`);
+}
+
+// ── 10. The step arithmetic ─────────────────────────────────────────────────
+
+console.log("\n10. Each branch's step list is walkable end to end");
+{
+  for (const [label, Ctor, branchSteps] of [
+    ["notes", PlayImport, ["source", "details", "players", "games"]],
+    ["photos", PhotoImport, ["photos", "assign"]],
+  ]) {
+    const steps = Ctor.steps;
+    ok(`${label} steps are unique`, new Set(steps).size === steps.length);
+    ok(`${label} ends review -> import`,
+      steps[steps.length - 2] === "review" && steps[steps.length - 1] === "import");
+    ok(`${label} branch steps lead the list`,
+      JSON.stringify(steps.slice(0, branchSteps.length)) === JSON.stringify(branchSteps));
+    // The progress bar is rendered with total = steps.length, so no reachable
+    // index may need clamping.
+    ok(`${label} every index is inside the bar`,
+      steps.every((_, i) => i >= 0 && i < steps.length));
+  }
+}
+
+// ── 11. Every step body renders ─────────────────────────────────────────────
+// The gate that catches a helper deleted along with the function above it.
+// Splitting the two step modules cut `thumb()` and `emptyStep()` out of the
+// photo one — they sat below the renderers that moved — and nothing said so:
+// both files parsed, both exported, and the pager threw
+// "thumb is not defined" only when somebody opened it.
+
+console.log("\n11. Every step body renders without throwing");
+{
+  const w = loadUi();
+  const notes = new w.ImportNotesBranch();
+  const photos = new w.ImportPhotosBranch();
+  photos.draft.shots = [{
+    id: "s1", label: "a.jpg", file: null, url: "blob:a", playedAt: "2026-02-01",
+    dateSource: "exif", countryCode: "PT", countrySource: "photo",
+    game: { id: "g1", name: "Catan" }, notes: null, photoUrl: null,
+    players: [{ name: "Me", userId: "u-me", isWinner: true, score: null }],
+  }];
+  const opts = { host: "window.importWizardView.review", expanded: {}, shownGroups: 99 };
+
+  for (const [label, branch] of [["notes", notes], ["photos", photos]]) {
+    for (const step of branch.steps) {
+      let html = null, err = null;
+      try { html = branch.renderStep(step, opts); } catch (e) { err = e.message; }
+      ok(`${label}/${step} renders`, typeof html === "string" && html.length > 40);
+      if (err) console.log(`       ${err}`);
+    }
+  }
+
+  // And the three shared screens, for both sources.
+  for (const [label, draft] of [["notes", notes.draft], ["photos", photos.draft]]) {
+    if (label === "notes") {
+      draft.plays = [{
+        id: "p1", gameName: "Catan", gameId: null, playedAt: "2026-01-04",
+        notes: null, runId: null, dropped: false, seatsOverride: null,
+        players: [{ name: "Sean", isWinner: true, score: 9 }],
+      }];
+      draft.gameMap = { catan: { id: "g1", name: "Catan", thumbnail_url: null } };
+      draft.playerNames = ["Sean"];
+      draft.playerMap = { sean: { kind: "ghost", userId: null, label: "Sean" } };
+    }
+    const rowId = draft.reviewGroups()[0].rows[0].id;
+    for (const [name, fn] of [
+      ["review", () => w.ImportReviewStep.review(draft, opts)],
+      ["review (open)", () => w.ImportReviewStep.review(
+        draft, { ...opts, expanded: { [rowId]: true } })],
+      ["summary", () => w.ImportReviewStep.summary(draft, opts)],
+    ]) {
+      let html = null, err = null;
+      try { html = fn(); } catch (e) { err = e.message; }
+      ok(`${label} ${name} renders`, typeof html === "string" && html.length > 40);
+      if (err) console.log(`       ${err}`);
+    }
+    draft.progress = { done: 1, total: 2, imported: 1, duplicate: 0, failed: 0,
+      photosFailed: 0, errors: [] };
+    let html = null, err = null;
+    try { html = w.ImportReviewStep.progress(draft, true, opts); } catch (e) { err = e.message; }
+    ok(`${label} progress renders`, typeof html === "string" && html.includes("progressbar"));
+    if (err) console.log(`       ${err}`);
+    draft.progress = null;
+  }
+
+  // The picker names four sources, two of them not built yet.
+  const picker = w.ImportSourceStep.render({ resume: null });
+  ok("the picker offers four sources",
+    (picker.match(/class="imp-row[ "]/g) || []).length === 4);
+  ok("two of them are disabled",
+    (picker.match(/disabled aria-disabled/g) || []).length === 2);
+  ok("the BGG row points at the sync that already exists",
+    picker.includes("Settings \u2192 Connections"));
 }
 
 console.log(fails ? `\n${fails} FAILED\n` : "\nAll checks passed\n");

@@ -6,12 +6,12 @@
 // state, sheets and events. Same shell/bodies split as
 // widgets/import-plays-steps.js, for the same reason.
 //
-// Handlers are inline `onclick="window.photoImportView._foo()"` strings — the
+// Handlers are inline `onclick="window.importPhotosBranch._foo()"` strings — the
 // project idiom, and what keeps these functions pure. Anything carrying a
 // name the user typed goes through jsStr THEN escapeAttr; see helpers.js.
 
 (function () {
-  const V = "window.photoImportView";
+  const V = "window.importPhotosBranch";
   /** A handler attribute for a call with one user-typed string argument. */
   const call = (method, arg) => escapeAttr(`${V}.${method}('${jsStr(arg)}')`);
 
@@ -285,110 +285,7 @@
 
   // ── Step 3: Import ─────────────────────────────────────────────────────────
 
-  function renderImport(draft, opts) {
-    const busy = !!(opts && opts.importing);
-    const done = draft.progress && draft.progress.done >= draft.progress.total;
-    if (draft.progress && (busy || done)) return renderProgress(draft, busy);
-
-    const ready = draft.importable();
-    const missing = draft.unassigned();
-    const withPhoto = ready.filter((s) => s.file || s.photoUrl).length;
-    const seatless = draft.seatless().length;
-    const games = {};
-    for (const s of ready) games[s.game.name] = (games[s.game.name] || 0) + 1;
-
-    return `
-      <div class="imp-step">
-        <h3 class="imp-step__title font-display">Ready to import</h3>
-        <dl class="imp-summary">
-          <div><dt>Plays</dt><dd>${ready.length}</dd></div>
-          <div><dt>Games</dt><dd>${Object.keys(games).length}</dd></div>
-          <div>
-            <dt>Photos</dt><dd>${withPhoto}</dd>
-            ${withPhoto < ready.length
-              ? `<div class="imp-summary__note">${ready.length - withPhoto} without one</div>`
-              : ""}
-          </div>
-        </dl>
-        <ul class="imp-bygame">
-          ${Object.keys(games).map((name) => `
-            <li><span>${escapeHtml(name)}</span><span>${games[name]}</span></li>
-          `).join("")}
-        </ul>
-        ${missing.length ? `
-          <p class="imp-warn">
-            ${missing.length} photo${missing.length === 1 ? "" : "s"} still ${missing.length === 1 ? "has" : "have"} no game,
-            so ${missing.length === 1 ? "it won't" : "they won't"} be imported.
-            Go back to match ${missing.length === 1 ? "it" : "them"}.
-          </p>
-        ` : ""}
-        ${seatless ? `
-          <p class="imp-warn">
-            ${seatless} photo${seatless === 1 ? "" : "s"} ${seatless === 1 ? "has" : "have"} a game but
-            nobody at the table, so ${seatless === 1 ? "it won't" : "they won't"} be imported — a play
-            with no players counts towards nobody's record and leaves no ghost
-            for anyone to claim. Go back and seat ${seatless === 1 ? "it" : "them"}.
-          </p>
-        ` : ""}
-        <button class="imp-cta" type="button" ${ready.length ? "" : "disabled"}
-                onclick="${V}._startImport()">
-          Import ${ready.length} play${ready.length === 1 ? "" : "s"}
-        </button>
-        <p class="imp-note">
-          The photos go up first, then the plays. Leaving the screen mid-run
-          stops it; everything already saved stays saved.
-        </p>
-      </div>
-    `;
-  }
-
-  function renderProgress(draft, busy) {
-    const p = draft.progress;
-    const pct = p.total ? Math.round((p.done / p.total) * 100) : 100;
-    const failed = p.failed > 0;
-    // The first half of the bar is photos, the second is plays — worth saying,
-    // because the two halves move at very different speeds and a bar that
-    // crawls then sprints reads as a bar that is stuck.
-    const uploading = busy && p.done < p.total / 2;
-    return `
-      <div class="imp-step">
-        <h3 class="imp-step__title font-display">
-          ${busy ? (uploading ? "Uploading photos…" : "Saving plays…") : (failed ? "Import finished" : "Imported")}
-        </h3>
-        <div class="imp-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
-             aria-valuenow="${pct}" aria-label="Import progress">
-          <div class="imp-progress__fill" style="width:${pct}%"></div>
-        </div>
-        <p class="imp-progress__label">${p.done} of ${p.total}</p>
-        ${busy ? "" : `
-          <dl class="imp-summary">
-            <div><dt>Added</dt><dd>${p.imported}</dd></div>
-            ${p.duplicate ? `<div><dt>Already there</dt><dd>${p.duplicate}</dd></div>` : ""}
-            ${failed ? `<div><dt>Failed</dt><dd>${p.failed}</dd></div>` : ""}
-          </dl>
-          ${p.photosFailed ? `
-            <p class="imp-note">
-              ${p.photosFailed} photo${p.photosFailed === 1 ? "" : "s"} didn't upload.
-              ${p.photosFailed === 1 ? "That play" : "Those plays"} landed without
-              ${p.photosFailed === 1 ? "it" : "them"} — you can add a photo from the play itself later.
-            </p>
-          ` : ""}
-          ${failed ? `
-            <p class="imp-warn">
-              ${p.failed} play${p.failed === 1 ? "" : "s"} didn't land. Everything else did —
-              running the import again picks up only what's missing.
-            </p>
-            <button class="imp-cta imp-cta--ghost" type="button" onclick="${V}._startImport()">Try the rest again</button>
-          ` : ""}
-          <button class="imp-cta" type="button" onclick="${V}._finish()">
-            ${failed ? "Done" : "See your plays"}
-          </button>
-        `}
-      </div>
-    `;
-  }
-
-  // ── Shared ─────────────────────────────────────────────────────────────────
+  // ── Shared ──────────────────────────────────────────────────────
 
   /** A shot's thumbnail, or the placeholder a restored draft gets. */
   function thumb(shot, alt) {
@@ -410,9 +307,8 @@
     `;
   }
 
-  window.PhotoImportSteps = {
+  window.ImportPhotosSteps = {
     photos: renderPhotos,
     assign: renderAssign,
-    import: renderImport,
   };
 })();

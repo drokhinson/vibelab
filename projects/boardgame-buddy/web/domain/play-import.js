@@ -70,7 +70,11 @@
   const PARSE_TIMEOUT_MS = 90000;
   const IMPORT_TIMEOUT_MS = 60000;
 
-  const STEPS = ["source", "details", "players", "games", "plays", "import"];
+  // The wizard's step list for this source, the source picker aside. The
+  // review step used to be called "plays" — it is `review` now because it is
+  // the same screen the photo branch ends on (widgets/import-review-step.js),
+  // and two names for one screen is how two screens start.
+  const STEPS = ["source", "details", "players", "games", "review", "import"];
 
   /**
    * @typedef {Object} DraftPlayer
@@ -815,7 +819,7 @@
 
     /** @param {any} p @param {boolean} busy */
     progressHeading(p, busy) {
-      return busy ? "Importing…" : (p && p.failed ? "Finished with errors" : "Imported");
+      return busy ? "Importing…" : (p && p.failed ? "Import finished" : "Imported");
     }
 
     progressNote() { return null; }

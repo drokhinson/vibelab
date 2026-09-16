@@ -664,42 +664,36 @@
     }
 
     /**
-     * The two importers' front door (views/import-plays-view.js and
-     * views/photo-import-view.js).
+     * The play importer's front door (views/import-wizard-view.js).
      *
-     * Their own section rather than rows under Connections: BGG sync links an
-     * account and keeps two libraries in step, and these read something the
+     * Its own section rather than a row under Connections: BGG sync links an
+     * account and keeps two libraries in step, and this reads something the
      * user already has, once. Filing them together would suggest an importer
      * needs an account somewhere, which is the whole point of it not doing.
      *
-     * Two rows rather than one screen with a source picker, because they are
-     * not two sources for one flow — they ask for different things (a note to
-     * be read and checked; a photo to be captioned) and they end up somewhere
-     * different (plays; plays with their photographs). Which one somebody
-     * wants is decided by what they have, and that is a decision they can make
-     * from these two lines without opening either.
+     * ONE row, where there used to be two. The old pair argued that a note and
+     * a camera roll are not two sources for one flow — they ask for different
+     * things and end somewhere different — and that the choice was better made
+     * from two lines here than from a picker inside. That was true while the
+     * two flows ended on two different screens. They end on the same review and
+     * the same summary now, so which record you happen to have is a question
+     * about your evening rather than a question about which wizard to open,
+     * and it belongs on the first step of the one that exists.
+     *
+     * The wizard also names the sources it does not have yet, which two rows
+     * here could not: a door that says "Board Game Arena, coming soon" is worth
+     * more than the absence of one.
      */
     _renderImportCard() {
       return `
         <div class="set-card">
-          <button class="set-card__row" onclick="window.router.go('import-plays')">
+          <button class="set-card__row" onclick="window.router.go('import-wizard')">
             <span class="set-card__row-icon"><i data-icon="upload" class="w-4 h-4"></i></span>
             <span class="set-card__row-body">
-              <span class="set-card__row-title">Import plays from notes</span>
+              <span class="set-card__row-title">Play importer</span>
               <span class="set-card__row-sub">
-                Paste a list or a page of tally marks — you review every play
-                before anything is saved.
-              </span>
-            </span>
-            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
-          </button>
-          <button class="set-card__row" onclick="window.router.go('photo-import')">
-            <span class="set-card__row-icon"><i data-icon="camera" class="w-4 h-4"></i></span>
-            <span class="set-card__row-body">
-              <span class="set-card__row-title">Import plays from photos</span>
-              <span class="set-card__row-sub">
-                Pick photos of games you've played — each one keeps its date and
-                its country, and you add the game and the players.
+                Import plays from photos, notes or another app — you review every
+                play before anything is saved.
               </span>
             </span>
             <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
