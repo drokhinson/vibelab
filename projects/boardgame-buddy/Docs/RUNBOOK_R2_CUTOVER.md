@@ -38,6 +38,21 @@ Cloudflare dashboard → **R2** → Create bucket, twice:
 
 Location hint: leave it automatic. Default storage class: Standard.
 
+**Jurisdiction is not the location hint, and it is the one field here that can
+cost you an evening.** A location hint only tells Cloudflare where to put the
+bytes; it never appears in the S3 endpoint or the request signature. A
+*jurisdiction* changes the endpoint host — `<account>.us.r2.cloudflarestorage.com`
+rather than `<account>.r2.cloudflarestorage.com` — and on the default host a
+jurisdiction bucket answers **`AccessDenied`**, not "no such bucket". So the
+symptom is a 403 on a bucket you can see in the dashboard, with a token you can
+see is scoped to it, and every other explanation looks likelier first.
+
+If you set one, it must go in three places: the `rclone` endpoint (step 5), the
+`R2_JURISDICTION` Railway variable (step 8), and nowhere else — the custom
+domains in step 2 are unaffected, because public reads do not go through the S3
+API. Leave it Default unless you specifically want data residency; the app
+works with either.
+
 **Two buckets, not one with `plays/` and `games/` prefixes.** A play photo is
 user content; a cover is a cache of public BGG images. The privacy policy
 discloses that a play photo's URL is open to anyone holding the link, and the
@@ -121,17 +136,41 @@ rclone config create r2 s3 \
   region=auto
 ```
 
+**`region` is always `auto`**, whatever the bucket's location says. R2's S3 API
+is account-scoped and region-less, and `auto` is the literal string it expects
+in the SigV4 scope — a real region name is rejected. If the buckets are in a
+jurisdiction, that goes in the **host** (`<ACCOUNT_ID>.us.r2.cloudflarestorage.com`),
+never in `region`.
+
+**On Windows, drop the backslashes and put each command on one line.** `\` is a
+bash continuation; cmd reads it literally and loses the rest of the command.
+One line works in cmd, PowerShell and bash alike. (`rclone` itself needs
+installing first — `winget install Rclone.Rclone`, then open a *new* terminal
+so it is on `PATH`.)
+
 Prove both remotes work before copying anything:
 
 ```
-rclone lsd sb:                      # should list boardgamebuddy-plays, -games
-rclone lsd r2:                      # should list bgb-plays, bgb-games
 rclone size sb:boardgamebuddy-plays # note this number
 rclone size sb:boardgamebuddy-games # and this one
+rclone size r2:bgb-plays            # expect 0 objects
+rclone size r2:bgb-games            # expect 0 objects
 ```
 
-If `lsd` fails, the endpoint or the keys are wrong. Fix that here — every later
-step assumes these two lines work.
+**Name the bucket; do not test the account.** `rclone lsd sb:` and `rclone lsd
+r2:` both call `ListBuckets`, an account-level operation that neither side
+serves here — Supabase's endpoint is per-project, and the step 3 token is
+scoped to two buckets. Both answer 403 while everything you need works, which
+is a false alarm that reads exactly like a real one.
+
+Read the error rather than guessing, because the three cases have different
+fixes and only one of them is the credentials:
+
+| Error | Meaning |
+|---|---|
+| `InvalidAccessKeyId` | the key does not exist at that endpoint — wrong key, or an endpoint pointing at another project/account |
+| `SignatureDoesNotMatch` | wrong secret, or a `region` other than `auto` |
+| `AccessDenied` | the key is valid and this operation or bucket is not permitted — token scope, or a jurisdiction missing from the host |
 
 ## 6. Copy the objects
 
@@ -191,6 +230,13 @@ R2_PLAYS_BUCKET=bgb-plays
 R2_GAMES_BUCKET=bgb-games
 R2_PLAYS_PUBLIC_BASE=https://img.bgbuddy.app
 R2_GAMES_PUBLIC_BASE=https://covers.bgbuddy.app
+```
+
+Plus an eighth **only if step 1's buckets are in a jurisdiction**, matching the
+one in the rclone endpoint:
+
+```
+R2_JURISDICTION=us
 ```
 
 Seven or nothing, per store. `object_store.configured()` requires the account,
@@ -290,7 +336,7 @@ no complaints.
 
 | Got to | Undo |
 |---|---|
-| step 9 | Unset the seven Railway variables. New uploads return to Supabase; the handful of rows written to R2 keep working, because R2 is still serving them. |
+| step 9 | Unset the R2 Railway variables. New uploads return to Supabase; the handful of rows written to R2 keep working, because R2 is still serving them. |
 | step 10 | The same, plus run `036` again with `old_*` and `new_*` swapped. The objects are still in both places, so either direction works. |
 
 ---

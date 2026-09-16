@@ -117,6 +117,62 @@ def test_one_missing_variable_is_unconfigured(monkeypatch, missing):
         object_store.reload()
 
 
+# ── The jurisdiction in the endpoint host ────────────────────────────────────
+# A bucket created in a jurisdiction is not reachable on the account's default
+# S3 host, and R2 reports that as AccessDenied on a bucket the dashboard shows
+# and the token is scoped to. These pin the host so the next person debugging
+# that has the answer in a test rather than in an evening.
+
+
+def test_endpoint_has_no_jurisdiction_segment_by_default(configured):
+    assert object_store._cfg.endpoint() == "https://acct123.r2.cloudflarestorage.com"
+
+
+def test_endpoint_carries_the_jurisdiction_when_set(monkeypatch):
+    for name, value in R2_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("R2_JURISDICTION", "us")
+    object_store.reload()
+    try:
+        assert object_store._cfg.endpoint() == "https://acct123.us.r2.cloudflarestorage.com"
+        assert object_store.configured() is True
+    finally:
+        object_store.reload()
+
+
+def test_jurisdiction_is_case_and_space_insensitive(monkeypatch):
+    """Operators paste what the dashboard shows, which is 'US'."""
+    for name, value in R2_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("R2_JURISDICTION", "  US  ")
+    object_store.reload()
+    try:
+        assert object_store._cfg.endpoint() == "https://acct123.us.r2.cloudflarestorage.com"
+    finally:
+        object_store.reload()
+
+
+@pytest.mark.parametrize(
+    "bad", ["us/../evil", "us.evil.com", "-us", "us-", "e vil", "us_1", "a" * 64]
+)
+def test_a_jurisdiction_that_is_not_a_hostname_label_disables_r2(monkeypatch, bad):
+    """It is interpolated into a host, so garbage fails closed, not open.
+
+    Reporting the store unconfigured sends uploads back to Supabase Storage —
+    the designed fallback — rather than signing for a host nobody chose.
+    """
+    for name, value in R2_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("R2_JURISDICTION", bad)
+    object_store.reload()
+    try:
+        assert object_store.configured() is False
+        assert object_store.configured(object_store.PLAYS) is False
+        assert object_store._cfg.endpoint() == "https://acct123.r2.cloudflarestorage.com"
+    finally:
+        object_store.reload()
+
+
 def test_public_url_is_the_base_plus_the_key(configured):
     assert (
         object_store.public_url(object_store.PLAYS, "uid-1/deadbeef.jpg")

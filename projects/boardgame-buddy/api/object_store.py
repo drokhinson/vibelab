@@ -37,6 +37,7 @@ after they do. Local dev has no R2 credentials and needs none.
 """
 import logging
 import os
+import re
 import threading
 from urllib.parse import quote
 
@@ -49,7 +50,27 @@ GAMES = "games"
 
 # R2's S3 endpoint is account-scoped and region-less. "auto" is the literal
 # region R2 expects in the SigV4 scope; it is not a placeholder.
+#
+# NOT the bucket's location hint. A bucket created in "US" or "Eastern North
+# America" is still signed for `auto` — the hint decides where Cloudflare puts
+# the bytes and never appears in the signature. Signing with a real region name
+# is rejected outright.
 _R2_REGION = "auto"
+
+# A bucket created in a JURISDICTION is a different matter: it is not reachable
+# on the account's default S3 host at all, and the jurisdiction goes in the
+# hostname — `<account>.us.r2.cloudflarestorage.com`. The default jurisdiction
+# has no segment.
+#
+# This cost an evening to find, because R2 reports it as `AccessDenied` on a
+# bucket you can see in the dashboard and that your token is scoped to: from
+# the default host the bucket simply is not there, and R2 will not say so.
+# Neither the credentials nor the token scope are wrong, which is exactly what
+# makes every other hypothesis look plausible first.
+#
+# Constrained to a hostname label because that is where it is interpolated. An
+# unset value is the default jurisdiction and the endpoint we always built.
+_JURISDICTION_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$")
 
 
 class ObjectStoreError(RuntimeError):
@@ -63,11 +84,31 @@ class NotConfigured(ObjectStoreError):
 class _Config:
     """The env-derived settings, read once and re-readable by `reload()`."""
 
-    __slots__ = ("account_id", "access_key_id", "secret_access_key", "buckets", "bases")
+    __slots__ = (
+        "account_id",
+        "access_key_id",
+        "secret_access_key",
+        "buckets",
+        "bases",
+        "jurisdiction",
+        "jurisdiction_valid",
+    )
 
     def __init__(self) -> None:
         env = os.environ.get
         self.account_id = (env("R2_ACCOUNT_ID") or "").strip()
+        # Optional, and empty means the default jurisdiction. A value that is
+        # not a hostname label is dropped rather than interpolated: the result
+        # would be an unresolvable or — worse — an attacker-chosen host, and
+        # `ready()` below then reports the store unusable so the API keeps
+        # writing to Supabase instead of somewhere unintended.
+        juris = (env("R2_JURISDICTION") or "").strip().lower()
+        self.jurisdiction_valid = not juris or bool(_JURISDICTION_RE.match(juris))
+        if not self.jurisdiction_valid:
+            logger.error(
+                "R2_JURISDICTION=%r is not a hostname label; R2 left unconfigured", juris
+            )
+        self.jurisdiction = juris if self.jurisdiction_valid else ""
         self.access_key_id = (env("R2_ACCESS_KEY_ID") or "").strip()
         self.secret_access_key = (env("R2_SECRET_ACCESS_KEY") or "").strip()
         self.buckets = {
@@ -96,7 +137,13 @@ class _Config:
             and self.secret_access_key
             and self.buckets.get(kind)
             and self.bases.get(kind)
+            and self.jurisdiction_valid
         )
+
+    def endpoint(self) -> str:
+        """The S3 host to sign for. See _JURISDICTION_RE for why this varies."""
+        label = f".{self.jurisdiction}" if self.jurisdiction else ""
+        return f"https://{self.account_id}{label}.r2.cloudflarestorage.com"
 
 
 _lock = threading.Lock()
@@ -144,7 +191,7 @@ def _s3():
 
             _client = boto3.client(
                 "s3",
-                endpoint_url=f"https://{_cfg.account_id}.r2.cloudflarestorage.com",
+                endpoint_url=_cfg.endpoint(),
                 aws_access_key_id=_cfg.access_key_id,
                 aws_secret_access_key=_cfg.secret_access_key,
                 region_name=_R2_REGION,

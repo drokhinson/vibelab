@@ -31,6 +31,7 @@ Supersedes the root `ENV.md` for anything BoardgameBuddy. Domain: **bgbuddy.app*
 | Variable | Stage | Purpose |
 |---|---|---|
 | `R2_ACCOUNT_ID` | 4 | Cloudflare account ID. `object_store.py` builds the S3 endpoint from it: `https://<id>.r2.cloudflarestorage.com`. |
+| `R2_JURISDICTION` | 4 | **Optional, and only if the buckets were created in a jurisdiction** — then it goes in the endpoint host: `https://<id>.<juris>.r2.cloudflarestorage.com`. Lowercased; `us` for a US-jurisdiction bucket. Leave unset for the default jurisdiction. Getting this wrong is invisible until an upload: a bucket in a jurisdiction answers `AccessDenied` on the default host, which looks exactly like a mis-scoped token. Not the bucket's *location hint* — that never reaches the endpoint or the signature. A value that is not a hostname label disables R2 entirely rather than being interpolated. |
 | `R2_ACCESS_KEY_ID` | 4 | R2 API token. Scope: **Object Read & Write**, limited to the two buckets. |
 | `R2_SECRET_ACCESS_KEY` | 4 | The other half of that token. Shown once at creation. |
 | `R2_PLAYS_BUCKET` | 4 | Play photos (was Supabase `boardgamebuddy-plays`). Object keys are unchanged: `{user_id}/{uuid4hex}.{ext}`. |
@@ -39,7 +40,8 @@ Supersedes the root `ENV.md` for anything BoardgameBuddy. Domain: **bgbuddy.app*
 | `R2_GAMES_PUBLIC_BASE` | 4 | e.g. `https://covers.bgbuddy.app` — the custom domain on the games bucket. Stored in `boardgamebuddy_games.image_url`/`.thumbnail_url`. |
 | `GCP_PROJECT_ID` | 3-ALT | `boardgamebuddy-508716`. Read by `api/jwt_auth.py` as the Firebase token `aud`, with the issuer derived as `https://securetoken.google.com/<id>`. **Set it on the Railway service before the frontend swap.** Until it is set, the verifier still accepts Supabase tokens normally but answers 500 to any Identity Platform token — deliberately, since an unset value is an operator error, not a bad credential. Must equal `BGB_FIREBASE_PROJECT_ID`. |
 
-**All seven or none, per store.** `object_store.configured(kind)` requires the
+**All seven or none, per store** (`R2_JURISDICTION` is the optional eighth and
+is not part of the count). `object_store.configured(kind)` requires the
 account, both token halves, that store's bucket AND its public base. Miss any
 one and the API silently keeps writing to Supabase Storage — which is the
 intended fallback, so nothing breaks and nothing tells you either. There is no
