@@ -199,6 +199,53 @@ Blocking functions**. `supabaseRole` should be listed against *Before sign-in*.
 **should be committed** (`.gitignore` has an exception for it), so a later
 deploy installs the same versions this one did.
 
+### B3b. If the first deploy fails with "container failed to start"
+
+```
+Could not create or update Cloud Run service supabaserole, Container
+Healthcheck failed. The user-provided container failed to start and listen on
+the port defined provided by the PORT=8080 environment variable within the
+allocated timeout.
+```
+
+**Run the deploy again before debugging anything.** On a project that has
+never had a Cloud Function, that same deploy enables five APIs on the way
+through — `artifactregistry`, `cloudbuild`, `run`, `eventarc`,
+`firebaseextensions` — and mints service identities for two of them. Those
+grants propagate asynchronously, so the build can finish and produce an image
+that the Cloud Run service account cannot yet pull. The container then never
+starts, and the symptom is a healthcheck timeout that says nothing about
+permissions. A retry a few minutes later usually just works, and the CLI is
+idempotent.
+
+It is worth knowing that the code is almost certainly not the problem here:
+the deploy's own `Loading and analyzing source code` step (`Serving at port
+8172` in its output) already loaded the module without error, and that step is
+the one that catches a broken `index.js`.
+
+If a second attempt fails the same way, get the actual reason from the
+container rather than guessing — the Logs URL the CLI printed, or:
+
+```
+gcloud run services logs read supabaserole --region us-central1 --limit 50 --project boardgamebuddy-508716
+```
+
+The two causes worth knowing:
+
+* **A missing role on the compute service account.** A first-ever deploy
+  sometimes leaves `<project-number>-compute@developer.gserviceaccount.com`
+  without **Artifact Registry Reader**, so it cannot pull its own image. Grant
+  it in IAM and redeploy.
+* **The runtime.** `functions/package.json` pins `engines.node` to `22`.
+  It was briefly `20`, which the deploy itself warned about —
+  *"Runtime Node.js 20 was deprecated on 2026-04-30 and will be decommissioned
+  on 2026-10-30"* — so a function deployed on it would have stopped building
+  within weeks. If you see that warning again, the pin has regressed.
+
+Node 22 also means a local `npm install` on Node 24 prints
+`EBADENGINE ... required: { node: '22' }`. Harmless: `engines.node` here
+selects the **cloud** runtime, and is not a constraint on your machine.
+
 ### B4. Verify with a throwaway account
 
 Sign up a new account, then decode its token as in A5 and confirm
