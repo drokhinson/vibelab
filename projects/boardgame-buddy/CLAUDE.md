@@ -29,6 +29,7 @@ projects/boardgame-buddy/
 ├── db/migrations/          001–036, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  one-off generators + operator scripts, never deploy steps
+├── functions/              ONE Identity Platform blocking function (see below)
 ├── web/                    the static PWA
 ├── moved/                  the retired Vercel origin's notice (see below)
 └── Docs/
@@ -47,6 +48,7 @@ forty of them for nothing.
 | `web/` | Cloudflare Pages (`bgbuddy`) | `.github/workflows/deploy-bgb-web.yml` |
 | `api/` | Railway, Root Directory `projects/boardgame-buddy/api` | `.github/workflows/deploy-bgb-api.yml` |
 | `moved/` | the retired Vercel project — a static notice, dispatch-only | `.github/workflows/deploy-bgb-moved-notice.yml` |
+| `functions/` | GCP Identity Platform blocking function | **manual** — `firebase deploy --only functions` from `projects/boardgame-buddy` |
 
 Workflows live at the repo root because GitHub only reads them from there.
 `deploy-frontend.yml` filters this project out of its change detection — if that
@@ -89,7 +91,15 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    registered on that origin serves same-origin subresources cache-first with
    revalidation off, so any file the notice referenced could come back as the
    old app's bytes. Its deploy workflow fails on any external reference.
-11. **Both image uploads still carry a Supabase Storage branch**, and
+11. **`functions/` looks unused and is load-bearing.** Nothing in the repo
+   imports it and no test covers it — it runs inside Google's auth flow. It
+   puts the `role: "authenticated"` claim on every ID token, which is what
+   makes the `TO authenticated` RLS policies on the live-session tables
+   evaluate at all. Delete it and live scoring plus both Realtime channels
+   break for every account created afterwards, silently: the API is
+   service-role and bypasses RLS, so everything except the browser-direct
+   paths keeps working. `Docs/RUNBOOK_AUTH_ROLE_CLAIM.md` is the whole story.
+12. **Both image uploads still carry a Supabase Storage branch**, and
    `object_store.py` treats an unconfigured R2 as normal rather than as an
    error. That is the Stage 4 rollout: the R2 code deploys before the buckets
    exist, and unsetting one variable rolls it back after they do. What is NOT

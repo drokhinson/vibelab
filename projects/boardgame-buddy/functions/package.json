@@ -1,0 +1,12 @@
+{
+  "name": "bgb-auth-functions",
+  "description": "Identity Platform blocking function: the role claim Supabase RLS needs",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-functions": "^7.4.0"
+  }
+}

@@ -37,6 +37,9 @@ npm-debug.log*
 package-lock.json
 # Native apps need a committed lock file so EAS Build / expo-doctor can run.
 !projects/*/app/package-lock.json
+# Cloud Functions are deployed from source: the lockfile is what makes a
+# later deploy install what the last one did.
+!projects/*/functions/package-lock.json
 
 # Web prototypes copy ../shared/ into web/shared/ at build time (see web/build.sh).
 # The source of truth lives in projects/<name>/shared/.
