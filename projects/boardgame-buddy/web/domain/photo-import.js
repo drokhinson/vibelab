@@ -423,6 +423,13 @@
     /** @returns {"notes"|"photos"} */
     get sourceKey() { return "photos"; }
 
+    /**
+     * The catalog game of one item in `importable()`. Part of the ImportSource
+     * interface — see PlayImport.gameOf. A shot carries its own.
+     * @param {any} shot
+     */
+    gameOf(shot) { return shot.game; }
+
     /** Every photo carries its own date, out of its own EXIF. */
     get supportsBulkDate() { return false; }
 

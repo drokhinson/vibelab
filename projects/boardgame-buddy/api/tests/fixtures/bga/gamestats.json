@@ -1,0 +1,13 @@
+{"status": 1, "has_more": false, "tables": [
+  {"table_id": "555000123", "game_name": "Azul", "game_id": "1032", "end": "1772409600",
+   "players": [
+     {"id": "88421735", "name": "me_bga", "score": "88", "gamerank": "1"},
+     {"id": "90112233", "name": "Tiggy_42", "score": "71", "gamerank": "2"}
+   ]},
+  {"table_id": "555000456", "game_name": "Hanabi", "game_id": "1606", "end": "1772323200",
+   "players": [
+     {"id": "88421735", "name": "me_bga", "score": "25", "gamerank": "1"},
+     {"id": "90112233", "name": "Tiggy_42", "score": "25", "gamerank": "1"},
+     {"id": "0", "name": "Robot", "is_ai": "1", "score": "25", "gamerank": "1"}
+   ]}
+]}

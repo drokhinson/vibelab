@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// check-import-wizard.mjs — assert the two import drafts answer one interface.
+// check-import-wizard.mjs — assert every import draft answers one interface.
 //
 //     node projects/boardgame-buddy/tools/check-import-wizard.mjs
 //
@@ -8,12 +8,12 @@
 // into a VM context and checks the things the unified importer rests on and
 // that are invisible when they break.
 //
-// The note importer and the photo importer stayed two models on purpose: one
-// is a parse → global name-map → run-collapse machine and the other is an
-// EXIF → per-file upload machine, and merging them would be a thousand lines
-// of `if (source === …)`. What makes one review screen render both is that
-// they answer the SAME interface. Assertion 1 is the whole justification for
-// that choice, and it is one loop.
+// The three importers stayed three models on purpose: a parse → global
+// name-map → run-collapse machine, an EXIF → per-file upload machine, and a
+// sign-in → sweep → handle-map machine. Merging them would be a thousand lines
+// of `if (source === …)`. What makes one review screen render all of them is
+// that they answer the SAME interface. Assertion 1 is the whole justification
+// for that choice, and it is one loop.
 //
 // The rest guard the per-play seat override, which is the genuinely new and
 // genuinely dangerous piece: seats in the note importer are DERIVED through a
@@ -46,13 +46,19 @@ function load() {
       removeItem(k) { this._v.delete(k); },
     },
   };
+  // Same globals as loadUi()'s sandbox, deliberately: the two used to differ,
+  // and a model touching RegExp at module scope would then throw in one and
+  // not the other — a gate that disagrees with itself about what "loads" means.
   const sandbox = {
     window: win, console, Date, Number, Math, Map, Set, Promise, JSON, String,
-    Array, Object, Boolean, URL,
+    Array, Object, Boolean, URL, RegExp, Error, Intl, parseInt, parseFloat, isNaN,
   };
   sandbox.localStorage = win.localStorage;
   vm.createContext(sandbox);
-  for (const f of ["domain/play-import.js", "domain/photo-import.js"]) {
+  for (const f of [
+    "domain/import-seats.js", "domain/play-import.js", "domain/photo-import.js",
+    "domain/bga-import.js",
+  ]) {
     vm.runInContext(fs.readFileSync(`${W}${f}`, "utf8"), sandbox, { filename: f });
   }
   return win;
@@ -93,17 +99,20 @@ function loadUi() {
   // step bodies build every string with.
   run("helpers.js");
   for (const f of [
-    "domain/import-people.js", "domain/play-import.js", "domain/photo-import.js",
+    "domain/import-people.js", "domain/import-seats.js",
+    "domain/play-import.js", "domain/photo-import.js",
+    "domain/bga.js", "domain/bga-import.js",
     "domain/import-draft.js", "widgets/import-review-step.js",
     "widgets/import-source-step.js", "widgets/import-notes-steps.js",
-    "widgets/import-photos-steps.js", "widgets/import-notes-branch.js",
-    "widgets/import-photos-branch.js",
+    "widgets/import-photos-steps.js", "widgets/import-bga-steps.js",
+    "widgets/import-notes-branch.js", "widgets/import-photos-branch.js",
+    "widgets/import-bga-branch.js",
   ]) run(f);
   return win;
 }
 
 const win = load();
-const { PlayImport, PhotoImport } = win;
+const { PlayImport, PhotoImport, BgaImport } = win;
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -174,14 +183,62 @@ function photoDraft() {
   return d;
 }
 
+/**
+ * A Board Game Arena draft: two tables of one game with the same two people,
+ * one of another game. The repeated pair is what run-collapse and feed
+ * grouping bite on; the two handles are one person, which is what the seat
+ * collapse has to honour or migration 023's unique index refuses the play.
+ *
+ * `Ctor` so a caller with its own VM context can build one there — §8 saves
+ * and restores through a fresh sandbox's localStorage, and a draft built from
+ * the module-level class would write into the wrong one and silently restore
+ * nothing.
+ */
+function bgaDraft(Ctor = BgaImport) {
+  const d = new Ctor();
+  d.link = { username: "me_bga", playerId: "77", authState: "linked", lastImportAt: null };
+  d.tables = [
+    ...[0, 1].map((i) => ({
+      id: `t-${i}`, bgaTableId: 5550 + i, gameName: "Azul", gameId: null,
+      playedAt: "2026-03-01", seatsOverride: null, dropped: false,
+      seats: [
+        { handle: "Tiggy_42", isWinner: true, score: 88, rank: 1 },
+        { handle: "tiggy", isWinner: false, score: 71, rank: 2 },
+      ],
+    })),
+    {
+      id: "t-solo", bgaTableId: 5599, gameName: "Hanabi", gameId: null,
+      playedAt: "2026-03-02", seatsOverride: null, dropped: false,
+      seats: [{ handle: "Tiggy_42", isWinner: true, score: 25, rank: 1 }],
+    },
+  ];
+  d.handles = ["Tiggy_42", "tiggy"];
+  // Two BGA accounts, one person — the BGA analogue of "Jas" and "Jasmine".
+  d.handleMap = {
+    tiggy_42: { kind: "buddy", userId: "u-tig", label: "Tiggy" },
+    tiggy: { kind: "buddy", userId: "u-tig", label: "Tiggy" },
+  };
+  d.matchReasons = { tiggy_42: "remembered", tiggy: "fuzzy" };
+  d.gameMap = {
+    azul: { id: "g-azul", name: "Azul", thumbnail_url: null },
+    hanabi: { id: "g-hana", name: "Hanabi", thumbnail_url: null },
+  };
+  d.gameRefs = [
+    { name: "Azul", candidates: [], confident: true },
+    { name: "Hanabi", candidates: [], confident: true },
+  ];
+  d.skipped = 12;
+  return d;
+}
+
 // ── 1. Interface conformance ─────────────────────────────────────────────────
 // The entire argument for keeping two models behind an adapter rather than
 // merging them. If this fails, the shared review step cannot be shared.
 
-console.log("\n1. Both drafts answer the ImportSource interface");
+console.log("\n1. Every draft answers the ImportSource interface");
 {
   const METHODS = [
-    "importable", "seatless", "seats", "toPayload", "run",
+    "importable", "seatless", "seats", "gameOf", "toPayload", "run",
     "save", "restore", "clearDraft",
     "reviewGroups", "reviewWarnings", "reviewNotices",
     "summaryTile", "ctaNote", "progressHeading", "progressNote",
@@ -194,6 +251,7 @@ console.log("\n1. Both drafts answer the ImportSource interface");
   for (const [label, Ctor, draft] of [
     ["PlayImport", PlayImport, noteDraft()],
     ["PhotoImport", PhotoImport, photoDraft()],
+    ["BgaImport", BgaImport, bgaDraft()],
   ]) {
     const missing = METHODS.filter((m) => typeof draft[m] !== "function");
     ok(`${label} implements every method`, missing.length === 0);
@@ -212,7 +270,9 @@ console.log("\n1. Both drafts answer the ImportSource interface");
   // produce every key, or the step reads undefined on one source only.
   const ROW_KEYS = ["id", "count", "countEditable", "game", "playedAt", "notes",
     "thumbUrl", "countryCode", "seats", "edited", "runNote"];
-  for (const [label, draft] of [["notes", noteDraft()], ["photos", photoDraft()]]) {
+  for (const [label, draft] of [
+    ["notes", noteDraft()], ["photos", photoDraft()], ["bga", bgaDraft()],
+  ]) {
     const groups = draft.reviewGroups();
     const row = groups[0] && groups[0].rows[0];
     ok(`${label} reviewGroups() yields rows`, !!row);
@@ -329,6 +389,32 @@ console.log("\n5. Each source still writes its own columns after an edit");
   ok("a photo never groups", !("import_group_id" in shotPayload));
   ok("the edited score reached the payload",
     shotPayload.players.some((p) => p.score === 42));
+
+  // BGA's own column, and the two it must NOT invent. bga_table_id is the key
+  // the server dedupes a re-import on, so a payload that drops it turns every
+  // second import into a pile of duplicate plays.
+  const b = bgaDraft();
+  b.setScore("t-solo", "u:u-tig", "31");
+  const bGroups = b.assignGroups(b.importable());
+  const pairPayload = b.toPayload(b.tables[0], bGroups, "batch-3");
+  const bSoloPayload = b.toPayload(b.tables[2], bGroups, "batch-3");
+
+  ok("a BGA play carries its table id", pairPayload.bga_table_id === 5550);
+  ok("each table carries its OWN id", bSoloPayload.bga_table_id === 5599);
+  ok("a BGA play still carries a client_key", !!pairPayload.client_key);
+  ok("two identical BGA tables group together", !!pairPayload.import_group_id);
+  ok("a lone BGA table gets no group", bSoloPayload.import_group_id === null);
+  ok("BGA carries the batch id", pairPayload.import_batch_id === "batch-3");
+  ok("BGA sends no photo_url", !("photo_url" in pairPayload));
+  ok("BGA sends no country_code", !("country_code" in pairPayload));
+  ok("the edited score reached the BGA payload",
+    bSoloPayload.players.some((p) => p.score === 31));
+
+  // The seat collapse, which is what stops two handles for one person becoming
+  // two seats for one account — a play migration 023 refuses outright.
+  ok("two handles for one person collapse to one seat",
+    pairPayload.players.length === 1 && pairPayload.players[0].user_id === "u-tig");
+  ok("the collapse keeps the win", pairPayload.players[0].is_winner === true);
 }
 
 // ── 6. Scores ────────────────────────────────────────────────────────────────
@@ -371,6 +457,16 @@ console.log("\n7. Seats are addressed by identity, not by display name");
   ok("PhotoImport.whoOf is case-insensitive on a ghost",
     PhotoImport.whoOf({ name: "SEAN", userId: null })
       === PhotoImport.whoOf({ name: "sean", userId: null }));
+  // THREE models now, and this is what makes pointing the other two at
+  // domain/import-seats.js a safe change later: a handler in the shared review
+  // passes a key minted by one model to a method on another's draft, so two
+  // key shapes would silently address nobody.
+  ok("BgaImport.whoOf agrees on the key shape",
+    BgaImport.whoOf({ name: "Sean", user_id: "u-1" })
+      === PlayImport.whoOf({ name: "Sean", user_id: "u-1" }));
+  ok("BgaImport.whoOf agrees on a ghost key",
+    BgaImport.whoOf({ name: "SEAN", user_id: null })
+      === PlayImport.whoOf({ name: "sean", user_id: null }));
 
   const ph = photoDraft();
   ph.shots[0].players.push({ name: "Sean", userId: "u-other", isWinner: false, score: null });
@@ -416,6 +512,31 @@ console.log("\n8. A pre-edit draft restores with the new fields defaulted");
   const ph = new w.PhotoImport();
   ok("a v1 photo draft still restores", ph.restore() === true);
   ok("score is normalised to null", ph.shots[0].players[0].score === null);
+
+  // The BGA draft round-trips, AND — the assertion that earns this section's
+  // place — carries no password. There is no `password` field on the model to
+  // begin with and save() writes an explicit field list, but "we accidentally
+  // persisted the credential" is exactly the class of mistake that reads fine
+  // in review, so it gets a gate rather than a comment.
+  const b = bgaDraft(w.BgaImport);
+  b.save();
+  const saved = w.localStorage.getItem("bgb.bgaImport.draft");
+  ok("a BGA draft saves", typeof saved === "string" && saved.length > 10);
+  ok("a saved BGA draft holds no password", !/password|passwd|secret/i.test(saved || ""));
+
+  const b2 = new w.BgaImport();
+  ok("a BGA draft restores", b2.restore() === true);
+  ok("the table id survives the round trip", b2.tables[0].bgaTableId === 5550);
+  ok("seatsOverride is normalised to null", b2.tables[0].seatsOverride === null);
+  ok("rank survives the round trip", b2.tables[0].seats[0].rank === 1);
+  ok("the skipped count survives", b2.skipped === 12);
+  ok("the linked handle survives", b2.link.username === "me_bga");
+
+  // A table already imported is the server's answer, not the client's, but a
+  // table the user dropped must never reach the payload.
+  b2.dropRow("t-solo");
+  ok("a dropped table leaves importable()",
+    !b2.importable().some((t) => t.id === "t-solo"));
 }
 
 // ── 9. Every inline handler resolves ────────────────────────────────────────
@@ -433,6 +554,7 @@ console.log("\n9. Every inline handler names a method that exists");
   const OWNERS = {
     "window.importNotesBranch": "widgets/import-notes-branch.js",
     "window.importPhotosBranch": "widgets/import-photos-branch.js",
+    "window.importBgaBranch": "widgets/import-bga-branch.js",
     "window.importWizardView": "views/import-wizard-view.js",
     "window.importWizardView.review": "widgets/import-review-host.js",
   };
@@ -456,6 +578,7 @@ console.log("\n9. Every inline handler names a method that exists");
   const CALLERS = [
     "widgets/import-notes-steps.js",
     "widgets/import-photos-steps.js",
+    "widgets/import-bga-steps.js",
     "widgets/import-source-step.js",
     "widgets/import-review-step.js",
   ];
@@ -467,7 +590,7 @@ console.log("\n9. Every inline handler names a method that exists");
     const vMatch = src.match(/const V = "([^"]+)"/);
     const V = vMatch ? vMatch[1] : null;
     const text = V ? src.split("${V}").join(V) : src;
-    for (const m of text.matchAll(/(window\.importWizardView\.review|window\.importWizardView|window\.importNotesBranch|window\.importPhotosBranch)\.(_?[A-Za-z]\w*)\(/g)) {
+    for (const m of text.matchAll(/(window\.importWizardView\.review|window\.importWizardView|window\.importNotesBranch|window\.importPhotosBranch|window\.importBgaBranch)\.(_?[A-Za-z]\w*)\(/g)) {
       const [, global, method] = m;
       if (!defined[global] || !defined[global].has(method)) {
         bad.push(`${file}: ${global}.${method}()`);
@@ -504,6 +627,7 @@ console.log("\n10. Each branch's step list is walkable end to end");
   for (const [label, Ctor, branchSteps] of [
     ["notes", PlayImport, ["source", "details", "players", "games"]],
     ["photos", PhotoImport, ["photos", "assign"]],
+    ["bga", BgaImport, ["account", "fetch", "players", "games"]],
   ]) {
     const steps = Ctor.steps;
     ok(`${label} steps are unique`, new Set(steps).size === steps.length);
@@ -530,6 +654,17 @@ console.log("\n11. Every step body renders without throwing");
   const w = loadUi();
   const notes = new w.ImportNotesBranch();
   const photos = new w.ImportPhotosBranch();
+  const bga = new w.ImportBgaBranch();
+  // Enough draft to make every BGA step body have something to draw.
+  const bgaSeed = bgaDraft();
+  bga.draft.link = bgaSeed.link;
+  bga.draft.tables = bgaSeed.tables;
+  bga.draft.handles = bgaSeed.handles;
+  bga.draft.handleMap = bgaSeed.handleMap;
+  bga.draft.matchReasons = bgaSeed.matchReasons;
+  bga.draft.gameMap = bgaSeed.gameMap;
+  bga.draft.gameRefs = bgaSeed.gameRefs;
+  bga.draft.skipped = bgaSeed.skipped;
   photos.draft.shots = [{
     id: "s1", label: "a.jpg", file: null, url: "blob:a", playedAt: "2026-02-01",
     dateSource: "exif", countryCode: "PT", countrySource: "photo",
@@ -538,7 +673,7 @@ console.log("\n11. Every step body renders without throwing");
   }];
   const opts = { host: "window.importWizardView.review", expanded: {}, shownGroups: 99 };
 
-  for (const [label, branch] of [["notes", notes], ["photos", photos]]) {
+  for (const [label, branch] of [["notes", notes], ["photos", photos], ["bga", bga]]) {
     for (const step of branch.steps) {
       let html = null, err = null;
       try { html = branch.renderStep(step, opts); } catch (e) { err = e.message; }
@@ -547,8 +682,41 @@ console.log("\n11. Every step body renders without throwing");
     }
   }
 
-  // And the three shared screens, for both sources.
-  for (const [label, draft] of [["notes", notes.draft], ["photos", photos.draft]]) {
+  // The account step has TWO states and they are different screens: the
+  // unlinked one carries the consent copy and the fields that gate Continue,
+  // and rendering only the linked one would never exercise it.
+  {
+    const unlinked = new w.ImportBgaBranch();
+    let html = null, err = null;
+    try { html = unlinked.renderStep("account", opts); } catch (e) { err = e.message; }
+    ok("bga/account renders unlinked", typeof html === "string" && html.length > 40);
+    ok("the unlinked account step says the terms don't allow this",
+      !!html && html.includes("terms don"));
+    ok("the unlinked account step asks for a password",
+      !!html && html.includes('type="password"'));
+    if (err) console.log(`       ${err}`);
+
+    // The sweep's ledger, which only paints while a fetch is in flight. Set on
+    // the BRANCH rather than passed in opts: renderStep overlays its own
+    // transient state over whatever it is handed, because the branch is the
+    // source of truth about whether a fetch is running.
+    let ledger = null;
+    bga._fetching = true;
+    bga._fetchProgress = { state: "running", steps: [
+      { key: "history", state: "active", done: 3, total: null, detail: "3 new so far" },
+    ] };
+    try { ledger = bga.renderStep("fetch", opts); } catch (e) { err = e.message; }
+    bga._fetching = false;
+    bga._fetchProgress = null;
+    ok("bga/fetch renders its ledger",
+      typeof ledger === "string" && ledger.includes("imp-ledger"));
+    if (err) console.log(`       ${err}`);
+  }
+
+  // And the three shared screens, for every source.
+  for (const [label, draft] of [
+    ["notes", notes.draft], ["photos", photos.draft], ["bga", bga.draft],
+  ]) {
     if (label === "notes") {
       draft.plays = [{
         id: "p1", gameName: "Catan", gameId: null, playedAt: "2026-01-04",
@@ -580,14 +748,25 @@ console.log("\n11. Every step body renders without throwing");
     draft.progress = null;
   }
 
-  // The picker names four sources, two of them not built yet.
+  // The picker names four sources. ONE is still unbuilt — this count is the
+  // only thing between enabling a source and shipping a dead button, and it
+  // has to come down by one every time a source lands.
   const picker = w.ImportSourceStep.render({ resume: null });
   ok("the picker offers four sources",
     (picker.match(/class="imp-row[ "]/g) || []).length === 4);
-  ok("two of them are disabled",
-    (picker.match(/disabled aria-disabled/g) || []).length === 2);
+  ok("one of them is disabled",
+    (picker.match(/disabled aria-disabled/g) || []).length === 1);
   ok("the BGG row points at the sync that already exists",
     picker.includes("Settings \u2192 Connections"));
+  ok("the BGA row is live and warns before the door",
+    picker.includes("_pickSource(&#39;bga&#39;)") || picker.includes("_pickSource('bga')"));
+
+  // Every branch must expose _partners: ImportReviewHost._openRowPlayerSheet
+  // reads this._branch._partners directly, so a branch without it fails only
+  // when somebody opens a review row — the one place nothing else would catch.
+  for (const [label, branch] of [["notes", notes], ["photos", photos], ["bga", bga]]) {
+    ok(`${label} branch exposes _partners`, "_partners" in branch);
+  }
 }
 
 console.log(fails ? `\n${fails} FAILED\n` : "\nAll checks passed\n");

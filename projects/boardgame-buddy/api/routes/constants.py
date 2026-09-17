@@ -461,6 +461,84 @@ class BggCheckStepState(StrEnum):
     SKIPPED = "skipped"
 
 
+class BgaAuthState(StrEnum):
+    """Surfaced on /bga/link so the wizard's account step knows what to render.
+
+    The same three states as BggAuthState and deliberately not shared with it:
+    the two accounts link independently, and a user can be LINKED on one while
+    RELINK_REQUIRED on the other.
+    """
+
+    UNLINKED = "unlinked"                # No bga_username on profile
+    LINKED = "linked"                    # Username + encrypted password present
+    RELINK_REQUIRED = "relink_required"  # Username, but nothing we can decrypt
+
+
+def bga_auth_state_from(profile: dict) -> BgaAuthState:
+    """The state a profile row implies for Board Game Arena."""
+    if not profile.get("bga_username"):
+        return BgaAuthState.UNLINKED
+    if profile.get("bga_password_enc"):
+        return BgaAuthState.LINKED
+    return BgaAuthState.RELINK_REQUIRED
+
+
+class BgaFetchPhase(StrEnum):
+    """The phases POST /bga/tables/fetch walks, in the order it runs them.
+
+    ORDER IS LOAD-BEARING: the FE renders the checklist by iterating this enum,
+    so a phase's position here is its position on screen. Every phase is
+    emitted from the start — including DETAIL, which is skipped whenever BGA's
+    history pages carry their own rosters — because a row appearing halfway
+    down a running checklist reads worse than one that turns out not to have
+    been needed.
+    """
+
+    SIGN_IN = "sign_in"   # Reusing or refreshing the stored session
+    HISTORY = "history"   # Walking getGames pages, newest first
+    KNOWN = "known"       # Dropping tables already imported
+    DETAIL = "detail"     # Per-table rosters, only when history lacked them
+    MATCH = "match"       # Game names against the catalog, handles against people
+
+
+class BgaFetchState(StrEnum):
+    """Whether a sweep is running, and whether we can still see it.
+
+    UNKNOWN is not an error — see BggCheckState. A poll landing on a process
+    that never ran the sweep reads as UNKNOWN while the POST is perfectly
+    alive, and the FE must render that as "still working".
+    """
+
+    UNKNOWN = "unknown"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class BgaFetchStepState(StrEnum):
+    """One checklist row's state. SKIPPED is a step that was not needed."""
+
+    IDLE = "idle"
+    ACTIVE = "active"
+    DONE = "done"
+    SKIPPED = "skipped"
+
+
+class BgaMatchReason(StrEnum):
+    """Why a BGA handle was resolved to the person it was.
+
+    Surfaced per row so the wizard can LABEL A SUGGESTION BY ITS REASON rather
+    than by the score that ranked it (.claude/rules/web-frontend.md). The order
+    here is the resolution ladder's precedence, best evidence first.
+    """
+
+    VIEWER = "viewer"                  # The handle is the importer's own
+    REMEMBERED = "remembered"          # boardgamebuddy_bga_player_links
+    CROSS_ACCOUNT = "cross_account"    # Another account linked this handle
+    FUZZY = "fuzzy"                    # The name ranker's best guess
+    NONE = "none"                      # Nothing — a new ghost
+
+
 class PlayMode(StrEnum):
     """Scoring style for a game / play. Persisted on boardgamebuddy_games.play_mode."""
 

@@ -18,21 +18,24 @@
 // (.claude/rules/ui-object-design.md §4): the header, the step bar, the nav and
 // its blocker, the step arithmetic, the error banner, the review's open rows,
 // the write, and close-and-discard. Each branch
-// (widgets/import-notes-branch.js, widgets/import-photos-branch.js) owns its
-// own markup, its own handlers and its own draft model, and answers a small
-// contract: `steps`, `renderStep`, `continueBlocker`, `stepNext`, `stepBack`,
-// `navLabel`, `onEnter`, `resetFormState`, `sourceKey`, `draft`.
+// (widgets/import-notes-branch.js, widgets/import-photos-branch.js,
+// widgets/import-bga-branch.js) owns its own markup, its own handlers and its
+// own draft model, and answers a small contract: `steps`, `renderStep`,
+// `continueBlocker`, `stepNext`, `stepBack`, `navLabel`, `onEnter`,
+// `resetFormState`, `sourceKey`, `draft`.
 //
-// The two drafts stay two models on purpose — one is a parse → name-map →
-// run-collapse machine and the other an EXIF → per-file upload machine — and
-// what makes one review render both is that they answer one interface
-// (domain/import-draft.js, `@typedef ImportSource`).
+// The three drafts stay three models on purpose — a parse → name-map →
+// run-collapse machine, an EXIF → per-file upload machine, and a
+// sign-in → sweep → handle-map machine — and what makes one review render all
+// of them is that they answer one interface (domain/import-draft.js,
+// `@typedef ImportSource`).
 //
 // ─── Two things that look odd and are not ────────────────────────────────────
 //
 // 1. THE SOURCE PICKER SHOWS NO PROGRESS BAR. The branches are different
-//    lengths (7 steps for a note, 5 for a camera roll), so a counter before
-//    the branch is known would have to promise a number nobody can know yet.
+//    lengths (6 steps for a note, 4 for a camera roll, 5 for Board Game
+//    Arena), so a counter before the branch is known would have to promise a
+//    number nobody can know yet.
 //    Once a source is picked the bar counts that branch's real path, and a user
 //    only ever walks one, so the lengths differing is invisible.
 //
@@ -68,7 +71,7 @@
      * because onMount has to decide whether to restore it first.
      */
     _resetFormState() {
-      /** @type {"notes"|"photos"|null} null until a source is picked. */
+      /** @type {"notes"|"photos"|"bga"|null} null until a source is picked. */
       this._source = null;
       /** @type {any} The live branch, or null on the picker. */
       this._branch = null;
@@ -84,14 +87,26 @@
       for (const b of this._branches()) b.resetFormState();
     }
 
-    /** Both branches, whether or not one is live. */
+    /** Every branch, whether or not one is live. */
     _branches() {
-      return [window.importNotesBranch, window.importPhotosBranch].filter(Boolean);
+      return [
+        window.importNotesBranch,
+        window.importPhotosBranch,
+        window.importBgaBranch,
+      ].filter(Boolean);
     }
 
-    /** @param {"notes"|"photos"} source */
+    /**
+     * A lookup rather than a ternary: with three sources a chain of them is
+     * one edit away from silently resolving an unknown key to the last arm.
+     * @param {"notes"|"photos"|"bga"} source
+     */
     _branchFor(source) {
-      return source === "notes" ? window.importNotesBranch : window.importPhotosBranch;
+      return {
+        notes: window.importNotesBranch,
+        photos: window.importPhotosBranch,
+        bga: window.importBgaBranch,
+      }[source] || null;
     }
 
     /** The live draft, or null on the picker. */
@@ -281,20 +296,31 @@
 
     // ── Picking a source ──────────────────────────────────────────────────────
 
-    /** The Resume row's label, or null when there is nothing to resume. */
+    /**
+     * The Resume row's label, or null when there is nothing to resume.
+     *
+     * A switch rather than a ternary chain, for the same reason _branchFor is
+     * a lookup: with three sources, "the last arm catches everything" stops
+     * being obviously right.
+     */
     _resumeOffer() {
       if (!this._resume) return null;
       const m = this._resume.model;
-      const n = m.sourceKey === "notes" ? m.liveCount : m.shots.length;
-      return {
-        source: this._resume.source,
-        label: m.sourceKey === "notes"
-          ? `A note with ${n} play${n === 1 ? "" : "s"} read out of it`
-          : `${n} photo${n === 1 ? "" : "s"} you were still assigning`,
-      };
+      let label;
+      if (m.sourceKey === "notes") {
+        const n = m.liveCount;
+        label = `A note with ${n} play${n === 1 ? "" : "s"} read out of it`;
+      } else if (m.sourceKey === "photos") {
+        const n = m.shots.length;
+        label = `${n} photo${n === 1 ? "" : "s"} you were still assigning`;
+      } else {
+        const n = m.liveCount;
+        label = `${n} Board Game Arena table${n === 1 ? "" : "s"} you were still assigning`;
+      }
+      return { source: this._resume.source, label };
     }
 
-    /** @param {"notes"|"photos"} source */
+    /** @param {"notes"|"photos"|"bga"} source */
     _pickSource(source) {
       // Picking a source discards any OTHER source's unfinished draft — there
       // is one import at a time, and two half-finished ones in localStorage is
@@ -315,7 +341,7 @@
       this.render();
     }
 
-    /** @param {"notes"|"photos"} source */
+    /** @param {"notes"|"photos"|"bga"} source */
     _enter(source, opts) {
       this._source = source;
       this._branch = this._branchFor(source);

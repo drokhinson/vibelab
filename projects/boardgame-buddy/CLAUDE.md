@@ -128,4 +128,6 @@ them silently stops delivery to every existing subscription and requires
 `TRUNCATE boardgamebuddy_push_subscriptions`. `BGB_QR_SECRET` *is* the
 revocation lever for add-a-buddy codes, which carry no server-side state.
 `BGG_CREDENTIAL_KEY` is the Fernet key for linked users' stored BGG passwords.
+`BGA_CREDENTIAL_KEY` is the same thing for Board Game Arena, and is deliberately
+a **separate** key — rotating one must not orphan the other's stored passwords.
 See `ENV.md`.

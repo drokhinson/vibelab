@@ -284,7 +284,12 @@
     const ready = model.importable();
     const byGame = new Map();
     for (const item of ready) {
-      const game = model.sourceKey === "notes" ? model.playGame(item) : item.game;
+      // model.gameOf(), not a branch on model.sourceKey. This line used to
+      // read `sourceKey === "notes" ? model.playGame(item) : item.game`, which
+      // silently assumed every non-note source had the PHOTO shape — so the
+      // third source threw here and nowhere else. A shared step that names a
+      // source is a shared step with a countdown on it.
+      const game = model.gameOf(item);
       const row = byGame.get(game.id);
       if (row) { row.plays++; continue; }
       byGame.set(game.id, { name: game.name, plays: 1 });

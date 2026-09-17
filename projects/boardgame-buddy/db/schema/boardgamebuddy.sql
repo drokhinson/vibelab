@@ -1,6 +1,9 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 042_release_notices.sql (boardgamebuddy_release_notices, plus
+-- Last updated: 043_bga_import.sql (bga_* on boardgamebuddy_profiles,
+--               bga_table_id on boardgamebuddy_plays, and the
+--               boardgamebuddy_bga_player_links table; hand-added below).
+--               Before that: 042_release_notices.sql (boardgamebuddy_release_notices, plus
 --               profiles.release_notices_seen_at — the what's-new popup and its
 --               per-user watermark; hand-added below).
 --               Before that: 041_dev_feedback.sql (the Dev feedback board — four tables:
@@ -142,6 +145,16 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- (link_notifications_seen_at above is the older, nullable form of the same
   -- idea). Advanced only by bgb_mark_release_notices_seen.
   release_notices_seen_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  -- Board Game Arena account link (migration 043). One JSONB cookie blob
+  -- rather than BGG's three named cookie columns: BGA has no documented cookie
+  -- set, and three named columns would bake in a guess.
+  bga_username TEXT,
+  bga_player_id TEXT,
+  bga_password_enc TEXT,
+  bga_session_cookies JSONB,
+  bga_session_expires_at TIMESTAMPTZ,
+  bga_last_login_at TIMESTAMPTZ,
+  bga_last_import_at TIMESTAMPTZ,
   CONSTRAINT boardgamebuddy_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,
   CONSTRAINT bgb_profiles_username_format CHECK ((username ~ '^[a-z0-9_]{3,30}$'::text)),
@@ -150,6 +163,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
 ALTER TABLE public.boardgamebuddy_profiles ENABLE ROW LEVEL SECURITY;
 CREATE UNIQUE INDEX IF NOT EXISTS bgb_profiles_username_uk ON public.boardgamebuddy_profiles USING btree (username);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_profiles_bgg_username ON public.boardgamebuddy_profiles USING btree (bgg_username) WHERE (bgg_username IS NOT NULL);
+-- lower(), unlike the bgg_username index above: the cross-account match the
+-- BGA importer makes is case-insensitive (migration 043).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_profiles_bga_username ON public.boardgamebuddy_profiles USING btree (lower(bga_username)) WHERE (bga_username IS NOT NULL);
 GRANT SELECT ON public.boardgamebuddy_profiles TO boardgamebuddy_role;
 
 
@@ -514,6 +530,9 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   -- for the plain R1..Rn grid (migration 018). Deliberately not an FK — see
   -- the COMMENT ON COLUMN at the foot of this file.
   scoring_template JSONB,
+  -- The Board Game Arena table this play was imported from, or NULL for every
+  -- other origin (migration 043).
+  bga_table_id BIGINT,
   CONSTRAINT boardgamebuddy_plays_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_plays_game_id_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_plays_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -528,6 +547,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_plays_import_batch ON public.boardgamebuddy_p
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_import_group ON public.boardgamebuddy_plays USING btree (import_group_id, id) WHERE (import_group_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_played_at ON public.boardgamebuddy_plays USING btree (played_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bgg_play ON public.boardgamebuddy_plays USING btree (user_id, bgg_play_id) WHERE (bgg_play_id IS NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bga_table ON public.boardgamebuddy_plays USING btree (user_id, bga_table_id) WHERE (bga_table_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_user_played ON public.boardgamebuddy_plays USING btree (user_id, played_at DESC, created_at DESC);
 GRANT SELECT ON public.boardgamebuddy_plays TO boardgamebuddy_role;
 
@@ -890,6 +910,35 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_release_notices (
 ALTER TABLE public.boardgamebuddy_release_notices ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_release_notices_published ON public.boardgamebuddy_release_notices USING btree (published_at DESC) WHERE (published_at IS NOT NULL);
 GRANT SELECT ON public.boardgamebuddy_release_notices TO boardgamebuddy_role;
+
+
+-- ── BGA player links ─────────────────────────────────────────────────────────
+-- Board Game Arena handle → the person the owner says it is (migration 043).
+-- Written by the import wizard when a handle is resolved by hand, read on the
+-- next import to pre-seat it.
+--
+-- A table rather than a column, because a BGA handle most often maps to a
+-- GHOST and a ghost has no row anywhere: boardgamebuddy_buddies is only the
+-- explicitly-named ghost roster, and a play ghost is free text in
+-- boardgamebuddy_play_players.player_display_name. There is nothing to hang a
+-- column on. The identity CHECK mirrors boardgamebuddy_play_players' so one
+-- link row resolves to either kind of seat with no branching at the call site.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bga_player_links (
+  id UUID DEFAULT gen_random_uuid() NOT NULL,
+  owner_id UUID NOT NULL,
+  bga_handle TEXT NOT NULL,
+  player_user_id UUID,
+  player_display_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT boardgamebuddy_bga_player_links_pkey PRIMARY KEY (id),
+  CONSTRAINT bgb_bga_links_owner_fkey FOREIGN KEY (owner_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT bgb_bga_links_player_fkey FOREIGN KEY (player_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
+  CONSTRAINT bgb_bga_links_identity_chk CHECK (((player_user_id IS NOT NULL) OR (NULLIF(btrim(COALESCE(player_display_name, ''::text)), ''::text) IS NOT NULL)))
+);
+ALTER TABLE public.boardgamebuddy_bga_player_links ENABLE ROW LEVEL SECURITY;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_bga_links_owner_handle ON public.boardgamebuddy_bga_player_links USING btree (owner_id, lower(bga_handle));
+GRANT SELECT ON public.boardgamebuddy_bga_player_links TO boardgamebuddy_role;
 
 
 -- ── Column documentation ─────────────────────────────────────────────────────

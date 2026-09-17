@@ -1,28 +1,30 @@
 // domain/import-draft.js — which source an import is coming from.
 //
 // The wizard holds one draft at a time and each source keeps its own model
-// (domain/play-import.js, domain/photo-import.js) with its own localStorage key
-// at its own version. This is the small envelope over the top: it records which
-// of them is live, so a refresh mid-wizard resumes on the right branch instead
-// of at the source picker.
+// (domain/play-import.js, domain/photo-import.js, domain/bga-import.js) with
+// its own localStorage key at its own version. This is the small envelope over
+// the top: it records which of them is live, so a refresh mid-wizard resumes
+// on the right branch instead of at the source picker.
 //
-// Three keys rather than one blob, deliberately. Both models' save()/restore()
-// pairs are already correct about the things that are easy to get wrong — the
-// note's photos are never saved, the camera roll's Files are never saved,
-// `progress` is never restored, a full quota costs the resume and not the
-// import — and folding them into one envelope would mean rewriting both.
+// One key per model rather than one blob, deliberately. Each model's
+// save()/restore() pair is already correct about the things that are easy to
+// get wrong — the note's photos are never saved, the camera roll's Files are
+// never saved, the BGA password is never anywhere near the model, `progress`
+// is never restored, a full quota costs the resume and not the import — and
+// folding them into one envelope would mean rewriting all three.
 //
-// The cost is that clearDraft() has to sweep all three. It does; a finished
-// import that left one key behind would be resurrectable from it on the next
-// open.
+// The cost is that clear() has to sweep every one of them. KEYS below is that
+// list, and it is why it is separate from LEGACY: a key left behind by a
+// finished import is resurrectable from it on the next open.
 //
 /**
  * @typedef {Object} ImportSource
- *   The interface both draft models answer, which is what lets
- *   widgets/import-review-step.js render either without knowing which it has.
- *   tools/check-import-wizard.mjs asserts every name below exists on both.
+ *   The interface every draft model answers, which is what lets
+ *   widgets/import-review-step.js render any of them without knowing which it
+ *   has. tools/check-import-wizard.mjs asserts every name below exists on all
+ *   three.
  *
- * @property {"notes"|"photos"} sourceKey
+ * @property {"notes"|"photos"|"bga"} sourceKey
  * @property {boolean} supportsBulkDate
  * @property {number} step
  * @property {string} stepName
@@ -49,6 +51,7 @@
  * @property {() => any[]} importable
  * @property {() => any[]} seatless
  * @property {(item: any) => any[]} seats
+ * @property {(item: any) => any} gameOf
  * @property {(onProgress?: Function) => Promise<void>} run
  * @property {() => void} save
  * @property {() => boolean} restore
@@ -59,9 +62,24 @@
   const KEY = "bgb.import.draft";
   const VERSION = 1;
 
+  // EVERY source's draft key. clear() sweeps this list, and it is separate
+  // from LEGACY below for a reason that bit once already: clear() used to
+  // sweep LEGACY, which made "the keys we probe" and "the keys we delete" the
+  // same list by accident. A third source added without touching it would
+  // survive a discard and resurrect on the next open — a finished import
+  // offering itself again.
+  const KEYS = [
+    "bgb.playImport.draft",
+    "bgb.photoImport.draft",
+    "bgb.bgaImport.draft",
+  ];
+
   // Probed in this order when the envelope is absent — a user who was mid-
-  // wizard when this shipped. Photos first: that draft costs more to rebuild,
-  // because its files are gone and its assignments are not.
+  // wizard when the wizard shipped. Photos first: that draft costs more to
+  // rebuild, because its files are gone and its assignments are not.
+  //
+  // BGA is deliberately absent: it has never existed outside the wizard, so
+  // there is no pre-envelope draft of it to adopt.
   const LEGACY = [
     ["photos", "bgb.photoImport.draft"],
     ["notes", "bgb.playImport.draft"],
@@ -70,6 +88,7 @@
   const MODELS = {
     notes: () => new window.PlayImport(),
     photos: () => new window.PhotoImport(),
+    bga: () => new window.BgaImport(),
   };
 
   function read(key) {
@@ -77,9 +96,9 @@
   }
 
   const ImportDraft = {
-    SOURCES: ["notes", "photos"],
+    SOURCES: ["notes", "photos", "bga"],
 
-    /** @param {"notes"|"photos"} source */
+    /** @param {"notes"|"photos"|"bga"} source */
     create(source) {
       const make = MODELS[source];
       return make ? make() : null;
@@ -123,10 +142,10 @@
       return null;
     },
 
-    /** Drop the envelope AND both models' keys. */
+    /** Drop the envelope AND every model's key. */
     clear() {
       try { localStorage.removeItem(KEY); } catch (_) {}
-      for (const [, key] of LEGACY) {
+      for (const key of KEYS) {
         try { localStorage.removeItem(key); } catch (_) {}
       }
     },
