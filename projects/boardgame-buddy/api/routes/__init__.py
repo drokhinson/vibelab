@@ -55,6 +55,9 @@ from . import profile_routes   # noqa: F401, E402
 from . import push_routes      # noqa: F401, E402
 from . import bgg_link_routes  # noqa: F401, E402
 from . import bgg_push_routes  # noqa: F401, E402
+# No ordering constraint: `/bgg/plays/pending` is a literal path and nothing in
+# the two modules above takes a parameter that could swallow it.
+from . import bgg_plays_routes  # noqa: F401, E402
 # No ordering constraint: every path here is a literal under /bga/, with no
 # parameterised sibling to be swallowed by. The BGA importer's WRITE is not
 # here — it goes through POST /plays/import like every other source.
