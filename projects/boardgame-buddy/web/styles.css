@@ -13936,6 +13936,45 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   display: grid;
   place-items: center;
 }
+
+/* An admin row that DOES something instead of going somewhere (Settings →
+   Admin tools → Refresh trending). It keeps the row shape so the card still
+   reads as one list, and swaps the chevron for a pill that names the verb:
+   the chevron means "a screen is through here", and this row has no screen —
+   the tap is the BGG pull. Muted-ink, not accent-filled, because it sits in a
+   list of five quiet rows and should not shout over them. */
+.set-card__row-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: none;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--polaroid-ink) 18%, transparent);
+  background: color-mix(in srgb, var(--polaroid-ink) 5%, transparent);
+  color: var(--polaroid-ink, #1D1812);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.set-card__row--action:hover .set-card__row-run {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent-ink);
+}
+.set-card__row--action:disabled {
+  cursor: default;
+  background: transparent;
+}
+.set-card__row--action:disabled .set-card__row-title,
+.set-card__row--action:disabled .set-card__row-sub { opacity: 0.6; }
+.set-card__row--action:disabled .set-card__row-run {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent-ink);
+}
 .set-card__badge {
   background: var(--accent-fill);
   color: var(--on-accent);
