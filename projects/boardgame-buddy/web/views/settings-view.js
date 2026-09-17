@@ -481,6 +481,13 @@
           title: "Missing BGG stats",
           sub: "Sync ratings, ranks and weights from BoardGameGeek for the Discover tab.",
         },
+        {
+          route: "admin-publishers",
+          tool: "publishers",
+          icon: "library-big",
+          title: "Missing publishers",
+          sub: "Backfill publisher credits from BoardGameGeek for the game page.",
+        },
         // An action, not a spoke: there is nothing to look at, only a run to
         // kick off. The daily cron does the same call; this is for "now".
         {

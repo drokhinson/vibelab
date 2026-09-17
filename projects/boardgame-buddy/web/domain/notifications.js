@@ -82,6 +82,12 @@
       adminTool: "stats",
       label: (n) => `${n} game${n === 1 ? "" : "s"} missing BGG stats`,
     },
+    {
+      slot: "adminMissingPublisherCount",
+      gear: true,
+      adminTool: "publishers",
+      label: (n) => `${n} game${n === 1 ? "" : "s"} missing a publisher`,
+    },
     // Pending uploads. The header's own upload button is gone: a queue that
     // drains itself is the app doing something FOR you, which is plumbing, and
     // plumbing lives in Settings — where a "Pending uploads" section has always

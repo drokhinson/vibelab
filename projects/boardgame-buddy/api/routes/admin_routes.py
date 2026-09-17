@@ -61,12 +61,22 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
         .limit(1)
         .execute()
     )
+    # NULL, not '{}': a game BGG credits to nobody is synced and has nothing
+    # left for an admin to do (migration 040).
+    missing_publishers = (
+        _count_query(sb, "boardgamebuddy_games")
+        .is_("publishers", "null")
+        .not_.is_("bgg_id", "null")
+        .limit(1)
+        .execute()
+    )
 
     return AdminReviewCounts(
         chapter_reports=reports.count or 0,
         missing_images=missing_images.count or 0,
         missing_descriptions=missing_descriptions.count or 0,
         missing_stats=missing_stats.count or 0,
+        missing_publishers=missing_publishers.count or 0,
     )
 
 

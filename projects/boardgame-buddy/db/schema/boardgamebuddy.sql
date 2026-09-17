@@ -1,6 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 039_bgg_hot_snapshots.sql (boardgamebuddy_bgg_hot_snapshots,
+-- Last updated: 040_game_publishers.sql (boardgamebuddy_games.publishers,
+--               hand-added to the dump below).
+--               Before that: 039_bgg_hot_snapshots.sql (boardgamebuddy_bgg_hot_snapshots,
 --               BGG's hot list kept one run per refresh; hand-added below).
 --               Before that: 038_discover.sql (five nullable bgg_* stats columns and three
 --               indexes on boardgamebuddy_games, hand-added to the dump below).
@@ -54,6 +56,11 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   bgg_weight NUMERIC(4,2),
   bgg_owned_count INTEGER,
   bgg_stats_synced_at TIMESTAMPTZ,
+  -- BGG boardgamepublisher links in BGG's order, capped at 4 by the import
+  -- (migration 040). Nullable with no default, unlike categories/mechanics:
+  -- NULL = never synced and is the queue marker for
+  -- POST /games/admin/backfill-publishers; '{}' = synced, BGG credits nobody.
+  publishers TEXT[],
   CONSTRAINT boardgamebuddy_games_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_games_bgg_id_key UNIQUE (bgg_id),
   CONSTRAINT boardgamebuddy_games_play_mode_check CHECK ((play_mode = ANY (ARRAY['competitive'::text, 'coop'::text, 'team'::text])))

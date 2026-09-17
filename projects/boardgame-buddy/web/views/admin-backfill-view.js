@@ -1,8 +1,9 @@
 // views/admin-backfill-view.js — a catalog-backfill spoke.
 //
-// ONE class, THREE instances: "Games missing images", "Games missing
-// descriptions" and "Games missing BGG stats". The tools are identical in shape — list what's missing, fix
-// one row, fix them all — so they are a parameter, not two screens
+// ONE class, FOUR instances: "Games missing images", "Games missing
+// descriptions", "Games missing BGG stats" and "Games missing publishers".
+// The tools are identical in shape — list what's missing, fix
+// one row, fix them all — so they are a parameter, not four screens
 // (ui-object-design.md §2). All the behaviour lives in the AdminBackfillPanel
 // widget; this view is the route, the header, and the count refresh.
 
@@ -54,7 +55,7 @@
     }
   }
 
-  // The two configured instances. Their strings live here, with the view that
+  // The configured instances. Their strings live here, with the view that
   // renders them, rather than in init.js — which stays a registry of what
   // exists, not a description of what each screen says.
   AdminBackfillView.images = () => new AdminBackfillView({
@@ -125,6 +126,28 @@
       list: () => window.Game.adminMissingStats(),
       refreshOne: (id) => window.Game.adminRefreshOneStats(id),
       refreshAll: () => window.Game.adminBackfillStats(),
+    },
+  });
+
+  AdminBackfillView.publishers = () => new AdminBackfillView({
+    route: "admin-publishers",
+    title: "Missing publishers",
+    global: "adminPublishersView",
+    panel: {
+      key: "publishers",
+      title: "Games missing publishers",
+      icon: "library-big",
+      emptyText: "Every catalog game has been checked for a publisher.",
+      bulkLabel: "Backfill all",
+      busyLabel: "Backfilling\u2026",
+      oneOkToast: "Publishers refreshed",
+      rowStatus: () => "Not synced",
+      bulkConfirm: (n) => (n > 0
+        ? `Fetch BGG publisher credits for ${n} game${n === 1 ? "" : "s"}? BGG is called in throttled batches of 20 and the run continues automatically until every game is done \u2014 a cold catalog takes a few minutes.`
+        : "Fetch BGG publisher credits for every game that has none? BGG is called in throttled batches of 20."),
+      list: () => window.Game.adminMissingPublishers(),
+      refreshOne: (id) => window.Game.adminRefreshOnePublishers(id),
+      refreshAll: () => window.Game.adminBackfillPublishers(),
     },
   });
 

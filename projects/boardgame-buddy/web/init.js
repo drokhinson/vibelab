@@ -40,12 +40,13 @@
   window.importWizardView = new window.ImportWizardView();
   window.bggSyncView    = new window.BggSyncView();
   window.adminReportsView = new window.AdminReportsView();
-  // Two instances of one class — the tools differ only in their strings and
+  // Four instances of one class — the tools differ only in their strings and
   // which three API calls they make. The configs live with the view rather
   // than here so init.js stays a registry. See views/admin-backfill-view.js.
   window.adminImagesView = window.AdminBackfillView.images();
   window.adminDescriptionsView = window.AdminBackfillView.descriptions();
   window.adminStatsView = window.AdminBackfillView.stats();
+  window.adminPublishersView = window.AdminBackfillView.publishers();
 
   // Widget singleton — the Play tab's Join half. Hoisted here (rather than
   // owned by LogPlayView) so its inline onclick handlers resolve the same way
@@ -80,6 +81,7 @@
   window.router.register("admin-images",       window.adminImagesView);
   window.router.register("admin-descriptions", window.adminDescriptionsView);
   window.router.register("admin-stats",        window.adminStatsView);
+  window.router.register("admin-publishers",   window.adminPublishersView);
 
   // A global helper rather than a view concern, because the provider's state
   // listener fires async, outside the view lifecycle.
