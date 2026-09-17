@@ -82,6 +82,11 @@
 
       // True while the "Refresh cached data" button is working.
       this._cacheRefreshing = false;
+
+      // True while the admin "Refresh trending" run is in flight — it is what
+      // puts the row's Sync pill into "Syncing…" and keeps a second tap from
+      // starting a second BGG pull.
+      this._trendingBusy = false;
     }
 
     async onMount() {
@@ -176,7 +181,7 @@
         ${this._renderCacheCard()}
         ${me.is_admin ? `
           <div class="set-card-label">Admin tools</div>
-          ${this._renderAdminCard()}
+          <div id="set-admin-host">${this._renderAdminCard()}</div>
         ` : `
           <div class="set-card-label">Account</div>
           <div class="set-card">${this._renderBecomeAdminBlock()}</div>
@@ -490,12 +495,18 @@
         },
         // An action, not a spoke: there is nothing to look at, only a run to
         // kick off. The daily cron does the same call; this is for "now".
+        //
+        // `run` is what makes it READ as an action. Without it the row was
+        // chevron-tipped like the five above, i.e. it promised a screen and
+        // then silently fired a BGG sync instead — the one row on this card
+        // whose tap you could not take back.
         {
           action: "window.settingsView._refreshTrending()",
           tool: "trending",
           icon: "flame",
           title: "Refresh trending",
           sub: "Snapshot BoardGameGeek's hot list now and import what the catalog lacks.",
+          run: { idle: "Sync", busy: "Syncing\u2026", isBusy: () => this._trendingBusy },
         },
       ];
     }
@@ -508,6 +519,16 @@
       `;
     }
 
+    /**
+     * One row, in one of two dialects.
+     *
+     * A SPOKE (`route`) ends in a chevron: tapping it takes you somewhere, and
+     * whatever you do there you do deliberately, on that screen. An ACTION
+     * (`action` + `run`) ends in a pill spelling the verb, because tapping it
+     * IS the deed — it goes to BoardGameGeek and writes to the catalog with no
+     * screen in between and no way back. The chevron is the app's promise of a
+     * destination; an action row must not borrow it.
+     */
     _renderAdminRow(t) {
       const { total, parts } = window.BgbNotifications.forAdminTool(t.tool);
       // The badge is decorative — the count is already in the row's
@@ -519,8 +540,24 @@
         ? `${t.title} — ${window.BgbNotifications.phrase(parts)} waiting`
         : t.title;
       const onclick = t.action || `window.router.go('${t.route}')`;
+
+      // The pill is the only thing that moves between idle and running — the
+      // row keeps its own icon, so the flame does not turn into a spinner and
+      // back and leave you unsure which row you were looking at. The pill is
+      // aria-hidden because the title already says the verb ("Refresh
+      // trending") and the running state is on the button's own label.
+      const busy = !!(t.run && t.run.isBusy && t.run.isBusy());
+      const tail = t.run
+        ? `<span class="set-card__row-run" aria-hidden="true">
+             <i data-icon="refresh-cw" class="w-3.5 h-3.5${busy ? " animate-spin" : ""}"></i>
+             <span>${escapeHtml(busy ? t.run.busy : t.run.idle)}</span>
+           </span>`
+        : `<span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>`;
+
       return `
-        <button class="set-card__row" aria-label="${escapeAttr(label)}"
+        <button class="set-card__row${t.run ? " set-card__row--action" : ""}"
+                ${busy ? `disabled aria-busy="true"` : ""}
+                aria-label="${escapeAttr(busy ? `${t.title} — running` : label)}"
                 onclick="${escapeAttr(onclick)}">
           <span class="set-card__row-icon"><i data-icon="${t.icon}" class="w-4 h-4"></i></span>
           <span class="set-card__row-body">
@@ -528,7 +565,7 @@
             <span class="set-card__row-sub">${escapeHtml(t.sub)}</span>
           </span>
           ${badge}
-          <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+          ${tail}
         </button>
       `;
     }
@@ -536,6 +573,10 @@
     async _refreshTrending() {
       if (this._trendingBusy) return;
       this._trendingBusy = true;
+      // Repaint the card, not the screen: the pill has to go to "Syncing…"
+      // and start spinning, and a full render() here would blow away the
+      // focus ring on the row the user just pressed.
+      this._patchHost("set-admin-host", this._renderAdminCard());
       showToast("Refreshing trending\u2026", "info");
       try {
         const r = await window.Game.adminRefreshTrending();
@@ -547,6 +588,7 @@
         showToast((e && e.message) || "Couldn't refresh trending", "error");
       } finally {
         this._trendingBusy = false;
+        this._patchHost("set-admin-host", this._renderAdminCard());
       }
     }
 
