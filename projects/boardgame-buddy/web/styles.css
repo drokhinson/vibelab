@@ -5604,6 +5604,39 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0;
 }
 
+/* The finished import's hand-off into the play importer. In the body rather
+   than the nav on purpose: the nav's Done LEAVES this screen, and this goes
+   somewhere — two buttons that mean different things must not sit in the same
+   bar looking like a pair. */
+.bgg-flow__handoff {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--polaroid-line);
+}
+.bgg-flow__cta {
+  /* 52px — a commit button (.claude/rules/mobile-web.md §5). */
+  min-height: 52px;
+  width: 100%;
+  border: 0;
+  border-radius: var(--r-pill, 999px);
+  /* --accent-fill, never --accent: this lands on a chrome surface, where the
+     gold tuned for the app ground does not carry white text
+     (.claude/rules/theming.md §6). */
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.bgg-flow__cta:active { transform: translateY(1px); }
+.bgg-flow__note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--polaroid-muted);
+}
+
 /* The three figures above the table. Deliberately quiet: they are context for
    the comparison, not the point of the screen — the table is. */
 .bgg-flow__stats {

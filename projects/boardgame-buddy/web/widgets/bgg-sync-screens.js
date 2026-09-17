@@ -251,6 +251,37 @@
           </p>` : ""}
         </div>
         ${body}
+        ${playsHandoff(snap)}
+      </div>
+    `;
+  }
+
+  /**
+   * The finished import's offer to go and get the plays it did NOT bring over.
+   *
+   * This screen syncs a collection. Plays come in through the play importer,
+   * where every one of them is reviewed first — so the sync counts what is
+   * missing and hands the number here, and this is the door.
+   *
+   * Only on a finished PULL: a push writes to BoardGameGeek and has nothing to
+   * say about what BgB is missing. And only with a number — an "Import 0 plays"
+   * button is a door onto an empty room.
+   */
+  function playsHandoff(snap) {
+    if (snap.screen !== "done" || snap.direction !== "pull") return "";
+    const s = snap.summary || {};
+    const n = s.plays_new || 0;
+    if (s.plays_read_failed || !n) return "";
+    return `
+      <div class="bgg-flow__handoff">
+        <button class="bgg-flow__cta" type="button"
+                onclick="window.bggSyncView.importPlays()">
+          Import ${n} play${n === 1 ? "" : "s"}
+        </button>
+        <p class="bgg-flow__note">
+          Your shelf is up to date. Plays come in through the importer, where
+          you check every one before it's written.
+        </p>
       </div>
     `;
   }

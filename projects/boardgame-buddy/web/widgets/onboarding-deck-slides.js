@@ -492,9 +492,22 @@
         "Importing your collection",
         () => link.promise.then(() => window.api.post("/bgg/sync", {}, { timeoutMs: 120000 })),
         (res) => {
-          const games = (res && (res.games_imported ?? res.collection_count)) || 0;
-          const plays = (res && (res.plays_imported ?? res.play_count)) || 0;
-          return `${games} games, ${plays} plays`;
+          // Read off BggSyncSummary's real field names. This asked for
+          // `games_imported ?? collection_count`, neither of which that model
+          // has ever carried, so the line has always said "0 games" however
+          // large the shelf that landed.
+          const games = ((res && res.collection_imported) || 0)
+                      + ((res && res.collection_pending) || 0);
+          const shelf = `${games} game${games === 1 ? "" : "s"}`;
+          // Plays are DETECTED by the sync and imported through the wizard, so
+          // this names what is waiting rather than what landed. Saying nothing
+          // about them when the read failed is deliberate: this is a ledger
+          // line on a first-run deck, and "we couldn't check" is a sentence
+          // that needs somewhere to act on it.
+          if (!res || res.plays_read_failed) return shelf;
+          const plays = res.plays_new || 0;
+          if (!plays) return shelf;
+          return `${shelf} · ${plays} play${plays === 1 ? "" : "s"} to review`;
         },
       );
       deck.next();

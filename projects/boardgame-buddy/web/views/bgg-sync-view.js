@@ -170,6 +170,25 @@
       this.flow.reset();
       window.router.up("settings");
     }
+
+    /**
+     * The done screen's hand-off into the play importer.
+     *
+     * Resets the flow first, for the same reason finish() does: the comparison
+     * described the shelf before this run and cannot describe it after, so
+     * leaving it behind would mean coming back from the importer to a screen
+     * offering a second commit against a stale plan.
+     *
+     * `?source=bgg` rather than a fresh picker — the user has already said what
+     * they want by pressing a button that names it. ImportWizardView.onMount
+     * enters the branch and replaces the url with the canonical one, and a
+     * half-finished draft still outranks it, which is right: an unfinished
+     * import is worth more than a button press.
+     */
+    importPlays() {
+      this.flow.reset();
+      window.router.go("import-wizard", { source: "bgg" });
+    }
   }
 
   window.BggSyncView = BggSyncView;
