@@ -18367,27 +18367,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .run-sheet__delete:active:not(:disabled) { background: color-mix(in srgb, var(--rust) 22%, transparent); }
 .run-sheet__delete:disabled { opacity: 0.5; }
 
-/* Settings' past-imports rows: the trailing delete affordance. */
-.set-card__row-del {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--polaroid-muted, #8B7E68);
-  position: relative;
-}
-/* 44px hit area without inflating the glyph (.claude/rules/mobile-web.md §5). */
-.set-card__row-del::before { content: ""; position: absolute; inset: -6px; }
-.set-card__row-del:active:not(:disabled) {
-  color: var(--rust);
-  background: color-mix(in srgb, var(--rust) 14%, transparent);
-}
-.set-card__row-del:disabled { opacity: 0.5; }
-
 /* The run-size field on the review step's run row. Narrow on purpose: it holds
    at most three digits, and a full-width number input reads as a text field. */
 .imp-field--count { flex: 0 0 auto; }
