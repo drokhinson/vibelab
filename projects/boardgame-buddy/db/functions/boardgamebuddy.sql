@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 042_release_notices.sql (adds bgb_release_notices_unseen and
+-- Last updated: 043_bga_import.sql (replaces bgb_log_play: it persists and
+--               dedupes on plays.bga_table_id, and its unique_violation
+--               handler now resolves on either unique key rather than on
+--               client_key alone.)
+--               Before that: 042_release_notices.sql (adds bgb_release_notices_unseen and
 --               bgb_mark_release_notices_seen — the what's-new popup's unseen
 --               list and its watermark write, the latter a near-copy of
 --               bgb_mark_link_notifications_seen below.)
@@ -734,7 +738,9 @@
 --     or {"error": "game_not_found"}
 --     or {"error": "no_players"} / {"error": "duplicate_player"} (023)
 --     or {"duplicate": true, "id": <uuid>} when p_payload.client_key is one
---     this user already has a play for (048) — the caller re-reads that row.
+--     this user already has a play for (048), or p_payload.bga_table_id is a
+--     Board Game Arena table they already imported (040) — the caller re-reads
+--     that row.
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/042_write_rpcs.sql)
@@ -775,6 +781,14 @@
 --                  anything that isn't ^[A-Z]{2}$ to NULL rather than failing
 --                  the save, writes plays.country_code and echoes the
 --                  NORMALIZED value back)
+--               db/migrations/043_bga_import.sql
+--                 (reads p_payload.bga_table_id, pre-checks it the same way as
+--                  client_key and writes the column. ALSO widens the
+--                  unique_violation handler: there are two unique indexes a
+--                  play can violate now, and resolving the winner's id by
+--                  client_key alone returned {"duplicate": true, "id": null}
+--                  for a caller that sent only a table id — a wrong answer
+--                  that raises nothing.)
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
 --               bgb_finalize_session

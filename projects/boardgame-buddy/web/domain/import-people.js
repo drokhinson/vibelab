@@ -223,13 +223,22 @@
      * username is closest to what the note wrote, scored by
      * domain/name-match.js — the same score that pre-filled the row behind the
      * sheet, so the two agree.
+     *
+     * `fields` overrides WHICH names are compared and in what order, and the
+     * order is the whole signal: domain/name-match.js docks FIELD_PENALTY off
+     * every field after the first, so a display-name hit outranks a username
+     * one. That is right for a note, which writes people the way you say them
+     * out loud, and wrong for a Board Game Arena handle, which IS a username —
+     * so the BGA source passes `(c) => [c.username, c.name]`. Additive and
+     * optional: every existing caller keeps the default.
      * @param {string} name
      * @param {any[]} candidates
      * @param {number} [max]
+     * @param {(candidate: any) => Array<string|null|undefined>} [fields]
      */
-    closestTo(name, candidates, max) {
+    closestTo(name, candidates, max, fields) {
       return window.BgbNameMatch
-        .rank(name, candidates || [], namesOf)
+        .rank(name, candidates || [], fields || namesOf)
         .slice(0, max || SUGGEST_MAX)
         .map((hit) => hit.row);
     },

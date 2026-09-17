@@ -30,6 +30,11 @@ from .constants import (
     MAX_RELEASE_NOTICE_LINK_ROUTE_CHARS,
     MAX_RELEASE_NOTICE_TITLE_CHARS,
     MAX_SCORING_TEMPLATE_ROWS,
+    BgaAuthState,
+    BgaFetchPhase,
+    BgaFetchState,
+    BgaFetchStepState,
+    BgaMatchReason,
     BggAuthState,
     BggCheckPhase,
     BggCheckState,
@@ -825,6 +830,11 @@ class PlayCreate(BaseModel):
     # id because the chapter is community-owned and may later be edited or
     # deleted; see the COMMENT ON boardgamebuddy_plays.scoring_template.
     scoring_template: PlayScoringTemplate | None = None
+    # Migration 040. The Board Game Arena table this play was imported from,
+    # and the key a re-import dedupes on — unique per user, so BGA history can
+    # be imported repeatedly and only ever offer what is new. Set ONLY by the
+    # wizard's BGA branch; every other origin leaves it None.
+    bga_table_id: int | None = None
 
 
 def validated_roster(players: list[PlayerEntry]) -> list[PlayerEntry]:
@@ -2648,3 +2658,163 @@ class ReleaseNoticesSeenResponse(BaseModel):
     """The watermark that now stands, after the monotonic merge."""
 
     seen_at: datetime
+
+
+# ── Board Game Arena import (migration 043) ──────────────────────────────────
+#
+# The wizard's third source. Everything here is REQUEST/RESPONSE shape only —
+# what BGA's own wire looks like lives in routes/bga_endpoints.py, which is
+# quarantined on purpose.
+#
+# One rule governs the whole block: no model below carries `bga_password_enc`
+# or `bga_session_cookies`, ever. api/tests/test_bga_secrets.py asserts it,
+# because "we forgot to leave the cookies out of a response" is the kind of
+# mistake that reads fine in review.
+
+
+class BgaLinkRequest(BaseModel):
+    """Credentials for the wizard's account step.
+
+    SecretStr so the password cannot be printed by an accidental repr of the
+    request — the same guard BggLinkRequest uses.
+    """
+
+    username: str = Field(min_length=1, max_length=120)
+    password: SecretStr
+
+
+class BgaLinkStatus(BaseModel):
+    """Whether a BGA account is linked, and what the account step should say."""
+
+    bga_username: str | None = None
+    bga_player_id: str | None = None
+    auth_state: BgaAuthState = BgaAuthState.UNLINKED
+    last_import_at: datetime | None = None
+
+
+class BgaDraftSeat(BaseModel):
+    """One chair at an imported table.
+
+    `handle` is the BGA username, which is all BGA gives about an opponent —
+    there is no email and no other identifier, which is why the wizard
+    remembers handle→person mappings rather than matching on anything else.
+
+    `is_winner` is derived from BGA's own `rank == 1`, not from the scores:
+    re-deriving it would disagree with the site on every game where the low
+    score wins. Both stay editable in the shared review.
+    """
+
+    handle: str
+    score: int | None = None
+    rank: int | None = None
+    is_winner: bool = False
+
+
+class BgaDraftTable(BaseModel):
+    """One finished BGA table, as a play the user has not yet agreed to."""
+
+    bga_table_id: int
+    game_name: str = ""
+    bga_game_id: str | None = None
+    played_at: date | None = None
+    seats: list[BgaDraftSeat] = []
+
+
+class BgaHandleMatch(BaseModel):
+    """Who the server thinks a BGA handle is, and on what evidence.
+
+    `reason` is carried so the wizard can LABEL A SUGGESTION BY ITS REASON
+    rather than by a score (.claude/rules/web-frontend.md): "Matched before"
+    and "@handle is Marcus Chen on BoardgameBuddy" are different claims and
+    deserve different words.
+
+    REMEMBERED and VIEWER are safe to apply silently. CROSS_ACCOUNT is not —
+    it is somebody else's claim about a shared username — so it is returned as
+    a suggestion the wizard shows as undoable, never pre-applied.
+    """
+
+    handle: str
+    reason: BgaMatchReason = BgaMatchReason.NONE
+    player_user_id: str | None = None
+    player_display_name: str | None = None
+    username: str | None = None
+    avatar: dict[str, Any] | None = None
+
+
+class BgaFetchResponse(BaseModel):
+    """Everything the wizard needs to open its Players step, in one call.
+
+    `games` is the same ParsedGameRef list the note importer's parse returns,
+    produced by the same play_import_service.match_games, so the Games step
+    renders identically for both sources and there is no second round trip.
+    """
+
+    tables: list[BgaDraftTable] = []
+    handles: list[BgaHandleMatch] = []
+    games: list[ParsedGameRef] = []
+    # Tables seen in the history that are already in this account's plays.
+    # Reported rather than hidden: "12 you already had" is the sentence that
+    # makes a second import legible.
+    skipped: int = 0
+    # A cap was hit and there is older history still on BGA. The wizard says so
+    # and offers another run; the history is complete across runs.
+    truncated: bool = False
+
+
+class BgaFetchStep(BaseModel):
+    """One row of the sweep's checklist."""
+
+    key: BgaFetchPhase
+    state: BgaFetchStepState = BgaFetchStepState.IDLE
+    done: int | None = None
+    total: int | None = None
+    detail: str | None = None
+
+
+class BgaFetchProgressResponse(BaseModel):
+    """The sweep's ledger, polled while it runs.
+
+    UNKNOWN with no steps is the honest answer when this process has no record
+    — an in-process ledger, one uvicorn worker, see services/bga_progress.py.
+    The FE renders it as "still working", never as done.
+    """
+
+    state: BgaFetchState = BgaFetchState.UNKNOWN
+    fetch_id: str | None = None
+    started_at: datetime | None = None
+    updated_at: datetime | None = None
+    steps: list[BgaFetchStep] = []
+    truncated: bool = False
+    error: str | None = None
+
+
+class BgaPlayerLink(BaseModel):
+    """One handle→person mapping the wizard wants remembered."""
+
+    bga_handle: str = Field(min_length=1, max_length=120)
+    player_user_id: str | None = None
+    player_display_name: str | None = None
+
+    @model_validator(mode="after")
+    def _names_somebody(self) -> "BgaPlayerLink":
+        """A link that names nobody is not a link.
+
+        Mirrors boardgamebuddy_bga_player_links' identity CHECK, so a payload
+        that would violate it is rejected here with a readable 422 rather than
+        reaching Postgres as a constraint error.
+        """
+        display = (self.player_display_name or "").strip()
+        if not self.player_user_id and not display:
+            raise ValueError("a link must name an account or a display name")
+        self.player_display_name = display or None
+        return self
+
+
+class BgaRememberRequest(BaseModel):
+    """A batch of mappings to remember, written after a successful import."""
+
+    links: list[BgaPlayerLink] = Field(min_length=1, max_length=200)
+
+
+class BgaRememberResponse(BaseModel):
+    stored: int = 0

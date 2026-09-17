@@ -31,12 +31,14 @@
   window.achievementsView = new window.AchievementsView();
   window.notificationsView = new window.NotificationsView();
   window.settingsView    = new window.SettingsView();
-  // The two branches are widget singletons hoisted here so their inline
+  // The three branches are widget singletons hoisted here so their inline
   // handlers resolve by the same window.<name> lookup every view uses. The
-  // shell reads them off window rather than holding them, because init builds
-  // them in this order and the shell is constructed last.
+  // shell reads them off window rather than holding them, and it MUST be
+  // constructed last: its own _resetFormState() calls _branches(), so a branch
+  // built after it would miss the first reset.
   window.importNotesBranch = new window.ImportNotesBranch();
   window.importPhotosBranch = new window.ImportPhotosBranch();
+  window.importBgaBranch = new window.ImportBgaBranch();
   window.importWizardView = new window.ImportWizardView();
   window.importsView    = new window.ImportsView();
   window.importDetailView = new window.ImportDetailView();

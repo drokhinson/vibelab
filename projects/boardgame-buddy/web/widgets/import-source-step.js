@@ -48,10 +48,16 @@
       extra: "Syncing your BGG collection is already in Settings → Connections.",
     },
     {
-      key: "",
+      key: "bga",
       icon: "gamepad-2",
       title: "Board Game Arena",
-      sub: "Coming soon — importing the plays from your Board Game Arena account.",
+      sub: "Sign in and bring over the tables you've finished. Each one keeps "
+         + "its date, its scores and everyone who was there.",
+      // Said HERE rather than only behind the row, because it is the one thing
+      // that might make somebody not want to open the door at all. The account
+      // step says it again, at length, above the password field.
+      extra: "Needs your BGA password, and their terms don't allow this — "
+           + "there's a note to read before you sign in.",
     },
   ];
 

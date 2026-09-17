@@ -15970,7 +15970,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    rule deliberately sets no size, so without this they inherit the page's ~14px
    and every tap zooms — on a screen whose entire purpose is typing prose. */
 .rel-ed__input,
-.rel-ed__textarea {
+.rel-ed__textarea,
+/* The Board Game Arena sign-in's two fields. .imp-input sets no size of its
+   own and says so, so this is what keeps a tap into the password field from
+   zooming the page on the one step where a zoomed page hides the consent text
+   above it. */
+.imp-input {
   font-size: 16px;
 }
 
@@ -17472,6 +17477,106 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--polaroid-muted);
+  white-space: nowrap;
+}
+
+/* A row that reports rather than navigates — the linked BGA account, with its
+   Unlink beside it. Not a <button>, so it needs the row's own padding and
+   layout back without the press affordance. */
+.imp-row--static { cursor: default; }
+.imp-row--static:active { background: transparent; }
+
+/* ── The Board Game Arena source ───────────────────────────────────────────── */
+
+/* The consent block above the password field. Bordered rather than tinted:
+   this is not a warning the user can dismiss by fixing something, it is the
+   terms of the thing they are about to do, and --rust would read as "you have
+   made a mistake" rather than "read this". */
+.imp-disclose {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 0.6rem);
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.imp-disclose__line {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  margin: 0;
+}
+.imp-disclose__line strong { color: var(--ink); }
+
+.imp-field { display: flex; flex-direction: column; gap: 0.3rem; }
+.imp-field__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+/* Font size is NOT set here: the 16px floor block at the foot of this file
+   owns every text control, because anything smaller makes iOS zoom the page on
+   focus (.claude/rules/mobile-web.md §2). Add new controls there, not here. */
+.imp-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--well);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 0.6rem);
+  padding: 0.65rem 0.8rem;
+  line-height: 1.4;
+}
+.imp-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The acknowledgement that gates Continue. 44px minimum through the whole
+   row, not just the box: the label is the part a thumb actually lands on. */
+.imp-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: 44px;
+  padding: 0.35rem 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.imp-check input {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.1rem;
+  accent-color: var(--accent);
+}
+
+/* The sweep's checklist, straight off the server's ledger. */
+.imp-ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.imp-ledger__row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 40px;
+  padding: 0.35rem 0.1rem;
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+}
+.imp-ledger__row.is-active { color: var(--ink); }
+.imp-ledger__row.is-done { color: var(--ink-muted); }
+.imp-ledger__row.is-done i { color: var(--ok); }
+.imp-ledger__row.is-skipped { opacity: 0.55; }
+.imp-ledger__label { flex: 1 1 auto; min-width: 0; }
+.imp-ledger__detail {
+  flex: none;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
   white-space: nowrap;
 }
 

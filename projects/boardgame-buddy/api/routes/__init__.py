@@ -55,6 +55,10 @@ from . import profile_routes   # noqa: F401, E402
 from . import push_routes      # noqa: F401, E402
 from . import bgg_link_routes  # noqa: F401, E402
 from . import bgg_push_routes  # noqa: F401, E402
+# No ordering constraint: every path here is a literal under /bga/, with no
+# parameterised sibling to be swallowed by. The BGA importer's WRITE is not
+# here — it goes through POST /plays/import like every other source.
+from . import bga_routes       # noqa: F401, E402
 from . import bootstrap_routes  # noqa: F401, E402
 from . import export_routes  # noqa: F401, E402
 from . import admin_routes  # noqa: F401, E402

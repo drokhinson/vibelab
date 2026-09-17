@@ -723,8 +723,19 @@
     // date, warnings the model raised, and runs. The SHAPE is identical, which
     // is the whole point.
 
-    /** @returns {"notes"|"photos"} */
+    /** @returns {"notes"|"photos"|"bga"} */
     get sourceKey() { return "notes"; }
+
+    /**
+     * The catalog game of one item in `importable()`.
+     *
+     * Part of the ImportSource interface so the shared summary can ask every
+     * model the same question — a note's play resolves through the game map, a
+     * photo carries its game on the shot, and the step must not have to know
+     * which.
+     * @param {DraftPlay} play
+     */
+    gameOf(play) { return this.playGame(play); }
 
     /** A note can leave a play undated; every photo carries its own date. */
     get supportsBulkDate() { return true; }

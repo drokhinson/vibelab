@@ -24,6 +24,14 @@ Supersedes the root `ENV.md` for anything BoardgameBuddy. Domain: **bgbuddy.app*
 | `BGG_WEB_USER_AGENT` | hand-set | UA for boardgamegeek.com's own web endpoints (not xmlapi2). Those sit behind Cloudflare, which screens POSTs on how browser-shaped they look; the UA that gets through is a moving target, hence env-tunable. |
 | `BGG_THROTTLE_SECONDS` | hand-set (default `1.5`) | Seconds between BGG collection *reads* in a sweep. |
 | `BGG_PUSH_THROTTLE_SECONDS` | hand-set (default `2.0`) | Seconds between BGG collection *writes*. Higher because BGG's write limits are undocumented. |
+| `BGA_CREDENTIAL_KEY` | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` | Fernet key encrypting linked users' **Board Game Arena** passwords. Its own key, deliberately **not** `BGG_CREDENTIAL_KEY`: rotating one must not force a re-link of the other. Rotating this one forces every BGA-linked user to re-link. |
+| `BGA_DRY_RUN` | hand-set (`true`) | Logs the request the BGA client *would* send and returns a fixture instead. BGA has no public API and the endpoints are reverse-engineered — **leave this on** until confirmed against a throwaway BGA account. Same posture as `BGG_PUSH_DRY_RUN`. |
+| `BGA_BASE_URL` | hand-set (default `https://boardgamearena.com`) | Origin the BGA client talks to. Overridable so a local fixture server can drive the whole import end-to-end without touching the real site. |
+| `BGA_USER_AGENT` | hand-set (default `vibelab-boardgame-buddy/1.0`) | **Honest by design, and not the browser spoof `BGG_WEB_USER_AGENT` carries.** BGA's terms name automated access specifically, so a bot screen that turns us away is a control working as intended. Do not point this at a Chrome UA string to get past one. |
+| `BGA_THROTTLE_SECONDS` | hand-set (default `2.0`) | Minimum seconds between BGA requests, enforced process-wide behind a single-flight lock rather than per-sweep. Stricter than BGG's because BGG rate-limits and BGA bans. |
+| `BGA_MAX_TABLES` | hand-set (default `500`) | Ceiling on one import's sweep. Past it the response reports `truncated` and the wizard asks the user to run it again — the history is still complete across runs, bounded per request. |
+| `BGA_MAX_PAGES` | hand-set (default `20`) | The same ceiling expressed in `getGames` pages, whichever is hit first. |
+| `BGA_SWEEP_BUDGET_SECONDS` | hand-set (default `90`) | Wall-clock wall on the sweep, so a slow BGA cannot hold the single uvicorn worker's request open indefinitely. |
 | `GEMINI_API_KEY` | aistudio.google.com → API Keys | Chapter drafting and play-note import. Missing key → those two endpoints 502; nothing else breaks. |
 
 ### Added by the migration (see `Docs/MIGRATION_PLAN.md`)
