@@ -148,10 +148,21 @@
       // worth more than a URL, and the picker offers it as a row rather than
       // resuming it behind the user's back.
       const saved = window.ImportDraft.restore();
-      this._resume = saved;
+      // ...unless its source has since been switched off, in which case the
+      // branch it resumes into is unreachable and the row would be a door to
+      // nowhere. Cleared rather than kept for later: by the time the source is
+      // back the draft is stale, and leaving it in localStorage means the offer
+      // reappears the day somebody deletes the OFF entry.
+      const live = !saved || window.ImportSourceStep.isLive(saved.source);
+      if (!live) window.ImportDraft.clear();
+      this._resume = live ? saved : null;
 
       const asked = this.params && this.params.source;
-      if (!saved && asked && window.ImportDraft.SOURCES.indexOf(asked) !== -1) {
+      // isLive is checked HERE too, not only on the row: a disabled button is
+      // not an off switch while /settings/import?source=bga walks straight past
+      // the picker into the branch behind it.
+      if (!this._resume && asked && window.ImportDraft.SOURCES.indexOf(asked) !== -1
+          && window.ImportSourceStep.isLive(asked)) {
         this._enter(asked, { skipRender: true });
         // The two retired paths resolve here through route aliases, so the
         // address bar still says /settings/import-plays. The BGG sync's done
