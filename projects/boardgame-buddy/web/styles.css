@@ -17461,6 +17461,34 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .imp-row__chev { flex: none; color: var(--polaroid-muted); }
 .imp-row--unset .imp-row__sub { color: var(--accent-ink); font-weight: 600; }
 
+/* A row that is not itself a control — it carries its own buttons instead.
+   The BoardGameGeek branch's Games step needs two actions per row (bring the
+   game over from BGG, or match one already here), and a <button> holding two
+   buttons is not a thing. Kills the press affordance the row would otherwise
+   advertise, since the row no longer does anything when tapped. */
+.imp-row--static { cursor: default; }
+.imp-row--static:active { background: transparent; }
+.imp-row__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+/* Both controls keep the 44px floor even at btn-xs, which is a 28px control —
+   the two sit side by side in a 56px row (.claude/rules/mobile-web.md §5). */
+.imp-row__actions .btn { position: relative; }
+.imp-row__actions .btn::before { content: ""; position: absolute; inset: -8px -2px; }
+
+/* A step's own primary action, under its body rather than in the wizard nav.
+   The nav's Continue moves BETWEEN steps; this does something on the step it
+   sits on, so it must not look like the same control. */
+.imp-step__cta {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--s-4, 16px);
+}
+
 /* A source the wizard names but cannot import from yet. A disabled <button>,
    not a styled <div>: it stays out of the tab order and is announced as
    unavailable rather than as a row that simply does nothing when tapped. */

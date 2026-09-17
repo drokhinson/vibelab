@@ -20,10 +20,11 @@
    * @property {string} title
    * @property {string} sub
    * @property {string|null} [extra]  A second line, for a pointer elsewhere.
+   * @property {string} [chip]  The label on a disabled row's badge.
    */
 
   /** @type {SourceOption[]} */
-  const SOURCES = [
+  const STATIC_SOURCES = [
     {
       key: "notes",
       icon: "sticky-note",
@@ -37,15 +38,6 @@
       title: "Photos",
       sub: "Pick photos of games you've played. Each one keeps its date and its "
          + "country; you add the game and who was there.",
-    },
-    {
-      key: "",
-      icon: "dices",
-      title: "BoardGameGeek",
-      sub: "Coming soon — bringing over the plays you've recorded on BGG.",
-      // Without this the row reads as a regression to the people already using
-      // the BGG sync, which is not going anywhere and is not this wizard.
-      extra: "Syncing your BGG collection is already in Settings → Connections.",
     },
     {
       key: "bga",
@@ -62,10 +54,61 @@
   ];
 
   /**
-   * @param {{resume: {source: string, label: string}|null}} [opts]
+   * The BoardGameGeek row, which is four rows depending on the account.
+   *
+   * NEVER LIVE BEFORE THE LINK STATE IS KNOWN. The picker paints synchronously
+   * — the wizard navigates first and fetches after — so `bggAuth` is null on
+   * the first paint and arrives a moment later. Rendering the row enabled
+   * meanwhile and disabling it when the answer lands would take a control away
+   * from under a thumb already on its way down; starting disabled and enabling
+   * is the safe direction, because nothing the user could have tapped becomes
+   * untappable.
+   *
+   * @param {"linked"|"unlinked"|"relink_required"|null} bggAuth
+   * @returns {SourceOption}
+   */
+  function bggRow(bggAuth) {
+    const base = { icon: "dices", title: "BoardGameGeek" };
+    if (bggAuth === "linked") {
+      return Object.assign({}, base, {
+        key: "bgg",
+        sub: "Bring over the plays you've recorded on BoardGameGeek. You match "
+           + "the people and check every play before anything is written.",
+      });
+    }
+    if (bggAuth === "unlinked") {
+      return Object.assign({}, base, {
+        key: "",
+        chip: "Not connected",
+        sub: "Bring over the plays you've recorded on BoardGameGeek.",
+        extra: "Link your BoardGameGeek account in Settings → Connections first.",
+      });
+    }
+    if (bggAuth === "relink_required") {
+      return Object.assign({}, base, {
+        key: "",
+        chip: "Reconnect",
+        sub: "Bring over the plays you've recorded on BoardGameGeek.",
+        extra: "Your BoardGameGeek session has expired — reconnect in "
+             + "Settings → Connections.",
+      });
+    }
+    return Object.assign({}, base, {
+      key: "",
+      chip: "Checking",
+      sub: "Bring over the plays you've recorded on BoardGameGeek.",
+    });
+  }
+
+  /**
+   * @param {{resume: {source: string, label: string}|null,
+   *          bggAuth: "linked"|"unlinked"|"relink_required"|null}} [opts]
    */
   function render(opts) {
     const resume = opts && opts.resume;
+    // BoardGameGeek is built per render because its row depends on the link
+    // state; every other source is static.
+    const sources = STATIC_SOURCES.concat([bggRow((opts && opts.bggAuth) || null)]);
     return `
       <div class="imp-step">
         <h3 class="imp-step__title font-display">Where are these plays coming from?</h3>
@@ -74,7 +117,7 @@
         </p>
         <div class="imp-list">
           ${resume ? renderResume(resume) : ""}
-          ${SOURCES.map(renderRow).join("")}
+          ${sources.map(renderRow).join("")}
         </div>
       </div>
     `;
@@ -117,11 +160,11 @@
           ${src.extra ? `<span class="imp-row__sub">${escapeHtml(src.extra)}</span>` : ""}
         </span>
         ${soon
-          ? `<span class="imp-row__soon">Coming soon</span>`
+          ? `<span class="imp-row__soon">${escapeHtml(src.chip || "Coming soon")}</span>`
           : `<span class="imp-row__chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>`}
       </button>
     `;
   }
 
-  window.ImportSourceStep = { render, SOURCES };
+  window.ImportSourceStep = { render, bggRow, STATIC_SOURCES };
 })();

@@ -489,6 +489,16 @@
     get supportsBulkDate() { return false; }
 
     /**
+     * The picker's Resume row, in this source's own words. On the contract so
+     * views/import-wizard-view.js can ask every model the same question rather
+     * than reaching into each one's own fields.
+     */
+    resumeLabel() {
+      const n = this.liveCount;
+      return `${n} Board Game Arena table${n === 1 ? "" : "s"} you were still assigning`;
+    }
+
+    /**
      * The one thing worth warning about before the review: history left behind.
      * Everything else this source could get wrong is a row the user can see.
      */

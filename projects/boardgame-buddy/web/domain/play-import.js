@@ -740,6 +740,12 @@
     /** A note can leave a play undated; every photo carries its own date. */
     get supportsBulkDate() { return true; }
 
+    /** The picker's Resume row, in this source's own words. */
+    resumeLabel() {
+      const n = this.liveCount;
+      return `A note with ${n} play${n === 1 ? "" : "s"} read out of it`;
+    }
+
     /** Things the model flagged while reading. Nothing else raises any. */
     reviewWarnings() { return this.warnings || []; }
 

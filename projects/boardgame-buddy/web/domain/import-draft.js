@@ -24,12 +24,17 @@
  *   has. tools/check-import-wizard.mjs asserts every name below exists on all
  *   three.
  *
- * @property {"notes"|"photos"|"bga"} sourceKey
+ * @property {"notes"|"photos"|"bga"|"bgg"} sourceKey
  * @property {boolean} supportsBulkDate
  * @property {number} step
  * @property {string} stepName
  * @property {boolean} isDirty
  * @property {any} progress
+ *
+ * @property {() => string} resumeLabel  What the picker's Resume row says. Each
+ *   model words it, because only the model knows what it is holding — the
+ *   shell used to branch on sourceKey to build this, which is exactly the
+ *   source-specific knowledge its own header says it has none of.
  *
  * @property {() => Array<{key: string, name: string, game: any, rows: any[]}>} reviewGroups
  * @property {() => string[]} reviewWarnings
@@ -72,14 +77,17 @@
     "bgb.playImport.draft",
     "bgb.photoImport.draft",
     "bgb.bgaImport.draft",
+    "bgb.bggPlayImport.draft",
   ];
 
   // Probed in this order when the envelope is absent — a user who was mid-
   // wizard when the wizard shipped. Photos first: that draft costs more to
   // rebuild, because its files are gone and its assignments are not.
   //
-  // BGA is deliberately absent: it has never existed outside the wizard, so
-  // there is no pre-envelope draft of it to adopt.
+  // BGA and BGG are deliberately absent: neither has ever existed outside
+  // the wizard, so there is no pre-envelope draft of either to adopt. Both
+  // ARE in KEYS above, which is the list clear() sweeps — see the note
+  // there for why the two lists are separate.
   const LEGACY = [
     ["photos", "bgb.photoImport.draft"],
     ["notes", "bgb.playImport.draft"],
@@ -89,6 +97,7 @@
     notes: () => new window.PlayImport(),
     photos: () => new window.PhotoImport(),
     bga: () => new window.BgaImport(),
+    bgg: () => new window.BggPlayImport(),
   };
 
   function read(key) {
@@ -96,9 +105,9 @@
   }
 
   const ImportDraft = {
-    SOURCES: ["notes", "photos", "bga"],
+    SOURCES: ["notes", "photos", "bga", "bgg"],
 
-    /** @param {"notes"|"photos"|"bga"} source */
+    /** @param {"notes"|"photos"|"bga"|"bgg"} source */
     create(source) {
       const make = MODELS[source];
       return make ? make() : null;
