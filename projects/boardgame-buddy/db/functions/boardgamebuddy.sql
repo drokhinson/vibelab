@@ -1443,11 +1443,11 @@
 
 -- bgb_delete_import_group(p_user UUID, p_group UUID)
 --   → JSONB { deleted: INT }
---   Defined in: db/migrations/boardgamebuddy/007_play_import_batches.sql
---   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
+--   Defined in: db/migrations/007_play_import_batches.sql
+--   Called by:  api/routes/services/play_import_service.py
 --               (delete_import_group — DELETE /plays/import-group/{id})
 --   Purpose:    Drop one run of identical imported plays, from its own feed
---               card. Owner-scoped in the WHERE clause rather than by a
+--               card or from the imports spoke's detail screen. Owner-scoped in the WHERE clause rather than by a
 --               separate check, so a group belonging to somebody else matches
 --               nothing and reports 0 — the same answer as a group that never
 --               existed, which is deliberate: distinguishing them would tell a
@@ -1456,8 +1456,8 @@
 
 -- bgb_delete_import_batch(p_user UUID, p_batch UUID)
 --   → JSONB { deleted: INT }
---   Defined in: db/migrations/boardgamebuddy/007_play_import_batches.sql
---   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
+--   Defined in: db/migrations/007_play_import_batches.sql
+--   Called by:  api/routes/services/play_import_service.py
 --               (delete_import_batch — DELETE /plays/import-batch/{id})
 --   Purpose:    Undo a whole import — every play one paste wrote, including the
 --               one-offs that carry no group id and could not be found any
@@ -1466,13 +1466,21 @@
 -- bgb_list_imports(p_user UUID)
 --   → JSONB [ { batch_id, imported_at, play_count, game_count, game_names[],
 --               first_played_at, last_played_at } ], newest first
---   Defined in: db/migrations/boardgamebuddy/007_play_import_batches.sql
---   Called by:  shared-backend/routes/boardgame_buddy/services/play_import_service.py
---               (list_imports — GET /plays/imports, the Settings undo list)
---   Purpose:    What Settings lists so a user can find the import to undo.
+--   Defined in: db/migrations/007_play_import_batches.sql
+--   Called by:  api/routes/services/play_import_service.py
+--               (list_imports — GET /plays/imports)
+--   Purpose:    The index of the imports spoke (/settings/imports), and the
+--               count line on Settings' Past imports row.
 --               game_names is capped at four — a batch spanning fifteen games
 --               would push a paragraph into a settings row — while game_count
---               beside it stays exact.
+--               beside it stays exact. GET /plays/imports/{batch_id} mirrors
+--               that cap in Python rather than calling this per batch, so one
+--               import cannot read two ways across the two screens.
+--
+--               NOTE: that endpoint adds NO function here. It reads the plays
+--               rows directly and groups them in Python, because the five
+--               aggregates above all fall out of rows it has already fetched —
+--               a sibling RPC would be a second place for them to drift.
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Notifications (migrations 008, 009)
