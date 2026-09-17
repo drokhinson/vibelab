@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 038_discover.sql (adds bgb_discover_recommendations, the
+-- Last updated: 039_bgg_hot_snapshots.sql (adds bgb_bgg_hot_latest — the
+--               newest BGG hot-list run diffed against the newest run at
+--               least 20 hours older, so the Discover rail can say what
+--               climbed.)
+--               Before that: 038_discover.sql (adds bgb_discover_recommendations, the
 --               Discover tab's scorer: the catalog ranked against a taste
 --               profile built from the viewer's shelf and plays, each row
 --               carrying the reason it was picked. Also gives
@@ -138,6 +142,23 @@
 --               shared mechanics / categories / table fit / rating — and no
 --               explaining seed gets more than three picks. Zero rows for a
 --               viewer with no seeds; the service falls back to catalog rank.
+
+-- bgb_bgg_hot_latest()
+--   → TABLE (bgg_id INT, rank INT, name TEXT, year_published INT,
+--            thumbnail_url TEXT, prev_rank INT, rank_delta INT,
+--            is_new BOOLEAN, captured_at TIMESTAMPTZ)
+--   Defined in: db/migrations/boardgamebuddy/039_bgg_hot_snapshots.sql
+--   Called by:  projects/boardgame-buddy/api/routes/services/discovery_service.py
+--               (fetch_trending — snapshot first, BGG live only when no run
+--               has been written)
+--   Purpose:    The newest row set of boardgamebuddy_bgg_hot_snapshots, each
+--               game carrying its rank in the newest run at least 20 hours
+--               older: rank_delta = prev - current (positive = climbing),
+--               is_new = absent from that run. 20 hours, not a day, so the
+--               daily cron's drift and an admin's same-day re-run neither
+--               skip a day nor compare a run against itself. A lone first
+--               run reports no comparison (NULL deltas, is_new false) rather
+--               than fifty newcomers.
 
 -- bgb_user_stats(uid UUID)
 --   → TABLE (total_plays BIGINT, unique_games BIGINT, win_count BIGINT,
