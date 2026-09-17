@@ -53,3 +53,11 @@ from . import bgg_push_routes  # noqa: F401, E402
 from . import bootstrap_routes  # noqa: F401, E402
 from . import export_routes  # noqa: F401, E402
 from . import admin_routes  # noqa: F401, E402
+# No ordering constraint. `/feedback` is one segment and
+# `/feedback/{id}/like` is three, and no single-segment `/{x}` route exists in
+# this package for either to be swallowed by — test_route_ordering only flags a
+# shadow between paths of EQUAL segment count. The two lookup endpoints are
+# top-level literals (`/feedback-types`, `/feedback-topics`) rather than
+# `/feedback/types`, mirroring `/chapter-types`, which is what keeps that true
+# if a `GET /feedback/{id}` ever lands.
+from . import feedback_routes  # noqa: F401, E402

@@ -28,6 +28,21 @@ class ChapterReportStatus(StrEnum):
     RESOLVED = "resolved"
 
 
+class FeedbackStatus(StrEnum):
+    """The two halves of the Dev feedback board.
+
+    An enum and not a lookup table, which is the opposite of what feedback_type
+    and topic get — and the split is deliberate. Those two carry a label, an icon
+    and a display order, so they are presentation the frontend must not hardcode
+    and a deploy must not be needed to change; this carries none of the three.
+    It is two words the code branches on. Same reading as ChapterReportStatus
+    above, whose column this one mirrors.
+    """
+
+    OPEN = "open"
+    RESOLVED = "resolved"
+
+
 class CollectionStatus(StrEnum):
     OWNED = "owned"
     # Legacy synthetic shelf — derived from boardgamebuddy_plays, never written
@@ -551,6 +566,14 @@ MAX_IMPORT_NAME_CHARS = 80
 # the Tuesday group", short enough that it cannot smuggle a paragraph into a row
 # the person it names can never see. Mirrors MAX_IMPORT_NAME_CHARS' reasoning.
 MAX_BUDDY_ALIAS_CHARS = 60
+
+# Longest Dev feedback body. Room for a real bug report — what you did, what you
+# expected, what happened — without turning a board that is skimmed into one that
+# is read. Well above MAX_BUDDY_ALIAS_CHARS above and well under MAX_IMPORT_CHARS
+# below, which is what the two bounds are for. The cap is enforced on the request
+# model rather than as a CHECK: it is an editorial limit on a textarea, not an
+# invariant the database needs.
+MAX_FEEDBACK_BODY_CHARS = 2000
 
 # Catalog candidates offered per unmatched game name in the Games step.
 IMPORT_GAME_CANDIDATES = 6
