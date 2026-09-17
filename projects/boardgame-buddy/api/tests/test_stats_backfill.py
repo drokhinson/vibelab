@@ -16,12 +16,16 @@ os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test")
 
 import pytest  # noqa: E402
+
+import cache  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from routes import game_routes as G  # noqa: E402
 from routes import router as bgb_router  # noqa: E402
+from routes.constants import AdminRunLevel, AdminRunTool  # noqa: E402
 from routes.dependencies import CurrentUser, get_current_admin  # noqa: E402
+from routes.services import admin_run_progress as A  # noqa: E402
 
 
 class _Query:
@@ -88,7 +92,9 @@ def _thing_xml(ids, *, skip=()):
 @pytest.fixture
 def client(monkeypatch):
     """50 unsynced games, a fake BGG, a recorded sleep, and an admin identity."""
-    rows = [{"id": f"g{i}", "bgg_id": 1000 + i} for i in range(50)]
+    # `name` rides along because the run log names what it is working on — a
+    # line reading "g13 failed" is one an admin has to go and decode.
+    rows = [{"id": f"g{i}", "bgg_id": 1000 + i, "name": f"Game {i}"} for i in range(50)]
     writes, calls, sleeps = [], [], []
 
     monkeypatch.setattr(G, "get_supabase", lambda: _SB(rows, writes))
@@ -181,3 +187,107 @@ def test_backfill_requires_admin():
     app = FastAPI()
     app.include_router(bgb_router)
     assert TestClient(app).post(BASE).status_code in (401, 403)
+
+
+# ── The run log ──────────────────────────────────────────────────────────────
+# A cold catalog is up to twenty-five of these calls, and the panel used to
+# show "N done, M left" inside a button between them. These pin that the ledger
+# turns those calls into one readable log.
+
+@pytest.fixture(autouse=True)
+def _clean_run_log():
+    cache.clear(A._NS)
+    yield
+    cache.clear(A._NS)
+
+
+def test_a_pass_narrates_scan_fetch_and_caches(client):
+    client.post(BASE)
+    snap = A.read(AdminRunTool.BGG_STATS)
+    assert snap["state"] == "done"
+    assert snap["started_by"] == "Admin"
+    assert [s["key"] for s in snap["steps"]] == ["scan", "fetch", "caches"]
+    assert {s["state"] for s in snap["steps"]} == {"done"}
+    assert next(s["detail"] for s in snap["steps"] if s["key"] == "scan") == (
+        "50 games are missing BGG stats"
+    )
+    fetch = next(s for s in snap["steps"] if s["key"] == "fetch")
+    assert (fetch["done"], fetch["total"]) == (3, 3), "one tick per batch"
+    assert [e["message"] for e in snap["events"]] == [
+        "Batch 1 of 3 — 20 of 20 saved",
+        "Batch 2 of 3 — 20 of 20 saved",
+        "Batch 3 of 3 — 10 of 10 saved",
+    ]
+    assert snap["totals"] == {"updated": 50, "failed": 0, "remaining": 0}
+
+
+def test_a_scan_that_takes_only_part_of_the_queue_says_so(client):
+    client.post(BASE, params={"limit": 20})
+    snap = A.read(AdminRunTool.BGG_STATS)
+    assert next(s["detail"] for s in snap["steps"] if s["key"] == "scan") == (
+        "50 games are missing BGG stats — taking 20 this pass"
+    )
+    assert snap["totals"]["remaining"] == 30
+
+
+def test_a_drain_reads_as_one_log_across_its_passes(client, monkeypatch):
+    """The whole point of the pass counter: twenty-five requests, one run."""
+    first = client.post(BASE, params={"limit": 20}).json()
+    assert first["remaining"] == 30
+    run_id = A.read(AdminRunTool.BGG_STATS)["run_id"]
+
+    client.post(BASE, params={"limit": 20, "pass_no": 1})
+    snap = A.read(AdminRunTool.BGG_STATS)
+
+    assert snap["run_id"] == run_id, "still the same run"
+    assert snap["pass_no"] == 1
+    assert sorted({e["pass_no"] for e in snap["events"]}) == [0, 1]
+    assert snap["totals"]["updated"] == 40, "totals accumulate across passes"
+    # The checklist restarted for the new pass; the log below it did not.
+    assert {s["state"] for s in snap["steps"]} == {"done"}
+
+
+def test_a_failed_batch_names_the_games_in_it(client, monkeypatch):
+    async def boom(_path, params, **_kw):
+        if str(params["id"]).startswith("1020"):
+            raise RuntimeError("BGG 502")
+        return _thing_xml([int(x) for x in str(params["id"]).split(",")])
+
+    monkeypatch.setattr(G, "fetch_bgg", boom)
+    body = client.post(BASE).json()
+    assert body["updated"] == 30 and body["failed"] == 20
+
+    snap = A.read(AdminRunTool.BGG_STATS)
+    errors = [e["message"] for e in snap["events"] if e["level"] == AdminRunLevel.ERROR.value]
+    assert errors == [
+        "Batch 2 failed (Game 20, Game 21, Game 22 and 17 more) — BGG 502"
+    ]
+    assert snap["state"] == "done", "one bad batch does not fail the pass"
+
+
+def test_games_bgg_has_no_stats_for_get_a_warning_not_silence(client, monkeypatch):
+    """They are stamped and leave the queue, so the count moves while the
+    catalog gains nothing — which looks like a bug unless the log says."""
+    async def partial(_path, params, **_kw):
+        ids = [int(x) for x in str(params["id"]).split(",")]
+        return _thing_xml(ids, skip=ids[:5])
+
+    monkeypatch.setattr(G, "fetch_bgg", partial)
+    client.post(BASE, params={"limit": 20})
+
+    snap = A.read(AdminRunTool.BGG_STATS)
+    warns = [e["message"] for e in snap["events"] if e["level"] == AdminRunLevel.WARN.value]
+    assert warns == [
+        "5 of this batch have no stats on BoardGameGeek — stamped so they leave the queue"
+    ]
+
+
+def test_an_empty_queue_skips_the_fetch_rather_than_showing_an_empty_counter(client, monkeypatch):
+    monkeypatch.setattr(G, "get_supabase", lambda: _SB([], []))
+    client.post(BASE)
+    snap = A.read(AdminRunTool.BGG_STATS)
+    fetch = next(s for s in snap["steps"] if s["key"] == "fetch")
+    assert fetch["state"] == "skipped" and fetch["detail"] == "Nothing left to fetch"
+    assert next(s["detail"] for s in snap["steps"] if s["key"] == "scan") == (
+        "Nothing is missing BGG stats"
+    )

@@ -23,7 +23,7 @@ from supabase import Client
 
 import cache
 
-from ..constants import DiscoverReasonKind
+from ..constants import AdminRunLevel, AdminRunTool, AdminTrendingPhase, DiscoverReasonKind
 from ..models import (
     DiscoverBundleResponse,
     DiscoverDormantEntry,
@@ -34,6 +34,7 @@ from ..models import (
 )
 from ..bgg_client import _BGG_CACHE_HOT, fetch_hot_games
 from ..bgg_collection_read import BGG_THROTTLE_SECONDS
+from . import admin_run_progress
 from ._helpers import fetch_games_by_ids, game_select_clause, game_summary_from_row
 
 logger = logging.getLogger(__name__)
@@ -289,7 +290,17 @@ def _write_snapshot(sb: Client, items: list[dict], captured_at: datetime) -> tup
     return len(rows), len(pruned), missing
 
 
-async def refresh_hot_snapshot(sb: Client) -> HotRefreshResult:
+def hot_names(items: list[dict]) -> dict[int, str]:
+    """bgg_id → the name BGG gave it on the hot list.
+
+    The import loop has only ids to work with, and a run log that says
+    "12333 failed" is a log an admin has to go and decode. BGG already told us
+    the name in the same response, so carry it.
+    """
+    return {i["bgg_id"]: (i.get("name") or f"BGG {i['bgg_id']}") for i in items}
+
+
+async def refresh_hot_snapshot(sb: Client, *, progress=None) -> HotRefreshResult:
     """Fetch BGG's hot list, keep it as a run, and import what the catalog lacks.
 
     Straight to BGG (no cache): a refresh that re-wrote the hour-old list
@@ -302,38 +313,99 @@ async def refresh_hot_snapshot(sb: Client) -> HotRefreshResult:
     reason: sequential, spaced, one failure logged and skipped. Both caches
     the rail reads through are dropped at the end so the new run is what the
     next viewer sees.
+
+    `progress` is the admin run ledger (services/admin_run_progress.py). It is
+    optional and defaults to a muted one so the cron, a test, or any future
+    caller with no page behind it can run this unchanged — the narration below
+    is then dict writes that go nowhere, which is why there is no `if progress`
+    at any of the eleven call sites.
     """
     # Inside the function: game_routes is a route module that imports this
     # package's services, so a top-level import here is a cycle. Same shape
     # bgg_link_routes' pending-import drain uses.
     from ..game_routes import import_game_from_bgg
 
+    prog = progress or admin_run_progress.NullProgress(AdminRunTool.TRENDING)
+    P = AdminTrendingPhase
+
+    prog.begin(P.FETCH)
     items = await fetch_hot_games(use_cache=False)
     if not items:
+        # Named as BGG's failure rather than ours: this is the one outcome an
+        # operator will want to tell apart from "the import loop broke".
         raise HTTPException(status_code=503, detail="BoardGameGeek did not return a hot list")
+    prog.tick(P.FETCH, 0, detail=f"{len(items)} games on the hot list")
+
     captured_at = datetime.now(timezone.utc)
+    names = hot_names(items)
+    prog.begin(P.SNAPSHOT, total=len(items))
     written, pruned, missing = await asyncio.to_thread(_write_snapshot, sb, items, captured_at)
+    prog.tick(P.SNAPSHOT, written, detail=f"{written} rows written")
+
+    # PRUNE and DIFF both happened inside that one threaded call — the three
+    # statements share a connection and a captured_at, and splitting them to
+    # give each phase its own await would buy nothing but round trips. They are
+    # still three rows, because they are three things an operator asks about.
+    prog.begin(P.PRUNE)
+    prog.tick(P.PRUNE, 0, detail=(
+        f"{pruned} rows older than {HOT_RETENTION_DAYS} days removed" if pruned
+        else "nothing old enough to remove"
+    ))
+    prog.begin(P.DIFF)
+    prog.tick(P.DIFF, 0, detail=(
+        f"{len(missing)} of {len(items)} not in the catalog" if missing
+        else "the catalog already has every hot game"
+    ))
 
     imported = 0
     failed: list[int] = []
     to_import = missing[:HOT_IMPORT_PER_RUN]
+    skipped = missing[HOT_IMPORT_PER_RUN:]
+    if not to_import:
+        prog.skip(P.IMPORT, detail="Nothing new to import")
+    else:
+        prog.begin(P.IMPORT, total=len(to_import))
     for n, bgg_id in enumerate(to_import):
         if n:
             await asyncio.sleep(BGG_THROTTLE_SECONDS)
+        name = names.get(bgg_id, f"BGG {bgg_id}")
+        prog.tick(P.IMPORT, n, detail=name)
         try:
             await import_game_from_bgg(sb, bgg_id)
             imported += 1
-        except Exception:  # noqa: BLE001 — one bad import must not sink the run
+            prog.event(P.IMPORT, f"Imported {name} (BGG {bgg_id})")
+        except Exception as exc:  # noqa: BLE001 — one bad import must not sink the run
             logger.warning("Hot-list import of bgg_id=%s failed", bgg_id, exc_info=True)
             failed.append(bgg_id)
+            prog.event(
+                P.IMPORT,
+                f"{name} (BGG {bgg_id}) — {exc}",
+                level=AdminRunLevel.ERROR,
+            )
+    if to_import:
+        prog.tick(P.IMPORT, len(to_import))
+    if skipped:
+        # A warn rather than an error: the cap is working as designed, and the
+        # next run picks these up. It is still the thing an admin wonders about
+        # when the counts do not add up.
+        prog.event(
+            P.IMPORT,
+            f"{len(skipped)} more are missing and will import on the next run "
+            f"(cap is {HOT_IMPORT_PER_RUN} per run)",
+            level=AdminRunLevel.WARN,
+        )
 
+    prog.begin(P.CACHES)
     cache.clear(_NS)
     cache.clear(_BGG_CACHE_HOT)
+    prog.tick(P.CACHES, 0, detail="Discover rails will rebuild on the next visit")
+    prog.add_totals(updated=imported, failed=len(failed), remaining=len(skipped))
+
     return HotRefreshResult(
         captured_at=captured_at,
         items=written,
         imported=imported,
-        skipped=missing[HOT_IMPORT_PER_RUN:],
+        skipped=skipped,
         failed=failed,
         pruned=pruned,
     )

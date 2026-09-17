@@ -14,6 +14,8 @@ from pydantic import (
 )
 
 from .constants import (
+    AdminRunLevel,
+    AdminRunTool,
     ChapterReportStatus,
     DiscoverReasonKind,
     FeedbackStatus,
@@ -52,6 +54,8 @@ from .constants import (
     PlayMode,
     PlaySessionStatus,
     PushTier,
+    RunState,
+    RunStepState,
     ScoringGridMode,
     ScoringRowColor,
     SessionPhase,
@@ -86,7 +90,19 @@ CountryCode = Annotated[str, AfterValidator(_normalize_country)]
 
 
 class RefreshImagesResponse(BaseModel):
+    """Outcome of ONE PASS of the admin image re-host.
+
+    Same three fields as RefreshDescriptionsResponse, and for the same reason:
+    this used to report `updated` alone and so ran exactly once, because the
+    panel's drain loop breaks on a falsy `remaining`. One pass over a cold
+    catalog is one BGG call plus two image uploads per needy game — far past
+    the platform's request timeout — so it was the one backfill that could not
+    finish. It is bounded and drained like the other three now.
+    """
+
     updated: int
+    failed: int = 0
+    remaining: int = 0
 
 
 class AdminReviewCounts(BaseModel):
@@ -502,6 +518,86 @@ class BggCheckProgressResponse(BaseModel):
     steps: list[BggCheckStep] = []
     warm_up_failed: bool = False
     error: str | None = None
+
+
+# ── Admin run progress (GET /admin/runs, GET /admin/runs/{tool}) ──────────────
+# The same checklist shape as BggCheckStep above, plus the two things an admin
+# run has that a user's comparison does not: a journal of per-item outcomes,
+# and a life that spans several requests. Declared here, next to the model it
+# mirrors, so the two cannot drift apart unnoticed.
+
+class AdminRunStep(BaseModel):
+    """One row of an admin run's checklist.
+
+    `key` is a bare str rather than an enum because the phase vocabulary varies
+    by tool — trending walks AdminTrendingPhase, the four backfills walk
+    AdminBackfillPhase — and a union here would let a response validate against
+    the wrong tool's phases.
+    """
+    key: str
+    state: RunStepState = RunStepState.IDLE
+    done: int | None = None
+    total: int | None = None
+    detail: str | None = None
+    retry: BggCheckRetry | None = None
+
+
+class AdminRunEvent(BaseModel):
+    """One line of the run log — a game imported, a batch that failed, a row
+    that would not write. This is what the checklist cannot say: which item."""
+    at: datetime
+    level: AdminRunLevel = AdminRunLevel.INFO
+    phase: str
+    pass_no: int = 0
+    message: str
+
+
+class AdminRunTotals(BaseModel):
+    """Cumulative across every pass of a run. `remaining` is the server's
+    current view of the queue rather than a running sum, which is what lets the
+    client decide whether to ask for another pass."""
+    updated: int = 0
+    failed: int = 0
+    remaining: int = 0
+
+
+class AdminRunSummary(BaseModel):
+    """One row of GET /admin/runs — everything the Settings status pill needs
+    and nothing it does not.
+
+    Deliberately journal-free: that card polls every tool at once and is not
+    the log, so it must not cost a few hundred event rows a second to paint a
+    pill that says "Running · 4 of 10".
+    """
+    tool: AdminRunTool
+    state: RunState = RunState.UNKNOWN
+    run_id: str | None = None
+    pass_no: int = 0
+    started_at: datetime | None = None
+    updated_at: datetime | None = None
+    started_by: str | None = None
+    totals: AdminRunTotals = AdminRunTotals()
+    steps: list[AdminRunStep] = []
+    error: str | None = None
+
+
+class AdminRunProgressResponse(AdminRunSummary):
+    """GET /admin/runs/{tool} — the summary above plus the log itself.
+
+    `state = unknown` means this process has no record, which for an admin run
+    means NOTHING HAS RUN IN THE LAST TEN MINUTES — the page renders its idle
+    "Run now" state. That is the opposite reading from
+    BggCheckProgressResponse, where unknown means "still working"; see
+    RunState's docstring for why the two differ.
+
+    `tool` is optional here and required on the summary: a response for a tool
+    with no record still has to name the tool it is about.
+    """
+    tool: AdminRunTool | None = None
+    events: list[AdminRunEvent] = []
+    # How many oldest lines the 200-entry cap dropped, so a long drain's log
+    # says "and 340 earlier lines" instead of quietly starting mid-run.
+    events_dropped: int = 0
 
 
 class BggPushBody(BaseModel):

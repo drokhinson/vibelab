@@ -437,13 +437,21 @@ class BggCheckPhase(StrEnum):
     QUEUE = "queue"
 
 
-class BggCheckState(StrEnum):
-    """Whether a comparison is running, and whether we can still see it.
+class RunState(StrEnum):
+    """Whether a narrated run is going, and whether we can still see it.
 
-    UNKNOWN is not an error. Progress lives in an in-process cache, so a
-    restart — or a poll landing on a worker that never ran the check — reads as
-    UNKNOWN while the POST itself is still perfectly alive. The FE must render
-    that as "still working", never as done.
+    UNKNOWN is not an error and not a success — it means THIS PROCESS HAS NO
+    RECORD, and what that implies depends on who is asking:
+
+      • The BGG check (BggCheckState below) is started by the same request that
+        is being narrated, so no record while the POST is still in flight means
+        a restart or a poll landing on a worker that never ran it. The FE must
+        render that as "still working", never as done.
+      • An admin run is started from its own page and its ledger outlives the
+        run by ten minutes, so no record means "nothing has run recently" and
+        the page renders its idle state.
+
+    Do not collapse those two readings into one FE branch.
     """
 
     UNKNOWN = "unknown"
@@ -452,13 +460,22 @@ class BggCheckState(StrEnum):
     FAILED = "failed"
 
 
-class BggCheckStepState(StrEnum):
+class RunStepState(StrEnum):
     """One checklist row's state. SKIPPED is a step that was not needed."""
 
     IDLE = "idle"
     ACTIVE = "active"
     DONE = "done"
     SKIPPED = "skipped"
+
+
+# The BGG check named these two first and forty-odd call sites plus two
+# response models import them under those names. They were always generic —
+# services/step_progress.py now shares them with the BGA sweep and the admin
+# runs — so they are aliases rather than a rename, which would have been a
+# sweep with no behaviour change at the end of it.
+BggCheckState = RunState
+BggCheckStepState = RunStepState
 
 
 class BgaAuthState(StrEnum):
@@ -501,27 +518,78 @@ class BgaFetchPhase(StrEnum):
     MATCH = "match"       # Game names against the catalog, handles against people
 
 
-class BgaFetchState(StrEnum):
-    """Whether a sweep is running, and whether we can still see it.
+# The BGA sweep's own names for the same two vocabularies, kept as aliases for
+# the same reason as BggCheckState above: the sweep's modules and its response
+# model import them by these names, and the values were already identical
+# member for member. A sweep with UNKNOWN still reads as "still working" — see
+# RunState's docstring for why that is the sweep's reading and not the admin
+# runs'.
+BgaFetchState = RunState
+BgaFetchStepState = RunStepState
 
-    UNKNOWN is not an error — see BggCheckState. A poll landing on a process
-    that never ran the sweep reads as UNKNOWN while the POST is perfectly
-    alive, and the FE must render that as "still working".
+
+class AdminRunTool(StrEnum):
+    """The admin catalog jobs that narrate themselves on /admin/run/:tool.
+
+    The value IS the url segment and the ledger's cache key, so renaming one
+    orphans any run in flight and any bookmark. TRENDING is the odd one: it is
+    a single request, and the four BGG_* are drained in passes by the browser
+    (see AdminBackfillPhase).
     """
 
-    UNKNOWN = "unknown"
-    RUNNING = "running"
-    DONE = "done"
-    FAILED = "failed"
+    TRENDING = "trending"
+    BGG_IMAGES = "bgg-images"
+    BGG_DESCRIPTIONS = "bgg-descriptions"
+    BGG_STATS = "bgg-stats"
+    BGG_PUBLISHERS = "bgg-publishers"
 
 
-class BgaFetchStepState(StrEnum):
-    """One checklist row's state. SKIPPED is a step that was not needed."""
+class AdminTrendingPhase(StrEnum):
+    """The phases POST /discover/admin/refresh-trending walks, in order.
 
-    IDLE = "idle"
-    ACTIVE = "active"
-    DONE = "done"
-    SKIPPED = "skipped"
+    ORDER IS LOAD-BEARING — the FE renders the checklist by walking this enum,
+    so a phase's position here is its position on screen. Same contract as
+    BggCheckPhase.
+    """
+
+    FETCH = "fetch"          # BGG's hot list
+    SNAPSHOT = "snapshot"    # this run's rows
+    PRUNE = "prune"          # runs past the retention window
+    DIFF = "diff"            # which hot games the catalog lacks
+    IMPORT = "import"        # throttled, capped at HOT_IMPORT_PER_RUN
+    CACHES = "caches"
+
+
+class AdminBackfillPhase(StrEnum):
+    """The phases ONE PASS of a catalog backfill walks, in order.
+
+    A cold catalog takes many passes — each is bounded server-side so it fits
+    inside the platform's request timeout — and every pass walks these three
+    again. The ledger keeps its journal and its totals across passes, so the
+    checklist restarts while the log below it does not. See
+    services/admin_run_progress.py.
+
+    THREE PHASES, NOT FOUR. Fetching from BGG and writing what came back are
+    one interleaved loop — a batch is fetched, its rows are written, then the
+    next batch — so a separate WRITE phase would have to ping-pong with FETCH
+    on every chunk, and `begin()` marks earlier phases done. FETCH counts
+    batches and carries the running save count in its detail; which individual
+    row failed to write is a journal line, which is where per-item outcomes
+    belong anyway.
+    """
+
+    SCAN = "scan"      # page_all over the catalog for what is still missing
+    FETCH = "fetch"    # BGG, in throttled batches, writing as it goes
+    CACHES = "caches"
+
+
+class AdminRunLevel(StrEnum):
+    """A journal entry's severity. INFO is a thing that worked — the run log
+    is as much about what succeeded as about what did not."""
+
+    INFO = "info"
+    WARN = "warn"
+    ERROR = "error"
 
 
 class BgaMatchReason(StrEnum):
