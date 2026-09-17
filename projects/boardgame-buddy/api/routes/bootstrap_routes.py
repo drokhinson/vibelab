@@ -13,6 +13,8 @@ cached identity to boot from. It returns:
     from one bgb_play_partners RPC)
   - notifications_first_page (the bell's first page AND its unread count, from
     one notification_service.list_notifications call)
+  - release_notices_unseen (the what's-new popup's slides, oldest-first, capped;
+    empty for almost every boot)
   - bootstrap_version (int; FE wipes cache when this changes)
 
 GET /bootstrap/game-bundles is the deferred one — one bgb_game_detail_bundle
@@ -40,6 +42,7 @@ from .services import (
     game_service,
     notification_service,
     played_with_service,
+    release_notice_service,
 )
 
 # Cap on how many owned games get a prebuilt detail bundle. Mirrors the RPC's
@@ -90,12 +93,22 @@ async def get_bootstrap(
     # the unread count is one of them, so this member's wall time is what the
     # count alone already cost. `notifications_unread` is still emitted below,
     # unchanged, because an older frontend reads that key and nothing else.
+    #
+    # release_notices_unseen rides this gather for the same reason the
+    # notifications block does — bgb_bootstrap is 542 lines and adding to it
+    # means re-emitting all 542 in a migration. It is one indexed read against
+    # a table with tens of rows, and it returns empty on almost every boot, so
+    # it can never be this gather's slowest member. It is the popup's ONLY
+    # delivery path: /bootstrap runs on every visit (the warm frontend boot
+    # paints from cache and still calls it in the background), so a dedicated
+    # endpoint would be a round trip bought for nothing.
     (
         rpc_result,
         feed_page,
         recent_games,
         partners,
         notifs,
+        release_notices,
     ) = await asyncio.gather(
         asyncio.to_thread(
             lambda: sb.rpc(
@@ -111,6 +124,7 @@ async def get_bootstrap(
         asyncio.to_thread(game_service.recently_played, sb, viewer, limit=6),
         asyncio.to_thread(played_with_service.fetch_play_partners, sb, viewer),
         notification_service.list_notifications(sb, viewer, limit=_NOTIFICATIONS_PAGE),
+        asyncio.to_thread(release_notice_service.unseen, sb, viewer),
     )
 
     payload: dict[str, Any] = dict(rpc_result.data or {})
@@ -120,6 +134,9 @@ async def get_bootstrap(
     payload["play_partners"] = partners.model_dump(mode="json")
     payload["notifications_first_page"] = notifs.model_dump(mode="json")
     payload["notifications_unread"] = notifs.unread
+    payload["release_notices_unseen"] = [
+        n.model_dump(mode="json") for n in release_notices
+    ]
     return payload
 
 

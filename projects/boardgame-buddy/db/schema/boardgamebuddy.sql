@@ -1,6 +1,9 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 041_dev_feedback.sql (the Dev feedback board — four tables:
+-- Last updated: 042_release_notices.sql (boardgamebuddy_release_notices, plus
+--               profiles.release_notices_seen_at — the what's-new popup and its
+--               per-user watermark; hand-added below).
+--               Before that: 041_dev_feedback.sql (the Dev feedback board — four tables:
 --               boardgamebuddy_feedback_types, _feedback_topics, _feedback and
 --               _feedback_likes; hand-added below).
 --               Before that: 040_game_publishers.sql (boardgamebuddy_games.publishers,
@@ -131,6 +134,14 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- what makes the opt-in reachable is that the app offers it (the first-run
   -- deck's notifications slide, ui/push-prompt.js), not a pre-set column.
   push_tier TEXT DEFAULT 'none'::text NOT NULL,
+  -- Watermark for the what's-new popup (migration 042): a release notice
+  -- published at or before this is never shown again. NOT NULL DEFAULT now() is
+  -- load-bearing three ways — a new account starts watermarked at signup so it
+  -- never sees the backlog, existing rows were watermarked by the ADD COLUMN
+  -- itself, and there is no NULL so no COALESCE direction to get backwards
+  -- (link_notifications_seen_at above is the older, nullable form of the same
+  -- idea). Advanced only by bgb_mark_release_notices_seen.
+  release_notices_seen_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   CONSTRAINT boardgamebuddy_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,
   CONSTRAINT bgb_profiles_username_format CHECK ((username ~ '^[a-z0-9_]{3,30}$'::text)),
@@ -856,6 +867,29 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_likes (
 );
 ALTER TABLE public.boardgamebuddy_feedback_likes ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_feedback_likes TO boardgamebuddy_role;
+
+-- ── Release notices ───────────────────────────────────────────────────────────
+-- Admin-authored "what's new" notes (migration 042), shown once per user in a
+-- popup on their next visit and kept afterwards in the Settings archive.
+-- published_at is the ONLY draft/published flag — NULL is a draft, and the same
+-- column is the sort key and the unit profiles.release_notices_seen_at compares
+-- against. A status column beside it would be two sources of truth for one fact.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_release_notices (
+  id UUID DEFAULT gen_random_uuid() NOT NULL,
+  title TEXT NOT NULL,
+  body_md TEXT NOT NULL,
+  link_route TEXT,
+  link_label TEXT,
+  published_at TIMESTAMPTZ,
+  created_by UUID,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT boardgamebuddy_release_notices_pkey PRIMARY KEY (id),
+  CONSTRAINT bgb_release_notices_created_by_fkey FOREIGN KEY (created_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL
+);
+ALTER TABLE public.boardgamebuddy_release_notices ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_bgb_release_notices_published ON public.boardgamebuddy_release_notices USING btree (published_at DESC) WHERE (published_at IS NOT NULL);
+GRANT SELECT ON public.boardgamebuddy_release_notices TO boardgamebuddy_role;
 
 
 -- ── Column documentation ─────────────────────────────────────────────────────

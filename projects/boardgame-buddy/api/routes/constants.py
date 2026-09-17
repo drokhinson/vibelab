@@ -734,3 +734,44 @@ MAX_SCORING_ROW_LABEL_CHARS = 24
 # not characters — so this constant and the editor's mirror of it are the
 # ceiling.
 MAX_SCORING_ROW_NOTE_CHARS = 200
+
+
+# ── Release notices ──────────────────────────────────────────────────────────
+
+class ReleaseNoticeStatus(StrEnum):
+    """The admin list's filter, and only that.
+
+    Deliberately NOT a row state: `published_at IS NULL` is the one draft flag
+    (migration 042). A status column beside the timestamp would be two sources
+    of truth for one fact, written by three routes and correct only if all
+    three remember.
+    """
+
+    ALL = "all"
+    DRAFT = "draft"
+    PUBLISHED = "published"
+
+
+# How many unseen notices the popup carries at once. Someone six releases
+# behind gets the newest five, not the oldest five — the rest stay in the
+# Settings archive. Five is about the point where "here is what you missed"
+# stops being a welcome and starts being a wall.
+RELEASE_NOTICES_POPUP_MAX = 5
+
+# A title is one line on a 390px card in the app's display face.
+MAX_RELEASE_NOTICE_TITLE_CHARS = 120
+
+# The body is the whole point and it is markdown, so this is generous — but it
+# is bounded, because the popup is a card the user cannot scroll past to reach
+# their app. Past this, write two notices.
+MAX_RELEASE_NOTICE_BODY_CHARS = 8000
+
+# "Take me there" / "See the Discover tab". A button label, not a sentence.
+MAX_RELEASE_NOTICE_LINK_LABEL_CHARS = 40
+
+# A router route name from web/domain/view.js's _routes table. Not validated
+# against a server-side enum: the backend has no route table, so any enum here
+# would be a copy that drifts the first time a route is renamed. The admin
+# picker offers only param-free routes, and both render paths drop the button
+# when router.pathFor() cannot build a URL.
+MAX_RELEASE_NOTICE_LINK_ROUTE_CHARS = 64
