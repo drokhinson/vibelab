@@ -242,6 +242,14 @@
           alias: "admin-bgg-data" },
         { name: "admin-release-notices", pattern: /^\/admin\/release-notices\/?$/,
           build: () => "/admin/release-notices" },
+        // The run log, one screen for all five admin jobs. `tool` is in the
+        // PATH because it is what the page IS, not a hint about how you got
+        // here — same call as import-detail's batchId above. Declared before
+        // the bare /admin alias so the longer pattern is tried first.
+        { name: "admin-run",           pattern: /^\/admin\/run\/([^/]+)\/?$/,
+          consume: ["tool"],
+          extract: (m) => ({ tool: decodeURIComponent(m[1]) }),
+          build: (p) => `/admin/run/${encodeURIComponent(p.tool || "")}` },
         // The admin tools used to be one stacked screen at /admin. Aliased
         // rather than dropped so an old bookmark lands on the Settings card
         // that now indexes the three spokes, instead of a 404-ish blank.

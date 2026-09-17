@@ -13,10 +13,6 @@
 // which of them a tap belongs to before it can delegate.
 
 (function () {
-  // A bulk pass is bounded server-side, so a cold catalog needs several. Cap
-  // the drain so a bug in `remaining` can't spin forever.
-  const MAX_BULK_PASSES = 25;
-
   class AdminBackfillPanel {
     /**
      * @param {Object} opts
@@ -25,12 +21,11 @@
      * @param {string}   opts.icon         data-icon name for the heading
      * @param {string}   opts.emptyText    shown when nothing is missing
      * @param {string}   opts.bulkLabel    label for the bulk button
-     * @param {string}   opts.busyLabel    label while a refresh is running
+     * @param {string}   opts.runTool      the admin-run slug this panel drives
      * @param {(n:number)=>string} opts.bulkConfirm   the confirm dialog's title
      * @param {(g:Object)=>string} opts.rowStatus     per-row "what's missing" label
      * @param {()=>Promise<Object[]>}  opts.list
      * @param {(id:string)=>Promise<any>} opts.refreshOne
-     * @param {()=>Promise<{updated:number, remaining?:number, failed?:number}>} opts.refreshAll
      * @param {string}   opts.oneOkToast   toast after a single-row refresh
      * @param {string}   opts.host         the `window.<name>` of the hosting view
      * @param {()=>void} opts.render       host repaint
@@ -41,8 +36,13 @@
       this._rows = [];
       this._loading = false;
       this._busyId = null;   // id of the row currently refreshing
-      this._bulk = false;
-      this._bulkNote = "";   // running progress during a multi-pass drain
+    }
+
+    /** What the bulk run for this panel is doing, if anything. Read fresh on
+     *  every paint rather than held: the flow outlives this widget, and a run
+     *  can start, advance and finish while this panel is not even mounted. */
+    get run() {
+      return window.AdminRunFlow ? window.AdminRunFlow.stateOf(this.opts.runTool) : null;
     }
 
     async load() {
@@ -77,50 +77,49 @@
       }
     }
 
-    async refreshAll() {
-      const count = this._rows.length;
+    /**
+     * Hand the whole queue to the run page.
+     *
+     * This used to BE the drain — a loop of up to 25 bounded passes, reporting
+     * "40 done, 260 left" inside this button between them, for a run that can
+     * take twenty minutes. Two things were wrong with that. The loop lived on
+     * a widget, so leaving the screen killed it; and a button is not somewhere
+     * you can show which game failed and why, which on a long catalog fill is
+     * the only thing worth knowing. Both live on /admin/run/:tool now, and the
+     * loop with them (domain/admin-run-flow.js).
+     *
+     * The confirm stays here, before the navigation: it is a real cost — every
+     * pass calls BoardGameGeek once per batch — and the page that would ask
+     * instead is the page that shows Run now, which is one tap too late.
+     */
+    async goToRun() {
+      const st = this.run;
+      // Already going: no confirm, nothing to start, just take them to it.
+      if (st && st.state !== "unknown") {
+        window.router.go("admin-run", { tool: this.opts.runTool });
+        return;
+      }
       const ok = await window.PolaroidPopup.confirm({
-        title: this.opts.bulkConfirm(count), confirmLabel: "Refresh all", cancelLabel: "Cancel",
+        title: this.opts.bulkConfirm(this._rows.length),
+        confirmLabel: "Refresh all",
+        cancelLabel: "Cancel",
       });
       if (!ok) return;
-      this._bulk = true;
-      this._bulkNote = "";
-      this.opts.render();
-      let updated = 0;
-      let failed = 0;
-      try {
-        // Drain: one pass is bounded server-side, so keep going while the
-        // server still reports work left. `remaining` is absent on the images
-        // endpoint, which does the whole catalog in one pass — undefined is
-        // falsy, so that path runs exactly once.
-        for (let pass = 0; pass < MAX_BULK_PASSES; pass++) {
-          const result = (await this.opts.refreshAll()) || {};
-          updated += result.updated || 0;
-          failed += result.failed || 0;
-          if (!result.remaining) break;
-          this._bulkNote = `${updated} done, ${result.remaining} left`;
-          this.opts.render();
-        }
-        const plural = updated === 1 ? "" : "s";
-        showToast(
-          failed
-            ? `Updated ${updated} game${plural}, ${failed} failed`
-            : `Updated ${updated} game${plural}`,
-          failed ? "warning" : "success",
-        );
-        await this.load();
-      } catch (e) {
-        showToast(e.message || "Bulk refresh failed", "error");
-      } finally {
-        this._bulk = false;
-        this._bulkNote = "";
-        this.opts.render();
-      }
+      window.router.go("admin-run", { tool: this.opts.runTool });
     }
 
     html() {
       const o = this.opts;
-      const bulkDisabled = this._bulk || this._loading;
+      const st = this.run;
+      const live = !!(st && st.state !== "unknown");
+      // While a run exists the button reports it and opens its log, rather
+      // than offering to start a second one against the same ledger. It is
+      // never disabled: "go and look at what is happening" is always a
+      // reasonable thing to let someone do.
+      const face = live
+        ? `<i data-icon="${st.live ? "loader-2" : st.state === "done" ? "check" : "alert-triangle"}"
+              class="w-3.5 h-3.5${st.live ? " animate-spin" : ""}"></i> ${escapeHtml(st.label)}`
+        : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> ${escapeHtml(o.bulkLabel)}`;
       return `
         <div class="admin-reports__header">
           <h3 class="font-semibold flex items-center gap-2">
@@ -128,12 +127,9 @@
             ${escapeHtml(o.title)}
             ${this._loading ? "" : `<span class="opacity-60 font-normal text-sm">(${this._rows.length})</span>`}
           </h3>
-          <button class="btn btn-xs ${bulkDisabled ? "btn-ghost" : "btn-primary"}"
-                  ${bulkDisabled ? "disabled" : ""}
+          <button class="btn btn-xs ${live && !st.live ? "btn-ghost" : "btn-primary"}"
                   onclick="window.${o.host}._all('${o.key}')">
-            ${this._bulk
-              ? `<span class="loading loading-spinner loading-xs"></span> ${escapeHtml(this._bulkNote || o.busyLabel)}`
-              : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> ${escapeHtml(o.bulkLabel)}`}
+            ${face}
           </button>
         </div>
         ${this._body()}
@@ -156,7 +152,7 @@
 
     _row(g) {
       const busy = this._busyId === g.id;
-      const disabled = busy || !g.bgg_id || this._bulk;
+      const disabled = busy || !g.bgg_id;
       return `
         <li class="admin-reports__row">
           <div class="admin-reports__meta">
