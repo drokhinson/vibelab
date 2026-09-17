@@ -1,0 +1,45 @@
+<!--
+  bgb-feedback-empty.svg — the Dev feedback board with nothing on it yet.
+
+  READS ON BOTH GROUNDS, which for this file means neither of the two easy
+  answers (.claude/rules/assets.md, "Assets read on both grounds"):
+
+  * NO currentColor and NO var() tokens. This is loaded through an <img>, and a
+    document referenced that way has no access to the host page's colour or its
+    custom properties — currentColor would resolve against this file's own root
+    and paint everything black on an espresso ground.
+  * NO background plate. The ground shows through instead, so the same file sits
+    on cream and on espresso without reading as a bright rectangle in dark —
+    which is exactly what bgb-loading.svg beside it does, and why that one is
+    grandfathered rather than copied.
+
+  So every value below is a literal chosen to clear both grounds: the warm mid
+  tone #8A7A68 is ~3.2:1 on the cream #F7F0E1 and ~4.4:1 on the espresso
+  #1A1310, and the gold #C08A2A sits between the two themes' accents so it
+  reads as the brand on either. Decorative marks, not text, so those are
+  comfortable rather than marginal.
+-->
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none"
+     xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+
+  <!-- Two cards behind, fanned, to say "a board" rather than "a note". -->
+  <g stroke="#8A7A68" stroke-width="2.5" stroke-linejoin="round">
+    <rect x="38" y="26" width="84" height="34" rx="8"
+          opacity="0.35" transform="rotate(-6 80 43)" />
+    <rect x="42" y="58" width="84" height="34" rx="8"
+          opacity="0.55" transform="rotate(3 84 75)" />
+  </g>
+
+  <!-- The front card: the one waiting to be written. -->
+  <rect x="30" y="86" width="100" height="46" rx="10"
+        stroke="#8A7A68" stroke-width="3" stroke-linejoin="round" />
+  <g stroke="#8A7A68" stroke-width="3" stroke-linecap="round" opacity="0.45">
+    <line x1="44" y1="103" x2="104" y2="103" />
+    <line x1="44" y1="115" x2="82" y2="115" />
+  </g>
+
+  <!-- The star is the board's own currency — the like everything sorts by. -->
+  <path d="M118 18 L123.4 29.6 L136 31.3 L126.8 40 L129.1 52.5 L118 46.5
+           L106.9 52.5 L109.2 40 L100 31.3 L112.6 29.6 Z"
+        fill="#C08A2A" stroke="#C08A2A" stroke-width="2" stroke-linejoin="round" />
+</svg>

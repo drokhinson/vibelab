@@ -39,6 +39,7 @@
   window.importPhotosBranch = new window.ImportPhotosBranch();
   window.importWizardView = new window.ImportWizardView();
   window.bggSyncView    = new window.BggSyncView();
+  window.feedbackView   = new window.FeedbackView();
   window.adminReportsView = new window.AdminReportsView();
   // Four instances of one class — the tools differ only in their strings and
   // which three API calls they make. The configs live with the view rather
@@ -77,6 +78,7 @@
   window.router.register("settings",      window.settingsView);
   window.router.register("import-wizard", window.importWizardView);
   window.router.register("bgg-sync",      window.bggSyncView);
+  window.router.register("feedback",       window.feedbackView);
   window.router.register("admin-reports",      window.adminReportsView);
   window.router.register("admin-images",       window.adminImagesView);
   window.router.register("admin-descriptions", window.adminDescriptionsView);
@@ -131,6 +133,10 @@
         _bootRouted = false;
         _profileLoaded = false;
         window.store.set("user", null);
+        // Session-scoped module caches that survive a store reset. The feedback
+        // option sets are per-backend, and in local dev the next sign-in can be
+        // a different one.
+        if (window.Feedback) window.Feedback.clearCache();
         window.router.go("auth");
         // A signed-out cold open is a boot too, and it reaches neither
         // routeAfterBoot nor the watchdog — the watchdog bails once the view is

@@ -16,8 +16,10 @@ from pydantic import (
 from .constants import (
     ChapterReportStatus,
     DiscoverReasonKind,
+    FeedbackStatus,
     IMPORT_CHUNK_MAX,
     MAX_BUDDY_ALIAS_CHARS,
+    MAX_FEEDBACK_BODY_CHARS,
     MAX_IMPORT_CHARS,
     MAX_IMPORT_HINT_CHARS,
     MAX_IMPORT_IMAGES,
@@ -2425,3 +2427,80 @@ class ExportManifestResponse(BaseModel):
     """Everything the export sheet needs to paint itself, in one call."""
 
     datasets: list[ExportDatasetInfo] = []
+
+
+# ── Dev feedback board ────────────────────────────────────────────────────────
+
+class FeedbackOptionResponse(BaseModel):
+    """One row of either lookup table — a type or a topic.
+
+    Shaped identically to ChapterTypeResponse because it is the same kind of
+    thing: a seeded option the client renders by label and icon rather than
+    hardcoding. `icon` is a Lucide slug into web/ui/icons.js, never an emoji.
+    """
+
+    id: str
+    label: str
+    icon: str | None = None
+    display_order: int
+
+
+class FeedbackCreate(BaseModel):
+    """A new item for the board.
+
+    `feedback_type` and `topic` are plain strings validated against their lookup
+    tables at write time rather than enums, because the option sets live in the
+    database and adding one must not need a deploy. The route raises 400 on an
+    unknown id — same shape as _validate_chapter_type.
+    """
+
+    feedback_type: str
+    topic: str
+    # min_length=1 as well as the cap: the client trims before sending, and a
+    # body of spaces is not feedback. The route strips again rather than trusting
+    # it, since this model is also the API's public contract.
+    body: str = Field(..., min_length=1, max_length=MAX_FEEDBACK_BODY_CHARS)
+
+
+class FeedbackResponse(BaseModel):
+    """One board row, as bgb_feedback_list returns it.
+
+    The type and topic display fields ride along denormalised so the list paints
+    from one round trip — the client never has to join against the lookup
+    endpoints to render a row.
+
+    `viewer_liked` is computed against the caller, so the like button knows its
+    own state without a second read, and `like_count` is aggregated in SQL rather
+    than stored on the item.
+    """
+
+    id: str
+    user_id: str
+    author_name: str | None = None
+    feedback_type: str
+    feedback_type_label: str | None = None
+    feedback_type_icon: str | None = None
+    topic: str
+    topic_label: str | None = None
+    topic_icon: str | None = None
+    body: str
+    status: FeedbackStatus
+    resolved_at: datetime | None = None
+    resolver_name: str | None = None
+    created_at: datetime
+    like_count: int = 0
+    viewer_liked: bool = False
+
+
+class FeedbackLikeResponse(BaseModel):
+    """What a like toggle settled on, so an optimistic client can reconcile.
+
+    Both the flag and the fresh count come back: the client painted its own
+    guess before the request went out, and reconciling against a server-counted
+    total is what keeps two people liking the same item at once from leaving
+    either of them one behind.
+    """
+
+    feedback_id: str
+    liked: bool
+    like_count: int

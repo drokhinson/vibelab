@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 039_bgg_hot_snapshots.sql (adds bgb_bgg_hot_latest — the
+-- Last updated: 041_dev_feedback.sql (adds bgb_feedback_list — the Dev feedback
+--               board filtered, counted and ordered by like count, which is an
+--               aggregate over a second table and therefore the one thing
+--               PostgREST could not do on its own.)
+--               Before that: 039_bgg_hot_snapshots.sql (adds bgb_bgg_hot_latest — the
 --               newest BGG hot-list run diffed against the newest run at
 --               least 20 hours older, so the Discover rail can say what
 --               climbed.)
@@ -1584,3 +1588,25 @@
 --               player_user_id = p_viewer (only your own seat) and
 --               p.user_id <> p_viewer (never a play you logged) — and skips a
 --               failing id silently so one bad id cannot sink a batch of 60.
+
+
+-- ── Dev feedback (migration 041) ─────────────────────────────────────────────
+
+-- bgb_feedback_list(viewer_id UUID, want_status TEXT,
+--                   want_type TEXT DEFAULT NULL, want_topic TEXT DEFAULT NULL)
+--   → TABLE (id, user_id, author_name, feedback_type, feedback_type_label,
+--            feedback_type_icon, topic, topic_label, topic_icon, body, status,
+--            resolved_at, resolver_name, created_at, like_count, viewer_liked)
+--   Defined in: projects/boardgame-buddy/db/migrations/041_dev_feedback.sql
+--   Called by:  services/feedback_service.list_feedback (GET /feedback)
+--   Purpose:    The Dev feedback board as the screen renders it. Exists ONLY
+--               because the board's sort key is `like_count DESC` — an
+--               aggregate over boardgamebuddy_feedback_likes, which PostgREST
+--               cannot order by. Its twin feature, chapter reports, needs no
+--               RPC for exactly that reason. The type/topic label and icon ride
+--               along denormalised so the list paints from one round trip, and
+--               `viewer_liked` is computed against viewer_id so the like button
+--               knows its own state without a second read. want_type and
+--               want_topic are NULL for "no filter"; want_status is required,
+--               and feedback_routes forces it to 'open' for non-admins so a
+--               missing argument can never leak the resolved half.
