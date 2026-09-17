@@ -425,7 +425,7 @@ def _queue_pending_rows(sb: Client, user_id: str, items: list[tuple]) -> int:
 def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
     """Bulk-insert plays + their players. `items` is [(game_row, play_payload)].
 
-    DRAIN-ONLY SINCE MIGRATION 040. Nothing queues a kind='play' row any more —
+    DRAIN-ONLY SINCE MIGRATION 044. Nothing queues a kind='play' row any more —
     BoardGameGeek plays come in through the importer, reviewed, via
     POST /plays/import. This still runs because _process_pending_imports has to
     finish draining the rows queued before that change, and a queued play the
