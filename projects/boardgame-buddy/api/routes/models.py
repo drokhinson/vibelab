@@ -2100,6 +2100,12 @@ class DiscoverTrendingEntry(BaseModel):
     year_published: int | None = None
     thumbnail_url: str | None = None
     game: GameSummary | None = None
+    # From bgb_bgg_hot_latest (migration 039): where the game sat in the run
+    # ~a day earlier. rank_delta positive = climbing; None when there is no
+    # comparison run or the game was not in it. is_new = absent from the
+    # comparison run. Both None/False on the live-/hot fallback.
+    rank_delta: int | None = None
+    is_new: bool = False
 
 
 class DiscoverDormantEntry(BaseModel):
@@ -2107,6 +2113,16 @@ class DiscoverDormantEntry(BaseModel):
     None when they have never logged it at all."""
     game: GameSummary
     last_played_at: date | None = None
+
+
+class HotRefreshResult(BaseModel):
+    """What one POST /discover/admin/refresh-trending did."""
+    captured_at: datetime
+    items: int                     # rows written for this run
+    imported: int                  # hot games the catalog lacked and now has
+    skipped: list[int] = []        # bgg_ids still missing after the per-run import cap
+    failed: list[int] = []         # bgg_ids whose import raised
+    pruned: int = 0                # snapshot rows older than the retention window
 
 
 class DiscoverBundleResponse(BaseModel):

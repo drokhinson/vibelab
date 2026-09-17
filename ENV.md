@@ -48,6 +48,7 @@ Set in Repo → Settings → Secrets and variables → Actions.
 | `VERCEL_ORG_ID` | Vercel → Settings → General | Target Vercel org for the CLI | all `deploy-*.yml` |
 | `VERCEL_LANDING_PROJECT_ID` | Vercel → landing project → Settings | Target Vercel project for landing | `deploy-landing.yml` |
 | `VERCEL_<PROJECT>_PROJECT_ID` | Vercel → that project → Settings | One per per-project deploy. Project keys are upper-case, dashes → underscores: `VERCEL_DAYWORDPLAY_PROJECT_ID`, `VERCEL_SAUCEBOSS_PROJECT_ID`, `VERCEL_PLANT_PLANNER_PROJECT_ID`, `VERCEL_SPOTME_PROJECT_ID`, `VERCEL_WEALTHMATE_PROJECT_ID`, `VERCEL_ADMIN_PROJECT_ID` | `deploy-frontend.yml`, `deploy-frontend-all.yml` |
+| `BGB_ADMIN_API_KEY` | The same value as the BoardgameBuddy Railway service's `ADMIN_API_KEY` (hand-generated) | Bearer for the daily BGG trending snapshot (`POST /discover/admin/refresh-trending`). Rotate the two together — a mismatch turns the cron into a 403 that nobody sees until the Discover rail stops showing deltas | `bgb-hot-refresh.yml` |
 | `VERCEL_BOARDGAME_BUDDY_PROJECT_ID` | Vercel → that project → Settings | **Not a frontend deploy any more.** BoardgameBuddy serves from Cloudflare Pages; this now targets the same Vercel project only to publish the "we have moved" notice on the retired origin. Keep it as long as that project exists. | `deploy-bgb-moved-notice.yml` |
 
 `RAILWAY_TOKEN` is referenced (commented out) in `deploy-backend.yml`. Backend deploys currently use Railway's native GitHub auto-deploy, so this secret is not required.

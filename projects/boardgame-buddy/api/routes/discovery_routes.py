@@ -16,8 +16,8 @@ from fastapi import Depends, Query
 from db import get_supabase
 
 from . import router
-from .dependencies import CurrentUser, get_current_user
-from .models import DiscoverBundleResponse
+from .dependencies import CurrentUser, get_admin_or_service_key, get_current_user
+from .models import DiscoverBundleResponse, HotRefreshResult
 from .services import discovery_service
 
 
@@ -41,3 +41,18 @@ async def get_discover(
         user.user_id,
         refresh=refresh,
     )
+
+
+@router.post(
+    "/discover/admin/refresh-trending",
+    response_model=HotRefreshResult,
+    status_code=200,
+    summary="Snapshot BGG's hot list and import what the catalog lacks (admin or service key)",
+)
+async def refresh_trending(
+    _caller: CurrentUser | None = Depends(get_admin_or_service_key),
+) -> HotRefreshResult:
+    """Write one run of the hot list (migration 039); the daily cron and the Settings admin row both call this."""
+    # Inline rather than a BackgroundTask: the cron wants the counts back, and
+    # ten throttled imports is well inside the platform timeout.
+    return await discovery_service.refresh_hot_snapshot(get_supabase())

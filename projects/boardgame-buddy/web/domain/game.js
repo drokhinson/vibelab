@@ -262,6 +262,17 @@
         });
     }
 
+    /** Snapshot BGG's hot list now (migration 039) and import what the
+     *  catalog lacks. Same call the daily cron makes; the Discover bundle is
+     *  dropped so the next mount shows the new run. */
+    static adminRefreshTrending() {
+      return window.api.post("/discover/admin/refresh-trending")
+        .then((r) => {
+          if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
+          return r;
+        });
+    }
+
     /** Admin: set or clear a game's rulebook URL. Pass null/"" to clear. */
     static adminSetRulebookUrl(gameId, url) {
       const cleaned = (url || "").trim() || null;

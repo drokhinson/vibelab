@@ -28,6 +28,7 @@
 
   const HOSTS = {
     picks: "discover-picks-host",
+    climbing: "discover-climbing-host",
     trending: "discover-trending-host",
     fresh: "discover-new-host",
     shelf: "discover-shelf-host",
@@ -183,6 +184,7 @@
             <p class="discover__blurb">Games worth a look, picked from what's on your shelf and what hits your table.</p>
           </header>
           <section class="discover__section" id="${HOSTS.picks}"></section>
+          <section class="discover__section" id="${HOSTS.climbing}"></section>
           <section class="discover__section" id="${HOSTS.trending}"></section>
           <section class="discover__section" id="${HOSTS.fresh}"></section>
           <section class="discover__section" id="${HOSTS.shelf}"></section>
@@ -202,6 +204,7 @@
       if (!b && this._loading) {
         this._paintHosts({
           picks: this._skeleton("sparkles", "Picked for you"),
+          climbing: "",
           trending: this._skeleton("flame", "Trending on BoardGameGeek"),
           fresh: this._skeleton("star", "New this year"),
           shelf: this._skeleton("hourglass", "Back on the shelf"),
@@ -212,12 +215,13 @@
         // Failed with nothing to show: one retry card, not four.
         this._paintHosts({
           picks: this._renderLoadError(),
-          trending: "", fresh: "", shelf: "",
+          climbing: "", trending: "", fresh: "", shelf: "",
         });
         return;
       }
       this._paintHosts({
         picks: this._renderPicks(b),
+        climbing: this._renderClimbing(b),
         trending: this._renderTrending(b),
         fresh: this._renderNew(b),
         shelf: this._renderShelf(b),
@@ -276,16 +280,48 @@
           </section>
         `;
       }
-      const entries = (b.trending || []).map((t) => (t.game
-        ? { game: t.game, meta: `#${t.rank} on BGG` }
-        : { stub: { bgg_id: t.bgg_id, name: t.name, thumbnail_url: t.thumbnail_url, year_published: t.year_published },
-            meta: `#${t.rank} on BGG` }
-      ));
+      const entries = (b.trending || []).map((t) => this._trendingEntry(t));
       return window.renderGameRail(entries, this._railOpts({
         icon: "flame",
         title: "Trending on BoardGameGeek",
         stubHandler: (s) => `window.discoveryView._importStub(${Number(s.bgg_id) || 0})`,
         emptyHtml: this._empty("Nothing trending to show just now."),
+      }));
+    }
+
+    /**
+     * A trending row as a rail entry. The meta line carries the rank and,
+     * when the snapshot knows it (migration 039), the move since the run a
+     * day earlier: "#3 on BGG · ▲2", "· ▼1", "· NEW". Text on the existing
+     * meta line rather than a new chip — the tile is 112px wide.
+     */
+    _trendingEntry(t) {
+      let move = "";
+      if (t.is_new) move = " \u00b7 NEW";
+      else if (typeof t.rank_delta === "number" && t.rank_delta > 0) move = ` \u00b7 \u25b2${t.rank_delta}`;
+      else if (typeof t.rank_delta === "number" && t.rank_delta < 0) move = ` \u00b7 \u25bc${-t.rank_delta}`;
+      const meta = `#${t.rank} on BGG${move}`;
+      return t.game
+        ? { game: t.game, meta }
+        : { stub: { bgg_id: t.bgg_id, name: t.name, thumbnail_url: t.thumbnail_url, year_published: t.year_published }, meta };
+    }
+
+    /**
+     * What moved up since yesterday's run — the interesting half of a hot
+     * list. Only when at least three games climbed three or more places;
+     * fewer is noise, and before the first two snapshots there is nothing to
+     * compare, so the section stays empty rather than saying so.
+     */
+    _renderClimbing(b) {
+      const climbers = (b.trending || [])
+        .filter((t) => typeof t.rank_delta === "number" && t.rank_delta >= 3)
+        .sort((x, y) => y.rank_delta - x.rank_delta);
+      if (climbers.length < 3) return "";
+      return window.renderGameRail(climbers.map((t) => this._trendingEntry(t)), this._railOpts({
+        icon: "arrow-up-right",
+        title: "Climbing this week",
+        subtitle: "Up the BoardGameGeek hot list since yesterday.",
+        stubHandler: (s) => `window.discoveryView._importStub(${Number(s.bgg_id) || 0})`,
       }));
     }
 

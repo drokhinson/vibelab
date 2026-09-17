@@ -15,9 +15,10 @@ game the viewer just shelved off a pick does not come straight back.
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from fastapi import HTTPException
 from supabase import Client
 
 import cache
@@ -29,8 +30,10 @@ from ..models import (
     DiscoverPick,
     DiscoverTrendingEntry,
     GameSummary,
+    HotRefreshResult,
 )
-from ..bgg_client import fetch_hot_games
+from ..bgg_client import _BGG_CACHE_HOT, fetch_hot_games
+from ..bgg_collection_read import BGG_THROTTLE_SECONDS
 from ._helpers import fetch_games_by_ids, game_select_clause, game_summary_from_row
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,12 @@ NEW_LIMIT = 12
 NEW_MIN_ROWS = 6
 DORMANT_DAYS = 60
 DORMANT_LIMIT = 8
+# The refresh imports hot games the catalog lacks, and each import is one
+# /thing?stats=1 plus two R2 uploads on a client with no rate limiter — so a
+# run takes at most this many, spaced by the BGG throttle, and reports the rest
+# as skipped for tomorrow's run.
+HOT_IMPORT_PER_RUN = 10
+HOT_RETENTION_DAYS = 30
 
 
 # ── Reasons ───────────────────────────────────────────────────────────────────
@@ -222,17 +231,112 @@ def _hydrate_trending(sb: Client, items: list[dict]) -> list[DiscoverTrendingEnt
             year_published=(g.year_published if g else i.get("year_published")),
             thumbnail_url=(g.thumbnail_url if g else i.get("thumbnail_url")),
             game=g,
+            rank_delta=i.get("rank_delta"),
+            is_new=bool(i.get("is_new")),
         ))
     return out[:TRENDING_LIMIT]
 
 
+def _latest_snapshot(sb: Client) -> list[dict]:
+    """bgb_bgg_hot_latest rows, or [] when no run has been written yet."""
+    return sb.rpc("bgb_bgg_hot_latest", {}).execute().data or []
+
+
 async def fetch_trending(sb: Client) -> tuple[list[DiscoverTrendingEntry], bool]:
-    """BGG's hot list with catalog rows attached; (entries, bgg_failed)."""
-    items = await fetch_hot_games()
+    """The newest hot-list snapshot with catalog rows attached; (entries, bgg_failed).
+
+    Snapshot first (migration 039): it survives worker restarts and carries
+    yesterday's ranks, which is what "climbing" is. Only when no run has ever
+    been written — first deploy, cron not yet wired — does this fall back to
+    BGG live, exactly as before 039.
+    """
+    items = await asyncio.to_thread(_latest_snapshot, sb)
     if not items:
-        return [], True
+        items = await fetch_hot_games()
+        if not items:
+            return [], True
     entries = await asyncio.to_thread(_hydrate_trending, sb, items)
     return entries, False
+
+
+def _write_snapshot(sb: Client, items: list[dict], captured_at: datetime) -> tuple[int, int, list[int]]:
+    """Insert one run, prune the old ones, and say which bgg_ids the catalog lacks."""
+    rows = [{
+        "captured_at": captured_at.isoformat(),
+        "bgg_id": i["bgg_id"],
+        "rank": i["rank"],
+        "name": i["name"],
+        "year_published": i.get("year_published"),
+        "thumbnail_url": i.get("thumbnail_url"),
+    } for i in items]
+    sb.table("boardgamebuddy_bgg_hot_snapshots").insert(rows).execute()
+    cutoff = (captured_at - timedelta(days=HOT_RETENTION_DAYS)).isoformat()
+    pruned = (
+        sb.table("boardgamebuddy_bgg_hot_snapshots")
+        .delete()
+        .lt("captured_at", cutoff)
+        .execute()
+    ).data or []
+    bgg_ids = [i["bgg_id"] for i in items]
+    have = (
+        sb.table("boardgamebuddy_games")
+        .select("bgg_id")
+        .in_("bgg_id", bgg_ids)
+        .execute()
+    ).data or []
+    present = {int(r["bgg_id"]) for r in have if r.get("bgg_id")}
+    missing = [b for b in bgg_ids if b not in present]
+    return len(rows), len(pruned), missing
+
+
+async def refresh_hot_snapshot(sb: Client) -> HotRefreshResult:
+    """Fetch BGG's hot list, keep it as a run, and import what the catalog lacks.
+
+    Straight to BGG (no cache): a refresh that re-wrote the hour-old list
+    would be a no-op with a fresh captured_at, and the delta RPC would then
+    compare the same list against itself. An empty answer is a 503 rather
+    than an empty run — the delta math treats "no run" and "a run with no
+    rows" very differently, and only the first one is true.
+
+    Imports are the cap-and-sleep loop the stats backfill uses, for the same
+    reason: sequential, spaced, one failure logged and skipped. Both caches
+    the rail reads through are dropped at the end so the new run is what the
+    next viewer sees.
+    """
+    # Inside the function: game_routes is a route module that imports this
+    # package's services, so a top-level import here is a cycle. Same shape
+    # bgg_link_routes' pending-import drain uses.
+    from ..game_routes import import_game_from_bgg
+
+    items = await fetch_hot_games(use_cache=False)
+    if not items:
+        raise HTTPException(status_code=503, detail="BoardGameGeek did not return a hot list")
+    captured_at = datetime.now(timezone.utc)
+    written, pruned, missing = await asyncio.to_thread(_write_snapshot, sb, items, captured_at)
+
+    imported = 0
+    failed: list[int] = []
+    to_import = missing[:HOT_IMPORT_PER_RUN]
+    for n, bgg_id in enumerate(to_import):
+        if n:
+            await asyncio.sleep(BGG_THROTTLE_SECONDS)
+        try:
+            await import_game_from_bgg(sb, bgg_id)
+            imported += 1
+        except Exception:  # noqa: BLE001 — one bad import must not sink the run
+            logger.warning("Hot-list import of bgg_id=%s failed", bgg_id, exc_info=True)
+            failed.append(bgg_id)
+
+    cache.clear(_NS)
+    cache.clear(_BGG_CACHE_HOT)
+    return HotRefreshResult(
+        captured_at=captured_at,
+        items=written,
+        imported=imported,
+        skipped=missing[HOT_IMPORT_PER_RUN:],
+        failed=failed,
+        pruned=pruned,
+    )
 
 
 # ── The bundle ────────────────────────────────────────────────────────────────

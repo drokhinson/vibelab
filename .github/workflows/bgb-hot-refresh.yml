@@ -1,0 +1,28 @@
+name: BoardgameBuddy — refresh BGG trending
+
+# Snapshots BoardGameGeek's hot list into boardgamebuddy_bgg_hot_snapshots
+# once a day (migration 039), so the Discover tab's "Trending" rail can show
+# what climbed since yesterday and import the hot games the catalog lacks.
+# The endpoint is the same one the Settings admin row calls; here it is
+# authorised by the app's ADMIN_API_KEY as a bearer (see ENV.md §2).
+#
+# Note: GitHub disables scheduled workflows after 60 days without repo
+# activity. If the rail stops showing deltas, re-enable from the Actions tab.
+
+on:
+  schedule:
+    - cron: "23 6 * * *" # daily at 06:23 UTC (off top-of-hour congestion)
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /discover/admin/refresh-trending
+        run: |
+          if [ -z "${{ vars.BGB_API_BASE }}" ]; then
+            echo "::error::Repo variable BGB_API_BASE is unset."; exit 1
+          fi
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer ${{ secrets.BGB_ADMIN_API_KEY }}" \
+            "${{ vars.BGB_API_BASE }}/api/v1/boardgame_buddy/discover/admin/refresh-trending"
