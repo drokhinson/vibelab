@@ -179,7 +179,7 @@
         <div class="set-card-label">Data management</div>
         ${this._renderExportCard()}
         ${this._renderCacheCard()}
-        <div class="set-card-label">Feedback</div>
+        <div class="set-card-label">What's new &amp; what's next</div>
         ${this._renderFeedbackCard()}
         ${me.is_admin ? `
           <div class="set-card-label">Admin tools</div>
@@ -495,6 +495,19 @@
           title: "Missing publishers",
           sub: "Backfill publisher credits from BoardGameGeek for the game page.",
         },
+        // The one admin tool that AUTHORS rather than moderates — the other
+        // five work a queue somebody else filled. So it carries no count and
+        // no row in domain/notifications.js: an unpublished draft is not work
+        // waiting, and forAdminTool("releaseNotices") matching no signal
+        // returns zero, which renders no badge. That is the wanted behaviour,
+        // noted because every other row here has one.
+        {
+          route: "admin-release-notices",
+          tool: "releaseNotices",
+          icon: "sparkles",
+          title: "Release notices",
+          sub: "Write the what's-new note everyone sees once on their next visit.",
+        },
         // An action, not a spoke: there is nothing to look at, only a run to
         // kick off. The daily cron does the same call; this is for "now".
         //
@@ -788,16 +801,25 @@
     }
 
     /**
-     * Two rows onto ONE screen, not two screens.
+     * What shipped, what you want next, and what's broken — in that order.
      *
-     * Both land on /settings/feedback with the compose sheet already up; the
-     * bug row preselects the type and the other leaves it unset. The second row
-     * exists because "report a bug" is the errand somebody arrives at Settings
-     * already intending to run, and making them find it inside a board named
-     * for something else costs a tap and a moment of doubt about whether they
-     * are in the right place. Same destination, same affordance — which is what
-     * keeps this inside ui-object-design.md §3b rather than in breach of it: the
-     * board's own header "+" opens the identical sheet.
+     * TWO destinations, not one, which is the thing to know before editing.
+     * The bottom two rows both land on /settings/feedback with the compose
+     * sheet already up; the bug row preselects the type and the other leaves it
+     * unset. That pair exists because "report a bug" is the errand somebody
+     * arrives at Settings already intending to run, and making them find it
+     * inside a board named for something else costs a tap and a moment of doubt
+     * about whether they are in the right place. Same destination, same
+     * affordance — which is what keeps those two inside ui-object-design.md §3b
+     * rather than in breach of it: the board's own header "+" opens the
+     * identical sheet.
+     *
+     * `What's new` is a GENUINELY different destination (/settings/whats-new,
+     * views/whats-new-view.js) and is not a shortcut into the board. It sits
+     * here rather than under a section of its own because the three rows are
+     * one errand — talking to whoever builds this — read in time order: what
+     * landed, what you want, what broke. Do not "simplify" the row helper back
+     * to a single hardcoded route on the assumption this card has one.
      *
      * `compose` rides as a querystring param, so the router builds
      * /settings/feedback?compose=bug and the view strips it once the sheet is
@@ -806,9 +828,9 @@
      * screen itself.
      */
     _renderFeedbackCard() {
-      const row = (compose, icon, title, sub) => `
+      const row = (route, params, icon, title, sub) => `
         <button class="set-card__row"
-                onclick="window.router.go('feedback', { compose: '${compose}' })">
+                onclick="window.router.go('${route}'${params ? `, ${params}` : ""})">
           <span class="set-card__row-icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
           <span class="set-card__row-body">
             <span class="set-card__row-title">${escapeHtml(title)}</span>
@@ -816,11 +838,15 @@
           </span>
           <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
         </button>`;
+      const compose = (type, icon, title, sub) =>
+        row("feedback", `{ compose: '${type}' }`, icon, title, sub);
       return `
         <div class="set-card">
-          ${row("1", "lightbulb", "Add feedback",
+          ${row("whats-new", null, "sparkles", "What's new",
+                "Everything we've shipped, newest first.")}
+          ${compose("1", "lightbulb", "Add feedback",
                 "Suggest a feature, or vote up what others have asked for.")}
-          ${row("bug", "alert-triangle", "Report a bug",
+          ${compose("bug", "alert-triangle", "Report a bug",
                 "Something broken? It goes on the same board.")}
         </div>
       `;

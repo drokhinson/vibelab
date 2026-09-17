@@ -207,12 +207,16 @@
         // sheet is up, so a refresh lands on the board rather than re-opening it.
         { name: "feedback",            pattern: /^\/settings\/feedback\/?$/,
           build: () => "/settings/feedback" },
+        { name: "whats-new",           pattern: /^\/settings\/whats-new\/?$/,
+          build: () => "/settings/whats-new" },
         { name: "notifications",       pattern: /^\/notifications\/?$/,           build: () => "/notifications" },
         { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
         { name: "admin-reports",       pattern: /^\/admin\/reports\/?$/,          build: () => "/admin/reports" },
         { name: "admin-images",        pattern: /^\/admin\/images\/?$/,           build: () => "/admin/images" },
         { name: "admin-descriptions",  pattern: /^\/admin\/descriptions\/?$/,     build: () => "/admin/descriptions" },
         { name: "admin-stats",         pattern: /^\/admin\/stats\/?$/,            build: () => "/admin/stats" },
+        { name: "admin-release-notices", pattern: /^\/admin\/release-notices\/?$/,
+          build: () => "/admin/release-notices" },
         // The admin tools used to be one stacked screen at /admin. Aliased
         // rather than dropped so an old bookmark lands on the Settings card
         // that now indexes the three spokes, instead of a 404-ish blank.
@@ -280,6 +284,30 @@
       }
       const qs = extras.toString();
       return qs ? `${url}?${qs}` : url;
+    }
+
+    /**
+     * Every route a link can point at with no parameters — the set the release
+     * notice editor's "take me there" picker offers.
+     *
+     * Derived from the table rather than hand-listed anywhere, because a
+     * hand-list drifts the first time a route is renamed and the only symptom
+     * is a button that silently goes nowhere (pathFor returns null, go() skips
+     * its pushState) in front of every user.
+     *
+     * Two filters, and both matter:
+     *   `build`   — a match-only alias (wishlist, import-plays) resolves an old
+     *               URL but nothing navigates TO it, so it cannot be a target.
+     *   `consume` — a route with path params (game-detail, play-flow) cannot be
+     *               built without them, so offering it would produce exactly
+     *               the dead button this exists to prevent.
+     *
+     * @returns {string[]} route names, in table order
+     */
+    routeNames() {
+      return this._routes
+        .filter((r) => r.build && !(r.consume && r.consume.length))
+        .map((r) => r.name);
     }
 
     // Update the browser URL to match the current route + params without

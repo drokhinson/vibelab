@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 041_dev_feedback.sql (adds bgb_feedback_list — the Dev feedback
+-- Last updated: 042_release_notices.sql (adds bgb_release_notices_unseen and
+--               bgb_mark_release_notices_seen — the what's-new popup's unseen
+--               list and its watermark write, the latter a near-copy of
+--               bgb_mark_link_notifications_seen below.)
+--               Before that: 041_dev_feedback.sql (adds bgb_feedback_list — the Dev feedback
 --               board filtered, counted and ordered by like count, which is an
 --               aggregate over a second table and therefore the one thing
 --               PostgREST could not do on its own.)
@@ -1569,6 +1573,36 @@
 --               reconciles without a second read. Kept its 008 name in 009 —
 --               it writes the watermark and never knew which kinds it covered,
 --               so covering three needed no change.
+
+-- bgb_release_notices_unseen(p_viewer UUID, p_limit INTEGER DEFAULT 5)
+--   → TABLE(id, title, body_md, link_route, link_label, published_at)
+--   Defined in: db/migrations/boardgamebuddy/042_release_notices.sql
+--   Called by:  services/release_notice_service.unseen
+--               (GET /bootstrap → release_notices_unseen)
+--   Purpose:    The published release notices this viewer has not been shown,
+--               oldest-first so the popup reads as a chronology. The inner
+--               ORDER BY published_at DESC + LIMIT picks the NEWEST p_limit and
+--               the outer ASC flips them, so an account six releases behind
+--               gets the last five rather than the first five; the rest stay in
+--               the Settings archive. The watermark is a scalar subquery on
+--               profiles rather than a Python pre-read, so "what counts as
+--               unseen" lives in one place. A missing profile row yields NULL
+--               there and therefore no rows — it fails CLOSED, deliberately.
+
+-- bgb_mark_release_notices_seen(p_viewer UUID,
+--                               p_through TIMESTAMPTZ DEFAULT NULL)
+--   → TIMESTAMPTZ (the stamp that now stands)
+--   Defined in: db/migrations/boardgamebuddy/042_release_notices.sql
+--   Called by:  services/release_notice_service.mark_seen
+--               (POST /release-notices/seen)
+--   Purpose:    bgb_mark_link_notifications_seen's twin, and monotonic for the
+--               same reason — p_through is the newest published_at the client
+--               was actually SHOWN, so a notice published between /bootstrap
+--               and the dismissal is not marked seen without appearing. That
+--               race is ordinary rather than contrived here, since the admin
+--               publishes from inside this same app. No COALESCE around the
+--               column: release_notices_seen_at is NOT NULL, so 008's inner
+--               COALESCE would be dead code.
 
 -- bgb_ghost_out_of_plays(p_viewer UUID, p_play_ids UUID[] DEFAULT '{}',
 --                        p_group_ids UUID[] DEFAULT '{}',

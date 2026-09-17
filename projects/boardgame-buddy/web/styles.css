@@ -15460,6 +15460,405 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border-top: 1px solid var(--polaroid-line);
 }
 
+/* ── Release notices ──────────────────────────────────────────────────────────
+   Two surfaces share the .rel-note__* contents family: the what's-new popup's
+   slide (.rel-deck, a BgbModal card) and the Settings archive's row
+   (.whats-new). Only the contents are shared — the track geometry and the
+   disclosure chrome stay with their own surface.
+
+   SURFACE KIND. The card carries .polaroid-popup__card, so it reads the
+   --polaroid-* alias family, which at :root is PAPER — light in both themes.
+   That is deliberate and it is why .rel-deck is NOT named in the chrome
+   re-point lists at the top of this file the way .import-exp-modal and .ob-deck
+   are: a release note reads as a printed card, and it sits in the popup family
+   .outbox-modal already keeps paper for. Consequence for anyone editing below:
+   no oklch(var(--b1)), no oklch(var(--b2)), and no --accent/--accent-hover AS
+   TEXT — the ground gold measures ~1.5:1 on cream. Link ink is --accent-ink and
+   a solid fill is --accent-fill + --on-accent (.claude/rules/theming.md §6).
+
+   Z-index: none of its own. It rides .polaroid-popup__backdrop at the modal
+   tier of the ladder (90-100), which is correct — it is a modal. */
+.polaroid-popup__card.rel-deck {
+  width: calc(100vw - 32px);
+  max-width: 400px;
+  /* % of the BACKDROP, never vh: vh is the layout viewport, which nothing
+     shrinks, while the backdrop tracks the visible one (overlays.md §4).
+     border-box explicitly, because max-height caps the CONTENT box and the
+     padding below would otherwise land outside the cap. */
+  max-height: min(78%, 560px);
+  box-sizing: border-box;
+  padding: 18px 16px 14px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.rel-deck:focus { outline: none; }
+.rel-deck__head { flex: none; }
+.rel-deck__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+.rel-deck__count {
+  font-size: 12px;
+  color: var(--polaroid-muted);
+  margin-top: 2px;
+}
+.rel-deck__dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+/* A 6px dot with a 44x44 hit area, per mobile-web.md §5 — the pseudo-element
+   carries the target so the visible mark stays small. */
+.rel-deck__dot {
+  position: relative;
+  width: 22px;
+  height: 4px;
+  border: none;
+  border-radius: var(--r-pill);
+  padding: 0;
+  background: var(--polaroid-line);
+  cursor: pointer;
+  transition: background 0.18s var(--ease);
+}
+.rel-deck__dot::before {
+  content: "";
+  position: absolute;
+  inset: -20px -4px;
+}
+.rel-deck__dot.is-on { background: var(--accent-ink); }
+
+/* The track is the only thing that moves. One transform, and the panel count
+   is published as --rel-panels so the slide width lives in ONE place rather
+   than being repeated here and in the JS. */
+.rel-deck__clip {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.rel-deck__track {
+  display: flex;
+  height: 100%;
+  transition: transform 260ms var(--ease);
+}
+.rel-deck__slide {
+  width: calc(100% / var(--rel-panels, 1));
+  flex: 0 0 calc(100% / var(--rel-panels, 1));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rel-deck__track { transition: none; }
+}
+
+.rel-deck__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 1px solid var(--polaroid-line);
+}
+.rel-deck__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 0 10px;
+  margin-right: auto;
+  border: none;
+  background: none;
+  color: var(--polaroid-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rel-deck__back:active { transform: translateY(1px); }
+/* 52px: a commit button (mobile-web.md §5). */
+.rel-deck__next {
+  min-height: 52px;
+  min-width: 108px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s var(--ease);
+}
+.rel-deck__next:active { transform: translateY(1px); }
+
+/* ── One notice's contents, on either surface ───────────────────────────── */
+.rel-note__date {
+  font-size: 12px;
+  color: var(--polaroid-muted);
+}
+.rel-note__title {
+  font-size: 20px;
+  line-height: 1.25;
+  margin: 2px 0 10px;
+  color: var(--polaroid-ink);
+}
+.rel-note__body {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--polaroid-ink);
+}
+.rel-note__body > :first-child { margin-top: 0; }
+.rel-note__body > :last-child { margin-bottom: 0; }
+.rel-note__body p { margin: 0 0 10px; }
+.rel-note__body h2,
+.rel-note__body h3,
+.rel-note__body h4 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  margin: 14px 0 6px;
+  color: var(--polaroid-ink);
+}
+.rel-note__body ul,
+.rel-note__body ol { margin: 0 0 10px; padding-left: 20px; }
+.rel-note__body li { margin-bottom: 4px; }
+.rel-note__body strong { font-weight: 700; }
+/* --accent-ink, not --accent: the ground gold is ~1.5:1 on this paper. */
+.rel-note__body a { color: var(--accent-ink); text-decoration: underline; }
+.rel-note__body code {
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  background: var(--polaroid-line);
+  color: var(--polaroid-ink);
+}
+.rel-note__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 0 16px;
+  border: 1px solid var(--accent-ink);
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s var(--ease);
+}
+.rel-note__cta:active { transform: translateY(1px); }
+
+/* ── Release notices: the admin spoke and the Settings archive ─────────────
+   Both live on .bgb-spoke-screen, which IS in the chrome re-point list at the
+   top of this file — so --polaroid-* resolves to chrome here and the same
+   .rel-note__* rules above read correctly on either ground. That is the whole
+   reason the contents family paints from the alias rather than from --paper
+   directly. */
+.rel-admin__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+.rel-admin__filter { display: flex; gap: 6px; }
+.rel-admin__list { list-style: none; margin: 0; padding: 0; }
+.rel-admin__row {
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+.rel-admin__row:last-child { border-bottom: none; }
+.rel-admin__rowhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.rel-admin__pill {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--well);
+  color: var(--ink-muted);
+}
+.rel-admin__pill.is-live {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.rel-admin__date { font-size: 12px; color: var(--ink-faint); }
+.rel-admin__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+}
+.rel-admin__link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.rel-admin__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+.rel-admin__del { color: var(--rust); margin-left: auto; }
+
+/* ── The editor ───────────────────────────────────────────────────────────── */
+.rel-ed { display: flex; flex-direction: column; }
+.rel-ed__head { margin-bottom: var(--s-3); }
+.rel-ed__heading { font-size: 18px; color: var(--ink); }
+.rel-ed__note {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+.rel-ed__label {
+  display: block;
+  margin: var(--s-3) 0 5px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+/* Font size is NOT set here. These are text controls, and the 16px floor that
+   stops iOS zooming the page on focus lives in the last block of this file —
+   adding a size here would out-specify nothing but would duplicate a decision
+   that has one home (mobile-web.md §3). */
+.rel-ed__input,
+.rel-ed__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--well);
+  color: var(--ink);
+  font-family: inherit;
+}
+.rel-ed__textarea { line-height: 1.5; resize: vertical; }
+.rel-ed__input:focus,
+.rel-ed__textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.rel-ed__hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+.rel-ed__hint code {
+  padding: 1px 4px;
+  border-radius: var(--r-xs);
+  background: var(--well);
+}
+.rel-ed__linkrow { display: flex; gap: var(--s-2); }
+.rel-ed__route {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--well);
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.rel-ed__route span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rel-ed__input--label { flex: 1; min-width: 0; }
+.rel-ed__previewhead {
+  margin: var(--s-4) 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+/* The preview is a real card so the author sees what the reader sees. It keeps
+   .polaroid-popup__card, so it paints from the same alias family the deck
+   does — a preview drawn from the screen's tokens would be a different card. */
+.polaroid-popup__card.rel-ed__preview {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  padding: 16px;
+  text-align: left;
+}
+.rel-ed__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+}
+
+/* ── The route picker sheet ───────────────────────────────────────────────── */
+.rel-route-sheet__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ── The Settings archive ─────────────────────────────────────────────────── */
+.whats-new__list { list-style: none; margin: 0; padding: 0; }
+.whats-new__row { border-bottom: 1px solid var(--line); }
+.whats-new__row:last-child { border-bottom: none; }
+.whats-new__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  width: 100%;
+  /* 56px: rows sit flush against each other (mobile-web.md §5). */
+  min-height: 56px;
+  padding: 10px 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.whats-new__summary:active { opacity: 0.7; }
+.whats-new__meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.whats-new__date { font-size: 12px; color: var(--ink-faint); }
+.whats-new__title { font-size: 15px; font-weight: 600; line-height: 1.35; }
+.whats-new__body { padding: 2px 0 var(--s-4); }
+/* Inside the archive the notice is already under a row heading, so its own
+   title and date would say the same thing twice. */
+.whats-new__body .rel-note__date,
+.whats-new__body .rel-note__title { display: none; }
+.whats-new__empty { padding: var(--s-6) var(--s-4); text-align: center; }
+.whats-new__empty p { color: var(--ink-muted); }
+.whats-new__emptysub {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+
 /* ── Boot failure ─────────────────────────────────────────────────────────────
    The splash is the one view with no bottom nav, so a boot that stalls leaves
    the user with a loader and nothing to tap. Two mechanisms cover that, and
@@ -15566,7 +15965,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    of its sheet, so a focus zoom here would scale the one thing the user opened
    the sheet to type into. */
 .alias-sheet__input,
-.ghost-name-sheet__input {
+.ghost-name-sheet__input,
+/* The release-notice editor's title, body and button-label fields. Their own
+   rule deliberately sets no size, so without this they inherit the page's ~14px
+   and every tap zooms — on a screen whose entire purpose is typing prose. */
+.rel-ed__input,
+.rel-ed__textarea {
   font-size: 16px;
 }
 

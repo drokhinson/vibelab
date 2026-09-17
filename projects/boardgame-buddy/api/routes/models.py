@@ -25,6 +25,10 @@ from .constants import (
     MAX_IMPORT_IMAGES,
     MAX_SCORING_ROW_LABEL_CHARS,
     MAX_SCORING_ROW_NOTE_CHARS,
+    MAX_RELEASE_NOTICE_BODY_CHARS,
+    MAX_RELEASE_NOTICE_LINK_LABEL_CHARS,
+    MAX_RELEASE_NOTICE_LINK_ROUTE_CHARS,
+    MAX_RELEASE_NOTICE_TITLE_CHARS,
     MAX_SCORING_TEMPLATE_ROWS,
     BggAuthState,
     BggCheckPhase,
@@ -2504,3 +2508,105 @@ class FeedbackLikeResponse(BaseModel):
     feedback_id: str
     liked: bool
     like_count: int
+# ── Release notices ───────────────────────────────────────────────────────────
+
+class ReleaseNotice(BaseModel):
+    """One admin-authored what's-new note.
+
+    `published_at is None` IS the draft flag — there is no separate status
+    field, here or in the table (migration 042). The same timestamp is the sort
+    key and the unit `profiles.release_notices_seen_at` compares against.
+    """
+
+    id: str
+    title: str
+    body_md: str
+    link_route: str | None = None
+    link_label: str | None = None
+    published_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    @computed_field
+    @property
+    def published(self) -> bool:
+        """Sugar for the admin list, which shows drafts and published together."""
+        return self.published_at is not None
+
+
+class ReleaseNoticeListResponse(BaseModel):
+    """Both list endpoints return this — the archive and the admin list."""
+
+    items: list[ReleaseNotice] = []
+
+
+class ReleaseNoticeWriteRequest(BaseModel):
+    """A new notice. Always created as a draft.
+
+    `published_at` is deliberately absent: publishing is its own act with its
+    own route, never a field the client sets. A caller-supplied timestamp could
+    be backdated, which would sort the notice behind watermarks users already
+    hold and make it invisible to exactly the people it was written for.
+    """
+
+    title: str = Field(min_length=1, max_length=MAX_RELEASE_NOTICE_TITLE_CHARS)
+    body_md: str = Field(min_length=1, max_length=MAX_RELEASE_NOTICE_BODY_CHARS)
+    link_route: str | None = Field(
+        default=None, max_length=MAX_RELEASE_NOTICE_LINK_ROUTE_CHARS
+    )
+    link_label: str | None = Field(
+        default=None, max_length=MAX_RELEASE_NOTICE_LINK_LABEL_CHARS
+    )
+
+
+class ReleaseNoticePatchRequest(BaseModel):
+    """An edit. Every field optional, but an empty body is a no-op that reads
+    like a bug, so it is refused the way LinkUnlinkRequest refuses one."""
+
+    title: str | None = Field(
+        default=None, min_length=1, max_length=MAX_RELEASE_NOTICE_TITLE_CHARS
+    )
+    body_md: str | None = Field(
+        default=None, min_length=1, max_length=MAX_RELEASE_NOTICE_BODY_CHARS
+    )
+    link_route: str | None = Field(
+        default=None, max_length=MAX_RELEASE_NOTICE_LINK_ROUTE_CHARS
+    )
+    link_label: str | None = Field(
+        default=None, max_length=MAX_RELEASE_NOTICE_LINK_LABEL_CHARS
+    )
+    # Distinguishes "leave the link alone" from "clear the link": an absent key
+    # is the former, `clear_link: true` the latter. Without it a notice's link
+    # could be set but never removed, since None is also the absent value.
+    clear_link: bool = False
+
+    @model_validator(mode="after")
+    def _at_least_one(self) -> "ReleaseNoticePatchRequest":
+        if not (
+            self.title
+            or self.body_md
+            or self.link_route
+            or self.link_label
+            or self.clear_link
+        ):
+            raise ValueError("Name at least one field to change.")
+        return self
+
+
+class ReleaseNoticesSeenRequest(BaseModel):
+    """How far the popup actually got.
+
+    Sending the newest `published_at` the client was SHOWN, rather than letting
+    the server use now(), is what stops a notice published between /bootstrap
+    and this call from being marked seen without ever having been on screen.
+    That race is ordinary rather than contrived here — the admin publishes from
+    inside this same app.
+    """
+
+    through: datetime | None = None
+
+
+class ReleaseNoticesSeenResponse(BaseModel):
+    """The watermark that now stands, after the monotonic merge."""
+
+    seen_at: datetime

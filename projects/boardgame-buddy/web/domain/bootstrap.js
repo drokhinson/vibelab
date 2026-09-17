@@ -17,6 +17,7 @@
 //     play_partners:        { accounts, ghosts, recent },  // host player-picker seed
 //     notifications_first_page: NotificationsResponse,  // the bell's prefetch
 //     notifications_unread: int,                        // the bell's dot
+//     release_notices_unseen: ReleaseNotice[],  // the what's-new popup's slides
 //   }
 //
 // The heavy per-owned-game detail bundles are NOT in here — building them is
@@ -29,6 +30,11 @@
   // Bumped when the bootstrap RPC's shape changes. Mismatch with the server's
   // bootstrap_version forces a full cache wipe before rehydrating.
   // v2: game_detail_bundles moved out to /bootstrap/game-bundles.
+  //
+  // NOT bumped for release_notices_unseen: that key seeds no cache namespace —
+  // it is handed straight to a module local and re-read on every boot by
+  // construction — so a bump would cost every user their warm cache for
+  // nothing. If anyone ever caches the notices, the bump becomes mandatory.
   const EXPECTED_BOOTSTRAP_VERSION = 2;
 
   // TTL pairs (freshTtl, staleTtl) per namespace. Fresh = get() returns it,
@@ -299,6 +305,12 @@
       if (payload.feed_first_page) {
         window.store.set("feed", payload.feed_first_page);
         window.store.set("feedCursor", payload.feed_cursor || null);
+      }
+      // Parked, not cached and not a store slot: nothing subscribes to it, and
+      // init.js takes it once at the right moment in the boot. Empty on almost
+      // every boot. See domain/release-notices.js.
+      if (window.ReleaseNotices) {
+        window.ReleaseNotices.stage(payload.release_notices_unseen || []);
       }
     }
   }

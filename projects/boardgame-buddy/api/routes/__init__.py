@@ -31,6 +31,11 @@ from . import buddy_suggestion_routes  # noqa: F401, E402
 from . import buddy_routes     # noqa: F401, E402
 from . import ghost_claim_routes  # noqa: F401, E402
 from . import notification_routes  # noqa: F401, E402
+# No ordering constraint: `/release-notices` is a prefix nothing else touches,
+# and within the module the literal `/seen` and `/admin` paths are declared
+# ahead of the parameterised `/admin/{notice_id}` ones. Sits beside
+# notification_routes because both are "things the app is telling you".
+from . import release_notice_routes  # noqa: F401, E402
 from . import session_routes   # noqa: F401, E402
 from . import feed_routes      # noqa: F401, E402
 # No ordering constraint: `/discover` is a literal path under its own prefix,

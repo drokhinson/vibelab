@@ -48,6 +48,8 @@
   window.adminDescriptionsView = window.AdminBackfillView.descriptions();
   window.adminStatsView = window.AdminBackfillView.stats();
   window.adminPublishersView = window.AdminBackfillView.publishers();
+  window.adminReleaseNoticesView = new window.AdminReleaseNoticesView();
+  window.whatsNewView = new window.WhatsNewView();
 
   // Widget singleton — the Play tab's Join half. Hoisted here (rather than
   // owned by LogPlayView) so its inline onclick handlers resolve the same way
@@ -84,6 +86,8 @@
   window.router.register("admin-descriptions", window.adminDescriptionsView);
   window.router.register("admin-stats",        window.adminStatsView);
   window.router.register("admin-publishers",   window.adminPublishersView);
+  window.router.register("admin-release-notices", window.adminReleaseNoticesView);
+  window.router.register("whats-new",           window.whatsNewView);
 
   // A global helper rather than a view concern, because the provider's state
   // listener fires async, outside the view lifecycle.
@@ -331,7 +335,38 @@
   // the whole launch. A flag interrogated at call time cannot lose that race.
   let _qrHold = false;
   let _qrHoldTimer = null;
+  // Parks ONE of two arrivals behind the QR hold: the first-run onboarding deck
+  // (a brand-new account) or the what's-new deck (everyone else). They are
+  // mutually exclusive by construction — see handleProfileOutcome — so one slot
+  // is enough. Kept its first-run name because it is read by the public
+  // /b/<token> arrival path and the rename buys nothing the comment does not.
   let _pendingFirstRun = null;
+
+  // ── Release notices ────────────────────────────────────────────────────────
+  // The what's-new popup, staged by /bootstrap and shown once per page load.
+  // Three gates, and each one is a real collision rather than caution:
+  //
+  //   _bootRouted   the cold boot calls handleProfileOutcome BEFORE it routes,
+  //                 so opening here would push the modal's history entry under
+  //                 the feed's. routeAfterBoot() re-tries once it has routed.
+  //   _qrHold       an inbound /b/<token> arrival owns the screen; releaseQrHold
+  //                 runs whatever was parked when its sheet closes.
+  //   OnboardingDeck  a full-screen mounted surface that takes the scroll lock
+  //                 and refuses Escape. Two of those at once is unrecoverable.
+  let _releasePending = null;
+  let _releaseTried = false;
+
+  function tryReleaseNotices() {
+    if (_releaseTried || !_releasePending || !_releasePending.length) return;
+    if (!_bootRouted) return;
+    if (_qrHold) { _pendingFirstRun = tryReleaseNotices; return; }
+    if (window.OnboardingDeck && window.OnboardingDeck.isOpen()) return;
+    if (!window.ReleaseNoticeDeck) return;
+    const list = _releasePending;
+    _releasePending = null;
+    _releaseTried = true;
+    window.ReleaseNoticeDeck.open(list);
+  }
 
   // Idempotent: safe from the sheet's onClose, the deadline, or both.
   function releaseQrHold() {
@@ -380,6 +415,15 @@
     }
     reportBootTiming(landedOn);
     warmWhenIdle();
+    // PAIRED with the _bootRouted gate in tryReleaseNotices(). On a COLD boot
+    // handleProfileOutcome runs before this function (initAuth awaits the
+    // profile, then routes), so the deck's attempt there bails and this call is
+    // the one that lands — which is what puts the modal's back-guard entry ON
+    // TOP of the feed's history entry instead of underneath it. Move or drop
+    // this line and the cold boot silently stops showing notices: no error, no
+    // log, just a feature that works for returning users and not for anyone
+    // opening the app fresh.
+    tryReleaseNotices();
   }
 
   // How long the user actually stared at the splash, and which leg was to
@@ -511,6 +555,19 @@
       const run = () => maybePromptFirstTimeSetup(me);
       if (_qrHold) _pendingFirstRun = run;
       else run();
+    } else {
+      // What's new, for everyone who is not brand new. The else is what
+      // guarantees the two decks can never stack — belt-and-braces, since a
+      // fresh account's watermark is its own signup time and its unseen list
+      // is empty by construction (migration 042), but the onboarding deck is
+      // not a surface to be wrong about.
+      //
+      // On a WARM boot this is the call that lands, over an already-painted
+      // feed; on a cold boot it bails on !_bootRouted and routeAfterBoot()
+      // re-tries. Nothing is awaited: the notices arrived in the /bootstrap
+      // payload that produced `me`.
+      if (window.ReleaseNotices) _releasePending = window.ReleaseNotices.take();
+      tryReleaseNotices();
     }
   }
 
