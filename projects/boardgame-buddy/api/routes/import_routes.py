@@ -29,6 +29,7 @@ from .constants import MAX_IMPORT_IMAGE_BYTES, MAX_IMPORT_IMAGES_TOTAL_BYTES
 from .dependencies import CurrentUser, get_current_user
 from .models import (
     PlayImportDeleteResponse,
+    PlayImportDetailResponse,
     PlayImportImage,
     PlayImportListResponse,
     PlayImportParseRequest,
@@ -158,8 +159,34 @@ async def import_plays(
 async def list_imports(
     user: CurrentUser = Depends(get_current_user),
 ) -> PlayImportListResponse:
-    """Every import this user has run, newest first — what Settings lists to undo one."""
+    """Every import this user has run, newest first — the imports spoke's index."""
     return await asyncio.to_thread(play_import_service.list_imports, get_supabase(), user.user_id)
+
+
+@router.get(
+    "/plays/imports/{batch_id}",
+    response_model=PlayImportDetailResponse,
+    status_code=200,
+    summary="One import and what it wrote",
+)
+async def get_import(
+    batch_id: str = Path(..., description="Import batch UUID (one whole import)"),
+    user: CurrentUser = Depends(get_current_user),
+) -> PlayImportDetailResponse:
+    """One import's facts plus its contents, collapsed to runs.
+
+    404 for an id that is not this user's, which does NOT contradict the
+    deletes below. They answer 200 with deleted=0 so as not to DISTINGUISH
+    "not yours" from "not there"; 404 for both is the same non-disclosure,
+    because the read is owner-scoped in the service's .eq("user_id", …) and a
+    foreign batch comes back byte-identical to one that never existed.
+    """
+    detail = await asyncio.to_thread(
+        play_import_service.import_detail, get_supabase(), user.user_id, batch_id
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Import not found")
+    return detail
 
 
 @router.delete(

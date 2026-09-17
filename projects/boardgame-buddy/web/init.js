@@ -38,6 +38,8 @@
   window.importNotesBranch = new window.ImportNotesBranch();
   window.importPhotosBranch = new window.ImportPhotosBranch();
   window.importWizardView = new window.ImportWizardView();
+  window.importsView    = new window.ImportsView();
+  window.importDetailView = new window.ImportDetailView();
   window.bggSyncView    = new window.BggSyncView();
   window.feedbackView   = new window.FeedbackView();
   window.adminReportsView = new window.AdminReportsView();
@@ -79,6 +81,8 @@
   window.router.register("notifications", window.notificationsView);
   window.router.register("settings",      window.settingsView);
   window.router.register("import-wizard", window.importWizardView);
+  window.router.register("imports",       window.importsView);
+  window.router.register("import-detail", window.importDetailView);
   window.router.register("bgg-sync",      window.bggSyncView);
   window.router.register("feedback",       window.feedbackView);
   window.router.register("admin-reports",      window.adminReportsView);

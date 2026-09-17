@@ -66,10 +66,12 @@
       // must not be left unsure whether it happened.
       this._deleting = false;
 
-      // Past imports (migration 007). null = not loaded yet, so the section is
-      // absent rather than flashing an empty card on the first paint.
+      // Past imports (migration 007), for the Past imports row's count line.
+      // THREE states, not two: null is "not loaded, or the fetch failed", and
+      // reads as generic copy with no number in it; [] is a confirmed zero and
+      // says so. Collapsing them is how a row tells somebody with twelve
+      // imports that they have never imported anything.
       this._imports = null;
-      this._deletingImport = null;
 
       // Push notifications (migration 017). null = not read yet, so the card
       // renders "Checking…" rather than flashing "your browser can't do this"
@@ -118,8 +120,11 @@
       // changed since the last visit.
       this._refreshPushState();
       await this._loadBggStatus();
-      // Not awaited before the first paint — the section appears when it lands,
-      // and Settings is fully usable without it.
+      // Not awaited before the first paint — the Past imports row is already
+      // there and already tappable; this only fills in its count. Re-run on
+      // every mount rather than cached, which is also what makes the count
+      // correct after a delete on the spoke: leaving Settings unmounted it, so
+      // coming back is a fresh mount.
       this._loadImports();
       // Repaint whenever a notification count moves, so resolving a report on
       // the reports spoke leaves this card's badge already correct on the way
@@ -174,7 +179,6 @@
         <div id="set-bgg-host">${this._renderBggCard()}</div>
         <div class="set-card-label">Import</div>
         ${this._renderImportCard()}
-        ${this._renderPastImportsSection()}
         <div id="set-outbox-host">${this._renderPendingUploadsSection()}</div>
         <div class="set-card-label">Data management</div>
         ${this._renderExportCard()}
@@ -781,6 +785,14 @@
      * The wizard also names the sources it does not have yet, which two rows
      * here could not: a door that says "Board Game Arena, coming soon" is worth
      * more than the absence of one.
+     *
+     * TWO rows now: the door in, and the history of what came through it
+     * (views/imports-view.js). The second is not a second importer — it is the
+     * list that used to be rendered out in full below this card, with a trash
+     * can per row and no way to see what any of them had written. It is a spoke
+     * for the reasons the What's new archive is: this file is past 1250 lines,
+     * Settings' whole vocabulary is the one-line row below, and a list that
+     * grows every time somebody imports wants its own screen.
      */
     _renderImportCard() {
       return `
@@ -796,8 +808,33 @@
             </span>
             <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
           </button>
+          <button class="set-card__row" onclick="window.router.go('imports')">
+            <span class="set-card__row-icon"><i data-icon="history" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">Past imports</span>
+              <span class="set-card__row-sub">${escapeHtml(this._importsSubline())}</span>
+            </span>
+            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+          </button>
         </div>
       `;
+    }
+
+    /**
+     * The count line under Past imports — or, before the count lands, a
+     * sentence that does the row's other job.
+     *
+     * The row is tappable in all three states, including while the fetch is
+     * out: navigation never waits on data (.claude/rules/web-frontend.md), and
+     * the spoke loads its own list anyway.
+     */
+    _importsSubline() {
+      const rows = this._imports;
+      if (!rows) return "See everything you've imported, and undo one.";
+      if (!rows.length) return "Nothing imported yet.";
+      const plays = rows.reduce((n, i) => n + (i.play_count || 0), 0);
+      return `${rows.length} import${rows.length === 1 ? "" : "s"}` +
+             ` · ${plays} play${plays === 1 ? "" : "s"}`;
     }
 
     /**
@@ -852,88 +889,16 @@
       `;
     }
 
-    /**
-     * Past imports, each undoable.
-     *
-     * Absent entirely when there are none, like the pending-uploads section
-     * above: a permanent "0 imports" row would be chrome that never says
-     * anything. Loaded on mount rather than behind a tap, because the whole
-     * point is that somebody who regrets an import finds the undo without
-     * knowing to look for it.
-     */
-    _renderPastImportsSection() {
-      const rows = this._imports;
-      if (!rows || !rows.length) return "";
-      return `
-        <div class="set-card">
-          ${rows.map((imp) => {
-            const n = imp.play_count || 0;
-            const names = imp.game_names || [];
-            const games = names.join(", ") + ((imp.game_count || 0) > names.length ? "…" : "");
-            const busy = this._deletingImport === imp.batch_id;
-            return `
-              <div class="set-card__row set-card__row--static">
-                <span class="set-card__row-icon"><i data-icon="history" class="w-4 h-4"></i></span>
-                <span class="set-card__row-body">
-                  <span class="set-card__row-title">
-                    ${n} play${n === 1 ? "" : "s"}${games ? ` · ${escapeHtml(games)}` : ""}
-                  </span>
-                  <span class="set-card__row-sub">
-                    Imported ${escapeHtml(formatDate(imp.imported_at))}
-                  </span>
-                </span>
-                <button class="set-card__row-del" ${busy ? "disabled" : ""}
-                        aria-label="Delete this import"
-                        onclick="${escapeAttr(`window.settingsView._deleteImport('${jsStr(imp.batch_id)}')`)}">
-                  <i data-icon="trash-2" class="w-4 h-4"></i>
-                </button>
-              </div>
-            `;
-          }).join("")}
-        </div>
-      `;
-    }
-
     async _loadImports() {
       try {
         this._imports = await window.Play.listImports();
       } catch (_) {
-        // Non-fatal: the section stays absent. An import you cannot list is no
-        // worse off than one you could not have deleted anyway.
-        this._imports = [];
+        // Left NULL, not []. The row is permanent now, so a failed fetch that
+        // wrote an empty list would tell somebody with twelve imports that they
+        // have never imported anything — and the row is a door either way.
+        this._imports = null;
       }
       this.render();
-    }
-
-    /** @param {string} batchId */
-    async _deleteImport(batchId) {
-      const imp = (this._imports || []).find((i) => i.batch_id === batchId);
-      if (!imp || this._deletingImport) return;
-      const n = imp.play_count || 0;
-      const ok = await window.PolaroidPopup.confirm({
-        title: "Delete this import?",
-        body: `All ${n} play${n === 1 ? "" : "s"} it added will be removed from your history and your stats. This can't be undone — you'd have to import the note again.`,
-        confirmLabel: "Delete",
-        cancelLabel: "Keep them",
-        destructive: true,
-      });
-      if (!ok) return;
-      this._deletingImport = batchId;
-      this.render();
-      let deleted = 0;
-      try {
-        const res = await window.Play.deleteImportBatch(batchId);
-        deleted = (res && res.deleted) || 0;
-      } catch (e) {
-        this._deletingImport = null;
-        this.render();
-        showToast((e && e.message) || "Couldn't delete that import", "error");
-        return;
-      }
-      this._deletingImport = null;
-      this._imports = (this._imports || []).filter((i) => i.batch_id !== batchId);
-      this.render();
-      showToast(`Deleted ${deleted} play${deleted === 1 ? "" : "s"}`, "success");
     }
 
     /**
