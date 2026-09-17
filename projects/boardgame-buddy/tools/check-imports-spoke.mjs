@@ -193,5 +193,39 @@ console.log("\n3. plays-changed and play-changed keep the screen honest");
   ok("an edit removes nothing", v._runs.length === 2);
 }
 
+// ── 4. The routes, one letter apart ──────────────────────────────────────────
+// /settings/import is the wizard that writes plays; /settings/imports is the
+// history of what it wrote. Both patterns are anchored, so neither can swallow
+// the other — but they are adjacent rows in the table and look like a typo, and
+// a "tidy" that drops the anchors sends the spoke to the wizard silently.
+console.log("\n4. /settings/import and /settings/imports stay apart");
+{
+  const rwin = { addEventListener() {}, location: { pathname: "/", search: "" } };
+  const rbox = {
+    window: rwin, console, Date, Math, Map, Set, Promise,
+    document: { querySelector: () => null, querySelectorAll: () => [], addEventListener() {} },
+    history: {}, location: rwin.location,
+    URLSearchParams, decodeURIComponent, encodeURIComponent,
+  };
+  vm.createContext(rbox);
+  vm.runInContext(fs.readFileSync(`${W}/domain/view.js`, "utf8"), rbox, { filename: "domain/view.js" });
+  const R = rwin.router || new rwin.Router();
+  const at = (p) => { const m = R.matchPath(p); return m && m.name; };
+
+  ok("/settings/import is still the wizard", at("/settings/import") === "import-wizard");
+  ok("/settings/imports is the spoke", at("/settings/imports") === "imports");
+  ok("/settings/imports/<id> is the drill-down", at("/settings/imports/abc") === "import-detail");
+  ok("the batch id comes off the PATH",
+     (R.matchPath("/settings/imports/abc").params || {}).batchId === "abc");
+
+  // A uuid needs no escaping, but pathFor/matchPath are one declarative pair
+  // and a round trip is how you know they have not drifted.
+  const url = R.pathFor("import-detail", { batchId: "a b/c" });
+  ok("pathFor encodes the id", url === "/settings/imports/a%20b%2Fc");
+  ok("matchPath decodes it back",
+     (R.matchPath(url).params || {}).batchId === "a b/c");
+  ok("pathFor('imports') builds the index", R.pathFor("imports", {}) === "/settings/imports");
+}
+
 console.log(fails ? `\n${fails} FAILED` : "\nall assertions passed");
 process.exit(fails ? 1 : 0);
