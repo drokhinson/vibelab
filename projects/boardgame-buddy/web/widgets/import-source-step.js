@@ -23,6 +23,34 @@
    * @property {string} [chip]  The label on a disabled row's badge.
    */
 
+  /**
+   * Sources that are BUILT but switched off, keyed by source id.
+   *
+   * Everything behind an entry here is untouched — the branch, its steps, its
+   * draft model, its API routes and its tests all still exist and still pass.
+   * The question this table answers is only "may a user start one right now",
+   * which is a different question from "does it work". Re-enabling a source is
+   * deleting its entry; nothing else has to come back with it.
+   *
+   * Board Game Arena is off while we look for a supported way to read a
+   * player's table history. The branch we have signs in with the user's BGA
+   * password, which their terms do not allow — the row said so, which is not
+   * the same as not offering it.
+   *
+   * This is also the gate the WIZARD reads (`isLive`), not just the picker: a
+   * disabled row is not an off switch while `/settings/import?source=bga`
+   * still walks straight into the branch behind it.
+   *
+   * @type {Object<string, {chip: string, why: string}>}
+   */
+  const OFF = {
+    bga: {
+      chip: "Coming soon",
+      why: "Paused while we look for a supported way to read your table "
+         + "history.",
+    },
+  };
+
   /** @type {SourceOption[]} */
   const STATIC_SOURCES = [
     {
@@ -43,11 +71,13 @@
       key: "bga",
       icon: "gamepad-2",
       title: "Board Game Arena",
-      sub: "Sign in and bring over the tables you've finished. Each one keeps "
-         + "its date, its scores and everyone who was there.",
-      // Said HERE rather than only behind the row, because it is the one thing
-      // that might make somebody not want to open the door at all. The account
-      // step says it again, at length, above the password field.
+      sub: "Bring over the tables you've finished. Each one keeps its date, "
+         + "its scores and everyone who was there.",
+      // Whatever OFF says replaces this line while the source is off — see
+      // `applyOff`. It is kept here for the day the entry goes away: it is the
+      // one thing that might make somebody not want to open the door at all,
+      // and it belongs on the row rather than only behind it. The account step
+      // says it again, at length, above the password field.
       extra: "Needs your BGA password, and their terms don't allow this — "
            + "there's a note to read before you sign in.",
     },
@@ -100,6 +130,27 @@
     });
   }
 
+  /** Is this source available to start right now? */
+  function isLive(source) {
+    return !OFF[source];
+  }
+
+  /**
+   * A row, with its source's off-switch applied.
+   *
+   * Blanking `key` is what makes renderRow paint the disabled dialect, so an
+   * off source reuses the shape the picker already had for one that has not
+   * landed — the user meets one kind of unavailable row, not two.
+   *
+   * @param {SourceOption} src
+   * @returns {SourceOption}
+   */
+  function applyOff(src) {
+    const off = OFF[src.key];
+    if (!off) return src;
+    return Object.assign({}, src, { key: "", chip: off.chip, extra: off.why });
+  }
+
   /**
    * @param {{resume: {source: string, label: string}|null,
    *          bggAuth: "linked"|"unlinked"|"relink_required"|null}} [opts]
@@ -108,7 +159,8 @@
     const resume = opts && opts.resume;
     // BoardGameGeek is built per render because its row depends on the link
     // state; every other source is static.
-    const sources = STATIC_SOURCES.concat([bggRow((opts && opts.bggAuth) || null)]);
+    const sources = STATIC_SOURCES.concat([bggRow((opts && opts.bggAuth) || null)])
+      .map(applyOff);
     return `
       <div class="imp-step">
         <h3 class="imp-step__title font-display">Where are these plays coming from?</h3>
@@ -166,5 +218,5 @@
     `;
   }
 
-  window.ImportSourceStep = { render, bggRow, STATIC_SOURCES };
+  window.ImportSourceStep = { render, bggRow, isLive, STATIC_SOURCES, OFF };
 })();

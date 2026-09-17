@@ -10028,6 +10028,14 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    restores the vertical rhythm the old stacked /admin screen got from its
    per-section .p-3. */
 .admin-spoke__body { padding-top: 0.25rem; }
+/* The BGG-data spoke stacks four backfill panels, each with its own heading
+   and bulk button. Without a rule between them the second panel's heading sits
+   right under the first panel's last row and reads as part of it. */
+.admin-spoke__body + .admin-spoke__body {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid oklch(var(--b3));
+}
 
 /* Unified section header for both Expansions and Recent plays so the
    two blocks read as siblings — same font size, same gap above/below. */

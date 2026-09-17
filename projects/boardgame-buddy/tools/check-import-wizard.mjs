@@ -933,29 +933,64 @@ console.log("\n11. Every step body renders without throwing");
     ok(`the picker offers four sources (${state || "unknown"})`,
       rows(pickerFor(state)) === 4);
   }
-  // This count is the only thing between enabling a source and shipping a
-  // dead button, and it has to come down by one every time a source lands.
-  // Board Game Arena landed, so a linked BGG account leaves nothing behind.
-  ok("a linked account leaves nothing disabled",
-    disabled(pickerFor("linked")) === 0);
-  ok("the BGA row is live and warns before the door",
-    pickerFor("linked").includes("_pickSource(&#39;bga&#39;)"));
   // The handler is escapeAttr'd, so the quotes around the source arrive as
   // entities. Matched on the escaped form rather than unescaping, so the
   // assertion fails if that escaping is ever dropped.
-  const picksBgg = (html) => html.includes("_pickSource(&#39;bgg&#39;)");
-  ok("a linked account makes the BGG row selectable", picksBgg(pickerFor("linked")));
+  const picks = (html, src) => html.includes(`_pickSource(&#39;${src}&#39;)`);
+
+  // ImportSourceStep.OFF is the off switch (see its header). Counting off it
+  // rather than hardcoding a number is what lets a source be switched off, or
+  // back on, without this block needing a hand edit — and what makes the two
+  // assertions below real rather than a restatement of whatever it says today.
+  const OFF = w.ImportSourceStep.OFF;
+  const offKeys = Object.keys(OFF);
+  for (const key of offKeys) {
+    ok(`a source that is off is not pickable (${key})`,
+      !picks(pickerFor("linked"), key));
+    ok(`and says why, on the row (${key})`,
+      pickerFor("linked").includes(OFF[key].chip));
+    ok(`and isLive agrees (${key})`, w.ImportSourceStep.isLive(key) === false);
+  }
+  ok("every other source is live", ["notes", "photos", "bgg"]
+    .every((k) => w.ImportSourceStep.isLive(k)));
+
+  // The disabled count is the only thing between enabling a source and
+  // shipping a dead button. It is the off sources plus whatever the BGG link
+  // state adds, so it moves on its own when OFF changes.
+  ok("a linked account disables exactly the off sources",
+    disabled(pickerFor("linked")) === offKeys.length);
+  ok("a linked account makes the BGG row selectable",
+    picks(pickerFor("linked"), "bgg"));
   ok("an unlinked account disables the BGG row",
-    disabled(pickerFor("unlinked")) === 1);
+    disabled(pickerFor("unlinked")) === offKeys.length + 1);
   ok("and points it at Connections",
     pickerFor("unlinked").includes("Settings \u2192 Connections"));
   ok("an expired session says reconnect",
     pickerFor("relink_required").includes("Reconnect")
-      && disabled(pickerFor("relink_required")) === 1);
+      && disabled(pickerFor("relink_required")) === offKeys.length + 1);
   ok("an unknown link state never offers the row",
-    disabled(pickerFor(null)) === 1 && !picksBgg(pickerFor(null)));
+    disabled(pickerFor(null)) === offKeys.length + 1
+      && !picks(pickerFor(null), "bgg"));
   ok("nor does an unlinked or expired one",
-    !picksBgg(pickerFor("unlinked")) && !picksBgg(pickerFor("relink_required")));
+    !picks(pickerFor("unlinked"), "bgg")
+      && !picks(pickerFor("relink_required"), "bgg"));
+
+  // A DISABLED ROW IS NOT AN OFF SWITCH. The picker is one of three ways into
+  // a branch; the other two are /settings/import?source=<key> and a restored
+  // draft, and both live in the wizard's onMount. Asserted against the source
+  // text rather than by driving onMount, which would want a router, a store
+  // and four branch globals — the same trade section 9 makes.
+  {
+    const wizard = fs.readFileSync(`${W}views/import-wizard-view.js`, "utf8");
+    const onMount = wizard.slice(wizard.indexOf("async onMount()"),
+                                wizard.indexOf("_loadBggAuth()", wizard.indexOf("async onMount()")));
+    ok("the ?source= deep link is gated on isLive",
+      /ImportSourceStep\.isLive\(asked\)/.test(onMount));
+    ok("a restored draft for an off source is not offered",
+      /ImportSourceStep\.isLive\(saved\.source\)/.test(onMount));
+    ok("and is cleared rather than left to reappear",
+      /if \(!live\) window\.ImportDraft\.clear\(\);/.test(onMount));
+  }
 
   // Every branch must expose _partners: ImportReviewHost._openRowPlayerSheet
   // reads this._branch._partners directly, so a branch without it fails only

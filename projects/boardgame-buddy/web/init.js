@@ -46,13 +46,10 @@
   window.bggSyncView    = new window.BggSyncView();
   window.feedbackView   = new window.FeedbackView();
   window.adminReportsView = new window.AdminReportsView();
-  // Four instances of one class — the tools differ only in their strings and
-  // which three API calls they make. The configs live with the view rather
+  // One spoke stacking four panels — the tools differ only in their strings
+  // and which three API calls they make. The configs live with the view rather
   // than here so init.js stays a registry. See views/admin-backfill-view.js.
-  window.adminImagesView = window.AdminBackfillView.images();
-  window.adminDescriptionsView = window.AdminBackfillView.descriptions();
-  window.adminStatsView = window.AdminBackfillView.stats();
-  window.adminPublishersView = window.AdminBackfillView.publishers();
+  window.adminBggDataView = window.AdminBackfillView.bggData();
   window.adminReleaseNoticesView = new window.AdminReleaseNoticesView();
   window.whatsNewView = new window.WhatsNewView();
 
@@ -89,10 +86,7 @@
   window.router.register("bgg-sync",      window.bggSyncView);
   window.router.register("feedback",       window.feedbackView);
   window.router.register("admin-reports",      window.adminReportsView);
-  window.router.register("admin-images",       window.adminImagesView);
-  window.router.register("admin-descriptions", window.adminDescriptionsView);
-  window.router.register("admin-stats",        window.adminStatsView);
-  window.router.register("admin-publishers",   window.adminPublishersView);
+  window.router.register("admin-bgg-data",     window.adminBggDataView);
   window.router.register("admin-release-notices", window.adminReleaseNoticesView);
   window.router.register("whats-new",           window.whatsNewView);
 
