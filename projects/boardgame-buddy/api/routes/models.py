@@ -14,6 +14,7 @@ from pydantic import (
 
 from .constants import (
     ChapterReportStatus,
+    DiscoverReasonKind,
     IMPORT_CHUNK_MAX,
     MAX_BUDDY_ALIAS_CHARS,
     MAX_IMPORT_CHARS,
@@ -87,11 +88,18 @@ class AdminReviewCounts(BaseModel):
     chapter_reports: int = 0
     missing_images: int = 0
     missing_descriptions: int = 0
+    # Catalog games whose BGG stats have never been synced (migration 038).
+    missing_stats: int = 0
 
     @computed_field  # type: ignore[misc]
     @property
     def total(self) -> int:
-        return self.chapter_reports + self.missing_images + self.missing_descriptions
+        return (
+            self.chapter_reports
+            + self.missing_images
+            + self.missing_descriptions
+            + self.missing_stats
+        )
 
 
 class RefreshDescriptionsResponse(BaseModel):
@@ -530,6 +538,12 @@ class GameSummary(BaseModel):
     expansion_color: str | None = None
     rulebook_url: str | None = None
     play_mode: PlayMode = PlayMode.COMPETITIVE
+    # BGG geek rating (1..10) and overall rank, backfilled into the catalog by
+    # POST /games/admin/backfill-stats (migration 038). Optional on purpose:
+    # NULL means "not synced yet", and a client holding a pre-038 cached row
+    # simply reads None — no cache SCHEMA_VERSION bump needed.
+    bgg_rating: float | None = None
+    bgg_rank: int | None = None
     # Number of expansion rows in boardgamebuddy_games that point at this
     # game (via base_game_bgg_id == this.bgg_id). Populated by the list
     # endpoints so browse/search tiles can show a "git-fork N" badge.
@@ -2053,6 +2067,75 @@ class HotGamesResponse(BaseModel):
 
 class SuggestedBuddiesResponse(BaseModel):
     suggestions: list[FeedSuggestedBuddy] = []
+
+
+# ── Discover ──────────────────────────────────────────────────────────────────
+# One bundle for the whole tab (GET /discover), assembled by
+# services/discovery_service.build_bundle. Four sections, each independently
+# empty-able, so a BGG outage or a brand-new account degrades one rail rather
+# than the screen.
+
+class DiscoverPick(BaseModel):
+    """One "Picked for you" tile: the game plus the reason it is there."""
+    game: GameSummary
+    reason_kind: DiscoverReasonKind
+    # The one line the tile shows — "Because you play Wingspan". Formatted
+    # server-side by discovery_service.format_reason so there is one writer;
+    # the client never composes it from the fields below.
+    reason_label: str
+    reason_game_id: str | None = None
+    shared_mechanics: list[str] = []
+    shared_categories: list[str] = []
+    # True when the viewer had no shelf and no plays to profile, so this row
+    # is a catalog-rank fallback rather than a personal pick.
+    cold_start: bool = False
+
+
+class DiscoverTrendingEntry(BaseModel):
+    """One row of BGG's hot list. `game` is None when the catalog does not
+    have it yet — the tile renders from the BGG fields and a tap imports."""
+    bgg_id: int
+    rank: int
+    name: str
+    year_published: int | None = None
+    thumbnail_url: str | None = None
+    game: GameSummary | None = None
+    # From bgb_bgg_hot_latest (migration 039): where the game sat in the run
+    # ~a day earlier. rank_delta positive = climbing; None when there is no
+    # comparison run or the game was not in it. is_new = absent from the
+    # comparison run. Both None/False on the live-/hot fallback.
+    rank_delta: int | None = None
+    is_new: bool = False
+
+
+class DiscoverDormantEntry(BaseModel):
+    """An owned game the viewer has not played in a while. last_played_at is
+    None when they have never logged it at all."""
+    game: GameSummary
+    last_played_at: date | None = None
+
+
+class HotRefreshResult(BaseModel):
+    """What one POST /discover/admin/refresh-trending did."""
+    captured_at: datetime
+    items: int                     # rows written for this run
+    imported: int                  # hot games the catalog lacked and now has
+    skipped: list[int] = []        # bgg_ids still missing after the per-run import cap
+    failed: list[int] = []         # bgg_ids whose import raised
+    pruned: int = 0                # snapshot rows older than the retention window
+
+
+class DiscoverBundleResponse(BaseModel):
+    picks: list[DiscoverPick] = []
+    trending: list[DiscoverTrendingEntry] = []
+    # BGG did not answer. The picks still paint; the trending rail shows its
+    # own error branch instead of the whole tab failing.
+    trending_error: bool = False
+    new_this_year: list[GameSummary] = []
+    new_year: int
+    back_on_shelf: list[DiscoverDormantEntry] = []
+    dormant_days: int
+    generated_at: datetime
 
 
 class SuggestionNetworkGroup(BaseModel):

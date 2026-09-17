@@ -150,7 +150,8 @@ def raise_for_rpc_error(data: Any, what: str) -> None:
 _GAME_SELECT = (
     "id, bgg_id, name, year_published, min_players, max_players, "
     "playing_time, thumbnail_url, image_url, theme_color, is_expansion, "
-    "base_game_bgg_id, expansion_color, rulebook_url, play_mode"
+    "base_game_bgg_id, expansion_color, rulebook_url, play_mode, "
+    "bgg_rating, bgg_rank"
 )
 
 
@@ -177,6 +178,8 @@ def game_summary_from_row(row: dict[str, Any]) -> GameSummary:
         expansion_color=row.get("expansion_color"),
         rulebook_url=row.get("rulebook_url"),
         play_mode=PlayMode(row.get("play_mode") or PlayMode.COMPETITIVE.value),
+        bgg_rating=row.get("bgg_rating"),
+        bgg_rank=row.get("bgg_rank"),
     )
 
 

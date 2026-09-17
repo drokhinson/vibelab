@@ -833,6 +833,8 @@
     // Shared game-rail component — a heading plus a horizontal strip of game
     // tiles. It used to back two rails ("Hot this week" and the since-removed
     // "Time to revisit"), so it stays parameterised by heading and meta line.
+    // The rail itself lives in ui/game-rail.js — extracted the day the
+    // Discover tab became its second consumer, with this markup unchanged.
     // Tiles delegate to the canonical Game component per
     // .claude/rules/ui-object-design.md §2.
     /**
@@ -840,27 +842,15 @@
      * @param {{icon: string, title: string, meta: (entry: any) => string}} opts
      */
     _renderGameRail(card, { icon, title, meta }) {
-      const tiles = (card.games || []).map((entry) => {
-        const game = entry.game;
-        const status = this._statusMap[game.id] || null;
-        const expCount = game.bgg_id ? (this._expansionCounts[game.bgg_id] || 0) : 0;
-        return window.renderGamePolaroid(game, {
-          variant: "rail",
-          collectionStatus: status,
-          pending: !this._statusReady,
-          meta: meta(entry),
-          badgeHtml: window.renderExpansionBadge(expCount),
-          clickHandler: gameDetailJs(game.id, game.name),
-        });
-      }).join("");
-      return `
-        <section class="feed-rail">
-          <header class="feed-rail__header">
-            <h3><i data-icon="${icon}" class="w-4 h-4"></i> ${escapeHtml(title)}</h3>
-          </header>
-          <div class="feed-rail__scroll">${tiles}</div>
-        </section>
-      `;
+      const entries = (card.games || []).map((entry) => ({ game: entry.game, meta: meta(entry) }));
+      return window.renderGameRail(entries, {
+        icon,
+        title,
+        statusMap: this._statusMap,
+        statusReady: this._statusReady,
+        expansionCounts: this._expansionCounts,
+        clickHandler: (g) => gameDetailJs(g.id, g.name),
+      });
     }
 
     _renderHotGamesCard(card) {

@@ -235,6 +235,44 @@
         .then((r) => { Game.invalidateBundle(); return r; });
     }
 
+    // ── Admin: BGG stats backfill ─────────────────────────────────────────
+    // Rating / rank / weight arrived with migration 038, so every game imported
+    // before it has bgg_stats_synced_at NULL. Same trio as descriptions.
+
+    /** List catalog games whose BGG stats have never been synced. */
+    static adminMissingStats() {
+      return window.api.get("/games/admin/missing-stats");
+    }
+
+    /** Re-fetch one game's rating, rank and weight from BGG. */
+    static adminRefreshOneStats(gameId) {
+      return window.api.post(`/games/admin/${gameId}/refresh-stats`)
+        .then((r) => { Game.invalidateBundle(gameId); return r; });
+    }
+
+    /** Sync stats for games never synced, in one bounded, throttled pass.
+     *  `remaining` in the response drives the panel's next call. */
+    static adminBackfillStats(limit) {
+      const q = limit ? `?limit=${encodeURIComponent(limit)}` : "";
+      return window.api.post(`/games/admin/backfill-stats${q}`)
+        .then((r) => {
+          Game.invalidateBundle();
+          if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
+          return r;
+        });
+    }
+
+    /** Snapshot BGG's hot list now (migration 039) and import what the
+     *  catalog lacks. Same call the daily cron makes; the Discover bundle is
+     *  dropped so the next mount shows the new run. */
+    static adminRefreshTrending() {
+      return window.api.post("/discover/admin/refresh-trending")
+        .then((r) => {
+          if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
+          return r;
+        });
+    }
+
     /** Admin: set or clear a game's rulebook URL. Pass null/"" to clear. */
     static adminSetRulebookUrl(gameId, url) {
       const cleaned = (url || "").trim() || null;

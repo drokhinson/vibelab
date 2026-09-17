@@ -280,6 +280,7 @@
     <main data-view="terms" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="auth" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="feed" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="discovery" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="log-play" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="play-flow" class="hidden flex-1 px-0 py-0"></main>
     <main data-view="game-explorer" class="hidden flex-1 px-4 py-4"></main>
@@ -305,12 +306,13 @@
     <main data-view="admin-reports" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="admin-images" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="admin-descriptions" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
+    <main data-view="admin-stats" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
 
     <!-- Toast -->
     <div id="toast" class="toast toast-end toast-top hidden"></div>
   </div>
 
-  <!-- Bottom nav: a flat, edge-to-edge rectangular bar with three equal
+  <!-- Bottom nav: a flat, edge-to-edge rectangular bar with four equal
        tabs. Play carries a gold icon chip so it still reads as the primary
        action, but nothing breaks the bar's rectangle. data-nav is the
        destination on tap; data-nav-views (when present) is a comma-separated
@@ -334,6 +336,12 @@
         <i data-icon="home" class="w-5 h-5"></i>
       </span>
       <span class="bgb-nav__label">Feed</span>
+    </button>
+    <button class="bgb-nav__tab" data-nav="discovery">
+      <span class="bgb-nav__ico">
+        <i data-icon="compass" class="w-5 h-5"></i>
+      </span>
+      <span class="bgb-nav__label">Discover</span>
     </button>
     <button class="bgb-nav__tab bgb-nav__tab--play" data-nav="log-play"
             data-nav-views="play-flow,log-play,game-explorer,session-viewer">
@@ -449,6 +457,7 @@
   <script src="domain/buddy-network.js"></script>
   <script src="domain/ghost-claim.js"></script>
   <script src="domain/feed.js"></script>
+  <script src="domain/discovery.js"></script>
   <script src="domain/stats.js"></script>
   <script src="domain/bgg.js"></script>
   <script src="domain/bgg-sync-flow.js"></script>
@@ -469,6 +478,7 @@
   <script src="ui/player-row-action.js"></script>
   <script src="ui/play-card.js"></script>
   <script src="ui/game-card.js"></script>
+  <script src="ui/game-rail.js"></script>
   <script src="ui/game-stats-panel.js"></script>
   <script src="ui/preview-card.js"></script>
   <script src="ui/buddy-suggestion-rail.js"></script>
@@ -571,6 +581,7 @@
   <script src="views/terms-view.js"></script>
   <script src="views/auth-view.js"></script>
   <script src="views/feed-view.js"></script>
+  <script src="views/discovery-view.js"></script>
   <script src="views/log-play-view.js"></script>
   <script src="views/play-flow-view.js"></script>
   <script src="views/game-explorer-view.js"></script>

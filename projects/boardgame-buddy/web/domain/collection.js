@@ -298,6 +298,9 @@
       // Cached game searches embed each hit's collection_status — a mutation
       // changes which shelf a game sits on, so drop them too.
       if (window.Game && window.Game.invalidateSearch) window.Game.invalidateSearch();
+      // A pick just shelved must not come straight back on the Discover tab,
+      // and "Back on the shelf" is a read of the shelf.
+      if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
     }
 
     /**

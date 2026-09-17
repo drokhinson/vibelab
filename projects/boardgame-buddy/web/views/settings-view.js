@@ -474,6 +474,22 @@
           title: "Missing descriptions",
           sub: "Backfill game descriptions from BoardGameGeek.",
         },
+        {
+          route: "admin-stats",
+          tool: "stats",
+          icon: "star",
+          title: "Missing BGG stats",
+          sub: "Sync ratings, ranks and weights from BoardGameGeek for the Discover tab.",
+        },
+        // An action, not a spoke: there is nothing to look at, only a run to
+        // kick off. The daily cron does the same call; this is for "now".
+        {
+          action: "window.settingsView._refreshTrending()",
+          tool: "trending",
+          icon: "flame",
+          title: "Refresh trending",
+          sub: "Snapshot BoardGameGeek's hot list now and import what the catalog lacks.",
+        },
       ];
     }
 
@@ -495,9 +511,10 @@
       const label = parts.length
         ? `${t.title} — ${window.BgbNotifications.phrase(parts)} waiting`
         : t.title;
+      const onclick = t.action || `window.router.go('${t.route}')`;
       return `
         <button class="set-card__row" aria-label="${escapeAttr(label)}"
-                onclick="window.router.go('${t.route}')">
+                onclick="${escapeAttr(onclick)}">
           <span class="set-card__row-icon"><i data-icon="${t.icon}" class="w-4 h-4"></i></span>
           <span class="set-card__row-body">
             <span class="set-card__row-title">${escapeHtml(t.title)}</span>
@@ -507,6 +524,23 @@
           <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
         </button>
       `;
+    }
+
+    async _refreshTrending() {
+      if (this._trendingBusy) return;
+      this._trendingBusy = true;
+      showToast("Refreshing trending\u2026", "info");
+      try {
+        const r = await window.Game.adminRefreshTrending();
+        const parts = [`${r.items} games`];
+        if (r.imported) parts.push(`${r.imported} imported`);
+        if (r.skipped && r.skipped.length) parts.push(`${r.skipped.length} more tomorrow`);
+        showToast(`Trending refreshed \u2014 ${parts.join(", ")}`, "success");
+      } catch (e) {
+        showToast((e && e.message) || "Couldn't refresh trending", "error");
+      } finally {
+        this._trendingBusy = false;
+      }
     }
 
     // ── BGG card ──────────────────────────────────────────────────────────────

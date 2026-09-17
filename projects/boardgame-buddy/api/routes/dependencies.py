@@ -4,7 +4,7 @@ import asyncio
 import re
 
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel
 
 import cache
@@ -12,6 +12,7 @@ from supabase import Client
 from api_logger import set_request_user
 from jwt_auth import SupabaseUser, get_current_supabase_user
 from db import get_supabase
+from auth import ADMIN_API_KEY
 
 APP_NAME = "boardgame-buddy"
 
@@ -189,6 +190,27 @@ async def get_current_admin(
     if not is_admin:
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return user
+
+
+async def get_admin_or_service_key(
+    authorization: str | None = Header(None),
+) -> CurrentUser | None:
+    """An admin session, or the shared ADMIN_API_KEY as a bearer.
+
+    For endpoints a scheduler calls as well as an admin: the daily trending
+    refresh runs from a GitHub Actions cron that has no user, only the key
+    already used to promote admins (POST /profile/become-admin). The key is
+    tried first because it is a string compare; anything else goes through
+    the normal get_current_admin path and its 401/403s. Returns None for a
+    key caller — there is no profile behind it.
+    """
+    if authorization and ADMIN_API_KEY:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer" and parts[1] == ADMIN_API_KEY:
+            return None
+    su_user = await get_current_supabase_user(authorization=authorization)
+    user = await get_current_user(su_user)
+    return await get_current_admin(user)
 
 
 async def maybe_supabase_user(authorization: str | None) -> SupabaseUser | None:

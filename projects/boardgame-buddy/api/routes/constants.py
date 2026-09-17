@@ -327,6 +327,21 @@ class CollectionSort(StrEnum):
     ADDED_AT = "added_at"
 
 
+class DiscoverReasonKind(StrEnum):
+    """Why a game is on the Discover tab's "Picked for you" rail.
+
+    Mirrors the reason_kind text bgb_discover_recommendations (migration 038)
+    returns; services/discovery_service.format_reason turns each into the one
+    line the tile shows. The order here is the RPC's precedence order.
+    """
+
+    BECAUSE_YOU_PLAY = "because_you_play"      # a seed game shares ≥2 mechanics
+    SHARED_MECHANICS = "shared_mechanics"      # ≥1 mechanic in the taste profile
+    SHARED_CATEGORIES = "shared_categories"    # ≥1 category in the taste profile
+    FITS_YOUR_TABLE = "fits_your_table"        # seat count + playtime match
+    HIGHLY_RATED = "highly_rated"              # nothing personal; the BGG prior
+
+
 class CatalogSort(StrEnum):
     """Row order for GET /games.
 

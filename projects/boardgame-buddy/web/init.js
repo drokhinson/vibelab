@@ -14,6 +14,7 @@
   window.termsView       = new window.TermsView();
   window.authView        = new window.AuthView();
   window.feedView        = new window.FeedView();
+  window.discoveryView   = new window.DiscoveryView();
   window.logPlayView     = new window.LogPlayView();
   window.playFlowView    = new window.PlayFlowView();
   window.gameExplorerView = new window.GameExplorerView();
@@ -44,6 +45,7 @@
   // than here so init.js stays a registry. See views/admin-backfill-view.js.
   window.adminImagesView = window.AdminBackfillView.images();
   window.adminDescriptionsView = window.AdminBackfillView.descriptions();
+  window.adminStatsView = window.AdminBackfillView.stats();
 
   // Widget singleton — the Play tab's Join half. Hoisted here (rather than
   // owned by LogPlayView) so its inline onclick handlers resolve the same way
@@ -55,6 +57,7 @@
   window.router.register("terms",         window.termsView);
   window.router.register("auth",          window.authView);
   window.router.register("feed",          window.feedView);
+  window.router.register("discovery",     window.discoveryView);
   window.router.register("log-play",      window.logPlayView);
   window.router.register("play-flow",     window.playFlowView);
   window.router.register("game-explorer", window.gameExplorerView);
@@ -76,6 +79,7 @@
   window.router.register("admin-reports",      window.adminReportsView);
   window.router.register("admin-images",       window.adminImagesView);
   window.router.register("admin-descriptions", window.adminDescriptionsView);
+  window.router.register("admin-stats",        window.adminStatsView);
 
   // A global helper rather than a view concern, because the provider's state
   // listener fires async, outside the view lifecycle.

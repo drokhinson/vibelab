@@ -1,6 +1,15 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 034_team_coop_win_achievements.sql (re-emits bgb_sync_achievements
+-- Last updated: 039_bgg_hot_snapshots.sql (adds bgb_bgg_hot_latest — the
+--               newest BGG hot-list run diffed against the newest run at
+--               least 20 hours older, so the Discover rail can say what
+--               climbed.)
+--               Before that: 038_discover.sql (adds bgb_discover_recommendations, the
+--               Discover tab's scorer: the catalog ranked against a taste
+--               profile built from the viewer's shelf and plays, each row
+--               carrying the reason it was picked. Also gives
+--               bgb_dormant_collection its first Python caller.)
+--               Before that: 034_team_coop_win_achievements.sql (re-emits bgb_sync_achievements
 --               with team_wins and coop_wins — the same win narrowed to the
 --               mode the table was playing in, behind the Dream Team and
 --               Machine Breaker badges (20 wins each, no first-win tier under
@@ -115,6 +124,41 @@
 --   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
 --   Purpose:    Top-N most-played games in the last N days for the Feed's
 --               "Hot Games" card, counting live-logged plays only.
+
+-- bgb_discover_recommendations(uid UUID, lim INT DEFAULT 12)
+--   → TABLE (game_id UUID, score NUMERIC, reason_kind TEXT,
+--            reason_game_id UUID, reason_game_name TEXT,
+--            shared_mechanics TEXT[], shared_categories TEXT[])
+--   Defined in: db/migrations/boardgamebuddy/038_discover.sql
+--   Called by:  projects/boardgame-buddy/api/routes/services/discovery_service.py
+--   Purpose:    The Discover tab's "Picked for you" rail. Builds a taste
+--               profile from the viewer's collection (owned 1.0 / wishlist
+--               0.6 / prev_owned 0.25) and plays (LN-damped totals, recent
+--               90 days weighted 1.5x), rolls it up per mechanic and
+--               category, then scores every base game the viewer has no
+--               relationship with: .45 mechanics + .20 categories + .15
+--               seat fit + .10 playtime fit + .10 BGG rating prior. Each row
+--               names WHY — the seed game sharing ≥2 mechanics, else the
+--               shared mechanics / categories / table fit / rating — and no
+--               explaining seed gets more than three picks. Zero rows for a
+--               viewer with no seeds; the service falls back to catalog rank.
+
+-- bgb_bgg_hot_latest()
+--   → TABLE (bgg_id INT, rank INT, name TEXT, year_published INT,
+--            thumbnail_url TEXT, prev_rank INT, rank_delta INT,
+--            is_new BOOLEAN, captured_at TIMESTAMPTZ)
+--   Defined in: db/migrations/boardgamebuddy/039_bgg_hot_snapshots.sql
+--   Called by:  projects/boardgame-buddy/api/routes/services/discovery_service.py
+--               (fetch_trending — snapshot first, BGG live only when no run
+--               has been written)
+--   Purpose:    The newest row set of boardgamebuddy_bgg_hot_snapshots, each
+--               game carrying its rank in the newest run at least 20 hours
+--               older: rank_delta = prev - current (positive = climbing),
+--               is_new = absent from that run. 20 hours, not a day, so the
+--               daily cron's drift and an admin's same-day re-run neither
+--               skip a day nor compare a run against itself. A lone first
+--               run reports no comparison (NULL deltas, is_new false) rather
+--               than fifty newcomers.
 
 -- bgb_user_stats(uid UUID)
 --   → TABLE (total_plays BIGINT, unique_games BIGINT, win_count BIGINT,
@@ -284,9 +328,10 @@
 --                 (was joining plays on p.user_id = uid only, so a game the
 --                  user played but a buddy logged read as "never played" and
 --                  got nudged at them; now counts participated plays)
---   Called by:  shared-backend/routes/boardgame_buddy/services/feed_service.py
---   Purpose:    Owned games this user hasn't played in N days; powers the
---               "Featured from your collection" Feed card.
+--   Called by:  projects/boardgame-buddy/api/routes/services/discovery_service.py
+--               (fetch_back_on_shelf — the Discover tab's "Back on the shelf"
+--               rail. The Feed card it was written for never shipped.)
+--   Purpose:    Owned games this user hasn't played in N days.
 
 -- bgb_suggested_buddies(uid UUID, lim INT DEFAULT 5)
 --   → TABLE (user_id UUID, mutual_count BIGINT, play_count BIGINT,
