@@ -1,6 +1,9 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 040_game_publishers.sql (boardgamebuddy_games.publishers,
+-- Last updated: 041_dev_feedback.sql (the Dev feedback board — four tables:
+--               boardgamebuddy_feedback_types, _feedback_topics, _feedback and
+--               _feedback_likes; hand-added below).
+--               Before that: 040_game_publishers.sql (boardgamebuddy_games.publishers,
 --               hand-added to the dump below).
 --               Before that: 039_bgg_hot_snapshots.sql (boardgamebuddy_bgg_hot_snapshots,
 --               BGG's hot list kept one run per refresh; hand-added below).
@@ -782,6 +785,77 @@ ALTER TABLE public.boardgamebuddy_bgg_push_queue ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_push_queue_user_created ON public.boardgamebuddy_bgg_push_queue USING btree (user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_bgb_push_queue_user_pending ON public.boardgamebuddy_bgg_push_queue USING btree (user_id, status) WHERE (status = 'pending'::text);
 GRANT SELECT ON public.boardgamebuddy_bgg_push_queue TO boardgamebuddy_role;
+
+
+-- ── Dev feedback board (migration 041) ───────────────────────────────────────
+-- What users want built next. Two lookup tables, the item, and its likes.
+--
+-- Type and topic are tables rather than a CHECK because each carries a label, an
+-- icon and a display order — the same test boardgamebuddy_chapter_types passes.
+-- `status` carries none of those and so stays a plain TEXT + CHECK, exactly like
+-- boardgamebuddy_chapter_reports, whose shape this table otherwise mirrors
+-- column for column.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_types (
+  id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  icon TEXT,
+  display_order INTEGER DEFAULT 0,
+  CONSTRAINT boardgamebuddy_feedback_types_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.boardgamebuddy_feedback_types ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_feedback_types TO boardgamebuddy_role;
+-- Seeded in 040: bug / feature / suggestion.
+
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_topics (
+  id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  icon TEXT,
+  display_order INTEGER DEFAULT 0,
+  CONSTRAINT boardgamebuddy_feedback_topics_pkey PRIMARY KEY (id)
+);
+ALTER TABLE public.boardgamebuddy_feedback_topics ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_feedback_topics TO boardgamebuddy_role;
+-- Seeded in 040: feed / play / game / profile / settings / notifications / discover.
+
+-- `body` is NOT NULL where chapter_reports' `reason` is nullable: there the text
+-- annotates other content, here it IS the content. No UNIQUE on the author
+-- either — filing two pieces of feedback means two things.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback (
+  id UUID DEFAULT gen_random_uuid() NOT NULL,
+  user_id UUID NOT NULL,
+  feedback_type TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT DEFAULT 'open'::text NOT NULL,
+  resolved_by UUID,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT boardgamebuddy_feedback_pkey PRIMARY KEY (id),
+  CONSTRAINT boardgamebuddy_feedback_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
+  CONSTRAINT boardgamebuddy_feedback_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
+  CONSTRAINT boardgamebuddy_feedback_feedback_type_fkey FOREIGN KEY (feedback_type) REFERENCES boardgamebuddy_feedback_types(id),
+  CONSTRAINT boardgamebuddy_feedback_topic_fkey FOREIGN KEY (topic) REFERENCES boardgamebuddy_feedback_topics(id),
+  CONSTRAINT boardgamebuddy_feedback_status_check CHECK ((status = ANY (ARRAY['open'::text, 'resolved'::text])))
+);
+ALTER TABLE public.boardgamebuddy_feedback ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_bgb_feedback_status_created ON public.boardgamebuddy_feedback USING btree (status, created_at DESC);
+GRANT SELECT ON public.boardgamebuddy_feedback TO boardgamebuddy_role;
+
+-- Shaped on boardgamebuddy_play_reactions: no surrogate id, the composite PK is
+-- the idempotency, and the count is never stored. `feedback_id` leads the PK so
+-- that index serves the count aggregate in bgb_feedback_list, which is why there
+-- is no second index here. Unlike reactions, a caller MAY like their own item —
+-- POST /feedback inserts the author's own like so a new item lands at 1.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_likes (
+  feedback_id UUID NOT NULL,
+  user_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT boardgamebuddy_feedback_likes_pkey PRIMARY KEY (feedback_id, user_id),
+  CONSTRAINT boardgamebuddy_feedback_likes_feedback_id_fkey FOREIGN KEY (feedback_id) REFERENCES boardgamebuddy_feedback(id) ON DELETE CASCADE,
+  CONSTRAINT boardgamebuddy_feedback_likes_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE
+);
+ALTER TABLE public.boardgamebuddy_feedback_likes ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_feedback_likes TO boardgamebuddy_role;
 
 
 -- ── Column documentation ─────────────────────────────────────────────────────
