@@ -2,7 +2,7 @@
 //
 // Sibling of ui/bgg-import-log.js, sharing ui/bgg-log-step.js but not its
 // narration: that one walks five import-specific counters (collection_imported,
-// plays_pending, unique_games_to_import) with no push analogue, and
+// plays_new, unique_games_to_import) with no push analogue, and
 // parameterising it would be the options-matrix anti-pattern
 // (.claude/rules/ui-object-design.md §2). Two components, one step primitive,
 // one CSS family.

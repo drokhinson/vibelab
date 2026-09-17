@@ -1,4 +1,4 @@
-"""BoardGameGeek account linking + collection/plays import.
+"""BoardGameGeek account linking + the COLLECTION sync.
 
 Flow:
   1. User links a BGG account (POST /bgg/link with username + password). The
@@ -9,16 +9,36 @@ Flow:
      via fetch_bgg_as_user, which transparently re-logs in when the cookies
      expire. Public catalog calls (search, /thing) keep going through
      fetch_bgg with just the shared bearer token.
-  3. Rows referencing games we already have are upserted immediately, including
-     the private fields (purchase price, private comments, …).
-  4. Rows referencing games we don't have are persisted as pending imports;
-     a BackgroundTask drains the queue by calling import_game_from_bgg() and
-     materializing the deferred collection / play rows.
+  3. Collection rows referencing games we already have are upserted
+     immediately, including the private fields (purchase price, private
+     comments, …).
+  4. Collection rows referencing games we don't have are persisted as pending
+     imports; a BackgroundTask drains the queue by calling
+     import_game_from_bgg() and materializing the deferred rows.
   5. The FE polls GET /bgg/sync/status until pending_count hits zero, and uses
      auth_state to decide between "Link", "Re-link required", and "Linked".
 
+THE PLAYS HALF IS A COUNT, NOT A WRITE. This module used to insert BGG plays
+into boardgamebuddy_plays directly — the one importer in the app that wrote
+plays nobody had reviewed, with the migration-023 roster rules re-implemented
+in _player_rows rather than enforced by bgb_log_play. Plays come in through the
+play importer now (POST /bgg/plays/pending → the wizard → POST /plays/import).
+What survives here is the read: the sync counts what BgB is missing so its done
+screen can offer "Import N plays", and parks the read it took
+(services/bgg_plays_cache.py) so the importer does not repeat it.
+
+Two consequences worth knowing:
+
+  * NOTHING QUEUES A kind='play' PENDING ROW ANY MORE. _materialize_plays,
+    _materialize_play, _play_row and _player_rows are kept as DRAIN-ONLY, for
+    the rows queued before this change — see the comment on _materialize_plays.
+  * A game that exists only to carry a play is no longer resolved or queued
+    here. The importer's Games step fetches those on demand, so nobody spends a
+    BGG /thing call on a game whose plays they never bring over.
+
 Idempotent: collection rows upsert on (user_id, game_id); plays dedup on
-(user_id, bgg_play_id). Re-running sync is always safe.
+(user_id, bgg_play_id), now enforced inside bgb_log_play (migration 044).
+Re-running sync is always safe.
 """
 
 import asyncio
@@ -40,9 +60,7 @@ from .game_routes import (
 from .bgg_client import (
     BggWarmUpError,
     clear_user_session,
-    fetch_bgg_as_user,
     linked_bgg_username,
-    parse_bgg_xml,
     store_user_credentials,
 )
 # The collection read layer lives in its own module now — the BgB->BGG
@@ -55,6 +73,10 @@ from .bgg_collection_read import (
     _fetch_collection_batched,
     collection_rows_from_items,
 )
+# The plays read moved out for the same reason the collection read did: a
+# second consumer. POST /bgg/plays/pending shows the plays this counts, and a
+# parser with a cheap mode is two parsers that drift.
+from .bgg_plays_read import existing_bgg_play_ids, fetch_all_plays
 from .bgg_credentials import login_to_bgg
 from .constants import auth_state_from
 from .dependencies import CurrentUser, get_current_user
@@ -65,7 +87,7 @@ from .models import (
     BggSyncStatus,
     BggSyncSummary,
 )
-from .services import bgg_check_cache
+from .services import bgg_check_cache, bgg_plays_cache
 from .services._helpers import chunked, reject_if_push_running
 
 logger = logging.getLogger(__name__)
@@ -403,10 +425,24 @@ def _queue_pending_rows(sb: Client, user_id: str, items: list[tuple]) -> int:
 def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
     """Bulk-insert plays + their players. `items` is [(game_row, play_payload)].
 
+    DRAIN-ONLY SINCE MIGRATION 044. Nothing queues a kind='play' row any more —
+    BoardGameGeek plays come in through the importer, reviewed, via
+    POST /plays/import. This still runs because _process_pending_imports has to
+    finish draining the rows queued before that change, and a queued play the
+    user was already promised must not be dropped on the floor. Do not delete
+    it as dead code; when
+
+        SELECT count(*) FROM boardgamebuddy_bgg_pending_imports
+         WHERE kind = 'play' AND status = 'pending';
+
+    reaches zero across the fleet, this and its three helpers can go.
+
     Dedup is one batched SELECT against the partial UNIQUE on
     (user_id, bgg_play_id) (001_baseline.sql:169-171) instead of a probe per
-    play. Rows the account already has are skipped without touching their
-    players, exactly as the per-play path did.
+    play — shared with the importer's preview as
+    bgg_plays_read.existing_bgg_play_ids, so the two cannot disagree about what
+    "already here" means. Rows the account already has are skipped without
+    touching their players, exactly as the per-play path did.
 
     Plays with no bgg_play_id can't be matched back to their inserted id by
     key, so they fall through to the single-row path. BGG always supplies one,
@@ -437,16 +473,7 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
     if not keyed:
         return
 
-    already: set = set()
-    for chunk in chunked(sorted(keyed), _BATCH):
-        res = (
-            sb.table("boardgamebuddy_plays")
-            .select("bgg_play_id")
-            .eq("user_id", user_id)
-            .in_("bgg_play_id", chunk)
-            .execute()
-        )
-        already.update(r["bgg_play_id"] for r in (res.data or []))
+    already = existing_bgg_play_ids(sb, user_id, keyed.keys())
 
     fresh = [(bgg_play_id, keyed[bgg_play_id]) for bgg_play_id in sorted(keyed)
              if bgg_play_id not in already]
@@ -471,70 +498,6 @@ def _materialize_plays(sb: Client, user_id: str, items: list[tuple]) -> None:
 
     for chunk in chunked(player_rows, _BATCH):
         sb.table("boardgamebuddy_play_players").insert(chunk).execute()
-
-
-# ── BGG XML parsing ──────────────────────────────────────────────────────────
-
-
-def _parse_plays(body: str, *, username: str) -> tuple[list[dict], int]:
-    """Parse a BGG /plays page into (rows, total).
-
-    Each row: {bgg_play_id, bgg_id, played_at, notes, players[]}. `total` is the
-    server-reported count so the caller knows when to stop paginating.
-    """
-    root = parse_bgg_xml(body, context=f"plays user={username!r}")
-    try:
-        total = int(root.get("total", "0"))
-    except (TypeError, ValueError):
-        total = 0
-
-    rows: list[dict] = []
-    for play_el in root.findall("play"):
-        try:
-            bgg_play_id = int(play_el.get("id", "0"))
-        except (TypeError, ValueError):
-            continue
-        if not bgg_play_id:
-            continue
-
-        played_at = play_el.get("date") or None
-        # BGG sometimes returns date="" for incomplete plays — skip those.
-        if not played_at:
-            continue
-
-        item_el = play_el.find("item")
-        if item_el is None:
-            continue
-        try:
-            bgg_id = int(item_el.get("objectid", "0"))
-        except (TypeError, ValueError):
-            continue
-        if not bgg_id:
-            continue
-
-        comments_el = play_el.find("comments")
-        notes = comments_el.text if comments_el is not None else None
-
-        players: list[dict] = []
-        players_el = play_el.find("players")
-        if players_el is not None:
-            for p in players_el.findall("player"):
-                name = (p.get("name") or "").strip()
-                if not name:
-                    continue
-                players.append({
-                    "name": name,
-                    "is_winner": p.get("win") == "1",
-                })
-
-        rows.append({
-            "bgg_play_id": bgg_play_id,
-            "bgg_id": bgg_id,
-            "played_at": played_at,
-            "notes": notes,
-            "players": players,
-        })
-    return rows, total
 
 
 # ── Worker ───────────────────────────────────────────────────────────────────
@@ -660,47 +623,27 @@ async def _process_pending_imports(user_id: str) -> None:
 # ── Sync core ────────────────────────────────────────────────────────────────
 
 
-async def _fetch_all_plays(user_id: str, username: str) -> list[dict]:
-    """Pull every page of /plays for a user (BGG returns 100 per page).
-
-    Uses cookie auth so private plays — and any future write actions — are
-    available, mirroring the collection sync.
-    """
-    page = 1
-    out: list[dict] = []
-    while True:
-        body = await fetch_bgg_as_user(
-            user_id,
-            "/plays",
-            {"username": username, "page": page},
-            timeout=20.0,
-        )
-        rows, total = _parse_plays(body, username=username)
-        out.extend(rows)
-        # Stop when we've collected all of them or the page returned nothing.
-        if not rows or len(out) >= total:
-            return out
-        page += 1
-        # Safety cap: BGG accounts rarely exceed a few thousand plays. 50 pages
-        # = 5000 plays; beyond that we bail to avoid runaway loops on malformed
-        # responses.
-        if page > 50:
-            return out
-
-
 async def _run_sync(
     user_id: str,
     username: str,
     *,
     swept_items: list[BggCollectionItem] | None = None,
 ) -> BggSyncSummary:
-    """Pull collection + plays from BGG, materialize knowns, queue unknowns.
+    """Pull the collection from BGG, materialize knowns, queue unknowns — and
+    COUNT the plays that are missing without writing any of them.
 
     `swept_items` is a collection read a comparison already made, handed over so
     the import does not spend eight throttled requests re-reading what it was
-    just shown (services/bgg_check_cache.py). Only the collection half is ever
-    reusable — a check never touches /plays, and quietly skipping those would
-    turn "Import from BoardGameGeek" into "import some of it".
+    just shown (services/bgg_check_cache.py).
+
+    WHY THE PLAYS ARE STILL READ HERE when nothing writes them. The done screen
+    offers "Import N plays", and it cannot offer a number it has not counted.
+    Reading is also the only way to tell an account with nothing new from one
+    whose history we failed to reach — which is what `plays_read_failed` is
+    for, and why a warm-up exhaustion must never be reported as zero.
+
+    The read is parked for the importer (services/bgg_plays_cache.py) so the
+    user who taps that button does not wait for the same paginated walk twice.
     """
     sb = get_supabase()
 
@@ -730,21 +673,31 @@ async def _run_sync(
     else:
         collection_rows, coll_warm_up = await _fetch_collection_batched(user_id, username)
 
+    plays_read_at = datetime.now(timezone.utc)
     plays_warm_up = False
     try:
-        play_rows = await _fetch_all_plays(user_id, username)
+        play_rows = await fetch_all_plays(user_id, username)
     except BggWarmUpError:
         logger.warning("BGG plays fetch warm-up exhausted user=%s", user_id)
         play_rows = []
         plays_warm_up = True
+    else:
+        # Park it for POST /bgg/plays/pending, which the done screen's CTA is
+        # about to call. An unread history is deliberately NOT cached — see
+        # services/bgg_plays_cache.py.
+        bgg_plays_cache.store(user_id, fetched_at=plays_read_at, plays=play_rows)
 
-    # Resolve known bgg_ids in two batched queries.
-    all_bgg_ids = {bid for bid, _, _ in collection_rows} | {p["bgg_id"] for p in play_rows}
-    known = await asyncio.to_thread(_existing_game_map, sb, sorted(all_bgg_ids))
+    # Resolve known bgg_ids for the COLLECTION only. A game that exists solely
+    # to carry a play is no longer this sync's problem: the importer's Games
+    # step fetches those on demand, so nobody pays for a /thing call on a game
+    # whose plays they never bring over.
+    known = await asyncio.to_thread(
+        _existing_game_map, sb, sorted({bid for bid, _, _ in collection_rows})
+    )
 
     # Sort each row into "we know this game" or "queue it for the worker",
-    # then write each bucket in bulk. The per-row loops this replaces cost one
-    # round trip per collection game and 2+players per play.
+    # then write each bucket in bulk. The per-row loop this replaces cost one
+    # round trip per collection game.
     coll_known: list[tuple] = []
     pending: list[tuple] = []
     for bgg_id, status, private in collection_rows:
@@ -754,51 +707,42 @@ async def _run_sync(
         else:
             pending.append((bgg_id, "collection", {"status": status, "private": private}))
 
-    plays_known: list[tuple] = []
-    for play in play_rows:
-        bgg_id = play["bgg_id"]
-        play_payload = {
-            "bgg_play_id": play["bgg_play_id"],
-            "played_at": play["played_at"],
-            "notes": play.get("notes"),
-            "players": play.get("players") or [],
-        }
-        game_row = known.get(bgg_id)
-        if game_row is not None:
-            plays_known.append((game_row, play_payload))
-        else:
-            pending.append((bgg_id, "play", play_payload))
-
     # Counts stay row-based, not statement-based, so the summary the FE renders
     # means the same thing it did before.
     coll_imported = len(coll_known)
-    plays_imported = len(plays_known)
-    coll_pending = sum(1 for _, kind, _ in pending if kind == "collection")
-    plays_pending = sum(1 for _, kind, _ in pending if kind == "play")
+    coll_pending = len(pending)
 
     def _apply_writes() -> None:
         _upsert_collection_rows(sb, user_id, coll_known)
-        _materialize_plays(sb, user_id, plays_known)
         _queue_pending_rows(sb, user_id, pending)
 
     await asyncio.to_thread(_apply_writes)
 
-    total = coll_imported + coll_pending + plays_imported + plays_pending
-    warm_up_retry_pending = (coll_warm_up or plays_warm_up) and total == 0
+    # The plays half is a COUNT. One batched read against the partial UNIQUE on
+    # (user_id, bgg_play_id), which is the only column that can see every
+    # writer at once — the retired sync path, the pending-imports worker still
+    # draining kind='play' rows, and the importer.
+    if play_rows:
+        already = await asyncio.to_thread(
+            existing_bgg_play_ids, sb, user_id, [p["bgg_play_id"] for p in play_rows]
+        )
+        plays_new = len({p["bgg_play_id"] for p in play_rows} - already)
+    else:
+        plays_new = 0
+
+    warm_up_retry_pending = coll_warm_up and (coll_imported + coll_pending) == 0
 
     # Distinct BGG ids queued for the worker — one /thing fetch per id, so
     # this is the meaningful "Y" in the FE's "Importing X of Y games" UI.
-    # Collection + play rows can both reference the same missing game, so
-    # naively adding the two pending counts inflates the apparent work.
-    unique_to_import = len({bid for bid, _, _ in collection_rows if bid not in known} |
-                            {p["bgg_id"] for p in play_rows if p["bgg_id"] not in known})
+    unique_to_import = len({bid for bid, _, _ in collection_rows if bid not in known})
 
     return BggSyncSummary(
         bgg_username=username,
         collection_imported=coll_imported,
         collection_pending=coll_pending,
-        plays_imported=plays_imported,
-        plays_pending=plays_pending,
+        plays_new=plays_new,
+        plays_total=len(play_rows),
+        plays_read_failed=plays_warm_up,
         unique_games_to_import=unique_to_import,
         warm_up_retry_pending=warm_up_retry_pending,
     )
@@ -855,18 +799,21 @@ async def unlink_bgg(
     "/bgg/sync",
     response_model=BggSyncSummary,
     status_code=200,
-    summary="Sync collection + plays from BGG",
+    summary="Sync the collection from BGG, and count the plays that are missing",
 )
 async def sync_bgg(
     background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> BggSyncSummary:
-    """Pull the linked BGG account's collection and plays.
+    """Pull the linked BGG account's collection, and count its unimported plays.
 
     Games already in our catalog are written immediately. Games we don't have
     yet are persisted as pending imports and a background task drains them
     after fetching each missing game from BGG (one BGG call per unique game,
     ~1.5s apart).
+
+    Plays are counted and not written — `plays_new` is what the done screen's
+    hand-off into the play importer is about. See the module docstring.
     """
     sb = get_supabase()
     username = linked_bgg_username(sb, user.user_id)

@@ -39,6 +39,7 @@
   window.importNotesBranch = new window.ImportNotesBranch();
   window.importPhotosBranch = new window.ImportPhotosBranch();
   window.importBgaBranch = new window.ImportBgaBranch();
+  window.importBggBranch = new window.ImportBggBranch();
   window.importWizardView = new window.ImportWizardView();
   window.importsView    = new window.ImportsView();
   window.importDetailView = new window.ImportDetailView();

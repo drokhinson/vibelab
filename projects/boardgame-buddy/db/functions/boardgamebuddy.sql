@@ -1,6 +1,16 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 043_bga_import.sql (replaces bgb_log_play: it persists and
+-- Last updated: 044_play_bgg_play_id.sql (re-emits bgb_log_play AGAIN, on top
+--               of 043's body rather than 023's, so it reads, dedups on and
+--               writes bgg_play_id WITHOUT dropping bga_table_id. A third
+--               duplicate pre-check keys on (user_id, bgg_play_id), which is
+--               the only one that can see plays the retired POST /bgg/sync
+--               write path landed — those carry no client_key. The
+--               unique_violation handler resolves the winner across all three
+--               keys now: three unique indexes can fire, and resolving on the
+--               wrong one returns id: null. Signature and success shape
+--               unchanged.)
+--               Before that: 043_bga_import.sql (replaces bgb_log_play: it persists and
 --               dedupes on plays.bga_table_id, and its unique_violation
 --               handler now resolves on either unique key rather than on
 --               client_key alone.)
@@ -738,9 +748,10 @@
 --     or {"error": "game_not_found"}
 --     or {"error": "no_players"} / {"error": "duplicate_player"} (023)
 --     or {"duplicate": true, "id": <uuid>} when p_payload.client_key is one
---     this user already has a play for (048), or p_payload.bga_table_id is a
---     Board Game Arena table they already imported (040) — the caller re-reads
---     that row.
+--     this user already has a play for (048), p_payload.bga_table_id is a
+--     Board Game Arena table they already imported (043), or
+--     p_payload.bgg_play_id is a BoardGameGeek play they already have
+--     (044) — the caller re-reads that row.
 --   p_payload mirrors models.PlayCreate (a PlayCreate.model_dump(mode="json")).
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/042_write_rpcs.sql)
@@ -789,6 +800,20 @@
 --                  client_key alone returned {"duplicate": true, "id": null}
 --                  for a caller that sent only a table id — a wrong answer
 --                  that raises nothing.)
+--               db/migrations/boardgamebuddy/044_play_bgg_play_id.sql
+--                 (reads p_payload.bgg_play_id, pre-checks
+--                  (user_id, bgg_play_id) for a stored play and returns the
+--                  duplicate envelope, and writes the column. BoardGameGeek
+--                  plays are written by the importer now — POST /bgg/sync no
+--                  longer inserts them — and this pre-check is the only one
+--                  that can see the plays the retired sync path wrote, because
+--                  those carry no client_key. Built on 043's body, not 023's:
+--                  re-emitting the older one would have dropped bga_table_id
+--                  and its dedup with nothing raising. Widens the
+--                  unique_violation handler a second time — three indexes can
+--                  fire now, and the BGG arm is also the only thing that can
+--                  resolve a race against the pending-imports worker, which
+--                  writes a bgg_play_id and no client_key.)
 --   Called by:  shared-backend/routes/boardgame_buddy/play_routes.py
 --               (log_play — POST /plays) and SQL-internally by
 --               bgb_finalize_session

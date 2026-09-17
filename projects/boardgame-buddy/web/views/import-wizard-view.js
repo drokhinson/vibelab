@@ -19,23 +19,27 @@
 // its blocker, the step arithmetic, the error banner, the review's open rows,
 // the write, and close-and-discard. Each branch
 // (widgets/import-notes-branch.js, widgets/import-photos-branch.js,
-// widgets/import-bga-branch.js) owns its own markup, its own handlers and its
+// widgets/import-bga-branch.js, widgets/import-bgg-branch.js) owns its own
+// markup, its own handlers and its
 // own draft model, and answers a small contract: `steps`, `renderStep`,
 // `continueBlocker`, `stepNext`, `stepBack`, `navLabel`, `onEnter`,
 // `resetFormState`, `sourceKey`, `draft`.
 //
-// The three drafts stay three models on purpose — a parse → name-map →
-// run-collapse machine, an EXIF → per-file upload machine, and a
-// sign-in → sweep → handle-map machine — and what makes one review render all
-// of them is that they answer one interface (domain/import-draft.js,
-// `@typedef ImportSource`).
+// The four drafts stay four models on purpose — a parse → name-map →
+// run-collapse machine, an EXIF → per-file upload machine, a
+// sign-in → sweep → handle-map machine, and a fetch → name-map → game-map
+// machine — and what makes one review render all of them is that they answer
+// one interface (domain/import-draft.js, `@typedef ImportSource`). Nothing in
+// this file may branch on `sourceKey`; when a source needs something said its
+// own way, the interface grows a method and every model answers it
+// (`resumeLabel`, `gameOf`).
 //
 // ─── Two things that look odd and are not ────────────────────────────────────
 //
 // 1. THE SOURCE PICKER SHOWS NO PROGRESS BAR. The branches are different
 //    lengths (6 steps for a note, 4 for a camera roll, 5 for Board Game
-//    Arena), so a counter before the branch is known would have to promise a
-//    number nobody can know yet.
+//    Arena, 5 for BoardGameGeek), so a counter before the branch is known
+//    would have to promise a number nobody can know yet.
 //    Once a source is picked the bar counts that branch's real path, and a user
 //    only ever walks one, so the lengths differing is invisible.
 //
@@ -71,8 +75,24 @@
      * because onMount has to decide whether to restore it first.
      */
     _resetFormState() {
-      /** @type {"notes"|"photos"|"bga"|null} null until a source is picked. */
+      /** @type {"notes"|"photos"|"bga"|"bgg"|null} null until a source is picked. */
       this._source = null;
+      /**
+       * The BoardGameGeek link state, for the picker's BGG row.
+       *
+       * DELIBERATELY NOT CLEARED between mounts, unlike everything else here.
+       * It is a cached answer rather than form state, and nulling it would
+       * flash the row back to "Checking" every time the wizard reopens. It is
+       * re-read on every mount anyway, so a stale one is corrected within a
+       * round trip — and the row is disabled until the fresh answer says
+       * otherwise if this is the first open.
+       * @type {"linked"|"unlinked"|"relink_required"|null}
+       */
+      this._bggAuth = this._bggAuth || null;
+      // Monotonic, and advancing rather than restarting, for the same reason
+      // _importSeq below is: a link-state read from a previous mount must not
+      // paint over this one's picker.
+      this._authSeq = (this._authSeq || 0) + 1;
       /** @type {any} The live branch, or null on the picker. */
       this._branch = null;
       this._importing = false;
@@ -93,19 +113,21 @@
         window.importNotesBranch,
         window.importPhotosBranch,
         window.importBgaBranch,
+        window.importBggBranch,
       ].filter(Boolean);
     }
 
     /**
-     * A lookup rather than a ternary: with three sources a chain of them is
+     * A lookup rather than a ternary: with four sources a chain of them is
      * one edit away from silently resolving an unknown key to the last arm.
-     * @param {"notes"|"photos"|"bga"} source
+     * @param {"notes"|"photos"|"bga"|"bgg"} source
      */
     _branchFor(source) {
       return {
         notes: window.importNotesBranch,
         photos: window.importPhotosBranch,
         bga: window.importBgaBranch,
+        bgg: window.importBggBranch,
       }[source] || null;
     }
 
@@ -132,11 +154,42 @@
       if (!saved && asked && window.ImportDraft.SOURCES.indexOf(asked) !== -1) {
         this._enter(asked, { skipRender: true });
         // The two retired paths resolve here through route aliases, so the
-        // address bar still says /settings/import-plays. replaceUrl rather
-        // than history.replaceState, because it stamps the back guard.
+        // address bar still says /settings/import-plays. The BGG sync's done
+        // screen arrives the same way, as ?source=bgg. replaceUrl rather than
+        // history.replaceState, because it stamps the back guard.
         window.router.replaceUrl("import-wizard", {});
       }
       this.render();
+      // Not awaited, and after the first paint: the picker has to land in the
+      // same frame as the tap that opened it (.claude/rules/web-frontend.md),
+      // so the BoardGameGeek row starts disabled and settles a moment later.
+      this._loadBggAuth();
+    }
+
+    /**
+     * Which of Link / Linked / Reconnect the BoardGameGeek row should show.
+     *
+     * The same GET /bgg/sync/status Settings reads it from — one source for
+     * the answer, so the picker and the Connections card cannot disagree about
+     * whether an account is usable. A failure leaves the row disabled, which
+     * is the honest outcome: we do not know, and the branch's first step says
+     * so properly if the user gets there another way.
+     */
+    async _loadBggAuth() {
+      const seq = ++this._authSeq;
+      let status;
+      try {
+        status = await window.Bgg.status();
+      } catch (_) {
+        return;
+      }
+      if (seq !== this._authSeq) return;
+      const next = (status && status.auth_state) || "unlinked";
+      if (next === this._bggAuth) return;
+      this._bggAuth = next;
+      // Only the picker shows it. Repainting a branch mid-step to change a row
+      // the user cannot see would drop whatever they were typing into.
+      if (!this._branch) this.render();
     }
 
     async onUnmount() {
@@ -222,7 +275,10 @@
       const d = this._draft;
       if (!d) {
         this.container.innerHTML = this._chrome(
-          window.ImportSourceStep.render({ resume: this._resumeOffer() }),
+          window.ImportSourceStep.render({
+            resume: this._resumeOffer(),
+            bggAuth: this._bggAuth,
+          }),
           { hideNav: true });
         this.refreshIcons();
         this._scroller.observe(null);
@@ -299,28 +355,20 @@
     /**
      * The Resume row's label, or null when there is nothing to resume.
      *
-     * A switch rather than a ternary chain, for the same reason _branchFor is
-     * a lookup: with three sources, "the last arm catches everything" stops
-     * being obviously right.
+     * Asked of the model. This used to branch on sourceKey and reach into each
+     * model's own fields to build the sentence — which is exactly the
+     * source-specific knowledge this file's header says it holds none of, and
+     * which every new source could only join by growing another arm.
      */
     _resumeOffer() {
       if (!this._resume) return null;
-      const m = this._resume.model;
-      let label;
-      if (m.sourceKey === "notes") {
-        const n = m.liveCount;
-        label = `A note with ${n} play${n === 1 ? "" : "s"} read out of it`;
-      } else if (m.sourceKey === "photos") {
-        const n = m.shots.length;
-        label = `${n} photo${n === 1 ? "" : "s"} you were still assigning`;
-      } else {
-        const n = m.liveCount;
-        label = `${n} Board Game Arena table${n === 1 ? "" : "s"} you were still assigning`;
-      }
-      return { source: this._resume.source, label };
+      return {
+        source: this._resume.source,
+        label: this._resume.model.resumeLabel(),
+      };
     }
 
-    /** @param {"notes"|"photos"|"bga"} source */
+    /** @param {"notes"|"photos"|"bga"|"bgg"} source */
     _pickSource(source) {
       // Picking a source discards any OTHER source's unfinished draft — there
       // is one import at a time, and two half-finished ones in localStorage is
@@ -341,7 +389,7 @@
       this.render();
     }
 
-    /** @param {"notes"|"photos"|"bga"} source */
+    /** @param {"notes"|"photos"|"bga"|"bgg"} source */
     _enter(source, opts) {
       this._source = source;
       this._branch = this._branchFor(source);

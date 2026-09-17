@@ -111,6 +111,24 @@
 
     static pushStatus() { return window.api.get("/bgg/push/status"); }
 
+    // ── The plays the importer hasn't seen ───────────────────────────────────
+
+    /**
+     * Every BGG play with no row in BgB yet — the play importer's BoardGameGeek
+     * source, and the only caller.
+     *
+     * Kept here beside the rest of the BGG surface rather than in the draft
+     * model, so the deadline argument above lives in one place: this walks the
+     * same paginated third-party API POST /bgg/sync does, inside the handler,
+     * and the client's 15s default aborts a mid-size account routinely.
+     *
+     * A POST despite reading nothing but BoardGameGeek — see the endpoint's own
+     * docstring. It writes nothing to BgB.
+     */
+    static pendingPlays() {
+      return window.api.post("/bgg/plays/pending", {}, { timeoutMs: SYNC_TIMEOUT_MS });
+    }
+
     /**
      * True once the catalog fill a comparison kicked off has landed.
      *

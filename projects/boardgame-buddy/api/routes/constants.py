@@ -629,6 +629,16 @@ MAX_IMPORT_PLAYS = 500
 # plausible; anything past this is the model mis-reading a number.
 MAX_REPEAT_COUNT = 300
 
+# Plays returned by one POST /bgg/plays/pending, newest first. Matched to
+# MAX_IMPORT_PLAYS on purpose — the importer's review, its localStorage draft
+# and its chunked write are sized for that number whatever the source is.
+#
+# Truncating is safe in a way it would not be for a pasted note: every play the
+# importer lands keeps its bgg_play_id, so the next preview excludes it and
+# "run it again for the rest" is a loop that terminates. A BGG account with
+# 1,240 plays imports in three passes rather than one, and the review says so.
+MAX_BGG_PENDING_PLAYS = 500
+
 # Plays per POST /plays/import call. The client chunks to this so a long import
 # reports real progress and a failure costs one chunk, not the whole run.
 IMPORT_CHUNK_MAX = 50

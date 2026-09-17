@@ -124,15 +124,7 @@
         // nothing downstream of it changed: no cache to drop, no screen to
         // repaint, nothing to announce.
         if (!(opts && opts.silent)) {
-          // The catalog pages and every cached library search predate this
-          // row; both would otherwise keep answering "not here" for a game
-          // that now is. Dropped here rather than at a call site so it happens
-          // whether or not anything is still mounted.
-          if (window.bgbCache) window.bgbCache.clear(CATALOG_NS);
-          window.Game.invalidateSearch();
-          // Screens repaint off this rather than a callback the sheet would
-          // have taken to its grave when the user closed it.
-          document.dispatchEvent(new CustomEvent("bgg-imported", { detail: { game } }));
+          BggImport.catalogChanged(game);
           BggImport.notify(jobs.get(bggId));
         }
       } catch (e) {
@@ -185,6 +177,28 @@
     notify(job) {
       if (!job || !window.BggImportToast) return;
       window.BggImportToast.show(job);
+    },
+
+    /**
+     * The catalog just gained a row: drop what predates it and say so.
+     *
+     * The catalog pages and every cached library search answer "not here" for
+     * a game that now is, and screens repaint off the event rather than off a
+     * callback the sheet would have taken to its grave when the user closed
+     * it. Dropped here rather than at a call site so it happens whether or not
+     * anything is still mounted.
+     *
+     * Named rather than inlined into start() because a caller importing SEVERAL
+     * games — the play importer's BoardGameGeek branch, resolving a whole
+     * history's worth at once — wants `silent: true` per game and exactly one
+     * of these at the end. Per-game it would drop the same caches twenty times
+     * and stack twenty toasts over the step the user is working on.
+     * @param {any} [game] The row that landed, for the event's detail.
+     */
+    catalogChanged(game) {
+      if (window.bgbCache) window.bgbCache.clear(CATALOG_NS);
+      window.Game.invalidateSearch();
+      document.dispatchEvent(new CustomEvent("bgg-imported", { detail: { game: game || null } }));
     },
 
     /** Subscribe to job changes. Returns an unsubscribe fn. @param {() => void} fn */

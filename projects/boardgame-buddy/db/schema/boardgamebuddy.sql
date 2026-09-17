@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 043_bga_import.sql (bga_* on boardgamebuddy_profiles,
+-- Last updated: 044_play_bgg_play_id.sql (no table shape moves — it re-emits
+--               bgb_log_play. The one schema fact is the COMMENT ON
+--               boardgamebuddy_plays.bgg_play_id at the foot, naming the two
+--               writers that column now has.)
+--               Before that: 043_bga_import.sql (bga_* on boardgamebuddy_profiles,
 --               bga_table_id on boardgamebuddy_plays, and the
 --               boardgamebuddy_bga_player_links table; hand-added below).
 --               Before that: 042_release_notices.sql (boardgamebuddy_release_notices, plus
@@ -66,7 +70,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   bgg_owned_count INTEGER,
   bgg_stats_synced_at TIMESTAMPTZ,
   -- BGG boardgamepublisher links in BGG's order, capped at 4 by the import
-  -- (migration 040). Nullable with no default, unlike categories/mechanics:
+  -- (migration 043). Nullable with no default, unlike categories/mechanics:
   -- NULL = never synced and is the queue marker for
   -- POST /games/admin/backfill-publishers; '{}' = synced, BGG credits nobody.
   publishers TEXT[],
@@ -951,6 +955,7 @@ COMMENT ON COLUMN public.boardgamebuddy_collections.played_before_at IS 'Set whe
 COMMENT ON TABLE public.boardgamebuddy_countries IS 'ISO 3166-1 alpha-2 → continent, for the location achievements (migration 068). The code set is exactly the one web/domain/geo-data.js can produce, so no country the app can detect or offer is missing a continent.';
 COMMENT ON COLUMN public.boardgamebuddy_play_players.round_scores IS 'Per-round score breakdown as a JSON array of nullable ints, e.g. [5, 8, null, 12]. NULL when no rounds were tracked (<= 1 round). The `score` column still holds the final total for backward compatibility and quick aggregation.';
 COMMENT ON COLUMN public.boardgamebuddy_play_session_participants."position" IS 'Host-assigned column order, 0-based. NULL = never ordered; see bgb_session_bundle''s (position NULLS LAST, joined_at) sort.';
+COMMENT ON COLUMN public.boardgamebuddy_plays.bgg_play_id IS 'The BoardGameGeek play id this row came from. Written by the importer''s BoardGameGeek source (through bgb_log_play, migration 044) and by the pending-imports worker still draining kind=''play'' rows queued before 044. The partial UNIQUE idx_bgb_plays_user_bgg_play is what makes re-importing from BGG a no-op.';
 COMMENT ON COLUMN public.boardgamebuddy_plays.client_key IS 'Client-generated idempotency key for offline-queued plays. NULL for live writes.';
 COMMENT ON COLUMN public.boardgamebuddy_plays.country_code IS 'ISO 3166-1 alpha-2 country where the play happened, uppercase. Resolved by the client from the device timezone (or picked by the host in Settle Up); NULL when unknown, and NULL on every row predating migration 065. Feeds a future popularity-by-country view and nothing today.';
 COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Denormalised snapshot of the scoring grid this play was scored with: {"v":1,"chapter_id":…,"title":…,"rows":[…],"parts":[…]}. NOT a foreign key, on purpose. The chapter is community-owned, editable by its author and deletable by author or admin, so a play holding only an id would render bare R1..Rn the moment a moderator cleared the chapter, and would silently RELABEL a two-year-old play if the author reordered its rows — labels that stop describing the numbers under them is precisely the failure widgets/round-score-grid.js is written to prevent. ON DELETE SET NULL loses the labels and CASCADE deletes plays, so neither constraint tells the truth. chapter_id rides INSIDE the document as provenance: a bare uuid column would imply an integrity the database is not enforcing. Same reasoning as game_name / game_thumbnail_url on this table. `rows` may be COMPOSED from several grids (migration 032) — a base game''s plus each add-on expansion''s, the add-ons appended in ascending BGG id so every client composes the same scorepad — in which case `chapter_id` names the grid that supplied the leading rows and `parts` lists every contributor in row order as {chapter_id,game_id,game_name,mode,row_count}. A row an add-on contributed also carries that expansion''s `source_color` (boardgamebuddy_games.expansion_color), which draws a rule down the RIGHT edge of its header cell (the left edge carries the row''s own palette tint, so the two never collide); the leading grid''s rows carry none. `parts` is absent, and no row carries a source_color, when one grid supplied the whole thing — so a pre-032 snapshot reads exactly as it always did.';

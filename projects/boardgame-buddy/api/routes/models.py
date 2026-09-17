@@ -331,21 +331,36 @@ class BggLinkResponse(BaseModel):
 
 
 class BggSyncSummary(BaseModel):
-    """Result of POST /bgg/sync.
+    """Result of POST /bgg/sync — a COLLECTION sync that also counts plays.
 
-    Counts that landed in their respective tables synchronously plus the
-    pending counts that the background worker will drain after importing
-    the missing games from BGG.
+    Collection counts landed in their respective tables synchronously, plus the
+    pending count the background worker will drain after importing the missing
+    games from BGG.
+
+    Plays are DETECTED here and imported elsewhere. This endpoint used to write
+    them too; they go through the play importer now (POST /bgg/plays/pending →
+    the wizard → POST /plays/import), so that nothing reaches
+    boardgamebuddy_plays the user has not reviewed. The fields below were
+    `plays_imported` / `plays_pending` and were RENAMED rather than left at
+    zero: a count that silently means something else is the quietly-wrong
+    number this whole change is about.
     """
     bgg_username: str
     collection_imported: int
     collection_pending: int
-    plays_imported: int
-    plays_pending: int
+    # BGG plays with no row in boardgamebuddy_plays for this user yet. Drives
+    # the done screen's "Import N plays" hand-off into the importer.
+    plays_new: int = 0
+    # Every play on the BGG account, for the copy around the number above.
+    plays_total: int = 0
+    # True when the /plays read ran out of warm-up retries. Without this a
+    # failed read is indistinguishable from "nothing new", and the done screen
+    # would hide the importer hand-off from an account with hundreds waiting.
+    plays_read_failed: bool = False
     # Count of distinct BGG game ids queued by this sync (one BGG /thing call
-    # per id). Drives the "Importing X of Y" progress bar. Distinct from
-    # collection_pending + plays_pending, which double-count a single game
-    # that needs both a collection row and a play row.
+    # per id). Drives the "Importing X of Y" progress bar. Collection-only
+    # since plays stopped being written here — a game that exists solely to
+    # carry a play is the importer's to fetch, on demand, in its Games step.
     unique_games_to_import: int = 0
     # True when BGG kept returning "still preparing" for every batch and the
     # sync ended up with nothing to import. The FE shows a "try again shortly"
@@ -611,6 +626,76 @@ class GameListResponse(BaseModel):
     per_page: int
 
 
+# ── BoardGameGeek plays, as the importer previews them ────────────────────────
+#
+# These live down here rather than up with the other Bgg* models because each
+# row carries a resolved GameSummary, and GameSummary is defined above. The
+# alternative was a forward reference plus a model_rebuild() at the foot of the
+# file, which is machinery for nothing.
+
+
+class BggPendingPlayer(BaseModel):
+    """One seat on a BGG play, before the importer maps it onto anybody."""
+    # BGG's own display name for the seat, or their handle when the play only
+    # recorded one. Never empty — the parser drops a seat that names nobody.
+    name: str
+    # The BGG account at this seat, when the play records one. This is what
+    # lets the importer seat the syncing user without guessing at a name
+    # match, and it is the only field here that is an identity rather than a
+    # label.
+    username: str | None = None
+    is_winner: bool = False
+
+
+class BggPendingPlay(BaseModel):
+    """One BGG play this account has not imported yet."""
+    bgg_play_id: int
+    bgg_id: int
+    # BGG's name for the game, kept even when `game` resolves — the Games step
+    # has to be able to say what it is asking about, and a game the catalog
+    # lacks has nothing else to be called.
+    bgg_game_name: str | None = None
+    played_at: date
+    notes: str | None = None
+    # BGG lets one play stand for N sittings. Echoed, never expanded: N rows
+    # would share one bgg_play_id and the partial UNIQUE would reject all but
+    # the first. The review warns about it instead.
+    quantity: int = 1
+    players: list[BggPendingPlayer] = []
+    # The catalog row for `bgg_id`, or None when BgB has never seen this game.
+    # The importer's Games step imports those on demand rather than the server
+    # queueing every one of them — a user only pays for the games whose plays
+    # they are actually bringing over.
+    game: GameSummary | None = None
+
+
+class BggPendingPlaysResponse(BaseModel):
+    """Result of POST /bgg/plays/pending — the importer's BoardGameGeek source.
+
+    `total_new` counts every play that is missing, `plays` carries at most
+    MAX_BGG_PENDING_PLAYS of them (newest first). The two differ on a large
+    history, which is what `truncated` is for: every imported play keeps its
+    bgg_play_id, so "run it again for the rest" is a loop that terminates.
+    """
+    bgg_username: str
+    plays: list[BggPendingPlay] = []
+    total_new: int = 0
+    truncated: bool = False
+    fetched_at: datetime
+    # True when this was served from the read a sync had just taken
+    # (services/bgg_plays_cache.py) rather than by walking BGG again. Reported
+    # so a slow first preview and an instant one are distinguishable in logs.
+    reused_read: bool = False
+    # True when the /plays read ran out of warm-up retries. `plays` is then
+    # empty and that emptiness means "we could not look", not "nothing new".
+    read_failed: bool = False
+    # Distinct player names across `plays`, first-seen order and first-seen
+    # casing — the rows of the importer's Players step. Same rule as
+    # play_import_service.distinct_player_names: a name written "Mick" must not
+    # come back "mick" because a later play happened to lowercase it.
+    players: list[str] = []
+
+
 class BggSearchResult(BaseModel):
     bgg_id: int
     name: str
@@ -835,6 +920,18 @@ class PlayCreate(BaseModel):
     # be imported repeatedly and only ever offer what is new. Set ONLY by the
     # wizard's BGA branch; every other origin leaves it None.
     bga_table_id: int | None = None
+    # Migration 044. The BoardGameGeek play this row came from, set ONLY by the
+    # importer's BoardGameGeek source. It is a second idempotency key beside
+    # client_key, and the only one that can recognise a play the retired
+    # POST /bgg/sync write path already landed — those rows carry a
+    # bgg_play_id and no client_key, so nothing derived from the wizard's own
+    # draft ids could ever match them. bgb_log_play pre-checks it and the
+    # partial UNIQUE on (user_id, bgg_play_id) backs the check up.
+    #
+    # A live POST /plays could name an arbitrary id and squat that slot. The
+    # index is per-user, so the only account anyone can do that to is their
+    # own; gt=0 is therefore the whole validation this needs.
+    bgg_play_id: int | None = Field(default=None, gt=0)
 
 
 def validated_roster(players: list[PlayerEntry]) -> list[PlayerEntry]:

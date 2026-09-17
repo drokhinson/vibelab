@@ -10,6 +10,16 @@
 // function of those — no fetching, no timers, no DOM. The caller owns the
 // poll and re-renders the host on each tick.
 //
+// THE LAST STEP COUNTS PLAYS IT DID NOT IMPORT. The sync stopped writing plays
+// when the importer grew a BoardGameGeek source; it reads them to say how many
+// are missing, and the done screen's CTA hands that number to the wizard. So
+// step 5 narrates a FINDING rather than an outcome, and it has three faces —
+// a count, "already up to date", and a read that failed. That last one is the
+// one worth keeping: `plays_new = 0` because BoardGameGeek would not answer
+// looks exactly like `plays_new = 0` because there is nothing new, and telling
+// somebody with four hundred plays waiting that they are up to date is worse
+// than telling them to try again.
+//
 // Why a shared component rather than a second copy: the log is the visual
 // representation of one domain thing — a BGG import — and it already reads
 // five interacting fields across two payloads to decide which of its five
@@ -21,8 +31,9 @@
    * @typedef {Object} BggSyncSummary  POST /bgg/sync
    * @property {number} collection_imported
    * @property {number} collection_pending
-   * @property {number} plays_imported
-   * @property {number} plays_pending
+   * @property {number} plays_new    BGG plays with no row in BgB yet.
+   * @property {number} plays_total  Every play on the BGG account.
+   * @property {boolean=} plays_read_failed  The /plays read never landed.
    * @property {number} unique_games_to_import
    * @property {boolean=} warm_up_retry_pending
    */
@@ -82,24 +93,23 @@
     const finished = !syncing && importsResolved;
 
     const collectionImmediate = summary ? (summary.collection_imported || 0) : 0;
-    const playsImmediate = summary ? (summary.plays_imported || 0) : 0;
     const missingCount = summary ? (summary.unique_games_to_import || 0) : 0;
     const newGames = summary
       ? collectionImmediate + (summary.collection_pending || 0)
       : 0;
-    const newPlays = summary
-      ? playsImmediate + (summary.plays_pending || 0)
-      : 0;
+    // Found, not imported — see the header.
+    const playsNew = summary ? (summary.plays_new || 0) : 0;
+    const playsUnread = !!(summary && summary.plays_read_failed);
 
     // Step 1 — request is in flight or already returned a summary.
     const step1 = step(summary || finished ? "done" : "active",
       "Importing data from BoardGameGeek");
 
-    // Step 2 — immediate writes (games already in our catalog).
+    // Step 2 — immediate writes (games already in our catalog). Collection
+    // only: this sync writes no plays.
     const step2 = summary
       ? step("done",
-          `<strong>${collectionImmediate}</strong> game${collectionImmediate === 1 ? "" : "s"} and ` +
-          `<strong>${playsImmediate}</strong> play${playsImmediate === 1 ? "" : "s"} imported`)
+          `<strong>${collectionImmediate}</strong> game${collectionImmediate === 1 ? "" : "s"} imported`)
       : "";
 
     // Step 3 — missing games that the worker has to fetch from BGG.
@@ -130,9 +140,20 @@
     const step4 = finished
       ? step("done", `<strong>${newGames}</strong> new game${newGames === 1 ? "" : "s"} added to collection`)
       : "";
-    const step5 = finished
-      ? step("done", `<strong>${newPlays}</strong> new play${newPlays === 1 ? "" : "s"} logged`)
-      : "";
+    // Step 5 is the hand-off, not an outcome — three faces, see the header.
+    let step5 = "";
+    if (finished && playsUnread) {
+      // "error" rather than "done": a step that finished and achieved nothing
+      // is not a done step — the state ui/bgg-log-step.js added for exactly
+      // this, so it does not draw a checkmark beside a check that never ran.
+      step5 = step("error", "Couldn't check your plays this time — try again shortly");
+    } else if (finished && playsNew) {
+      step5 = step("done",
+        `<strong>${playsNew}</strong> play${playsNew === 1 ? "" : "s"} on BoardGameGeek `
+        + `${playsNew === 1 ? "isn't" : "aren't"} here yet`);
+    } else if (finished) {
+      step5 = step("done", "Your plays are already up to date");
+    }
 
     const footer = finished
       ? `<div class="bgg-log__footer">Sync complete</div>`

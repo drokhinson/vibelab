@@ -420,7 +420,7 @@
     // genuinely differs: a photo has a thumbnail and a country and is always
     // exactly one play; a note has runs, a bulk date and warnings.
 
-    /** @returns {"notes"|"photos"} */
+    /** @returns {"notes"|"photos"|"bgg"} */
     get sourceKey() { return "photos"; }
 
     /**
@@ -432,6 +432,12 @@
 
     /** Every photo carries its own date, out of its own EXIF. */
     get supportsBulkDate() { return false; }
+
+    /** The picker's Resume row, in this source's own words. */
+    resumeLabel() {
+      const n = this.shots.length;
+      return `${n} photo${n === 1 ? "" : "s"} you were still assigning`;
+    }
 
     /** Nothing reads a photo, so nothing can flag anything about it. */
     reviewWarnings() { return []; }

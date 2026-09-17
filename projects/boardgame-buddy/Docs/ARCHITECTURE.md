@@ -376,6 +376,18 @@ re-renders the host on each tick. It was `SettingsView._renderBggProgress`; both
 surfaces now render the same function, differing only in a layout class
 (`bgg-log--card` supplies the Settings card's gutters).
 
+**Its last step counts plays it did not import.** The sync stopped writing plays
+when the play importer grew a BoardGameGeek source; it reads `/plays` only to say
+how many are missing, and the done screen's *Import N plays* button hands that
+number to the wizard. So step 5 narrates a **finding** rather than an outcome,
+and it has three faces — a count, "already up to date", and a read that failed.
+The third is the one worth keeping: `plays_new = 0` because BoardGameGeek would
+not answer looks exactly like `plays_new = 0` because there is nothing new, and
+telling somebody with four hundred plays waiting that they are up to date is the
+worse of the two lies. It renders through `bggLogStep`'s `error` state rather
+than `done`, which is the state that exists precisely so a step that finished
+and achieved nothing does not draw a checkmark.
+
 Two behaviours came out with it, onto `domain/bgg.js`, because they are the same
 question asked twice rather than shared markup:
 
@@ -413,7 +425,7 @@ paper.
 
 The BGG card grew a second direction, and with it three components; the sync flow added a fourth. `ui/bgg-log-step.js` is the step row promoted out of the import log the moment a second log needed it (`.claude/rules/ui-object-design.md` §4, extract at instance #2) — the three logs narrate different sequences but a step is a step.
 
-`ui/bgg-push-log.js` is deliberately **not** a variant of `renderBggImportLog`. That one walks five import-specific counters (`collection_imported`, `plays_pending`, `unique_games_to_import`) with no push analogue; parameterising it would be the options-matrix anti-pattern §2 warns about. Two components, one shared step primitive, one CSS family.
+`ui/bgg-push-log.js` is deliberately **not** a variant of `renderBggImportLog`. That one walks five import-specific counters (`collection_imported`, `plays_new`, `unique_games_to_import`) with no push analogue; parameterising it would be the options-matrix anti-pattern §2 warns about. Two components, one shared step primitive, one CSS family.
 
 `ui/bgg-check-log.js` is the third on the same argument. Both existing logs narrate a QUEUE draining — n of m games, by name — where this narrates a fixed sequence of PHASES with no per-item counters at all. It reads `GET /bgg/check/progress`, which is a ledger the handler writes to an in-process cache as it sweeps: real per-phase progress, including the warm-up backoff, rather than a client-side timer pretending to know. `state: "unknown"` there means the record is gone (a restart, or a second worker) while the request is still alive — it renders as *still working*, never as done, because completion comes from the POST's own resolution.
 
@@ -812,9 +824,11 @@ projects/boardgame-buddy/web/
 │   ├── exif.js             ← a photo's own date and coordinate, read on the device
 │   ├── play-import.js      ← the import wizard's NOTES draft
 │   ├── photo-import.js     ← the import wizard's PHOTOS draft
+│   ├── bgg-play-import.js  ← the import wizard's BOARDGAMEGEEK draft. Keys games
+│   │     by BGG id rather than by name, and sends bgg_play_id beside client_key
 │   ├── import-draft.js     ← which source is live, + the ImportSource typedef
-│   │     both models answer — it is what lets one review render either
-│   ├── import-people.js    ← who an importer can seat (shared by both branches)
+│   │     all three models answer — it is what lets one review render any of them
+│   ├── import-people.js    ← who an importer can seat (shared by every branch)
 │   ├── bgg-import.js       ← the BGG catalog-import queue: outlives the sheet that
 │   │                          started a job, and keeps importing apart from shelving
 │   ├── shelf-controller.js, shelf-filter.js               ← Client-side shelf paging
@@ -870,9 +884,14 @@ projects/boardgame-buddy/web/
 │   │      replaced its only caller, and Settings could already link and sync)
 │   ├── import-notes-steps.js        → the notes branch's four step bodies
 │   ├── import-photos-steps.js       → the photos branch's two step bodies
+│   ├── import-bgg-steps.js          → the BGG branch's three step bodies. Its
+│   │     first has four faces (reading, no link, nothing new, a count), which
+│   │     are four screens rather than a flag over one
 │   ├── import-notes-branch.js       → the notes branch's handlers + contract
 │   ├── import-photos-branch.js      → the photos branch's handlers + contract
-│   ├── import-source-step.js        → the wizard's source picker
+│   ├── import-bgg-branch.js         → the BGG branch's handlers + contract
+│   ├── import-source-step.js        → the wizard's source picker. The BGG row is
+│   │     four rows, keyed on auth_state, and never live before that is known
 │   ├── import-review-step.js        → the review, summary and progress EVERY
 │   │     source ends on — one implementation, three screens
 │   ├── import-review-host.js        → that review's handler half

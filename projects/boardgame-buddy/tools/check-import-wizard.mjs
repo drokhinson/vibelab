@@ -45,6 +45,8 @@ function load() {
       setItem(k, v) { this._v.set(k, String(v)); },
       removeItem(k) { this._v.delete(k); },
     },
+    ImportPeople: { viewerRow: () => null, candidates: () => [] },
+    BgbNameMatch: { best: () => null },
   };
   // Same globals as loadUi()'s sandbox, deliberately: the two used to differ,
   // and a model touching RegExp at module scope would then throw in one and
@@ -57,7 +59,7 @@ function load() {
   vm.createContext(sandbox);
   for (const f of [
     "domain/import-seats.js", "domain/play-import.js", "domain/photo-import.js",
-    "domain/bga-import.js",
+    "domain/bga-import.js", "domain/bgg-play-import.js",
   ]) {
     vm.runInContext(fs.readFileSync(`${W}${f}`, "utf8"), sandbox, { filename: f });
   }
@@ -82,7 +84,15 @@ function loadUi() {
     Geo: { countryName: (c) => c },
     BgbBadge: { render: (o) => `<b>${o.displayName}</b>` },
     Buddy: { toPlayerCandidates: () => [] },
-    ImportPeople: { SUGGEST_MAX: 5 },
+    ImportPeople: {
+      SUGGEST_MAX: 5,
+      viewerRow: () => ({ user_id: "u-me", name: "Me", username: "me" }),
+      candidates: () => [],
+      async loadPartners() { return { accounts: [], ghosts: [], recent: [] }; },
+    },
+    BgbNameMatch: { best: () => null },
+    Bgg: { status: async () => ({ auth_state: "linked" }) },
+    BggImport: { start: async () => null, catalogChanged() {} },
   };
   win.window = win;
   const sandbox = {
@@ -102,17 +112,19 @@ function loadUi() {
     "domain/import-people.js", "domain/import-seats.js",
     "domain/play-import.js", "domain/photo-import.js",
     "domain/bga.js", "domain/bga-import.js",
+    "domain/bgg-play-import.js",
     "domain/import-draft.js", "widgets/import-review-step.js",
     "widgets/import-source-step.js", "widgets/import-notes-steps.js",
     "widgets/import-photos-steps.js", "widgets/import-bga-steps.js",
+    "widgets/import-bgg-steps.js",
     "widgets/import-notes-branch.js", "widgets/import-photos-branch.js",
-    "widgets/import-bga-branch.js",
+    "widgets/import-bga-branch.js", "widgets/import-bgg-branch.js",
   ]) run(f);
   return win;
 }
 
 const win = load();
-const { PlayImport, PhotoImport, BgaImport } = win;
+const { PlayImport, PhotoImport, BgaImport, BggPlayImport } = win;
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -231,6 +243,62 @@ function bgaDraft(Ctor = BgaImport) {
   return d;
 }
 
+/**
+ * A BoardGameGeek draft: two games, one of them a pair of identical plays, and
+ * one game the catalog has never seen.
+ *
+ * Built through adopt() rather than by hand, so the fixture exercises the one
+ * translation step this source has — and so a change to the response shape
+ * shows up here rather than in production.
+ */
+function bggDraft() {
+  const d = new BggPlayImport();
+  d.adopt({
+    bgg_username: "me",
+    total_new: 4,
+    truncated: false,
+    fetched_at: "2026-09-17T10:00:00Z",
+    players: ["Jas", "Sean", "Jasmine"],
+    plays: [
+      // Two identical plays of one game — the pair the review collapses.
+      ...[101, 102].map((id) => ({
+        bgg_play_id: id, bgg_id: 13, bgg_game_name: "Catan",
+        played_at: "2026-01-04", notes: null, quantity: 1,
+        game: { id: "g-catan", name: "Catan", thumbnail_url: null },
+        players: [
+          { name: "Jas", username: null, is_winner: true },
+          { name: "Sean", username: null, is_winner: false },
+        ],
+      })),
+      // A one-off of another game, with a quantity BGG stands several plays on.
+      {
+        bgg_play_id: 103, bgg_id: 266192, bgg_game_name: "Wingspan",
+        played_at: "2026-01-05", notes: "close one", quantity: 3,
+        game: { id: "g-wing", name: "Wingspan", thumbnail_url: null },
+        players: [
+          { name: "Jasmine", username: null, is_winner: false },
+          { name: "Sean", username: null, is_winner: true },
+        ],
+      },
+      // A game BgB has never heard of — the Games step's row.
+      {
+        bgg_play_id: 104, bgg_id: 999999, bgg_game_name: "Obscure Thing",
+        played_at: "2026-01-06", notes: null, quantity: 1,
+        game: null,
+        players: [{ name: "Sean", username: null, is_winner: true }],
+      },
+    ],
+  });
+  // "Jas" and "Jasmine" are ONE account — the thing the Players step exists to
+  // say, and the thing the review row has to honour.
+  d.playerMap = {
+    jas: { kind: "buddy", userId: "u-jas", label: "Jasmine" },
+    jasmine: { kind: "buddy", userId: "u-jas", label: "Jasmine" },
+    sean: { kind: "ghost", userId: null, label: "Sean" },
+  };
+  return d;
+}
+
 // ── 1. Interface conformance ─────────────────────────────────────────────────
 // The entire argument for keeping two models behind an adapter rather than
 // merging them. If this fails, the shared review step cannot be shared.
@@ -252,6 +320,7 @@ console.log("\n1. Every draft answers the ImportSource interface");
     ["PlayImport", PlayImport, noteDraft()],
     ["PhotoImport", PhotoImport, photoDraft()],
     ["BgaImport", BgaImport, bgaDraft()],
+    ["BggPlayImport", BggPlayImport, bggDraft()],
   ]) {
     const missing = METHODS.filter((m) => typeof draft[m] !== "function");
     ok(`${label} implements every method`, missing.length === 0);
@@ -272,6 +341,7 @@ console.log("\n1. Every draft answers the ImportSource interface");
     "thumbUrl", "countryCode", "seats", "edited", "runNote"];
   for (const [label, draft] of [
     ["notes", noteDraft()], ["photos", photoDraft()], ["bga", bgaDraft()],
+    ["bgg", bggDraft()],
   ]) {
     const groups = draft.reviewGroups();
     const row = groups[0] && groups[0].rows[0];
@@ -415,6 +485,52 @@ console.log("\n5. Each source still writes its own columns after an edit");
   ok("two handles for one person collapse to one seat",
     pairPayload.players.length === 1 && pairPayload.players[0].user_id === "u-tig");
   ok("the collapse keeps the win", pairPayload.players[0].is_winner === true);
+
+  // The BoardGameGeek source's own asymmetry, and the one that matters most:
+  // its second idempotency key. Without bgg_play_id on the payload, migration
+  // 044's pre-check cannot see the plays the retired sync wrote and the
+  // wizard re-imports every one of them.
+  const g = bggDraft();
+  const gGroups = g.assignGroups(g.importable());
+  const bggPair = g.toPayload(g.plays[0], gGroups, "batch-3");
+  const bggSolo = g.toPayload(g.plays[2], gGroups, "batch-3");
+
+  ok("a BGG play carries its bgg_play_id", bggPair.bgg_play_id === 101);
+  ok("a BGG play still carries a client_key too",
+    typeof bggPair.client_key === "string" && bggPair.client_key.length > 0);
+  ok("two BGG plays carry DIFFERENT bgg_play_ids even in one row",
+    g.toPayload(g.plays[1], gGroups, "batch-3").bgg_play_id === 102);
+  ok("indistinguishable BGG plays still share a group id",
+    !!bggPair.import_group_id
+      && bggPair.import_group_id === g.toPayload(g.plays[1], gGroups, "b").import_group_id);
+  ok("a lone BGG play gets no group id", bggSolo.import_group_id === null);
+  ok("a BGG play carries the batch id", bggPair.import_batch_id === "batch-3");
+  ok("a BGG play sends no photo_url", !("photo_url" in bggPair));
+  ok("a BGG play sends no country_code", !("country_code" in bggPair));
+
+  // And the new column must not leak into the two sources that have no
+  // BoardGameGeek identity to send.
+  ok("a note sends no bgg_play_id", !("bgg_play_id" in runPayload));
+  ok("a photo sends no bgg_play_id", !("bgg_play_id" in shotPayload));
+}
+
+// ── 5b. Quantity is echoed, never expanded ───────────────────────────────────
+// BGG lets one <play> stand for N sittings. Expanding it would mint N rows
+// sharing one bgg_play_id, and the partial UNIQUE would reject all but the
+// first — so the import would land one play and report N.
+
+console.log("\n5b. A BGG quantity never becomes more than one play");
+{
+  const b = bggDraft();
+  const three = b.plays.find((p) => p.quantity === 3);
+  ok("the fixture holds a quantity of 3", !!three);
+  ok("it is still one draft play",
+    b.plays.filter((p) => p.bggPlayId === three.bggPlayId).length === 1);
+  ok("every bgg_play_id is unique across the draft",
+    new Set(b.plays.map((p) => p.bggPlayId)).size === b.plays.length);
+  ok("the review says so rather than hiding it",
+    b.reviewWarnings().some((w) => /several sittings/.test(w)));
+  ok("resizing a BGG row is refused", b.setRowCount(b.plays[0].id, 5) === false);
 }
 
 // ── 6. Scores ────────────────────────────────────────────────────────────────
@@ -461,6 +577,11 @@ console.log("\n7. Seats are addressed by identity, not by display name");
   // domain/import-seats.js a safe change later: a handler in the shared review
   // passes a key minted by one model to a method on another's draft, so two
   // key shapes would silently address nobody.
+  ok("BggPlayImport.whoOf agrees with PlayImport's",
+    BggPlayImport.whoOf({ name: "Sean", user_id: "u-1" })
+      === PlayImport.whoOf({ name: "Sean", user_id: "u-1" })
+    && BggPlayImport.whoOf({ name: "Sean", user_id: null })
+      === PlayImport.whoOf({ name: "Sean", user_id: null }));
   ok("BgaImport.whoOf agrees on the key shape",
     BgaImport.whoOf({ name: "Sean", user_id: "u-1" })
       === PlayImport.whoOf({ name: "Sean", user_id: "u-1" }));
@@ -555,6 +676,7 @@ console.log("\n9. Every inline handler names a method that exists");
     "window.importNotesBranch": "widgets/import-notes-branch.js",
     "window.importPhotosBranch": "widgets/import-photos-branch.js",
     "window.importBgaBranch": "widgets/import-bga-branch.js",
+    "window.importBggBranch": "widgets/import-bgg-branch.js",
     "window.importWizardView": "views/import-wizard-view.js",
     "window.importWizardView.review": "widgets/import-review-host.js",
   };
@@ -579,6 +701,7 @@ console.log("\n9. Every inline handler names a method that exists");
     "widgets/import-notes-steps.js",
     "widgets/import-photos-steps.js",
     "widgets/import-bga-steps.js",
+    "widgets/import-bgg-steps.js",
     "widgets/import-source-step.js",
     "widgets/import-review-step.js",
   ];
@@ -590,7 +713,7 @@ console.log("\n9. Every inline handler names a method that exists");
     const vMatch = src.match(/const V = "([^"]+)"/);
     const V = vMatch ? vMatch[1] : null;
     const text = V ? src.split("${V}").join(V) : src;
-    for (const m of text.matchAll(/(window\.importWizardView\.review|window\.importWizardView|window\.importNotesBranch|window\.importPhotosBranch|window\.importBgaBranch)\.(_?[A-Za-z]\w*)\(/g)) {
+    for (const m of text.matchAll(/(window\.importWizardView\.review|window\.importWizardView|window\.importNotesBranch|window\.importPhotosBranch|window\.importBgaBranch|window\.importBggBranch)\.(_?[A-Za-z]\w*)\(/g)) {
       const [, global, method] = m;
       if (!defined[global] || !defined[global].has(method)) {
         bad.push(`${file}: ${global}.${method}()`);
@@ -628,6 +751,7 @@ console.log("\n10. Each branch's step list is walkable end to end");
     ["notes", PlayImport, ["source", "details", "players", "games"]],
     ["photos", PhotoImport, ["photos", "assign"]],
     ["bga", BgaImport, ["account", "fetch", "players", "games"]],
+    ["bgg", BggPlayImport, ["plays", "players", "games"]],
   ]) {
     const steps = Ctor.steps;
     ok(`${label} steps are unique`, new Set(steps).size === steps.length);
@@ -671,9 +795,33 @@ console.log("\n11. Every step body renders without throwing");
     game: { id: "g1", name: "Catan" }, notes: null, photoUrl: null,
     players: [{ name: "Me", userId: "u-me", isWinner: true, score: null }],
   }];
+  const bgg = new w.ImportBggBranch();
+  // Built through adopt(), the same as the domain fixture above — the steps
+  // read fields that translation sets (bggGameName, quantity, bggUsername).
+  bgg.draft.adopt({
+    bgg_username: "me",
+    total_new: 2, truncated: false, fetched_at: "2026-09-17T10:00:00Z",
+    players: ["Sean"],
+    plays: [
+      {
+        bgg_play_id: 1, bgg_id: 13, bgg_game_name: "Catan",
+        played_at: "2026-01-04", notes: null, quantity: 1,
+        game: { id: "g1", name: "Catan", thumbnail_url: null },
+        players: [{ name: "Sean", username: null, is_winner: true }],
+      },
+      // One unresolved game, so the Games step renders its real row rather
+      // than the all-matched shape.
+      {
+        bgg_play_id: 2, bgg_id: 999999, bgg_game_name: "Obscure Thing",
+        played_at: "2026-01-05", notes: null, quantity: 1, game: null,
+        players: [{ name: "Sean", username: null, is_winner: false }],
+      },
+    ],
+  });
+  bgg.draft.playerMap = { sean: { kind: "ghost", userId: null, label: "Sean" } };
   const opts = { host: "window.importWizardView.review", expanded: {}, shownGroups: 99 };
 
-  for (const [label, branch] of [["notes", notes], ["photos", photos], ["bga", bga]]) {
+  for (const [label, branch] of [["notes", notes], ["photos", photos], ["bga", bga], ["bgg", bgg]]) {
     for (const step of branch.steps) {
       let html = null, err = null;
       try { html = branch.renderStep(step, opts); } catch (e) { err = e.message; }
@@ -713,9 +861,32 @@ console.log("\n11. Every step body renders without throwing");
     if (err) console.log(`       ${err}`);
   }
 
+  // The BGG plays step has four faces and only one of them is the happy path.
+  // Each is a different screen rather than a flag over one, so each renders.
+  for (const [name, extra] of [
+    ["loading", { loading: true }],
+    ["link error", { linkError: "Link your BoardGameGeek account first." }],
+    ["read error", { error: "Couldn't read your plays." }],
+  ]) {
+    let html = null, err = null;
+    try { html = bgg.renderStep("plays", Object.assign({}, opts, extra)); }
+    catch (e) { err = e.message; }
+    ok(`bgg/plays (${name}) renders`, typeof html === "string" && html.length > 40);
+    if (err) console.log(`       ${err}`);
+  }
+  {
+    const empty = new w.ImportBggBranch();
+    let html = null, err = null;
+    try { html = empty.renderStep("plays", opts); } catch (e) { err = e.message; }
+    ok("bgg/plays (nothing new) renders",
+      typeof html === "string" && /Nothing new/.test(html));
+    if (err) console.log(`       ${err}`);
+  }
+
   // And the three shared screens, for every source.
   for (const [label, draft] of [
     ["notes", notes.draft], ["photos", photos.draft], ["bga", bga.draft],
+    ["bgg", bgg.draft],
   ]) {
     if (label === "notes") {
       draft.plays = [{
@@ -748,25 +919,76 @@ console.log("\n11. Every step body renders without throwing");
     draft.progress = null;
   }
 
-  // The picker names four sources. ONE is still unbuilt — this count is the
-  // only thing between enabling a source and shipping a dead button, and it
-  // has to come down by one every time a source lands.
-  const picker = w.ImportSourceStep.render({ resume: null });
-  ok("the picker offers four sources",
-    (picker.match(/class="imp-row[ "]/g) || []).length === 4);
-  ok("one of them is disabled",
-    (picker.match(/disabled aria-disabled/g) || []).length === 1);
-  ok("the BGG row points at the sync that already exists",
-    picker.includes("Settings \u2192 Connections"));
+  // \u2500\u2500 The picker's four rows, and the BGG row's four states \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  //
+  // The row must never be live before the link state is known: the picker
+  // paints synchronously and the answer arrives a moment later, so starting
+  // enabled and disabling on arrival would take a control away from under a
+  // thumb already on its way down.
+  const pickerFor = (bggAuth) => w.ImportSourceStep.render({ resume: null, bggAuth });
+  const rows = (html) => (html.match(/class="imp-row[ "]/g) || []).length;
+  const disabled = (html) => (html.match(/disabled aria-disabled/g) || []).length;
+
+  for (const state of [null, "linked", "unlinked", "relink_required"]) {
+    ok(`the picker offers four sources (${state || "unknown"})`,
+      rows(pickerFor(state)) === 4);
+  }
+  // This count is the only thing between enabling a source and shipping a
+  // dead button, and it has to come down by one every time a source lands.
+  // Board Game Arena landed, so a linked BGG account leaves nothing behind.
+  ok("a linked account leaves nothing disabled",
+    disabled(pickerFor("linked")) === 0);
   ok("the BGA row is live and warns before the door",
-    picker.includes("_pickSource(&#39;bga&#39;)") || picker.includes("_pickSource('bga')"));
+    pickerFor("linked").includes("_pickSource(&#39;bga&#39;)"));
+  // The handler is escapeAttr'd, so the quotes around the source arrive as
+  // entities. Matched on the escaped form rather than unescaping, so the
+  // assertion fails if that escaping is ever dropped.
+  const picksBgg = (html) => html.includes("_pickSource(&#39;bgg&#39;)");
+  ok("a linked account makes the BGG row selectable", picksBgg(pickerFor("linked")));
+  ok("an unlinked account disables the BGG row",
+    disabled(pickerFor("unlinked")) === 1);
+  ok("and points it at Connections",
+    pickerFor("unlinked").includes("Settings \u2192 Connections"));
+  ok("an expired session says reconnect",
+    pickerFor("relink_required").includes("Reconnect")
+      && disabled(pickerFor("relink_required")) === 1);
+  ok("an unknown link state never offers the row",
+    disabled(pickerFor(null)) === 1 && !picksBgg(pickerFor(null)));
+  ok("nor does an unlinked or expired one",
+    !picksBgg(pickerFor("unlinked")) && !picksBgg(pickerFor("relink_required")));
 
   // Every branch must expose _partners: ImportReviewHost._openRowPlayerSheet
   // reads this._branch._partners directly, so a branch without it fails only
   // when somebody opens a review row — the one place nothing else would catch.
-  for (const [label, branch] of [["notes", notes], ["photos", photos], ["bga", bga]]) {
+  for (const [label, branch] of [["notes", notes], ["photos", photos], ["bga", bga], ["bgg", bgg]]) {
     ok(`${label} branch exposes _partners`, "_partners" in branch);
   }
+}
+
+// \u2500\u2500 12. The draft envelope knows every source \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// clear() used to sweep the LEGACY probe list, which is the two pre-wizard
+// keys. A third model's key left behind by a finished import is resurrectable
+// on the next open \u2014 the exact failure domain/import-draft.js's header is
+// about \u2014 so the sweep list and the probe list are now separate.
+
+console.log("\n12. The draft envelope knows every source");
+{
+  const w = loadUi();
+  const D = w.ImportDraft;
+  ok("SOURCES names all three",
+    JSON.stringify(D.SOURCES) === JSON.stringify(["notes", "photos", "bga", "bgg"]));
+  const noModel = D.SOURCES.filter((s) => !D.create(s));
+  ok("every source builds a model", noModel.length === 0);
+  if (noModel.length) console.log(`       no model: ${noModel.join(", ")}`);
+
+  const KEYS = ["bgb.import.draft", "bgb.playImport.draft",
+    "bgb.photoImport.draft", "bgb.bgaImport.draft",
+    "bgb.bggPlayImport.draft"];
+  for (const k of KEYS) w.localStorage.setItem(k, "{}");
+  D.clear();
+  const left = KEYS.filter((k) => w.localStorage.getItem(k) !== null);
+  ok("clear() sweeps every model's key and the envelope", left.length === 0);
+  if (left.length) console.log(`       left behind: ${left.join(", ")}`);
 }
 
 console.log(fails ? `\n${fails} FAILED\n` : "\nAll checks passed\n");
