@@ -26,6 +26,7 @@ from .bgg_client import (
     parse_bgg_xml,
     parse_thing_stats,
     thing_item_basics,
+    thing_item_publishers,
     thing_item_stats,
 )
 from .constants import EXPANSION_COLOR_PALETTE, CatalogSort, PlayMode, derive_play_mode
@@ -536,6 +537,10 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
         "description": bgg_description_text(item),
         "categories": categories,
         "mechanics": mechanics,
+        # Migration 040. [] rather than NULL even when BGG credits nobody —
+        # a fresh import is synced by definition and must not land in the
+        # backfill queue.
+        "publishers": thing_item_publishers(item),
         "is_expansion": is_expansion,
         "base_game_bgg_id": base_game_bgg_id,
         "expansion_color": expansion_color,
@@ -1160,6 +1165,178 @@ async def backfill_game_stats(
                 updated += 1
             except Exception:
                 logger.warning("Stats write failed for game %s", by_bgg_id[item_bgg_id], exc_info=True)
+                failed += 1
+
+    if updated:
+        _invalidate_game_caches()
+
+    return RefreshDescriptionsResponse(
+        updated=updated,
+        failed=failed,
+        remaining=max(0, total_missing - updated),
+    )
+
+
+# ── Admin: publisher backfill (migration 040) ────────────────────────────────
+# Every row imported before 040 has publishers NULL, which is what the game
+# page's "Publisher" fact reads — so without this the column would only ever
+# fill for games imported from here on. Fourth instance of the same trio as
+# images / descriptions / stats, batched like descriptions (stats=0 is enough:
+# publishers are plain <link> rows) and throttled like stats.
+#
+# The queue marker is `publishers IS NULL`, never `= '{}'`: a game BGG credits
+# to nobody is synced, and re-asking BGG about it on every run would mean the
+# panel never empties.
+
+
+def _publisher_cols(item: ET.Element) -> dict:
+    """The one column this backfill writes, for one /thing <item>."""
+    return {"publishers": thing_item_publishers(item)}
+
+
+async def _hydrate_publishers_from_bgg(sb: Client, game_id: str, bgg_id: int) -> list[str]:
+    """Fetch one game's publishers from BGG and patch the row; returns them.
+
+    Like `_hydrate_description_from_bgg`, no `_sync_denormalized_game_fields`
+    call: `publishers` is not in COLLECTION_DENORM_GAME_FIELDS, so no play or
+    collection row caches it and the fan-out would update nothing.
+    """
+    body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
+    root = parse_bgg_xml(body, context=f"hydrate publishers bgg_id={bgg_id}")
+    item = root.find("item")
+    if item is None:
+        raise HTTPException(status_code=404, detail="Game not found on BGG")
+
+    cols = _publisher_cols(item)
+    sb.table("boardgamebuddy_games").update(cols).eq("id", game_id).execute()
+    _invalidate_game_caches()
+    return cols["publishers"]
+
+
+@router.get(
+    "/games/admin/missing-publishers",
+    response_model=list[GameSummary],
+    status_code=200,
+    summary="List games whose publishers have never been synced (admin)",
+)
+async def list_games_missing_publishers(
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> list[GameSummary]:
+    """Admin-only: games imported before publishers were captured from BGG."""
+    sb = get_supabase()
+    result = (
+        sb.table("boardgamebuddy_games")
+        .select(game_select_clause())
+        .is_("publishers", "null")
+        .not_.is_("bgg_id", "null")
+        .order("name")
+        .limit(_ADMIN_LIST_LIMIT)
+        .execute()
+    )
+    return [GameSummary(**g) for g in (result.data or [])]
+
+
+@router.post(
+    "/games/admin/{game_id}/refresh-publishers",
+    response_model=GameDetail,
+    status_code=200,
+    summary="Refresh one game's publishers from BGG (admin)",
+)
+async def refresh_single_game_publishers(
+    game_id: str = Path(..., description="Game UUID"),
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> GameDetail:
+    """Admin-only: re-fetch and store one game's publisher credits."""
+    sb = get_supabase()
+    existing = (
+        sb.table("boardgamebuddy_games")
+        .select("id, bgg_id")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Game not found")
+    bgg_id = existing.data[0]["bgg_id"]
+    if not bgg_id:
+        raise HTTPException(status_code=400, detail="Game has no bgg_id; cannot refresh from BGG")
+
+    await _hydrate_publishers_from_bgg(sb, game_id, bgg_id)
+
+    # select("*") for the same reason the description refresh does it:
+    # GameDetail carries `publishers`, so the admin panel reports what landed.
+    refreshed = (
+        sb.table("boardgamebuddy_games")
+        .select("*")
+        .eq("id", game_id)
+        .execute()
+    )
+    if not refreshed.data:
+        raise HTTPException(status_code=500, detail="Failed to update game row")
+    return GameDetail(**refreshed.data[0])
+
+
+@router.post(
+    "/games/admin/backfill-publishers",
+    response_model=RefreshDescriptionsResponse,
+    status_code=200,
+    summary="Backfill missing publishers from BGG, in throttled batches (admin)",
+)
+async def backfill_game_publishers(
+    limit: int = Query(200, ge=1, le=1000, description="Max games to backfill in this call"),
+    _admin: CurrentUser = Depends(get_current_admin),
+) -> RefreshDescriptionsResponse:
+    """Admin-only: fill in publisher credits for games that have none yet."""
+    sb = get_supabase()
+
+    rows = await asyncio.to_thread(
+        page_all,
+        lambda: sb.table("boardgamebuddy_games")
+        .select("id, bgg_id")
+        .is_("publishers", "null")
+        .not_.is_("bgg_id", "null"),
+        "id", label="backfill publishers",
+    )
+    total_missing = len(rows)
+    batch = rows[:limit]
+    by_bgg_id = {int(r["bgg_id"]): r["id"] for r in batch}
+    chunks = list(chunked(batch, _DESC_CHUNK_SIZE))
+
+    updated = 0
+    failed = 0
+    for i, chunk in enumerate(chunks):
+        if i:
+            await asyncio.sleep(BGG_THROTTLE_SECONDS)
+        ids = ",".join(str(r["bgg_id"]) for r in chunk)
+        try:
+            body = await fetch_bgg(
+                "/thing", {"id": ids, "stats": 0}, timeout=20.0, use_cache=False
+            )
+            root = parse_bgg_xml(body, context=f"backfill publishers ({len(chunk)} ids)")
+        except Exception:
+            # One bad chunk must not abort a 50-chunk run.
+            logger.warning("Publisher backfill chunk failed (%d ids)", len(chunk), exc_info=True)
+            failed += len(chunk)
+            continue
+
+        by_item: dict[int, ET.Element] = {}
+        for item in root.findall("item"):
+            try:
+                by_item[int(item.get("id", "0"))] = item
+            except (TypeError, ValueError):
+                continue
+
+        for r in chunk:
+            item_bgg_id = int(r["bgg_id"])
+            item = by_item.get(item_bgg_id)
+            # Absent from the response = BGG has nothing under that id. Write
+            # '{}' anyway so the row leaves the queue, exactly as the stats
+            # backfill stamps bgg_stats_synced_at on a game BGG won't rate.
+            cols = _publisher_cols(item) if item is not None else {"publishers": []}
+            try:
+                sb.table("boardgamebuddy_games").update(cols).eq("id", by_bgg_id[item_bgg_id]).execute()
+                updated += 1
+            except Exception:
+                logger.warning("Publisher write failed for game %s", by_bgg_id[item_bgg_id], exc_info=True)
                 failed += 1
 
     if updated:

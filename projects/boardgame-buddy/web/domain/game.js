@@ -235,6 +235,30 @@
         .then((r) => { Game.invalidateBundle(); return r; });
     }
 
+    // ── Admin: publisher backfill ────────────────────────────────────────────
+    // Publishers arrived with migration 040, so every game imported before it
+    // has publishers NULL. Same trio as descriptions.
+
+    /** List catalog games whose publishers have never been synced. */
+    static adminMissingPublishers() {
+      return window.api.get("/games/admin/missing-publishers");
+    }
+
+    /** Re-fetch one game's publisher credits from BGG. */
+    static adminRefreshOnePublishers(gameId) {
+      return window.api.post(`/games/admin/${gameId}/refresh-publishers`)
+        .then((r) => { Game.invalidateBundle(gameId); return r; });
+    }
+
+    /** Backfill publishers for games that have none yet, in one bounded pass.
+     *  Batched and throttled server-side; `remaining` drives the panel's next
+     *  call, same as the description backfill above. */
+    static adminBackfillPublishers(limit) {
+      const q = limit ? `?limit=${encodeURIComponent(limit)}` : "";
+      return window.api.post(`/games/admin/backfill-publishers${q}`)
+        .then((r) => { Game.invalidateBundle(); return r; });
+    }
+
     // ── Admin: BGG stats backfill ─────────────────────────────────────────
     // Rating / rank / weight arrived with migration 038, so every game imported
     // before it has bgg_stats_synced_at NULL. Same trio as descriptions.

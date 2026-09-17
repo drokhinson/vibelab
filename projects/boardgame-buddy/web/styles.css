@@ -4777,16 +4777,28 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 10.5px; color: var(--polaroid-muted); margin-top: 3px;
   font-variant-numeric: tabular-nums;
 }
-/* Why the tile is here — "Because you play Wingspan". One line, ellipsised:
-   the tile is 112px wide and the reason is a caption, not a paragraph. */
+/* Why the tile is here — "Because you play Wingspan". Two lines, then
+   ellipsised: the tile is 112px wide, so a single nowrap line cut every
+   reason the app writes off at "Because you p…" — the seed game, which is the
+   whole point of the caption, never survived. Two lines carry the common ones
+   ("Because you play Wingspan", "Fits your usual table") whole; the long
+   mechanics ones still clamp, and the full string stays in the title attr.
+   Height is reserved rather than measured so a one-line reason and a two-line
+   one don't leave the rail's captions on different baselines. */
 .game-polaroid.game-polaroid--rail .game-polaroid__reason {
   font-size: 10.5px;
   line-height: 1.25;
   color: var(--polaroid-ink-soft);
   margin-top: 4px;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  min-height: 2.5em;
   overflow: hidden;
-  text-overflow: ellipsis;
+  /* A long unbreakable token (a game name with no spaces) would otherwise
+     spill past the tile instead of wrapping into the second line. */
+  overflow-wrap: anywhere;
 }
 
 .buddy-tile {
@@ -9982,6 +9994,42 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 .game-detail__meta-pill i { color: var(--accent); }
+
+/* Edition facts — "Published 2019", "Publisher Stonemaier Games" (migration
+   040). A <dl>, not more meta pills: a pill is a self-describing attribute
+   ("3-5P", "60m") and these two need their label to mean anything. Rows wrap
+   and each row keeps its label and value together, so a long publisher name
+   moves to the next line instead of pushing the year off the right edge.
+   Paper tokens, not ground ones — this sits on the same polaroid surface as
+   the pills above it (.claude/rules/theming.md §6). */
+.game-detail__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin: -0.4rem 0 0.9rem;
+}
+.game-detail__fact {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.game-detail__fact-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted);
+  white-space: nowrap;
+}
+.game-detail__fact-value {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--polaroid-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 
 /* Expansions reel — horizontal-scroll polaroid mini-cards. Bleeds past the
    page gutters so the row reads as a continuous reel. */

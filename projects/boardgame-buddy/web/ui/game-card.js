@@ -38,10 +38,12 @@
    *   it over the caption.
    * @param {boolean} [opts.pending] Collection map still loading — the status
    *   tag renders empty rather than guessing "not owned".
-   * @param {string} [opts.reason] One-line caption under the name saying WHY
+   * @param {string} [opts.reason] Short caption under the name saying WHY
    *   the tile is here ("Because you play Wingspan"). The Discover picks pass
    *   it; every other surface leaves it off. A variant parameter, not a second
-   *   tile — see .claude/rules/ui-object-design.md §2.
+   *   tile — see .claude/rules/ui-object-design.md §2. It wraps to two lines
+   *   before clamping (styles.css), so the seed game survives on a 112px
+   *   tile; the full string is always on the title attribute.
    * @param {boolean} [opts.eager] Load the photo eagerly instead of lazily.
    *   Callers that render a single-viewport grid (the explorer's 3x3) pass
    *   this: a lazy image is not loaded synchronously on insertion, so a

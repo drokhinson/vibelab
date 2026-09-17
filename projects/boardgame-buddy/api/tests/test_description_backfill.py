@@ -236,6 +236,7 @@ def counts_client(monkeypatch):
         ("boardgamebuddy_games", "or(image_url.is.null,thumbnail_url.is.null)"): 5,
         ("boardgamebuddy_games", "description is null"): 40,
         ("boardgamebuddy_games", "bgg_stats_synced_at is null,not bgg_id is null"): 7,
+        ("boardgamebuddy_games", "not bgg_id is null,publishers is null"): 3,
     }
 
     class _SB:
@@ -264,18 +265,19 @@ def test_review_counts_reports_each_queue(counts_client):
     assert body["missing_images"] == 5
     assert body["missing_descriptions"] == 40
     assert body["missing_stats"] == 7
+    assert body["missing_publishers"] == 3
 
 
 def test_review_counts_total_is_derived_not_sent(counts_client):
     # Computed server-side so the gear's dot and the per-row badges can never
     # disagree about whether there is anything waiting.
-    assert counts_client.get(COUNTS_URL).json()["total"] == 54
+    assert counts_client.get(COUNTS_URL).json()["total"] == 57
 
 
 def test_review_counts_uses_exact_count_not_row_fetches(counts_client):
     counts_client.get(COUNTS_URL)
     selects = [row for row in counts_client.log if row[0] == "select"]
-    assert len(selects) == 4
+    assert len(selects) == 5
     # Every one asks PostgREST for the count header rather than the rows.
     assert all(row[2] == "exact" for row in selects), selects
 

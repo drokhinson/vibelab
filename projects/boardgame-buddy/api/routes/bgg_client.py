@@ -456,6 +456,40 @@ def thing_item_stats(item: ET.Element) -> dict:
     }
 
 
+# ── /thing publishers ─────────────────────────────────────────────────────────
+# The game page names who published a game (migration 040). These are plain
+# <link type="boardgamepublisher"> rows, present with stats=0, so the import,
+# the per-game refresh and the batched backfill all read them through here.
+
+# BGG lists the original publisher alongside every localized reissue — a
+# popular game carries 30+ links, and storing them all would be a paragraph of
+# names for a UI that shows one. The first few in BGG's own order keep the
+# original (which is, in practice, first) plus enough for an edition list, and
+# nothing on the page has to page through Devir / Feuerland / Ghenos / Maldito.
+_PUBLISHER_LIMIT = 4
+
+
+def thing_item_publishers(item: ET.Element) -> list[str]:
+    """The publisher names off one /thing <item>, in BGG's order, capped.
+
+    Returns [] when BGG credits nobody — an empty list, not None: the caller
+    writes it to a column whose NULL means "never synced", and a game with no
+    credited publisher must still leave the backfill queue.
+    """
+    out: list[str] = []
+    for link in item.findall("link[@type='boardgamepublisher']"):
+        name = (link.get("value") or "").strip()
+        # BGG has genuine duplicates across reissues ("Z-Man Games" twice under
+        # different ids), and a repeated name in a four-slot list is a wasted
+        # slot rather than information.
+        if not name or name in out:
+            continue
+        out.append(name)
+        if len(out) >= _PUBLISHER_LIMIT:
+            break
+    return out
+
+
 def parse_thing_stats(root: ET.Element) -> dict[int, dict]:
     """thing_item_stats for every <item> in a batched /thing response, by bgg_id."""
     out: dict[int, dict] = {}

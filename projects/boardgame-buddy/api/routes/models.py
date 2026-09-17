@@ -6,6 +6,7 @@ from pydantic import (
     UUID4,
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     Field,
     SecretStr,
     computed_field,
@@ -90,6 +91,8 @@ class AdminReviewCounts(BaseModel):
     missing_descriptions: int = 0
     # Catalog games whose BGG stats have never been synced (migration 038).
     missing_stats: int = 0
+    # Catalog games whose publishers have never been synced (migration 040).
+    missing_publishers: int = 0
 
     @computed_field  # type: ignore[misc]
     @property
@@ -99,6 +102,7 @@ class AdminReviewCounts(BaseModel):
             + self.missing_images
             + self.missing_descriptions
             + self.missing_stats
+            + self.missing_publishers
         )
 
 
@@ -556,10 +560,32 @@ class GameSummary(BaseModel):
         return f"https://boardgamegeek.com/boardgame/{self.bgg_id}" if self.bgg_id else None
 
 
+def _null_list_to_empty(v: Any) -> Any:
+    """NULL → [] for a nullable array column.
+
+    `publishers` is nullable with no DB default (migration 040) so that NULL
+    can mean "never synced" to the backfill's queue. A reader has no use for
+    that distinction and Pydantic would reject the None outright, so it lands
+    here as the empty list every consumer already handles.
+    """
+    return [] if v is None else v
+
+
 class GameDetail(GameSummary):
     description: str | None = None
     categories: list[str] = []
     mechanics: list[str] = []
+    # BGG's publisher credits in BGG's order, capped at 4 by the import
+    # (migration 040). The game page names the first; the rest are there for
+    # any later edition list. On GameDetail and not GameSummary on purpose —
+    # no rail or search tile shows a publisher, so it stays out of
+    # game_select_clause() and off every list payload.
+    #
+    # Defaults to [], which flattens the column's two absences (NULL = never
+    # synced, '{}' = synced and BGG credits nobody) into one. That is the right
+    # shape for a reader: both mean "no publisher to show", and a client
+    # holding a row cached before 040 reads the same empty list.
+    publishers: Annotated[list[str], BeforeValidator(_null_list_to_empty)] = []
     created_at: datetime
     # Populated on expansion rows so the FE can render a "Back to <base>" link
     # without a second lookup. Resolved via base_game_bgg_id at read time.

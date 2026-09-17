@@ -164,6 +164,7 @@
               ${g.playTimeText() ? `<span class="game-detail__meta-pill"><i data-icon="clock" class="w-3.5 h-3.5"></i> ${g.playTimeText()}</span>` : ""}
               ${g.play_mode === "coop" ? `<span class="game-detail__meta-pill"><i data-icon="handshake" class="w-3.5 h-3.5"></i> Co-op</span>` : ""}
             </div>
+            ${this._renderFacts(g)}
             <div class="game-detail__actions">
               ${g.is_expansion ? "" : `
                 <button class="btn btn-secondary game-detail__action" onclick="window.gameDetailView._startPlay()">
@@ -190,6 +191,47 @@
       this.refreshIcons();
       this._mountDescription();
       this._mountGuide();
+    }
+
+    // Publication year and publisher — the two edition facts a collector
+    // reaches for, as labelled data rather than decoration.
+    //
+    // The year is deliberately here as well as on the polaroid's caption
+    // strip: that strip is part of the photo (it renders a blank line when
+    // there is no year, because a polaroid has a caption band whether or not
+    // anything is written on it), so a bare "2019" under the picture reads as
+    // a flourish. "Published 2019" under a label reads as a fact, which is
+    // what someone comparing two editions is looking for.
+    //
+    // `publishers` is BGG's list in BGG's order, capped at 4 by the import
+    // (migration 040). Only the first is shown — after the original, the rest
+    // are localized reissues, and four company names is a paragraph in a row
+    // meant to be scanned — but the whole list rides in the title attribute
+    // rather than being dropped on the floor.
+    _renderFacts(g) {
+      const publishers = Array.isArray(g.publishers) ? g.publishers.filter(Boolean) : [];
+      const rows = [];
+      if (g.year_published) {
+        rows.push({ label: "Published", value: String(g.year_published) });
+      }
+      if (publishers.length) {
+        rows.push({
+          label: publishers.length > 1 ? "Publishers" : "Publisher",
+          value: publishers[0],
+          title: publishers.join(" \u00b7 "),
+        });
+      }
+      if (!rows.length) return "";
+      return `
+        <dl class="game-detail__facts">
+          ${rows.map((r) => `
+            <div class="game-detail__fact">
+              <dt class="game-detail__fact-label">${escapeHtml(r.label)}</dt>
+              <dd class="game-detail__fact-value"${r.title ? ` title="${escapeAttr(r.title)}"` : ""}>${escapeHtml(r.value)}</dd>
+            </div>
+          `).join("")}
+        </dl>
+      `;
     }
 
     _renderDescription(g) {
