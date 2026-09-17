@@ -408,6 +408,8 @@
    .ach-sheet is a body-level sheet too, and joins for the same reason: the
    Achievements spoke is a .bgb-spoke-screen, so a badge's detail sheet has to
    land on the same surface the shelf it was tapped on is drawn against.
+   .feedback-sheet is the same case exactly — the Dev feedback board is a
+   .bgb-spoke-screen and its compose sheet is appended to <body>.
 
    .cascade-player--drag-clone is the third body-level entry, for the same
    reason as the sheets: widgets/player-reorder.js appends the drag clone to
@@ -437,6 +439,7 @@
      .export-sheet,
      .play-run-sheet,
      .ach-sheet,
+     .feedback-sheet,
      .exp-picker,
      .import-exp-modal,
      .cascade-player--drag-clone,
@@ -489,6 +492,7 @@
      .export-sheet,
      .play-run-sheet,
      .ach-sheet,
+     .feedback-sheet,
      .exp-picker,
      .import-exp-modal,
      .cascade-player--drag-clone,
@@ -3078,6 +3082,194 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   opacity: 0.75;
 }
 .admin-reports__actions { display: inline-flex; gap: 0.4rem; }
+
+/* ── Dev feedback board ─────────────────────────────────────────────────────
+   views/feedback-view.js. Lives on a .bgb-spoke-screen, which is CHROME rather
+   than paper, so everything here paints from the ground tokens the re-point at
+   the top of this file supplies — oklch(var(--b*)) and var(--accent), not the
+   --polaroid-* family. The compose sheet is body-level and is named in that
+   re-point list by class (.feedback-sheet), which is what keeps it from landing
+   cream on a dark ground (.claude/rules/theming.md §8).
+
+   Filter chips are NOT restyled here: the screen reuses .chapter-add__chip,
+   which is already the project's chip rail. A second chip family would be the
+   parallel implementation ui-object-design.md §2 exists to prevent. */
+.feedback__status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+.feedback__status-label {
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  flex: none;
+}
+.feedback__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+/* Staggered entrance, per .claude/rules/web-frontend.md. `--i` is set inline
+   per row by the view, which is the one legitimate inline custom property. */
+.feedback__item {
+  padding: 12px 14px;
+  background: oklch(var(--b2));
+  border: 1px solid var(--card-border, oklch(var(--b3)));
+  border-radius: 0.6rem;
+  box-shadow: var(--sh-1);
+  animation: fadeUp 240ms var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+.feedback__marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+.feedback__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: oklch(var(--b3));
+  color: oklch(var(--bc) / 0.8);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* The type mark takes the accent so a bug reads as a bug at a glance. Only the
+   type — tinting the topic as well would leave a row with two competing
+   highlights and no hierarchy between them. */
+.feedback__tag--bug {
+  background: var(--accent-quiet);
+  color: var(--accent);
+}
+.feedback__body-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: oklch(var(--bc));
+  /* Feedback is written in a textarea, so newlines are meaningful; the view
+     escapes the text and this is what renders them. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.feedback__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+.feedback__meta {
+  font-size: 0.74rem;
+  color: var(--ink-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feedback__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+}
+/* 44px tall even though the pill looks smaller — the tap-target floor
+   (.claude/rules/mobile-web.md §5). It is the most-tapped control on the
+   screen and it sits next to Resolve, so a fat thumb must not reach the wrong
+   one; the gap above keeps them 8px apart. */
+.feedback__like {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: oklch(var(--b3));
+  border: 1px solid transparent;
+  color: oklch(var(--bc) / 0.75);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.feedback__like.is-on {
+  background: var(--accent-quiet);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* Touch has no hover, so :active is the feedback that the tap landed —
+   mandatory, not decorative. The hover lift below is the enhancement on top. */
+.feedback__like:active { transform: translateY(1px); }
+@media (hover: hover) {
+  .feedback__like:hover { border-color: var(--accent); color: var(--accent); }
+}
+.feedback__like-count { font-variant-numeric: tabular-nums; }
+.feedback__resolved {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid oklch(var(--b3));
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+}
+.feedback__empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: oklch(var(--bc));
+}
+.feedback__empty-art { width: 140px; height: 140px; margin: 0 auto; display: block; }
+
+/* ── Dev feedback: the compose sheet ──────────────────────────────────────
+   The first sheet in this project to hold a <textarea>, which is why it has a
+   scroller of its own: the topic list and the field together overflow the panel
+   on a small phone, and .bgb-sheet__list is only the list. The panel's own
+   height ceiling stays with .bgb-sheet__panel so the keyboard still shrinks it
+   (.claude/rules/overlays.md §4) — do not add a vh ceiling here. */
+.feedback-sheet__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 10px;
+}
+.feedback-sheet__label {
+  display: block;
+  margin: 0.7rem 0 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--polaroid-muted);
+}
+/* font-size is 16px and must stay there: anything smaller makes iOS Safari zoom
+   the page on focus (.claude/rules/mobile-web.md §2). The floor block at the
+   end of this file would otherwise have to carry it. */
+.feedback-sheet__text {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--well);
+  border: 1px solid var(--polaroid-line);
+  border-radius: 0.5rem;
+  color: var(--polaroid-ink);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.feedback-sheet__text:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.feedback-sheet__send {
+  width: 100%;
+  min-height: 52px;   /* commit button, per mobile-web.md §5 */
+}
 
 /* Markdown tables rendered as real data grids */
 .scroll-panel .guide-table {

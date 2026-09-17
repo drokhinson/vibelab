@@ -200,6 +200,13 @@
           alias: "import-wizard", aliasParams: { source: "photos" } },
         { name: "bgg-sync",            pattern: /^\/settings\/bgg\/?$/,
           build: () => "/settings/bgg" },
+        // `compose` stays OFF the path and rides as querystring: it is a
+        // display hint about how to arrive, not part of what the page is
+        // (.claude/rules/web-frontend.md, "Path params for identity,
+        // querystring for extras"). The view strips it with replaceUrl once the
+        // sheet is up, so a refresh lands on the board rather than re-opening it.
+        { name: "feedback",            pattern: /^\/settings\/feedback\/?$/,
+          build: () => "/settings/feedback" },
         { name: "notifications",       pattern: /^\/notifications\/?$/,           build: () => "/notifications" },
         { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
         { name: "admin-reports",       pattern: /^\/admin\/reports\/?$/,          build: () => "/admin/reports" },

@@ -174,6 +174,8 @@
         <div class="set-card-label">Data management</div>
         ${this._renderExportCard()}
         ${this._renderCacheCard()}
+        <div class="set-card-label">Feedback</div>
+        ${this._renderFeedbackCard()}
         ${me.is_admin ? `
           <div class="set-card-label">Admin tools</div>
           ${this._renderAdminCard()}
@@ -739,6 +741,45 @@
             </span>
             <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
           </button>
+        </div>
+      `;
+    }
+
+    /**
+     * Two rows onto ONE screen, not two screens.
+     *
+     * Both land on /settings/feedback with the compose sheet already up; the
+     * bug row preselects the type and the other leaves it unset. The second row
+     * exists because "report a bug" is the errand somebody arrives at Settings
+     * already intending to run, and making them find it inside a board named
+     * for something else costs a tap and a moment of doubt about whether they
+     * are in the right place. Same destination, same affordance — which is what
+     * keeps this inside ui-object-design.md §3b rather than in breach of it: the
+     * board's own header "+" opens the identical sheet.
+     *
+     * `compose` rides as a querystring param, so the router builds
+     * /settings/feedback?compose=bug and the view strips it once the sheet is
+     * up. Not gated on is_admin: everybody files feedback and everybody reads
+     * the board. Only resolving is an admin action, and that lives on the
+     * screen itself.
+     */
+    _renderFeedbackCard() {
+      const row = (compose, icon, title, sub) => `
+        <button class="set-card__row"
+                onclick="window.router.go('feedback', { compose: '${compose}' })">
+          <span class="set-card__row-icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
+          <span class="set-card__row-body">
+            <span class="set-card__row-title">${escapeHtml(title)}</span>
+            <span class="set-card__row-sub">${escapeHtml(sub)}</span>
+          </span>
+          <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+        </button>`;
+      return `
+        <div class="set-card">
+          ${row("1", "lightbulb", "Add feedback",
+                "Suggest a feature, or vote up what others have asked for.")}
+          ${row("bug", "alert-triangle", "Report a bug",
+                "Something broken? It goes on the same board.")}
         </div>
       `;
     }
