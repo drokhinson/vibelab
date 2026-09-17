@@ -37,7 +37,7 @@ Two consequences worth knowing:
     BGG /thing call on a game whose plays they never bring over.
 
 Idempotent: collection rows upsert on (user_id, game_id); plays dedup on
-(user_id, bgg_play_id), now enforced inside bgb_log_play (migration 040).
+(user_id, bgg_play_id), now enforced inside bgb_log_play (migration 044).
 Re-running sync is always safe.
 """
 

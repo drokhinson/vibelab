@@ -23,7 +23,7 @@
 //    — and two games that happen to share a name cannot collide.
 //
 // 2. EVERY PLAY CARRIES ITS bgg_play_id INTO THE PAYLOAD. That is the second
-//    idempotency key (migration 040), beside the client_key every source sends.
+//    idempotency key (migration 044), beside the client_key every source sends.
 //    The client_key makes re-running THIS draft free; the BGG id makes
 //    re-running from a different draft, another device, or after the retired
 //    sync already landed the play free as well. Nothing else can see those
@@ -775,13 +775,14 @@
         // The draft's own idempotency key, so re-sending a chunk whose response
         // was lost returns duplicates rather than a second set of plays.
         client_key: play.id,
-        // Migration 040. The OTHER idempotency key, and the one that spans
+        // Migration 044. The OTHER idempotency key, and the one that spans
         // drafts, devices and the retired POST /bgg/sync write path — those
         // rows carry this and no client_key, so nothing else can see them.
         bgg_play_id: play.bggPlayId,
         import_group_id: (groups && groups.get(play.id)) || null,
         // Migration 007. Every play in THIS import shares one, so a BGG import
-        // can be undone from Settings — which it never could when the sync
+        // shows up in the imports spoke (/settings/imports) and can be read
+        // back and undone there — neither of which it could when the sync
         // wrote these rows itself.
         import_batch_id: batchId || null,
       };
