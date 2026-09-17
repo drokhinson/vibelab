@@ -2403,6 +2403,44 @@ class PlayImportListResponse(BaseModel):
     imports: list[PlayImportSummary] = []
 
 
+class PlayImportRunItem(BaseModel):
+    """One row of an import's contents: a RUN of identical plays, or a one-off.
+
+    Collapsed on COALESCE(import_group_id, id), so a one-off is a run of one
+    and the client needs no branch between the two cases. The importer sets a
+    group id only on plays it judged indistinguishable from another in the same
+    paste, so every one-off in a batch arrives here with `import_group_id`
+    None — and `group_count` 1 — rather than being left out.
+
+    `play_id` is the group's representative: the LOWEST id in it, the rule
+    bgb_plays_page and bgb_feed_plays already use. That matters because it is
+    what makes the play this row opens the same play those surfaces show, so a
+    `play-changed` echo patches the same row everywhere.
+    """
+
+    play_id: str
+    import_group_id: str | None = None
+    group_count: int = 1
+    game_id: str
+    game_name: str
+    game_thumbnail: str | None = None
+    played_at: date
+    notes: str | None = None
+    players: list[PlayPlayerResponse] = []
+
+
+class PlayImportDetailResponse(BaseModel):
+    """One import and what it wrote — the imports spoke's drill-down.
+
+    `batch` is the SAME PlayImportSummary the list endpoint hands back, not a
+    second shape saying the same things: the spoke's index row and its detail
+    header render from one model, so they cannot drift.
+    """
+
+    batch: PlayImportSummary
+    runs: list[PlayImportRunItem] = []
+
+
 # ── Data export ───────────────────────────────────────────────────────────────
 
 class ExportDatasetInfo(BaseModel):
