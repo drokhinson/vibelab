@@ -198,6 +198,20 @@
           alias: "import-wizard", aliasParams: { source: "notes" } },
         { name: "photo-import",        pattern: /^\/settings\/import-photos\/?$/,
           alias: "import-wizard", aliasParams: { source: "photos" } },
+        // The imports spoke and its drill-down. `batchId` is in the PATH, not
+        // the querystring, because it is what the page is rather than a hint
+        // about how you got there — the opposite call from `compose` below.
+        //
+        // One letter from the importer above, and deliberately so: `/import`
+        // is the wizard that writes plays and `/imports` is the history of what
+        // it wrote. The patterns are anchored, so `/settings/imports` cannot
+        // match `import-wizard`'s — do not "tidy" these into one.
+        { name: "import-detail",       pattern: /^\/settings\/imports\/([^/]+)\/?$/,
+          consume: ["batchId"],
+          extract: (m) => ({ batchId: decodeURIComponent(m[1]) }),
+          build: (p) => `/settings/imports/${encodeURIComponent(p.batchId || "")}` },
+        { name: "imports",             pattern: /^\/settings\/imports\/?$/,
+          build: () => "/settings/imports" },
         { name: "bgg-sync",            pattern: /^\/settings\/bgg\/?$/,
           build: () => "/settings/bgg" },
         // `compose` stays OFF the path and rides as querystring: it is a

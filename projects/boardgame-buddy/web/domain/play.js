@@ -587,9 +587,21 @@
         .then((r) => { _invalidatePlayDeps(); return r; });
     }
 
-    /** Past imports, newest first — the Settings list. */
+    /** Past imports, newest first — the imports spoke's index. */
     static listImports() {
       return window.api.get("/plays/imports").then((r) => (r && r.imports) || []);
+    }
+
+    /**
+     * One import and the runs it wrote — the spoke's drill-down.
+     *
+     * Uncached, like listImports above: a screen whose whole job is auditing
+     * what an import did must not paint a list that predates the delete the
+     * user just made on it.
+     * @returns {Promise<{batch:any, runs:any[]}>}
+     */
+    static importDetail(batchId) {
+      return window.api.get(`/plays/imports/${encodeURIComponent(batchId)}`);
     }
   }
 

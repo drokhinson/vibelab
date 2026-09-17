@@ -18665,3 +18665,48 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 @media (hover: hover) {
   .bgbnotif-row__main:hover { background: oklch(var(--bc) / 0.04); }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Imports spoke — /settings/imports and its drill-down
+   ══════════════════════════════════════════════════════════════════════════
+   Almost everything here is borrowed and that is deliberate: the index rows
+   are .set-card / .set-card__row (the same one-line row Settings uses, already
+   56px and already re-pointed for .bgb-spoke-screen), and the detail's run list
+   is the .plays-list family from the plays log. Only the three rules below are
+   this screen's own.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Breathing room between the import's facts card and the runs it wrote. */
+.import-detail .plays-list { margin-top: 0.9rem; }
+
+/* A run row opens the run sheet HERE, unlike on the plays log, where
+   bgb_plays_page returns no group id to open it with — so the row has to look
+   tappable. (0,2,0) beats the base rule's (0,1,0) by specificity, not by
+   source order. */
+.import-detail .plays-list__row--run { cursor: pointer; }
+
+/* Undo the whole import. Same --rust recipe as .run-sheet__delete, which is the
+   other place this act is offered — but its own class, because a family named
+   for a sheet has no business on a screen (.claude/rules/ui-object-design.md). */
+.import-detail__delete {
+  width: 100%;
+  margin-top: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  /* 52px: a commit button, and the thing it commits to is destructive
+     (.claude/rules/mobile-web.md §5). */
+  min-height: 52px;
+  border-radius: var(--rounded-btn, 0.6rem);
+  border: 1px solid color-mix(in srgb, var(--rust) 45%, transparent);
+  background: color-mix(in srgb, var(--rust) 12%, transparent);
+  color: var(--rust);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.import-detail__delete:active:not(:disabled) {
+  background: color-mix(in srgb, var(--rust) 22%, transparent);
+}
+.import-detail__delete:disabled { opacity: 0.5; }
+.import-detail__delete:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
