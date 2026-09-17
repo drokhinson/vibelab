@@ -8,8 +8,9 @@
 //
 // The host view owns the repaint: every state change calls opts.render(), and
 // the panel's html() is re-read from the host's own render pass. Inline
-// onclick attributes name `window.<opts.host>`, so two panels on two spokes
-// each route back to their own view rather than a shared global.
+// onclick attributes name `window.<opts.host>` AND carry the panel's `key`,
+// because one spoke now stacks every backfill panel: the host has to know
+// which of them a tap belongs to before it can delegate.
 
 (function () {
   // A bulk pass is bounded server-side, so a cold catalog needs several. Cap
@@ -129,7 +130,7 @@
           </h3>
           <button class="btn btn-xs ${bulkDisabled ? "btn-ghost" : "btn-primary"}"
                   ${bulkDisabled ? "disabled" : ""}
-                  onclick="window.${o.host}._all()">
+                  onclick="window.${o.host}._all('${o.key}')">
             ${this._bulk
               ? `<span class="loading loading-spinner loading-xs"></span> ${escapeHtml(this._bulkNote || o.busyLabel)}`
               : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> ${escapeHtml(o.bulkLabel)}`}
@@ -171,7 +172,7 @@
             <div class="admin-reports__actions">
               <button class="btn btn-xs ${disabled ? "btn-ghost" : "btn-primary"}"
                       ${disabled ? "disabled" : ""}
-                      onclick="window.${this.opts.host}._one('${g.id}')">
+                      onclick="window.${this.opts.host}._one('${this.key}', '${g.id}')">
                 ${busy
                   ? `<span class="loading loading-spinner loading-xs"></span> Refreshing…`
                   : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> Refresh`}

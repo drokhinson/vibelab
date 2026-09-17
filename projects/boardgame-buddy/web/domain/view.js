@@ -226,9 +226,20 @@
         { name: "notifications",       pattern: /^\/notifications\/?$/,           build: () => "/notifications" },
         { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
         { name: "admin-reports",       pattern: /^\/admin\/reports\/?$/,          build: () => "/admin/reports" },
-        { name: "admin-images",        pattern: /^\/admin\/images\/?$/,           build: () => "/admin/images" },
-        { name: "admin-descriptions",  pattern: /^\/admin\/descriptions\/?$/,     build: () => "/admin/descriptions" },
-        { name: "admin-stats",         pattern: /^\/admin\/stats\/?$/,            build: () => "/admin/stats" },
+        { name: "admin-bgg-data",      pattern: /^\/admin\/bgg-data\/?$/,         build: () => "/admin/bgg-data" },
+        // The four backfills were four spokes until they became four panels on
+        // one. Match-only aliases so an admin's bookmark still lands on the
+        // screen that holds its queue. /admin/publishers never had a pattern of
+        // its own — it is listed here for the same reason as the other three,
+        // not because anything could have linked to it.
+        { name: "admin-images",        pattern: /^\/admin\/images\/?$/,           build: () => "/admin/images",
+          alias: "admin-bgg-data" },
+        { name: "admin-descriptions",  pattern: /^\/admin\/descriptions\/?$/,     build: () => "/admin/descriptions",
+          alias: "admin-bgg-data" },
+        { name: "admin-stats",         pattern: /^\/admin\/stats\/?$/,            build: () => "/admin/stats",
+          alias: "admin-bgg-data" },
+        { name: "admin-publishers",    pattern: /^\/admin\/publishers\/?$/,       build: () => "/admin/publishers",
+          alias: "admin-bgg-data" },
         { name: "admin-release-notices", pattern: /^\/admin\/release-notices\/?$/,
           build: () => "/admin/release-notices" },
         // The admin tools used to be one stacked screen at /admin. Aliased
@@ -320,7 +331,11 @@
      */
     routeNames() {
       return this._routes
-        .filter((r) => r.build && !(r.consume && r.consume.length))
+        // `alias` entries are match-only: they have a `build`, but no view is
+        // registered under their name, so go() would console.error on one. The
+        // release-notice editor picks its destination out of this list, so a
+        // retired path in it is a published notice whose button does nothing.
+        .filter((r) => r.build && !r.alias && !(r.consume && r.consume.length))
         .map((r) => r.name);
     }
 

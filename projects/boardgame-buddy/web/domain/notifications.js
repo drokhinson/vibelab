@@ -64,28 +64,35 @@
       adminTool: "reports",
       label: (n) => `${n} chapter report${n === 1 ? "" : "s"}`,
     },
+    // Four signals, one `adminTool`: the four catalog backfills are four panels
+    // on the single "Missing BGG data" spoke now, so they badge together. They
+    // stay four ROWS here rather than collapsing into one summed slot, because
+    // `parts` is what the row's aria-label reads out — a screen reader hearing
+    // "7 waiting" learns nothing, "3 games missing images and 4 games missing a
+    // publisher" is the whole story — and because each count still arrives from
+    // its own query in domain/admin-review.js.
     {
       slot: "adminMissingImageCount",
       gear: true,
-      adminTool: "images",
+      adminTool: "bggData",
       label: (n) => `${n} game${n === 1 ? "" : "s"} missing images`,
     },
     {
       slot: "adminMissingDescriptionCount",
       gear: true,
-      adminTool: "descriptions",
+      adminTool: "bggData",
       label: (n) => `${n} game${n === 1 ? "" : "s"} missing a description`,
     },
     {
       slot: "adminMissingStatsCount",
       gear: true,
-      adminTool: "stats",
+      adminTool: "bggData",
       label: (n) => `${n} game${n === 1 ? "" : "s"} missing BGG stats`,
     },
     {
       slot: "adminMissingPublisherCount",
       gear: true,
-      adminTool: "publishers",
+      adminTool: "bggData",
       label: (n) => `${n} game${n === 1 ? "" : "s"} missing a publisher`,
     },
     // Pending uploads. The header's own upload button is gone: a queue that
@@ -194,7 +201,11 @@
       return tally({ bell: true });
     },
 
-    /** What one admin spoke has to act on, by its tool key. */
+    /**
+     * What one admin spoke has to act on, by its tool key. A spoke that hosts
+     * several queues (see "bggData") shares one key across its signals, so the
+     * total sums them and `parts` still names each.
+     */
     forAdminTool(key) {
       return tally({ adminTool: key });
     },

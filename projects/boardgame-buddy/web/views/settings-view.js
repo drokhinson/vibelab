@@ -82,8 +82,8 @@
       // double-tap cannot race two permission prompts.
       this._pushBusy = false;
 
-      // True while the "Refresh cached data" button is working.
-      this._cacheRefreshing = false;
+      // True while the "Reset local cache" button is working.
+      this._cacheResetting = false;
 
       // True while the admin "Refresh trending" run is in flight — it is what
       // puts the row's Sync pill into "Syncing…" and keeps a second tap from
@@ -458,7 +458,9 @@
     // One row per admin tool, each its own spoke. Previously all three tools
     // lived on one /admin screen behind a row labelled "Chapter reports" — so
     // the two catalog backfills were unreachable by name, and the single badge
-    // could only ever count one of the three queues.
+    // could only ever count one of the three queues. The catalog backfills
+    // share a row again, but not that bug: the row is named for what it holds
+    // and its badge sums every queue behind it.
     //
     // `tool` keys into domain/notifications.js, which owns the count and how
     // to say it; this table owns only how the row looks.
@@ -471,36 +473,24 @@
           title: "Chapter reports",
           sub: "Moderate community-reported reference-guide chapters.",
         },
+        // ONE row for four queues. They were four — Missing images, Missing
+        // descriptions, Missing BGG stats, Missing publishers — which is four
+        // rows saying the same sentence with a different noun in it, and a
+        // fifth was already in sight. They are panels on one spoke now
+        // (views/admin-backfill-view.js); the badge sums the four counts and
+        // the aria-label still names them one by one, so nothing is hidden by
+        // the collapse except the scrolling.
         {
-          route: "admin-images",
-          tool: "images",
-          icon: "image-off",
-          title: "Missing images",
-          sub: "Re-host box art and thumbnails from BoardGameGeek.",
-        },
-        {
-          route: "admin-descriptions",
-          tool: "descriptions",
-          icon: "scroll-text",
-          title: "Missing descriptions",
-          sub: "Backfill game descriptions from BoardGameGeek.",
-        },
-        {
-          route: "admin-stats",
-          tool: "stats",
-          icon: "star",
-          title: "Missing BGG stats",
-          sub: "Sync ratings, ranks and weights from BoardGameGeek for the Discover tab.",
-        },
-        {
-          route: "admin-publishers",
-          tool: "publishers",
-          icon: "library-big",
-          title: "Missing publishers",
-          sub: "Backfill publisher credits from BoardGameGeek for the game page.",
+          route: "admin-bgg-data",
+          tool: "bggData",
+          // Not `image-off`, which the images spoke carried: it names one of
+          // the four queues and would read as the row's whole subject.
+          icon: "layers",
+          title: "Missing BGG data",
+          sub: "Backfill missing photos, descriptions, or other game data from BGG.",
         },
         // The one admin tool that AUTHORS rather than moderates — the other
-        // five work a queue somebody else filled. So it carries no count and
+        // two work a queue somebody else filled. So it carries no count and
         // no row in domain/notifications.js: an unpublished draft is not work
         // waiting, and forAdminTool("releaseNotices") matching no signal
         // returns zero, which renders no badge. That is the wanted behaviour,
@@ -802,8 +792,7 @@
             <span class="set-card__row-body">
               <span class="set-card__row-title">Play importer</span>
               <span class="set-card__row-sub">
-                Import plays from photos, notes or another app — you review every
-                play before anything is saved.
+                Import plays from photos, notes or another app.
               </span>
             </span>
             <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
@@ -882,9 +871,9 @@
           ${row("whats-new", null, "sparkles", "What's new",
                 "Everything we've shipped, newest first.")}
           ${compose("1", "lightbulb", "Add feedback",
-                "Suggest a feature, or vote up what others have asked for.")}
+                "Give feedback or make feature requests.")}
           ${compose("bug", "alert-triangle", "Report a bug",
-                "Something broken? It goes on the same board.")}
+                "Something broken? Report it.")}
         </div>
       `;
     }
@@ -1039,8 +1028,7 @@
             <span class="set-card__row-body">
               <span class="set-card__row-title">Export your data</span>
               <span class="set-card__row-sub">
-                Download your collection, plays and guides as a zip of
-                CSV files.
+                Download your collection, plays and guides.
               </span>
             </span>
             <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
@@ -1051,7 +1039,7 @@
 
     _renderCacheCard() {
       const stats = (window.bgbCache && window.bgbCache.stats) ? window.bgbCache.stats() : null;
-      const busy = !!this._cacheRefreshing;
+      const busy = !!this._cacheResetting;
 
       let totalBytes = 0;
       const buckets = { games: { entries: 0, bytes: 0 }, plays: { entries: 0, bytes: 0 }, buddies: { entries: 0, bytes: 0 }, other: { entries: 0, bytes: 0 } };
@@ -1083,7 +1071,7 @@
 
       const breakdown = empty ? `<div class="text-xs opacity-60">Nothing cached yet.</div>` : `
         <div class="set-card__cache-total">
-          <span>Total</span><span>${fmt(totalBytes)}</span>
+          <span>Total cache</span><span>${fmt(totalBytes)}</span>
         </div>
         <div class="set-card__cache-breakdown">
           ${row("Games", buckets.games)}
@@ -1096,34 +1084,30 @@
       return `
         <div class="set-card">
           <div class="set-card__bgg-body" style="flex-direction: column; align-items: stretch;">
-            <p class="text-sm opacity-80">
-              Your collection, buddies, and recent feed are kept locally so the
-              app loads instantly. Refresh if something looks out of date.
-            </p>
             ${breakdown}
             <button class="btn btn-primary btn-sm" ${busy ? "disabled" : ""}
-                    onclick="window.settingsView._refreshLocalCache()">
+                    onclick="window.settingsView._resetLocalCache()">
               <i data-icon="refresh-cw" class="w-4 h-4 ${busy ? "animate-spin" : ""}"></i>
-              ${busy ? "Refreshing…" : "Refresh local cache"}
+              ${busy ? "Resetting…" : "Reset local cache"}
             </button>
           </div>
         </div>
       `;
     }
 
-    async _refreshLocalCache() {
-      if (this._cacheRefreshing) return;
+    async _resetLocalCache() {
+      if (this._cacheResetting) return;
       const ok = await window.PolaroidPopup.confirm({
-        title: "Refresh local cache?",
+        title: "Reset local cache?",
         body: "We'll re-download your collection, buddies, and feed. Anything you've typed but not submitted is unaffected.",
-        confirmLabel: "Refresh",
+        confirmLabel: "Reset",
         cancelLabel: "Cancel",
       });
       if (!ok) return;
       const me = window.store.get("user");
       const uid = me && me.id;
       if (!uid) return;
-      this._cacheRefreshing = true;
+      this._cacheResetting = true;
       this.render();
       try {
         // Drop everything for this user (in-memory + localStorage), then
@@ -1137,11 +1121,11 @@
         window.store.invalidate("user");
         window.store.invalidate("feed");
         window.store.invalidate("myCollectionMap");
-        if (typeof showToast === "function") showToast("Cache refreshed", "success");
+        if (typeof showToast === "function") showToast("Cache reset", "success");
       } catch (e) {
-        if (typeof showToast === "function") showToast(e.message || "Couldn't refresh — check your connection.", "error");
+        if (typeof showToast === "function") showToast(e.message || "Couldn't reset — check your connection.", "error");
       } finally {
-        this._cacheRefreshing = false;
+        this._cacheResetting = false;
         this.render();
       }
     }
