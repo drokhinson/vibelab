@@ -16,7 +16,7 @@ from db import get_supabase
 
 from . import router
 from .dependencies import CurrentUser, get_current_user
-from .models import UnifiedSearchResponse
+from .models import CatalogIndexResponse, UnifiedSearchResponse
 from .services import search_service
 
 
@@ -59,3 +59,22 @@ async def unified_search(
         include_bgg=include_bgg,
         include_expansions=include_expansions,
     )
+
+
+@router.get(
+    "/search/index",
+    response_model=CatalogIndexResponse,
+    status_code=200,
+    summary="Every base game in the catalog, compact, for client-side search",
+)
+async def search_index(
+    user: CurrentUser = Depends(get_current_user),
+) -> CatalogIndexResponse:
+    """The Gather picker's whole answer, fetched once and searched on-device.
+
+    Lives under /search rather than /games so no `/games/{game_id}` route can
+    swallow it (tests/test_route_ordering.py). Not viewer-specific — the
+    response is shared across every caller for its TTL — but authenticated
+    like everything else the catalog exposes.
+    """
+    return await search_service.catalog_index(get_supabase())
