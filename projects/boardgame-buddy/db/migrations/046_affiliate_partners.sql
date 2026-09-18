@@ -1,4 +1,4 @@
--- 045_affiliate_partners.sql — retailer partners under every game, off by default.
+-- 046_affiliate_partners.sql — retailer partners under every game, off by default.
 --
 -- WHY. The Discover tab (038/039) finds games; this is where finding one turns
 -- into revenue. A partner row is a retailer BoardgameBuddy can send a reader to

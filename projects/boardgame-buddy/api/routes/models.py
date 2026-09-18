@@ -131,7 +131,7 @@ class AdminReviewCounts(BaseModel):
     chapter_reports: int = 0
     missing_images: int = 0
     # Catalog games short of anything one /thing?stats=1 read would give them —
-    # a description, BGG stats, publisher credits, or a year (migration 045).
+    # a description, BGG stats, publisher credits, or a year (migration 046).
     #
     # ONE field where there were three. They were three counts of three
     # overlapping queues, so a game missing both its blurb and its year was
@@ -3033,7 +3033,7 @@ class BgaRememberResponse(BaseModel):
     stored: int = 0
 
 
-# ── Affiliate partners (migration 045) ───────────────────────────────────────
+# ── Affiliate partners (migration 046) ───────────────────────────────────────
 #
 # A partner is LIVE only when enabled AND it holds a credential (a tracking
 # tag or a wrapper link). `enabled` is never a field on the write model:

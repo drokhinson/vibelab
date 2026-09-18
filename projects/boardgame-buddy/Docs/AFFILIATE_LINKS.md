@@ -6,7 +6,7 @@ document is the operator's side of that: how to join each program, what it
 hands you, where to paste it, and what the app promises about it.
 
 **Nothing is showing to readers until you finish a partner's setup.** The four
-partner rows ship disabled with no credentials (migration 045), and a partner
+partner rows ship disabled with no credentials (migration 046), and a partner
 renders only when it is *enabled* **and** holds a *tracking tag* or a *wrapper
 link*. Enabling a row with neither is refused. Disabling is instant and needs no
 deploy.
@@ -136,7 +136,7 @@ the first partner, and record the outcome here.
 
 | What | Where |
 |---|---|
-| The tables and the seeded rows | `db/migrations/045_affiliate_partners.sql` |
+| The tables and the seeded rows | `db/migrations/046_affiliate_partners.sql` |
 | The live rule and the URL builder | `api/routes/services/affiliate_service.py` |
 | The endpoints | `api/routes/affiliate_routes.py` (`GET /affiliate/links`, `POST /affiliate/click`, `/affiliate/admin/*`) |
 | The pills | `web/ui/buy-links.js`, painted by `web/views/game-detail-view.js` |

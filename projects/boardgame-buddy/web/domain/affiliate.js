@@ -2,7 +2,7 @@
 //
 // NOTHING RENDERS UNTIL A PARTNER IS LIVE, and that decision is the server's:
 // GET /affiliate/links answers `{links: [], live: false}` until an admin has
-// pasted a credential and switched a partner on (migration 045,
+// pasted a credential and switched a partner on (migration 046,
 // Docs/AFFILIATE_LINKS.md). Every surface that paints from this module renders
 // nothing from an empty list — there is no client-side default, no placeholder
 // pill, no "coming soon".

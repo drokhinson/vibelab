@@ -7,7 +7,7 @@ THE LIVE RULE IS THE WHOLE MODULE. A partner renders only when
 
 and it is applied in exactly one place (`AffiliatePartner.live`, read by
 `list_live`), so a game page, the Discover footer and the admin list cannot
-disagree about whether a retailer is on. Every seeded row (migration 045) is
+disagree about whether a retailer is on. Every seeded row (migration 046) is
 disabled with no credential; `set_enabled(True)` refuses a row with neither.
 
 ONE URL WRITER. `build_url` is the only code that turns a partner row and a

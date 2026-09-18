@@ -1,7 +1,7 @@
 // views/admin-affiliates-view.js — switching retailer partners on, and off.
 //
 // The spoke behind Settings → Admin tools → Affiliate partners. Four fixed
-// rows (migration 045 seeds them; there is no New and no Delete — a retailer
+// rows (migration 046 seeds them; there is no New and no Delete — a retailer
 // is a program you joined, not a note you wrote), each with an Edit that opens
 // widgets/affiliate-partner-editor.js inline and an Enable/Disable that is
 // THE switch: nothing on any game page shows a pill until one of these is
@@ -97,7 +97,7 @@
           </div>`;
       }
       if (!this._partners.length) {
-        return `<div class="text-sm opacity-60 p-6 text-center">No partners seeded. Run migration 045.</div>`;
+        return `<div class="text-sm opacity-60 p-6 text-center">No partners seeded. Run migration 046.</div>`;
       }
       return `<ul class="rel-admin__list">${this._partners.map((p) => this._renderRow(p)).join("")}</ul>`;
     }

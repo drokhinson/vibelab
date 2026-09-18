@@ -1,9 +1,14 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 045_affiliate_partners.sql (boardgamebuddy_affiliate_partners —
+-- Last updated: 046_affiliate_partners.sql (boardgamebuddy_affiliate_partners —
 --               the four retailers, seeded DISABLED with no credential — and
 --               boardgamebuddy_affiliate_clicks, a userless tap log; hand-added
 --               below).
+--               Before that: 045_bgg_meta_sync.sql (boardgamebuddy_games.bgg_meta_synced_at
+--               plus idx_bgb_games_meta_synced — the queue marker for the merged
+--               /thing?stats=1 sweep, superseding bgg_stats_synced_at as the QUEUE
+--               while that column stays a real record of when the ratings landed;
+--               already folded into the games block above.)
 --               Before that: 044_play_bgg_play_id.sql (no table shape moves — it re-emits
 --               bgb_log_play. The one schema fact is the COMMENT ON
 --               boardgamebuddy_plays.bgg_play_id at the foot, naming the two
@@ -82,7 +87,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   -- (045), and readers coerce both to [].
   publishers TEXT[],
   -- When POST /games/admin/backfill-metadata last read BGG's /thing?stats=1
-  -- record for this game (migration 045). NULL with a non-null bgg_id IS that
+  -- record for this game (migration 046). NULL with a non-null bgg_id IS that
   -- backfill's queue — and it is deliberately NOT the same predicate the admin
   -- panel lists from. The row is stamped even when BGG had no description or
   -- year, so the queue drains; the panel keeps listing it off the field
@@ -907,7 +912,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_likes (
 ALTER TABLE public.boardgamebuddy_feedback_likes ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_feedback_likes TO boardgamebuddy_role;
 
--- ── Affiliate partners (migration 045) ────────────────────────────────────────
+-- ── Affiliate partners (migration 046) ────────────────────────────────────────
 -- Retailers a game page can link to. live = enabled AND (tracking_tag OR
 -- wrapper_template); every seeded row is disabled with no credential, so
 -- nothing renders until an admin sets one up (Docs/AFFILIATE_LINKS.md).

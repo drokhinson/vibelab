@@ -941,7 +941,7 @@ MAX_RELEASE_NOTICE_LINK_LABEL_CHARS = 40
 MAX_RELEASE_NOTICE_LINK_ROUTE_CHARS = 64
 
 
-# ── Affiliate partners (migration 045) ───────────────────────────────────────
+# ── Affiliate partners (migration 046) ───────────────────────────────────────
 
 class AffiliateSurface(StrEnum):
     """Where a partner pill was tapped. Mirrors the CHECK on
