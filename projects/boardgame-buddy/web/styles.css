@@ -19451,7 +19451,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .tour__stage {
   margin-top: 12px;
   width: 100%;
-  height: clamp(176px, 30vh, 244px);
+  /* The floor is set by the tallest scene, which is the feed: a game-night
+     header, a rail of polaroids and the Good game footer need ~203px of
+     screen under the frame's own title bar. Below that the rail's clip was
+     the flex child that gave, and it gave by cutting every card off below its
+     game name. The chapter panel has the room — its points list leaves ~150px
+     of slack above the actions row. */
+  height: clamp(232px, 34vh, 272px);
 }
 .tour__stage-wait {
   width: 100%;
@@ -19542,72 +19548,215 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 :root[data-bgb="dark"] .vig-av { color: var(--accent); }
 .vig-av--sm { width: 18px; height: 18px; font-size: 8px; }
+.vig-av--xs { width: 14px; height: 14px; font-size: 6.5px; }
 
-/* ── Scene: community ─────────────────────────────────────────────────────── */
-.vfeed-track {
+/* ── Scene: community ─────────────────────────────────────────────────────
+   A miniature of the feed, and the whole reason it reads as one is the
+   GROUND/PAPER contrast: the day divider, the session header and the Good
+   game footer paint from --ink*, while the cards between them are paper and
+   stay cream in both themes. Scaled from ui/play-card.js at roughly a third —
+   the real card is 280px wide with a 230px photo and 12px/12px/16px padding.
+   ────────────────────────────────────────────────────────────────────────── */
+.vfeed {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  /* One "step" is one card plus its gap. The scene sets --vig-step; this
-     turns it into travel, so the step count in JS never has to know a pixel
-     measurement that lives here. */
-  transform: translateY(calc(var(--vig-step, 0) * -58px));
-  transition: transform 520ms var(--ease);
+  gap: 4px;
+  padding: 6px 0 6px 9px;
+  justify-content: center;
+  /* A fixed measure rather than the column's. The rail's slide only reads as
+     a slide while the rail is wider than what shows of it, and the tour panel
+     is 448px wide on a tablet against 342 on a phone — enough of a spread to
+     turn two honest steps into one step and a gap. Capping the clip makes the
+     geometry the same everywhere; a vignette is a picture, not a layout. */
+  max-width: 339px;
 }
-.vfeed-sec {
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  padding: 2px 2px 0;
-}
-.vfeed-card {
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--bg-2);
-  padding: 7px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.vfeed-card__top { display: flex; align-items: center; gap: 7px; }
-.vfeed-card__who { display: flex; flex-direction: column; line-height: 1.2; }
-.vfeed-card__who b { font-size: 11px; color: var(--ink); }
-.vfeed-card__who span { font-size: 9.5px; color: var(--ink-faint); }
-.vfeed-card__game { display: flex; align-items: center; gap: 7px; }
-.vfeed-card__cover {
-  width: 26px;
-  height: 20px;
-  border-radius: var(--r-xs);
-  background: linear-gradient(135deg, var(--accent-quiet), var(--bg-1));
-  border: 1px solid var(--line);
-}
-.vfeed-card__name {
+/* The .day-divider analogue: accent, upper, tracked out. */
+.vfeed__day {
+  margin: 0;
   font-family: var(--font-polaroid);
-  font-size: 12.5px;
-  color: var(--ink);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
-.vfeed-kudos { display: flex; align-items: center; gap: 5px; }
-.vfeed-kudos__btn {
-  width: 20px;
-  height: 20px;
+/* .play-session__title — muted sentence, the names picked out in full ink. */
+.vfeed__header {
+  margin: 0 9px 1px 0;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vfeed__header b { font-weight: 600; color: var(--ink); }
+
+/* The rail. Clipped rather than scrollable — nothing here takes a gesture. */
+/* flex: none on all four children. Without it the clip is the one that gives
+   when the frame is short, and it gave by cutting each card off below its game
+   name — taking the winner line, which is the thing the cards are here for. */
+.vfeed__day, .vfeed__header, .vfeed__foot { flex: none; }
+.vfeed__railclip { flex: none; overflow: hidden; padding: 3px 0 5px; }
+.vfeed__rail {
+  display: flex;
+  gap: 8px;
+  /* One step is one card plus its gap (96 + 8). The scene sets --vig-step, so
+     the JS never has to know a measurement that lives here. */
+  transform: translateX(calc(var(--vig-step, 0) * -104px));
+  transition: transform 560ms var(--ease);
+}
+
+/* ── The polaroid ─────────────────────────────────────────────────────────
+   Paper, and a card, not a row. --sh-3 is the real card's shadow and it is
+   tinted to the ground rather than black, so it reads in both themes. */
+.vfeed-card {
+  flex: none;
+  width: 96px;
+  box-sizing: border-box;
+  background: var(--polaroid-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-md);
+  /* The real card's 12/12/16 at this scale. The deeper bottom lip is what
+     makes a polaroid look like one. */
+  padding: 4px 4px 6px;
+  box-shadow: var(--sh-3);
+  color: var(--polaroid-ink);
+}
+.vfeed-card__photo {
+  position: relative;
+  /* 86px of content width at ~1.11:1, which is the real card's wide-variant
+     frame (256x230). */
+  height: 77px;
+  /* 3px, not the card's 10px — the photo's corners are much tighter than the
+     paper's, same as .play-card__photo. */
+  border-radius: 3px;
+  overflow: hidden;
+  /* This flat warm-grey IS the real card's no-art state, not a placeholder
+     invented here (.play-card__photo's own background). */
+  background: var(--polaroid-line);
+}
+.vfeed-card__art {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 30% 28%,
+                    color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%),
+    linear-gradient(150deg,
+                    color-mix(in srgb, var(--paper-ink) 22%, var(--polaroid-line)),
+                    var(--polaroid-line));
+}
+/* The bottom-darkening wash the real photo carries, so the frame has depth. */
+.vfeed-card__photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 62%, rgba(0, 0, 0, 0.20));
+}
+/* The one mark the shipped card has no equivalent for — see the comment on
+   playCard() in widgets/tour-vignette-ambient.js. Top-left, clear of the
+   bottom-right corner where the real card parks its box-art badge. */
+.vfeed-card__crown {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 2;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
-  color: var(--ink-faint);
-  transition: background 220ms var(--ease), color 220ms var(--ease), transform 220ms var(--ease);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
 }
-.vfeed-kudos.is-on .vfeed-kudos__btn {
+.vfeed-card__cap {
+  padding: 5px 1px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.vfeed-card__name {
+  font-family: var(--font-polaroid);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--polaroid-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The hairline above the winner, exactly as .play-card__meta-row has it. */
+.vfeed-card__meta {
+  padding-top: 3px;
+  border-top: 1px solid var(--polaroid-line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* --rust-ink rather than --polaroid-accent, and the measurement is the reason.
+   --polaroid-accent resolves to --win, which on cream in dark (#C8553D on
+   #F8F2E5) is 3.90:1 — fine for the real card's 11px bold, under the 4.5:1
+   that this 8.5px line needs. --rust-ink is the token that exists for exactly
+   this case, "rust as ink on a surface that is light in every theme":
+   #A8452F is 5.29:1 on #F8F2E5 (dark) and 5.90:1 on #FFFFFF (light). */
+.vfeed-win {
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--rust-ink);
+}
+.vfeed-win__label { color: var(--polaroid-muted); font-weight: 500; margin-right: 3px; }
+.vfeed-win__score { font-family: var(--font-score); font-weight: 700; }
+.vfeed-win__sep {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin: 0 4px;
+  border-radius: 50%;
+  background: var(--polaroid-line);
+  vertical-align: middle;
+}
+
+/* ── The Good game footer ─────────────────────────────────────────────────
+   Outside the cards, on the GROUND, one per night — which is where the real
+   control lives (.play-session__foot) and why it is not on a card here. */
+.vfeed__foot { display: flex; align-items: center; gap: 5px; padding-right: 9px; min-width: 0; }
+.vfeed__gg {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px 0 7px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 700;
+  transition: background 260ms var(--ease), border-color 260ms var(--ease),
+              color 260ms var(--ease);
+}
+.vfeed__foot.is-on .vfeed__gg {
   background: var(--accent-quiet);
+  border-color: var(--accent);
   color: var(--accent);
-  transform: scale(1.14);
 }
-.vfeed-kudos__n { font-family: var(--font-score); font-size: 10px; color: var(--ink-faint); }
-.vfeed-kudos.is-on .vfeed-kudos__n { color: var(--accent-ink); }
-:root[data-bgb="dark"] .vfeed-kudos.is-on .vfeed-kudos__n { color: var(--accent); }
+.vfeed__faces { display: inline-flex; flex: none; opacity: 0; transition: opacity 300ms var(--ease); }
+.vfeed__foot.is-on .vfeed__faces { opacity: 1; }
+/* Overlapped, each ringed in the ground so the stack reads as separate faces. */
+.vfeed__faces .vig-av { margin-left: -5px; box-shadow: 0 0 0 1.5px var(--bg-0); }
+.vfeed__faces .vig-av:first-child { margin-left: 0; }
+.vfeed__ggwho {
+  font-size: 8.5px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ── Scene: stats ─────────────────────────────────────────────────────────── */
 .vstat { flex: 1 1 auto; display: flex; flex-direction: column; gap: 9px; padding: 10px; min-height: 0; }
@@ -19778,7 +19927,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   box-sizing: border-box;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 280ms var(--ease);
+  transition: opacity 360ms var(--ease);
 }
 .vscore[data-stage="lobby"] .vscore__stage--lobby,
 .vscore[data-stage="pad"] .vscore__stage--pad,
@@ -19859,7 +20008,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding-block: 0;
   border-bottom-color: transparent;
   overflow: hidden;
-  transition: max-height 300ms var(--ease), opacity 240ms var(--ease), padding 300ms var(--ease);
+  /* 420ms rather than 300: the rows arriving IS the story this scene tells,
+     and at 300ms they appeared rather than grew. Paired with the ~2s dwell on
+     the generic pad above it in the beat list. */
+  transition: max-height 420ms var(--ease), opacity 300ms var(--ease), padding 420ms var(--ease);
 }
 .vscore.has-tmpl .vscore__row.is-tmpl,
 .vscore.has-exp .vscore__row.is-exp {
@@ -19876,7 +20028,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding-block: 0;
   border-bottom-color: transparent;
   overflow: hidden;
-  transition: max-height 300ms var(--ease), opacity 200ms var(--ease), padding 300ms var(--ease);
+  transition: max-height 420ms var(--ease), opacity 260ms var(--ease), padding 420ms var(--ease);
 }
 
 .vscore__stage--settle { align-items: center; justify-content: center; gap: 4px; text-align: center; }
@@ -19884,7 +20036,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .vscore__winner { margin: 4px 0 0; font-family: var(--font-polaroid); font-size: 16px; color: var(--ink); }
 .vscore__settlesub { margin: 0; font-size: 10px; color: var(--ink-faint); }
 
-/* THE SCOREPAD IS PAPER, AND THE TOUR IS CHROME.
+/* THE SCOREPAD AND THE PLAY CARDS ARE PAPER, AND THE TOUR IS CHROME.
    ──────────────────────────────────────────────────────────────────────────
    [data-view="tour"] joins the chrome re-point lists near the top of this
    file, which points --polaroid-* at the ground tokens — right for the deck,
@@ -19896,20 +20048,28 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    so a single .vscore__pad at (0,1,0) would lose --accent-ink back to it and
    settle the rest on source order — which is the drift .claude/rules/
    theming.md §7 exists to stop. Do not "simplify" it. */
-:root :is([data-view="tour"], [data-view="auth"]) .vscore__pad.vscore__pad {
+:root :is([data-view="tour"], [data-view="auth"])
+      :is(.vscore__pad.vscore__pad, .vfeed-card.vfeed-card) {
   --polaroid-bg:       var(--paper);
   --polaroid-bg-soft:  color-mix(in srgb, var(--paper) 92%, var(--paper-line));
   --polaroid-ink:      var(--paper-ink);
   --polaroid-muted:    var(--paper-muted);
   --polaroid-line:     var(--paper-line);
   --accent-ink:        var(--accent-on-paper);
+  /* The chrome branch lightens this to #E87B63 for a dark GROUND; on cream it
+     is 2.6:1. Back to --win, which is what :root aliases it to. */
+  --polaroid-accent:   var(--win);
+  /* Dark declares --card-border: transparent, which is right for a card on
+     the app's dark ground and wrong for cream paper on it — the card would
+     have no edge at all. Paper takes light's hairline in both themes. */
+  --card-border:       rgba(48, 34, 20, 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vfeed-track, .vdisc__tile, .vdisc__cover, .vstat__bar, .vstat__rate-fill,
+  .vfeed__rail, .vfeed__gg, .vfeed__faces,
+  .vdisc__tile, .vdisc__cover, .vstat__bar, .vstat__rate-fill,
   .vguide__scroll, .vguide__scrollinner, .vscore__stage, .vscore__seat,
-  .vscore__pill, .vscore__row, .vfeed-kudos__btn, .vstat__h2h, .vguide__row,
-  .vguide__tick {
+  .vscore__pill, .vscore__row, .vstat__h2h, .vguide__row, .vguide__tick {
     transition: none;
   }
 }

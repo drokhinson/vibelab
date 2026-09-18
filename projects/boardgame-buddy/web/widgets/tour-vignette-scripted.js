@@ -52,7 +52,7 @@
   V.register({
     id: "guides",
     label: "Adding a community-written chapter to your own reference guide",
-    hold: 2400,
+    hold: 3000,
     html: `
       <div class="vig-chrome"><span class="vig-chrome__title">Arboretum · Guide</span></div>
       <div class="vguide">
@@ -84,17 +84,17 @@
       body(root, ".vguide").classList.remove("is-open", "is-read");
     },
     beats: [
-      { name: "pick", at: 900, apply: (r) => {
+      { name: "pick", at: 1200, apply: (r) => {
         const row = r.querySelector('[data-row="1"]');
         if (row) row.classList.add("is-picked");
       } },
-      { name: "added", at: 1700, apply: (r) => {
+      { name: "added", at: 2600, apply: (r) => {
         const row = r.querySelector('[data-row="1"]');
         if (row) row.classList.add("is-added");
         put(r, '[data-row="1"] .vguide__rowby', "in your guide");
       } },
-      { name: "open", at: 2400, apply: (r) => body(r, ".vguide").classList.add("is-open") },
-      { name: "read", at: 3600, apply: (r) => body(r, ".vguide").classList.add("is-read") },
+      { name: "open", at: 4000, apply: (r) => body(r, ".vguide").classList.add("is-open") },
+      { name: "read", at: 6200, apply: (r) => body(r, ".vguide").classList.add("is-read") },
     ],
   });
 
@@ -122,7 +122,15 @@
   V.register({
     id: "scoring",
     label: "A live game: a blank scorepad becomes Arboretum's, then settles up",
-    hold: 2600,
+    // PACING IS THE POINT OF THIS SCENE, NOT DECORATION.
+    //
+    // It ran at roughly one beat a second and read as a flicker: one second to
+    // take in a join code and three names, and one second on the GENERIC
+    // scorepad before a template rewrote it. That second one is the whole
+    // scene — you have to register "this grid is generic" before it changes,
+    // or the change is just a grid appearing. Every gap below is ~2s now, and
+    // the generic pad gets the longest of them.
+    hold: 3000,
     html: `
       <div class="vig-chrome"><span class="vig-chrome__title" data-step>Play · Gather</span></div>
       <div class="vscore">
@@ -176,28 +184,28 @@
       root.querySelectorAll(".vscore__c[data-v]").forEach((c) => { c.textContent = "·"; });
     },
     beats: [
-      { name: "lobby", at: 400, apply: (r) => mark(r, ".vscore__seat", "is-in", true) },
-      { name: "play", at: 1400, apply: (r) => {
+      { name: "lobby", at: 600, apply: (r) => mark(r, ".vscore__seat", "is-in", true) },
+      { name: "play", at: 2600, apply: (r) => {
         stage(r, "pad");
         put(r, "[data-step]", "Play · Scoring");
       } },
-      { name: "template-on", at: 2400, apply: (r) => {
+      { name: "template-on", at: 4800, apply: (r) => {
         const p = r.querySelector('[data-pill="tmpl"]');
         if (p) p.classList.add("is-on");
         body(r, ".vscore").classList.add("has-tmpl");
       } },
-      { name: "expansion-on", at: 3400, apply: (r) => {
+      { name: "expansion-on", at: 6800, apply: (r) => {
         const p = r.querySelector('[data-pill="exp"]');
         if (p) p.classList.add("is-on");
         body(r, ".vscore").classList.add("has-exp");
       } },
-      { name: "scored", at: 4300, apply: (r) => {
+      { name: "scored", at: 8600, apply: (r) => {
         body(r, ".vscore").classList.add("is-scored");
         r.querySelectorAll(".vscore__c[data-v]").forEach((c) => {
           c.textContent = /** @type {HTMLElement} */ (c).dataset.v || "·";
         });
       } },
-      { name: "settle", at: 5600, apply: (r) => {
+      { name: "settle", at: 11000, apply: (r) => {
         stage(r, "settle");
         put(r, "[data-step]", "Play · Settle up");
       } },
