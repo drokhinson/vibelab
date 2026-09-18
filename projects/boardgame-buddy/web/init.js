@@ -13,6 +13,7 @@
   window.privacyView     = new window.PrivacyView();
   window.termsView       = new window.TermsView();
   window.authView        = new window.AuthView();
+  window.tourView        = new window.TourView();
   window.feedView        = new window.FeedView();
   window.discoveryView   = new window.DiscoveryView();
   window.logPlayView     = new window.LogPlayView();
@@ -95,6 +96,7 @@
   window.router.register("admin-run",           window.adminRunView);
   window.router.register("admin-usage",         window.adminUsageView);
   window.router.register("whats-new",           window.whatsNewView);
+  window.router.register("tour",                window.tourView);
 
   // A global helper rather than a view concern, because the provider's state
   // listener fires async, outside the view lifecycle.

@@ -117,12 +117,19 @@
   // Google's consent screen links to both permanently. They are NOT in
   // CHROMELESS_VIEWS below — a signed-in user opens them from Settings, and
   // taking the nav away there would strand the reader.
-  const PUBLIC_VIEWS = ["auth", "privacy", "terms", "splash"];
+  //
+  // tour is here because selling the app to somebody who has not signed up is
+  // the entire reason it exists — it reads no account data, and the sign-in
+  // screen links straight into it. Unlike auth it is NOT a destination the
+  // gate steers a signed-in user away from: Settings offers the same tour, and
+  // bouncing that tap to the feed would be a dead button.
+  const PUBLIC_VIEWS = ["auth", "privacy", "terms", "splash", "tour"];
 
-  // Screens that deliberately show no app chrome: the splash covers boot, and
-  // the sign-in screen must not offer a nav bar into an app nobody is signed
-  // in to. index.html marks the header and the nav [data-auth-only].
-  const CHROMELESS_VIEWS = ["splash", "auth"];
+  // Screens that deliberately show no app chrome: the splash covers boot, the
+  // sign-in screen must not offer a nav bar into an app nobody is signed in
+  // to, and the tour is a full-screen deck whose own x is the way out.
+  // index.html marks the header and the nav [data-auth-only].
+  const CHROMELESS_VIEWS = ["splash", "auth", "tour"];
 
   class Router {
     constructor() {
@@ -147,6 +154,11 @@
       // returns null for unknown names and go() skips pushState in that case.
       return [
         { name: "auth",                pattern: /^\/auth\/?$/,                    build: () => "/auth" },
+        // The feature tour. The chapter rides as ?c=<slug> rather than in the
+        // path: it is a display hint, not what the page IS, and matchPath
+        // folds the querystring into params for free so /tour?c=scoring opens
+        // on chapter 3 from a cold link.
+        { name: "tour",                pattern: /^\/tour\/?$/,                    build: () => "/tour" },
         { name: "reference-guide-add", pattern: /^\/game\/([^/]+)\/chapters\/?$/,
           consume: ["gameId"],
           extract: (m) => ({ gameId: decodeURIComponent(m[1]) }),
