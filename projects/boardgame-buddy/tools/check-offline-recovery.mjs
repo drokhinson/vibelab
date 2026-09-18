@@ -283,5 +283,30 @@ console.log("\n7. the page going away stops the ladder, coming back restarts it"
   ok("and recovers", h.win.BgbNet.isOffline() === false);
 }
 
+console.log("\n8. a network switch clears the latch outright — the user's workaround");
+{
+  const h = boot();
+  await latch(h);
+  h.setBehaviour((url) => (url === HEALTH ? "wedge" : "fail"));
+  await h.tick(5000);
+  ok("the ladder's probe is out and will never answer", h.healthCount() === 1);
+  // Dropping Wi-Fi for mobile data was the one thing that got the app back
+  // without a force-quit, and this is why: the `online` handler zeroes the
+  // strikes rather than asking anything, so it clears a latch that the wedged
+  // probe could not. Reported as "sometimes" — which is the other half of the
+  // story, since iOS does not reliably fire the pair at all (scenario 5 is that
+  // case: the same switch with no events, which used to recover from nothing).
+  h.nav.onLine = false;
+  h.fireWindow("offline");
+  await h.tick(0);
+  ok("the interface going down is published", h.slots.offline === true);
+  h.nav.onLine = true;
+  h.fireWindow("online");
+  await h.tick(0);
+  ok("coming back up clears the strikes", h.win.BgbNet.isOffline() === false);
+  ok("without waiting on a probe", h.healthCount() === 1);
+  ok("and drains the outbox on the edge", h.win.Outbox.flushes === 1);
+}
+
 console.log(fails ? `\n${fails} FAILED\n` : "\nAll offline-recovery contracts hold.\n");
 process.exit(fails ? 1 : 0);
