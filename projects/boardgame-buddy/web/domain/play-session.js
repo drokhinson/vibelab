@@ -238,7 +238,10 @@
           avatar: p.avatar || null,
           is_winner: false,
           score: null,
-          team: "",
+          // Carried off the saved row now that it persists, so "another round"
+          // from a finished play keeps the sides — which is what the in-memory
+          // path (PlayFlowView._nextRoundSeed) has always done.
+          team: p.team || "",
           initials: null,
         })),
       };
@@ -474,6 +477,12 @@
           score: rollupScore(p),
           user_id: p.user_id || null,
           round_scores: persistableRounds(p, !!this.scoringTemplate),
+          // The side this seat played on (migration 048). Until now the tag
+          // settled the side's win flags and was then dropped on the floor, so
+          // a team night saved as N seats and no sides — and the play detail
+          // had nothing to group by. `null` rather than "" for an untagged
+          // seat, or every seat in the app would share one anonymous side.
+          team: (p.team || "").trim() || null,
         })),
         notes: this.notes || null,
         photo_url: this.photoUrl || null,

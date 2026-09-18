@@ -731,6 +731,15 @@ MAX_IMPORT_NAME_CHARS = 80
 # the person it names can never see. Mirrors MAX_IMPORT_NAME_CHARS' reasoning.
 MAX_BUDDY_ALIAS_CHARS = 60
 
+# Longest team tag on a play seat (migration 048). SIXTEEN, not the six the
+# Gather input enforces: that six is there because the tag has to fit a
+# --rg-col-min grid column, which is a layout fact about one screen and not a
+# fact about the data. An importer, or a wider field later, would hit a six-char
+# column for no reason. Mirrored as a CHECK on the column, which is the part
+# that matters — PUT /plays/{id} writes these rows through PostgREST and never
+# passes through bgb_log_play's normalization.
+MAX_PLAY_TEAM_CHARS = 16
+
 # Longest Dev feedback body. Room for a real bug report — what you did, what you
 # expected, what happened — without turning a board that is skimmed into one that
 # is read. Well above MAX_BUDDY_ALIAS_CHARS above and well under MAX_IMPORT_CHARS

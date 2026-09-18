@@ -191,10 +191,10 @@ def _store(**overrides):
         # somebody else logged" is expressible without double-counting.
         "boardgamebuddy_play_players": [
             {"play_id": "p1", "player_user_id": ME, "player_display_name": "Old Name",
-             "is_winner": True, "score": 84, "round_scores": None,
+             "is_winner": True, "score": 84, "round_scores": None, "team": "Red",
              "boardgamebuddy_plays": {"user_id": ME}},
             {"play_id": "p1", "player_user_id": None, "player_display_name": "Ghost Pat",
-             "is_winner": False, "score": 71, "round_scores": None,
+             "is_winner": False, "score": 71, "round_scores": None, "team": "Blue",
              "boardgamebuddy_plays": {"user_id": ME}},
             {"play_id": "p2", "player_user_id": ME, "player_display_name": "Me",
              "is_winner": False, "score": 60, "round_scores": None,
@@ -384,6 +384,23 @@ def test_a_seat_uses_the_accounts_current_name_not_the_frozen_one():
     ghost = next(s for s in seats if not s["player_user_id"])
     assert ghost["player_name"] == "Ghost Pat"
     assert ghost["is_you"] == "false"
+
+
+def test_a_seats_team_is_exported():
+    """The lossless roster file is the only place the side survives.
+
+    plays.csv's roster cell is the readable `Alice:84|Bob:71` summary and does
+    not carry it; play_players.csv is documented as the lossless form of the
+    same thing, so a team play exported and re-read has to keep who was with
+    whom. A seat with no side exports blank, not the string "None".
+    """
+    zf, _ = _export(_store(), [ExportDataset.PLAYS_DETAIL])
+    seats = _rows(zf, "play_players.csv")
+    sides = {(s["play_id"], s["player_name"]): s["team"] for s in seats}
+    assert sides[("p1", "Me")] == "Red"
+    assert sides[("p1", "Ghost Pat")] == "Blue"
+    # p2's seat predates the column entirely — it exports blank, not "None".
+    assert sides[("p2", "Me")] == ""
 
 
 def test_both_play_datasets_share_one_read_of_the_history():

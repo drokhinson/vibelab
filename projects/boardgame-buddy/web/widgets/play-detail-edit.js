@@ -121,6 +121,11 @@
         // the play had ≤1 rounds (column is NULL on the backend) so the
         // grid handlers can push into it directly when the author opts in.
         roundScores: Array.isArray(pl.round_scores) ? pl.round_scores.slice() : [],
+        // Carried so the save below can put it back. Edit mode offers no way to
+        // CHANGE a side yet — the point of holding it is that editing the notes
+        // must not erase who played with whom, and PUT /plays/{id} is a full
+        // replacement that deletes and re-inserts every seat.
+        team: pl.team || "",
       })),
       // The whole refs, not just their ids: the edit form draws these as
       // named chips, so a bare id list would mean holding a second lookup
@@ -932,6 +937,7 @@
           score,
           user_id: p.user_id || null,
           round_scores,
+          team: (p.team || "").trim() || null,
         };
       }),
     };

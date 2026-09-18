@@ -105,7 +105,10 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
 
     pps = (
         sb.table("boardgamebuddy_play_players")
-        .select("play_id, player_user_id, player_display_name, is_winner, score, round_scores")
+        .select(
+            "play_id, player_user_id, player_display_name, is_winner, score, "
+            "round_scores, team"
+        )
         .in_("play_id", play_ids)
         .execute()
     )
@@ -138,6 +141,7 @@ def _fetch_players(sb, play_ids: list[str]) -> dict[str, list[PlayPlayerResponse
                 is_winner=row.get("is_winner", False),
                 score=row.get("score"),
                 round_scores=row.get("round_scores"),
+                team=row.get("team"),
             )
         )
     # Sorted to match what the feed RPC already promises
@@ -279,6 +283,14 @@ def _write_play_players(
     which is also the truer answer — the seats it stamps all happened in the
     same write.
 
+    `team` (migration 048) is unconditional for the same reason, and that is the
+    trap to watch: it reads as the natural candidate for `if team:`, being NULL
+    on most rows of most plays. Setting it only where there is a side would put
+    the batch back into mixed key sets — a different column, the same 500. The
+    column is nullable, so an explicit NULL is both harmless and correct.
+    `player_user_id` is the one key that IS conditional, which is safe for the
+    narrower reason that a ghost genuinely has none.
+
     The roster itself is already checked by the time it gets here: this is only
     reached from PUT /plays/{id}, whose PlayUpdate validator refuses an empty
     one and refuses one account on two seats (migration 023) before the caller
@@ -294,6 +306,9 @@ def _write_play_players(
     for p in players:
         round_scores = getattr(p, "round_scores", None)
         player_uid = getattr(p, "user_id", None)
+        # PlayerEntry has already turned "" into None (an untagged seat is NULL,
+        # never an empty tag everyone shares), so this rides through as-is.
+        team = getattr(p, "team", None)
         row: dict = {
             "play_id": play_id,
             "is_winner": p.is_winner,
@@ -301,6 +316,7 @@ def _write_play_players(
             "player_display_name": p.name,
             "round_scores": round_scores,
             "linked_at": carried.get(player_uid) or seated_now,
+            "team": team,
         }
         if player_uid:
             row["player_user_id"] = player_uid
@@ -311,6 +327,7 @@ def _write_play_players(
             is_winner=p.is_winner,
             score=p.score,
             round_scores=round_scores,
+            team=team,
         ))
     sb.table("boardgamebuddy_play_players").insert(rows).execute()
     return out

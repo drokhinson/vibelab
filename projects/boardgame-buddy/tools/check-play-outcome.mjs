@@ -260,6 +260,33 @@ console.log("\nan edit carries the aggregates with it (Play.mergeIntoCard):");
   eq("and the card now says what happened", text(caption(c)), "We won!");
 }
 
+console.log("\na saved play remembers the sides (PlaySession.toPlayCreate):");
+{
+  // Before migration 048 the tag settled the side's win flags and was then
+  // dropped on the floor, so a team night saved as N seats and no sides.
+  const ps = new win.PlaySession({
+    gameId: "g1",
+    playedAt: "2026-09-18",
+    playMode: "team",
+    players: [
+      { name: "Ana", user_id: "u-a", is_winner: true, team: " Red " },
+      { name: "Bo", user_id: "u-b", is_winner: true, team: "red" },
+      { name: "Cy", user_id: "u-c", team: "" },
+      { name: "Di", user_id: "u-d" },
+    ],
+  });
+  const sent = ps.toPlayCreate().players.map((p) => p.team);
+  // Trimmed, and case is left alone — the UI folds case when it GROUPS, so
+  // "Red" and "red" are one side without the row having to pick a spelling.
+  eq("a tagged seat sends its side", sent[0], "Red");
+  eq("...and its teammate's own spelling survives", sent[1], "red");
+  // null, not "": PlaySession seeds every seat with "" and writes "" back when
+  // a tag is cleared, so an empty string on the wire would make every untagged
+  // seat in the app one anonymous side.
+  eq("a cleared tag sends null", sent[2], null);
+  eq("a seat that never had one sends null", sent[3], null);
+}
+
 console.log("\nnaming a team never drops a recorded win (PlaySession.applyTeamTag):");
 {
   const PS = win.PlaySession;

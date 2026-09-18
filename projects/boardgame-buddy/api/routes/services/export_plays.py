@@ -122,7 +122,7 @@ def _load_players(sb: Client, play_ids: list[str]) -> list[dict[str, Any]]:
             (
                 sb.table("boardgamebuddy_play_players")
                 .select("play_id, player_user_id, player_display_name, "
-                        "is_winner, score, round_scores, linked_at")
+                        "is_winner, score, round_scores, linked_at, team")
                 .in_("play_id", chunk)
                 .execute()
             ).data or []
@@ -326,7 +326,8 @@ def build_play_details(sb: Client, user_id: str, ctx: dict[str, Any]) -> list[Cs
         player_rows.append([
             played_at, game_name, _seat_name(r, b.profiles),
             r.get("player_user_id") == user_id, r.get("is_winner"), r.get("score"),
-            r.get("round_scores"), r.get("player_user_id"), r["play_id"],
+            r.get("round_scores"), r.get("team"), r.get("player_user_id"),
+            r["play_id"],
         ])
 
     expansion_rows = []
@@ -342,7 +343,7 @@ def build_play_details(sb: Client, user_id: str, ctx: dict[str, Any]) -> list[Cs
         CsvFile(
             "play_players.csv",
             ["played_at", "game_name", "player_name", "is_you", "is_winner",
-             "score", "round_scores", "player_user_id", "play_id"],
+             "score", "round_scores", "team", "player_user_id", "play_id"],
             player_rows,
         ),
         CsvFile(
