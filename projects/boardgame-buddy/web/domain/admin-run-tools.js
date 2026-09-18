@@ -1,5 +1,5 @@
 // @ts-check
-// domain/admin-run-tools.js — what the five admin catalog runs ARE, and what
+// domain/admin-run-tools.js — what the three admin catalog runs ARE, and what
 // they say.
 //
 // Split from domain/admin-run-flow.js, which is the machine: this file holds
@@ -14,7 +14,7 @@
 
 (function () {
   /**
-   * The five tools, in one table read by all three surfaces.
+   * The three tools, in one table read by all three surfaces.
    *
    * It lives here rather than in init.js for the same reason
    * AdminBackfillView.bggData() keeps its strings with its view: init.js is a
@@ -25,7 +25,13 @@
    * deadline below it AND inside the platform's request timeout, so the slower
    * the per-game work, the smaller the bite. Images are by far the slowest
    * (one BGG call plus two downloads and two uploads each, spaced 1.5s), which
-   * is why their bite is a tenth of the others'.
+   * is why their bite is a tenth of the other's.
+   *
+   * There were five. Descriptions, stats and publishers were three tools
+   * asking BoardGameGeek the SAME question — one /thing?stats=1 response
+   * carries the blurb, the stats, the publisher links and the year — so they
+   * walked the catalog three times to read one document. Images stays its own
+   * tool because it is genuinely different work.
    */
   const TOOLS = {
     trending: {
@@ -54,32 +60,14 @@
       timeoutMs: 5 * 60 * 1000,
       run: (opts) => window.Game.adminRefreshAllImages(opts),
     },
-    "bgg-descriptions": {
-      title: "Missing descriptions",
-      lede: "Fetch blurbs from BoardGameGeek for games that have none.",
-      icon: "scroll-text",
+    "bgg-metadata": {
+      title: "Missing BGG data",
+      lede: "Fetch descriptions, publisher credits, ratings and missing years — one BoardGameGeek call covers all four.",
+      icon: "layers",
       multiPass: true,
       limit: 200,
       timeoutMs: 5 * 60 * 1000,
-      run: (opts) => window.Game.adminBackfillDescriptions(opts),
-    },
-    "bgg-stats": {
-      title: "Missing BGG stats",
-      lede: "Fetch ratings, ranks and weights for games never synced.",
-      icon: "star",
-      multiPass: true,
-      limit: 200,
-      timeoutMs: 5 * 60 * 1000,
-      run: (opts) => window.Game.adminBackfillStats(opts),
-    },
-    "bgg-publishers": {
-      title: "Missing publishers",
-      lede: "Fetch publisher credits for games that have none yet.",
-      icon: "library-big",
-      multiPass: true,
-      limit: 200,
-      timeoutMs: 5 * 60 * 1000,
-      run: (opts) => window.Game.adminBackfillPublishers(opts),
+      run: (opts) => window.Game.adminBackfillMetadata(opts),
     },
   };
 

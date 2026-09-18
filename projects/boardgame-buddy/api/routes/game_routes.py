@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -24,7 +24,6 @@ from .bgg_client import (
     invalidate_bgg_thing_cache,
     normalize_image_url,
     parse_bgg_xml,
-    parse_thing_stats,
     thing_item_basics,
     thing_item_publishers,
     thing_item_stats,
@@ -40,11 +39,11 @@ from .constants import (
 )
 from .dependencies import CurrentUser, get_current_admin, get_current_user, maybe_supabase_user
 from .models import (
+    BackfillPassResponse,
     GameDetail,
     GameListResponse,
     GameSummary,
-    RefreshDescriptionsResponse,
-    RefreshImagesResponse,
+    MissingMetadataGame,
     RulebookUrlUpdate,
 )
 from .services import admin_run_progress, game_service
@@ -63,7 +62,7 @@ _ADMIN_LIST_LIMIT = 500
 
 
 # ── Admin run narration ──────────────────────────────────────────────────────
-# Shared by the four catalog backfills below. Declared up here rather than
+# Shared by the two catalog backfills below. Declared up here rather than
 # beside them because `_PASS_NO` is a Query DEFAULT, and a default is
 # evaluated when the function is defined — the first backfill that reads it
 # (`refresh_game_images`) is three hundred lines above where these used to sit.
@@ -99,9 +98,9 @@ def _name_list(rows: list[dict], *, show: int = 3) -> str:
     return f"{joined} and {rest} more" if rest > 0 else joined
 
 
-# The four sentences every backfill's checklist says. Written once because they
-# are the SAME sentence — the noun is the only thing that differs, which is the
-# argument views/admin-backfill-view.js makes for the four being one screen.
+# The four sentences a backfill's checklist says. Written once because they are
+# the SAME sentence — the noun is the only thing that differs, which is the
+# argument views/admin-backfill-view.js makes for the panels being one screen.
 
 def _scan_detail(total_missing: int, batch_size: int, noun: str) -> str:
     """"412 games are missing BGG stats — taking 200 this pass".
@@ -129,6 +128,8 @@ def _caches_detail(updated: int) -> str:
     # Said even when it did nothing: a phase that silently no-ops reads as a
     # step that hung.
     return "Catalog caches cleared" if updated else "Nothing changed, caches left alone"
+
+
 _CACHE_GAME = "game.detail"          # game_id (str) → boardgamebuddy_games row dict
 _CACHE_GAME_TTL_S = 60 * 60          # games are immutable post-import; 1h is plenty
 
@@ -627,6 +628,11 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
         # lands with its rating and rank rather than joining the backfill queue.
         **thing_item_stats(item),
         "bgg_stats_synced_at": _now_iso(),
+        # And the metadata stamp with it. This import reads exactly what the
+        # sweep reads, from the same call, so a game that arrives here is
+        # already answered — without this line every newly imported game joins
+        # the metadata queue the moment it lands (migration 045).
+        "bgg_meta_synced_at": _now_iso(),
     }
 
     result = (
@@ -680,7 +686,7 @@ def _needs_images(game: dict) -> bool:
 
 @router.post(
     "/games/refresh-images",
-    response_model=RefreshImagesResponse,
+    response_model=BackfillPassResponse,
     status_code=200,
     summary="Re-host image URLs for games that need it, in bounded passes (admin)",
 )
@@ -688,7 +694,7 @@ async def refresh_game_images(
     limit: int = Query(200, ge=1, le=1000, description="Max games to re-host in this call"),
     pass_no: int = _PASS_NO,
     _admin: CurrentUser = Depends(get_current_admin),
-) -> RefreshImagesResponse:
+) -> BackfillPassResponse:
     """Admin-only: re-host images in object storage for games with missing or BGG-hosted URLs.
 
     BOUNDED, unlike the version this replaces. This is one BGG call plus two
@@ -784,7 +790,7 @@ async def refresh_game_images(
         prog.tick(P.CACHES, 0, detail=_caches_detail(updated))
         prog.add_totals(updated=updated, failed=failed, remaining=remaining)
 
-        return RefreshImagesResponse(updated=updated, failed=failed, remaining=remaining)
+        return BackfillPassResponse(updated=updated, failed=failed, remaining=remaining)
 
 
 # ── Denormalization helpers (migration 020) ──────────────────────────────────
@@ -980,81 +986,190 @@ async def update_game_rulebook_url(
     return GameSummary(**updated.data[0])
 
 
-# ── Admin: description backfill ──────────────────────────────────────────────
-# The catalog predates description capture on import, so every row imported
-# before it has description NULL. These three endpoints mirror the missing-
-# images trio above, with one structural difference called out at the bulk
-# endpoint: it batches its BGG calls.
+# ── Admin: the catalog metadata sweep (migration 045) ────────────────────────
+# ONE trio — list, refresh-one, backfill-all — where there were three.
+#
+# Descriptions, BGG stats and publisher credits each had their own queue, their
+# own endpoint and their own panel, and all three asked BoardGameGeek the SAME
+# question: GET /thing?stats=1 for a game id. One response carries the blurb,
+# the four stats, the publisher links AND the year, which is what
+# import_game_from_bgg above has always done with it. So the catalog was walked
+# three times to read one document.
+#
+# The images trio stays separate and is genuinely different work: one BGG call
+# plus two downloads and two uploads per game, which is why its pass is a tenth
+# the size of this one's.
+#
+# THE QUEUE IS NOT THE LIST. This is the distinction the three-queue version
+# did not have, and it is why the description queue re-requested the same games
+# on every pass forever:
+#
+#   * THE LIST (and the Settings badge) is every row still short of any of the
+#     four fields. A game BoardGameGeek has no blurb or no year for KEEPS
+#     SHOWING there — that is what an admin opens the panel to see — so that
+#     count is not expected to reach zero.
+#   * THE QUEUE (`remaining`, what a run works through) is
+#     `bgg_meta_synced_at IS NULL`, plus anything checked long enough ago to be
+#     worth asking about again. It terminates, which is what lets the drain
+#     stop.
+#
+# Conflating them either strands the drain or hides the incomplete rows. Both
+# were tried.
 
 # BGG accepts a comma-separated id list on /thing. 20 is the chunk size
 # fetch_owner_counts already settled on for the same API.
-_DESC_CHUNK_SIZE = 20
+_BGG_CHUNK_SIZE = 20
+
+# The four fields one /thing?stats=1 read fills. Order is the order the panel
+# says them in.
+_META_FIELDS = ("description", "stats", "publishers", "year")
+
+# How long a row that came back incomplete waits before being asked again.
+#
+# Without this the stamp is permanent and a description BoardGameGeek adds next
+# year never lands. With it, a stuck row rejoins the queue quarterly — bounded
+# by AGE, so it can never be the thing that fills a pass and stalls the drain
+# the way a count-based re-check would.
+_META_RECHECK_DAYS = 90
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def _hydrate_description_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Optional[str]:
-    """Fetch one game's description from BGG and patch the row; returns the text.
+def _meta_missing(row: dict) -> list[str]:
+    """Which of the four fields this row is still short of.
 
-    Deliberately unlike `_hydrate_images_from_bgg` in one respect: it does NOT
-    call `_sync_denormalized_game_fields`. `description` is not in
-    COLLECTION_DENORM_GAME_FIELDS — no play or collection row caches it — so
-    the fan-out would be two bulk UPDATEs that change nothing.
+    `publishers` is checked against None rather than emptiness on purpose:
+    '{}' means BGG credits nobody, which is an answer, not a gap.
     """
-    body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
-    root = parse_bgg_xml(body, context=f"hydrate description bgg_id={bgg_id}")
-    item = root.find("item")
-    if item is None:
-        raise HTTPException(status_code=404, detail="Game not found on BGG")
+    missing = []
+    if not row.get("description"):
+        missing.append("description")
+    if not row.get("bgg_stats_synced_at"):
+        missing.append("stats")
+    if row.get("publishers") is None:
+        missing.append("publishers")
+    if not row.get("year_published"):
+        missing.append("year")
+    return missing
 
+
+def _meta_cols(item: Optional[ET.Element], *, has_year: bool) -> dict:
+    """The columns one /thing?stats=1 <item> gives us, ready to UPDATE.
+
+    Shared by the bulk loop and the single-game refresh so the two cannot
+    drift. Three rules here, each deliberate:
+
+    * THE STAMPS ALWAYS GO ON, even for an id BGG returned nothing for. That is
+      what terminates the queue, and it is a straight reversal of the
+      description backfill, which left those rows NULL "so they keep showing in
+      the panel" — a queue that never drained. They still show in the panel;
+      the LIST no longer reads the same predicate as the queue.
+    * A DESCRIPTION IS ONLY WRITTEN WHEN BGG HAS ONE. The key is omitted rather
+      than set to NULL, so a blurb an admin already has survives a sweep that
+      BGG answers thinly.
+    * A YEAR IS ONLY WRITTEN WHEN THE ROW HAS NONE. BGG disagreeing with a year
+      we already hold is not something a backfill should arbitrate — and this
+      is also the flag that decides the fan-out below.
+    """
+    ts = _now_iso()
+    cols: dict = {"bgg_stats_synced_at": ts, "bgg_meta_synced_at": ts}
+    if item is None:
+        # Unknown to BGG under that id. Stamped so it leaves the queue, and
+        # NOT written `publishers: []` — that was the old backfill's way of
+        # clearing its own NULL-is-the-queue marker, and NULL no longer means
+        # "never asked" (migration 045). Readers coerce both to [] anyway.
+        return cols
+    cols.update(thing_item_stats(item))
+    cols["publishers"] = thing_item_publishers(item)
     description = bgg_description_text(item)
-    sb.table("boardgamebuddy_games").update(
-        {"description": description}
-    ).eq("id", game_id).execute()
+    if description:
+        cols["description"] = description
+    year = thing_item_basics(item).get("year_published")
+    if year and not has_year:
+        cols["year_published"] = year
+    return cols
+
+
+async def _hydrate_metadata_from_bgg(sb: Client, game_id: str, bgg_id: int, *, has_year: bool) -> dict:
+    """Read one game's BGG record and write everything it gives.
+
+    Replaces three hydrators that each made their own /thing call for the same
+    row. Unlike them it CAN need the denormalization fan-out — `year_published`
+    is in COLLECTION_DENORM_GAME_FIELDS and the other three fields are not — so
+    it fans out only when a year actually landed.
+    """
+    body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 1}, timeout=10.0, use_cache=False)
+    root = parse_bgg_xml(body, context=f"metadata bgg_id={bgg_id}")
+    cols = _meta_cols(root.find("item"), has_year=has_year)
+    sb.table("boardgamebuddy_games").update(cols).eq("id", game_id).execute()
+    if "year_published" in cols:
+        _sync_denormalized_game_fields(sb, game_id)
     _invalidate_game_caches()
-    return description
+    return cols
 
 
 @router.get(
-    "/games/admin/missing-descriptions",
-    response_model=list[GameSummary],
+    "/games/admin/missing-metadata",
+    response_model=list[MissingMetadataGame],
     status_code=200,
-    summary="List games with no description (admin)",
+    summary="List games short of any BGG metadata (admin)",
 )
-async def list_games_missing_descriptions(
+async def list_games_missing_metadata(
     _admin: CurrentUser = Depends(get_current_admin),
-) -> list[GameSummary]:
-    """Admin-only: games imported before descriptions were captured from BGG."""
+) -> list[MissingMetadataGame]:
+    """Admin-only: catalog games missing a description, stats, publishers or a year.
+
+    Lists what is INCOMPLETE, not what is queued. A row BoardGameGeek has
+    nothing more to give stays here with its `checked_at` set, so the panel can
+    say why it is still listed rather than looking like a stalled queue.
+    """
     sb = get_supabase()
-    result = (
-        sb.table("boardgamebuddy_games")
-        .select(game_select_clause())
-        .is_("description", "null")
-        .order("name")
-        .limit(_ADMIN_LIST_LIMIT)
-        .execute()
+    rows = await asyncio.to_thread(
+        page_all,
+        lambda: sb.table("boardgamebuddy_games")
+        .select(game_select_clause() + ", description, publishers, bgg_stats_synced_at, bgg_meta_synced_at")
+        .not_.is_("bgg_id", "null"),
+        "id", label="missing metadata",
     )
-    return [GameSummary(**g) for g in (result.data or [])]
+    out = []
+    for row in rows:
+        missing = _meta_missing(row)
+        if not missing:
+            continue
+        out.append(MissingMetadataGame(
+            **{k: v for k, v in row.items()
+               if k not in ("description", "publishers", "bgg_stats_synced_at", "bgg_meta_synced_at")},
+            missing=missing,
+            checked_at=row.get("bgg_meta_synced_at"),
+        ))
+        if len(out) >= _ADMIN_LIST_LIMIT:
+            break
+    return out
 
 
 @router.post(
-    "/games/admin/{game_id}/refresh-description",
+    "/games/admin/{game_id}/refresh-metadata",
     response_model=GameDetail,
     status_code=200,
-    summary="Refresh one game's description from BGG (admin)",
+    summary="Refresh one game's description, stats, publishers and year from BGG (admin)",
 )
-async def refresh_single_game_description(
-    game_id: str = Path(..., description="Game UUID"),
+async def refresh_single_game_metadata(
+    game_id: str = Path(..., description="Catalog game id"),
     _admin: CurrentUser = Depends(get_current_admin),
 ) -> GameDetail:
-    """Admin-only: re-fetch and store one game's description from BGG."""
-    sb = get_supabase()
+    """Admin-only: re-read one game's BoardGameGeek record.
 
+    GameDetail rather than GameSummary because it carries `description` and
+    `publishers`, so the panel reports what actually landed. It is also the
+    escape hatch from the 90-day re-check window: a row an admin wants asked
+    about again right now is asked about here.
+    """
+    sb = get_supabase()
     existing = (
         sb.table("boardgamebuddy_games")
-        .select("id, bgg_id")
+        .select("bgg_id, year_published")
         .eq("id", game_id)
         .execute()
     )
@@ -1064,15 +1179,12 @@ async def refresh_single_game_description(
     if not bgg_id:
         raise HTTPException(status_code=400, detail="Game has no bgg_id; cannot refresh from BGG")
 
-    await _hydrate_description_from_bgg(sb, game_id, bgg_id)
+    await _hydrate_metadata_from_bgg(
+        sb, game_id, bgg_id, has_year=bool(existing.data[0].get("year_published")),
+    )
 
-    # select("*") rather than game_select_clause(): GameDetail carries the
-    # description itself, so the admin panel can report what actually landed.
     refreshed = (
-        sb.table("boardgamebuddy_games")
-        .select("*")
-        .eq("id", game_id)
-        .execute()
+        sb.table("boardgamebuddy_games").select("*").eq("id", game_id).execute()
     )
     if not refreshed.data:
         raise HTTPException(status_code=500, detail="Failed to update game row")
@@ -1080,280 +1192,63 @@ async def refresh_single_game_description(
 
 
 @router.post(
-    "/games/admin/backfill-descriptions",
-    response_model=RefreshDescriptionsResponse,
+    "/games/admin/backfill-metadata",
+    response_model=BackfillPassResponse,
     status_code=200,
-    summary="Backfill missing descriptions from BGG, in batches (admin)",
+    summary="Read BGG once per game and fill every missing field, in throttled batches (admin)",
 )
-async def backfill_game_descriptions(
-    limit: int = Query(200, ge=1, le=1000, description="Max games to backfill in this call"),
-    pass_no: int = _PASS_NO,
-    _admin: CurrentUser = Depends(get_current_admin),
-) -> RefreshDescriptionsResponse:
-    """Admin-only: fill in descriptions for games that have none, oldest first.
-
-    Narrated into the run ledger as it goes, and readable at
-    /admin/runs/bgg-descriptions while it runs and for ten minutes after. The
-    ledger spans passes, so a cold catalog's twenty-odd calls read as one log.
-    """
-    sb = get_supabase()
-    P = AdminBackfillPhase
-    with admin_run_progress.run_pass(
-        AdminRunTool.BGG_DESCRIPTIONS,
-        started_by=_admin.display_name,
-        pass_no=pass_no,
-    ) as prog:
-        prog.begin(P.SCAN)
-        # Paged, so `remaining` counts the whole catalog rather than the first
-        # 1000 rows PostgREST would return. Ordered by id: a page boundary needs a
-        # total order, and name is not one. `name` rides along for the log.
-        rows = await asyncio.to_thread(
-            page_all,
-            lambda: sb.table("boardgamebuddy_games")
-            .select("id, bgg_id, name")
-            .is_("description", "null")
-            .not_.is_("bgg_id", "null"),
-            "id", label="backfill descriptions",
-        )
-        total_missing = len(rows)
-        batch = rows[:limit]
-        prog.tick(P.SCAN, 0, detail=_scan_detail(total_missing, len(batch), "a description"))
-
-        # One BGG round trip per 20 games, not per game. The catalog seeds from
-        # BGG's top ~1000, so on a cold run every row needs a description: at ~1.5s
-        # per call, per-game requests would take 25 minutes and die on the platform
-        # request timeout with the catalog half-filled. Chunks go sequentially —
-        # this module has no rate-limit guard and _map_bgg_status turns BGG's 429
-        # into an exception, so parallel batches would trip it for every user.
-        by_bgg_id = {int(r["bgg_id"]): r for r in batch}
-        chunks = list(chunked(batch, _DESC_CHUNK_SIZE))
-
-        updated = 0
-        failed = 0
-        if not chunks:
-            prog.skip(P.FETCH, detail="Nothing left to fetch")
-        else:
-            prog.begin(P.FETCH, total=len(chunks))
-        for i, chunk in enumerate(chunks):
-            prog.tick(P.FETCH, i, detail=_batch_detail(i, len(chunks), updated))
-            ids = ",".join(str(r["bgg_id"]) for r in chunk)
-            try:
-                # use_cache=False for the same reason fetch_owner_counts does it:
-                # 20 full game records is ~1MB of XML and the bgg.thing namespace
-                # caps at 500 entries, so admitting these would evict the per-game
-                # entries every page load reads.
-                body = await fetch_bgg(
-                    "/thing", {"id": ids, "stats": 0}, timeout=20.0, use_cache=False
-                )
-                root = parse_bgg_xml(body, context=f"backfill descriptions ({len(chunk)} ids)")
-            except Exception as exc:
-                # One bad chunk must not abort a 50-chunk run.
-                logger.warning("Description backfill chunk failed (%d ids)", len(chunk), exc_info=True)
-                failed += len(chunk)
-                prog.event(
-                    P.FETCH,
-                    f"Batch {i + 1} failed ({_name_list(chunk)}) — {exc}",
-                    level=AdminRunLevel.ERROR,
-                )
-                continue
-
-            wrote = 0
-            blank = 0
-            for item in root.findall("item"):
-                try:
-                    item_bgg_id = int(item.get("id", "0"))
-                except (TypeError, ValueError):
-                    continue
-                row = by_bgg_id.get(item_bgg_id)
-                if not row:
-                    continue
-                description = bgg_description_text(item)
-                if not description:
-                    # BGG genuinely has no blurb for this game. Leave it NULL so it
-                    # keeps showing in the panel rather than silently disappearing.
-                    blank += 1
-                    continue
-                try:
-                    sb.table("boardgamebuddy_games").update(
-                        {"description": description}
-                    ).eq("id", row["id"]).execute()
-                    updated += 1
-                    wrote += 1
-                except Exception as exc:
-                    logger.warning("Description write failed for game %s", row["id"], exc_info=True)
-                    failed += 1
-                    prog.event(
-                        P.FETCH,
-                        f"{_name_of(row)} — could not save: {exc}",
-                        level=AdminRunLevel.ERROR,
-                    )
-            prog.event(P.FETCH, _saved_line(i, len(chunks), wrote, len(chunk)))
-            if blank:
-                # Not a failure — these rows stay in the queue on purpose, and
-                # an admin watching the count not move deserves to know why.
-                prog.event(
-                    P.FETCH,
-                    f"{blank} of this batch have no description on BoardGameGeek "
-                    f"and will keep showing in the panel",
-                    level=AdminRunLevel.WARN,
-                )
-        if chunks:
-            prog.tick(P.FETCH, len(chunks), detail=f"{updated} saved")
-
-        # Once at the end, not per game: _invalidate_game_caches does a namespace
-        # -wide clear plus invalidate_bgg_thing_cache(), so calling it per row would
-        # defeat the /thing cache for every concurrent user for the whole run.
-        remaining = max(0, total_missing - updated)
-        prog.begin(P.CACHES)
-        if updated:
-            _invalidate_game_caches()
-        prog.tick(P.CACHES, 0, detail=_caches_detail(updated))
-        prog.add_totals(updated=updated, failed=failed, remaining=remaining)
-
-        return RefreshDescriptionsResponse(
-            updated=updated,
-            failed=failed,
-            remaining=remaining,
-        )
-
-
-# ── BGG stats (migration 038) ────────────────────────────────────────────────
-# The Discover tab ranks by BGG rating and "New this year" orders by rank, and
-# neither existed on the catalog before 038. These three mirror the missing-
-# descriptions trio above exactly — same list / one / all shape, same 20-id
-# batches — with one addition: a throttle between chunks. A stats=1 record is
-# several times the size of a stats=0 one and the module has no rate-limit
-# guard, so a 50-chunk cold run at full speed is how the app gets 429'd for
-# every user at once.
-
-_STATS_SELECT = game_select_clause() + ", bgg_stats_synced_at"
-
-
-async def _hydrate_stats_from_bgg(sb: Client, game_id: str, bgg_id: int) -> dict:
-    """Fetch one game's stats from BGG and patch the row; returns the columns.
-
-    Stamps bgg_stats_synced_at even when BGG carries no <statistics> for the
-    id, so a game BGG will never rate leaves the queue instead of being
-    re-requested on every pass. Like descriptions, none of these columns are
-    denormalised onto plays or collections, so there is no fan-out.
-    """
-    body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 1}, timeout=10.0, use_cache=False)
-    root = parse_bgg_xml(body, context=f"hydrate stats bgg_id={bgg_id}")
-    item = root.find("item")
-    if item is None:
-        raise HTTPException(status_code=404, detail="Game not found on BGG")
-    cols = {**thing_item_stats(item), "bgg_stats_synced_at": _now_iso()}
-    sb.table("boardgamebuddy_games").update(cols).eq("id", game_id).execute()
-    _invalidate_game_caches()
-    return cols
-
-
-@router.get(
-    "/games/admin/missing-stats",
-    response_model=list[GameSummary],
-    status_code=200,
-    summary="List games whose BGG stats have never been synced (admin)",
-)
-async def list_games_missing_stats(
-    _admin: CurrentUser = Depends(get_current_admin),
-) -> list[GameSummary]:
-    """Admin-only: catalog games with no BGG rating / rank sync yet."""
-    sb = get_supabase()
-    result = (
-        sb.table("boardgamebuddy_games")
-        .select(game_select_clause())
-        .is_("bgg_stats_synced_at", "null")
-        .not_.is_("bgg_id", "null")
-        .order("name")
-        .limit(_ADMIN_LIST_LIMIT)
-        .execute()
-    )
-    return [GameSummary(**g) for g in (result.data or [])]
-
-
-@router.post(
-    "/games/admin/{game_id}/refresh-stats",
-    response_model=GameSummary,
-    status_code=200,
-    summary="Refresh one game's BGG rating, rank and weight (admin)",
-)
-async def refresh_single_game_stats(
-    game_id: str = Path(..., description="Game UUID"),
-    _admin: CurrentUser = Depends(get_current_admin),
-) -> GameSummary:
-    """Admin-only: re-fetch and store one game's BGG stats."""
-    sb = get_supabase()
-    existing = (
-        sb.table("boardgamebuddy_games")
-        .select("id, bgg_id")
-        .eq("id", game_id)
-        .execute()
-    )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Game not found")
-    bgg_id = existing.data[0]["bgg_id"]
-    if not bgg_id:
-        raise HTTPException(status_code=400, detail="Game has no bgg_id; cannot refresh from BGG")
-
-    await _hydrate_stats_from_bgg(sb, game_id, bgg_id)
-
-    refreshed = (
-        sb.table("boardgamebuddy_games")
-        .select(game_select_clause())
-        .eq("id", game_id)
-        .execute()
-    )
-    if not refreshed.data:
-        raise HTTPException(status_code=500, detail="Failed to update game row")
-    return GameSummary(**refreshed.data[0])
-
-
-@router.post(
-    "/games/admin/backfill-stats",
-    response_model=RefreshDescriptionsResponse,
-    status_code=200,
-    summary="Backfill BGG stats for unsynced games, in throttled batches (admin)",
-)
-async def backfill_game_stats(
+async def backfill_game_metadata(
     limit: int = Query(200, ge=1, le=1000, description="Max games to sync in this call"),
     pass_no: int = _PASS_NO,
     _admin: CurrentUser = Depends(get_current_admin),
-) -> RefreshDescriptionsResponse:
-    """Admin-only: fill in rating / rank / weight for games never synced, oldest first.
+) -> BackfillPassResponse:
+    """Admin-only: one /thing?stats=1 per batch of 20, filling all four fields.
 
-    Narrated into the run ledger; readable at /admin/runs/bgg-stats. See
-    backfill_game_descriptions for the pass/ledger contract, which is the same.
+    Narrated into the run ledger; readable at /admin/runs/bgg-metadata while it
+    runs and for ten minutes after.
     """
     sb = get_supabase()
     P = AdminBackfillPhase
     with admin_run_progress.run_pass(
-        AdminRunTool.BGG_STATS, started_by=_admin.display_name, pass_no=pass_no
+        AdminRunTool.BGG_METADATA, started_by=_admin.display_name, pass_no=pass_no
     ) as prog:
         prog.begin(P.SCAN)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=_META_RECHECK_DAYS)).isoformat()
+        # Narrowed server-side to "never asked, or asked long enough ago to be
+        # worth asking again"; the second group is then filtered in Python down
+        # to rows that are actually still short of something. The whole thing is
+        # not one PostgREST predicate because the second half needs an OR across
+        # four nullable columns — the same reason _needs_images filters here.
         rows = await asyncio.to_thread(
             page_all,
             lambda: sb.table("boardgamebuddy_games")
-            .select("id, bgg_id, name")
-            .is_("bgg_stats_synced_at", "null")
-            .not_.is_("bgg_id", "null"),
-            "id", label="backfill stats",
+            .select("id, bgg_id, name, year_published, description, publishers, bgg_stats_synced_at, bgg_meta_synced_at")
+            .not_.is_("bgg_id", "null")
+            .or_(f"bgg_meta_synced_at.is.null,bgg_meta_synced_at.lt.{cutoff}"),
+            "id", label="backfill metadata",
         )
-        total_missing = len(rows)
-        batch = rows[:limit]
-        prog.tick(P.SCAN, 0, detail=_scan_detail(total_missing, len(batch), "BGG stats"))
-        by_bgg_id = {int(r["bgg_id"]): r["id"] for r in batch}
-        chunks = list(chunked(batch, _DESC_CHUNK_SIZE))
+        queue = [r for r in rows if not r.get("bgg_meta_synced_at") or _meta_missing(r)]
+        total_missing = len(queue)
+        batch = queue[:limit]
+        prog.tick(P.SCAN, 0, detail=_scan_detail(total_missing, len(batch), "BGG data"))
+
+        by_bgg_id = {int(r["bgg_id"]): r for r in batch}
+        chunks = list(chunked(batch, _BGG_CHUNK_SIZE))
 
         updated = 0
         failed = 0
         if not chunks:
-            prog.skip(P.FETCH, detail="Nothing left to fetch")
+            prog.skip(P.FETCH, detail="Nothing left to ask about")
         else:
             prog.begin(P.FETCH, total=len(chunks))
         for i, chunk in enumerate(chunks):
             prog.tick(P.FETCH, i, detail=_batch_detail(i, len(chunks), updated))
-            # Sequential AND spaced: see the section comment. The first chunk goes
-            # straight out; every later one waits its turn.
+            # Sequential AND spaced. A stats=1 record is several times the size
+            # of a stats=0 one and this module has no rate-limit guard, so a
+            # cold 50-chunk run at full speed is how the app gets 429'd for
+            # everyone. The old description backfill ran unthrottled and only
+            # got away with it because its payloads were small — after the
+            # merge every payload is a stats=1 one.
             if i:
                 await asyncio.sleep(BGG_THROTTLE_SECONDS)
             ids = ",".join(str(r["bgg_id"]) for r in chunk)
@@ -1361,220 +1256,9 @@ async def backfill_game_stats(
                 body = await fetch_bgg(
                     "/thing", {"id": ids, "stats": 1}, timeout=20.0, use_cache=False
                 )
-                stats = parse_thing_stats(parse_bgg_xml(body, context=f"backfill stats ({len(chunk)} ids)"))
+                root = parse_bgg_xml(body, context=f"backfill metadata ({len(chunk)} ids)")
             except Exception as exc:
-                logger.warning("Stats backfill chunk failed (%d ids)", len(chunk), exc_info=True)
-                failed += len(chunk)
-                prog.event(
-                    P.FETCH,
-                    f"Batch {i + 1} failed ({_name_list(chunk)}) — {exc}",
-                    level=AdminRunLevel.ERROR,
-                )
-                continue
-
-            synced_at = _now_iso()
-            wrote = 0
-            unrated = 0
-            for r in chunk:
-                item_bgg_id = int(r["bgg_id"])
-                # Absent from the response = BGG has nothing for that id. Stamp it
-                # anyway so it leaves the queue; the four stats stay NULL.
-                if item_bgg_id not in stats:
-                    unrated += 1
-                cols = {**stats.get(item_bgg_id, {c: None for c in ("bgg_rating", "bgg_rank", "bgg_weight", "bgg_owned_count")}),
-                        "bgg_stats_synced_at": synced_at}
-                try:
-                    sb.table("boardgamebuddy_games").update(cols).eq("id", by_bgg_id[item_bgg_id]).execute()
-                    updated += 1
-                    wrote += 1
-                except Exception as exc:
-                    logger.warning("Stats write failed for game %s", by_bgg_id[item_bgg_id], exc_info=True)
-                    failed += 1
-                    prog.event(
-                        P.FETCH,
-                        f"{_name_of(r)} — could not save: {exc}",
-                        level=AdminRunLevel.ERROR,
-                    )
-            prog.event(P.FETCH, _saved_line(i, len(chunks), wrote, len(chunk)))
-            if unrated:
-                # Stamped and gone from the queue with no stats on them. Worth a
-                # line: the count moves but the catalog gains nothing.
-                prog.event(
-                    P.FETCH,
-                    f"{unrated} of this batch have no stats on BoardGameGeek — "
-                    f"stamped so they leave the queue",
-                    level=AdminRunLevel.WARN,
-                )
-        if chunks:
-            prog.tick(P.FETCH, len(chunks), detail=f"{updated} saved")
-
-        remaining = max(0, total_missing - updated)
-        prog.begin(P.CACHES)
-        if updated:
-            _invalidate_game_caches()
-        prog.tick(P.CACHES, 0, detail=_caches_detail(updated))
-        prog.add_totals(updated=updated, failed=failed, remaining=remaining)
-
-        return RefreshDescriptionsResponse(
-            updated=updated,
-            failed=failed,
-            remaining=remaining,
-        )
-
-
-# ── Admin: publisher backfill (migration 040) ────────────────────────────────
-# Every row imported before 040 has publishers NULL, which is what the game
-# page's "Publisher" fact reads — so without this the column would only ever
-# fill for games imported from here on. Fourth instance of the same trio as
-# images / descriptions / stats, batched like descriptions (stats=0 is enough:
-# publishers are plain <link> rows) and throttled like stats.
-#
-# The queue marker is `publishers IS NULL`, never `= '{}'`: a game BGG credits
-# to nobody is synced, and re-asking BGG about it on every run would mean the
-# panel never empties.
-
-
-def _publisher_cols(item: ET.Element) -> dict:
-    """The one column this backfill writes, for one /thing <item>."""
-    return {"publishers": thing_item_publishers(item)}
-
-
-async def _hydrate_publishers_from_bgg(sb: Client, game_id: str, bgg_id: int) -> list[str]:
-    """Fetch one game's publishers from BGG and patch the row; returns them.
-
-    Like `_hydrate_description_from_bgg`, no `_sync_denormalized_game_fields`
-    call: `publishers` is not in COLLECTION_DENORM_GAME_FIELDS, so no play or
-    collection row caches it and the fan-out would update nothing.
-    """
-    body = await fetch_bgg("/thing", {"id": bgg_id, "stats": 0}, timeout=10.0)
-    root = parse_bgg_xml(body, context=f"hydrate publishers bgg_id={bgg_id}")
-    item = root.find("item")
-    if item is None:
-        raise HTTPException(status_code=404, detail="Game not found on BGG")
-
-    cols = _publisher_cols(item)
-    sb.table("boardgamebuddy_games").update(cols).eq("id", game_id).execute()
-    _invalidate_game_caches()
-    return cols["publishers"]
-
-
-@router.get(
-    "/games/admin/missing-publishers",
-    response_model=list[GameSummary],
-    status_code=200,
-    summary="List games whose publishers have never been synced (admin)",
-)
-async def list_games_missing_publishers(
-    _admin: CurrentUser = Depends(get_current_admin),
-) -> list[GameSummary]:
-    """Admin-only: games imported before publishers were captured from BGG."""
-    sb = get_supabase()
-    result = (
-        sb.table("boardgamebuddy_games")
-        .select(game_select_clause())
-        .is_("publishers", "null")
-        .not_.is_("bgg_id", "null")
-        .order("name")
-        .limit(_ADMIN_LIST_LIMIT)
-        .execute()
-    )
-    return [GameSummary(**g) for g in (result.data or [])]
-
-
-@router.post(
-    "/games/admin/{game_id}/refresh-publishers",
-    response_model=GameDetail,
-    status_code=200,
-    summary="Refresh one game's publishers from BGG (admin)",
-)
-async def refresh_single_game_publishers(
-    game_id: str = Path(..., description="Game UUID"),
-    _admin: CurrentUser = Depends(get_current_admin),
-) -> GameDetail:
-    """Admin-only: re-fetch and store one game's publisher credits."""
-    sb = get_supabase()
-    existing = (
-        sb.table("boardgamebuddy_games")
-        .select("id, bgg_id")
-        .eq("id", game_id)
-        .execute()
-    )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Game not found")
-    bgg_id = existing.data[0]["bgg_id"]
-    if not bgg_id:
-        raise HTTPException(status_code=400, detail="Game has no bgg_id; cannot refresh from BGG")
-
-    await _hydrate_publishers_from_bgg(sb, game_id, bgg_id)
-
-    # select("*") for the same reason the description refresh does it:
-    # GameDetail carries `publishers`, so the admin panel reports what landed.
-    refreshed = (
-        sb.table("boardgamebuddy_games")
-        .select("*")
-        .eq("id", game_id)
-        .execute()
-    )
-    if not refreshed.data:
-        raise HTTPException(status_code=500, detail="Failed to update game row")
-    return GameDetail(**refreshed.data[0])
-
-
-@router.post(
-    "/games/admin/backfill-publishers",
-    response_model=RefreshDescriptionsResponse,
-    status_code=200,
-    summary="Backfill missing publishers from BGG, in throttled batches (admin)",
-)
-async def backfill_game_publishers(
-    limit: int = Query(200, ge=1, le=1000, description="Max games to backfill in this call"),
-    pass_no: int = _PASS_NO,
-    _admin: CurrentUser = Depends(get_current_admin),
-) -> RefreshDescriptionsResponse:
-    """Admin-only: fill in publisher credits for games that have none yet.
-
-    Narrated into the run ledger; readable at /admin/runs/bgg-publishers. See
-    backfill_game_descriptions for the pass/ledger contract, which is the same.
-    """
-    sb = get_supabase()
-    P = AdminBackfillPhase
-    with admin_run_progress.run_pass(
-        AdminRunTool.BGG_PUBLISHERS, started_by=_admin.display_name, pass_no=pass_no
-    ) as prog:
-        prog.begin(P.SCAN)
-        rows = await asyncio.to_thread(
-            page_all,
-            lambda: sb.table("boardgamebuddy_games")
-            .select("id, bgg_id, name")
-            .is_("publishers", "null")
-            .not_.is_("bgg_id", "null"),
-            "id", label="backfill publishers",
-        )
-        total_missing = len(rows)
-        batch = rows[:limit]
-        prog.tick(P.SCAN, 0, detail=_scan_detail(total_missing, len(batch), "publisher credits"))
-        by_bgg_id = {int(r["bgg_id"]): r["id"] for r in batch}
-        chunks = list(chunked(batch, _DESC_CHUNK_SIZE))
-
-        updated = 0
-        failed = 0
-        if not chunks:
-            prog.skip(P.FETCH, detail="Nothing left to fetch")
-        else:
-            prog.begin(P.FETCH, total=len(chunks))
-        for i, chunk in enumerate(chunks):
-            prog.tick(P.FETCH, i, detail=_batch_detail(i, len(chunks), updated))
-            if i:
-                await asyncio.sleep(BGG_THROTTLE_SECONDS)
-            ids = ",".join(str(r["bgg_id"]) for r in chunk)
-            try:
-                body = await fetch_bgg(
-                    "/thing", {"id": ids, "stats": 0}, timeout=20.0, use_cache=False
-                )
-                root = parse_bgg_xml(body, context=f"backfill publishers ({len(chunk)} ids)")
-            except Exception as exc:
-                # One bad chunk must not abort a 50-chunk run.
-                logger.warning("Publisher backfill chunk failed (%d ids)", len(chunk), exc_info=True)
+                logger.warning("Metadata backfill chunk failed (%d ids)", len(chunk), exc_info=True)
                 failed += len(chunk)
                 prog.event(
                     P.FETCH,
@@ -1591,22 +1275,31 @@ async def backfill_game_publishers(
                     continue
 
             wrote = 0
-            uncredited = 0
+            blank: list[dict] = []
+            unknown: list[dict] = []
+            years: list[dict] = []
             for r in chunk:
                 item_bgg_id = int(r["bgg_id"])
                 item = by_item.get(item_bgg_id)
-                # Absent from the response = BGG has nothing under that id. Write
-                # '{}' anyway so the row leaves the queue, exactly as the stats
-                # backfill stamps bgg_stats_synced_at on a game BGG won't rate.
                 if item is None:
-                    uncredited += 1
-                cols = _publisher_cols(item) if item is not None else {"publishers": []}
+                    unknown.append(r)
+                cols = _meta_cols(item, has_year=bool(r.get("year_published")))
+                if item is not None and "description" not in cols and not r.get("description"):
+                    blank.append(r)
+                if "year_published" in cols:
+                    years.append(r)
                 try:
-                    sb.table("boardgamebuddy_games").update(cols).eq("id", by_bgg_id[item_bgg_id]).execute()
+                    sb.table("boardgamebuddy_games").update(cols).eq("id", by_bgg_id[item_bgg_id]["id"]).execute()
                     updated += 1
                     wrote += 1
+                    # Only for a year, and only when one actually landed:
+                    # year_published is in COLLECTION_DENORM_GAME_FIELDS and the
+                    # other three fields are not, so an unconditional call would
+                    # be two extra bulk UPDATEs per game across 200 rows a pass.
+                    if "year_published" in cols:
+                        _sync_denormalized_game_fields(sb, by_bgg_id[item_bgg_id]["id"])
                 except Exception as exc:
-                    logger.warning("Publisher write failed for game %s", by_bgg_id[item_bgg_id], exc_info=True)
+                    logger.warning("Metadata write failed for game %s", r["id"], exc_info=True)
                     failed += 1
                     prog.event(
                         P.FETCH,
@@ -1614,11 +1307,26 @@ async def backfill_game_publishers(
                         level=AdminRunLevel.ERROR,
                     )
             prog.event(P.FETCH, _saved_line(i, len(chunks), wrote, len(chunk)))
-            if uncredited:
+            if years:
+                # The reason this sweep learned about years at all. Said as INFO
+                # because it is the good outcome, and named because "3 years
+                # filled" is not something an admin can check.
+                prog.event(P.FETCH, f"Filled the missing year for {_name_list(years)}")
+            if blank:
+                # The whole replacement for the old "leave it NULL so it keeps
+                # showing" behaviour. The row is stamped and leaves the queue;
+                # it stays in the panel, and this is where it says why.
                 prog.event(
                     P.FETCH,
-                    f"{uncredited} of this batch are not on BoardGameGeek under that id — "
-                    f"credited to nobody so they leave the queue",
+                    f"{len(blank)} of this batch have no description on BoardGameGeek — "
+                    f"stamped anyway, so the run can finish; they stay listed",
+                    level=AdminRunLevel.WARN,
+                )
+            if unknown:
+                prog.event(
+                    P.FETCH,
+                    f"{len(unknown)} of this batch are not on BoardGameGeek under that id "
+                    f"({_name_list(unknown)})",
                     level=AdminRunLevel.WARN,
                 )
         if chunks:
@@ -1631,8 +1339,4 @@ async def backfill_game_publishers(
         prog.tick(P.CACHES, 0, detail=_caches_detail(updated))
         prog.add_totals(updated=updated, failed=failed, remaining=remaining)
 
-        return RefreshDescriptionsResponse(
-            updated=updated,
-            failed=failed,
-            remaining=remaining,
-        )
+        return BackfillPassResponse(updated=updated, failed=failed, remaining=remaining)

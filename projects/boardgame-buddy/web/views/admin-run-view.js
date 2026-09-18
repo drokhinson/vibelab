@@ -1,9 +1,9 @@
 // @ts-check
 // views/admin-run-view.js — one admin catalog run, narrated.
 //
-// ONE screen, FIVE tools. They are the same errand — "go and do slow throttled
+// ONE screen, THREE tools. They are the same errand — "go and do slow throttled
 // work against BoardGameGeek, and tell me what happened" — so the tool is a
-// route param, not five views (ui-object-design.md §2). Everything that
+// route param, not three views (ui-object-design.md §2). Everything that
 // differs between them is a row in domain/admin-run-tools.js.
 //
 // This file is the SHELL: the gate, the header, the footer, and which of four
@@ -138,27 +138,28 @@
       }
       if (st.state === "unknown") {
         return `<div class="bgg-flow__nav">
-          <button class="bgg-flow__nav-next" type="button" onclick="${go("start")}">Run now</button>
+          <button class="bgg-flow__nav-next" type="button" onclick="${go("start")}">Sync now</button>
         </div>`;
       }
       return `<div class="bgg-flow__nav">
         <button class="bgg-flow__nav-back" type="button" onclick="${go("close")}">Close</button>
-        <button class="bgg-flow__nav-next" type="button" onclick="${go("start")}">Run again</button>
+        <button class="bgg-flow__nav-next" type="button" onclick="${go("start")}">Sync again</button>
       </div>`;
     }
 
     /** The idle face. Not an empty state — nothing has gone wrong and there is
-     *  nothing missing; the page is simply waiting to be told to go. */
+     *  nothing missing; the page is simply waiting to be told to go.
+     *
+     *  Reached by opening the run page directly. Coming from a panel's Sync now
+     *  the run is already started before this could paint, which is why there
+     *  is no longer a paragraph here explaining that you may leave and come
+     *  back: the pill on the way out says it better than a sentence nobody
+     *  reads twice. */
     _renderIdle(tool) {
       return `
         <div class="bgg-flow__step">
           <h3 class="bgg-flow__title font-display">${escapeHtml(tool.title)}</h3>
           <p class="bgg-flow__lede">${escapeHtml(tool.lede)}</p>
-          <p class="bgg-flow__note">
-            This calls BoardGameGeek at a throttle, so it takes a while. You can
-            leave this screen once it starts — it keeps going, and the log stays
-            here for ten minutes after it finishes.
-          </p>
         </div>
       `;
     }

@@ -1,19 +1,27 @@
 // views/admin-backfill-view.js — the catalog-backfill spoke.
 //
-// ONE class, ONE instance, FOUR panels: images, descriptions, BGG stats and
-// publishers. The tools are identical in shape — list what's missing, fix one
-// row, fix them all — so they are a parameter, not four screens
-// (ui-object-design.md §2), and since the parameter is the only thing that
-// differs they are also not four SPOKES: "Missing images" and "Missing
-// publishers" are not two errands, they are one errand ("the catalog is short
-// some BGG data") filed under two nouns, and Settings was carrying four rows
-// to say it.
+// ONE class, ONE instance, TWO panels: images and everything else. The tools
+// are identical in shape — list what's missing, fix one row, fix them all — so
+// they are a parameter, not two screens (ui-object-design.md §2), and since the
+// parameter is the only thing that differs they are not two SPOKES either:
+// "Missing images" and "Missing BGG data" are not two errands, they are one
+// errand ("the catalog is short some BGG data") filed under two nouns, and
+// Settings was once carrying four rows to say it.
+//
+// IT WAS FOUR PANELS. Descriptions, BGG stats and publishers each had a queue,
+// an endpoint and a panel, and all three asked BoardGameGeek the same question:
+// one /thing?stats=1 response carries the blurb, the stats, the publisher links
+// AND the year. Three panels over one document is three sweeps of the catalog
+// and a badge that counted a game twice for being short of two fields.
+//
+// Images stays separate because it is genuinely different work — one BGG call
+// plus two downloads and two uploads per game, which is why its pass is a tenth
+// the size (domain/admin-run-tools.js).
 //
 // This is NOT a return to the old combined /admin screen. That one was reached
 // through a row labelled "Chapter reports", so the backfills were unreachable
 // by name and one badge had to stand in for three queues. Here the row says
-// what the screen holds, the badge sums the queues behind it and its
-// aria-label still names them one by one.
+// what the screen holds and the badge counts what is behind it.
 //
 // All the behaviour lives in the AdminBackfillPanel widget; this view is the
 // route, the header, and the count refresh.
@@ -108,7 +116,6 @@
         title: "Games missing images",
         icon: "image-off",
         emptyText: "All catalog games have images.",
-        bulkLabel: "Refresh all",
         oneOkToast: "Image refreshed",
         rowStatus: (g) => {
           const missing = [];
@@ -116,56 +123,33 @@
           if (!g.image_url) missing.push("image");
           return missing.length ? `Missing: ${missing.join(", ")}` : "OK";
         },
-        bulkConfirm: (n) => (n > 0
-          ? `Re-host BGG images for ${n} game${n === 1 ? "" : "s"}? One throttled BGG call per game, so a cold catalog takes a while. You'll watch it on the run page and can leave it going.`
-          : "Re-host images for every game with a missing or BGG-hosted URL? One throttled BGG call per game. You'll watch it on the run page and can leave it going."),
         list: () => window.Game.adminMissingImages(),
         refreshOne: (id) => window.Game.adminRefreshOneImage(id),
       },
       {
-        key: "descriptions",
-        runTool: "bgg-descriptions",
-        title: "Games missing descriptions",
-        icon: "scroll-text",
-        emptyText: "Every catalog game has a description.",
-        bulkLabel: "Backfill all",
-        oneOkToast: "Description refreshed",
-        rowStatus: () => "No description",
-        bulkConfirm: (n) => (n > 0
-          ? `Fetch BGG descriptions for ${n} game${n === 1 ? "" : "s"}? BGG is called in batches of 20 until every game is done. You'll watch it on the run page and can leave it going.`
-          : "Fetch BGG descriptions for every game that has none? BGG is called in batches of 20. You'll watch it on the run page and can leave it going."),
-        list: () => window.Game.adminMissingDescriptions(),
-        refreshOne: (id) => window.Game.adminRefreshOneDescription(id),
-      },
-      {
-        key: "stats",
-        runTool: "bgg-stats",
-        title: "Games missing BGG stats",
-        icon: "star",
-        emptyText: "Every catalog game has its BGG rating and rank.",
-        bulkLabel: "Sync all",
-        oneOkToast: "Stats refreshed",
-        rowStatus: () => "Not synced",
-        bulkConfirm: (n) => (n > 0
-          ? `Fetch BGG ratings, ranks and weights for ${n} game${n === 1 ? "" : "s"}? Throttled batches of 20 until every game is done — a cold catalog takes a few minutes. You'll watch it on the run page and can leave it going.`
-          : "Fetch BGG stats for every game that has none? Throttled batches of 20. You'll watch it on the run page and can leave it going."),
-        list: () => window.Game.adminMissingStats(),
-        refreshOne: (id) => window.Game.adminRefreshOneStats(id),
-      },
-      {
-        key: "publishers",
-        runTool: "bgg-publishers",
-        title: "Games missing publishers",
-        icon: "library-big",
-        emptyText: "Every catalog game has been checked for a publisher.",
-        bulkLabel: "Backfill all",
-        oneOkToast: "Publishers refreshed",
-        rowStatus: () => "Not synced",
-        bulkConfirm: (n) => (n > 0
-          ? `Fetch BGG publisher credits for ${n} game${n === 1 ? "" : "s"}? Throttled batches of 20 until every game is done — a cold catalog takes a few minutes. You'll watch it on the run page and can leave it going.`
-          : "Fetch BGG publisher credits for every game that has none? Throttled batches of 20. You'll watch it on the run page and can leave it going."),
-        list: () => window.Game.adminMissingPublishers(),
-        refreshOne: (id) => window.Game.adminRefreshOnePublishers(id),
+        key: "metadata",
+        runTool: "bgg-metadata",
+        title: "Games missing BGG data",
+        icon: "layers",
+        emptyText: "Every catalog game has been checked against BoardGameGeek.",
+        oneOkToast: "Game data refreshed",
+        // The server sends `missing` (the field names) and `checked_at`, so
+        // this needs no ternaries and — more importantly — a row that has been
+        // asked about says so. A game BoardGameGeek has nothing more to give
+        // stays listed on purpose; without the "checked" half it reads as a
+        // queue that will not drain.
+        rowStatus: (g) => {
+          const names = {
+            description: "no description", stats: "no BGG stats",
+            publishers: "no publisher", year: "no year",
+          };
+          const missing = (g.missing || []).map((k) => names[k] || k).join(", ");
+          return g.checked_at
+            ? `${missing} — BoardGameGeek has no more`
+            : missing || "Not synced";
+        },
+        list: () => window.Game.adminMissingMetadata(),
+        refreshOne: (id) => window.Game.adminRefreshOneMetadata(id),
       },
     ],
   });

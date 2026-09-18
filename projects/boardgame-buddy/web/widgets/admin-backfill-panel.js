@@ -1,16 +1,19 @@
 // widgets/admin-backfill-panel.js — one "catalog rows missing X" admin panel.
 //
 // Extracted at instance #2 (ui-object-design.md §4): the images panel and the
-// descriptions panel are identical in lifecycle AND appearance, so the config
+// metadata panel are identical in lifecycle AND appearance, so the config
 // carries the handful of strings that differ rather than each caller keeping
 // its own markup. Reuses the .admin-reports__* class family wholesale — this
 // widget ships no CSS of its own.
 //
+// Two panels now, not four: descriptions, stats and publishers were three
+// views of one BoardGameGeek read and became one queue (migration 045).
+//
 // The host view owns the repaint: every state change calls opts.render(), and
 // the panel's html() is re-read from the host's own render pass. Inline
 // onclick attributes name `window.<opts.host>` AND carry the panel's `key`,
-// because one spoke now stacks every backfill panel: the host has to know
-// which of them a tap belongs to before it can delegate.
+// because one spoke stacks both backfill panels: the host has to know which of
+// them a tap belongs to before it can delegate.
 
 (function () {
   class AdminBackfillPanel {
@@ -20,9 +23,7 @@
      * @param {string}   opts.title        panel heading
      * @param {string}   opts.icon         data-icon name for the heading
      * @param {string}   opts.emptyText    shown when nothing is missing
-     * @param {string}   opts.bulkLabel    label for the bulk button
      * @param {string}   opts.runTool      the admin-run slug this panel drives
-     * @param {(n:number)=>string} opts.bulkConfirm   the confirm dialog's title
      * @param {(g:Object)=>string} opts.rowStatus     per-row "what's missing" label
      * @param {()=>Promise<Object[]>}  opts.list
      * @param {(id:string)=>Promise<any>} opts.refreshOne
@@ -78,7 +79,7 @@
     }
 
     /**
-     * Hand the whole queue to the run page.
+     * Start the sweep, and go and watch it.
      *
      * This used to BE the drain — a loop of up to 25 bounded passes, reporting
      * "40 done, 260 left" inside this button between them, for a run that can
@@ -88,24 +89,22 @@
      * the only thing worth knowing. Both live on /admin/run/:tool now, and the
      * loop with them (domain/admin-run-flow.js).
      *
-     * The confirm stays here, before the navigation: it is a real cost — every
-     * pass calls BoardGameGeek once per batch — and the page that would ask
-     * instead is the page that shows Run now, which is one tap too late.
+     * NAVIGATE AND START, in that order and in one tap. There was a confirm
+     * here, and the argument for it was that navigation is one tap too late to
+     * ask — which was true while the run page started nothing on arrival. It
+     * starts now, so the button does what it says: the deed and the screen that
+     * narrates it are one press. Nothing here is destructive (a sweep only
+     * fills in fields that are missing), the whole surface is admin-only, and
+     * the run page's log is a better account of what happened than a dialog
+     * asking permission for it ever was.
+     *
+     * `start()` is safe on a run already going — it watches rather than
+     * starting a second drain against the same ledger — so there is no branch
+     * here for that case.
      */
-    async goToRun() {
-      const st = this.run;
-      // Already going: no confirm, nothing to start, just take them to it.
-      if (st && st.state !== "unknown") {
-        window.router.go("admin-run", { tool: this.opts.runTool });
-        return;
-      }
-      const ok = await window.PolaroidPopup.confirm({
-        title: this.opts.bulkConfirm(this._rows.length),
-        confirmLabel: "Refresh all",
-        cancelLabel: "Cancel",
-      });
-      if (!ok) return;
+    goToRun() {
       window.router.go("admin-run", { tool: this.opts.runTool });
+      window.AdminRunFlow.start(this.opts.runTool);
     }
 
     html() {
@@ -119,7 +118,10 @@
       const face = live
         ? `<i data-icon="${st.live ? "loader-2" : st.state === "done" ? "check" : "alert-triangle"}"
               class="w-3.5 h-3.5${st.live ? " animate-spin" : ""}"></i> ${escapeHtml(st.label)}`
-        : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> ${escapeHtml(o.bulkLabel)}`;
+        // "Sync now" for every panel, not a per-panel string. They were
+        // "Refresh all" / "Backfill all" / "Sync all" — three words for one
+        // deed, chosen per panel for no reason the reader could see.
+        : `<i data-icon="refresh-cw" class="w-3.5 h-3.5"></i> Sync now`;
       return `
         <div class="admin-reports__header">
           <h3 class="font-semibold flex items-center gap-2">

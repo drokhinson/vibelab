@@ -58,18 +58,18 @@ def test_every_phase_is_present_before_any_work_happens():
 
 
 def test_each_tool_gets_its_own_phase_vocabulary():
-    A.open(AdminRunTool.BGG_STATS)
-    keys = [s["key"] for s in A.read(AdminRunTool.BGG_STATS)["steps"]]
+    A.open(AdminRunTool.BGG_METADATA)
+    keys = [s["key"] for s in A.read(AdminRunTool.BGG_METADATA)["steps"]]
     assert keys == [p.value for p in AdminBackfillPhase]
 
 
 def test_begin_closes_earlier_phases_and_fills_their_counters():
-    led = A.open(AdminRunTool.BGG_STATS)
+    led = A.open(AdminRunTool.BGG_METADATA)
     led.begin(AdminBackfillPhase.SCAN)
     led.begin(AdminBackfillPhase.FETCH, total=4)
     led.tick(AdminBackfillPhase.FETCH, 2)
     led.begin(AdminBackfillPhase.CACHES)
-    snap = A.read(AdminRunTool.BGG_STATS)
+    snap = A.read(AdminRunTool.BGG_METADATA)
     assert _states(snap) == {
         "scan": RunStepState.DONE.value,
         "fetch": RunStepState.DONE.value,
@@ -99,10 +99,10 @@ def test_run_pass_finishes_a_clean_pass_and_reraises_a_dirty_one():
 
 
 def test_a_skipped_phase_is_not_a_failure():
-    led = A.open(AdminRunTool.BGG_STATS)
+    led = A.open(AdminRunTool.BGG_METADATA)
     led.skip(AdminBackfillPhase.FETCH, detail="Nothing left to fetch")
     led.finish()
-    snap = A.read(AdminRunTool.BGG_STATS)
+    snap = A.read(AdminRunTool.BGG_METADATA)
     assert _states(snap)["fetch"] == RunStepState.SKIPPED.value
     assert snap["state"] == RunState.DONE.value
 
@@ -110,18 +110,18 @@ def test_a_skipped_phase_is_not_a_failure():
 # ── Passes ───────────────────────────────────────────────────────────────────
 
 def test_a_later_pass_keeps_the_log_and_resets_the_checklist():
-    first = A.open(AdminRunTool.BGG_STATS, started_by="Dana")
+    first = A.open(AdminRunTool.BGG_METADATA, started_by="Dana")
     first.begin(AdminBackfillPhase.FETCH, total=2)
     first.event(AdminBackfillPhase.FETCH, "Batch 1 of 2 — 20 of 20 saved")
     first.add_totals(updated=20, failed=1, remaining=80)
     first.finish()
-    before = A.read(AdminRunTool.BGG_STATS)
+    before = A.read(AdminRunTool.BGG_METADATA)
 
-    second = A.open(AdminRunTool.BGG_STATS, started_by="Dana", pass_no=1)
+    second = A.open(AdminRunTool.BGG_METADATA, started_by="Dana", pass_no=1)
     second.event(AdminBackfillPhase.FETCH, "Batch 1 of 2 — 20 of 20 saved")
     second.add_totals(updated=20, failed=0, remaining=60)
     second.finish()
-    after = A.read(AdminRunTool.BGG_STATS)
+    after = A.read(AdminRunTool.BGG_METADATA)
 
     assert after["run_id"] == before["run_id"], "a drain is ONE run"
     assert after["started_at"] == before["started_at"]
@@ -135,14 +135,14 @@ def test_a_later_pass_keeps_the_log_and_resets_the_checklist():
 
 def test_pass_zero_starts_a_fresh_log():
     """Pressing Run again is a new run, not a twenty-sixth pass of the old one."""
-    first = A.open(AdminRunTool.BGG_STATS)
+    first = A.open(AdminRunTool.BGG_METADATA)
     first.event(AdminBackfillPhase.SCAN, "from the run before")
     first.add_totals(updated=5)
     first.finish()
-    first_run_id = A.read(AdminRunTool.BGG_STATS)["run_id"]
+    first_run_id = A.read(AdminRunTool.BGG_METADATA)["run_id"]
 
-    A.open(AdminRunTool.BGG_STATS)
-    snap = A.read(AdminRunTool.BGG_STATS)
+    A.open(AdminRunTool.BGG_METADATA)
+    snap = A.read(AdminRunTool.BGG_METADATA)
     assert snap["events"] == [] and snap["totals"]["updated"] == 0
     assert snap["pass_no"] == 0
     assert snap["run_id"] != first_run_id
@@ -152,7 +152,7 @@ def test_a_continued_pass_with_no_record_left_starts_over_rather_than_failing():
     """A restart mid-drain, or a resumed tab whose ledger has expired. An admin
     who cannot restart their own backfill is worse than a log that starts at
     pass 1."""
-    led = A.open(AdminRunTool.BGG_PUBLISHERS, pass_no=7)
+    led = A.open(AdminRunTool.BGG_METADATA, pass_no=7)
     snap = led.snapshot()
     assert snap["pass_no"] == 0 and snap["events"] == []
 
@@ -197,17 +197,17 @@ def test_the_ten_minute_clock_starts_at_the_LAST_write(monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(cache.time, "monotonic", lambda: now[0])
 
-    led = A.open(AdminRunTool.BGG_STATS)
+    led = A.open(AdminRunTool.BGG_METADATA)
     for _ in range(5):
         now[0] += 500.0          # 41 minutes of work, in 8-minute steps
         led.event(AdminBackfillPhase.FETCH, "still going")
-        assert A.read(AdminRunTool.BGG_STATS) is not None, "a live run must not expire"
+        assert A.read(AdminRunTool.BGG_METADATA) is not None, "a live run must not expire"
 
     led.finish()
     now[0] += A._TTL_SECONDS - 1
-    assert A.read(AdminRunTool.BGG_STATS) is not None, "readable for ten minutes after"
+    assert A.read(AdminRunTool.BGG_METADATA) is not None, "readable for ten minutes after"
     now[0] += 2
-    assert A.read(AdminRunTool.BGG_STATS) is None, "and gone after that"
+    assert A.read(AdminRunTool.BGG_METADATA) is None, "and gone after that"
 
 
 # ── Reads ────────────────────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ def test_a_tool_that_has_not_run_is_absent_rather_than_idle():
     A.open(AdminRunTool.TRENDING)
     tools = {r["tool"] for r in A.read_all()}
     assert tools == {"trending"}
-    assert A.read(AdminRunTool.BGG_STATS) is None
+    assert A.read(AdminRunTool.BGG_METADATA) is None
 
 
 def test_a_muted_ledger_publishes_nothing_but_still_accepts_every_call():

@@ -89,15 +89,24 @@ def _normalize_country(value: str) -> str:
 CountryCode = Annotated[str, AfterValidator(_normalize_country)]
 
 
-class RefreshImagesResponse(BaseModel):
-    """Outcome of ONE PASS of the admin image re-host.
+class BackfillPassResponse(BaseModel):
+    """Outcome of ONE PASS of an admin catalog backfill.
 
-    Same three fields as RefreshDescriptionsResponse, and for the same reason:
-    this used to report `updated` alone and so ran exactly once, because the
-    panel's drain loop breaks on a falsy `remaining`. One pass over a cold
-    catalog is one BGG call plus two image uploads per needy game — far past
-    the platform's request timeout — so it was the one backfill that could not
-    finish. It is bounded and drained like the other three now.
+    One model for both of them (images and metadata) because it was always one
+    shape: they had a `RefreshImagesResponse` and a `RefreshDescriptionsResponse`
+    with the same three fields, and the former's docstring said so.
+
+    A pass is bounded server-side so it fits inside the platform's request
+    timeout, so one call is usually NOT the whole catalog. `remaining` is how
+    many rows the run still has work to do on, and the browser keeps asking
+    until it reads 0 — a pass that cannot produce a falsy `remaining` is a
+    drain that never ends, which is the bug that left the image re-host running
+    exactly once.
+
+    `failed` counts rows in batches that errored out. The loop swallows those
+    so one bad chunk cannot abort a fifty-chunk run, which otherwise leaves an
+    admin staring at "updated: 40" with no hint that 20 more silently didn't
+    land.
     """
 
     updated: int
@@ -115,38 +124,22 @@ class AdminReviewCounts(BaseModel):
 
     chapter_reports: int = 0
     missing_images: int = 0
-    missing_descriptions: int = 0
-    # Catalog games whose BGG stats have never been synced (migration 038).
-    missing_stats: int = 0
-    # Catalog games whose publishers have never been synced (migration 040).
-    missing_publishers: int = 0
+    # Catalog games short of anything one /thing?stats=1 read would give them —
+    # a description, BGG stats, publisher credits, or a year (migration 045).
+    #
+    # ONE field where there were three. They were three counts of three
+    # overlapping queues, so a game missing both its blurb and its year was
+    # counted twice and the gear's dot over-reported. It is also deliberately
+    # NOT the backfill's queue predicate: this counts rows that are still
+    # incomplete, including ones BoardGameGeek has nothing more to give, so it
+    # is not expected to reach zero. The queue that has to terminate is
+    # `bgg_meta_synced_at IS NULL`, and it lives in the endpoint.
+    missing_metadata: int = 0
 
     @computed_field  # type: ignore[misc]
     @property
     def total(self) -> int:
-        return (
-            self.chapter_reports
-            + self.missing_images
-            + self.missing_descriptions
-            + self.missing_stats
-            + self.missing_publishers
-        )
-
-
-class RefreshDescriptionsResponse(BaseModel):
-    """Outcome of one pass of the admin description backfill.
-
-    The backfill is batched and bounded (see `backfill_game_descriptions`), so
-    one call is usually NOT the whole catalog: `remaining` is how many games
-    still have no description, and the admin panel re-invokes until it hits 0.
-    `failed` counts games in batches that errored out — the loop swallows those
-    so one bad chunk can't abort the run, which otherwise leaves an admin
-    staring at "updated: 40" with no hint that 20 more silently didn't land.
-    """
-
-    updated: int
-    failed: int = 0
-    remaining: int = 0
+        return self.chapter_reports + self.missing_images + self.missing_metadata
 
 
 # ── Scoring grids (migration 018) ─────────────────────────────────────────────
@@ -665,7 +658,7 @@ class GameSummary(BaseModel):
     rulebook_url: str | None = None
     play_mode: PlayMode = PlayMode.COMPETITIVE
     # BGG geek rating (1..10) and overall rank, backfilled into the catalog by
-    # POST /games/admin/backfill-stats (migration 038). Optional on purpose:
+    # POST /games/admin/backfill-metadata (migration 038, 045). Optional on purpose:
     # NULL means "not synced yet", and a client holding a pre-038 cached row
     # simply reads None — no cache SCHEMA_VERSION bump needed.
     bgg_rating: float | None = None
@@ -713,6 +706,27 @@ class GameDetail(GameSummary):
     # without a second lookup. Resolved via base_game_bgg_id at read time.
     base_game_id: str | None = None
     base_game_name: str | None = None
+
+
+class MissingMetadataGame(GameSummary):
+    """One row of GET /games/admin/missing-metadata.
+
+    A GameSummary plus the two things only this screen needs: WHAT is missing,
+    and whether we have already asked BoardGameGeek.
+
+    `missing` is a list of field names rather than four booleans so the panel
+    can say "no description, no year" in one line without four ternaries, and
+    so adding a fifth field to the sweep does not change this shape.
+
+    `checked_at` is what lets a row explain itself. A game still listed after a
+    sync is not a bug and not a stalled queue — it is a game BoardGameGeek has
+    nothing more to give, and the row says so instead of looking stuck. It is
+    also the one field that distinguishes "never asked" from "asked, and this
+    is all there is".
+    """
+
+    missing: list[str] = []
+    checked_at: datetime | None = None
 
 
 class GameListResponse(BaseModel):

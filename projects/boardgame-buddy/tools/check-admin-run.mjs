@@ -61,9 +61,7 @@ api.queue = [];
 win.Game = {
   adminRefreshTrending: gameStub("trending"),
   adminRefreshAllImages: gameStub("bgg-images"),
-  adminBackfillDescriptions: gameStub("bgg-descriptions"),
-  adminBackfillStats: gameStub("bgg-stats"),
-  adminBackfillPublishers: gameStub("bgg-publishers"),
+  adminBackfillMetadata: gameStub("bgg-metadata"),
 };
 
 const store = new Map();
@@ -120,16 +118,16 @@ const ledger = (tool, over = {}) => ({
 console.log("the tool registry");
 {
   const slugs = flow.slugs().sort();
-  ok("five tools, matching the server's AdminRunTool slugs",
-    slugs.join(",") === "bgg-descriptions,bgg-images,bgg-publishers,bgg-stats,trending");
-  const t = flow.tool("bgg-stats");
+  ok("three tools, matching the server's AdminRunTool slugs",
+    slugs.join(",") === "bgg-images,bgg-metadata,trending");
+  const t = flow.tool("bgg-metadata");
   ok("a backfill inherits the shared three-phase vocabulary",
     t.order.join(",") === "scan,fetch,caches" && !!t.labels.fetch);
   ok("trending brings its own six", flow.tool("trending").order.length === 6);
   ok("every tool carries a deadline, because api.js defaults to 15s",
     flow.slugs().every((s) => flow.tool(s).timeoutMs >= 60000));
   ok("images takes the smallest bite, being the slowest per game",
-    flow.tool("bgg-images").limit < flow.tool("bgg-stats").limit);
+    flow.tool("bgg-images").limit < flow.tool("bgg-metadata").limit);
   ok("an unknown slug is null, not a half-built tool", flow.tool("nope") === null);
 }
 
@@ -138,23 +136,23 @@ console.log("\nreading a ledger");
 {
   reset();
   ok("no record reads as idle, not as 'still working'",
-    flow.stateOf("bgg-stats").state === "unknown");
+    flow.stateOf("bgg-metadata").state === "unknown");
 
   reset();
-  flow.runs["bgg-stats"] = ledger("bgg-stats", {
+  flow.runs["bgg-metadata"] = ledger("bgg-metadata", {
     steps: [{ key: "fetch", state: "active", done: 3, total: 10 }],
   });
-  const live = flow.stateOf("bgg-stats");
+  const live = flow.stateOf("bgg-metadata");
   ok("a fresh running ledger is live", live.live && live.state === "running");
   ok("the pill counts the active phase", live.label === "3 of 10");
 
   // (3) The one that matters most: a ledger nobody is writing to.
   reset();
-  flow.runs["bgg-stats"] = ledger("bgg-stats", {
+  flow.runs["bgg-metadata"] = ledger("bgg-metadata", {
     updated_at: nowIso(5 * 60 * 1000),
     totals: { updated: 200, failed: 0, remaining: 800 },
   });
-  const stale = flow.stateOf("bgg-stats");
+  const stale = flow.stateOf("bgg-metadata");
   ok("a ledger five minutes cold is interrupted, not running",
     stale.state === "interrupted" && !stale.live);
   ok("and offers to continue, naming what is left",
@@ -163,10 +161,10 @@ console.log("\nreading a ledger");
   // ...unless THIS tab is the one driving it, where the clock knows less than
   // we do (a slow pass can go minutes between writes).
   reset();
-  flow.driving = "bgg-stats";
-  flow.runs["bgg-stats"] = ledger("bgg-stats", { updated_at: nowIso(5 * 60 * 1000) });
+  flow.driving = "bgg-metadata";
+  flow.runs["bgg-metadata"] = ledger("bgg-metadata", { updated_at: nowIso(5 * 60 * 1000) });
   ok("a run this tab is driving is never called interrupted",
-    flow.stateOf("bgg-stats").state === "running");
+    flow.stateOf("bgg-metadata").state === "running");
 
   reset();
   flow.runs["trending"] = ledger("trending", {
@@ -212,7 +210,7 @@ await (async () => {
       { updated: 200, remaining: 0 },
     ];
     api.summary = [];
-    const drain = flow.start("bgg-stats");
+    const drain = flow.start("bgg-metadata");
     await flow.adopt();          // the operator opens Settings mid-drain
     await flow.adopt();          // ...and the card's poll ticks
     await drain;
@@ -226,18 +224,18 @@ await (async () => {
   // Settings while this tab is the one driving.
   {
     reset();
-    const fresh = ledger("bgg-stats", { updated_at: nowIso(0), events: [{ at: nowIso(), level: "info", phase: "fetch", pass_no: 0, message: "kept" }] });
-    flow.runs["bgg-stats"] = fresh;
-    api.summary = [ledger("bgg-stats", { updated_at: nowIso(30 * 1000), events: [] })];
+    const fresh = ledger("bgg-metadata", { updated_at: nowIso(0), events: [{ at: nowIso(), level: "info", phase: "fetch", pass_no: 0, message: "kept" }] });
+    flow.runs["bgg-metadata"] = fresh;
+    api.summary = [ledger("bgg-metadata", { updated_at: nowIso(30 * 1000), events: [] })];
     await flow.adopt();
     ok("a staler summary does not overwrite a fresher run snapshot",
-      flow.runs["bgg-stats"].events.length === 1);
+      flow.runs["bgg-metadata"].events.length === 1);
 
-    flow.runs["bgg-stats"] = ledger("bgg-stats", { updated_at: nowIso(30 * 1000) });
-    api.summary = [ledger("bgg-stats", { updated_at: nowIso(0), totals: { updated: 9, failed: 0, remaining: 0 } })];
+    flow.runs["bgg-metadata"] = ledger("bgg-metadata", { updated_at: nowIso(30 * 1000) });
+    api.summary = [ledger("bgg-metadata", { updated_at: nowIso(0), totals: { updated: 9, failed: 0, remaining: 0 } })];
     await flow.adopt();
     ok("but a fresher summary does update a stale one — the pill must not freeze",
-      flow.runs["bgg-stats"].totals.updated === 9);
+      flow.runs["bgg-metadata"].totals.updated === 9);
   }
 })();
 
@@ -250,7 +248,7 @@ await (async () => {
     { updated: 200, remaining: 200 },
     { updated: 200, remaining: 0 },
   ];
-  await flow.start("bgg-stats");
+  await flow.start("bgg-metadata");
   ok("it keeps asking while the server reports work left", api.posts.length === 3);
   // (5) The pass counter.
   ok("pass 0 opens the log and the rest continue it",
@@ -267,32 +265,32 @@ await (async () => {
 
   // (2) Arriving at a live run must WATCH it.
   reset();
-  flow.runs["bgg-stats"] = ledger("bgg-stats");
-  await flow.start("bgg-stats");
+  flow.runs["bgg-metadata"] = ledger("bgg-metadata");
+  await flow.start("bgg-metadata");
   ok("a run already going is watched, never started twice", api.posts.length === 0);
 
   // A resume continues the server's log rather than throwing it away.
   reset();
-  flow.runs["bgg-stats"] = ledger("bgg-stats", {
+  flow.runs["bgg-metadata"] = ledger("bgg-metadata", {
     state: "done", pass_no: 4, updated_at: nowIso(5 * 60 * 1000),
     totals: { updated: 800, failed: 0, remaining: 200 },
   });
   api.queue = [{ updated: 200, remaining: 0 }];
-  await flow.resume("bgg-stats");
+  await flow.resume("bgg-metadata");
   ok("a resume asks for the NEXT pass, keeping the journal",
     api.posts.length === 1 && api.posts[0].passNo === 5);
 
   // A browser-side failure is its own thing: the server may be perfectly fine.
   reset();
-  win.Game.adminBackfillStats = () => Promise.reject(new Error("Network request failed"));
-  await flow.start("bgg-stats");
+  win.Game.adminBackfillMetadata = () => Promise.reject(new Error("Network request failed"));
+  await flow.start("bgg-metadata");
   ok("a dropped connection is reported rather than read as success",
-    flow.stateOf("bgg-stats").error === "Network request failed");
-  win.Game.adminBackfillStats = gameStub("bgg-stats");
+    flow.stateOf("bgg-metadata").error === "Network request failed");
+  win.Game.adminBackfillMetadata = gameStub("bgg-metadata");
 
   // (1) stopWatching is not stopRunning.
   reset();
-  flow.driving = "bgg-stats";
+  flow.driving = "bgg-metadata";
   flow._pollHandle = 99;
   flow.stopWatching();
   ok("unmounting a view mid-run does NOT stand the poll down", flow._pollHandle === 99);
@@ -304,8 +302,8 @@ await (async () => {
 // ── 5. The log renders what the ledger says ──────────────────────────────────
 console.log("\nthe log");
 {
-  const tool = flow.tool("bgg-stats");
-  const html = win.renderAdminRunLog(ledger("bgg-stats", {
+  const tool = flow.tool("bgg-metadata");
+  const html = win.renderAdminRunLog(ledger("bgg-metadata", {
     steps: [
       { key: "scan", state: "done", done: null, total: null, detail: "50 games are missing BGG stats" },
       { key: "fetch", state: "active", done: 1, total: 3, detail: "batch 2 of 3 · 20 saved so far" },
@@ -333,7 +331,7 @@ console.log("\nthe log");
   // so it must not invent a "still working" row the way the BGG check does.
   ok("no record renders nothing, leaving the idle face to the view",
     win.renderAdminRunLog({ state: "unknown", steps: [] }, { labels: {}, order: [] }).trim() === "");
-  ok("a stalled run says so", win.renderAdminRunLog(ledger("bgg-stats"), {
+  ok("a stalled run says so", win.renderAdminRunLog(ledger("bgg-metadata"), {
     labels: tool.labels, order: tool.order, stale: true,
   }).includes("stopped reporting"));
 }
@@ -376,6 +374,49 @@ console.log("\nthe BGG check log after the extraction");
     win.renderBggCheckLog({ ...snap, warm_up_failed: true }, {}).includes("never finished preparing"));
   ok("a failure still shows BGG's own words",
     win.renderBggCheckLog({ ...snap, state: "failed", error: "BGG said no" }, {}).includes("BGG said no"));
+}
+
+// ── 7. The panel's Sync now is one tap, and it is the deed ──────────────────
+// There was a PolaroidPopup.confirm here, and the argument for it was that
+// navigating is one tap too late to ask — true while the run page started
+// nothing on arrival. It starts now, so the button has to actually start
+// something: a version that only navigates leaves an admin on an idle page
+// believing they kicked off a twenty-minute sweep.
+console.log("\nthe panel hands off in one tap");
+{
+  const nav = [];
+  win.router = { go: (name, params) => nav.push({ name, params }) };
+  win.PolaroidPopup = {
+    confirm: () => { ok("no confirm popup", false); return Promise.resolve(true); },
+  };
+  sandbox.showToast = () => {};
+  vm.runInContext(
+    fs.readFileSync(`${W}/widgets/admin-backfill-panel.js`, "utf8"),
+    sandbox, { filename: "widgets/admin-backfill-panel.js" },
+  );
+
+  reset();
+  api.queue = [{ updated: 5, remaining: 0 }];
+  const panel = new win.AdminBackfillPanel({
+    key: "metadata", runTool: "bgg-metadata", title: "t", icon: "i",
+    emptyText: "", oneOkToast: "", rowStatus: () => "",
+    list: () => Promise.resolve([]), refreshOne: () => Promise.resolve(),
+    host: "x", render: () => {},
+  });
+  panel.goToRun();
+
+  ok("it navigates to that tool's log",
+    nav.length === 1 && nav[0].name === "admin-run" && nav[0].params.tool === "bgg-metadata");
+  ok("and starts the run in the same tap", api.posts.length === 1);
+  ok("the run it started is the panel's own", api.posts[0].name === "bgg-metadata");
+  // The confirm would have failed an assertion above if it were still called.
+  ok("with no confirm in between", true);
+
+  // A second press while it is going must not open a second drain.
+  reset();
+  flow.runs["bgg-metadata"] = ledger("bgg-metadata");
+  panel.goToRun();
+  ok("pressing it again on a live run just takes you there", api.posts.length === 0);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nAll checks passed");

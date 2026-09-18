@@ -8,8 +8,13 @@ Settings gear's notification dot.
 It is deliberately ONE endpoint rather than three. The dot is on the global
 header, so it is fetched on every boot for every admin; three round trips to
 light one dot is the wrong price, and having the frontend derive counts by
-fetching the three list endpoints would be worse still — those return full
+fetching the list endpoints would be worse still — those return full
 GameSummary rows (hundreds of them, mid-backfill) to arrive at an integer.
+
+Three counts now, not five: the description, stats and publisher queues became
+one metadata queue in migration 045, and collapsing them fixed an over-count as
+well as a round trip — a game missing both its blurb and its year used to be
+counted twice, so the gear's dot reported more work than existed.
 """
 
 import asyncio
@@ -48,24 +53,22 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
         .limit(1)
         .execute()
     )
-    missing_descriptions = (
+    # Short of anything one /thing?stats=1 read would give (migration 045).
+    # NULL publishers, not '{}': a game BGG credits to nobody has been answered
+    # and has nothing left for an admin to do.
+    #
+    # ONE query where there were three, and deliberately NOT the backfill's
+    # queue predicate. This counts rows that are still INCOMPLETE — including
+    # ones BoardGameGeek has nothing more to give, which stay listed in the
+    # panel on purpose — so it is not expected to reach zero. The queue that
+    # has to terminate is `bgg_meta_synced_at IS NULL`, and it lives with the
+    # endpoint that drains it.
+    missing_metadata = (
         _count_query(sb, "boardgamebuddy_games")
-        .is_("description", "null")
-        .limit(1)
-        .execute()
-    )
-    missing_stats = (
-        _count_query(sb, "boardgamebuddy_games")
-        .is_("bgg_stats_synced_at", "null")
-        .not_.is_("bgg_id", "null")
-        .limit(1)
-        .execute()
-    )
-    # NULL, not '{}': a game BGG credits to nobody is synced and has nothing
-    # left for an admin to do (migration 040).
-    missing_publishers = (
-        _count_query(sb, "boardgamebuddy_games")
-        .is_("publishers", "null")
+        .or_(
+            "description.is.null,bgg_stats_synced_at.is.null,"
+            "publishers.is.null,year_published.is.null"
+        )
         .not_.is_("bgg_id", "null")
         .limit(1)
         .execute()
@@ -74,9 +77,7 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
     return AdminReviewCounts(
         chapter_reports=reports.count or 0,
         missing_images=missing_images.count or 0,
-        missing_descriptions=missing_descriptions.count or 0,
-        missing_stats=missing_stats.count or 0,
-        missing_publishers=missing_publishers.count or 0,
+        missing_metadata=missing_metadata.count or 0,
     )
 
 
