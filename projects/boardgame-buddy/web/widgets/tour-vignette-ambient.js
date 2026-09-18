@@ -40,8 +40,8 @@
    * A miniature of ui/play-card.js — the polaroid, scaled to about a third.
    *
    * Faithful in the four things that make it one: a PAPER body (cream in both
-   * themes) with the app's ground showing around it, a photo frame whose empty
-   * state is a flat --polaroid-line rectangle exactly as the real one's is,
+   * themes) with the app's ground showing around it, a photo frame carrying
+   * stand-in box art,
    * the game name in the display face below it, and the winner on its own row
    * under a hairline reading "Won by <name> · <score>". No tilt — styles.css
    * says the nth-child rotations were removed on purpose and cards sit square.
@@ -52,12 +52,21 @@
    * plays the VIEWER won — not "this play has a winner", which is true of
    * every card and would make the mark say nothing.
    *
-   * @param {{game: string, winner: string, score: string, mine?: boolean}} p
+   * THE COVERS ARE INVENTED, and they have to be. The real card's no-art state
+   * is a flat --polaroid-line rectangle, which is honest in the app and reads
+   * as a broken image in a marketing mock — six grey holes where the reason to
+   * care should be. Each fixture carries a `hue` instead and the stylesheet
+   * builds an abstract cover from it, so the rail reads as six different games
+   * at a glance. A hue is data-derived and rides as a custom property, which
+   * is the one legitimate inline-colour case (.claude/rules/theming.md §10).
+   *
+   * @param {{game: string, winner: string, score: string, mine?: boolean,
+   *          hue: number}} p
    */
   const playCard = (p) => `
     <article class="vfeed-card">
       <div class="vfeed-card__photo">
-        <span class="vfeed-card__art" aria-hidden="true"></span>
+        <span class="vfeed-card__art" style="--vig-hue:${p.hue}" aria-hidden="true"></span>
         ${p.mine ? `<span class="vfeed-card__crown" aria-hidden="true">
           <i data-icon="crown" class="w-3 h-3"></i>
         </span>` : ""}
@@ -87,12 +96,12 @@
   // six 96px cards plus their gaps come to 616px, so both slide steps land
   // well inside the content.
   const NIGHT = [
-    { game: "Arboretum", winner: "You",    score: "87",  mine: true },
-    { game: "Wingspan",  winner: "Priya",  score: "102" },
-    { game: "Cascadia",  winner: "You",    score: "94",  mine: true },
-    { game: "Sagrada",   winner: "Marcus", score: "71" },
-    { game: "Azul",      winner: "You",    score: "68",  mine: true },
-    { game: "Calico",    winner: "Priya",  score: "55" },
+    { game: "Arboretum", winner: "You",    score: "87",  mine: true, hue: 104 },
+    { game: "Wingspan",  winner: "Priya",  score: "102", hue: 196 },
+    { game: "Cascadia",  winner: "You",    score: "94",  mine: true, hue: 28 },
+    { game: "Sagrada",   winner: "Marcus", score: "71", hue: 268 },
+    { game: "Azul",      winner: "You",    score: "68",  mine: true, hue: 220 },
+    { game: "Calico",    winner: "Priya",  score: "55", hue: 340 },
   ];
 
   V.register({
@@ -207,10 +216,10 @@
   // The reason line is the point, not the cover art: "Label a suggestion by its
   // reason, not by the number that ranked it" (.claude/rules/web-frontend.md).
   const PICKS = [
-    { name: "Sagrada", why: "Plays like Azul, which you've logged 9 times" },
-    { name: "Calico", why: "Tile-laying, 2 players — your usual table" },
-    { name: "Verdant", why: "Same designers as Cascadia, on your shelf" },
-    { name: "Sky Team", why: "Co-op for two, and you're 6–1 at co-ops" },
+    { name: "Sagrada", hue: 268, why: "Plays like Azul, which you've logged 9 times" },
+    { name: "Calico", hue: 340, why: "Tile-laying, 2 players — your usual table" },
+    { name: "Verdant", hue: 128, why: "Same designers as Cascadia, on your shelf" },
+    { name: "Sky Team", hue: 202, why: "Co-op for two, and you're 6–1 at co-ops" },
   ];
 
   // The four picks all fit the frame, so the motion is the ATTENTION moving
@@ -233,7 +242,7 @@
         <div class="vdisc__rail" data-rail>
           ${PICKS.map((p) => `
             <div class="vdisc__tile">
-              <span class="vdisc__cover" aria-hidden="true"></span>
+              <span class="vdisc__cover" style="--vig-hue:${p.hue}" aria-hidden="true"></span>
               <span class="vdisc__name">${p.name}</span>
             </div>`).join("")}
         </div>
