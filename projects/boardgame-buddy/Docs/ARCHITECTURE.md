@@ -595,10 +595,47 @@ first paint and degrades to nothing on a dead connection or under reduced
 motion.
 
 The tour is **chrome** and joins the re-point lists in `styles.css` — with one
-paper island. The Arboretum scorepad inside the scoring scene is a photograph
-of a scorepad, so `.vscore__pad` points `--polaroid-*` back at `--paper*`, with
-its class doubled to out-specify the `(0,3,0)` dark chrome branch, for the
-reason §4.2b spells out.
+paper island covering the two things inside it that are photographs: the
+Arboretum scorepad in the scoring scene, and the play cards in the feed scene.
+Both point `--polaroid-*` back at `--paper*`, class doubled to out-specify the
+`(0,3,0)` dark chrome branch, for the reason §4.2b spells out. The island also
+restores `--polaroid-accent` (the dark branch lightens it for a dark *ground*,
+and on cream that is 2.6:1) and `--card-border` (dark declares it
+`transparent`, which is right for a card on the app's own ground and leaves a
+cream card on that ground with no edge at all).
+
+**The feed scene is a miniature of `ui/play-card.js`, not an impression of
+one.** Paper body, a photo frame whose empty state is the same flat
+`--polaroid-line` rectangle the real card's is, the game name in the display
+face, and the winner under a hairline — laid out the way `views/feed-view.js`
+lays a night out: day divider, session header, a sideways rail of cards, and
+one *Good game* pill for the whole night, outside the cards because it reacts
+to the night rather than to any one play. The ground/paper contrast is what
+makes the frame read as the feed at all, so it is the part to preserve.
+
+Two of its numbers are load-bearing rather than taste. The rail carries **six**
+cards and its clip is **capped at 330px**: the slide beats only read as a
+slide while the rail is wider than what shows of it, and the tour panel is
+448px on a tablet against 342 on a phone — enough spread to turn two honest
+steps into one step and a gap. And every child of `.vfeed` is `flex: none`,
+because the clip was otherwise the one that gave on a short frame, and it gave
+by cutting each card off below its game name — taking the winner line, which
+is the thing the cards are there for. `.tour__stage`'s floor is set by this
+scene for the same reason.
+
+One mark in the tour has no equivalent in the app: the **crown** on a feed
+card. It is there because at 96px wide the caption's winner line is 8.5px of
+muted rust, which reads as texture rather than as a fact, and it marks the
+plays the *viewer* won rather than "this play has a winner" — which is true of
+every card and would make the mark say nothing. The shipped card is unchanged.
+
+**The scripted scenes are paced, and the pacing is the content.** Roughly two
+seconds a beat, and the longest dwell of all sits on the *generic* scorepad
+before the template rewrites it: you have to register that the grid is generic
+before it changes, or the change is just a grid appearing. At one beat a second
+the whole sequence read as a flicker. A long cycle costs nothing, because the
+shell pauses a scene the moment its panel scrolls off and every panel restarts
+from beat zero when it comes back — nobody lands mid-story.
 
 Content lives in exactly one file. `widgets/tour-chapters.js` carries the
 chapters, their marks and the one-line claims the sign-in strip shows, so the
