@@ -55,6 +55,19 @@
     return rows;
   }
 
+  // `winner_display_name` as bgb_feed_page builds it: every winning seat's
+  // display name, sorted by that name, comma-joined — and NULL, not "", when
+  // nobody won, because the caption's "was a result recorded at all?" test
+  // reads it as a presence check.
+  function winnerDisplayName(players) {
+    const names = (players || [])
+      .filter((p) => p && p.is_winner)
+      .map((p) => String(p.name == null ? "" : p.name).trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+    return names.length ? names.join(", ") : null;
+  }
+
   /**
    * A play projected out of a cached /plays page, or null.
    *
@@ -347,6 +360,18 @@
       card.play_mode = play.play_mode || "competitive";
       card.country_code = play.country_code == null ? null : play.country_code;
       card.players = play.players || [];
+      // The two aggregates the feed RPC computes BESIDE the roster. They are
+      // derived data, so an edit that changes who won has to move them too —
+      // without this the card kept the winner line the last feed fetch
+      // produced, and a play crowned after the fact went on rendering "We
+      // lost" over a roster that says otherwise. play-card.js prefers the
+      // roster now, but the run sheet still reads these, and a card holding
+      // two contradictory answers is a bug waiting for its next reader.
+      //
+      // Same shape bgb_feed_page emits: winners by display name, sorted,
+      // comma-joined, NULL when nobody won.
+      card.winner_display_name = winnerDisplayName(card.players);
+      card.participant_count = card.players.length;
       card.expansions = play.expansions || [];
       // A play owns its template, so an edit that changed it has to reach the
       // card too. Without this the card's projection would keep saying

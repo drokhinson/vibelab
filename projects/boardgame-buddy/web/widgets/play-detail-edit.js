@@ -537,11 +537,16 @@
   }
 
   // Auto-pick winners as the player with the highest round-sum. Mirrors
-  // play-flow-view's competitive-mode behavior; team / co-op semantics
-  // aren't expressible from the popup so we keep it simple. Authors can
-  // still toggle winners manually via the trophy / Won checkbox.
+  // play-flow-view's competitive-mode behavior, and ONLY that mode: the other
+  // two aren't near-enough fits, they are different questions. A co-op table
+  // shares one outcome, and a team play's sides don't exist in this popup at
+  // all — the team column lives on the Play screen. Running "highest total
+  // wins" over either would answer from data it cannot see, uncrowning every
+  // winner but one on a play whose author came here to fix a score. There the
+  // Won checkbox is the only thing that crowns, which is what it is for.
   function autoSelectWinners() {
     if (!state.draft) return;
+    if ((state.draft.play_mode || "competitive") !== "competitive") return;
     const totals = state.draft.players.map((p) => playerTotal(p, state.draft.players));
     if (totals.every((t) => t === 0)) return;
     const max = Math.max(...totals);
