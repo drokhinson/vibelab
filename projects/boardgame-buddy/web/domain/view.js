@@ -303,6 +303,18 @@
     // DIFFERENT view: that is how a retired path stays live without a second
     // view registered under its name. Extracted and querystring params win over
     // aliasParams, so an explicit ?shelf= in the URL is still honoured.
+    /**
+     * Does this route render for somebody with no account?
+     *
+     * Reads the one list rather than letting a caller keep its own copy —
+     * init.js needs this on the signed-out boot path, and a second hand-kept
+     * list of public screens would drift the first time one was added.
+     * @param {?string} name
+     */
+    isPublic(name) {
+      return PUBLIC_VIEWS.includes(name);
+    }
+
     matchPath(pathname, search) {
       const path = (pathname || "/").split("?")[0];
       const qs = search === undefined ? window.location.search : search;

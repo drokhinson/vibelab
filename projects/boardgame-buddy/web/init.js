@@ -150,7 +150,30 @@
         // option sets are per-backend, and in local dev the next sign-in can be
         // a different one.
         if (window.Feedback) window.Feedback.clearCache();
-        window.router.go("auth");
+        // A SIGNED-OUT COLD OPEN STILL HONOURS A PUBLIC DEEP LINK.
+        //
+        // The stash above this branch says initAuth "flips us forward to
+        // either the pending deep-link route or the feed", and for a session
+        // that resolves it does. With no session it used to go to /auth
+        // unconditionally — correct while every route in the table needed an
+        // account, and wrong the moment one did not. It sent a stranger
+        // following a marketing link to /tour to a login screen, and it did
+        // the same to /privacy and /terms, which Google's OAuth consent
+        // screen links to permanently and which strangers reach by
+        // definition.
+        //
+        // Gated on wasBooting because this callback also fires on a MID-SESSION
+        // sign-out, where routeAfterBoot has already consumed pendingRoute and
+        // the right destination is the login screen. skipPush for the same
+        // reason routeAfterBoot uses it: on a cold open the address bar
+        // already reads the URL being honoured.
+        const deep = wasBooting ? window.store.get("pendingRoute") : null;
+        if (deep && deep.name !== "auth" && window.router.isPublic(deep.name)) {
+          window.store.set("pendingRoute", null);
+          window.router.go(deep.name, deep.params || {}, { skipPush: true });
+        } else {
+          window.router.go("auth");
+        }
         // A signed-out cold open is a boot too, and it reaches neither
         // routeAfterBoot nor the watchdog — the watchdog bails once the view is
         // no longer the splash. Without this the numbers would silently cover
