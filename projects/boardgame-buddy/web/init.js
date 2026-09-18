@@ -53,6 +53,7 @@
   window.adminReleaseNoticesView = new window.AdminReleaseNoticesView();
   window.adminAffiliatesView = new window.AdminAffiliatesView();
   window.adminRunView = new window.AdminRunView();
+  window.adminUsageView = new window.AdminUsageView();
   window.whatsNewView = new window.WhatsNewView();
 
   // Widget singleton — the Play tab's Join half. Hoisted here (rather than
@@ -92,6 +93,7 @@
   window.router.register("admin-release-notices", window.adminReleaseNoticesView);
   window.router.register("admin-affiliates",   window.adminAffiliatesView);
   window.router.register("admin-run",           window.adminRunView);
+  window.router.register("admin-usage",         window.adminUsageView);
   window.router.register("whats-new",           window.whatsNewView);
 
   // A global helper rather than a view concern, because the provider's state

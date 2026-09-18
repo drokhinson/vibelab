@@ -1,6 +1,19 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 044_play_bgg_play_id.sql (re-emits bgb_log_play AGAIN, on top
+-- Last updated: 047_usage_stats.sql (adds bgb_admin_usage_stats — the admin
+--               Usage spoke's whole payload in one call: accounts, active
+--               accounts from api_logs, the Postgres footprint, the screen
+--               leaderboard from analytics_events, per-feature counters and
+--               play origins. Reads two cross-app tables and pg_class; adds
+--               no columns and no instrumentation.
+--
+--               NOTE THE NUMBER. It was written as 045 and renumbered to 047
+--               on rebase: main landed 045_bgg_meta_sync and then
+--               046_affiliate_partners while this branch was open, and the
+--               sequence is applied in numeric order. Neither shares an object
+--               with this function, so the move was numbering only — the same
+--               repair 046 made to itself for the same reason.)
+--               Before that: 044_play_bgg_play_id.sql (re-emits bgb_log_play AGAIN, on top
 --               of 043's body rather than 023's, so it reads, dedups on and
 --               writes bgg_play_id WITHOUT dropping bga_table_id. A third
 --               duplicate pre-check keys on (user_id, bgg_play_id), which is
@@ -1691,3 +1704,38 @@
 --               want_topic are NULL for "no filter"; want_status is required,
 --               and feedback_routes forces it to 'open' for non-admins so a
 --               missing argument can never leak the resolved half.
+
+-- bgb_admin_usage_stats()
+--   → JSONB { generated_at, users, active, database, screens, events, domain,
+--             play_origins }
+--   Defined in: projects/boardgame-buddy/db/migrations/047_usage_stats.sql
+--   Called by:  services/usage_service.fetch_usage (GET /admin/usage)
+--   Purpose:    App-wide usage for the admin Usage spoke — accounts, active
+--               accounts, the Postgres footprint, the screen leaderboard, the
+--               per-feature counters and where plays come from. One function
+--               for eleven unrelated aggregates, on archive/058's reasoning:
+--               the screen wants them all at once and a dozen round trips to
+--               draw one page is the wrong price.
+--
+--               THREE THINGS IT READS THAT NOTHING ELSE DOES. `active` counts
+--               DISTINCT api_logs.user_id — main.py's self-timing middleware
+--               writes a row per /bootstrap and /feed request carrying the
+--               account's app_uid, so active users needed no new
+--               instrumentation and have history from the day that landed. It
+--               counts SIGNED-IN accounts that made a boot-critical request,
+--               which is what the screen says rather than calling it DAU.
+--               `screens` reads analytics_events for `view:%` — web/domain/
+--               view.js has fired one per navigation since it shipped.
+--               `database` inlines the pg_class query rather than calling
+--               public.admin_table_sizes(): that function belongs to the other
+--               apps' migration tree and this project's db/migrations/_shared/
+--               does not carry it, so a fresh BoardgameBuddy-only database
+--               would 42883 on the call.
+--
+--               Every feature in `domain` names its own clock column — three
+--               of those tables have no created_at (participants use joined_at,
+--               shelf entries added_at, achievements unlocked_at) and a buddy
+--               link's accepted_at is NULL until accepted, which is the filter
+--               "links made" wants. Play origin is derived in a CASE whose
+--               ORDER is load-bearing: a BGG or BGA play carries an
+--               import_batch_id too, so the batch arm has to come last.

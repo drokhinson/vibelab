@@ -469,3 +469,29 @@ function fileToBase64(file) {
   });
 }
 window.fileToBase64 = fileToBase64;
+
+/**
+ * A byte count as a person reads it — "0 B", "912 kB", "1.4 MB", "2.3 GB".
+ *
+ * Decimal units (kB = 1000), not binary: these numbers are read next to a
+ * Supabase plan allowance and a Cloudflare R2 bill, and both of those are
+ * quoted in decimal. Labelling 1024 bytes "1 kB" would make the admin screen
+ * disagree with the invoice it exists to predict.
+ *
+ * One decimal place from MB up and none below, so a shelf of small tables
+ * stays scannable while the big ones keep their precision.
+ * @param {number} n
+ * @returns {string}
+ */
+function formatBytes(n) {
+  const v = Number(n);
+  if (!isFinite(v) || v <= 0) return "0 B";
+  const units = ["B", "kB", "MB", "GB", "TB"];
+  let i = 0;
+  let x = v;
+  while (x >= 1000 && i < units.length - 1) { x /= 1000; i += 1; }
+  // Below MB a fraction of a kilobyte is noise; from MB up it is the story.
+  const dp = i >= 2 && x < 100 ? 1 : 0;
+  return `${x.toFixed(dp)} ${units[i]}`;
+}
+window.formatBytes = formatBytes;

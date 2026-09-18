@@ -541,6 +541,19 @@
           title: "Refresh trending",
           sub: "Snapshot BoardGameGeek's hot list and import what the catalog lacks.",
         },
+        // The one tool that neither moderates a queue nor authors anything —
+        // it reports. So, like Release notices above, it carries no count and
+        // no row in domain/notifications.js: usage figures are never "work
+        // waiting", and forAdminTool("usage") matching no signal returns zero,
+        // which renders no badge. Wanted behaviour, noted because most rows
+        // here have one.
+        {
+          route: "admin-usage",
+          tool: "usage",
+          icon: "chart-bar",
+          title: "Usage",
+          sub: "Accounts, active users, database and bucket size, and which features get used.",
+        },
       ];
     }
 

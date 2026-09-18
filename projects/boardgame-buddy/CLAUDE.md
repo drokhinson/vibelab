@@ -26,7 +26,7 @@ projects/boardgame-buddy/
 │   ├── db.py jwt_auth.py cache.py api_logger.py gemini.py auth.py shared_models.py
 │   ├── object_store.py     Cloudflare R2 uploads (see below)
 │   └── tests/
-├── db/migrations/          001–046, plus _shared/ (analytics + api_logs)
+├── db/migrations/          001–047, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  generators, operator scripts, and web/'s only tests —
 │                           `node tools/check-*.mjs`; never deploy steps

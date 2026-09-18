@@ -519,9 +519,9 @@
           </header>
           <div class="stats-bars">
             ${rows.map((r) => `
-              <div class="stats-bar stats-bar--record">
-                <span class="stats-bar__k">${escapeHtml(r.name || "")}</span>
-                <span class="stats-bar__v">${r.score} &middot; ${escapeHtml(formatDate(r.played_at))}</span>
+              <div class="stat-bar stat-bar--record">
+                <span class="stat-bar__k">${escapeHtml(r.name || "")}</span>
+                <span class="stat-bar__v">${r.score} &middot; ${escapeHtml(formatDate(r.played_at))}</span>
               </div>
             `).join("")}
           </div>
@@ -545,15 +545,11 @@
         : `Every box on the shelf has hit the table.`;
     }
 
+    // Delegates to ui/stat-primitives.js, which the admin Usage spoke draws
+    // from too. Kept as a one-line method rather than replacing the call sites
+    // so the two readers below still say `this._bar(...)`.
     _bar(label, value, peak) {
-      const w = Math.max(4, Math.round((value / peak) * 100));
-      return `
-        <div class="stats-bar">
-          <span class="stats-bar__k" title="${escapeAttr(label)}">${escapeHtml(label)}</span>
-          <span class="stats-bar__track"><i style="width:${w}%"></i></span>
-          <span class="stats-bar__v">${value}</span>
-        </div>
-      `;
+      return window.BgbStat.bar(label, value, peak);
     }
 
     // ── Interaction ───────────────────────────────────────────────────────────
