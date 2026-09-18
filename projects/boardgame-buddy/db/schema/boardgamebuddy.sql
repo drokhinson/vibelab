@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 044_play_bgg_play_id.sql (no table shape moves — it re-emits
+-- Last updated: 045_affiliate_partners.sql (boardgamebuddy_affiliate_partners —
+--               the four retailers, seeded DISABLED with no credential — and
+--               boardgamebuddy_affiliate_clicks, a userless tap log; hand-added
+--               below).
+--               Before that: 044_play_bgg_play_id.sql (no table shape moves — it re-emits
 --               bgb_log_play. The one schema fact is the COMMENT ON
 --               boardgamebuddy_plays.bgg_play_id at the foot, naming the two
 --               writers that column now has.)
@@ -902,6 +906,45 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_feedback_likes (
 );
 ALTER TABLE public.boardgamebuddy_feedback_likes ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.boardgamebuddy_feedback_likes TO boardgamebuddy_role;
+
+-- ── Affiliate partners (migration 045) ────────────────────────────────────────
+-- Retailers a game page can link to. live = enabled AND (tracking_tag OR
+-- wrapper_template); every seeded row is disabled with no credential, so
+-- nothing renders until an admin sets one up (Docs/AFFILIATE_LINKS.md).
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_affiliate_partners (
+  id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  url_template TEXT NOT NULL,
+  wrapper_template TEXT,
+  tracking_tag TEXT,
+  disclosure TEXT,
+  notes TEXT,
+  display_order INTEGER DEFAULT 0 NOT NULL,
+  enabled BOOLEAN DEFAULT false NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT boardgamebuddy_affiliate_partners_pkey PRIMARY KEY (id),
+  CONSTRAINT bgb_affiliate_partners_id_slug_chk CHECK ((id ~ '^[a-z0-9][a-z0-9-]{1,40}$'::text))
+);
+ALTER TABLE public.boardgamebuddy_affiliate_partners ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.boardgamebuddy_affiliate_partners TO boardgamebuddy_role;
+
+-- One row per tap on a partner pill. No user column, by design (privacy §5).
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_affiliate_clicks (
+  id UUID DEFAULT gen_random_uuid() NOT NULL,
+  partner_id TEXT NOT NULL,
+  game_id UUID,
+  surface TEXT NOT NULL,
+  clicked_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT boardgamebuddy_affiliate_clicks_pkey PRIMARY KEY (id),
+  CONSTRAINT bgb_affiliate_clicks_partner_fkey FOREIGN KEY (partner_id) REFERENCES boardgamebuddy_affiliate_partners(id) ON DELETE CASCADE,
+  CONSTRAINT bgb_affiliate_clicks_game_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE SET NULL,
+  CONSTRAINT bgb_affiliate_clicks_surface_chk CHECK ((surface = ANY (ARRAY['game_detail'::text, 'discover'::text])))
+);
+ALTER TABLE public.boardgamebuddy_affiliate_clicks ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_bgb_affiliate_clicks_partner ON public.boardgamebuddy_affiliate_clicks USING btree (partner_id, clicked_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bgb_affiliate_clicks_game ON public.boardgamebuddy_affiliate_clicks USING btree (game_id, clicked_at DESC);
+GRANT SELECT ON public.boardgamebuddy_affiliate_clicks TO boardgamebuddy_role;
 
 -- ── Release notices ───────────────────────────────────────────────────────────
 -- Admin-authored "what's new" notes (migration 042), shown once per user in a
