@@ -9,7 +9,9 @@
 //     fresh window has lapsed so the next read gets new data.
 //
 // Persistence: every successful set() is written through to localStorage at
-// `bgb_cache:<userId>:<ns>:<key>` so a reload doesn't pay the network. The
+// `bgb_cache:<userId>:<ns>:<key>` so a reload doesn't pay the network — unless
+// the setter passed `persist: false` (see setWithTtls), which keeps an entry in
+// memory only for the length of the page session. The
 // cache must be bound to a user (bindUser(uid)) before persistence is active;
 // before bind, all entries are memory-only and reads/writes are silently
 // dropped from the persistence layer to avoid cross-account leaks.
@@ -82,14 +84,14 @@
    * in the air. Rejects on fetch failure — callers decide whether that
    * surfaces or is swallowed.
    */
-  function _startFetch(ns, key, fetcher, freshTtl, staleTtl) {
+  function _startFetch(ns, key, fetcher, freshTtl, staleTtl, persist) {
     const fk = _flightKey(ns, key);
     const gen = _flightGen.get(fk) || 0;
     const p = Promise.resolve()
       .then(() => fetcher())
       .then((fresh) => {
         if ((_flightGen.get(fk) || 0) === gen) {
-          bgbCache.setWithTtls(ns, key, fresh, { freshTtl, staleTtl });
+          bgbCache.setWithTtls(ns, key, fresh, { freshTtl, staleTtl, persist });
         }
         return fresh;
       })
@@ -204,6 +206,7 @@
       const key = rest.slice(colon + 1);
       // The stored string is the size — no re-serialization on the boot path.
       entry.bytes = raw.length;
+      entry.persisted = true;
       _bucket(ns).set(key, entry);
     }
     for (const k of drop) {
@@ -341,8 +344,17 @@
     /**
      * SWR setter. freshTtl: how long get() returns this value; staleTtl: how
      * long swr() will serve this value while refreshing in the background.
+     *
+     * `persist` (default true) decides whether the entry is written through
+     * to localStorage. `false` keeps it in memory only — it costs no
+     * serialisation, no setItem, and no share of the 3 MB budget, which is
+     * right for a value that is cheap to refetch or too large to be worth a
+     * reload (a search memo; a catalog index past its size cap). It may also
+     * be a predicate over the serialised JSON, `(json) => boolean`, for a
+     * caller that wants to persist only while the value stays small.
+     * A memory-only entry is still evicted by age exactly like any other.
      */
-    setWithTtls(ns, key, value, { freshTtl, staleTtl } = {}) {
+    setWithTtls(ns, key, value, { freshTtl, staleTtl, persist = true } = {}) {
       if (!freshTtl || freshTtl <= 0) return;
       if (!staleTtl || staleTtl < freshTtl) staleTtl = freshTtl;
       const entry = {
@@ -352,11 +364,17 @@
         staleTtl,
         ver: SCHEMA_VERSION,
       };
-      const json = _serialize(entry);
-      entry.bytes = json ? json.length : 0;
+      // Serialise only when something might be written: a memory-only entry
+      // never needs its JSON, and for a large value that stringify is the
+      // whole cost of the set.
+      const json = persist ? _serialize(entry) : null;
+      const write = typeof persist === "function" ? !!persist(json) : !!persist;
+      entry.bytes = write && json ? json.length : 0;
+      entry.persisted = write;
       _bucket(ns).set(key, entry);
-      _persistEntry(ns, key, json);
       _counters.set++;
+      if (!write) return;
+      _persistEntry(ns, key, json);
       if (_totalBytes() > SIZE_BUDGET_BYTES) {
         _evictOldest(SIZE_BUDGET_BYTES);
       }
@@ -368,7 +386,7 @@
      * during the stale window returns cached and fires fetcher() in the
      * background; past stale, awaits fetcher().
      */
-    async swr(ns, key, fetcher, { freshTtl = DEFAULT_TTL_MS, staleTtl } = {}) {
+    async swr(ns, key, fetcher, { freshTtl = DEFAULT_TTL_MS, staleTtl, persist } = {}) {
       if (!staleTtl || staleTtl < freshTtl) staleTtl = freshTtl;
       const b = _bucket(ns);
       const entry = b.get(key);
@@ -387,7 +405,7 @@
           // the stale value, so swallow the rejection here rather than
           // leaving it unhandled.
           if (!_inflight.has(inflightKey)) {
-            _startFetch(ns, key, fetcher, freshTtl, staleTtl)
+            _startFetch(ns, key, fetcher, freshTtl, staleTtl, persist)
               .catch((e) => { console.warn("bgbCache swr refresh failed", ns, key, e); });
           }
           return entry.value;
@@ -400,7 +418,7 @@
       }
       _counters.miss++;
       if (_inflight.has(inflightKey)) return _inflight.get(inflightKey);
-      return _startFetch(ns, key, fetcher, freshTtl, staleTtl);
+      return _startFetch(ns, key, fetcher, freshTtl, staleTtl, persist);
     },
 
     /**
@@ -420,6 +438,9 @@
       const b = _store.get(ns);
       const entry = b && b.get(key);
       if (!entry) return;
+      // An entry set memory-only stays memory-only: the caller decided at
+      // set() time that this value was not worth a reload.
+      if (entry.persisted === false) return;
       const json = _serialize(entry);
       entry.bytes = json ? json.length : 0;
       _persistEntry(ns, key, json);
