@@ -10,6 +10,7 @@ Every handler runs its Supabase round trips through `asyncio.to_thread`; the
 import asyncio
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import BackgroundTasks, Depends, Path, Query, HTTPException, UploadFile, File
@@ -260,8 +261,23 @@ def _write_play_players(
 
     `linked_at_by_user` is the edit path's carry-over (see _read_linked_at). A
     player already on the play keeps the timestamp they were first seated at;
-    one who is genuinely new to it falls through to the column default and is
-    notified, which is the whole point.
+    one who is genuinely new to it is stamped now and is notified, which is the
+    whole point.
+
+    EVERY ROW CARRIES `linked_at`, including the ghosts that have no carry-over
+    to look up. It cannot be left off for some rows and set on others, because
+    PostgREST writes a bulk insert as ONE statement over the union of the keys
+    it was given: a row missing a key the batch mentions is sent an explicit
+    NULL rather than falling through to the column default. `linked_at` is
+    `DEFAULT now() NOT NULL` (migration 008), so one carried-over seat beside
+    one uncarried seat is a `null value in column "linked_at" ... violates
+    not-null constraint` and a 500 — i.e. editing any play that seats a ghost,
+    or adds a player, once the host's own seat has a timestamp to carry. Seen in
+    the field: two failed saves of the same play, one minute apart.
+
+    One timestamp for the whole batch rather than a default evaluated per row,
+    which is also the truer answer — the seats it stamps all happened in the
+    same write.
 
     The roster itself is already checked by the time it gets here: this is only
     reached from PUT /plays/{id}, whose PlayUpdate validator refuses an empty
@@ -273,21 +289,21 @@ def _write_play_players(
         return out
 
     carried = linked_at_by_user or {}
+    seated_now = datetime.now(timezone.utc).isoformat()
     rows: list[dict] = []
     for p in players:
         round_scores = getattr(p, "round_scores", None)
+        player_uid = getattr(p, "user_id", None)
         row: dict = {
             "play_id": play_id,
             "is_winner": p.is_winner,
             "score": p.score,
             "player_display_name": p.name,
             "round_scores": round_scores,
+            "linked_at": carried.get(player_uid) or seated_now,
         }
-        player_uid = getattr(p, "user_id", None)
         if player_uid:
             row["player_user_id"] = player_uid
-            if player_uid in carried:
-                row["linked_at"] = carried[player_uid]
         rows.append(row)
         out.append(PlayPlayerResponse(
             user_id=player_uid,

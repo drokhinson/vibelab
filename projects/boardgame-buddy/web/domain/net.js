@@ -51,16 +51,45 @@
 // user is left with a "No connection" banner on full bars. That was the bug:
 // "stuck in offline mode when my phone is online."
 //
-// So three things below exist purely to make the latch let go:
+// So everything below exists purely to make the latch let go:
 //   * an epoch on every failure, so evidence from before a connectivity change
 //     (or before the OS froze the page) is discarded rather than counted;
-//   * a re-probe when the app becomes visible again, which is where a stale
-//     offline state is most likely to be sitting and most likely to be wrong;
+//   * a re-probe when the app comes back in front of the user, which is where a
+//     stale offline state is most likely to be sitting and most likely to be
+//     wrong — read from three events, because no one of them is reliable in an
+//     installed PWA (see _onResume);
 //   * a backing-off auto-probe while offline and on screen, so recovery never
 //     depends on the user doing anything at all;
 //   * a probe kicked by any request the short-circuit blocks, since the
 //     offline banner's "Try again" button is gone and the user's own retry tap
 //     is what replaces it (throttled — see ATTEMPT_PROBE_MIN_MS).
+//
+// AND NONE OF IT MAY DEPEND ON A REQUEST ANSWERING
+// ------------------------------------------------
+// The version before this one had all of the above and still stranded the app
+// offline until it was force-quit, because both halves of recovery hung off one
+// promise:
+//
+//   * probe() is single-flight, so while `_probing` is set every later probe
+//     hands back that same promise instead of asking again; and
+//   * the ladder was a CHAIN — each rung armed by the previous probe settling.
+//
+// A fetch that never settles therefore ended recovery permanently. That is the
+// exact failure this app already knows it has to survive: api.js's header
+// describes requests that stall instead of failing, and the deadline it puts on
+// every fetch assumes the abort lands. When it doesn't — sockets the OS has
+// dropped, a connection pool full of them, a page thawing out of suspension —
+// the deadline never fires either. Seen in the field: the app latched offline
+// with a working connection, and from that moment the server logged not one
+// /health probe, while fire-and-forget analytics pings (which bypass
+// api._fetch, so they never see the latch) kept arriving 200 for another
+// quarter of an hour.
+//
+// Two rules fall out of that, and every change here is one of them:
+//   * A PROBE THAT DOES NOT ANSWER STANDS ASIDE — the single-flight slot is
+//     held for a bounded time, then the request is abandoned (see probe()).
+//   * THE LADDER IS A HEARTBEAT, NOT A CHAIN — each rung arms the next itself,
+//     so nothing it waited on can stop it (see _armRecovery).
 //
 // Deliberately NOT wired to anything that tears down user state. Per
 // .claude/rules/web-frontend.md ("don't treat a transient blip as a real state
@@ -104,6 +133,15 @@
   // .claude/rules/backend-python.md — so the probe can't fail for a reason
   // that isn't connectivity.
   const PROBE_PATH = "/health";
+
+  // How long one probe may own the single-flight slot before it is abandoned.
+  //
+  // Sized off what an answering probe can honestly cost: api.js gives a JSON
+  // GET 15s, and retries a stalled one once on a fresh connection, so 30s is
+  // the worst case for a probe that is still going to come back. Past that it
+  // is not slow, it is gone — and holding the slot for something that is gone
+  // is the wedge the header above describes.
+  const PROBE_DEADLINE_MS = 35000;
 
   class Net {
     constructor() {
@@ -152,28 +190,56 @@
         this._publish();
       });
 
-      // Coming back to the foreground is the highest-yield moment to re-check,
-      // for two reasons that compound. The link genuinely may have changed
-      // while the app was away with no `online` event to show for it (the OS
-      // suspends a backgrounded PWA, and a suspended page hears nothing). And
-      // the strikes on the books may be an artefact of the suspension itself:
-      // iOS freezes the page mid-request, every in-flight fetch rejects on
-      // resume, and the deadline timers that were frozen fire the moment they
-      // thaw — a handful of failures, all of them about a page that wasn't
-      // running rather than about the network. The epoch bump discards exactly
-      // those, and the probe replaces them with a fresh answer.
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState !== "visible") {
           this._stopRecovery();
           return;
         }
-        this._epoch++;
-        this._recoveryStep = 0;
-        if (this.isOffline()) this.probe();
-        this._syncRecovery();
+        this._onResume();
       });
 
+      // The same resume, by two other names, because no single event reports it
+      // reliably in an installed PWA. `pageshow` is the one a page restored
+      // from the back/forward cache fires — the OS parked the app, or the user
+      // swiped back — and WebKit does not always pair it with a
+      // visibilitychange. `focus` is the window coming back with neither, which
+      // is still somebody looking at a screen that may be wrongly telling them
+      // they have no connection.
+      //
+      // Both are safe to double up on: _onResume's probe is single-flight, and
+      // it only asks at all while the latch is set.
+      window.addEventListener("pageshow", () => this._onResume());
+      window.addEventListener("focus", () => this._onResume());
+
       this._publish();
+    }
+
+    /**
+     * The app is back in front of the user. Throw away evidence from before the
+     * gap, and ask the network rather than waiting to be told.
+     *
+     * This is the highest-yield moment to re-check, for two reasons that
+     * compound. The link genuinely may have changed while the app was away with
+     * no `online` event to show for it (the OS suspends a backgrounded PWA, and
+     * a suspended page hears nothing). And the strikes on the books may be an
+     * artefact of the suspension itself: iOS freezes the page mid-request, every
+     * in-flight fetch rejects on resume, and the deadline timers that were
+     * frozen fire the moment they thaw — a handful of failures, all of them
+     * about a page that wasn't running rather than about the network. The epoch
+     * bump discards exactly those, and the probe replaces them with a fresh
+     * answer.
+     *
+     * The epoch bump is why this is wired to a plain window `focus` too, even
+     * though that fires more often than a real resume: its cost is that a
+     * genuine failure in flight is forgotten and the app takes one more request
+     * to notice it is offline, which is the cheap direction to be wrong in (see
+     * the header — a wrong latch is the expensive one).
+     */
+    _onResume() {
+      this._epoch++;
+      this._recoveryStep = 0;
+      if (this.isOffline()) this.probe();
+      this._syncRecovery();
     }
 
     /** @returns {boolean} */
@@ -214,19 +280,53 @@
      * request while this latch is set, and a probe judged by the latch it
      * exists to clear is the deadlock the header above is about.
      *
+     * Never rejects: callers read the answer off the return value, and several
+     * of them (the ladder, a resume) fire it without looking at all.
+     *
      * @returns {Promise<boolean>} true when the connection came back
      */
     probe() {
       if (this._probing) return this._probing;
-      this._probing = (async () => {
+      // Aborting through a CALLER signal, not the deadline api.js arms itself,
+      // is deliberate: api._fetch reads a caller abort as "superseded" and
+      // records nothing (`err.aborted`, no noteFailure). An abandoned probe is
+      // exactly that — we stopped waiting, which is not evidence about the link.
+      const ctl = new AbortController();
+      const asked = (async () => {
         try {
-          await window.api.get(PROBE_PATH, null, { allowWhileOffline: true });
+          await window.api.get(PROBE_PATH, null, {
+            allowWhileOffline: true,
+            signal: ctl.signal,
+          });
         } catch (_) {
           // Swallowed: noteFailure already recorded it, and the caller reads
           // the outcome from the return value rather than a rejection.
         }
         return !this.isOffline();
-      })().finally(() => { this._probing = null; });
+      })();
+      // THE SLOT IS HELD FOR A BOUNDED TIME AND NO LONGER.
+      //
+      // Single-flight is what keeps a leaning-on-the-button user to one check,
+      // and it is also what turned one request that never settled into an app
+      // that could not get back online: every later probe() handed back that
+      // same pending promise, so no further request was ever made. api.js's own
+      // deadline does not cover this, because it assumes the abort settles the
+      // fetch — and the case that wedges here is the one where it doesn't.
+      //
+      // So past PROBE_DEADLINE_MS the in-flight request is abandoned and the
+      // next probe starts clean. The abort is best-effort housekeeping; the
+      // point is the slot.
+      let timer = null;
+      const gaveUp = new Promise((resolve) => {
+        timer = setTimeout(() => {
+          try { ctl.abort(); } catch (_) {}
+          resolve(!this.isOffline());
+        }, PROBE_DEADLINE_MS);
+      });
+      this._probing = Promise.race([asked, gaveUp]).finally(() => {
+        clearTimeout(timer);
+        this._probing = null;
+      });
       return this._probing;
     }
 
@@ -276,7 +376,11 @@
       // re-arm from where the old outage had backed off to.
       this._stopRecovery();
       this._recoveryStep = 0;
-      this.probe().then(() => this._syncRecovery(), () => this._syncRecovery());
+      this.probe();
+      // Re-armed here rather than when the probe settles, for the reason the
+      // header gives: a probe that never answers must not be able to take the
+      // ladder down with it.
+      this._syncRecovery();
     }
 
     /** A request completed — the link demonstrably works. */
@@ -314,7 +418,22 @@
 
     // The auto-probe runs exactly while the app is offline and on screen.
     _syncRecovery() {
-      const wanted = this._published === true
+      const offline = this.isOffline();
+      // Asked of isOffline(), not of the published copy, which can lag it:
+      // navigator.onLine is an INPUT to the answer, and a browser that moves it
+      // without firing the matching event (iOS does, across a network change)
+      // moves the answer with nothing calling _publish(). Gating the ladder on
+      // the stale copy meant the one state where recovery matters most — offline
+      // by a flag nobody announced — was the one state with no auto-probe
+      // running at all.
+      //
+      // Republishing lands back in here via _publish(), which then does the
+      // arming; hence the return rather than a fall-through.
+      if (offline !== (this._published === true)) {
+        this._publish();
+        return;
+      }
+      const wanted = offline
         && (typeof document === "undefined" || document.visibilityState !== "hidden");
       if (wanted) this._armRecovery();
       else this._stopRecovery();
@@ -333,7 +452,16 @@
           return;
         }
         this._recoveryStep++;
-        this.probe().then(() => this._syncRecovery(), () => this._syncRecovery());
+        // Fired, not awaited — and the next rung is armed right here rather than
+        // when this probe settles. The ladder used to be a chain, which made it
+        // exactly as durable as the flakiest thing it waited on: one probe that
+        // never answered ended recovery for the life of the page, which is the
+        // field bug the header describes. A heartbeat cannot be stopped that
+        // way. probe() is single-flight, so a rung that lands while the previous
+        // probe is still out costs nothing — and by then PROBE_DEADLINE_MS has
+        // handed the slot back anyway.
+        this.probe();
+        this._syncRecovery();
       }, RECOVERY_DELAYS_MS[i]);
     }
 
