@@ -400,7 +400,9 @@
     _renderPlayRow(it, i) {
       const picked = this._selected.has(it.entry_key);
       const many = (it.group_count || 1) > 1;
-      const who = it.actor_display_name || "Someone";
+      // Under the viewer's private alias — the row is about a play they were
+      // both at, so it names them the way the play's own roster does.
+      const who = window.Buddy.nameFor(it.actor_id, it.actor_display_name) || "Someone";
       const game = it.game_name || "a game";
 
       // A run says how big it is and over how many games; a single play names
@@ -543,7 +545,7 @@
     _badge(it) {
       return window.BgbBadge.render({
         size: "sm",
-        displayName: it.actor_display_name || "Someone",
+        displayName: window.Buddy.nameFor(it.actor_id, it.actor_display_name) || "Someone",
         avatar: it.actor_avatar,
         extraClass: "bgbnotif-row__who",
       });

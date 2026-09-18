@@ -292,12 +292,16 @@
       const p = this._targetProfile;
       let titleHtml;
       if (other && p && p.display_name) {
-        const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm" });
+        // Under the viewer's private alias — this header names a person, and a
+        // spoke titled with their account name inside an app that calls them
+        // something else everywhere is the header disagreeing with its list.
+        const shown = window.Buddy.nameFor(this._targetUserId, p.display_name);
+        const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: shown, size: "sm" });
         // "Shared with X", not "X's plays": in shared mode every row is a play
         // you were in too, so calling it their log would misdescribe the list.
         const label = this._sharedOnly
-          ? `Shared with ${escapeHtml(p.display_name)}`
-          : `${escapeHtml(p.display_name)}'s plays`;
+          ? `Shared with ${escapeHtml(shown)}`
+          : `${escapeHtml(shown)}'s plays`;
         titleHtml = `${badge}<span class="spoke-head__title-text">${label}</span>`;
       } else {
         titleHtml = `<span class="spoke-head__title-text">${this._sharedOnly ? "Shared plays" : "Recent plays"}</span>`;

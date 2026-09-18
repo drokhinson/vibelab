@@ -2754,7 +2754,10 @@
       // Patch the badge's initials text in place — full re-render would
       // yank focus out of the initials input mid-typing.
       const heads = this.container.querySelectorAll(".scoring-head");
-      const label = p.initials || computeInitials(p.name);
+      // Off the RESOLVED name, matching what _renderPlayerRow's placeholder and
+      // the grid's own header derive from. Clearing the field otherwise painted
+      // the account-name initials over the aliased ones until the next render.
+      const label = p.initials || computeInitials(window.Buddy.nameFor(p.user_id, p.name));
       const span = heads[i] && heads[i].querySelector(".user-badge__initials");
       if (span) span.textContent = label;
     }
@@ -4397,7 +4400,7 @@
         headline: "Well played!",
         gameName: game.name || "Game over",
         game: game,
-        winnerName: winner ? winner.name : null,
+        winnerName: winner ? window.Buddy.nameFor(winner.user_id, winner.name) : null,
         onAnotherRound: () => this._startAnotherRound(seed),
         // Re-arms the write gate, so a "Another round?" tapped during a retry
         // waits on that attempt rather than on the one that already settled.

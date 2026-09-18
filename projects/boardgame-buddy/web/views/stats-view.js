@@ -311,9 +311,12 @@
       // >100% would spill out of the bar — divide by whichever is larger.
       const total = Math.max(shared, yours + theirs + other) || 1;
       const pctOf = (v) => (v / total) * 100;
+      // Under the viewer's private alias. A card whose whole point is "this
+      // person keeps beating you" has to name them the way you think of them.
+      const shown = window.Buddy.nameFor(n.user_id, n.display_name);
       const badge = window.BgbBadge.render({
         avatar: n.avatar,
-        displayName: n.display_name,
+        displayName: shown,
         size: "sm",
         extraClass: "stats-nemesis__av",
       });
@@ -330,7 +333,7 @@
           <div class="stats-nemesis">
             ${badge}
             <div class="stats-nemesis__body">
-              <div class="stats-nemesis__n">${escapeHtml(n.display_name || "")}</div>
+              <div class="stats-nemesis__n">${escapeHtml(shown || "")}</div>
               <div class="stats-nemesis__s">
                 They've won ${theirs} of the ${shared} ${shared === 1 ? "game" : "games"} you've both sat down for.
               </div>
@@ -343,7 +346,7 @@
           </div>
           <div class="stats-legend">
             <span>You <b>${yours}</b></span>
-            <span>${escapeHtml(this._firstName(n.display_name))} <b>${theirs}</b></span>
+            <span>${escapeHtml(this._firstName(shown))} <b>${theirs}</b></span>
             ${other ? `<span>Someone else <b>${other}</b></span>` : ""}
           </div>
         </section>
