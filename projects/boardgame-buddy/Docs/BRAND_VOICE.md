@@ -60,15 +60,25 @@ scan as one phrase rather than two features.
 
 **`Your Games, Your People, Your Record.`** The closest second, and it is still
 live — it survives a change of tagline because it is a *different shape*: a
-triad, which suits a place the primary line does not reach. Obvious homes if you
-want it: an onboarding deck's first slide, the empty state on a fresh account,
-an app-store screenshot caption, or merch. Keep it in the possessive — the
-version without "your" loses the whole point.
+triad, which suits a place the primary line does not reach. Keep it in the
+possessive — the version without "your" loses the whole point.
+
+**In use, as of 2026-09-18**, in two of the homes this section predicted:
+the **feature tour's closing panel** (`web/widgets/tour-chapters.js` → `CLOSER.title`,
+the last thing a signed-out reader sees before the Create-an-account button)
+and **app-store screenshot 1** (`Docs/STORE_LISTING.md`). The other homes named
+here — the empty state on a fresh account, merch — are still open.
 
 **`Half scoresheet, half scrapbook.`** The only line from the whole exercise
 that carries *recorder AND social* in one breath. Better as a one-line product
 description (an app-store subtitle, a directory listing) than as the tagline,
 because it describes the software rather than the night.
+
+**In use** as Google Play's short description (`Docs/STORE_LISTING.md`). Note
+which store: without the period it is **31 characters**, so it fits Play's
+80-character short description and **overruns Apple's 30-character subtitle by
+one**. Apple's slot carries `Keep score. Keep the night.` instead. Check the
+count before moving this line anywhere new.
 
 **`The buddy who was paying attention.`** The most ownable line written, because
 a competitor cannot use the word. Held back only because it personifies the app

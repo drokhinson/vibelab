@@ -532,6 +532,79 @@ same key (minus the plays with a score or a note of their own, which the feed's
 collapsed card could not speak for), so the row a user reviews and the card that
 lands in the feed cannot disagree.
 
+### 4.3e The feature tour, and the vignettes
+
+`/tour` is the app's marketing surface: five chapters — community, guides,
+scoring, stats, discover — and an uncounted closer, on one horizontal track.
+`views/tour-view.js` is the deck, `widgets/tour-chapters.js` is every word of
+it, and each chapter hosts an animated *vignette*. It exists because the
+sign-in screen was the only thing a stranger could see and it sold nothing but
+a logo and a seven-word tagline.
+
+Four decisions carry it.
+
+**It is a route, not an overlay, and that is why it arms nothing.** It looks
+like `widgets/onboarding-deck.js` and is deliberately not one: the onboarding
+deck is a *mode* thrown over the app's own first screen, this is a
+*destination* reachable from two places with a shareable URL. A routed screen
+already owns a history entry, so arming `BgbBackGuard` over it is the
+double-entry bug the chapter wizard shipped (`.claude/rules/overlays.md` §8b);
+`tools/check-tour.mjs` asserts the tour arms nothing. The chapter rides as
+`?c=<slug>` and each move **replaces** the entry rather than pushing one —
+`/tour?c=scoring` deep-links, and leaving is one back press rather than six.
+
+**The two decks share no module, on purpose.** What `ui-object-design.md` §4
+says to extract at instance #2 is the *lifecycle* — scroll lock, back guard,
+close animation, orphan teardown — and these two have different lifecycles by
+construction, one being a body-level overlay and the other a screen the router
+mounts. What they have in common is about fifteen lines of track geometry.
+Pulling that out alone would mean rewiring first-run setup to share a
+transform, so both files carry a pointer at the other instead.
+
+**A beat is a state, not a keyframe.** `ui/tour-vignette.js` is the shell; a
+scene declares an ordered list of beats, each of which puts the scene into a
+named state and is safe to apply twice. Reaching beat N is always *reset, then
+apply 0..N* — never *wait for N transitions*. Three things fall out of that one
+decision, and none of them needed code of their own: `prefers-reduced-motion`
+is a seek to the last beat and no clock; looping cannot drift, because every
+cycle starts from `reset()`; and `seek("template-on")` lands on exactly one
+frame, deterministically, which is what lets `Docs/STORE_LISTING.md` cite a
+*beat* per screenshot instead of a timestamp. Transitions are suppressed around
+a seek by a class on the root, added and removed either side of a forced
+reflow, so the destination paints rather than animating towards it.
+
+Two mistakes are already paid for here and are worth not repeating. The shell
+hands `reset()` and `apply()` the **screen wrapper** (`.vig__screen`), whose
+children are the scene's title bar and its body; every state selector in
+`styles.css` is written against the body (`.vscore[data-stage="pad"]`,
+`.vguide.is-open`), so a class put on what `apply()` was handed matches
+nothing — the title bar updates and the stage under it stays blank. And the
+`View` lifecycle **paints twice** on a cold mount (`renderLoading()` then
+`render()`), so the second paint detaches whatever the lazily-loaded scenes
+were just mounted into; `render()` therefore destroys every scene before it
+repaints, exactly as the sign-in screen's hero does.
+
+**The scenes are not on the boot path.** All three vignette modules are
+`<link rel="prefetch" as="script">` in `index.html` rather than `<script src>`,
+and load through `ui/lazy-script.js` when somebody opens the tour. That keeps
+them out of `scripts/bgb-bundle.mjs`'s manifest (which reads `<script src>`)
+while keeping them inside `sw.js`'s precache sweep (which reads `src=`/`href=`),
+so the tour works offline and no signed-out visitor pays for it. The same
+reasoning governs the sign-in screen's hero vignette, which mounts *after*
+first paint and degrades to nothing on a dead connection or under reduced
+motion.
+
+The tour is **chrome** and joins the re-point lists in `styles.css` — with one
+paper island. The Arboretum scorepad inside the scoring scene is a photograph
+of a scorepad, so `.vscore__pad` points `--polaroid-*` back at `--paper*`, with
+its class doubled to out-specify the `(0,3,0)` dark chrome branch, for the
+reason §4.2b spells out.
+
+Content lives in exactly one file. `widgets/tour-chapters.js` carries the
+chapters, their marks and the one-line claims the sign-in strip shows, so the
+tour, the strip and `Docs/STORE_LISTING.md` cannot drift into advertising three
+different products.
+
 ### 4.4 Chrome, layering and mobile
 
 The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§ App chrome & layering) and `.claude/rules/mobile-web.md`. The parts specific to this app:

@@ -279,6 +279,7 @@
     <main data-view="privacy" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="terms" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="auth" class="hidden flex-1 px-4 py-4"></main>
+    <main data-view="tour" class="hidden flex-1"></main>
     <main data-view="feed" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="discovery" class="hidden flex-1 px-4 py-4"></main>
     <main data-view="log-play" class="hidden flex-1 px-4 py-4"></main>
@@ -490,6 +491,7 @@
   <script src="ui/back-guard.js"></script>
   <script src="ui/zoom-lock.js"></script>
   <script src="ui/oauth-buttons.js"></script>
+  <script src="ui/feature-strip.js"></script>
   <script src="ui/user-badge.js"></script>
   <script src="ui/avatar-picker.js"></script>
   <script src="ui/player-row-action.js"></script>
@@ -551,6 +553,16 @@
        precache sweep by this href and pulled in on first use by
        domain/geo-grid.js. -->
   <link rel="prefetch" href="domain/geo-grid-data.js" as="script" />
+  <!-- The feature tour's animated scenes, on the same terms again. The
+       sign-in screen is a signed-out visitor's boot path, so the three
+       scene modules must not be on it; views/tour-view.js pulls them in
+       through ui/lazy-script.js when somebody actually opens the tour.
+       These hrefs are what keeps them inside sw.js's precache sweep, and
+       what keeps them OUT of the bundler's manifest, which reads
+       <script src> only. -->
+  <link rel="prefetch" href="ui/tour-vignette.js" as="script" />
+  <link rel="prefetch" href="widgets/tour-vignette-ambient.js" as="script" />
+  <link rel="prefetch" href="widgets/tour-vignette-scripted.js" as="script" />
   <script src="ui/lazy-script.js"></script>
   <script src="ui/qr-camera.js"></script>
 
@@ -580,6 +592,7 @@
   <script src="widgets/add-buddies-modal.js"></script>
   <script src="widgets/onboarding-deck-slides.js"></script>
   <script src="widgets/onboarding-deck.js"></script>
+  <script src="widgets/tour-chapters.js"></script>
   <script src="widgets/import-expansions-modal.js"></script>
   <script src="widgets/import-notes-steps.js"></script>
   <script src="widgets/import-photos-steps.js"></script>
@@ -612,6 +625,7 @@
   <script src="views/privacy-view.js"></script>
   <script src="views/terms-view.js"></script>
   <script src="views/auth-view.js"></script>
+  <script src="views/tour-view.js"></script>
   <script src="views/feed-view.js"></script>
   <script src="views/discovery-view.js"></script>
   <script src="views/log-play-view.js"></script>

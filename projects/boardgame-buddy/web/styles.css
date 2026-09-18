@@ -444,6 +444,7 @@
      .import-exp-modal,
      .cascade-player--drag-clone,
      .ob-deck,
+     [data-view="tour"],
      [data-view="import-plays"],
      [data-view="photo-import"],
      [data-view="log-play"],
@@ -497,6 +498,7 @@
      .import-exp-modal,
      .cascade-player--drag-clone,
      .ob-deck,
+     [data-view="tour"],
      [data-view="import-plays"],
      [data-view="photo-import"],
      [data-view="log-play"],
@@ -19253,3 +19255,736 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .import-detail__delete:disabled { opacity: 0.5; }
 .import-detail__delete:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   The feature tour — /tour, its animated scenes, and the sign-in strip
+   ══════════════════════════════════════════════════════════════════════════
+   Three families, one feature:
+     .tour__*        the deck at /tour (views/tour-view.js)
+     .vig* / .v*     the animated scenes (ui/tour-vignette.js + the two
+                     widgets/tour-vignette-*.js modules)
+     .feat-strip__*  the five-line condensation on the sign-in screen
+                     (ui/feature-strip.js)
+
+   Everything paints from the ground tokens, because the tour IS a screen —
+   it joins the chrome re-point lists near the top of this file. The one
+   exception is the scorepad inside the scoring scene, which is a genuine
+   PAPER surface and gets a paper island below (.claude/rules/theming.md §6-7).
+
+   No z-index anywhere in this block. The tour is a chromeless view, so the
+   header and the nav are hidden under it and there is nothing to out-stack.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* #app reserves the bottom nav's strip for EVERY view. The tour is chromeless
+   (CHROMELESS_VIEWS in domain/view.js), so on this screen there is no nav for
+   that strip to be reserved for — and leaving it stranded the deck's pinned
+   actions row 64px above the bottom of the phone. Same :has() idiom the wide
+   tier already uses to make room for the nav rail. */
+#app:has(> [data-view="tour"]:not(.hidden)) { padding-bottom: 0; }
+
+.tour {
+  display: flex;
+  flex-direction: column;
+  /* The full screen, now that the rule above has given the nav's strip back.
+     No --bgb-vv-h in the ladder: unlike the onboarding deck this screen has no
+     text input, so no software keyboard can ever shrink it. */
+  height: 100vh;
+  height: 100dvh;
+  min-height: 420px;
+  box-sizing: border-box;
+  color: var(--ink);
+  background-image: var(--glow);
+}
+
+/* ── Head: counter · exit · segment bar ───────────────────────────────────── */
+.tour__head {
+  flex: none;
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+  row-gap: 10px;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  max-width: var(--bgb-col-max);
+  width: 100%;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+.tour__count {
+  grid-column: 2;
+  text-align: center;
+  font-family: var(--font-score);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.tour__count b { color: var(--accent); font-weight: 700; }
+/* Trailing edge, and a x rather than a back arrow: the tour is reachable from
+   the sign-in screen AND from Settings, so dismissing it has to return to
+   whichever one it was opened from (.claude/rules/web-frontend.md, Close vs
+   back). views/tour-view.js calls router.back() with the fallback for a cold
+   deep link. */
+.tour__exit {
+  grid-column: 3;
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-muted);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+/* 44px hit area without inflating the control (.claude/rules/mobile-web.md §5). */
+.tour__exit::before { content: ""; position: absolute; inset: -4px; }
+.tour__exit:active { background: var(--accent-quiet); color: var(--ink); }
+.tour__exit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tour__bar { grid-column: 1 / -1; display: flex; gap: 5px; }
+.tour__seg {
+  flex: 1;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  overflow: hidden;
+  position: relative;
+}
+.tour__seg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 260ms var(--ease);
+}
+.tour__seg.is-done::after { transform: scaleX(1); }
+
+/* ── Track ────────────────────────────────────────────────────────────────── */
+.tour__clip { flex: 1 1 auto; overflow: hidden; min-height: 0; }
+.tour__track {
+  display: flex;
+  height: 100%;
+  /* Width comes from --tour-panels, set inline by views/tour-view.js from the
+     length of its own panel list, so adding a chapter is one edit there. */
+  width: calc(var(--tour-panels, 6) * 100%);
+  transition: transform 240ms var(--ease);
+}
+.tour__panel {
+  width: calc(100% / var(--tour-panels, 6));
+  flex: 0 0 calc(100% / var(--tour-panels, 6));
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 16px 0;
+  /* The app's content column, not the viewport, on a tablet or a monitor. */
+  max-width: var(--bgb-col-max);
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+.tour__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 8px;
+}
+.tour__scroll--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.tour__eyebrow {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  margin: 0 0 6px;
+}
+.tour__title {
+  font-family: var(--font-polaroid);
+  font-weight: 600;
+  font-size: 25px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 10px;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.tour__title--center { text-align: center; }
+.tour__body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  margin: 12px 0 0;
+}
+.tour__body--center { text-align: center; max-width: 30ch; }
+.tour__mark { width: 56px; height: 56px; border-radius: var(--r-lg); margin-bottom: 14px; }
+
+.tour__points { list-style: none; margin: 12px 0 0; padding: 0; }
+.tour__points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  padding: 4px 0;
+  animation: fadeUp 200ms ease both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+.tour__points li [data-icon-name] { color: var(--accent); flex: none; margin-top: 2px; }
+
+/* The stage a vignette mounts into. It holds its own height BEFORE the scene
+   modules land, so the paragraph under it does not jump up the screen when a
+   lazily-loaded scene arrives — the same reason a list reserves its skeleton. */
+.tour__stage {
+  margin-top: 12px;
+  width: 100%;
+  height: clamp(176px, 30vh, 244px);
+}
+.tour__stage-wait {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+}
+
+/* Actions: pinned to the bottom of the panel, never scrolled away. */
+.tour__actions {
+  flex: none;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0 max(16px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+}
+/* 52px: these are the deck's commit buttons (.claude/rules/mobile-web.md §5). */
+.tour__btn { min-height: 52px; border-radius: var(--r-lg); }
+.tour__btn--go { flex: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tour__track { transition: none; }
+  .tour__seg::after { transition: none; }
+  .tour__points li { animation: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Vignettes — the animated scenes
+   ══════════════════════════════════════════════════════════════════════════
+   Miniature app screens. They are NOT screenshots: every one is built from
+   the same tokens the real surface uses, so they re-theme with the app and
+   cannot drift into a second visual language.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.vig {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+  box-shadow: var(--sh-2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+/* Suppress every transition and animation while ui/tour-vignette.js seeks to a
+   beat, so the destination PAINTS rather than animating towards it. !important
+   is load-bearing here rather than lazy: the rule has to beat whatever the
+   scene's own class declares, and it is added and removed around a forced
+   reflow in the same synchronous block, so nothing outside a seek ever sees
+   it. */
+.vig--instant, .vig--instant * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* The scene's own title bar, standing in for the app's global header. */
+.vig-chrome {
+  flex: none;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.vig-chrome__title {
+  font-family: var(--font-polaroid);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.vig__screen { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.vig-scroll { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+
+.vig-av {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: var(--accent-quiet);
+  color: var(--accent-ink);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+:root[data-bgb="dark"] .vig-av { color: var(--accent); }
+.vig-av--sm { width: 18px; height: 18px; font-size: 8px; }
+
+/* ── Scene: community ─────────────────────────────────────────────────────── */
+.vfeed-track {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  /* One "step" is one card plus its gap. The scene sets --vig-step; this
+     turns it into travel, so the step count in JS never has to know a pixel
+     measurement that lives here. */
+  transform: translateY(calc(var(--vig-step, 0) * -58px));
+  transition: transform 520ms var(--ease);
+}
+.vfeed-sec {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 2px 2px 0;
+}
+.vfeed-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  padding: 7px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.vfeed-card__top { display: flex; align-items: center; gap: 7px; }
+.vfeed-card__who { display: flex; flex-direction: column; line-height: 1.2; }
+.vfeed-card__who b { font-size: 11px; color: var(--ink); }
+.vfeed-card__who span { font-size: 9.5px; color: var(--ink-faint); }
+.vfeed-card__game { display: flex; align-items: center; gap: 7px; }
+.vfeed-card__cover {
+  width: 26px;
+  height: 20px;
+  border-radius: var(--r-xs);
+  background: linear-gradient(135deg, var(--accent-quiet), var(--bg-1));
+  border: 1px solid var(--line);
+}
+.vfeed-card__name {
+  font-family: var(--font-polaroid);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.vfeed-kudos { display: flex; align-items: center; gap: 5px; }
+.vfeed-kudos__btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  color: var(--ink-faint);
+  transition: background 220ms var(--ease), color 220ms var(--ease), transform 220ms var(--ease);
+}
+.vfeed-kudos.is-on .vfeed-kudos__btn {
+  background: var(--accent-quiet);
+  color: var(--accent);
+  transform: scale(1.14);
+}
+.vfeed-kudos__n { font-family: var(--font-score); font-size: 10px; color: var(--ink-faint); }
+.vfeed-kudos.is-on .vfeed-kudos__n { color: var(--accent-ink); }
+:root[data-bgb="dark"] .vfeed-kudos.is-on .vfeed-kudos__n { color: var(--accent); }
+
+/* ── Scene: stats ─────────────────────────────────────────────────────────── */
+.vstat { flex: 1 1 auto; display: flex; flex-direction: column; gap: 9px; padding: 10px; min-height: 0; }
+.vstat__podium { flex: 1 1 auto; display: flex; align-items: flex-end; justify-content: center; gap: 12px; min-height: 0; }
+.vstat__col { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; justify-content: flex-end; }
+.vstat__n {
+  font-family: var(--font-score);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.vstat__bar {
+  width: 26px;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: var(--accent-quiet);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  height: var(--vig-h, 0%);
+  transition: height 520ms var(--ease);
+}
+.vstat__bar--gold { background: var(--accent); border-color: var(--accent); }
+.vstat__bar--silver { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.vstat__lbl { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.vstat__rate { display: flex; flex-direction: column; gap: 4px; }
+.vstat__rate-track { height: 5px; border-radius: var(--r-pill); background: var(--line-strong); overflow: hidden; }
+.vstat__rate-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--win);
+  width: var(--vig-w, 0%);
+  transition: width 520ms var(--ease);
+}
+.vstat__rate-txt { font-size: 10px; color: var(--ink-faint); }
+.vstat__rate-txt b { font-family: var(--font-score); color: var(--ink); }
+.vstat__h2h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  opacity: 0.45;
+  transition: opacity 300ms var(--ease);
+}
+.vstat__h2h.is-on { opacity: 1; }
+.vstat__h2h-lbl { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.vstat__h2h-name { font-size: 11px; color: var(--ink); flex: 1 1 auto; }
+.vstat__h2h-score { font-family: var(--font-score); font-size: 12px; font-weight: 700; color: var(--win); }
+
+/* ── Scene: discover ──────────────────────────────────────────────────────── */
+.vdisc { flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px; padding: 10px; min-height: 0; justify-content: center; }
+/* All four picks fit, so the tiles hold still and the highlight moves. The
+   row is a grid rather than a flex rail precisely so it cannot overflow into
+   a slide that would need one. */
+.vdisc__rail { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.vdisc__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  opacity: 0.45;
+  transition: opacity 320ms var(--ease), transform 320ms var(--ease);
+}
+.vdisc__tile.is-on { opacity: 1; transform: translateY(-3px); }
+.vdisc__cover {
+  height: 62px;
+  border-radius: var(--r-md);
+  background: linear-gradient(140deg, var(--accent-quiet), var(--bg-2));
+  border: 1px solid var(--line);
+  transition: border-color 320ms var(--ease);
+}
+.vdisc__tile.is-on .vdisc__cover { border-color: var(--accent); }
+.vdisc__name {
+  font-family: var(--font-polaroid);
+  font-size: 10.5px;
+  color: var(--ink);
+  /* Four names across a phone column: let a long one ellipsise rather than
+     wrap and shove its neighbours' covers out of line. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vdisc__why {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-muted);
+  min-height: 2.7em;
+}
+
+/* ── Scene: guides ────────────────────────────────────────────────────────── */
+.vguide { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; padding: 9px; gap: 8px; }
+.vguide__poolhead {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.vguide__pool { display: flex; flex-direction: column; gap: 5px; }
+.vguide__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  transition: border-color 240ms var(--ease), background 240ms var(--ease);
+}
+.vguide__row [data-icon-name] { color: var(--ink-faint); flex: none; }
+.vguide__rowtitle { font-size: 11px; color: var(--ink); flex: 1 1 auto; }
+.vguide__rowby { font-size: 9.5px; color: var(--ink-faint); flex: none; }
+.vguide__tick {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 240ms var(--ease), transform 240ms var(--ease);
+}
+.vguide__row.is-picked { border-color: var(--accent); background: var(--accent-quiet); }
+.vguide__row.is-added .vguide__tick { opacity: 1; transform: scale(1); }
+.vguide__row.is-added [data-icon-name] { color: var(--accent); }
+/* The guide itself, rolled open like the app's parchment scroll. */
+.vguide__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 420ms var(--ease), opacity 260ms var(--ease);
+}
+.vguide.is-open .vguide__scroll { max-height: 200px; opacity: 1; }
+.vguide__scrollinner {
+  padding: 8px 10px;
+  transform: translateY(0);
+  transition: transform 700ms var(--ease);
+}
+.vguide.is-read .vguide__scrollinner { transform: translateY(-26px); }
+.vguide__scrollinner h4 {
+  margin: 0 0 5px;
+  font-family: var(--font-polaroid);
+  font-size: 12px;
+  font-weight: 600;
+}
+.vguide__scrollinner p { margin: 0 0 6px; font-size: 10px; line-height: 1.45; }
+
+/* ── Scene: scoring ───────────────────────────────────────────────────────── */
+.vscore { flex: 1 1 auto; position: relative; min-height: 0; }
+/* The three stages cross-fade in place rather than laying out in sequence, so
+   the frame never changes height between Gather, Play and Settle up. */
+.vscore__stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  box-sizing: border-box;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms var(--ease);
+}
+.vscore[data-stage="lobby"] .vscore__stage--lobby,
+.vscore[data-stage="pad"] .vscore__stage--pad,
+.vscore[data-stage="settle"] .vscore__stage--settle { opacity: 1; }
+
+.vscore__stage--lobby { align-items: center; justify-content: center; gap: 6px; }
+.vscore__codelbl { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
+.vscore__code {
+  font-family: var(--font-score);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+.vscore__seats { display: flex; gap: 12px; margin-top: 6px; }
+.vscore__seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 9.5px;
+  color: var(--ink-muted);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 300ms var(--ease), transform 300ms var(--ease);
+}
+.vscore__seat.is-in { opacity: 1; transform: none; }
+/* Staggered so the three players arrive one after another rather than as a
+   block — the same --i convention the app's card lists use. */
+.vscore__seat[data-seat="1"] { transition-delay: 120ms; }
+.vscore__seat[data-seat="2"] { transition-delay: 240ms; }
+
+.vscore__pills { display: flex; gap: 5px; flex: none; margin-bottom: 8px; flex-wrap: wrap; }
+.vscore__pill {
+  font-size: 9.5px;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  color: var(--ink-faint);
+  transition: background 260ms var(--ease), color 260ms var(--ease), border-color 260ms var(--ease);
+}
+.vscore__pill.is-base { border-color: var(--accent); color: var(--accent); }
+.vscore__pill.is-on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+.vscore__pad {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: var(--r-md);
+  border: 1px solid var(--polaroid-line);
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+  padding: 6px 8px;
+  overflow: hidden;
+}
+.vscore__row {
+  display: grid;
+  grid-template-columns: 1fr repeat(3, 34px);
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--polaroid-line);
+}
+.vscore__row--head { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--polaroid-muted); }
+.vscore__row--total { border-bottom: none; font-weight: 800; }
+.vscore__lbl { font-size: 10.5px; }
+.vscore__c {
+  font-family: var(--font-score);
+  font-size: 11px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+/* The template's rows and the expansion's rows are collapsed until their pill
+   turns on. Collapsing the ROW rather than hiding it is what makes the grid
+   visibly grow, which is the whole story this scene tells. */
+.vscore__row.is-tmpl, .vscore__row.is-exp {
+  max-height: 0;
+  opacity: 0;
+  padding-block: 0;
+  border-bottom-color: transparent;
+  overflow: hidden;
+  transition: max-height 300ms var(--ease), opacity 240ms var(--ease), padding 300ms var(--ease);
+}
+.vscore.has-tmpl .vscore__row.is-tmpl,
+.vscore.has-exp .vscore__row.is-exp {
+  max-height: 26px;
+  opacity: 1;
+  padding-block: 3px;
+  border-bottom-color: var(--polaroid-line);
+}
+/* The generic row is what the template REPLACES, so it leaves as the real rows
+   arrive rather than sitting above them meaning nothing. */
+.vscore.has-tmpl .vscore__row:not(.is-tmpl):not(.is-exp):not(.vscore__row--head):not(.vscore__row--total) {
+  max-height: 0;
+  opacity: 0;
+  padding-block: 0;
+  border-bottom-color: transparent;
+  overflow: hidden;
+  transition: max-height 300ms var(--ease), opacity 200ms var(--ease), padding 300ms var(--ease);
+}
+
+.vscore__stage--settle { align-items: center; justify-content: center; gap: 4px; text-align: center; }
+.vscore__stage--settle [data-icon-name] { color: var(--accent); }
+.vscore__winner { margin: 4px 0 0; font-family: var(--font-polaroid); font-size: 16px; color: var(--ink); }
+.vscore__settlesub { margin: 0; font-size: 10px; color: var(--ink-faint); }
+
+/* THE SCOREPAD IS PAPER, AND THE TOUR IS CHROME.
+   ──────────────────────────────────────────────────────────────────────────
+   [data-view="tour"] joins the chrome re-point lists near the top of this
+   file, which points --polaroid-* at the ground tokens — right for the deck,
+   wrong for the one thing inside it that is a photograph of a scorepad. This
+   island points that family back at --paper*, exactly as the live cascade's
+   .cascade-card--scoring does.
+
+   The class is DOUBLED on purpose. The dark chrome branch above is (0,3,0),
+   so a single .vscore__pad at (0,1,0) would lose --accent-ink back to it and
+   settle the rest on source order — which is the drift .claude/rules/
+   theming.md §7 exists to stop. Do not "simplify" it. */
+:root :is([data-view="tour"], [data-view="auth"]) .vscore__pad.vscore__pad {
+  --polaroid-bg:       var(--paper);
+  --polaroid-bg-soft:  color-mix(in srgb, var(--paper) 92%, var(--paper-line));
+  --polaroid-ink:      var(--paper-ink);
+  --polaroid-muted:    var(--paper-muted);
+  --polaroid-line:     var(--paper-line);
+  --accent-ink:        var(--accent-on-paper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vfeed-track, .vdisc__tile, .vdisc__cover, .vstat__bar, .vstat__rate-fill,
+  .vguide__scroll, .vguide__scrollinner, .vscore__stage, .vscore__seat,
+  .vscore__pill, .vscore__row, .vfeed-kudos__btn, .vstat__h2h, .vguide__row,
+  .vguide__tick {
+    transition: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   The sign-in screen's feature strip
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.feat-strip { width: 100%; max-width: 24rem; margin: 1.75rem auto 0; }
+.feat-strip__head {
+  margin: 0 0 0.6rem;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-align: center;
+}
+.feat-strip__list { list-style: none; margin: 0; padding: 0; }
+.feat-strip__row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.42rem 0;
+  animation: fadeUp 240ms ease both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+/* The mark is painted as a MASK, not as an <img>: an SVG in an <img> is its
+   own document and can see neither currentColor nor this page's custom
+   properties, so a file-based mark would need a second artwork file per theme.
+   As a mask, the sprite supplies the alpha and the surface supplies the ink —
+   one file, both themes (.claude/rules/assets.md). --feat-mark is set inline
+   by ui/feature-strip.js and is a data-derived custom property, which is the
+   one legitimate inline-style case in .claude/rules/theming.md §10. */
+.feat-strip__mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  background: var(--accent);
+  -webkit-mask: var(--feat-mark) center / contain no-repeat;
+  mask: var(--feat-mark) center / contain no-repeat;
+}
+.feat-strip__txt { font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
+/* 52px: the screen's secondary commit button (.claude/rules/mobile-web.md §5). */
+.feat-strip__cta {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms;
+}
+/* One step further from the ground in BOTH themes, never "lighter"
+   (.claude/rules/auth-ui.md). */
+.feat-strip__cta:active { background: var(--bg-2); border-color: var(--accent); }
+.feat-strip__cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) {
+  .feat-strip__cta:hover { background: var(--bg-2); border-color: var(--line-strong); }
+}
+
+/* The sign-in screen's hero scene. Empty until ui/tour-vignette.js lands —
+   and it stays empty on a dead connection or under reduced motion, so it
+   reserves no height of its own. */
+.auth-hero { width: 100%; max-width: 24rem; margin-bottom: 1.25rem; }
+.auth-hero:not(:empty) { height: clamp(168px, 26vh, 220px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .feat-strip__row { animation: none; }
+}
