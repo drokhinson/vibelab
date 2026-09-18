@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="An open reference book">
+  <!-- An open book: two leaves with a gutter between them, so the mark still
+       reads as a book rather than a slab when it is painted as one flat ink. -->
+  <path d="M11.1 6.05C9.3 4.55 6.2 3.85 4.45 3.5A1.05 1.05 0 0 0 3.2 4.53v11.2c0 .5.35.94.85 1.03 1.62.3 4.42.93 6.1 2.2a.5.5 0 0 0 .95-.3V6.05Z"/>
+  <path d="M12.9 6.05c1.8-1.5 4.9-2.2 6.65-2.55a1.05 1.05 0 0 1 1.25 1.03v11.2c0 .5-.35.94-.85 1.03-1.62.3-4.42.93-6.1 2.2a.5.5 0 0 1-.95-.3V6.05Z"/>
+  <rect x="11.1" y="19.6" width="1.8" height="1.6" rx=".6"/>
+</svg>

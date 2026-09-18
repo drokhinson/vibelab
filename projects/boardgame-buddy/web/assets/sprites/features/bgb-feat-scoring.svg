@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="A scorepad with rows and a score column">
+  <!-- A scorepad: an outlined pad (a ring, cut with evenodd) holding three
+       labelled rows and a narrow score column on the right. -->
+  <path fill-rule="evenodd" d="M5.4 2.4h13.2a2.6 2.6 0 0 1 2.6 2.6v14a2.6 2.6 0 0 1-2.6 2.6H5.4A2.6 2.6 0 0 1 2.8 19V5a2.6 2.6 0 0 1 2.6-2.6Zm0 2a.6.6 0 0 0-.6.6v14c0 .33.27.6.6.6h13.2a.6.6 0 0 0 .6-.6V5a.6.6 0 0 0-.6-.6H5.4Z"/>
+  <rect x="6.4" y="6.9" width="7.1" height="1.7" rx=".85"/>
+  <rect x="15" y="6.9" width="2.6" height="1.7" rx=".85"/>
+  <rect x="6.4" y="11.15" width="7.1" height="1.7" rx=".85"/>
+  <rect x="15" y="11.15" width="2.6" height="1.7" rx=".85"/>
+  <rect x="6.4" y="15.4" width="7.1" height="1.7" rx=".85"/>
+  <rect x="15" y="15.4" width="2.6" height="1.7" rx=".85"/>
+</svg>
