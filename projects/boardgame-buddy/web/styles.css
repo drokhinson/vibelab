@@ -16697,8 +16697,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
 /* ── Spoke: bar rows (table size, taste, personal bests) ──────────────────── */
 .stats-bars { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.55rem; }
-.stats-bar { display: grid; grid-template-columns: 5.2rem 1fr 2rem; align-items: center; gap: 0.5rem; }
-.stats-bar__k {
+.stat-bar { display: grid; grid-template-columns: 5.2rem 1fr 2rem; align-items: center; gap: 0.5rem; }
+.stat-bar__k {
   font-size: 0.7rem;
   color: var(--polaroid-muted, #8B7E68);
   font-weight: 700;
@@ -16706,18 +16706,36 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.stats-bar__track { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--polaroid-ink) 9%, transparent); overflow: hidden; }
-.stats-bar__track i { display: block; height: 100%; border-radius: 999px; background: var(--accent-fill-grad); }
-.stats-bar__v {
+/* The bar's optional second line (BgbStat.bar's `sub`) — a row estimate under
+   a table name. Block, so it drops below the label rather than widening the
+   fixed first column. */
+.stat-bar__k em {
+  display: block;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 0.62rem;
+  opacity: 0.75;
+}
+.stat-bar__track { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--polaroid-ink) 9%, transparent); overflow: hidden; }
+.stat-bar__track i { display: block; height: 100%; border-radius: 999px; background: var(--accent-fill-grad); }
+.stat-bar__v {
   font-family: var(--font-score);
   font-size: 0.72rem;
   color: var(--polaroid-ink, #1D1812);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* Prose labels and figures with units. Column widths are measured, not
+   guessed: at 420px the widest label in use ("Notes or photos import") needs
+   124px and the widest figure ("at least 41.2 GB") needs a nowrap run, which
+   the default 5.2rem/2rem grid gave neither of — the labels ellipsised and
+   every byte count wrapped to two lines. */
+.stat-bar--wide { grid-template-columns: 8rem 1fr 3.6rem; }
+.stat-bar--wide .stat-bar__v { white-space: nowrap; }
+
 /* Personal bests: a name and a record, no bar between them. */
-.stats-bar--record { grid-template-columns: 1fr auto; }
-.stats-bar--record .stats-bar__k { color: var(--polaroid-ink, #1D1812); font-weight: 600; }
+.stat-bar--record { grid-template-columns: 1fr auto; }
+.stat-bar--record .stat-bar__k { color: var(--polaroid-ink, #1D1812); font-weight: 600; }
 
 /* ── Spoke: shelf-of-shame dial ───────────────────────────────────────────── */
 .stats-shelf { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; }
@@ -16756,6 +16774,189 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .stats-duo { grid-template-columns: 1fr; }
   .statsblock__row { grid-template-columns: 1fr 1fr; }
   .statsblock__cell:last-child { grid-column: 1 / -1; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   USAGE  (views/admin-usage-view.js + widgets/usage-panels.js — /admin/usage)
+
+   Lands inside .bgb-spoke-screen on .set-card hosts, both of which are in the
+   polaroid re-point list near the top of this file — so every colour here is a
+   --polaroid-* / --accent-* token and inverts with the theme for free. Never
+   oklch(var(--b1)) and never --accent-hover as text: this is a chrome surface,
+   not a photograph (.claude/rules/theming.md §6).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.usage-seg { margin: 0.25rem 0 0.75rem; }
+.usage-card { padding: 0.85rem 0.9rem 1rem; }
+
+/* ── Tiles ─────────────────────────────────────────────────────────────────── */
+/* Two-up rather than four: four figures across a 480px column leaves each one
+   about 6ch, and "Active this month" needs more room than that to be read. */
+.usage-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.usage-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--r-sm);
+  background: var(--well);
+  border: 1px solid var(--polaroid-line);
+  min-width: 0;
+}
+.usage-tile__k {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--polaroid-muted);
+  min-width: 0;
+}
+.usage-tile__k i, .usage-tile__k svg { color: var(--accent-ink); flex: none; }
+.usage-tile__v {
+  font-family: var(--font-score);
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: var(--polaroid-ink);
+  font-variant-numeric: tabular-nums;
+}
+.usage-tile__d { font-size: 0.62rem; color: var(--polaroid-muted); }
+
+/* ── The 30-day active strip ───────────────────────────────────────────────── */
+/* align-items: flex-end so every column grows from the baseline; a fixed
+   height rather than aspect-ratio so 30 columns on a narrow phone do not
+   collapse the block to nothing. */
+.usage-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 52px;
+  margin-top: 0.75rem;
+  padding: 0 1px;
+}
+.usage-strip i {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent-fill);
+}
+/* A day with nobody on it is a hairline on the baseline, not a gap: a missing
+   column would read as a narrower chart rather than as a quiet Tuesday. */
+.usage-strip i.is-zero {
+  background: color-mix(in srgb, var(--polaroid-ink) 16%, transparent);
+  /* The 2% share alone measured 1.03px, which rounds away on a 1x screen and
+     turns a quiet day into a gap. A gap reads as a narrower chart. */
+  min-height: 2px;
+}
+.usage-strip__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+  font-size: 0.6rem;
+  color: var(--polaroid-muted);
+}
+
+/* ── Facts line ────────────────────────────────────────────────────────────── */
+.usage-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.75rem;
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--polaroid-line);
+  font-size: 0.68rem;
+  color: var(--polaroid-muted);
+}
+.usage-facts b { color: var(--polaroid-ink); font-weight: 700; }
+
+/* ── Section headings inside a card ───────────────────────────────────────── */
+.usage-h {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--polaroid-ink);
+  margin-bottom: 0.1rem;
+}
+.usage-h em {
+  display: block;
+  font-style: normal;
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  font-weight: 500;
+  color: var(--polaroid-muted);
+}
+.usage-h--sep {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--polaroid-line);
+}
+
+/* ── Label / figure rows ───────────────────────────────────────────────────── */
+.usage-rows { display: flex; flex-direction: column; margin-top: 0.4rem; }
+.usage-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--polaroid-line) 55%, transparent);
+}
+.usage-row:last-child { border-bottom: none; }
+.usage-row__k {
+  font-size: 0.72rem;
+  color: var(--polaroid-ink);
+  min-width: 0;
+}
+.usage-row__k em {
+  display: block;
+  font-style: normal;
+  font-size: 0.62rem;
+  color: var(--polaroid-muted);
+}
+.usage-row__v {
+  font-family: var(--font-score);
+  font-size: 0.78rem;
+  color: var(--polaroid-ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.usage-row__v--quiet {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--polaroid-muted);
+}
+
+/* ── Quiet notes, the buckets refresh, the footer ─────────────────────────── */
+.usage-quiet {
+  font-size: 0.68rem;
+  color: var(--polaroid-muted);
+  padding: 0.5rem 0;
+}
+.usage-bucket-refresh { margin-top: 0.4rem; }
+.usage-error {
+  text-align: center;
+  padding: 2rem 1.25rem;
+  color: var(--polaroid-muted);
+}
+.usage-error h3 { color: var(--polaroid-ink); }
+.usage-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin: 0.9rem 0.25rem 1.25rem;
+  font-size: 0.64rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+/* Narrow phones: the tile grid is the one thing that cannot hold two up. */
+@media (max-width: 350px) {
+  .usage-tiles { grid-template-columns: 1fr; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

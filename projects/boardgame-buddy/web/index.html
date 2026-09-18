@@ -311,6 +311,7 @@
     <main data-view="admin-release-notices" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="admin-run" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="admin-affiliates" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
+    <main data-view="admin-usage" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
     <main data-view="whats-new" class="hidden flex-1 px-4 py-4 bgb-spoke-screen"></main>
 
     <!-- Toast -->
@@ -475,6 +476,7 @@
   <script src="domain/bgg-sync-flow.js"></script>
   <script src="domain/admin-run-tools.js"></script>
   <script src="domain/admin-run-flow.js"></script>
+  <script src="domain/admin-usage.js"></script>
   <script src="domain/bgg-import.js"></script>
   <script src="domain/chapter.js"></script>
   <script src="domain/feedback.js"></script>
@@ -500,6 +502,9 @@
   <script src="ui/ghost-claim-suggestions.js"></script>
   <script src="ui/icons.js"></script>
   <script src="ui/dom-patch.js"></script>
+  <!-- stat-primitives before views/stats-view.js and widgets/usage-panels.js:
+       both call BgbStat.bar() at render time. -->
+  <script src="ui/stat-primitives.js"></script>
   <script src="ui/admin-gate.js"></script>
   <script src="ui/search-field.js"></script>
   <script src="ui/switch.js"></script>
@@ -638,6 +643,8 @@
   <script src="views/admin-release-notices-view.js"></script>
   <script src="views/admin-affiliates-view.js"></script>
   <script src="views/admin-run-view.js"></script>
+  <script src="widgets/usage-panels.js"></script>
+  <script src="views/admin-usage-view.js"></script>
   <script src="views/whats-new-view.js"></script>
 
   <script src="init.js"></script>

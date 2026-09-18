@@ -3174,3 +3174,34 @@ class AffiliateClickSummary(BaseModel):
     days: int
     total: int
     by_partner: list[AffiliateClickCount] = []
+
+
+# ── Admin usage (migration 047) ──────────────────────────────────────────────
+
+class BucketUsage(BaseModel):
+    """One R2 bucket's footprint, as `object_store.usage()` reports it.
+
+    `configured` is False for an unset bucket, which is a supported state and
+    not an error (local dev has no R2 credentials). `error` carries a listing
+    failure for THIS bucket only — the two buckets have separate permissions,
+    so one refusing must not hide the other's number. `truncated` means the
+    walk hit its page ceiling and the figures are a floor, which the UI renders
+    as "at least".
+    """
+
+    configured: bool = False
+    objects: int = 0
+    bytes: int = 0
+    truncated: bool = False
+    error: str | None = None
+
+
+class BucketUsageResponse(BaseModel):
+    """Both R2 buckets, keyed by object_store's store names (plays / games).
+
+    A plain dict rather than two named fields: the keys are object_store.PLAYS
+    and .GAMES, and naming them again here is a second place for that pair to
+    drift when a third bucket appears.
+    """
+
+    buckets: dict[str, BucketUsage] = {}

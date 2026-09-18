@@ -4,12 +4,14 @@ Replaces Supabase Storage for image objects. Image bytes are ~93% of this
 app's egress and Supabase bills egress; **R2 never does, at any volume**, which
 is the entire reason this module exists.
 
-WHAT IS AND IS NOT HERE. Two operations: `put()` and `public_url()`. No read,
-no list, no delete. Reads never come through the API at all — the client loads
-an absolute URL straight from the row, so an image is an `<img src>` and
-nothing more. Delete is absent because nothing deletes an image today; the
-privacy policy discloses that, and when it stops being true this module gains
-a `delete()` rather than a caller reaching for boto3 itself.
+WHAT IS AND IS NOT HERE. Three operations: `put()`, `public_url()`, and
+`usage()`. No object read, no delete. Reads never come through the API at all —
+the client loads an absolute URL straight from the row, so an image is an
+`<img src>` and nothing more, and `usage()` does not change that: it lists
+KEYS AND SIZES for the admin Usage spoke and never fetches an object's bytes.
+Delete is absent because nothing deletes an image today; the privacy policy
+discloses that, and when it stops being true this module gains a `delete()`
+rather than a caller reaching for boto3 itself.
 
 PATHS ARE UNCHANGED FROM THE SUPABASE LAYOUT.
   plays: `{user_id}/{uuid4hex}.{ext}`     games: `{bgg_id}_{kind}.{ext}`
@@ -291,3 +293,84 @@ def put(
             f": {exc}"
         ) from exc
     return public_url(kind, path)
+
+
+# The page ceiling on `usage()`. 100 pages x 1000 keys is 100k objects, which
+# is far above either bucket today and still only ~100 round trips in the worst
+# case. Past it the walk stops and reports what it has as a FLOOR rather than
+# running until the request times out — the admin screen renders "≥ N" for a
+# truncated bucket, which is a true statement, where a silent partial sum is
+# not.
+_USAGE_MAX_PAGES = 100
+
+
+def usage() -> dict:
+    """Object count and total bytes per bucket, for the admin Usage spoke.
+
+    The module header says there are two operations and no list. This is the
+    third, and it is a read of METADATA only — `ListObjectsV2` returns keys and
+    sizes, never bytes — so the argument there (reads never come through the
+    API; an image is an `<img src>` and nothing more) is untouched. What this
+    answers is "how much are we storing", which nothing else could.
+
+    Returns, per store key (`plays` / `games`):
+
+        {"configured": bool, "objects": int, "bytes": int,
+         "truncated": bool, "error": str | None}
+
+    Three deliberate shapes:
+
+    * **Unconfigured is not an error.** `configured: False` with zeroes, the
+      same stance as `configured()` and `put()`'s Supabase fallback — local dev
+      has no R2 credentials and needs none, and the screen renders a "not
+      configured" state rather than a failure.
+    * **A failure is PER BUCKET.** Cover art and play photos are separate
+      buckets with separate permissions, so a token that cannot list one can
+      still list the other. Raising would hide the number that did come back.
+    * **It needs `ListBucket` on the token.** An R2 "Object Read & Write" token
+      has it; a write-only one does not, and R2 reports the difference as
+      `AccessDenied` — the same string a missing `R2_JURISDICTION` produces
+      (see `put()`), so the error text names the bucket it was signing for.
+
+    Synchronous and blocking, like `put()`: callers hand it to
+    `asyncio.to_thread`. The result is cached by the caller, not here — this
+    module holds no clock.
+    """
+    out: dict[str, dict] = {}
+    for kind in (PLAYS, GAMES):
+        entry = {
+            "configured": False,
+            "objects": 0,
+            "bytes": 0,
+            "truncated": False,
+            "error": None,
+        }
+        out[kind] = entry
+        # `ready()` also demands a public base, which listing does not need —
+        # but a bucket whose contents cannot be served is not a bucket this app
+        # is using, so reporting its size would be misleading rather than
+        # helpful. Same gate as every other caller, deliberately.
+        if not _cfg.ready(kind):
+            continue
+        entry["configured"] = True
+        bucket = _cfg.buckets[kind]
+        try:
+            paginator = _s3().get_paginator("list_objects_v2")
+            pages = 0
+            for page in paginator.paginate(Bucket=bucket):
+                pages += 1
+                for obj in page.get("Contents") or ():
+                    entry["objects"] += 1
+                    entry["bytes"] += obj.get("Size") or 0
+                if pages >= _USAGE_MAX_PAGES:
+                    entry["truncated"] = True
+                    break
+        except Exception as exc:
+            # Same reasoning as put()'s error text: name the bucket and the
+            # jurisdiction, never the account id.
+            entry["error"] = (
+                f"list failed [bucket={bucket} "
+                f"jurisdiction={_cfg.jurisdiction or '(default)'}]: {exc}"
+            )
+            logger.warning("R2 usage() failed for %s: %s", kind, exc)
+    return out

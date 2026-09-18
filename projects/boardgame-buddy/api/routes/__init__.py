@@ -72,6 +72,13 @@ from . import admin_routes  # noqa: F401, E402
 # ahead of the parameterised `/admin/runs/{tool}`, which is a different
 # segment count again and so could not have been swallowed either way.
 from . import admin_run_routes  # noqa: F401, E402
+# The admin Usage spoke. Both paths are literal, so nothing here can shadow or
+# be shadowed: `/admin/usage` is two segments against admin_routes' two, but a
+# shadow needs a PARAMETERISED path to swallow a literal one and neither module
+# has any. `/admin/usage/buckets` is three, against admin_run_routes'
+# `/admin/runs/{tool}` — same count, but the second segment differs on a
+# literal, so no request can match both.
+from . import usage_routes  # noqa: F401, E402
 # No ordering constraint. `/feedback` is one segment and
 # `/feedback/{id}/like` is three, and no single-segment `/{x}` route exists in
 # this package for either to be swallowed by — test_route_ordering only flags a

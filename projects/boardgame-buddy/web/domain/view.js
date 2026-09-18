@@ -245,6 +245,11 @@
         { name: "admin-release-notices", pattern: /^\/admin\/release-notices\/?$/,
           build: () => "/admin/release-notices" },
         { name: "admin-affiliates",    pattern: /^\/admin\/affiliates\/?$/,       build: () => "/admin/affiliates" },
+        // /admin/USAGE, not /admin/stats: that name and that path are already
+        // taken above, as the legacy alias for the BGG-stats backfill panel.
+        // Two different screens called "admin stats" is how a bookmark ends up
+        // on the wrong one.
+        { name: "admin-usage",         pattern: /^\/admin\/usage\/?$/,           build: () => "/admin/usage" },
         // The run log, one screen for all five admin jobs. `tool` is in the
         // PATH because it is what the page IS, not a hint about how you got
         // here — same call as import-detail's batchId above. Declared before
