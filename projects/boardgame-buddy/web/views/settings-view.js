@@ -178,6 +178,8 @@
 
       this.container.innerHTML = `
         ${this._renderHead()}
+        <div class="set-card-label">Getting started</div>
+        ${this._renderTourCard()}
         <div class="set-card-label">Appearance</div>
         ${this._renderAppearanceCard()}
         <div class="set-card-label">Notifications</div>
@@ -259,6 +261,32 @@
             </button>
           </div>
         </form>
+      `;
+    }
+
+    /**
+     * The feature tour, the one row in Settings aimed at somebody who has just
+     * arrived. It sits first because Settings is ordered by who opens it, and
+     * "what does this thing actually do" is the newest account's question.
+     *
+     * The same deck a signed-out visitor reads from the sign-in screen — one
+     * destination, one affordance (ui-object-design.md §3b). It is re-enterable
+     * by design, which is what makes it different from the first-run
+     * onboarding deck: that one collects a name and a set of buddies, fires
+     * once off `needs_setup`, and is setup rather than explanation.
+     */
+    _renderTourCard() {
+      return `
+        <div class="set-card">
+          <button class="set-card__row" onclick="window.router.go('tour')">
+            <span class="set-card__row-icon"><i data-icon="compass" class="w-4 h-4"></i></span>
+            <span class="set-card__row-body">
+              <span class="set-card__row-title">Take the tour</span>
+              <span class="set-card__row-sub">Five chapters on what BoardgameBuddy does.</span>
+            </span>
+            <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
+          </button>
+        </div>
       `;
     }
 
