@@ -19778,7 +19778,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   box-sizing: border-box;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 280ms var(--ease);
+  transition: opacity 360ms var(--ease);
 }
 .vscore[data-stage="lobby"] .vscore__stage--lobby,
 .vscore[data-stage="pad"] .vscore__stage--pad,
@@ -19859,7 +19859,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding-block: 0;
   border-bottom-color: transparent;
   overflow: hidden;
-  transition: max-height 300ms var(--ease), opacity 240ms var(--ease), padding 300ms var(--ease);
+  /* 420ms rather than 300: the rows arriving IS the story this scene tells,
+     and at 300ms they appeared rather than grew. Paired with the ~2s dwell on
+     the generic pad above it in the beat list. */
+  transition: max-height 420ms var(--ease), opacity 300ms var(--ease), padding 420ms var(--ease);
 }
 .vscore.has-tmpl .vscore__row.is-tmpl,
 .vscore.has-exp .vscore__row.is-exp {
@@ -19876,7 +19879,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding-block: 0;
   border-bottom-color: transparent;
   overflow: hidden;
-  transition: max-height 300ms var(--ease), opacity 200ms var(--ease), padding 300ms var(--ease);
+  transition: max-height 420ms var(--ease), opacity 260ms var(--ease), padding 420ms var(--ease);
 }
 
 .vscore__stage--settle { align-items: center; justify-content: center; gap: 4px; text-align: center; }
