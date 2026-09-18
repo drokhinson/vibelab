@@ -244,6 +244,7 @@
           alias: "admin-bgg-data" },
         { name: "admin-release-notices", pattern: /^\/admin\/release-notices\/?$/,
           build: () => "/admin/release-notices" },
+        { name: "admin-affiliates",    pattern: /^\/admin\/affiliates\/?$/,       build: () => "/admin/affiliates" },
         // The run log, one screen for all five admin jobs. `tool` is in the
         // PATH because it is what the page IS, not a hint about how you got
         // here — same call as import-detail's batchId above. Declared before

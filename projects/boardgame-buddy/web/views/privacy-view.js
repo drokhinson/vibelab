@@ -29,7 +29,7 @@
     constructor() { super("privacy"); }
 
     _title() { return "Privacy Policy"; }
-    _updated() { return "2026-09-16"; }
+    _updated() { return "2026-09-18"; }
 
     _body() {
       return `
@@ -103,6 +103,11 @@
               when you use them. See §6.</li>
           <li><strong>BoardGameGeek</strong> — only if you link an account, and
               only to read or update your collection there.</li>
+          <li><strong>Retailers</strong> — only if you tap a <em>Where to buy</em>
+              link on a game's page. That opens the retailer's own site, under
+              its own privacy policy; nothing about your account travels with
+              the link. Some of those links are affiliate links — see the
+              Terms.</li>
         </ul>
 
         <h3 class="font-semibold mt-4">Other people using the app</h3>
@@ -122,6 +127,10 @@
         and no device identifier</strong> — the stored row is the app name, the
         event name and a timestamp, so it can tell us "the app was opened 400
         times yesterday" and can never tell us who opened it.</p>
+        <p>A tap on a <em>Where to buy</em> link is counted the same way: which
+        retailer, which game, which screen, and when — <strong>no account
+        identifier</strong>. It tells us whether a retailer is worth listing,
+        never who was shopping.</p>
         <p>Separately, the server logs the requests it makes to BoardGameGeek
         and to Google, so failures can be diagnosed. Those entries can include
         your BoardGameGeek username, because it is part of the request.</p>
