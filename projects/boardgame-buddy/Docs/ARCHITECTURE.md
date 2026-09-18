@@ -864,7 +864,7 @@ projects/boardgame-buddy/web/
 │   ├── reference-guide-scroll.js   → ReferenceGuideScroll class (Chapter rendering)
 │   ├── round-score-grid.js          → renderRoundGrid (Session scoring)
 │   ├── game-info-bar.js             → renderGameInfoBar (Session header on Play)
-│   ├── game-finder.js               → the network game search, dropdown or inline
+│   ├── game-finder.js               → the game search: on-device catalog index first, /search fallback, BGG escalation
 │   ├── player-reorder.js            → drag-to-reorder the Gather roster
 │   ├── game-picker-sheet.js, game-search-sheet.js, player-picker-sheet.js  ← sheets (§4.3)
 │   ├── bgg-import-sheet.js          → search BoardGameGeek, import into the catalog
