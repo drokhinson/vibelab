@@ -27,7 +27,7 @@
     const el = root.querySelector(sel);
     if (el) el.classList.toggle(cls, on !== false);
   };
-  /** Move the feed track by N cards. */
+  /** Move a track by N steps; the stylesheet decides what a step is. */
   const shift = (root, sel, n) => {
     const el = /** @type {HTMLElement} */ (root.querySelector(sel));
     if (el) el.style.setProperty("--vig-step", String(n));
@@ -36,54 +36,105 @@
   const avatar = (initials, cls) =>
     `<span class="vig-av ${cls || ""}">${initials}</span>`;
 
-  const playCard = (game, who, meta, extra) => `
+  /**
+   * A miniature of ui/play-card.js — the polaroid, scaled to about a third.
+   *
+   * Faithful in the four things that make it one: a PAPER body (cream in both
+   * themes) with the app's ground showing around it, a photo frame whose empty
+   * state is a flat --polaroid-line rectangle exactly as the real one's is,
+   * the game name in the display face below it, and the winner on its own row
+   * under a hairline reading "Won by <name> · <score>". No tilt — styles.css
+   * says the nth-child rotations were removed on purpose and cards sit square.
+   *
+   * THE CROWN IS THE ONE THING THE REAL CARD DOES NOT HAVE, and it is here
+   * deliberately: at ~100px wide the caption's winner line is 8px of muted
+   * rust, which reads as texture rather than as a fact. So the crown marks the
+   * plays the VIEWER won — not "this play has a winner", which is true of
+   * every card and would make the mark say nothing.
+   *
+   * @param {{game: string, winner: string, score: string, mine?: boolean}} p
+   */
+  const playCard = (p) => `
     <article class="vfeed-card">
-      <div class="vfeed-card__top">
-        ${avatar(who.slice(0, 2).toUpperCase())}
-        <div class="vfeed-card__who">
-          <b>${who}</b>
-          <span>${meta}</span>
-        </div>
+      <div class="vfeed-card__photo">
+        <span class="vfeed-card__art" aria-hidden="true"></span>
+        ${p.mine ? `<span class="vfeed-card__crown" aria-hidden="true">
+          <i data-icon="crown" class="w-3 h-3"></i>
+        </span>` : ""}
       </div>
-      <div class="vfeed-card__game">
-        <span class="vfeed-card__cover" aria-hidden="true"></span>
-        <span class="vfeed-card__name">${game}</span>
+      <div class="vfeed-card__cap">
+        <span class="vfeed-card__name">${p.game}</span>
+        <span class="vfeed-card__meta"><span class="vfeed-win"><span
+          class="vfeed-win__label">Won by</span>${p.winner}<span
+          class="vfeed-win__sep" aria-hidden="true"></span><span
+          class="vfeed-win__score">${p.score}</span></span></span>
       </div>
-      ${extra || ""}
     </article>`;
 
-  // ── 1. Community — the feed, and a kudos landing ───────────────────────────
+  // ── 1. Community — a game night, as the feed actually lays it out ─────────
+  //
+  // The real feed is not a vertical list of rows. views/feed-view.js emits a
+  // day divider, then a session header naming who played, then a SIDEWAYS RAIL
+  // of polaroids (.play-session__scroll), then one "Good game" pill for the
+  // whole night — the pill sits outside the cards on purpose, because it
+  // reacts to the night rather than to any one play. This mirrors that,
+  // including the part that carries the most: the cards are paper and
+  // everything around them is ground.
+  // SIX, and the count is geometry rather than taste: the rail has to be
+  // meaningfully wider than its clip or the slide beats move a rail that had
+  // already fitted, leaving a third of the frame empty at the end of the loop.
+  // styles.css caps the clip at 330px so this holds on every layout tier;
+  // six 96px cards plus their gaps come to 616px, so both slide steps land
+  // well inside the content.
+  const NIGHT = [
+    { game: "Arboretum", winner: "You",    score: "87",  mine: true },
+    { game: "Wingspan",  winner: "Priya",  score: "102" },
+    { game: "Cascadia",  winner: "You",    score: "94",  mine: true },
+    { game: "Sagrada",   winner: "Marcus", score: "71" },
+    { game: "Azul",      winner: "You",    score: "68",  mine: true },
+    { game: "Calico",    winner: "Priya",  score: "55" },
+  ];
+
   V.register({
     id: "community",
-    label: "A shared feed of plays, with buddies reacting",
-    hold: 1800,
+    label: "A game night in the feed: three plays, and the table saying good game",
+    hold: 2600,
     html: `
       <div class="vig-chrome"><span class="vig-chrome__title">Feed</span></div>
-      <div class="vig-scroll">
-        <div class="vfeed-track" data-track>
-          <div class="vfeed-sec">Game night · Saturday</div>
-          ${playCard("Arboretum", "Priya", "won · 3 players", `
-            <div class="vfeed-kudos" data-kudos>
-              <span class="vfeed-kudos__btn"><i data-icon="handshake" class="w-3 h-3"></i></span>
-              <span class="vfeed-kudos__n" data-kudos-n>3</span>
-            </div>`)}
-          ${playCard("Wingspan", "Marcus", "2nd · 4 players")}
-          <div class="vfeed-sec">Thursday</div>
-          ${playCard("Cascadia", "You", "won · 2 players")}
+      <div class="vfeed">
+        <p class="vfeed__day">Saturday</p>
+        <p class="vfeed__header"><b>You</b> and <b>Priya</b> played 6 games</p>
+        <div class="vfeed__railclip">
+          <div class="vfeed__rail" data-rail>
+            ${NIGHT.map(playCard).join("")}
+          </div>
+        </div>
+        <div class="vfeed__foot" data-kudos>
+          <span class="vfeed__gg">
+            <i data-icon="handshake" class="w-3 h-3"></i><span>Good game</span>
+          </span>
+          <span class="vfeed__faces">
+            ${avatar("PR", "vig-av--xs")}${avatar("MA", "vig-av--xs")}
+          </span>
+          <span class="vfeed__ggwho" data-ggwho></span>
         </div>
       </div>`,
     reset(root) {
-      shift(root, "[data-track]", 0);
+      shift(root, "[data-rail]", 0);
       flag(root, "[data-kudos]", "is-on", false);
-      put(root, "[data-kudos-n]", "3");
+      put(root, "[data-ggwho]", "");
     },
     beats: [
-      { name: "scroll", at: 1100, apply: (r) => shift(r, "[data-track]", 1) },
-      { name: "kudos", at: 2100, apply: (r) => {
+      // Sideways, because the rail is sideways. One step is one card plus its
+      // gap; styles.css turns --vig-step into the travel, so this never has to
+      // know a pixel measurement that lives there. Two steps is as far as the
+      // rail can go without running out of cards — see NIGHT above.
+      { name: "slide", at: 1800, apply: (r) => shift(r, "[data-rail]", 1) },
+      { name: "kudos", at: 3400, apply: (r) => {
         flag(r, "[data-kudos]", "is-on", true);
-        put(r, "[data-kudos-n]", "4");
+        put(r, "[data-ggwho]", "Priya and Marcus said good game");
       } },
-      { name: "more", at: 3300, apply: (r) => shift(r, "[data-track]", 2) },
+      { name: "more", at: 5200, apply: (r) => shift(r, "[data-rail]", 2) },
     ],
   });
 
