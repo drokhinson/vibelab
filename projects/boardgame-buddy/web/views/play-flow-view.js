@@ -2759,26 +2759,21 @@
       if (span) span.textContent = label;
     }
 
+    // The tag joins this seat to a side, and PlaySession.applyTeamTag settles
+    // what that does to the side's win flag — including the case this used to
+    // get backwards, where naming a team AFTER crowning it wiped the win. The
+    // rule lives on the draft (and is covered by tools/check-play-outcome.mjs)
+    // because it is a fact about the roster, not about this screen.
     _setTeam(i, value) {
       const ps = this._ps;
-      const p = ps.players[i];
-      if (!p) return;
-      p.team = String(value || "").trim();
-      if (p.team) {
-        const tag = p.team.toLowerCase();
-        const teammateWon = ps.players.some(
-          (o, j) => j !== i && (o.team || "").trim().toLowerCase() === tag && o.is_winner
-        );
-        if (teammateWon !== p.is_winner) {
-          p.is_winner = teammateWon;
-          this._ps.persist();
-          this._autoSelectWinners();
-          this.render();
-          return;
-        }
-      }
+      if (!ps.players[i]) return;
+      const winnersMoved = window.PlaySession.applyTeamTag(ps.players, i, value);
       ps.persist();
       this._autoSelectWinners();
+      // Only the trophy row changed, but it is rendered by the cascade — and
+      // only when something actually moved, so typing a tag that settles
+      // nothing doesn't yank focus out of the input mid-word.
+      if (winnersMoved) this.render();
     }
 
     // ── Scoring templates (migration 018) ───────────────────────────────────

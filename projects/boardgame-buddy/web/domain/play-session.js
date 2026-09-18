@@ -244,6 +244,52 @@
       };
     }
 
+    /**
+     * Tag one seat with a team, and settle that side's outcome.
+     *
+     * A side shares ONE result — PlayFlowView's trophy toggle already crowns or
+     * un-crowns a whole tag at once — so the seat and the seats it just joined
+     * have to agree on `is_winner` afterwards. They agree by UNION: if either
+     * the seat or the side it joins is flagged a winner, all of them are.
+     *
+     * The direction is the bug this exists to close. This used to overwrite the
+     * seat with whatever its teammates said, which on the ordinary order of
+     * operations — crown the winners, THEN name the teams — read a side that
+     * was still empty and silently cleared the win just recorded. The play
+     * saved with nobody flagged and the feed card told the people who won it
+     * "We lost". A recorded win is never dropped by typing a team name; an
+     * accidental tag can over-crown a side, and the trophy toggle takes that
+     * back, where the wipe left nothing to notice.
+     *
+     * A tag no other seat carries yet says nothing about this one, so a lone
+     * seat keeps its own flag untouched. Clearing the tag does the same.
+     *
+     * Mutates `players` in place (the draft's array is the live one) and
+     * returns whether any `is_winner` moved, so the caller can skip a repaint.
+     *
+     * @param {any[]} players the draft roster
+     * @param {number} i the seat being tagged
+     * @param {string} value the typed tag
+     * @returns {boolean} true when a win flag changed
+     */
+    static applyTeamTag(players, i, value) {
+      const p = players && players[i];
+      if (!p) return false;
+      p.team = String(value == null ? "" : value).trim();
+      if (!p.team) return false;
+      const tag = p.team.toLowerCase();
+      const side = players.filter(
+        (o, j) => j !== i && o && (o.team || "").trim().toLowerCase() === tag
+      );
+      if (!side.length) return false;
+      const won = !!p.is_winner || side.some((o) => !!o.is_winner);
+      const changed = !!p.is_winner !== won || side.some((o) => !!o.is_winner !== won);
+      if (!changed) return false;
+      p.is_winner = won;
+      for (const o of side) o.is_winner = won;
+      return true;
+    }
+
     // Remote lobby helpers ──────────────────────────────────────────────────────
 
     static async openLobby({ gameId } = {}) {

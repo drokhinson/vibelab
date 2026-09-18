@@ -237,16 +237,18 @@
     // "No winner recorded" is kept for the run that HAS scores but crowned
     // nobody — there the absence of a winner is itself the fact.
     if (outcomeUnrecorded(card)) return "";
-    const winnerCount = countWinners(card.winner_display_name);
+    const winners = winnerNames(card);
+    const winnerCount = winners.length;
     if (winnerCount === 0) return `<span class="win-loss">No winner recorded</span>`;
-    const everyoneWon = (card.participant_count || 0) > 0
-      && winnerCount >= (card.participant_count || 0);
+    const rosterTotal = rosterSize(card);
+    const everyoneWon = rosterTotal > 0 && winnerCount >= rosterTotal;
     if (everyoneWon) {
       const we = viewerInPlay(card, me) ? "We" : "They";
       return `<span class="win">${we} won all ${n}</span>`;
     }
-    const isSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
-    const name = isSelf ? "You" : escapeHtml(card.winner_display_name);
+    const joined = winners.join(", ");
+    const isSelf = !!(me && me.display_name && joined === me.display_name);
+    const name = isSelf ? "You" : escapeHtml(joined);
     // ONE flex item, not two. .win is inline-flex with a 5px gap, so a bare
     // <span>name</span> followed by text renders as two items with that gap
     // between them — a visibly wider space than the sentence wants.
@@ -352,12 +354,15 @@
     `;
   }
 
-  // Build the "won" caption span. Four buckets:
+  // Build the "won" caption span. Five buckets:
   //   - no outcome recorded (nobody won AND nobody scored) → nothing at all
-  //   - all-or-nothing (coop, OR everyone won, OR nobody won) →
-  //       any winners → "We won!" / "They won!"     (brass)
-  //       no winners  → "We lost" / "They lost"     (grey/italic)
-  //   - standard competitive (a single named winner) →
+  //   - nobody won on a scored board →
+  //       coop      → "We lost" / "They lost"       (grey/italic)
+  //       otherwise → "No winner recorded"          (grey/italic)
+  //   - all-or-nothing (coop, OR everyone won) → "We won!" / "They won!" (brass)
+  //   - a TEAM play the viewer sat at → their own side's result:
+  //       "We won!" (brass) / "We lost" (grey/italic)
+  //   - standard competitive (a named winner) →
   //       "Won by <You|Name> · <score>" (score omitted if unknown)
   // The first bucket has to come first: a play with no result looks exactly
   // like a nobody-won loss from the winner list alone, and only the scores
@@ -370,21 +375,43 @@
     // play whose result was simply never entered.
     if (outcomeUnrecorded(card)) return "";
     const playMode = card.play_mode || "competitive";
-    const winnerCount = countWinners(card.winner_display_name);
-    const participantTotal = card.participant_count || 0;
+    const winners = winnerNames(card);
+    const winnerCount = winners.length;
+    const participantTotal = rosterSize(card);
     const everyoneWon = participantTotal > 0 && winnerCount > 0 && winnerCount >= participantTotal;
-    const nobodyWon = winnerCount === 0;
-    const teamBucket = (playMode === "coop") || everyoneWon || nobodyWon;
     const we = viewerInPlay(card, me) ? "We" : "They";
 
-    if (teamBucket) {
-      return winnerCount > 0
-        ? `<span class="win">${we} won!</span>`
-        : `<span class="win-loss">${we} lost</span>`;
+    if (winnerCount === 0) {
+      // Co-op is the ONE mode where an uncrowned board is itself the result:
+      // the table played the game and the game won, which is what
+      // PlayFlowView._stampCoopLoss writes down on purpose. Anywhere else
+      // "nobody is flagged" means the winner was never entered — a BGG import
+      // that carried scores but no win flags, a table that tapped Save before
+      // crowning anyone — and answering that with "We lost" is the card
+      // inventing a defeat out of a blank field, on the evening of the people
+      // who were there. The run card has always drawn this line; the single
+      // card now draws it too.
+      return playMode === "coop"
+        ? `<span class="win-loss">${we} lost</span>`
+        : `<span class="win-loss">No winner recorded</span>`;
     }
-    if (!card.winner_display_name) return "";
-    const winnerIsSelf = !!(me && me.display_name && card.winner_display_name === me.display_name);
-    const winnerName = winnerIsSelf ? "You" : escapeHtml(card.winner_display_name);
+    if (playMode === "coop" || everyoneWon) {
+      return `<span class="win">${we} won!</span>`;
+    }
+    // A team play splits the table, so the winner list is half of it by
+    // construction and the competitive branch below would label the card with
+    // the names of one side — "Won by Ana, Kim" — where the only thing the
+    // viewer wants to know is which side theirs was. Their own seat carries
+    // that, so say it the way they would.
+    const seat = viewerSeat(card, me);
+    if (playMode === "team" && seat) {
+      return seat.is_winner
+        ? `<span class="win">We won!</span>`
+        : `<span class="win-loss">We lost</span>`;
+    }
+    const joined = winners.join(", ");
+    const winnerIsSelf = !!(me && me.display_name && joined === me.display_name);
+    const winnerName = winnerIsSelf ? "You" : escapeHtml(joined);
     const winnerScore = winnerScoreFor(card);
     // The winner has its own caption row now, so a bare name would read as an
     // unexplained label. The team buckets above already read as sentences and
@@ -394,13 +421,50 @@
     : ""}</span>`;
   }
 
-  // `winner_display_name` is a comma-joined list of winners (one entry for a
-  // single winner, multiple for team / coop wins, null when nobody won).
-  // Names normally don't contain commas so a comma-split is reliable enough
+  // Who won, by name.
+  //
+  // THE ROSTER WINS when the card carries one (migration 015). Every surface
+  // that patches a card in place writes `players` — a saved edit through
+  // Play.mergeIntoCard, the hand-built cards in game-detail and import-detail
+  // — while `winner_display_name` is an aggregate the feed RPC computed when
+  // the page was fetched. Reading the aggregate here is how a play whose win
+  // was recorded after the fact went on telling the people who won it that
+  // they lost: the roster said Ana won, the stale aggregate said nobody did,
+  // and "nobody won" renders as "We lost".
+  //
+  // `winner_display_name` remains the fallback for a payload with no roster
+  // (pre-015, or an adapter that omits it). It is a comma-joined list, and
+  // names normally don't contain commas, so a comma-split is reliable enough
   // for the UI bucket selection.
-  function countWinners(raw) {
-    if (!raw) return 0;
-    return String(raw).split(",").map((s) => s.trim()).filter(Boolean).length;
+  function winnerNames(card) {
+    const players = card.players;
+    if (Array.isArray(players) && players.length) {
+      return players
+        .filter((p) => p && p.is_winner)
+        .map((p) => String(p.name == null ? "" : p.name).trim())
+        .filter(Boolean);
+    }
+    const raw = card.winner_display_name;
+    if (!raw) return [];
+    return String(raw).split(",").map((s) => s.trim()).filter(Boolean);
+  }
+
+  // How many seats the play had. Same preference and the same reason: the
+  // roster is unfiltered (every seat, ghosts included) and is patched by an
+  // edit, where `participant_count` is the fetch-time aggregate beside it.
+  function rosterSize(card) {
+    const players = card.players;
+    if (Array.isArray(players) && players.length) return players.length;
+    return card.participant_count || 0;
+  }
+
+  // The viewer's own seat at this play, or null when they weren't at it. Ghost
+  // seats carry a null user_id and can never match.
+  function viewerSeat(card, me) {
+    if (!me || !me.id) return null;
+    const players = card.players;
+    if (!Array.isArray(players)) return null;
+    return players.find((p) => p && p.user_id && String(p.user_id) === String(me.id)) || null;
   }
 
   // A play whose outcome was never recorded: nobody is flagged a winner AND not
@@ -411,7 +475,7 @@
   // predating migration 015, or an adapter that omits it — keeps the old
   // reading rather than guessing from an absence it cannot see.
   function outcomeUnrecorded(card) {
-    if (countWinners(card.winner_display_name) > 0) return false;
+    if (winnerNames(card).length > 0) return false;
     const players = card.players;
     if (!Array.isArray(players) || !players.length) return false;
     return !players.some((p) => p && p.score != null && p.score !== "");
@@ -426,12 +490,14 @@
     return ps.some((p) => p && p.user_id === me.id);
   }
 
+  // The score that belongs beside "Won by <name>". Only ever ONE winner's:
+  // a tie prints two names, and hanging a single number off that sentence
+  // would be claiming it as the pair's shared score.
   function winnerScoreFor(card) {
-    if (!card.winner_display_name) return null;
     const players = card.players || [];
-    const winner = players.find((p) => p.is_winner && p.name === card.winner_display_name)
-      || players.find((p) => p.is_winner);
-    if (!winner) return null;
+    const winners = players.filter((p) => p && p.is_winner);
+    if (winners.length !== 1) return null;
+    const winner = winners[0];
     return (winner.score != null && winner.score !== "") ? winner.score : null;
   }
 
@@ -710,5 +776,9 @@
 
   window.renderPlayCard = renderPlayCard;
   window.playCardFlip = controller;
-  window.BgbPlayCard = { applyPlayUpdate };
+  // buildWinnerBlock and stackOutcome are exported for tools/check-play-outcome.mjs
+  // ONLY — nothing in the app calls them from outside this module. The caption
+  // is the one thing on the card that can be confidently, silently wrong (it
+  // states a result), so it is the one thing with a test.
+  window.BgbPlayCard = { applyPlayUpdate, buildWinnerBlock, stackOutcome };
 })();
