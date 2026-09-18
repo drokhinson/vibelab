@@ -145,7 +145,17 @@
         .catch((e) => {
           if (window.console) console.warn("profile bundle failed", e);
         });
-      await Promise.all([profilePromise, bundlePromise]);
+      // The alias pencil is gated on Buddy.edgeIdFor(), which answers off the
+      // /play-partners bundle. Nothing else on this screen needs that bundle,
+      // and bootstrap does not seed it — so a cold deep link straight to
+      // /u/:userId found an empty map and showed no pencil at all on the one
+      // screen that is ABOUT a person. SWR-cached 24h/7d, so on a warm app this
+      // resolves without a round trip; it never gates the first paint, and a
+      // failure simply leaves the pencil off.
+      const buddiesPromise = window.Buddy.allBuddies()
+        .then(() => { if (!stale()) this.render(); })
+        .catch(() => {});
+      await Promise.all([profilePromise, bundlePromise, buddiesPromise]);
     }
 
     _seedViewerMaps(b) {
@@ -205,23 +215,111 @@
     }
 
     // ── Identity row ──────────────────────────────────────────────────────────
+
+    /** What this person reads as to the viewer: their alias, else their name. */
+    _shownName() {
+      const p = this._profile;
+      if (!p) return "";
+      return window.Buddy.nameFor(p.id, p.display_name);
+    }
+
     _renderIdRow(p) {
+      const alias = window.Buddy.aliasFor(p.id);
+      const shown = window.Buddy.nameFor(p.id, p.display_name);
+      // Only an accepted buddy has an edge to hold an alias, so a stranger gets
+      // no pencil rather than one whose save would 404 — the same gate the
+      // play-detail popup's player rows use.
+      const edgeId = window.Buddy.edgeIdFor(p.id);
       const badge = window.BgbBadge.render({
         avatar: p.avatar,
-        displayName: p.display_name,
+        // The badge follows the alias too. One that renamed the row but not the
+        // avatar beside it reads as two people.
+        displayName: shown,
         size: "lg",
         extraClass: "profile-hub__avatar",
       });
+      // Their REAL name stays on screen whenever an alias is covering it, on
+      // the handle line rather than a third row: this header already carries a
+      // 44px relation button beside it, and the handle line is where "who this
+      // actually is" already lives. A profile with no alias is unchanged.
+      const handle = p.username ? `@${escapeHtml(p.username)}` : "";
+      const real = alias ? escapeHtml(p.display_name || "") : "";
+      const sub = handle && real ? `${handle} · <span class="profile-hub__realname">${real}</span>`
+        : handle || (real ? `<span class="profile-hub__realname">${real}</span>` : "");
       return `
         <header class="profile-hub__id">
           ${badge}
           <div class="profile-hub__who">
-            <div class="profile-hub__name font-display">${escapeHtml(p.display_name || "")}</div>
-            ${p.username ? `<div class="profile-hub__handle">@${escapeHtml(p.username)}</div>` : ""}
+            <div class="profile-hub__name font-display">
+              <span class="profile-hub__name-text">${escapeHtml(shown || "")}</span>
+              ${edgeId ? `
+                <button class="bgb-alias-btn" type="button"
+                        aria-label="${escapeAttr("Rename " + (p.display_name || "this buddy") + " for yourself")}"
+                        title="Rename just for you"
+                        onclick="window.profileOtherView._openAlias()">
+                  <i data-icon="pencil" class="w-3.5 h-3.5"></i>
+                </button>
+              ` : ""}
+            </div>
+            ${sub ? `<div class="profile-hub__handle">${sub}</div>` : ""}
           </div>
           ${this._renderRelationButton(p)}
         </header>
       `;
+    }
+
+    // ── Private alias ─────────────────────────────────────────────────────────
+
+    /**
+     * Rename this person, for the viewer's eyes only.
+     *
+     * The sheet is always titled with their REAL name — an alias titling its
+     * own editor would leave the user no way back to who they actually renamed
+     * (widgets/buddy-alias-sheet.js).
+     */
+    _openAlias() {
+      const p = this._profile;
+      if (!p) return;
+      const edgeId = window.Buddy.edgeIdFor(p.id);
+      if (!edgeId) return;
+      window.BuddyAliasSheet.open({
+        edgeId,
+        displayName: p.display_name,
+        alias: window.Buddy.aliasFor(p.id),
+        returnFocus: document.activeElement,
+        onSave: (alias) => this._saveAlias(edgeId, alias),
+      });
+    }
+
+    /**
+     * Write the alias, painting it first. The alias lives in the Buddy module's
+     * maps, not on this profile, so remembering it and re-rendering is the whole
+     * repaint — and it is what makes the header right in the same frame as the
+     * tap, on a screen whose own payload never carried the alias.
+     * @param {string} edgeId
+     * @param {string|null} alias
+     */
+    async _saveAlias(edgeId, alias) {
+      const p = this._profile;
+      if (!p) return;
+      const before = window.Buddy.aliasFor(p.id);
+      const next = (alias || "").trim() || null;
+      if (before === next) return;
+      const patch = (v) => {
+        window.Buddy.rememberAliases([
+          { other_user_id: p.id, other_alias: v, id: edgeId },
+        ]);
+        this.render();
+      };
+      patch(next);
+      try {
+        await window.Buddy.setAlias(edgeId, next);
+      } catch (e) {
+        patch(before);
+        if (typeof showToast === "function") {
+          showToast((e && e.message) || "Couldn't save that alias", "error");
+        }
+      }
     }
 
     _renderRelationButton(p) {
@@ -472,7 +570,7 @@
       // sum past `shared` — divide by whichever is larger or the bar overflows.
       const total = Math.max(shared, yours + theirs + other) || 1;
       const pctOf = (v) => (v / total) * 100;
-      const them = this._firstName(this._profile.display_name);
+      const them = this._firstName(this._shownName());
       return `
         <section class="preview-card">
           <header class="preview-card__head">
@@ -553,7 +651,7 @@
         seeAllJs: "window.profileOtherView._goCollection()",
         body: items.length
           ? `<div class="preview-card__covers">${items.slice(0, PREVIEW_COVERS).map((it) => window.BgbPreviewCard.cover(it)).join("")}</div>`
-          : `<div class="preview-card__empty">${escapeHtml(this._profile.display_name || "They")} doesn't own any games yet.</div>`,
+          : `<div class="preview-card__empty">${escapeHtml(this._shownName() || "They")} doesn't own any games yet.</div>`,
       });
     }
 
@@ -565,7 +663,7 @@
     // week never have.
     _renderSharedPlays() {
       if (!this._isBuddy()) return "";
-      const them = this._firstName(this._profile.display_name);
+      const them = this._firstName(this._shownName());
       const s = this._shared;
       let body;
       let sub;

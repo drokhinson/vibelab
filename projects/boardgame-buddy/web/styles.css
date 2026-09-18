@@ -13321,6 +13321,17 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-weight: 600;
   line-height: 1.05;
   color: oklch(var(--bc));
+  /* A flex row since the rename pencil sits inside it — the truncation moved
+     down to __name-text, because text-overflow has nothing to do on a flex
+     container and a long name would otherwise push the pencil off the row
+     instead of ellipsising. */
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  overflow: hidden;
+}
+.profile-hub__name-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -13331,6 +13342,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-top: 0.2rem;
   font-weight: 700;
 }
+/* Their account's own name, shown on the handle line only while an alias is
+   covering it above. Lighter than the handle it sits beside: the handle is an
+   address you might type, this is a reminder of who you renamed. */
+.profile-hub__realname { font-weight: 500; opacity: 0.85; }
+.profile-hub__who .bgb-alias-btn { flex: none; }
 /* ── 4 stat tiles — profile-other ONLY ─────────────────────────────────────
    The hub moved to .statsblock; another user's profile still shows four
    static tiles, so this family is live, not dead. ─────────────────────── */
