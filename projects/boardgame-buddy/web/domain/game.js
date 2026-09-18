@@ -2,6 +2,38 @@
 // Hydrated from GameSummary / GameDetail backend shapes.
 
 (function () {
+  // ── Admin bulk-run plumbing ────────────────────────────────────────────────
+  //
+  // The five admin catalog runs share two things no other call here needs.
+  //
+  // `pass_no` is the drain counter. The server bounds each pass so it fits
+  // inside the platform's request timeout, and the browser keeps asking until
+  // `remaining` hits 0; pass 0 opens a fresh run log and anything above it
+  // continues the one the last pass left, which is what makes twenty-five
+  // requests read as one log. domain/admin-run-flow.js owns the loop.
+  //
+  // `timeoutMs` is not optional and not a tuning knob. api.js defaults every
+  // request to a 15-SECOND deadline, and a bounded pass here is 30 seconds to
+  // several minutes of throttled BoardGameGeek work — so without an explicit
+  // deadline the browser aborts a pass that is running perfectly well, and the
+  // drain stops with the catalog half filled. The caller sets it because only
+  // the caller knows how big a bite it asked for.
+
+  /** @param {{limit?:number, passNo?:number}=} opts */
+  function _adminRunQuery(opts) {
+    const o = opts || {};
+    const parts = [];
+    if (o.limit) parts.push(`limit=${encodeURIComponent(o.limit)}`);
+    if (o.passNo) parts.push(`pass_no=${encodeURIComponent(o.passNo)}`);
+    return parts.length ? `?${parts.join("&")}` : "";
+  }
+
+  /** @param {{timeoutMs?:number}=} opts */
+  function _adminRunOpts(opts) {
+    const o = opts || {};
+    return o.timeoutMs ? { timeoutMs: o.timeoutMs } : undefined;
+  }
+
   class Game {
     constructor(raw) {
       Object.assign(this, raw || {});
@@ -196,10 +228,15 @@
         .then((r) => { Game.invalidateBundle(gameId); return r; });
     }
 
-    /** Bulk-rehost images for every catalog game with a missing or BGG-hosted URL.
-     *  Throttled server-side; can take a while if many games need work. */
-    static adminRefreshAllImages() {
-      return window.api.post("/games/refresh-images")
+    /** Re-host images for catalog games with a missing or BGG-hosted URL, in
+     *  one bounded pass.
+     *
+     *  Throttled server-side at one BGG call plus two uploads per game, so the
+     *  pass is SMALL and the deadline is long — see _adminRunOpts for why both
+     *  are the caller's to set. `remaining` in the response drives the next
+     *  pass, exactly like the three backfills below. */
+    static adminRefreshAllImages(opts) {
+      return window.api.post(`/games/refresh-images${_adminRunQuery(opts)}`, null, _adminRunOpts(opts))
         .then((r) => { Game.invalidateBundle(); return r; });
     }
 
@@ -229,10 +266,10 @@
      *  acceptable for a one-off catalog fill, and the cache.js SCHEMA_VERSION
      *  bump covers the rollout case where every client holds pre-description
      *  bundles. */
-    static adminBackfillDescriptions(limit) {
-      const q = limit ? `?limit=${encodeURIComponent(limit)}` : "";
-      return window.api.post(`/games/admin/backfill-descriptions${q}`)
-        .then((r) => { Game.invalidateBundle(); return r; });
+    static adminBackfillDescriptions(opts) {
+      return window.api.post(
+        `/games/admin/backfill-descriptions${_adminRunQuery(opts)}`, null, _adminRunOpts(opts),
+      ).then((r) => { Game.invalidateBundle(); return r; });
     }
 
     // ── Admin: publisher backfill ────────────────────────────────────────────
@@ -253,10 +290,10 @@
     /** Backfill publishers for games that have none yet, in one bounded pass.
      *  Batched and throttled server-side; `remaining` drives the panel's next
      *  call, same as the description backfill above. */
-    static adminBackfillPublishers(limit) {
-      const q = limit ? `?limit=${encodeURIComponent(limit)}` : "";
-      return window.api.post(`/games/admin/backfill-publishers${q}`)
-        .then((r) => { Game.invalidateBundle(); return r; });
+    static adminBackfillPublishers(opts) {
+      return window.api.post(
+        `/games/admin/backfill-publishers${_adminRunQuery(opts)}`, null, _adminRunOpts(opts),
+      ).then((r) => { Game.invalidateBundle(); return r; });
     }
 
     // ── Admin: BGG stats backfill ─────────────────────────────────────────
@@ -276,21 +313,21 @@
 
     /** Sync stats for games never synced, in one bounded, throttled pass.
      *  `remaining` in the response drives the panel's next call. */
-    static adminBackfillStats(limit) {
-      const q = limit ? `?limit=${encodeURIComponent(limit)}` : "";
-      return window.api.post(`/games/admin/backfill-stats${q}`)
-        .then((r) => {
-          Game.invalidateBundle();
-          if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
-          return r;
-        });
+    static adminBackfillStats(opts) {
+      return window.api.post(
+        `/games/admin/backfill-stats${_adminRunQuery(opts)}`, null, _adminRunOpts(opts),
+      ).then((r) => {
+        Game.invalidateBundle();
+        if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
+        return r;
+      });
     }
 
     /** Snapshot BGG's hot list now (migration 039) and import what the
      *  catalog lacks. Same call the daily cron makes; the Discover bundle is
      *  dropped so the next mount shows the new run. */
-    static adminRefreshTrending() {
-      return window.api.post("/discover/admin/refresh-trending")
+    static adminRefreshTrending(opts) {
+      return window.api.post("/discover/admin/refresh-trending", null, _adminRunOpts(opts))
         .then((r) => {
           if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();
           return r;

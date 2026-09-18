@@ -23,6 +23,8 @@ from fastapi import HTTPException  # noqa: E402
 
 import cache  # noqa: E402
 from routes import game_routes as G  # noqa: E402
+from routes.constants import AdminRunLevel, AdminRunTool  # noqa: E402
+from routes.services import admin_run_progress as A  # noqa: E402
 from routes.services import discovery_service as D  # noqa: E402
 
 
@@ -228,8 +230,11 @@ URL = "/api/v1/boardgame_buddy/discover/admin/refresh-trending"
 def route_client(monkeypatch):
     monkeypatch.setattr(DEP, "ADMIN_API_KEY", "svc-key")
 
-    async def fake_refresh(_sb):
+    async def fake_refresh(_sb, *, progress=None):
         from datetime import datetime, timezone
+        # `progress` is the run ledger the route opens. Accepted (and ignored)
+        # here because this fixture is about the AUTH on the route, not the
+        # narration; test_trending_run_is_narrated below drives the real one.
         return HotRefreshResult(captured_at=datetime.now(timezone.utc), items=50, imported=3)
 
     monkeypatch.setattr(discovery_routes.discovery_service, "refresh_hot_snapshot", fake_refresh)
@@ -248,3 +253,150 @@ def test_service_key_bearer_runs_the_refresh(route_client):
 def test_wrong_key_and_no_auth_are_refused(route_client):
     assert route_client.post(URL, headers={"Authorization": "Bearer nope"}).status_code in (401, 403)
     assert route_client.post(URL).status_code in (401, 403)
+
+
+# ── The run log ──────────────────────────────────────────────────────────────
+# The trending refresh takes 15–35 seconds behind a spinner, and the games it
+# fails to import used to be returned as bare ids and dropped by the client.
+# These pin what the operator actually reads.
+
+@pytest.fixture(autouse=True)
+def _clean_run_log():
+    cache.clear(A._NS)
+    yield
+    cache.clear(A._NS)
+
+
+def test_the_run_walks_its_phases_in_order_and_names_each_import(monkeypatch):
+    sb = _SB({"boardgamebuddy_games": [{"bgg_id": 1001}]})
+
+    async def hot(**_k):
+        return _hot(3)
+
+    async def fake_import(_sb, _bgg_id):
+        return {"id": "x"}
+
+    monkeypatch.setattr(D, "fetch_hot_games", hot)
+    monkeypatch.setattr(G, "import_game_from_bgg", fake_import)
+
+    with A.run_pass(AdminRunTool.TRENDING, started_by="Dana") as prog:
+        _run(D.refresh_hot_snapshot(sb, progress=prog))
+
+    snap = A.read(AdminRunTool.TRENDING)
+    assert snap["state"] == "done"
+    assert snap["started_by"] == "Dana"
+    assert [s["key"] for s in snap["steps"]] == [
+        "fetch", "snapshot", "prune", "diff", "import", "caches",
+    ]
+    assert {s["state"] for s in snap["steps"]} == {"done"}
+    # The two counts an operator checks first.
+    assert next(s for s in snap["steps"] if s["key"] == "fetch")["detail"] == "3 games on the hot list"
+    assert next(s for s in snap["steps"] if s["key"] == "diff")["detail"] == "2 of 3 not in the catalog"
+    # Named, not numbered: "12333 failed" is a log you have to go and decode.
+    assert [e["message"] for e in snap["events"]] == [
+        "Imported Hot 2 (BGG 1002)",
+        "Imported Hot 3 (BGG 1003)",
+    ]
+    assert snap["totals"] == {"updated": 2, "failed": 0, "remaining": 0}
+
+
+def test_a_failed_import_is_an_error_line_naming_the_game(monkeypatch):
+    """This is the case the old UI dropped entirely: `failed[]` came back as
+    bare ids and the toast never mentioned them."""
+    sb = _SB({"boardgamebuddy_games": []})
+
+    async def hot(**_k):
+        return _hot(2)
+
+    async def flaky(_sb, bgg_id):
+        if bgg_id == 1002:
+            raise RuntimeError("BGG 502")
+        return {"id": "x"}
+
+    monkeypatch.setattr(D, "fetch_hot_games", hot)
+    monkeypatch.setattr(G, "import_game_from_bgg", flaky)
+
+    with A.run_pass(AdminRunTool.TRENDING) as prog:
+        _run(D.refresh_hot_snapshot(sb, progress=prog))
+
+    snap = A.read(AdminRunTool.TRENDING)
+    errors = [e["message"] for e in snap["events"] if e["level"] == AdminRunLevel.ERROR.value]
+    assert errors == ["Hot 2 (BGG 1002) — BGG 502"]
+    assert snap["totals"]["failed"] == 1
+    assert snap["state"] == "done", "one bad import does not fail the run"
+
+
+def test_the_per_run_cap_is_a_warning_not_a_silence(monkeypatch):
+    """The counts not adding up is the thing an admin wonders about."""
+    sb = _SB({"boardgamebuddy_games": []})
+
+    async def hot(**_k):
+        return _hot(D.HOT_IMPORT_PER_RUN + 4)
+
+    async def fake_import(_sb, _bgg_id):
+        return {"id": "x"}
+
+    monkeypatch.setattr(D, "fetch_hot_games", hot)
+    monkeypatch.setattr(G, "import_game_from_bgg", fake_import)
+
+    with A.run_pass(AdminRunTool.TRENDING) as prog:
+        _run(D.refresh_hot_snapshot(sb, progress=prog))
+
+    snap = A.read(AdminRunTool.TRENDING)
+    warns = [e["message"] for e in snap["events"] if e["level"] == AdminRunLevel.WARN.value]
+    assert warns == [
+        f"4 more are missing and will import on the next run "
+        f"(cap is {D.HOT_IMPORT_PER_RUN} per run)"
+    ]
+    assert snap["totals"]["remaining"] == 4
+
+
+def test_nothing_to_import_skips_that_phase_rather_than_showing_an_empty_counter(monkeypatch):
+    sb = _SB({"boardgamebuddy_games": [{"bgg_id": 1001}, {"bgg_id": 1002}]})
+
+    async def hot(**_k):
+        return _hot(2)
+
+    monkeypatch.setattr(D, "fetch_hot_games", hot)
+    with A.run_pass(AdminRunTool.TRENDING) as prog:
+        _run(D.refresh_hot_snapshot(sb, progress=prog))
+
+    snap = A.read(AdminRunTool.TRENDING)
+    step = next(s for s in snap["steps"] if s["key"] == "import")
+    assert step["state"] == "skipped" and step["detail"] == "Nothing new to import"
+
+
+def test_bgg_being_down_fails_the_ledger_with_bggs_own_words(monkeypatch):
+    """The one outcome an operator wants to tell apart from "the import broke"."""
+    sb = _SB({"boardgamebuddy_games": []})
+
+    async def down(**_k):
+        return []
+
+    monkeypatch.setattr(D, "fetch_hot_games", down)
+    with pytest.raises(HTTPException):
+        with A.run_pass(AdminRunTool.TRENDING) as prog:
+            _run(D.refresh_hot_snapshot(sb, progress=prog))
+
+    snap = A.read(AdminRunTool.TRENDING)
+    assert snap["state"] == "failed"
+    assert snap["error"] == "BoardGameGeek did not return a hot list"
+    # Left active on the phase that died, which is where the reader looks.
+    assert next(s for s in snap["steps"] if s["key"] == "fetch")["state"] == "active"
+
+
+def test_the_service_runs_unnarrated_when_nobody_is_watching(monkeypatch):
+    """The cron, and every existing caller, pass no ledger."""
+    sb = _SB({"boardgamebuddy_games": []})
+
+    async def hot(**_k):
+        return _hot(1)
+
+    async def fake_import(_sb, _bgg_id):
+        return {"id": "x"}
+
+    monkeypatch.setattr(D, "fetch_hot_games", hot)
+    monkeypatch.setattr(G, "import_game_from_bgg", fake_import)
+    result = _run(D.refresh_hot_snapshot(sb))
+    assert result.imported == 1
+    assert A.read(AdminRunTool.TRENDING) is None

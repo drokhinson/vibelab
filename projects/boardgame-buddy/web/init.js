@@ -51,6 +51,7 @@
   // than here so init.js stays a registry. See views/admin-backfill-view.js.
   window.adminBggDataView = window.AdminBackfillView.bggData();
   window.adminReleaseNoticesView = new window.AdminReleaseNoticesView();
+  window.adminRunView = new window.AdminRunView();
   window.whatsNewView = new window.WhatsNewView();
 
   // Widget singleton — the Play tab's Join half. Hoisted here (rather than
@@ -88,6 +89,7 @@
   window.router.register("admin-reports",      window.adminReportsView);
   window.router.register("admin-bgg-data",     window.adminBggDataView);
   window.router.register("admin-release-notices", window.adminReleaseNoticesView);
+  window.router.register("admin-run",           window.adminRunView);
   window.router.register("whats-new",           window.whatsNewView);
 
   // A global helper rather than a view concern, because the provider's state

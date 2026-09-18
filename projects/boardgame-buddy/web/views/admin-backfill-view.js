@@ -40,6 +40,14 @@
 
     async onMount() {
       if (!window.AdminGate.allowed()) return;
+      // The four bulk buttons report their runs, and a run outlives this
+      // screen — so this repaints on the flow's ticks and adopts whatever is
+      // already going, the same way the Settings card does.
+      this.listen("adminRun", () => this.render());
+      this.listenDom("visibilitychange", () => {
+        if (!document.hidden && window.AdminRunFlow) window.AdminRunFlow.catchUp();
+      });
+      window.AdminRunFlow.adopt();
       // In parallel: four independent "what's missing" queries with no ordering
       // between them, and serialising them would leave the last panel spinning
       // behind three others for no reason. Each panel paints itself as it
@@ -75,10 +83,14 @@
       return panel.refreshOne(gameId).then(() => window.AdminReview.refresh());
     }
 
+    /** The bulk button. It no longer runs anything here — it confirms and
+     *  hands off to /admin/run/:tool, which owns the drain and the log. The
+     *  counts are refreshed on the way back in by onMount, not here: there is
+     *  nothing to refresh yet at the moment of the tap. */
     _all(key) {
       const panel = this._panel(key);
       if (!panel) return Promise.resolve();
-      return panel.refreshAll().then(() => window.AdminReview.refresh());
+      return panel.goToRun();
     }
   }
 
@@ -92,11 +104,11 @@
     panels: [
       {
         key: "images",
+        runTool: "bgg-images",
         title: "Games missing images",
         icon: "image-off",
         emptyText: "All catalog games have images.",
         bulkLabel: "Refresh all",
-        busyLabel: "Refreshing…",
         oneOkToast: "Image refreshed",
         rowStatus: (g) => {
           const missing = [];
@@ -105,59 +117,55 @@
           return missing.length ? `Missing: ${missing.join(", ")}` : "OK";
         },
         bulkConfirm: (n) => (n > 0
-          ? `Re-host BGG images for ${n} game${n === 1 ? "" : "s"}? This calls BGG once per game and is throttled — may take a minute or two.`
-          : "Re-host images for every game with a missing or BGG-hosted URL? This calls BGG once per game and is throttled."),
+          ? `Re-host BGG images for ${n} game${n === 1 ? "" : "s"}? One throttled BGG call per game, so a cold catalog takes a while. You'll watch it on the run page and can leave it going.`
+          : "Re-host images for every game with a missing or BGG-hosted URL? One throttled BGG call per game. You'll watch it on the run page and can leave it going."),
         list: () => window.Game.adminMissingImages(),
         refreshOne: (id) => window.Game.adminRefreshOneImage(id),
-        refreshAll: () => window.Game.adminRefreshAllImages(),
       },
       {
         key: "descriptions",
+        runTool: "bgg-descriptions",
         title: "Games missing descriptions",
         icon: "scroll-text",
         emptyText: "Every catalog game has a description.",
         bulkLabel: "Backfill all",
-        busyLabel: "Backfilling…",
         oneOkToast: "Description refreshed",
         rowStatus: () => "No description",
         bulkConfirm: (n) => (n > 0
-          ? `Fetch BGG descriptions for ${n} game${n === 1 ? "" : "s"}? BGG is called in batches of 20 and the run continues automatically until every game is done — may take a minute or two.`
-          : "Fetch BGG descriptions for every game that has none? BGG is called in batches of 20."),
+          ? `Fetch BGG descriptions for ${n} game${n === 1 ? "" : "s"}? BGG is called in batches of 20 until every game is done. You'll watch it on the run page and can leave it going.`
+          : "Fetch BGG descriptions for every game that has none? BGG is called in batches of 20. You'll watch it on the run page and can leave it going."),
         list: () => window.Game.adminMissingDescriptions(),
         refreshOne: (id) => window.Game.adminRefreshOneDescription(id),
-        refreshAll: () => window.Game.adminBackfillDescriptions(),
       },
       {
         key: "stats",
+        runTool: "bgg-stats",
         title: "Games missing BGG stats",
         icon: "star",
         emptyText: "Every catalog game has its BGG rating and rank.",
         bulkLabel: "Sync all",
-        busyLabel: "Syncing…",
         oneOkToast: "Stats refreshed",
         rowStatus: () => "Not synced",
         bulkConfirm: (n) => (n > 0
-          ? `Fetch BGG ratings, ranks and weights for ${n} game${n === 1 ? "" : "s"}? BGG is called in throttled batches of 20 and the run continues automatically until every game is done — a cold catalog takes a few minutes.`
-          : "Fetch BGG stats for every game that has none? BGG is called in throttled batches of 20."),
+          ? `Fetch BGG ratings, ranks and weights for ${n} game${n === 1 ? "" : "s"}? Throttled batches of 20 until every game is done — a cold catalog takes a few minutes. You'll watch it on the run page and can leave it going.`
+          : "Fetch BGG stats for every game that has none? Throttled batches of 20. You'll watch it on the run page and can leave it going."),
         list: () => window.Game.adminMissingStats(),
         refreshOne: (id) => window.Game.adminRefreshOneStats(id),
-        refreshAll: () => window.Game.adminBackfillStats(),
       },
       {
         key: "publishers",
+        runTool: "bgg-publishers",
         title: "Games missing publishers",
         icon: "library-big",
         emptyText: "Every catalog game has been checked for a publisher.",
         bulkLabel: "Backfill all",
-        busyLabel: "Backfilling…",
         oneOkToast: "Publishers refreshed",
         rowStatus: () => "Not synced",
         bulkConfirm: (n) => (n > 0
-          ? `Fetch BGG publisher credits for ${n} game${n === 1 ? "" : "s"}? BGG is called in throttled batches of 20 and the run continues automatically until every game is done — a cold catalog takes a few minutes.`
-          : "Fetch BGG publisher credits for every game that has none? BGG is called in throttled batches of 20."),
+          ? `Fetch BGG publisher credits for ${n} game${n === 1 ? "" : "s"}? Throttled batches of 20 until every game is done — a cold catalog takes a few minutes. You'll watch it on the run page and can leave it going.`
+          : "Fetch BGG publisher credits for every game that has none? Throttled batches of 20. You'll watch it on the run page and can leave it going."),
         list: () => window.Game.adminMissingPublishers(),
         refreshOne: (id) => window.Game.adminRefreshOnePublishers(id),
-        refreshAll: () => window.Game.adminBackfillPublishers(),
       },
     ],
   });

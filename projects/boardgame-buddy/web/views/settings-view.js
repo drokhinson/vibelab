@@ -85,10 +85,6 @@
       // True while the "Reset local cache" button is working.
       this._cacheResetting = false;
 
-      // True while the admin "Refresh trending" run is in flight — it is what
-      // puts the row's Sync pill into "Syncing…" and keeps a second tap from
-      // starting a second BGG pull.
-      this._trendingBusy = false;
     }
 
     async onMount() {
@@ -109,8 +105,14 @@
       this.listen("bggSync", () => this._patchHost("set-bgg-host", this._renderBggCard()));
       // Its poll skips ticks while the tab is hidden; fire one catch-up when
       // it comes back. Auto-removed on unmount via listenDom.
+      // The admin runs' status pills. Same shape as the BGG strip above and
+      // for the same reason: the flow outlives this view, so a run started
+      // here and walked away from is still going when you come back, and this
+      // card is where you find out.
+      this.listen("adminRun", () => this._patchHost("set-admin-host", this._renderAdminCard()));
       this.listenDom("visibilitychange", () => {
         if (!document.hidden && window.BggSyncFlow) window.BggSyncFlow.catchUp();
+        if (!document.hidden && window.AdminRunFlow) window.AdminRunFlow.catchUp();
       });
       this.render();
       // Not awaited: the card paints its "Checking…" row first and settles when
@@ -137,6 +139,11 @@
       // lands. AdminReview publishes into the store, which the listen above
       // turns into a repaint.
       window.AdminReview.load();
+      // Same shape, and the other half of "it keeps running when I leave": a
+      // run this tab never started — from another tab, from the nightly cron,
+      // or from before a reload — is what adopt() finds, and it is what puts a
+      // live pill on the row before the operator has touched anything.
+      if (window.AdminGate.allowed()) window.AdminRunFlow.adopt();
       // Re-arm whatever was still running when the user last left. Idempotent
       // and cheap when there is nothing to resume.
       if (window.BggSyncFlow) window.BggSyncFlow.resume();
@@ -482,6 +489,11 @@
         // the collapse except the scrolling.
         {
           route: "admin-bgg-data",
+          // Four sub-tools behind one row, so the pill shows whichever of them
+          // is live (or most recently was). Tapping a row with a live run goes
+          // to that run's log rather than the panel list — when something is
+          // happening, the log IS what you came to see.
+          runTools: ["bgg-images", "bgg-descriptions", "bgg-stats", "bgg-publishers"],
           tool: "bggData",
           // Not `image-off`, which the images spoke carried: it names one of
           // the four queues and would read as the row's whole subject.
@@ -502,20 +514,20 @@
           title: "Release notices",
           sub: "Write the what's-new note everyone sees once on their next visit.",
         },
-        // An action, not a spoke: there is nothing to look at, only a run to
-        // kick off. The daily cron does the same call; this is for "now".
-        //
-        // `run` is what makes it READ as an action. Without it the row was
-        // chevron-tipped like the five above, i.e. it promised a screen and
-        // then silently fired a BGG sync instead — the one row on this card
-        // whose tap you could not take back.
+        // A spoke again, and this time honestly. It was an action row — a tap
+        // that WAS the deed, with a pill instead of a chevron, because a
+        // chevron promising a screen and silently firing a BGG sync was the
+        // one tap on this card you could not take back. Now there IS a screen:
+        // it shows the run step by step and offers Run now, so the chevron
+        // tells the truth and nothing fires until you are looking at it.
         {
-          action: "window.settingsView._refreshTrending()",
+          route: "admin-run",
+          params: { tool: "trending" },
+          runTool: "trending",
           tool: "trending",
           icon: "flame",
           title: "Refresh trending",
-          sub: "Snapshot BoardGameGeek's hot list now and import what the catalog lacks.",
-          run: { idle: "Sync", busy: "Syncing\u2026", isBusy: () => this._trendingBusy },
+          sub: "Snapshot BoardGameGeek's hot list and import what the catalog lacks.",
         },
       ];
     }
@@ -538,6 +550,30 @@
      * screen in between and no way back. The chevron is the app's promise of a
      * destination; an action row must not borrow it.
      */
+    /**
+     * The run this row should report on, if any.
+     *
+     * A row names one tool or four. With four, the live one wins and otherwise
+     * the most recently touched — an operator who kicked off stats and then
+     * images wants to see images, and once both are done the last one they
+     * watched is the one they are coming back to check.
+     */
+    _runStateFor(t) {
+      const slugs = t.runTools || (t.runTool ? [t.runTool] : []);
+      if (!slugs.length || !window.AdminRunFlow) return null;
+      const states = slugs
+        .map((slug) => window.AdminRunFlow.stateOf(slug))
+        .filter((st) => st.state !== "unknown");
+      if (!states.length) return null;
+      return states.find((st) => st.live)
+        || states.sort((a, b) => this._runAge(a) - this._runAge(b))[0];
+    }
+
+    _runAge(st) {
+      const at = st.run && st.run.updated_at ? Date.parse(st.run.updated_at) : NaN;
+      return isNaN(at) ? Infinity : Date.now() - at;
+    }
+
     _renderAdminRow(t) {
       const { total, parts } = window.BgbNotifications.forAdminTool(t.tool);
       // The badge is decorative — the count is already in the row's
@@ -548,26 +584,39 @@
       const label = parts.length
         ? `${t.title} — ${window.BgbNotifications.phrase(parts)} waiting`
         : t.title;
-      const onclick = t.action || `window.router.go('${t.route}')`;
 
-      // The pill is the only thing that moves between idle and running — the
-      // row keeps its own icon, so the flame does not turn into a spinner and
-      // back and leave you unsure which row you were looking at. The pill is
-      // aria-hidden because the title already says the verb ("Refresh
-      // trending") and the running state is on the button's own label.
-      const busy = !!(t.run && t.run.isBusy && t.run.isBusy());
-      const tail = t.run
-        ? `<span class="set-card__row-run" aria-hidden="true">
-             <i data-icon="refresh-cw" class="w-3.5 h-3.5${busy ? " animate-spin" : ""}"></i>
-             <span>${escapeHtml(busy ? t.run.busy : t.run.idle)}</span>
+      const st = this._runStateFor(t);
+      // With a run live or recent, the row goes to its LOG rather than to the
+      // row's usual destination. "Missing BGG data" normally opens four panels
+      // of things to fix; while one of them is running, what you tapped the
+      // row to find out is how that run is going.
+      const dest = st
+        ? `window.router.go('admin-run', { tool: '${st.tool.slug}' })`
+        : t.params
+          // Two layers, as ever for an inline handler: JSON.stringify writes
+          // the JS object literal, escapeAttr below turns its double quotes
+          // into entities so the attribute survives. Do not drop either.
+          ? `window.router.go('${t.route}', ${JSON.stringify(t.params)})`
+          : `window.router.go('${t.route}')`;
+
+      // The pill replaces the chevron rather than joining it: two trailing
+      // affordances on one row is two promises, and the row only has one
+      // destination. The row keeps its own icon either way, so the flame does
+      // not turn into a spinner and back and leave you unsure which row you
+      // were looking at. aria-hidden because the state is already in the
+      // row's aria-label below.
+      const tail = st
+        ? `<span class="set-card__row-run set-card__row-run--${st.state}" aria-hidden="true">
+             <i data-icon="${st.live ? "loader-2" : st.state === "done" ? "check" : "alert-triangle"}"
+                class="w-3.5 h-3.5${st.live ? " animate-spin" : ""}"></i>
+             <span>${escapeHtml(st.label)}</span>
            </span>`
         : `<span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>`;
 
       return `
-        <button class="set-card__row${t.run ? " set-card__row--action" : ""}"
-                ${busy ? `disabled aria-busy="true"` : ""}
-                aria-label="${escapeAttr(busy ? `${t.title} — running` : label)}"
-                onclick="${escapeAttr(onclick)}">
+        <button class="set-card__row${st ? " set-card__row--action" : ""}"
+                aria-label="${escapeAttr(st ? `${t.title} — ${st.label}` : label)}"
+                onclick="${escapeAttr(dest)}">
           <span class="set-card__row-icon"><i data-icon="${t.icon}" class="w-4 h-4"></i></span>
           <span class="set-card__row-body">
             <span class="set-card__row-title">${escapeHtml(t.title)}</span>
@@ -577,28 +626,6 @@
           ${tail}
         </button>
       `;
-    }
-
-    async _refreshTrending() {
-      if (this._trendingBusy) return;
-      this._trendingBusy = true;
-      // Repaint the card, not the screen: the pill has to go to "Syncing…"
-      // and start spinning, and a full render() here would blow away the
-      // focus ring on the row the user just pressed.
-      this._patchHost("set-admin-host", this._renderAdminCard());
-      showToast("Refreshing trending\u2026", "info");
-      try {
-        const r = await window.Game.adminRefreshTrending();
-        const parts = [`${r.items} games`];
-        if (r.imported) parts.push(`${r.imported} imported`);
-        if (r.skipped && r.skipped.length) parts.push(`${r.skipped.length} more tomorrow`);
-        showToast(`Trending refreshed \u2014 ${parts.join(", ")}`, "success");
-      } catch (e) {
-        showToast((e && e.message) || "Couldn't refresh trending", "error");
-      } finally {
-        this._trendingBusy = false;
-        this._patchHost("set-admin-host", this._renderAdminCard());
-      }
     }
 
     // ── BGG card ──────────────────────────────────────────────────────────────

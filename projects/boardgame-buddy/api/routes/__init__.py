@@ -65,6 +65,13 @@ from . import bga_routes       # noqa: F401, E402
 from . import bootstrap_routes  # noqa: F401, E402
 from . import export_routes  # noqa: F401, E402
 from . import admin_routes  # noqa: F401, E402
+# The admin run logs. No ordering constraint against admin_routes: every path
+# here is three segments (`/admin/runs`, `/admin/runs/{tool}`) and every path
+# there is two, and test_route_ordering only flags a shadow between paths of
+# EQUAL segment count. Within this module the literal `/admin/runs` is declared
+# ahead of the parameterised `/admin/runs/{tool}`, which is a different
+# segment count again and so could not have been swallowed either way.
+from . import admin_run_routes  # noqa: F401, E402
 # No ordering constraint. `/feedback` is one segment and
 # `/feedback/{id}/like` is three, and no single-segment `/{x}` route exists in
 # this package for either to be swallowed by — test_route_ordering only flags a

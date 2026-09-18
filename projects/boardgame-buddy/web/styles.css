@@ -5591,6 +5591,75 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .bgg-flow__step--center { align-items: center; text-align: center; padding-top: 2rem; }
 
 .bgg-flow__head { display: flex; flex-direction: column; gap: 0.2rem; }
+/* ── Admin run journal (ui/admin-run-log.js) ────────────────────────────────
+   Sits under the shared .bgg-log checklist on /admin/run/:tool. Its own family
+   rather than more .bgg-log classes because it is a different thing: the
+   checklist says which STEP, this says which ITEM, and only this one grows to
+   two hundred rows and needs its own scroller.
+
+   Lands on .bgb-spoke-screen, which is a CHROME surface — so every colour here
+   reads the --polaroid-* aliases that screen re-points, never oklch(var(--b*))
+   (.claude/rules/theming.md §6). */
+.admin-run__totals {
+  margin: 0.7rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--polaroid-ink, #1D1812);
+}
+.admin-run__journal { margin-top: 0.9rem; }
+.admin-run__journal-head {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.admin-run__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--polaroid-line);
+  border-radius: var(--r-sm, 8px);
+  background: var(--well, transparent);
+  /* Capped and scrolled rather than unbounded: a 25-pass drain is hundreds of
+     lines, and a page that grows without limit loses its own footer. The
+     newest line is at the bottom, so the scroller opens already showing it —
+     see the scroll pin in views/admin-run-view.js's render. */
+  max-height: 22rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+.admin-run__line {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.1rem 0;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.admin-run__at {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+.admin-run__msg { min-width: 0; overflow-wrap: anywhere; }
+/* Only the two that need attention are coloured. Every line being coloured is
+   every line being uncoloured. */
+.admin-run__line--warn .admin-run__msg { color: var(--warn); }
+.admin-run__line--error .admin-run__msg { color: var(--rust); font-weight: 600; }
+.admin-run__pass {
+  margin: 0.45rem 0 0.2rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--polaroid-line);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--polaroid-muted, #8B7E68);
+}
+.admin-run__pass:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+
 .bgg-flow__title {
   font-size: 1.25rem;
   font-weight: 700;
@@ -14005,17 +14074,46 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   color: var(--accent-ink);
 }
+
+/* The four things a run can be, on the Settings row and on the backfill
+   panel's bulk button. Doubled class (.set-card__row-run.set-card__row-run--x)
+   so these beat the hover rule above, which is a later 0,2,0 selector and
+   would otherwise repaint a running pill gold on hover — see
+   .claude/rules/mobile-web.md §3 on winning a tie deliberately.
+
+   Every value is a var() onto the status ramp, so light and dark work by
+   construction (.claude/rules/theming.md §7). --accent-ink and not --accent:
+   these sit on a card, not on the app ground. */
+.set-card__row-run.set-card__row-run--running,
+.set-card__row--action:hover .set-card__row-run.set-card__row-run--running {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent-ink);
+}
+.set-card__row-run.set-card__row-run--done,
+.set-card__row--action:hover .set-card__row-run.set-card__row-run--done {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  color: var(--ok);
+}
+.set-card__row-run.set-card__row-run--interrupted,
+.set-card__row--action:hover .set-card__row-run.set-card__row-run--interrupted {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 42%, transparent);
+  color: var(--warn);
+}
+.set-card__row-run.set-card__row-run--failed,
+.set-card__row--action:hover .set-card__row-run.set-card__row-run--failed {
+  background: color-mix(in srgb, var(--rust) 14%, transparent);
+  border-color: color-mix(in srgb, var(--rust) 40%, transparent);
+  color: var(--rust);
+}
 .set-card__row--action:disabled {
   cursor: default;
   background: transparent;
 }
 .set-card__row--action:disabled .set-card__row-title,
 .set-card__row--action:disabled .set-card__row-sub { opacity: 0.6; }
-.set-card__row--action:disabled .set-card__row-run {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-  color: var(--accent-ink);
-}
 .set-card__badge {
   background: var(--accent-fill);
   color: var(--on-accent);

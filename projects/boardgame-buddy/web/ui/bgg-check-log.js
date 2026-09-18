@@ -1,6 +1,10 @@
 // @ts-check
 // ui/bgg-check-log.js — the checklist a BGG comparison ticks through.
 //
+// The phase-sequence half of this is ui/phase-log.js now, shared with the
+// admin run log. What stays here is everything a reader of THIS screen sees:
+// the seven sentences, the warm-up countdown, and the partial-sweep warning.
+//
 // Third sibling of ui/bgg-import-log.js and ui/bgg-push-log.js, sharing
 // ui/bgg-log-step.js and nothing else. Same argument as the push log
 // (.claude/rules/ui-object-design.md §2): the two existing logs narrate the
@@ -17,6 +21,10 @@
 //     — erases the ledger while the request itself is still perfectly alive.
 //     Rendering that as a finished checklist would be a lie; rendering it as
 //     an error would be a worse one. It gets one honest active row.
+//     (The admin run log reads the SAME state the opposite way — there a run
+//     is started from the page, so no record means none has run. Neither
+//     reading belongs in the shared primitive, which is why the row below is
+//     passed in.)
 //   • a step's `retry` is a warm-up backoff in flight. BGG answers a large
 //     collection request with a "still preparing" placeholder, and the client
 //     sleeps 5, then 10, then 20 seconds. That is the single most common
@@ -44,34 +52,13 @@
   const ORDER = ["guards", "collection", "shelf", "compare", "catalog", "collids", "queue"];
 
   /**
-   * "3 of 8" — only when the phase actually counts something. The sweep does
-   * (eight subtype × flag requests); "comparing the two" does not.
-   * @param {any} s
-   */
-  function counter(s) {
-    if (typeof s.total !== "number" || !s.total) return "";
-    const done = typeof s.done === "number" ? s.done : 0;
-    return `<span class="bgg-log__meta">${done} of ${s.total}</span>`;
-  }
-
-  /**
-   * The progress bar, for a counting phase that is currently running.
-   * @param {any} s
-   */
-  function bar(s) {
-    if (s.state !== "active" || typeof s.total !== "number" || !s.total) return "";
-    const done = typeof s.done === "number" ? s.done : 0;
-    const pct = Math.max(0, Math.min(100, Math.round((done / s.total) * 100)));
-    return `<div class="bgg-log__bar"><div class="bgg-log__bar-fill" style="width:${pct}%"></div></div>`;
-  }
-
-  /**
    * The warm-up line. `resume_at` is an absolute epoch second from the server,
    * so the countdown is against the moment the request actually resumes rather
    * than however long after the fact this poll happened to land.
-   * @param {any} retry
+   * @param {any} s  one BggCheckStep
    */
-  function retryLine(retry) {
+  function retryLine(s) {
+    const retry = s && s.retry;
     if (!retry) return "";
     const left = Math.max(0, Math.round((retry.resume_at * 1000 - Date.now()) / 1000));
     const when = left > 0 ? `retrying in ${left}s` : "retrying now";
@@ -79,34 +66,6 @@
       BoardGameGeek is still preparing your collection — ${when}
       <span class="bgg-log__muted">(attempt ${retry.attempt} of ${retry.of})</span>
     </span>`;
-  }
-
-  /**
-   * @param {any} s  one BggCheckStep
-   * @returns {string}
-   */
-  function renderStep(s) {
-    const label = LABEL[s.key] || s.key;
-    // A skipped phase reads as done-and-greyed rather than as a state of its
-    // own: it is a thing that did not need doing, and the primitive's three
-    // states are shared with two other logs that have no such case.
-    const state = s.state === "skipped" ? "done"
-      : s.state === "active" ? "active"
-      : s.state === "done" ? "done"
-      : "idle";
-    const muted = s.state === "skipped" ? " bgg-log__body--skipped" : "";
-    const detail = s.detail
-      ? `<span class="bgg-log__muted">${escapeHtml(s.detail)}</span>`
-      : "";
-    return step(state, `
-      <span class="bgg-check__row${muted}">
-        <span class="bgg-check__label">${escapeHtml(label)}</span>
-        ${counter(s)}
-      </span>
-      ${detail}
-      ${bar(s)}
-      ${retryLine(s.retry)}
-    `);
   }
 
   /**
@@ -122,49 +81,35 @@
    */
   function renderBggCheckLog(progress, opts) {
     const o = opts || {};
-    const cls = `bgg-log${o.className ? ` ${o.className}` : ""}`;
-    const state = progress && progress.state ? progress.state : "unknown";
-    const steps = (progress && progress.steps) || [];
-
-    // No ledger: either the first poll has not answered yet, or the server has
-    // no record of this check. Both mean the same thing to the user — it is
-    // running, we just cannot say which part. One honest row beats seven
-    // guesses.
-    if (!steps.length || state === "unknown") {
-      return `<div class="${cls}">
-        <ol class="bgg-log__steps">
-          ${step("active", `
-            <span class="bgg-check__row">
-              <span class="bgg-check__label">Reading your BoardGameGeek collection</span>
-            </span>
-            <span class="bgg-log__muted">This usually takes about 30 seconds.</span>
-          `)}
-        </ol>
-      </div>`;
-    }
-
-    const byKey = {};
-    for (const s of steps) byKey[s.key] = s;
-    const ordered = steps.length === ORDER.length
-      ? steps
-      : ORDER.map((k) => byKey[k]).filter(Boolean);
-
-    const failed = state === "failed" && progress.error
+    const failed = progress && progress.state === "failed" && progress.error
       ? `<p class="bgg-log__errors">${escapeHtml(progress.error)}</p>`
       : "";
     // Surfaced here as well as on the comparison screen, because this is where
     // the user watched it happen: a batch that gave up returned zero items, so
     // the sweep is partial and the push will refuse to run on it.
-    const warm = progress.warm_up_failed
+    const warm = progress && progress.warm_up_failed
       ? `<p class="bgg-log__errors">BoardGameGeek never finished preparing part of your
           collection, so this comparison is incomplete. Importing is still safe;
           pushing is not, and will be offered again after a clean check.</p>`
       : "";
 
-    return `<div class="${cls}">
-      <ol class="bgg-log__steps">${ordered.map(renderStep).join("")}</ol>
-      ${warm}${failed}
-    </div>`;
+    return window.renderPhaseLog(progress, {
+      labels: LABEL,
+      order: ORDER,
+      renderExtra: retryLine,
+      notices: `${warm}${failed}`,
+      className: o.className,
+      // One honest active row beats seven guesses: either the first poll has
+      // not answered yet, or the server has no record of this check. Both mean
+      // the same thing to the user — it is running, we just cannot say which
+      // part.
+      pendingRow: step("active", `
+        <span class="bgg-check__row">
+          <span class="bgg-check__label">Reading your BoardGameGeek collection</span>
+        </span>
+        <span class="bgg-log__muted">This usually takes about 30 seconds.</span>
+      `),
+    });
   }
 
   window.renderBggCheckLog = renderBggCheckLog;
