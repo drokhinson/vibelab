@@ -187,6 +187,25 @@ console.log("\nthe tour is a routed screen");
 const tourSrc = read("views/tour-view.js");
 ok("views/tour-view.js arms no back guard", !/BgbBackGuard\s*\.\s*arm/.test(tourSrc),
    "a routed screen already has a history entry — .claude/rules/overlays.md §8b");
+// ONE TAP IS ONE CHAPTER.
+//
+// render() runs twice on a cold mount (renderLoading, then View.mount), and
+// the deck's click handler goes on the CONTAINER, which innerHTML does not
+// replace. Bound from render() the handlers stacked — one tap on Next ran
+// _go(step + 1) twice and the deck skipped a chapter, then four on the second
+// visit because nothing removed them on unmount. The split is the fix: the
+// container click and the keydown latch behind _bound and register a remover,
+// while the swipe rebinds every paint because [data-clip] is inside the
+// markup render() replaces.
+ok("the container click handler is latched, not bound per paint",
+   /_bindOnce\(\)\s*\{\s*if \(this\._bound\) return;\s*this\._bound = true;/.test(tourSrc));
+ok("...and its remover is registered for unmount",
+   /_unsubs\.push\(\(\) => root\.removeEventListener\("click"/.test(tourSrc));
+ok("...and the latch is cleared on reset, so the next mount re-binds",
+   /_reset\(\)[\s\S]{0,400}this\._bound = false;/.test(tourSrc));
+ok("the swipe still rebinds every paint (its element is replaced)",
+   tourSrc.includes("_bindClip()") && /_bindClip\(\)\s*\{[\s\S]{0,200}querySelector\("\[data-clip\]"\)/.test(tourSrc));
+
 ok("chapter changes replace the URL rather than pushing it",
    tourSrc.includes("router.replaceUrl(\"tour\"") && !/router\.go\("tour"/.test(tourSrc));
 

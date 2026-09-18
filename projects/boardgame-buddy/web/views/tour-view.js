@@ -53,6 +53,8 @@
       this._scenes = {};
       this._scenesLoaded = false;
       this._dragX = null;
+      // Cleared here so the next mount re-binds — see _bindOnce().
+      this._bound = false;
     }
 
     get _signedIn() { return !!window.store.get("user"); }
@@ -203,14 +205,33 @@
         </div>`;
 
       this.refreshIcons();
-      this._bind();
+      this._bindOnce();
+      this._bindClip();
       this._go(this._step, { silent: true });
       if (this._scenesLoaded) this._mountScenes();
     }
 
-    _bind() {
+    /**
+     * Listeners that must be attached EXACTLY ONCE per mount.
+     *
+     * render() runs TWICE on a cold mount — renderLoading() paints the deck,
+     * then View.mount() calls render() again once onMount() resolves — and
+     * these two go on the CONTAINER, which innerHTML does not replace. Bound
+     * from render() they stacked: two identical click handlers on the first
+     * visit, so one tap on Next ran _go(step + 1) twice and the deck skipped a
+     * chapter. Nothing removed them on unmount either, so the second visit
+     * jumped four.
+     *
+     * Hence the latch, and hence the remover going into _unsubs: _reset()
+     * clears the latch on unmount, View.unmount() runs the removers before it,
+     * and the pair stays in step however many times the tour is opened.
+     */
+    _bindOnce() {
+      if (this._bound) return;
+      this._bound = true;
       const root = this.container;
-      root.addEventListener("click", (ev) => {
+
+      const onClick = (ev) => {
         const btn = ev.target.closest("[data-act]");
         if (!btn || !root.contains(btn)) return;
         const act = btn.dataset.act;
@@ -218,7 +239,9 @@
         else if (act === "prev") this._go(this._step - 1);
         else if (act === "exit") this._leave();
         else if (act === "done") this._finish();
-      });
+      };
+      root.addEventListener("click", onClick);
+      this._unsubs.push(() => root.removeEventListener("click", onClick));
 
       // Arrow keys on the document rather than the panel: nothing inside the
       // tour is focusable except its buttons, and listenDom drops the handler
@@ -228,8 +251,16 @@
         if (ev.key === "ArrowRight") this._go(this._step + 1);
         else if (ev.key === "ArrowLeft") this._go(this._step - 1);
       });
+    }
 
-      const clip = root.querySelector("[data-clip]");
+    /**
+     * The swipe, which is the opposite case: [data-clip] is inside the markup
+     * render() replaces, so every paint hands us a NEW element that has never
+     * been bound. This one has to run every time — the old clip is detached
+     * and takes its listeners with it.
+     */
+    _bindClip() {
+      const clip = this.container.querySelector("[data-clip]");
       if (!clip) return;
       clip.addEventListener("touchstart", (ev) => {
         this._dragX = ev.touches && ev.touches[0] ? ev.touches[0].clientX : null;
