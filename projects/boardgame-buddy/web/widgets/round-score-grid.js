@@ -129,6 +129,13 @@
     // new last round when this render added one. See RoundGridScroll.
     RoundGridScroll.schedule(host, roundCount);
 
+    // tag → colour slot, or null when no seat carries a side — which covers a
+    // competitive play, a co-op play, and a team play whose sides were never
+    // named. Built once and read by every header below, so the grid and the
+    // banded player list above it cannot land on different colours.
+    const teams = window.BgbTeams ? window.BgbTeams.indexMap(safePlayers) : null;
+    const slotOf = (p) => (teams && teams.get(window.BgbTeams.keyOf(p && p.team))) || 0;
+
     const cols = renderColGroup(safePlayers.length);
 
     return `
@@ -140,9 +147,16 @@
               <thead>
                 <tr>
                   <th class="scoring-head-corner"></th>
-                  ${safePlayers.map((p) => `
-                    <th class="scoring-head${headerNames ? " is-named" : ""}" scope="col" title="${escapeAttr(shownName(p))}">${renderScoringHead(renderHeadBadge(p), shownName(p), headerNames, headerNamesDefault)}</th>
-                  `).join("")}
+                  ${safePlayers.map((p) => {
+                    // A custom property set inline from data — the one
+                    // legitimate inline-colour case (theming.md §10), and the
+                    // same shape the row-label cells use for --row-accent.
+                    const slot = slotOf(p);
+                    return `
+                    <th class="scoring-head${headerNames ? " is-named" : ""}${slot ? " is-team" : ""}" scope="col"
+                        ${slot ? `style="--team-tint: var(--team-${slot})"` : ""}
+                        title="${escapeAttr(shownName(p))}">${renderScoringHead(renderHeadBadge(p), shownName(p), headerNames, headerNamesDefault)}</th>
+                  `;}).join("")}
                 </tr>
               </thead>
             </table>
