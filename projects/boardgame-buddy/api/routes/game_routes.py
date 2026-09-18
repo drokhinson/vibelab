@@ -46,7 +46,7 @@ from .models import (
     MissingMetadataGame,
     RulebookUrlUpdate,
 )
-from .services import admin_run_progress, game_service
+from .services import admin_run_progress, game_service, search_service
 from .services._helpers import chunked, game_select_clause, page_all, parse_csv_param
 
 
@@ -143,6 +143,9 @@ def _invalidate_game_caches() -> None:
     """
     cache.clear(_CACHE_GAME)
     invalidate_bgg_thing_cache()
+    # The client-side search index is built from this table too — an import
+    # that lands between builds must be findable on the next open.
+    search_service.invalidate_catalog_index()
 
 logger = logging.getLogger(__name__)
 

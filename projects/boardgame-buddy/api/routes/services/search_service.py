@@ -3,11 +3,17 @@
 import asyncio
 import logging
 import re
+from datetime import datetime, timezone
 from supabase import Client
 from typing import Any
 
+import cache
+import object_store
+
 from ..models import (
     BggSearchResult,
+    CatalogIndexResponse,
+    CatalogIndexRow,
     UnifiedSearchHit,
     UnifiedSearchResponse,
 )
@@ -474,3 +480,100 @@ async def unified_search(
         bgg_results=bgg_results,
         bgg_searched=include_bgg,
     )
+
+
+# ── The catalog index ────────────────────────────────────────────────────────
+#
+# GET /search/index hands the client every base game in one response so the
+# Gather picker can answer a keystroke without a request. /search stays as the
+# path for a client that has no index yet (first visit, offline, or a catalog
+# past the cap below), and for BoardGameGeek.
+#
+# The row is deliberately narrow: id, name, and only what a result row PAINTS
+# (year, players, time, thumb). Everything a pick needs beyond that — box art,
+# rulebook, play mode — comes from GET /games/{id}, which is already cached for
+# an hour in game_routes. Covers are shortened to their key under the R2 base
+# so a thousand rows do not each repeat the same origin.
+
+_CACHE_INDEX = "search.index"
+_CACHE_INDEX_KEY = "all"
+_CACHE_INDEX_TTL_S = 10 * 60
+# Past this the response is a prefix and says so. Sized for an order of
+# magnitude over today's catalog: at ~120 bytes a row it is ~2.4 MB raw, which
+# is where a phone should stop holding the whole thing in memory anyway.
+INDEX_HARD_CAP = 20000
+_INDEX_SELECT = "id, name, year_published, min_players, max_players, playing_time, thumbnail_url"
+
+cache.configure(_CACHE_INDEX, max_entries=1)
+
+
+def invalidate_catalog_index() -> None:
+    """Drop the built index. Called from every path that writes a game row."""
+    cache.clear(_CACHE_INDEX)
+
+
+def _shorten_thumb(url: str | None, base: str) -> str | None:
+    """A cover on the configured origin becomes its key; anything else stays."""
+    if not url:
+        return None
+    if base and url.startswith(base + "/"):
+        return url[len(base) + 1:]
+    return url
+
+
+def _build_catalog_index(sb: Client) -> CatalogIndexResponse:
+    """One PostgREST read of the whole base-game catalog, name-ordered.
+
+    Blocking — the Supabase client is synchronous — and reached only through
+    `asyncio.to_thread` in catalog_index(), for the same reason every other
+    read in this module is: one uvicorn worker, and the lobby polls behind it.
+    """
+    rows = (
+        sb.table("boardgamebuddy_games")
+        .select(_INDEX_SELECT)
+        .eq("is_expansion", False)
+        .order("name")
+        .limit(INDEX_HARD_CAP + 1)
+        .execute()
+        .data
+        or []
+    )
+    truncated = len(rows) > INDEX_HARD_CAP
+    if truncated:
+        rows = rows[:INDEX_HARD_CAP]
+    base = object_store.public_base(object_store.GAMES)
+    games = [
+        CatalogIndexRow(
+            id=r["id"],
+            name=r["name"],
+            y=r.get("year_published"),
+            mn=r.get("min_players"),
+            mx=r.get("max_players"),
+            t=r.get("playing_time"),
+            th=_shorten_thumb(r.get("thumbnail_url"), base),
+        )
+        for r in rows
+        if r.get("id") and r.get("name")
+    ]
+    return CatalogIndexResponse(
+        games=games,
+        count=len(games),
+        truncated=truncated,
+        thumb_base=base,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+async def catalog_index(sb: Client) -> CatalogIndexResponse:
+    """The whole base-game catalog, built at most once per TTL per worker.
+
+    Not per viewer: the index carries nothing about who is asking. The
+    collection-first ranking /search does in SQL is done on the client from
+    the status map it already holds.
+    """
+    hit = cache.get(_CACHE_INDEX, _CACHE_INDEX_KEY)
+    if hit is not None:
+        return hit
+    built = await asyncio.to_thread(_build_catalog_index, sb)
+    cache.set(_CACHE_INDEX, _CACHE_INDEX_KEY, built, _CACHE_INDEX_TTL_S)
+    return built

@@ -2088,6 +2088,40 @@ class UnifiedSearchResponse(BaseModel):
     bgg_searched: bool = False
 
 
+class CatalogIndexRow(BaseModel):
+    """One base game, as little of it as a search row needs to PAINT.
+
+    Short keys on purpose: this row is emitted once per game in the catalog
+    and the count is what sets the payload size, so every byte of key name is
+    paid thousands of times. The client (domain/catalog-index.js) widens these
+    back into GameSummary field names on receipt.
+    """
+    id: str
+    name: str
+    # year_published
+    y: int | None = None
+    # min_players / max_players / playing_time
+    mn: int | None = None
+    mx: int | None = None
+    t: int | None = None
+    # thumbnail_url — a PATH relative to `thumb_base` when the cover is on the
+    # configured R2 origin (almost all of them), the absolute URL otherwise.
+    th: str | None = None
+
+
+class CatalogIndexResponse(BaseModel):
+    """Every base game in the catalog, in one response, for client-side search."""
+    games: list[CatalogIndexRow] = []
+    count: int = 0
+    # True when the catalog outgrew the hard row cap and `games` is a prefix.
+    # The client must then treat the index as advisory and keep /search.
+    truncated: bool = False
+    # Origin to prepend to a relative `th` (no trailing slash). Empty when
+    # covers are not re-hosted, in which case every `th` is absolute.
+    thumb_base: str = ""
+    generated_at: str
+
+
 # ── Feed cards ────────────────────────────────────────────────────────────────
 
 class FeedPlayUser(BaseModel):

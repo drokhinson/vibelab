@@ -1,16 +1,28 @@
 // widgets/game-finder.js — Reusable game-picker combo (input + dropdown).
 //
-// Searches the BgB library via Game.search(), offers a BoardGameGeek
-// fallback when no library hits, and imports a BGG result on tap via
-// Game.importBgg(). Picking a result fires the caller-supplied onPick
-// callback — the widget itself never mutates collection/session state.
+// Searches the BgB catalog, offers a BoardGameGeek fallback when the catalog
+// has no hits, and imports a BGG result on tap via Game.importBgg(). Picking a
+// result fires the caller-supplied onPick callback — the widget itself never
+// mutates collection/session state.
 //
-// The network is never what the user waits on to see a list. Every keystroke
-// paints synchronously first — from an exact cached answer, a cached answer to
-// a shorter query this one extends, or the device's own warmed library — and
-// /search then refines that in place. Which is why the Gather picker feels
-// instant: the game a host is reaching for is nearly always one of their own,
-// and every one of those is already on the phone.
+// A keystroke is answered on the device. The whole base-game catalog is on
+// the phone as a compact index (domain/catalog-index.js, warmed from an idle
+// callback after login and refreshed every ten minutes), so typing is a
+// synchronous substring match with no debounce and no request behind it —
+// which is the difference between a picker that feels like a text filter and
+// one that feels like a form submit. The list is patched in place
+// (ui/dom-patch.js), so a row that survives a keystroke keeps its <img>.
+//
+// /search is the FALLBACK, taken only while the index is not on the device
+// yet (first visit, a cleared cache) or when the catalog has outgrown the
+// index's cap. On that path every keystroke still paints synchronously first
+// — from an exact cached answer, a cached answer to a shorter query this one
+// extends, or the device's own warmed library — and /search refines it.
+//
+// An index row carries what a result row PAINTS and no more (see the module
+// header in catalog-index.js), so a pick from it hydrates the full game
+// before handing it on — from the device when the game is one of the user's
+// own, from GET /games/{id} otherwise. See _pickById.
 //
 // Expansions never appear here: /search excludes them from every source
 // (library, DB, BGG). They're added through a base game's expansion
@@ -34,16 +46,17 @@
 (function () {
   let _seq = 0;
 
-  // How long after the last keystroke the network search fires. The dropdown
-  // is never empty while it waits — every keystroke repaints synchronously
-  // from cached results + the device's own library first (see
-  // _paintProvisional) — so this budget only delays the refinement.
+  // FALLBACK PATH ONLY (no catalog index on the device): how long after the
+  // last keystroke the network search fires. The dropdown is never empty
+  // while it waits — every keystroke repaints synchronously from cached
+  // results + the device's own library first (see _paintProvisional) — so
+  // this budget only delays the refinement.
   const SEARCH_DEBOUNCE_MS = 180;
 
   // How many BGG hits this dropdown will show. See _runBgg.
   const BGG_DROPDOWN_MAX = 25;
 
-  // Below this, /search is not called at all.
+  // Fallback path only: below this, /search is not called at all.
   //
   // The catalog ILIKE '%q%' is served by a pg_trgm GIN index, and pg_trgm has
   // nothing to match on under three characters — so a 1- or 2-character query
@@ -53,9 +66,13 @@
   // keystrokes are served from the device instead.
   const MIN_REMOTE_QUERY_LEN = 3;
 
-  // Rows painted before the server answers. Matches /search's default limit so
-  // the provisional list and the real one are the same length.
+  // Rows a query paints, from the index or (fallback) before the server
+  // answers. Matches /search's default limit so every list is the same length.
   const PROVISIONAL_LIMIT = 20;
+
+  // What an empty catalog answer says. The BGG footer under it is the way on.
+  const NO_MATCH_HTML =
+    `<li class="game-finder-dropdown__hint" data-morph-key="hint">No matches in your library.</li>`;
 
   // The device pool (recents + every warmed game bundle) is rebuilt at most
   // this often, so a fast typer walks an already-built index instead of
@@ -100,6 +117,7 @@
       this._outsideHandler = this._onOutsideClick.bind(this);
       this._docHandlerBound = false;
       this._offlineNotified = false; // see _notifyOfflineOnce
+      this._indexKicked = false;     // CatalogIndex.ensure() once per mount
     }
 
     mount(containerEl) {
@@ -125,6 +143,10 @@
         </div>
       `;
       window.BgbIcons.render(containerEl);
+      // One delegated click handler for the life of the mount. The list is
+      // patched in place from here on, never rebuilt, so this is bound once.
+      const dd = document.getElementById(this.dropdownId);
+      if (dd) this._wireRowClicks(dd);
 
       const input = document.getElementById(this.inputId);
       if (input) {
@@ -165,12 +187,60 @@
       // before the user focuses. Failure leaves _recentGames as null so
       // the next focus retries instead of caching an empty list forever.
       this._ensureRecentGamesLoad();
+      this._kickIndex();
+    }
+
+    /**
+     * Make sure the catalog index is on its way. Normally a no-op — init.js
+     * warms it from an idle callback after login — but a cold cache or a
+     * failed warm-up would otherwise leave this mount on the /search path
+     * for its whole life. When it lands with a query already in the box,
+     * that query is re-answered from the index, superseding any request the
+     * fallback path has in the air.
+     */
+    _kickIndex() {
+      if (this._indexKicked || !window.CatalogIndex) return;
+      this._indexKicked = true;
+      const wasReady = !!this._indexReady();
+      let p;
+      try { p = window.CatalogIndex.ensure(); } catch (_) { return; }
+      if (!p || typeof p.then !== "function" || wasReady) return;
+      p.then(() => {
+        const input = /** @type {HTMLInputElement|null} */ (document.getElementById(this.inputId));
+        if (!input || this._bggMode) return;
+        const dd = document.getElementById(this.dropdownId);
+        if (!dd || dd.classList.contains("hidden")) return;
+        if ((input.value || "").trim()) this._onInput(input.value);
+      }).catch(() => {});
+    }
+
+    /**
+     * Is the on-device catalog index the authority right now?
+     * @returns {{rows: number, truncated: boolean}|null}
+     */
+    _indexReady() {
+      if (!window.CatalogIndex || !window.CatalogIndex.peek) return null;
+      const idx = window.CatalogIndex.peek();
+      return idx && !idx.truncated ? idx : null;
+    }
+
+    /**
+     * The index's answer to `q`: substring matches, ranked, the viewer's own
+     * games first within a rank (see CatalogIndex.search).
+     * @param {string} q
+     * @returns {Array<Object>}
+     */
+    _indexMatches(q) {
+      const statusMap = (window.Collection && window.Collection.cachedStatusMap)
+        ? window.Collection.cachedStatusMap() : null;
+      return window.CatalogIndex.search(q, { limit: PROVISIONAL_LIMIT, statusMap });
     }
 
     unmount() {
       clearTimeout(this._searchTimer);
       this._supersede(); // invalidate AND abort any in-flight search
       this._devicePoolRows = null;
+      this._indexKicked = false;
       if (this._docHandlerBound) {
         document.removeEventListener("click", this._outsideHandler, true);
         this._docHandlerBound = false;
@@ -218,10 +288,12 @@
 
     // ── Internal ──────────────────────────────────────────────────────────
 
-    // Every keystroke paints SOMETHING synchronously. The network is only ever
-    // the refinement pass, never the thing the user waits on before seeing a
-    // list: the host picking a game on Gather is almost always picking one of
-    // their own, and those are already on the device.
+    // Every keystroke paints synchronously. With the catalog index on the
+    // device that paint IS the answer — no request follows. Without it (the
+    // fallback path) the paint comes from what the device knows and /search
+    // refines it after a debounce; even then the network is only ever the
+    // refinement pass, never the thing the user waits on before seeing a
+    // list.
     _onInput(value) {
       clearTimeout(this._searchTimer);
       // The previous keystroke's answer is not wanted any more — drop the
@@ -237,8 +309,17 @@
         return;
       }
 
-      // Instant path: a query the user already searched is served from cache
-      // with no debounce and no loading flash (backspace / re-type feel live).
+      // The whole catalog is on the device: answer from it and stop.
+      if (this._indexReady()) {
+        const dd = document.getElementById(this.dropdownId);
+        if (dd) this._paintList(dd, this._indexMatches(q), q, { emptyHtml: NO_MATCH_HTML });
+        return;
+      }
+      this._kickIndex();
+
+      // Fallback, instant path: a query the user already searched is served
+      // from cache with no debounce and no loading flash (backspace / re-type
+      // feel live).
       const cached = (window.Game && window.Game.cachedSearch)
         ? window.Game.cachedSearch(q) : null;
       if (cached) {
@@ -353,24 +434,27 @@
       // Empty query → recently-played seed (or hint). No BGG footer (nothing
       // to search for yet).
       if (!q) {
-        dd.classList.remove("game-finder-dropdown--loading");
         const list = (this._opts.includeRecentlyPlayed !== false && this._recentGames) || [];
-        this._gameById.clear();
-        list.forEach((g) => this._gameById.set(g.id, g));
-        if (list.length === 0) {
-          dd.innerHTML = `<li class="game-finder-dropdown__hint">Type a game name to search.</li>`;
-        } else {
-          dd.innerHTML =
-            `<li class="game-finder-dropdown__header">Recently played</li>` +
-            list.map((g) => this._renderRow(g, "recent")).join("");
-        }
-        this._show(dd);
-        this._wireRowClicks(dd);
-        window.BgbIcons.render(dd);
+        this._paintList(dd, list, q, {
+          source: "recent",
+          header: list.length ? "Recently played" : null,
+          emptyHtml: `<li class="game-finder-dropdown__hint" data-morph-key="hint">Type a game name to search.</li>`,
+          footer: false,
+        });
         return;
       }
 
-      // Cache hit → render instantly, no loading state, no network wait.
+      // The catalog index is the whole answer — same branch _onInput takes;
+      // repeated here for the other entry point (focus with a query in the
+      // box).
+      if (this._indexReady()) {
+        this._paintList(dd, this._indexMatches(q), q, { emptyHtml: NO_MATCH_HTML });
+        return;
+      }
+      this._kickIndex();
+
+      // Fallback. Cache hit → render instantly, no loading state, no network
+      // wait.
       const cached = (window.Game && window.Game.cachedSearch)
         ? window.Game.cachedSearch(q) : null;
       if (cached) {
@@ -406,11 +490,9 @@
           this._notifyOfflineOnce();
           return;
         }
-        dd.innerHTML =
-          `<li class="game-finder-dropdown__hint">Search failed. Try again.</li>` +
-          this._bggFooter(q);
-        this._wireRowClicks(dd);
-        window.BgbIcons.render(dd);
+        this._patch(dd,
+          `<li class="game-finder-dropdown__hint" data-morph-key="hint">Search failed. Try again.</li>` +
+          this._bggFooter(q));
         if (this._opts.onError) this._opts.onError(e);
         return;
       }
@@ -437,30 +519,17 @@
       const dd = document.getElementById(this.dropdownId);
       if (!dd) return;
       const games = this._provisionalMatches(q);
-      this._gameById.clear();
-      games.forEach((g) => this._gameById.set(g.id, g));
-
-      let rows;
-      if (games.length) {
-        rows = games.map((g) => this._renderRow(g, "library")).join("");
-      } else if (willFetch) {
-        rows =
-          `<li class="game-finder-dropdown__loading-row">
+      const emptyHtml = willFetch
+        ? `<li class="game-finder-dropdown__loading-row" data-morph-key="loading">
              <span class="game-finder-spinner" aria-hidden="true"></span>
              <span>Searching…</span>
-           </li>`;
-      } else {
+           </li>`
         // Nothing on the device matches and we deliberately aren't asking the
         // server yet — say which of those it is rather than "no matches".
-        rows = `<li class="game-finder-dropdown__hint">Keep typing to search the full library.</li>`;
-      }
-      dd.innerHTML = rows + this._bggFooter(q);
+        : `<li class="game-finder-dropdown__hint" data-morph-key="hint">Keep typing to search the full library.</li>`;
       // The dimmed/refreshing treatment only reads as "these are being
       // replaced" when there is something to dim.
-      dd.classList.toggle("game-finder-dropdown--loading", !!willFetch && games.length > 0);
-      this._show(dd);
-      this._wireRowClicks(dd);
-      window.BgbIcons.render(dd);
+      this._paintList(dd, games, q, { emptyHtml, loading: !!willFetch });
     }
 
     /**
@@ -485,20 +554,64 @@
       return Array.from(byId.values());
     }
 
-    // Render library results + the always-visible sticky BGG footer. Shared
-    // by the cache-hit and network-response paths.
+    // Render /search results + the always-visible sticky BGG footer. Shared
+    // by the fallback path's cache-hit and network-response branches.
     _renderResults(dd, data, q) {
       const hits = (data && data.results) || [];
+      const games = [];
+      hits.forEach((h) => { if (h && h.game) games.push(h.game); });
+      this._paintList(dd, games, q, { emptyHtml: NO_MATCH_HTML });
+    }
+
+    /**
+     * The one paint every list goes through.
+     *
+     * Builds the rows and patches them INTO the dropdown (ui/dom-patch.js)
+     * rather than replacing its innerHTML: every <li> is keyed by game id, so
+     * a keystroke that keeps a row keeps its node — its <img> does not
+     * re-decode, :active is not lost under a finger, and no icon is
+     * re-hydrated that was already there. overlays.md §6.
+     *
+     * @param {Element} dd
+     * @param {Array<Object>} games
+     * @param {string} q
+     * @param {{ source?: "library"|"recent", header?: string|null,
+     *           emptyHtml?: string, footer?: boolean, loading?: boolean }} [opts]
+     *   `emptyHtml` is one keyed <li> for the no-rows case. `footer` (default
+     *   true) appends the BGG footer when there is a query. `loading` dims the
+     *   rows as "about to be replaced" — meaningful only when there are rows.
+     */
+    _paintList(dd, games, q, opts) {
+      const o = opts || {};
       this._gameById.clear();
-      hits.forEach((h) => { if (h && h.game) this._gameById.set(h.game.id, h.game); });
-
-      const rows = hits.length
-        ? hits.map((h) => this._renderRow(h.game, "library")).join("")
-        : `<li class="game-finder-dropdown__hint">No matches in your library.</li>`;
-
-      dd.innerHTML = rows + this._bggFooter(q);
+      games.forEach((g) => { if (g && g.id) this._gameById.set(g.id, g); });
+      let html = "";
+      if (o.header) {
+        html += `<li class="game-finder-dropdown__header" data-morph-key="header">${escapeHtml(o.header)}</li>`;
+      }
+      if (games.length) {
+        html += games.map((g) => this._renderRow(g, o.source || "library")).join("");
+      } else if (o.emptyHtml) {
+        html += o.emptyHtml;
+      }
+      if (o.footer !== false && q) html += this._bggFooter(q);
+      dd.classList.toggle("game-finder-dropdown--loading", !!o.loading && games.length > 0);
+      this._patch(dd, html);
       this._show(dd);
-      this._wireRowClicks(dd);
+    }
+
+    /**
+     * Patch the dropdown's children towards `html`. The morph hydrates icons
+     * on the new tree itself; the innerHTML branch is only for a page that
+     * loaded without ui/dom-patch.js and needs the pass run by hand.
+     * @param {Element} dd @param {string} html
+     */
+    _patch(dd, html) {
+      if (window.BgbDomPatch && window.BgbDomPatch.morph) {
+        window.BgbDomPatch.morph(dd, html);
+        return;
+      }
+      dd.innerHTML = html;
       window.BgbIcons.render(dd);
     }
 
@@ -606,19 +719,15 @@
     }
 
     _renderOfflineResults(dd, games) {
-      this._gameById.clear();
-      games.forEach((g) => this._gameById.set(g.id, g));
-      dd.innerHTML = games.length
-        ? `<li class="game-finder-dropdown__header">On this device</li>` +
-          games.map((g) => this._renderRow(g, "library")).join("")
-        : `<li class="game-finder-dropdown__hint">
+      this._paintList(dd, games, "", {
+        header: games.length ? "On this device" : null,
+        emptyHtml: `<li class="game-finder-dropdown__hint" data-morph-key="hint">
              No match on this device, and searching the full library needs a
              connection. You can still pick anything already saved here — your
              collection and recent plays.
-           </li>`;
-      this._show(dd);
-      this._wireRowClicks(dd);
-      window.BgbIcons.render(dd);
+           </li>`,
+        footer: false,
+      });
     }
 
     // Short, sticky "Search BoardGameGeek" action pinned to the bottom of the
@@ -626,7 +735,7 @@
     // library already has matches, so BGG is one tap away and never buried.
     _bggFooter(q) {
       return `
-        <li class="game-finder-dropdown__bgg-footer">
+        <li class="game-finder-dropdown__bgg-footer" data-morph-key="bgg-footer">
           <button type="button" class="game-finder-bgg-btn"
                   data-finder-action="run-bgg" data-finder-query="${escapeAttr(q)}">
             <i data-icon="search" class="w-4 h-4"></i>
@@ -644,7 +753,7 @@
         game.playing_time ? `${game.playing_time}m` : null,
       ].filter(Boolean).join(" · ");
       return `
-        <li class="game-finder-dropdown-item"
+        <li class="game-finder-dropdown-item" data-morph-key="${escapeAttr(game.id)}"
             data-finder-action="pick" data-finder-game-id="${escapeAttr(game.id)}"
             data-finder-source="${escapeAttr(source)}">
           ${game.thumbnail_url
@@ -659,8 +768,9 @@
     }
 
     _wireRowClicks(dd) {
-      // Single delegated listener per render — picks/imports/run-bgg all
-      // come through data-finder-action so we never inline onclicks.
+      // Single delegated listener, bound once at mount — picks/imports/run-bgg
+      // all come through data-finder-action so we never inline onclicks, and
+      // the list is patched in place so the handler never needs re-binding.
       dd.onclick = (e) => {
         const row = e.target.closest("[data-finder-action]");
         if (!row) return;
@@ -738,7 +848,6 @@
             </button>
           </li>
         `).join("");
-      this._wireRowClicks(dd);
       window.BgbIcons.render(dd);
     }
 
@@ -775,6 +884,11 @@
       if (!game && Array.isArray(this._recentGames)) {
         game = this._recentGames.find((g) => g.id === gameId);
       }
+      if (game && game._partial) {
+        game = await this._hydratePartial(game, rowEl);
+        // Unmounted while the row was loading — the sheet is gone.
+        if (!document.getElementById(this.inputId)) return;
+      }
       if (!game) {
         try {
           game = await window.api.get(`/games/${gameId}`);
@@ -785,6 +899,49 @@
         isExpansion: !!(game && game.is_expansion),
         dropdownItemEl: rowEl || null,
       });
+    }
+
+    /**
+     * Widen an index row into a full game before it is handed on.
+     *
+     * The device first: an owned game has its bundle warmed, and a recent one
+     * is in the recents seed — both carry the full GameSummary and cost
+     * nothing. Otherwise one GET /games/{id}, which game_routes caches for an
+     * hour. On failure (offline, a stalled request) the partial row is picked
+     * anyway: _applyGamePick tolerates a missing image and rulebook, and a
+     * host who has just found their game should not be told "no" because a
+     * detail fetch fell over.
+     *
+     * @param {Object} game the `_partial` row
+     * @param {Element|null} rowEl
+     * @returns {Promise<Object>}
+     */
+    async _hydratePartial(game, rowEl) {
+      const cache = window.bgbCache;
+      if (cache) {
+        const bundle = cache.peek("game.bundle", game.id);
+        if (bundle && bundle.game && bundle.game.id === game.id) return bundle.game;
+      }
+      if (Array.isArray(this._recentGames)) {
+        const recent = this._recentGames.find((g) => g && g.id === game.id);
+        if (recent) return recent;
+      }
+      const body = rowEl ? rowEl.querySelector(".game-finder-dropdown-item__body") : null;
+      const before = body ? body.innerHTML : null;
+      if (body) {
+        body.innerHTML = `
+          <div class="game-finder-dropdown-item__name">${escapeHtml(game.name)}</div>
+          <div class="game-finder-dropdown-item__meta">Loading…</div>
+        `;
+      }
+      try {
+        const full = await window.api.get(`/games/${game.id}`);
+        if (full && full.id === game.id) return full;
+      } catch (_) {
+        // fall through to the partial row
+      }
+      if (body && before != null && body.isConnected) body.innerHTML = before;
+      return game;
     }
 
     async _handlePick(game, ctx) {

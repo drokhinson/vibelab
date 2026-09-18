@@ -220,6 +220,16 @@ def _s3():
     return _client
 
 
+def public_base(kind: str) -> str:
+    """The origin `public_url` builds on for `kind`, or "" when unconfigured.
+
+    For callers that want to SHORTEN a stored URL back to its key rather than
+    build one — the search index strips this prefix off every cover so a
+    thousand rows do not each carry the same forty-character origin.
+    """
+    return _cfg.bases.get(kind) or ""
+
+
 def public_url(kind: str, path: str) -> str:
     """The URL a browser loads for `path` — what gets stored in the row.
 

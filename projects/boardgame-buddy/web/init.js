@@ -491,6 +491,10 @@
   //   * the owned shelf — the Collection spoke pages entirely off one cached
   //     shelf, so even the session's first visit is zero-network. No-ops
   //     inside the cache's fresh window.
+  //   * the catalog index → the Gather game picker. GET /search/index once,
+  //     a few hundred KB raw and tens on the wire, cached ten minutes; every
+  //     keystroke in the picker is then a local substring match with no
+  //     request behind it (domain/catalog-index.js).
   //   * "Is this you?" suggestions → the Profile tab's dot. The only signal
   //     on that dot with nowhere else to come from, and deliberately not on
   //     the bundle: bgb_ghost_claim_suggestions scans every buddy's plays and
@@ -509,6 +513,11 @@
       }
       if (window.Collection && window.Collection.shelf && me.id) {
         jobs.push(window.Collection.shelf(me.id, "owned"));
+      }
+      // The whole base-game catalog, compact, so the Gather picker's first
+      // keystroke is answered from memory. No-ops inside its fresh window.
+      if (window.CatalogIndex && window.CatalogIndex.ensure) {
+        jobs.push(window.CatalogIndex.ensure());
       }
       if (window.GhostClaim && window.GhostClaim.suggestions) {
         jobs.push(window.GhostClaim.suggestions().then((list) => window.GhostClaim.setSuggestions(list)));

@@ -71,8 +71,10 @@
     }
 
     // Synchronous peek at the cached library-search result (or null). The
-    // GameFinder uses this to render instantly on backspace/re-type and to
-    // decide whether it needs to show a loading state at all.
+    // GameFinder uses this on its /search fallback path — when the on-device
+    // catalog index (domain/catalog-index.js) is not available — to render
+    // instantly on backspace/re-type and to decide whether it needs to show a
+    // loading state at all.
     static cachedSearch(q, { limit = 20 } = {}) {
       if (!window.bgbCache) return null;
       return window.bgbCache.get("game.search", Game._searchKey(q, limit));
@@ -151,7 +153,12 @@
       const data = await window.api.get("/search", params, opts);
       // 3-minute TTL: long enough that a burst of typing/backspacing is
       // instant, short enough that the catalog stays reasonably fresh.
-      window.bgbCache.set("game.search", key, data, 3 * 60 * 1000);
+      // Memory-only: a search memo is never worth a reload, and writing one
+      // through used to cost a stringify + setItem + a walk of every cached
+      // entry on the main thread, per response, while the user was typing.
+      window.bgbCache.setWithTtls("game.search", key, data, {
+        freshTtl: 3 * 60 * 1000, staleTtl: 3 * 60 * 1000, persist: false,
+      });
       return data;
     }
 
@@ -181,8 +188,14 @@
     }
 
     // Import a BGG game into the catalog and return the new GameSummary.
+    // The on-device catalog index (domain/catalog-index.js) is dropped so the
+    // game just imported is findable on the picker's next open rather than
+    // after the index's ten-minute refresh.
     static importBgg(bggId) {
-      return window.api.post(`/games/import-bgg/${bggId}`);
+      return window.api.post(`/games/import-bgg/${bggId}`).then((game) => {
+        if (window.CatalogIndex) window.CatalogIndex.invalidate();
+        return game;
+      });
     }
 
     accentColor() {
