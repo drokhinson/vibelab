@@ -480,26 +480,28 @@
           title: "Chapter reports",
           sub: "Moderate community-reported reference-guide chapters.",
         },
-        // ONE row for four queues. They were four — Missing images, Missing
-        // descriptions, Missing BGG stats, Missing publishers — which is four
-        // rows saying the same sentence with a different noun in it, and a
-        // fifth was already in sight. They are panels on one spoke now
-        // (views/admin-backfill-view.js); the badge sums the four counts and
-        // the aria-label still names them one by one, so nothing is hidden by
-        // the collapse except the scrolling.
+        // ONE row for the catalog backfills. They were four Settings rows —
+        // Missing images, Missing descriptions, Missing BGG stats, Missing
+        // publishers — which is four rows saying the same sentence with a
+        // different noun in it, and a fifth was already in sight. They became
+        // four panels on one spoke (views/admin-backfill-view.js), and then
+        // TWO: three of them asked BoardGameGeek the same question and are one
+        // queue now. The badge sums both counts and the aria-label names them
+        // one by one, so nothing is hidden by the collapse except the
+        // scrolling.
         {
           route: "admin-bgg-data",
-          // Four sub-tools behind one row, so the pill shows whichever of them
+          // Two sub-tools behind one row, so the pill shows whichever of them
           // is live (or most recently was). Tapping a row with a live run goes
           // to that run's log rather than the panel list — when something is
           // happening, the log IS what you came to see.
-          runTools: ["bgg-images", "bgg-descriptions", "bgg-stats", "bgg-publishers"],
+          runTools: ["bgg-images", "bgg-metadata"],
           tool: "bggData",
           // Not `image-off`, which the images spoke carried: it names one of
-          // the four queues and would read as the row's whole subject.
+          // the two queues and would read as the row's whole subject.
           icon: "layers",
           title: "Missing BGG data",
-          sub: "Backfill missing photos, descriptions, or other game data from BGG.",
+          sub: "Backfill missing photos, descriptions, stats, publishers and years from BGG.",
         },
         // The one admin tool that AUTHORS rather than moderates — the other
         // two work a queue somebody else filled. So it carries no count and

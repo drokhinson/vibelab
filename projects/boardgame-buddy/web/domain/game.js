@@ -240,82 +240,46 @@
         .then((r) => { Game.invalidateBundle(); return r; });
     }
 
-    // ── Admin: description backfill ──────────────────────────────────────────
-    // Descriptions were added to the BGG import after the catalog was seeded,
-    // so every game imported before that has description NULL.
+    // ── Admin: the catalog metadata sweep (migration 045) ────────────────────
+    // ONE trio where there were three — descriptions, BGG stats and publishers
+    // each had their own list / refresh-one / backfill-all, and all three asked
+    // BoardGameGeek the same question. One /thing?stats=1 response carries the
+    // blurb, the stats, the publisher links AND the year, so the catalog was
+    // walked three times to read one document.
 
-    /** List catalog games that have no description. */
-    static adminMissingDescriptions() {
-      return window.api.get("/games/admin/missing-descriptions");
+    /** Catalog games short of a description, stats, publishers or a year.
+     *
+     *  Lists what is INCOMPLETE, not what is queued: a game BoardGameGeek has
+     *  nothing more to give stays here with `checked_at` set, so the panel can
+     *  say why rather than looking like a stalled queue. Each row carries
+     *  `missing` — the field names — so the row line needs no ternaries. */
+    static adminMissingMetadata() {
+      return window.api.get("/games/admin/missing-metadata");
     }
 
-    /** Re-fetch one game's description from BGG. */
-    static adminRefreshOneDescription(gameId) {
-      return window.api.post(`/games/admin/${gameId}/refresh-description`)
+    /** Re-read one game's BoardGameGeek record and write everything it gives.
+     *  Also the escape hatch from the server's 90-day re-check window: a row an
+     *  admin wants asked about again right now is asked about here. */
+    static adminRefreshOneMetadata(gameId) {
+      return window.api.post(`/games/admin/${gameId}/refresh-metadata`)
         .then((r) => { Game.invalidateBundle(gameId); return r; });
     }
 
-    /** Backfill descriptions for games that have none, in one bounded pass.
+    /** Fill every missing field for a batch of games, in one bounded pass.
      *
      *  The server batches 20 games per BGG call and caps the pass at `limit`,
-     *  so a cold catalog needs several calls — the response's `remaining` says
-     *  how many are left and the admin panel loops until it reads 0.
+     *  so a cold catalog needs several — `remaining` says how many are left and
+     *  domain/admin-run-flow.js loops until it reads 0.
      *
-     *  Invalidating the bundle cache only helps the admin's own device; other
-     *  users' cached bundles age out on their own 30-minute TTL. That lag is
-     *  acceptable for a one-off catalog fill, and the cache.js SCHEMA_VERSION
-     *  bump covers the rollout case where every client holds pre-description
-     *  bundles. */
-    static adminBackfillDescriptions(opts) {
+     *  BOTH caches are dropped, and the second one is new with this sweep:
+     *  it now fills `year_published`, which is what Discover's "New this year"
+     *  rail filters on, so a stale bundle after a drain would be two rails
+     *  wrong rather than one. Invalidating only helps the admin's own device;
+     *  other clients age out on their own 30-minute TTL, which is acceptable
+     *  for a one-off catalog fill. */
+    static adminBackfillMetadata(opts) {
       return window.api.post(
-        `/games/admin/backfill-descriptions${_adminRunQuery(opts)}`, null, _adminRunOpts(opts),
-      ).then((r) => { Game.invalidateBundle(); return r; });
-    }
-
-    // ── Admin: publisher backfill ────────────────────────────────────────────
-    // Publishers arrived with migration 040, so every game imported before it
-    // has publishers NULL. Same trio as descriptions.
-
-    /** List catalog games whose publishers have never been synced. */
-    static adminMissingPublishers() {
-      return window.api.get("/games/admin/missing-publishers");
-    }
-
-    /** Re-fetch one game's publisher credits from BGG. */
-    static adminRefreshOnePublishers(gameId) {
-      return window.api.post(`/games/admin/${gameId}/refresh-publishers`)
-        .then((r) => { Game.invalidateBundle(gameId); return r; });
-    }
-
-    /** Backfill publishers for games that have none yet, in one bounded pass.
-     *  Batched and throttled server-side; `remaining` drives the panel's next
-     *  call, same as the description backfill above. */
-    static adminBackfillPublishers(opts) {
-      return window.api.post(
-        `/games/admin/backfill-publishers${_adminRunQuery(opts)}`, null, _adminRunOpts(opts),
-      ).then((r) => { Game.invalidateBundle(); return r; });
-    }
-
-    // ── Admin: BGG stats backfill ─────────────────────────────────────────
-    // Rating / rank / weight arrived with migration 038, so every game imported
-    // before it has bgg_stats_synced_at NULL. Same trio as descriptions.
-
-    /** List catalog games whose BGG stats have never been synced. */
-    static adminMissingStats() {
-      return window.api.get("/games/admin/missing-stats");
-    }
-
-    /** Re-fetch one game's rating, rank and weight from BGG. */
-    static adminRefreshOneStats(gameId) {
-      return window.api.post(`/games/admin/${gameId}/refresh-stats`)
-        .then((r) => { Game.invalidateBundle(gameId); return r; });
-    }
-
-    /** Sync stats for games never synced, in one bounded, throttled pass.
-     *  `remaining` in the response drives the panel's next call. */
-    static adminBackfillStats(opts) {
-      return window.api.post(
-        `/games/admin/backfill-stats${_adminRunQuery(opts)}`, null, _adminRunOpts(opts),
+        `/games/admin/backfill-metadata${_adminRunQuery(opts)}`, null, _adminRunOpts(opts),
       ).then((r) => {
         Game.invalidateBundle();
         if (window.Discovery && window.Discovery.invalidate) window.Discovery.invalidate();

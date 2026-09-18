@@ -72,12 +72,12 @@ def test_a_live_run_comes_back_with_its_checklist_and_log(client):
 
 
 def test_the_summary_list_carries_no_journal(client):
-    led = A.open(AdminRunTool.BGG_STATS)
+    led = A.open(AdminRunTool.BGG_METADATA)
     led.event(AdminTrendingPhase.IMPORT, "a line nobody needs on the Settings card")
     rows = client.get(BASE).json()
     assert len(rows) == 1
     assert "events" not in rows[0]
-    assert rows[0]["tool"] == "bgg-stats"
+    assert rows[0]["tool"] == "bgg-metadata"
 
 
 def test_the_summary_list_omits_tools_that_have_not_run(client):

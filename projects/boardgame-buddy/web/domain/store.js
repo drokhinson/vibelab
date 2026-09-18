@@ -71,9 +71,7 @@
         // keeps the dot dark for everyone else.
         adminChapterReportCount: 0,
         adminMissingImageCount: 0,
-        adminMissingDescriptionCount: 0,
-        adminMissingStatsCount: 0,
-        adminMissingPublisherCount: 0,
+        adminMissingMetaCount: 0,
         // The last /discover bundle, published by domain/discovery.js so the
         // Discover view repaints when a background SWR refresh lands. Declared
         // here for the reason profileBundle's comment gives: an undeclared
@@ -170,9 +168,7 @@
         // next — and for a non-admin there is nothing behind the dot at all.
         adminChapterReportCount: 0,
         adminMissingImageCount: 0,
-        adminMissingDescriptionCount: 0,
-        adminMissingStatsCount: 0,
-        adminMissingPublisherCount: 0,
+        adminMissingMetaCount: 0,
         // Zeroed: the picks are one account's taste, and the next account's
         // Discover tab must not open on them.
         discover: null,

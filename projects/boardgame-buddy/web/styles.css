@@ -10302,8 +10302,21 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    ("3-5P", "60m") and these two need their label to mean anything. Rows wrap
    and each row keeps its label and value together, so a long publisher name
    moves to the next line instead of pushing the year off the right edge.
-   Paper tokens, not ground ones — this sits on the same polaroid surface as
-   the pills above it (.claude/rules/theming.md §6). */
+   GROUND tokens, not paper ones, and the comment this replaced said the
+   opposite — which is what caused the bug. The meta pills above DO paint
+   --polaroid-bg and so are genuinely paper; this <dl> paints no background,
+   neither does .game-detail__body, and [data-view="game-detail"] is not in the
+   chrome re-point list at the top of this file. So it lands on --bg-0 while
+   reading --polaroid-ink, i.e. --paper-ink.
+
+   THE FAILURE MODE IS DARK-ONLY, which is how it shipped: in light,
+   --paper-ink and --ink are both #2A2016, so the value read 14.06:1 and looked
+   perfect. On the dark ground #211A12 on #1A1310 is 1.07:1 — text the same
+   colour as the page. Publisher names were invisible.
+
+   After: value --ink is 14.96:1 dark / 14.06:1 light; label --ink-muted is
+   7.28:1 / 5.22:1 (.claude/rules/theming.md §6 for the surface, §9 for the
+   ratios). Check BOTH themes before touching either line again. */
 .game-detail__facts {
   display: flex;
   flex-wrap: wrap;
@@ -10321,14 +10334,14 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--polaroid-muted);
+  color: var(--ink-muted);
   white-space: nowrap;
 }
 .game-detail__fact-value {
   margin: 0;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--polaroid-ink);
+  color: var(--ink);
   min-width: 0;
   overflow-wrap: anywhere;
 }

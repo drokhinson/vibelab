@@ -62,18 +62,28 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   created_at TIMESTAMPTZ DEFAULT now(),
   play_mode TEXT DEFAULT 'competitive'::text NOT NULL,
   -- BGG quality stats (migration 038). All nullable: NULL = never synced, and
-  -- every reader treats it as neutral. Filled by POST /games/admin/backfill-stats
-  -- from /thing?stats=1; bgg_stats_synced_at is the backfill's queue marker.
+  -- every reader treats it as neutral. Filled by
+  -- POST /games/admin/backfill-metadata from /thing?stats=1.
+  -- bgg_stats_synced_at was the backfill's queue marker until 045 moved that
+  -- to bgg_meta_synced_at; it is still written, and still means "when the
+  -- ratings landed".
   bgg_rating NUMERIC(4,2),
   bgg_rank INTEGER,
   bgg_weight NUMERIC(4,2),
   bgg_owned_count INTEGER,
   bgg_stats_synced_at TIMESTAMPTZ,
   -- BGG boardgamepublisher links in BGG's order, capped at 4 by the import
-  -- (migration 043). Nullable with no default, unlike categories/mechanics:
-  -- NULL = never synced and is the queue marker for
-  -- POST /games/admin/backfill-publishers; '{}' = synced, BGG credits nobody.
+  -- (migration 040). Nullable with no default, unlike categories/mechanics.
+  -- '{}' = synced, BGG credits nobody; NULL no longer means "never synced"
+  -- (045), and readers coerce both to [].
   publishers TEXT[],
+  -- When POST /games/admin/backfill-metadata last read BGG's /thing?stats=1
+  -- record for this game (migration 045). NULL with a non-null bgg_id IS that
+  -- backfill's queue — and it is deliberately NOT the same predicate the admin
+  -- panel lists from. The row is stamped even when BGG had no description or
+  -- year, so the queue drains; the panel keeps listing it off the field
+  -- predicate, so nothing incomplete disappears.
+  bgg_meta_synced_at TIMESTAMPTZ,
   CONSTRAINT boardgamebuddy_games_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_games_bgg_id_key UNIQUE (bgg_id),
   CONSTRAINT boardgamebuddy_games_play_mode_check CHECK ((play_mode = ANY (ARRAY['competitive'::text, 'coop'::text, 'team'::text])))
@@ -85,6 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_games_browse_alpha ON public.boardgamebuddy_g
 CREATE INDEX IF NOT EXISTS idx_bgb_games_name_trgm ON public.boardgamebuddy_games USING gin (name extensions.gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_year_rank ON public.boardgamebuddy_games USING btree (year_published DESC, bgg_rank ASC NULLS LAST) WHERE (is_expansion = false);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_stats_synced ON public.boardgamebuddy_games USING btree (bgg_stats_synced_at ASC NULLS FIRST) WHERE (bgg_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_bgb_games_meta_synced ON public.boardgamebuddy_games USING btree (bgg_meta_synced_at ASC NULLS FIRST) WHERE (bgg_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_mechanics_gin ON public.boardgamebuddy_games USING gin (mechanics) WHERE (is_expansion = false);
 GRANT SELECT ON public.boardgamebuddy_games TO boardgamebuddy_role;
 

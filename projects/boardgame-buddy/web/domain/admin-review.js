@@ -1,10 +1,14 @@
 // domain/admin-review.js — the admin review queues behind the Settings gear.
 //
-// Publishes five store slots (see domain/store.js) from ONE
-// /admin/review-counts call: open chapter reports, games missing images, games
-// missing descriptions, games missing BGG stats, games missing publishers.
-// domain/notifications.js turns them into the gear's dot
-// and the per-row badges in the Settings admin card.
+// Publishes three store slots (see domain/store.js) from ONE
+// /admin/review-counts call: open chapter reports, games missing images, and
+// games short of anything one BoardGameGeek read would give them.
+// domain/notifications.js turns them into the gear's dot and the per-row
+// badges in the Settings admin card.
+//
+// It was five. Descriptions, BGG stats and publishers were three counts of
+// three overlapping queues, so a game short of two of them was counted twice
+// and the dot reported more work than existed (migration 045).
 //
 // One call rather than five, and counts rather than lists: the dot is on the
 // global header, so this runs on every boot for every admin. Deriving the
@@ -49,9 +53,7 @@
       const n = (v) => Math.max(0, Math.floor(Number(v) || 0));
       window.store.set("adminChapterReportCount", n(counts.chapter_reports));
       window.store.set("adminMissingImageCount", n(counts.missing_images));
-      window.store.set("adminMissingDescriptionCount", n(counts.missing_descriptions));
-      window.store.set("adminMissingStatsCount", n(counts.missing_stats));
-      window.store.set("adminMissingPublisherCount", n(counts.missing_publishers));
+      window.store.set("adminMissingMetaCount", n(counts.missing_metadata));
     },
 
     /**

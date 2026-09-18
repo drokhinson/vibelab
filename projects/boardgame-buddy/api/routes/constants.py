@@ -533,15 +533,23 @@ class AdminRunTool(StrEnum):
 
     The value IS the url segment and the ledger's cache key, so renaming one
     orphans any run in flight and any bookmark. TRENDING is the odd one: it is
-    a single request, and the four BGG_* are drained in passes by the browser
+    a single request, and the two BGG_* are drained in passes by the browser
     (see AdminBackfillPhase).
+
+    BGG_METADATA was three tools — descriptions, stats and publishers — until
+    they became one. They asked BoardGameGeek the SAME question: one
+    /thing?stats=1 response carries the blurb, the four stats, the publisher
+    links and the year, which is what import_game_from_bgg has always done with
+    it. Three tools meant walking the catalog three times to read one document,
+    and a game short of two fields being counted twice by the admin badge.
+    Images stays its own tool because it is genuinely different work: one BGG
+    call plus two downloads and two uploads per game, which is why its pass is
+    a tenth the size.
     """
 
     TRENDING = "trending"
     BGG_IMAGES = "bgg-images"
-    BGG_DESCRIPTIONS = "bgg-descriptions"
-    BGG_STATS = "bgg-stats"
-    BGG_PUBLISHERS = "bgg-publishers"
+    BGG_METADATA = "bgg-metadata"
 
 
 class AdminTrendingPhase(StrEnum):

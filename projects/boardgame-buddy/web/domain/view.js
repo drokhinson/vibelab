@@ -227,11 +227,13 @@
         { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
         { name: "admin-reports",       pattern: /^\/admin\/reports\/?$/,          build: () => "/admin/reports" },
         { name: "admin-bgg-data",      pattern: /^\/admin\/bgg-data\/?$/,         build: () => "/admin/bgg-data" },
-        // The four backfills were four spokes until they became four panels on
-        // one. Match-only aliases so an admin's bookmark still lands on the
-        // screen that holds its queue. /admin/publishers never had a pattern of
-        // its own — it is listed here for the same reason as the other three,
-        // not because anything could have linked to it.
+        // The four backfills were four spokes, then four panels on one, and are
+        // two panels now — descriptions, stats and publishers became one queue.
+        // Match-only aliases so an admin's bookmark still lands on the screen
+        // that holds its queue, whichever panel that is today.
+        // /admin/publishers never had a pattern of its own — it is listed here
+        // for the same reason as the other three, not because anything could
+        // have linked to it.
         { name: "admin-images",        pattern: /^\/admin\/images\/?$/,           build: () => "/admin/images",
           alias: "admin-bgg-data" },
         { name: "admin-descriptions",  pattern: /^\/admin\/descriptions\/?$/,     build: () => "/admin/descriptions",

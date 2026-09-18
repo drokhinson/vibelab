@@ -1,11 +1,11 @@
 """Live progress for the admin catalog runs, and the log left behind after one.
 
 Two admin tools do slow, throttled work against BoardGameGeek and used to
-report it with a spinner and one toast: **Refresh trending** and the four
+report it with a spinner and one toast: **Refresh trending** and the two
 backfills behind **Missing BGG data**. This is the ledger they write as they
 go — `GET /admin/runs/{tool}` reads it, and `GET /admin/runs` reads the compact
 form of every tool at once so the Settings card can paint a status pill without
-pulling five journals.
+pulling every journal.
 
 The mechanics are `step_progress.StepLedger`. Four things are this module's
 own, and each of them is a decision rather than a detail.
@@ -26,7 +26,7 @@ the run is alive; the countdown only starts at the last write, which is
 ten minutes after the run ends", with no sweeper and no explicit clear, and a
 twenty-five-minute drain cannot expire underneath itself.
 
-A PASS IS NOT A RUN. The four backfills are bounded server-side so one request
+A PASS IS NOT A RUN. The backfills are bounded server-side so one request
 fits inside the platform timeout, and the browser drains them — up to 25 passes
 for a cold catalog. `open()` with `pass_no > 0` therefore REHYDRATES: the
 phases reset to IDLE (they are about to run again) while `run_id`, `started_at`,
@@ -76,18 +76,16 @@ _TTL_SECONDS = 600.0
 # long drain runs past it.
 _MAX_EVENTS = 200
 
-# Five tools, so the cap only ever evicts entries that have already expired.
+# Three tools, so the cap only ever evicts entries that have already expired.
 cache.configure(_NS, max_entries=16)
 
-# Which phase vocabulary each tool walks. The four backfills are the same job
+# Which phase vocabulary each tool walks. The two backfills are the same job
 # with a different noun in it, which is why they share one enum — the same
 # argument views/admin-backfill-view.js makes for being one screen.
 _PHASES: dict[AdminRunTool, type] = {
     AdminRunTool.TRENDING: AdminTrendingPhase,
     AdminRunTool.BGG_IMAGES: AdminBackfillPhase,
-    AdminRunTool.BGG_DESCRIPTIONS: AdminBackfillPhase,
-    AdminRunTool.BGG_STATS: AdminBackfillPhase,
-    AdminRunTool.BGG_PUBLISHERS: AdminBackfillPhase,
+    AdminRunTool.BGG_METADATA: AdminBackfillPhase,
 }
 
 # What a snapshot carries that a compact summary does not. `GET /admin/runs`

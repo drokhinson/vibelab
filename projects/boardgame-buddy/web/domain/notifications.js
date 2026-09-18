@@ -64,13 +64,17 @@
       adminTool: "reports",
       label: (n) => `${n} chapter report${n === 1 ? "" : "s"}`,
     },
-    // Four signals, one `adminTool`: the four catalog backfills are four panels
-    // on the single "Missing BGG data" spoke now, so they badge together. They
-    // stay four ROWS here rather than collapsing into one summed slot, because
-    // `parts` is what the row's aria-label reads out — a screen reader hearing
-    // "7 waiting" learns nothing, "3 games missing images and 4 games missing a
-    // publisher" is the whole story — and because each count still arrives from
-    // its own query in domain/admin-review.js.
+    // Two signals, one `adminTool`: both catalog backfills are panels on the
+    // single "Missing BGG data" spoke, so they badge together. They stay two
+    // ROWS rather than collapsing into one summed slot, because `parts` is what
+    // the row's aria-label reads out — a screen reader hearing "7 waiting"
+    // learns nothing, "3 games missing images and 4 games missing BGG data" is
+    // the whole story — and because each count still arrives from its own query
+    // in domain/admin-review.js.
+    //
+    // It was FOUR, and collapsing three of them was a fix rather than tidying:
+    // they counted three overlapping queues, so a game short of both its blurb
+    // and its year was counted twice here and the gear's dot over-reported.
     {
       slot: "adminMissingImageCount",
       gear: true,
@@ -78,22 +82,10 @@
       label: (n) => `${n} game${n === 1 ? "" : "s"} missing images`,
     },
     {
-      slot: "adminMissingDescriptionCount",
+      slot: "adminMissingMetaCount",
       gear: true,
       adminTool: "bggData",
-      label: (n) => `${n} game${n === 1 ? "" : "s"} missing a description`,
-    },
-    {
-      slot: "adminMissingStatsCount",
-      gear: true,
-      adminTool: "bggData",
-      label: (n) => `${n} game${n === 1 ? "" : "s"} missing BGG stats`,
-    },
-    {
-      slot: "adminMissingPublisherCount",
-      gear: true,
-      adminTool: "bggData",
-      label: (n) => `${n} game${n === 1 ? "" : "s"} missing a publisher`,
+      label: (n) => `${n} game${n === 1 ? "" : "s"} missing BGG data`,
     },
     // Pending uploads. The header's own upload button is gone: a queue that
     // drains itself is the app doing something FOR you, which is plumbing, and
