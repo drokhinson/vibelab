@@ -70,6 +70,11 @@
       this._expansions = [];
       this._viewerStats = null;
       this._guide = null;
+      // Where to buy. Fetched on its own (never a bundle field): the bundle is
+      // served from a 30-minute cache, and a partner switched off in Settings
+      // must not keep rendering for half an hour. Seeded from the SWR peek so a
+      // return visit paints the pills in the same frame as the rest.
+      this._buy = window.Affiliate ? window.Affiliate.cachedLinks(id) : null;
       // Singleton view: without this reset an expanded description leaks
       // across games (expansion → base game, search hit while one is open).
       this._descExpanded = false;
@@ -116,8 +121,43 @@
         if (!stale()) {
           this._loading = false;
           this.render();
+          this._loadBuyLinks(id, stale);
         }
       }
+    }
+
+    /**
+     * The "Where to buy" section, off the affiliate endpoint. Empty (and so
+     * rendered as nothing) until an admin has switched a partner on; painted
+     * into its own host so a late answer never rebuilds the page.
+     */
+    async _loadBuyLinks(id, stale) {
+      if (!window.Affiliate) return;
+      try {
+        const res = await window.Affiliate.links(id);
+        if (stale()) return;
+        this._buy = res;
+        this._paintBuy();
+      } catch (_) {
+        // No pills is the right rendering for "could not ask"; the page is
+        // whole without them.
+      }
+    }
+
+    _renderBuy() {
+      const b = this._buy;
+      if (!b || !b.live || !Array.isArray(b.links) || !b.links.length) return "";
+      return window.renderBuyLinks(b.links, {
+        surface: "game_detail",
+        gameId: this._game ? this._game.id : "",
+      });
+    }
+
+    _paintBuy() {
+      const host = this.container && this.container.querySelector("#game-detail-buy");
+      if (!host) return;
+      host.innerHTML = this._renderBuy();
+      this.refreshIcons(host);
     }
 
     render() {
@@ -181,6 +221,7 @@
               ${this._renderRulebookButton(g)}
             </div>
             ${this._renderDescription(g)}
+            <div id="game-detail-buy">${this._renderBuy()}</div>
             <div id="game-detail-expansions">${this._renderExpansions()}</div>
             ${this._renderReferenceGuide()}
             ${this._renderViewerStats()}

@@ -24,7 +24,7 @@
     constructor() { super("terms"); }
 
     _title() { return "Terms of Service"; }
-    _updated() { return "2026-09-16"; }
+    _updated() { return "2026-09-18"; }
 
     _governingLaw() {
       if (!JURISDICTION) {
@@ -94,14 +94,24 @@
         and from publishers. Those remain the property of their owners; nothing
         here transfers any right to them.</p>
 
-        <h2 class="text-xl font-semibold mt-8 mb-2">6. The AI features are not a rulebook</h2>
+        <h2 class="text-xl font-semibold mt-8 mb-2">6. Affiliate links</h2>
+        <p>A game's page may show <strong>Where to buy</strong> links to
+        retailers. Some of those are affiliate links: if you buy through one,
+        BoardgameBuddy may earn a small commission, at no extra cost to you.
+        Where a link is one, it says so beside it.</p>
+        <p>The retailer is the seller. Prices, stock, shipping, returns and the
+        purchase itself are theirs, under their terms; we do not see your order
+        and cannot help with it. A link does not mean we have checked that the
+        listing is the right edition or the best price.</p>
+
+        <h2 class="text-xl font-semibold mt-8 mb-2">7. The AI features are not a rulebook</h2>
         <p>Reference-guide chapters can be drafted by an AI model, and the photo
         importer uses one to read a play off an image. <strong>Both are
         regularly wrong.</strong> A generated chapter is a starting point for you
         to correct, not an authority — do not settle a rules argument with it,
         and check an imported play before you trust its scores.</p>
 
-        <h2 class="text-xl font-semibold mt-8 mb-2">7. Availability</h2>
+        <h2 class="text-xl font-semibold mt-8 mb-2">8. Availability</h2>
         <p>There is no uptime promise. The app runs on free and low-cost
         infrastructure, and we may change it, take features away, or stop
         running it entirely. If we shut it down, we will give notice and time to
@@ -110,38 +120,38 @@
         anything, and what you have logged will stay readable and exportable
         whether or not you pay.</p>
 
-        <h2 class="text-xl font-semibold mt-8 mb-2">8. Ending it</h2>
+        <h2 class="text-xl font-semibold mt-8 mb-2">9. Ending it</h2>
         <p>Delete your account in Settings whenever you like. We may suspend or
         close an account that breaks §3, or if we stop running the service.</p>
 
-        <h2 class="text-xl font-semibold mt-8 mb-2">9. Photos are shareable by link</h2>
+        <h2 class="text-xl font-semibold mt-8 mb-2">10. Photos are shareable by link</h2>
         <p>Photos you attach are stored at addresses that cannot realistically
         be guessed, but anyone who has the link can open the image without
         signing in. Treat a play photo as shared with your table. This is also
         in the <a class="link" href="/privacy" onclick="window.router.go('privacy'); return false;">Privacy Policy</a>,
         which forms part of these terms.</p>
 
-        <h2 class="text-xl font-semibold mt-8 mb-2">10. No warranty</h2>
+        <h2 class="text-xl font-semibold mt-8 mb-2">11. No warranty</h2>
         <p>The app is provided as it is, without warranties of any kind. We do
         not promise it will be available, error-free, or that it will not lose
         data. Export anything you would be upset to lose.</p>
 
-        <h2 class="text-xl font-semibold mt-8 mb-2">11. Limits on liability</h2>
+        <h2 class="text-xl font-semibold mt-8 mb-2">12. Limits on liability</h2>
         <p>To the fullest extent the law allows, we are not liable for indirect
         or consequential losses, or for lost data or lost profits, arising from
         your use of the app. Nothing here limits liability that cannot be
         limited by law.</p>
 
-        <h2 class="text-xl font-semibold mt-8 mb-2">12. Changes</h2>
+        <h2 class="text-xl font-semibold mt-8 mb-2">13. Changes</h2>
         <p>We may update these terms. If a change matters — anything affecting
         your content, your data, or what you are allowed to do — we will say so
         in the app before it takes effect rather than only changing the date at
         the top.</p>
 
-        <h2 class="text-xl font-semibold mt-8 mb-2">13. Governing law</h2>
+        <h2 class="text-xl font-semibold mt-8 mb-2">14. Governing law</h2>
         ${this._governingLaw()}
 
-        <h2 class="text-xl font-semibold mt-8 mb-2">14. Contact</h2>
+        <h2 class="text-xl font-semibold mt-8 mb-2">15. Contact</h2>
         <p><a class="link" href="mailto:support@bgbuddy.app">support@bgbuddy.app</a>.</p>`;
     }
   }

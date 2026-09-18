@@ -939,3 +939,26 @@ MAX_RELEASE_NOTICE_LINK_LABEL_CHARS = 40
 # picker offers only param-free routes, and both render paths drop the button
 # when router.pathFor() cannot build a URL.
 MAX_RELEASE_NOTICE_LINK_ROUTE_CHARS = 64
+
+
+# ── Affiliate partners (migration 045) ───────────────────────────────────────
+
+class AffiliateSurface(StrEnum):
+    """Where a partner pill was tapped. Mirrors the CHECK on
+    boardgamebuddy_affiliate_clicks.surface."""
+
+    GAME_DETAIL = "game_detail"
+    DISCOVER = "discover"
+
+
+# The retailer's name on a pill: "Noble Knight Games" is the long end.
+MAX_AFFILIATE_LABEL_CHARS = 60
+# A store URL or a network redirect with its placeholders. Impact links run
+# ~120 characters before the destination.
+MAX_AFFILIATE_TEMPLATE_CHARS = 500
+# An Amazon Store ID is ~12 characters; a network sub-id can be longer.
+MAX_AFFILIATE_TAG_CHARS = 100
+# One required sentence, not a paragraph.
+MAX_AFFILIATE_DISCLOSURE_CHARS = 300
+# The operator hint in the editor.
+MAX_AFFILIATE_NOTES_CHARS = 600

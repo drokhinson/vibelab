@@ -188,6 +188,7 @@
           <section class="discover__section" id="${HOSTS.trending}"></section>
           <section class="discover__section" id="${HOSTS.fresh}"></section>
           <section class="discover__section" id="${HOSTS.shelf}"></section>
+          <div id="discover-shop-host"></div>
           <p class="discover__footnote">Trending and ratings courtesy of BoardGameGeek.</p>
         </div>
       `;
@@ -227,6 +228,38 @@
         shelf: this._renderShelf(b),
       });
       if (window.scheduleRailTitleFit) window.scheduleRailTitleFit();
+      this._loadShopFooter(b);
+    }
+
+    /**
+     * "Shop these games" under the rails — one line that opens the top pick's
+     * page, where the Where to buy section lives. Rendered only when the
+     * affiliate endpoint says a partner is live; otherwise the host stays
+     * empty and nothing about affiliates is on this screen at all.
+     */
+    async _loadShopFooter(b) {
+      const host = this.container && this.container.querySelector("#discover-shop-host");
+      if (!host || !window.Affiliate) return;
+      const top = (b.picks || []).map((p) => p.game).find((g) => g && g.id);
+      if (!top) { host.innerHTML = ""; return; }
+      const cached = window.Affiliate.cachedLinks(top.id);
+      const paint = (res) => {
+        if (this._bundle !== b) return;
+        host.innerHTML = (res && res.live)
+          ? `<p class="discover__shop">
+               <i data-icon="box" class="w-4 h-4"></i>
+               Shop these games \u2014
+               <a class="link" href="#" onclick="event.preventDefault(); window.Affiliate.click('', '${escapeAttr(top.id)}', 'discover'); ${escapeAttr(gameDetailJs(top.id, top.name))}">see where to buy ${escapeHtml(top.name)}</a>
+             </p>`
+          : "";
+        this.refreshIcons(host);
+      };
+      if (cached) paint(cached);
+      try {
+        paint(await window.Affiliate.links(top.id));
+      } catch (_) {
+        if (!cached) host.innerHTML = "";
+      }
     }
 
     _paintHosts(html) {

@@ -80,3 +80,10 @@ from . import admin_run_routes  # noqa: F401, E402
 # `/feedback/types`, mirroring `/chapter-types`, which is what keeps that true
 # if a `GET /feedback/{id}` ever lands.
 from . import feedback_routes  # noqa: F401, E402
+# No ordering constraint: `/affiliate` is a prefix nothing else touches, and
+# within the module every literal (`/links`, `/click`, `/admin/partners`,
+# `/admin/clicks`) is declared ahead of the parameterised
+# `/admin/partners/{partner_id}…` forms. Last because it is the newest and
+# the least entangled — nothing here reads anything but its own two tables
+# and a game's name.
+from . import affiliate_routes  # noqa: F401, E402

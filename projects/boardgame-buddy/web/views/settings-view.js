@@ -516,6 +516,16 @@
           title: "Release notices",
           sub: "Write the what's-new note everyone sees once on their next visit.",
         },
+        // Authoring too, so no badge (see above). This is THE switch for the
+        // whole affiliate feature: nothing on any game page shows a retailer
+        // pill until a partner here holds a credential and is enabled.
+        {
+          route: "admin-affiliates",
+          tool: "affiliates",
+          icon: "handshake",
+          title: "Affiliate partners",
+          sub: "Retailer links under every game. Nothing shows until a partner is enabled.",
+        },
         // A spoke again, and this time honestly. It was an action row — a tap
         // that WAS the deed, with a pill instead of a chevron, because a
         // chevron promising a screen and silently firing a BGG sync was the

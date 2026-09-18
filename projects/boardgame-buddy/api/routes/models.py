@@ -14,8 +14,14 @@ from pydantic import (
 )
 
 from .constants import (
+    MAX_AFFILIATE_DISCLOSURE_CHARS,
+    MAX_AFFILIATE_LABEL_CHARS,
+    MAX_AFFILIATE_NOTES_CHARS,
+    MAX_AFFILIATE_TAG_CHARS,
+    MAX_AFFILIATE_TEMPLATE_CHARS,
     AdminRunLevel,
     AdminRunTool,
+    AffiliateSurface,
     ChapterReportStatus,
     DiscoverReasonKind,
     FeedbackStatus,
@@ -3025,3 +3031,112 @@ class BgaRememberRequest(BaseModel):
 
 class BgaRememberResponse(BaseModel):
     stored: int = 0
+
+
+# ── Affiliate partners (migration 045) ───────────────────────────────────────
+#
+# A partner is LIVE only when enabled AND it holds a credential (a tracking
+# tag or a wrapper link). `enabled` is never a field on the write model:
+# enabling is its own POST, refused without a credential, so a row can never
+# be switched on by a stray PATCH.
+
+class AffiliatePartner(BaseModel):
+    """One retailer row, as the admin screen sees it."""
+
+    id: str
+    label: str
+    url_template: str
+    wrapper_template: str | None = None
+    tracking_tag: str | None = None
+    disclosure: str | None = None
+    notes: str | None = None
+    display_order: int = 0
+    enabled: bool = False
+    updated_at: datetime | None = None
+
+    @computed_field
+    @property
+    def has_credential(self) -> bool:
+        return bool((self.tracking_tag or "").strip() or (self.wrapper_template or "").strip())
+
+    @computed_field
+    @property
+    def live(self) -> bool:
+        """The one rule every reader-facing path applies."""
+        return self.enabled and self.has_credential
+
+
+class AffiliatePartnerListResponse(BaseModel):
+    items: list[AffiliatePartner] = []
+
+
+class AffiliatePartnerPatchRequest(BaseModel):
+    """An edit. Every field optional; an empty body is refused. No `enabled`."""
+
+    label: str | None = Field(default=None, min_length=1, max_length=MAX_AFFILIATE_LABEL_CHARS)
+    url_template: str | None = Field(default=None, min_length=8, max_length=MAX_AFFILIATE_TEMPLATE_CHARS)
+    wrapper_template: str | None = Field(default=None, max_length=MAX_AFFILIATE_TEMPLATE_CHARS)
+    tracking_tag: str | None = Field(default=None, max_length=MAX_AFFILIATE_TAG_CHARS)
+    disclosure: str | None = Field(default=None, max_length=MAX_AFFILIATE_DISCLOSURE_CHARS)
+    notes: str | None = Field(default=None, max_length=MAX_AFFILIATE_NOTES_CHARS)
+    display_order: int | None = Field(default=None, ge=0, le=1000)
+    # An absent key means "leave it alone", and None is also the absent value —
+    # so clearing a credential needs its own flag (release-notices' clear_link).
+    clear_tag: bool = False
+    clear_wrapper: bool = False
+    clear_disclosure: bool = False
+
+    @model_validator(mode="after")
+    def _at_least_one(self) -> "AffiliatePartnerPatchRequest":
+        if not any([
+            self.label, self.url_template, self.wrapper_template, self.tracking_tag,
+            self.disclosure, self.notes, self.display_order is not None,
+            self.clear_tag, self.clear_wrapper, self.clear_disclosure,
+        ]):
+            raise ValueError("Name at least one field to change.")
+        return self
+
+
+class AffiliateLink(BaseModel):
+    """One pill on a game page: where it goes and what must be said beside it."""
+
+    partner_id: str
+    label: str
+    url: str
+    disclosure: str | None = None
+
+
+class AffiliateLinkListResponse(BaseModel):
+    """`live` is false with an empty list when no partner is switched on, which
+    is what every reader-facing surface renders NOTHING from."""
+
+    game_id: str | None = None
+    links: list[AffiliateLink] = []
+    live: bool = False
+
+
+class AffiliateLinkPreview(BaseModel):
+    """The admin editor's preview: the URL a partner WOULD produce, live or not."""
+
+    partner_id: str
+    game_name: str
+    url: str
+    live: bool
+
+
+class AffiliateClickRequest(BaseModel):
+    partner_id: str = Field(min_length=2, max_length=40)
+    game_id: str | None = None
+    surface: AffiliateSurface = AffiliateSurface.GAME_DETAIL
+
+
+class AffiliateClickCount(BaseModel):
+    partner_id: str
+    label: str
+    clicks: int
+
+
+class AffiliateClickSummary(BaseModel):
+    days: int
+    total: int
+    by_partner: list[AffiliateClickCount] = []
