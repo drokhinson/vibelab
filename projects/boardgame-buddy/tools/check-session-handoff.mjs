@@ -298,6 +298,13 @@ function newAuth(outcome, redirect = { err: null }) {
                   { filename: "domain/view.js" });
   vm.runInContext(fs.readFileSync(`${W}/ui/oauth-buttons.js`, "utf8"), sandbox,
                   { filename: "ui/oauth-buttons.js" });
+  // The sign-in screen's feature strip and the copy it reads. Real
+  // dependencies of render(), loaded in the same order index.html loads them,
+  // rather than stubbed — a stub would let the strip's markup rot unnoticed.
+  vm.runInContext(fs.readFileSync(`${W}/widgets/tour-chapters.js`, "utf8"), sandbox,
+                  { filename: "widgets/tour-chapters.js" });
+  vm.runInContext(fs.readFileSync(`${W}/ui/feature-strip.js`, "utf8"), sandbox,
+                  { filename: "ui/feature-strip.js" });
   vm.runInContext(fs.readFileSync(`${W}/views/auth-view.js`, "utf8"), sandbox,
                   { filename: "views/auth-view.js" });
 
