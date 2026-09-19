@@ -1228,7 +1228,7 @@ repaints by replacing `innerHTML` and restores focus by id needs it; the
 collection's "Show all expansions" does not pass one today because its host
 does not restore focus that way.
 
-**Gate extended:** `tools/check-feedback.mjs`, 24 assertions to 56. The five new
+**Gate extended:** `tools/check-feedback.mjs`, 24 assertions to 54. The five new
 groups drive the real `_groups` / `_renderList` / `_renderFab` / `_renderHead`
 rather than re-deriving their conditions, so the checks can disagree with the
 code. The ones that earn their place: a collapsed group must render **none** of
