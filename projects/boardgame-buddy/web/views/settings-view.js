@@ -904,36 +904,38 @@
     }
 
     /**
-     * What shipped, what you want next, and what's broken — in that order.
+     * What shipped, and what you want to say about it.
      *
-     * TWO destinations, not one, which is the thing to know before editing.
-     * The bottom two rows both land on /settings/feedback with the compose
-     * sheet already up; the bug row preselects the type and the other leaves it
-     * unset. That pair exists because "report a bug" is the errand somebody
-     * arrives at Settings already intending to run, and making them find it
-     * inside a board named for something else costs a tap and a moment of doubt
-     * about whether they are in the right place. Same destination, same
-     * affordance — which is what keeps those two inside ui-object-design.md §3b
-     * rather than in breach of it: the board's own header "+" opens the
-     * identical sheet.
+     * TWO rows, TWO destinations, one per destination — which is the thing to
+     * know before editing. This card used to carry three rows: "Add feedback"
+     * and "Report a bug" were separate, both landing on /settings/feedback with
+     * the compose sheet already up and only the preselected type differing.
+     * They are one row now. The split cost a decision at the top of an errand
+     * that the compose sheet then asks about again in its own type picker, and
+     * the board they both land on is one board — a bug and a feature request
+     * sit in the same list, under the same topics, and are voted on the same
+     * way. The board carries its own floating "Add" (see
+     * views/feedback-view.js), so nothing was lost by handing the errand over
+     * at the door rather than a tap earlier.
+     *
+     * `?compose=` is still a supported deep link into the sheet — the view
+     * still reads it — it simply has no caller in Settings any more. Point a
+     * release notice or a support reply at /settings/feedback?compose=bug if
+     * one ever wants the form open on arrival.
      *
      * `What's new` is a GENUINELY different destination (/settings/whats-new,
      * views/whats-new-view.js) and is not a shortcut into the board. It sits
-     * here rather than under a section of its own because the three rows are
-     * one errand — talking to whoever builds this — read in time order: what
-     * landed, what you want, what broke. Do not "simplify" the row helper back
-     * to a single hardcoded route on the assumption this card has one.
+     * here rather than under a section of its own because the two rows are one
+     * errand — talking to whoever builds this — read in time order: what
+     * landed, then what you make of it.
      *
-     * `compose` rides as a querystring param, so the router builds
-     * /settings/feedback?compose=bug and the view strips it once the sheet is
-     * up. Not gated on is_admin: everybody files feedback and everybody reads
-     * the board. Only resolving is an admin action, and that lives on the
+     * Neither row is gated on is_admin: everybody files feedback and everybody
+     * reads the board. Only resolving is an admin action, and that lives on the
      * screen itself.
      */
     _renderFeedbackCard() {
-      const row = (route, params, icon, title, sub) => `
-        <button class="set-card__row"
-                onclick="window.router.go('${route}'${params ? `, ${params}` : ""})">
+      const row = (route, icon, title, sub) => `
+        <button class="set-card__row" onclick="window.router.go('${route}')">
           <span class="set-card__row-icon"><i data-icon="${icon}" class="w-4 h-4"></i></span>
           <span class="set-card__row-body">
             <span class="set-card__row-title">${escapeHtml(title)}</span>
@@ -941,16 +943,12 @@
           </span>
           <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
         </button>`;
-      const compose = (type, icon, title, sub) =>
-        row("feedback", `{ compose: '${type}' }`, icon, title, sub);
       return `
         <div class="set-card">
-          ${row("whats-new", null, "sparkles", "What's new",
+          ${row("whats-new", "sparkles", "What's new",
                 "Everything we've shipped, newest first.")}
-          ${compose("1", "lightbulb", "Add feedback",
-                "Give feedback or make feature requests.")}
-          ${compose("bug", "alert-triangle", "Report a bug",
-                "Something broken? Report it.")}
+          ${row("feedback", "lightbulb", "Feedback & bugs",
+                "Request a feature, report a bug, back someone else's.")}
         </div>
       `;
     }

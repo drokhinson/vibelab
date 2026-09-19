@@ -42,6 +42,10 @@
    *   44px target with an inset ::before rather than by growing the row —
    *   the same move `.scoring-tplpill` under it makes.
    * @property {string} [cls]        Extra classes on the button.
+   * @property {string} [id]         DOM id. Pass one on any host that repaints
+   *   by replacing innerHTML and restores focus by id (helpers.js
+   *   captureFocus / restoreFocus) — without it, flipping the switch with the
+   *   keyboard drops focus to <body> on the repaint the flip causes.
    */
 
   /**
@@ -62,6 +66,7 @@
     return `
       <button type="button" role="switch" aria-checked="${on}"
               class="${cls}"
+              ${o.id ? `id="${escapeAttr(o.id)}"` : ""}
               ${name ? `aria-label="${escapeAttr(name)}"` : ""}
               ${o.title ? `title="${escapeAttr(o.title)}"` : ""}
               onclick="${o.onclick}">

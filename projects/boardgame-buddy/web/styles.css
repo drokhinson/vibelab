@@ -134,7 +134,7 @@
 }
 /* --bgb-col-max is a CAP THAT NEVER BINDS here, not a column width, and it has
    to stay a real length rather than `none`: two rules feed it into a calc()
-   — both .chapter-add__fab offsets — and `calc(none / 2)` is invalid, which
+   — both .bgb-fab offsets — and `calc(none / 2)` is invalid, which
    drops the whole declaration silently.
    1024px can never bind on this tier, since the tier itself stops at 1023px
    wide and the rail takes 64 off that, so the column always fills the space
@@ -2949,10 +2949,19 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 }
 .scroll-chapter__author { font-weight: 500; opacity: 0.85; }
 
-/* Floating "+ New chapter" action — only visible on the browse screen.
-   Anchored above the bottom nav (var(--bgb-nav-height)) so it never
-   collides with the tab bar. */
-.chapter-add__fab {
+/* ── The floating action button ──────────────────────────────────────────────
+   SHARED, not the chapter browser's own: `.bgb-fab` is the project's one
+   floating "add" affordance, used by the reference-guide browse screen
+   ("+ New chapter") and by the Dev feedback board ("Add"). It was extracted at
+   instance #2 per .claude/rules/ui-object-design.md §3b — same action, same
+   affordance — which is why the family is prefixed rather than named for either
+   screen. Nothing here knows what it adds; the caller supplies the icon, the
+   label and the handler.
+
+   Anchored above the bottom nav (var(--bgb-nav-height)) so it never collides
+   with the tab bar, and it is INSIDE the view's container in every caller, so a
+   hidden view's `display: none` takes the fixed button down with it. */
+.bgb-fab {
   position: fixed;
   /* 18px in from the CONTENT COLUMN's edge, not the viewport's: on a tablet
      or a monitor the column is narrower than the window, and a FAB hugging
@@ -2977,17 +2986,17 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   box-shadow: 0 10px 24px rgba(201, 146, 42, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.55);
   transition: transform 120ms ease, filter 140ms ease;
 }
-.chapter-add__fab:hover { filter: brightness(1.06); }
-.chapter-add__fab:active { transform: scale(0.97); }
-.chapter-add__fab [data-icon-name] { color: #3a2a08; }
+.bgb-fab:hover { filter: brightness(1.06); }
+.bgb-fab:active { transform: scale(0.97); }
+.bgb-fab [data-icon-name] { color: #3a2a08; }
 
-/* Mirror back FAB on the left side of the browse screen. Secondary
-   visual treatment (dark cream-on-dark) so the gold "+ New chapter"
+/* Mirror back FAB on the left side of the browse screen — the one caller that
+   wants a second floating control. Secondary visual treatment (dark cream-on-dark) so the gold "+ New chapter"
    stays the primary action. Label states the destination explicitly
    ("Back to game details", etc.). */
-.chapter-add__fab-back {
+.bgb-fab-back {
   position: fixed;
-  /* Mirror of .chapter-add__fab's right: the column's left edge is the rail
+  /* Mirror of .bgb-fab's right: the column's left edge is the rail
      plus the same centring gap, so this also stays clear of the rail. */
   left: max(calc(var(--bgb-rail-width) + 18px), calc(50% + var(--bgb-rail-width) / 2 - var(--bgb-col-max) / 2 + 18px));
   bottom: calc(var(--bgb-nav-height, 64px) + 18px);
@@ -3008,22 +3017,23 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   transition: transform 120ms ease, background 140ms ease, border-color 140ms ease;
   max-width: calc(100% - 200px); /* keep clear of the right FAB at narrow widths */
 }
-.chapter-add__fab-back:hover {
+.bgb-fab-back:hover {
   background: oklch(var(--b3));
   border-color: var(--accent);
 }
-.chapter-add__fab-back:active { transform: scale(0.97); }
-.chapter-add__fab-back [data-icon-name] { color: var(--accent); }
-.chapter-add__fab-back span {
+.bgb-fab-back:active { transform: scale(0.97); }
+.bgb-fab-back [data-icon-name] { color: var(--accent); }
+.bgb-fab-back span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Spacer at the end of the browse scroll body so the last chapter row
-   isn't hidden behind the floating FABs. ~140px = FAB height (~52px) +
-   bottom anchor (~82px from viewport bottom) + a few px breathing room. */
-.chapter-add__fab-spacer { height: 140px; }
+/* Spacer at the end of a FAB-bearing screen's scroll body so its last row isn't
+   hidden behind the floating buttons. ~140px = FAB height (~52px) + bottom
+   anchor (~82px from viewport bottom) + a few px breathing room. Every screen
+   that renders a .bgb-fab renders one of these too. */
+.bgb-fab-spacer { height: 140px; }
 
 /* ── Admin reports ──────────────────────────────────────────────────────── */
 .admin-reports__header {
@@ -3095,18 +3105,84 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 
    Filter chips are NOT restyled here: the screen reuses .chapter-add__chip,
    which is already the project's chip rail. A second chip family would be the
-   parallel implementation ui-object-design.md §2 exists to prevent. */
-.feedback__status {
+   parallel implementation ui-object-design.md §2 exists to prevent. The Add
+   button is the shared .bgb-fab, and the admin's Resolved control is the shared
+   .bgb-switch — neither has a copy in this family either. */
+
+/* The Resolved switch, in the header's trailing slot. The only rule it needs is
+   "do not take the title's width": everything else is ui/switch.js's. */
+.feedback__resolved-switch { flex: none; }
+
+/* ── Dev feedback: the topic groups ────────────────────────────────────────
+   One header per topic that actually has rows, every one of them closed until
+   tapped. The head is a LIST ROW and carries a list row's 52px floor
+   (.claude/rules/mobile-web.md §5) — the 0.5rem between groups is what buys the
+   4px off the flush-row 56, since a thumb that misses lands on ground rather
+   than on the next topic. */
+.feedback-group + .feedback-group { margin-top: 0.5rem; }
+/* An OPEN group needs more air under it than a closed one: its last row and the
+   next topic's header are both cards, 0.6rem apart is what separates two rows
+   INSIDE a group, and at that distance the next header reads as one more row of
+   the group above it. */
+.feedback-group.is-open + .feedback-group { margin-top: 1.1rem; }
+.feedback-group__head {
+  width: 100%;
+  min-height: 52px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.7rem;
+  gap: 0.55rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--card-border, oklch(var(--b3)));
+  border-radius: 0.6rem;
+  background: oklch(var(--b2));
+  color: oklch(var(--bc));
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
 }
-.feedback__status-label {
-  font-size: 0.78rem;
-  color: var(--ink-muted);
+/* Touch has no hover — :active is the press feedback that says the tap landed,
+   and the hover rule below is the enhancement on top of it. */
+.feedback-group__head:active { transform: translateY(1px); }
+@media (hover: hover) {
+  .feedback-group__head:hover {
+    background: oklch(var(--b3));
+    border-color: var(--accent);
+  }
+}
+.feedback-group__head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* An open group keeps its accent edge so the rows below read as belonging to
+   the header above them rather than to the board. */
+.feedback-group.is-open .feedback-group__head { border-color: var(--accent); }
+.feedback-group__icon { flex: none; color: var(--accent); }
+.feedback-group__chev { flex: none; color: oklch(var(--bc) / 0.55); }
+.feedback-group__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feedback-group__count {
   flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: oklch(var(--b3));
+  color: oklch(var(--bc) / 0.75);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
+/* The rows sit indented under their header — the second half of the same
+   signal, and the half that survives when the group above is the last one on
+   the board and has no gap below it to read. */
+.feedback-group .feedback__list { margin: 0.5rem 0 0 0.85rem; }
+
 .feedback__list {
   list-style: none;
   margin: 0;
@@ -3473,7 +3549,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
    see #app above), so nothing sits under it.
 
    The rest of the file already assumed this: every other rail-aware rule
-   (.chapter-add__fab and its mirror, the locked chapter editor, --bgb-col-center)
+   (.bgb-fab and its mirror, the locked chapter editor, --bgb-col-center)
    derives the column's edges as `rail + the centring gap`, which is only the
    truth when the rail is flush left.
 
