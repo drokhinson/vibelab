@@ -97,9 +97,10 @@
 
   // ── 1. Community — the feed, scrolling, as feed-view.js lays it out ──────
   //
-  // Three sessions across three days, because one game night demonstrates a
-  // rail and the feature is a FEED. What the real screen does, and therefore
-  // what this mirrors (views/feed-view.js):
+  // Four sessions across four days, TWO OF THEM NIGHTS THE VIEWER WAS NOT AT,
+  // because one game night demonstrates a rail and a feed of nothing but your
+  // own table is a log. What the real screen does, and therefore what this
+  // mirrors (views/feed-view.js):
   //
   //   • A day divider above that day's first session — Today / Yesterday /
   //     a short date (helpers.js#formatRelativeDay).
@@ -120,23 +121,54 @@
     { game: "Azul",      winner: "You",    score: "68",  mine: true, hue: 220 },
     { game: "Calico",    winner: "Priya",  score: "55",              hue: 340 },
   ];
+  // TWO OF THE FOUR NIGHTS ARE NOT YOURS, which is the chapter's actual
+  // claim — "see the games your friends are enjoying" is about a feed, and a
+  // feed of nothing but your own table is a log. Note what follows from it
+  // rather than being decided separately: no card on these nights carries a
+  // crown, because the crown marks plays the VIEWER won and there are none.
+  // A mark that would have appeared anyway says nothing.
+  const THEIRS_3 = [
+    { game: "Everdell",  winner: "Priya",  score: "78",              hue: 152 },
+    { game: "Wingspan",  winner: "Ada",    score: "91",              hue: 196 },
+    { game: "Barenpark", winner: "Marcus", score: "64",              hue: 14  },
+  ];
   const SOLO = [
     { game: "Cascadia",  winner: "You",    score: "104", mine: true, hue: 28  },
   ];
-  const SATURDAY = [
+  const THEIRS_2 = [
     { game: "Verdant",   winner: "Ada",    score: "63",              hue: 128 },
-    { game: "Sky Team",  winner: "You",    score: "9",   mine: true, hue: 202 },
+    { game: "Sky Team",  winner: "Marcus", score: "9",               hue: 202 },
   ];
 
-  const goodGame = () => `
-    <div class="vfeed__foot" data-kudos>
+  /**
+   * The Good game footer, in one of the three states the real one has.
+   *
+   * `views/feed-view.js#_reactionSentence` builds the line, and the shapes it
+   * can produce are the only ones used here: "Be the first to say good game"
+   * at zero, "<name> said good game" at one, and "You and N other(s) said
+   * good game" once the viewer is in the set — the viewer always leads and
+   * the others are COUNTED, never named. The mock used to say "Priya and
+   * Marcus said good game", which the app cannot render.
+   *
+   * ONE DELIBERATE DIVERGENCE: the real pill drops the words for a bare count
+   * the moment anyone reacts (`count ? String(count) : "Good game"`). This
+   * keeps the words in every state, because a handshake and the numeral "1"
+   * tells a stranger nothing, and the sentence beside it already carries the
+   * count.
+   *
+   * @param {{who: string, faces?: string[], live?: boolean}} o
+   *   `live` marks the one footer the kudos beat drives.
+   */
+  const goodGame = (o) => `
+    <div class="vfeed__foot"${o.live ? " data-kudos" : ""}>
       <span class="vfeed__gg">
         <i data-icon="handshake" class="w-3 h-3"></i><span>Good game</span>
       </span>
       <span class="vfeed__faces">
-        ${avatar("PR", "vig-av--xs")}${avatar("MA", "vig-av--xs")}
+        ${o.live ? `<span class="vig-av vig-av--xs" data-me>YO</span>` : ""}
+        ${(o.faces || []).map((f) => avatar(f, "vig-av--xs")).join("")}
       </span>
-      <span class="vfeed__ggwho" data-ggwho></span>
+      <span class="vfeed__ggwho" data-ggwho="${o.who}">${o.who}</span>
     </div>`;
 
   /**
@@ -155,31 +187,43 @@
             ${plays.map(playCard).join("")}
           </div>
         </div>
-        ${o.foot ? goodGame() : ""}
+        ${o.foot ? goodGame(o.foot) : ""}
       </section>`;
   };
 
   V.register({
     id: "community",
-    label: "Three game nights in the feed, scrolling, with the table saying good game",
+    label: "Four game nights in the feed — two of them your friends' — "
+      + "scrolling, with the table saying good game",
     hold: 2800,
     html: `
       <div class="vig-chrome"><span class="vig-chrome__title">Feed</span></div>
       <div class="vfeed">
         <div class="vfeed__track" data-feed>
           ${session("Today", "<b>You</b> and <b>Priya</b> played 6 games",
-                    TODAY, { rail: true, foot: true })}
-          ${session("Yesterday", "<b>You</b> played Cascadia",
+                    TODAY,
+                    { rail: true, foot: { live: true, faces: ["MA"],
+                                          who: "Marcus said good game" } })}
+          ${session("Yesterday",
+                    "<b>Priya</b>, <b>Marcus</b>, and <b>Ada</b> played 3 games",
+                    THEIRS_3,
+                    { foot: { faces: ["AD"], who: "Ada said good game" } })}
+          ${session("Sat 13", "<b>You</b> played Cascadia",
                     SOLO, { single: true })}
-          ${session("Sat 13", "<b>You</b>, <b>Marcus</b>, and <b>Ada</b> played 2 games",
-                    SATURDAY, { foot: true })}
+          ${session("Fri 12", "<b>Marcus</b> and <b>Ada</b> played 2 games",
+                    THEIRS_2,
+                    { foot: { who: "Be the first to say good game" } })}
         </div>
       </div>`,
     reset(root) {
       shift(root, "[data-feed]", 0, "--vig-vstep");
       shift(root, "[data-rail]", 0);
-      flag(root, "[data-kudos]", "is-on", false);
-      put(root, "[data-ggwho]", "");
+      // The footer is POPULATED from the first frame now: Marcus has already
+      // said good game and you have not. What the beat below does is press
+      // the button, which is the thing the chapter is claiming.
+      flag(root, "[data-kudos]", "is-mine", false);
+      const who = root.querySelector("[data-kudos] [data-ggwho]");
+      if (who) who.textContent = who.getAttribute("data-ggwho") || "";
     },
     beats: [
       // Sideways first, on the night that has somewhere to go. One step is one
@@ -187,13 +231,15 @@
       // this never has to know a pixel measurement that lives there.
       { name: "slide", at: 1600, apply: (r) => shift(r, "[data-rail]", 1) },
       { name: "kudos", at: 3200, apply: (r) => {
-        flag(r, "[data-kudos]", "is-on", true);
-        put(r, "[data-ggwho]", "Priya and Marcus said good game");
+        flag(r, "[data-kudos]", "is-mine", true);
+        put(r, "[data-kudos] [data-ggwho]", "You and 1 other said good game");
       } },
-      // Then down the feed. Sections are a uniform height, so one vertical
-      // step is one section and the arithmetic is the rail's again.
+      // Then down the feed, a night at a time. Sections are a uniform height,
+      // so one vertical step is one section and the arithmetic is the rail's
+      // again.
       { name: "scroll", at: 5000, apply: (r) => shift(r, "[data-feed]", 1, "--vig-vstep") },
-      { name: "more",   at: 7000, apply: (r) => shift(r, "[data-feed]", 2, "--vig-vstep") },
+      { name: "solo",   at: 7000, apply: (r) => shift(r, "[data-feed]", 2, "--vig-vstep") },
+      { name: "more",   at: 9000, apply: (r) => shift(r, "[data-feed]", 3, "--vig-vstep") },
     ],
   });
 

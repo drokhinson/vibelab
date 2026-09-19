@@ -19655,20 +19655,41 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .vig__screen { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .vig-scroll { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 
+/* THE APP'S OWN AVATAR, NOT A THEME WASH.
+   ui/user-badge.js paints every default badge as an opaque #2a1812 disc with
+   #C9922A initials, in BOTH themes, because an avatar is an identity mark
+   rather than a surface — the same reason a third-party lockup keeps its own
+   colours (.claude/rules/assets.md). These two literals are that file's
+   DEFAULT_AVATAR, and it is the source of truth; they are here rather than as
+   tokens because the app holds them as JS constants too.
+
+   This mock had invented --accent-quiet + --accent-ink instead, which was
+   wrong twice over. It is a different object from the one the feed shows
+   (.claude/rules/ui-object-design.md §3a), and --accent-quiet is TRANSLUCENT,
+   so an overlapped stack showed the disc behind straight through the disc in
+   front — initials and all. */
 .vig-av {
   flex: none;
   width: 22px;
   height: 22px;
+  /* EXPLICIT, not inherited from Tailwind's preflight: the hairline below is
+     what makes two overlapped discs read as two, and on content-box it would
+     inflate a 14px face instead (.claude/rules/mobile-web.md §7). */
+  box-sizing: border-box;
   border-radius: 50%;
   display: inline-grid;
   place-items: center;
-  background: var(--accent-quiet);
-  color: var(--accent-ink);
+  background: #2a1812;
+  color: #C9922A;
+  /* .user-badge's own pair, and they are why an overlapped stack reads as
+     separate faces at all: the disc is close in value to the ground, so the
+     top highlight is the edge, not the ring behind it. */
+  border: 1.5px solid rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
-:root[data-bgb="dark"] .vig-av { color: var(--accent); }
 .vig-av--sm { width: 18px; height: 18px; font-size: 8px; }
 .vig-av--xs { width: 14px; height: 14px; font-size: 6.5px; }
 
@@ -19935,16 +19956,44 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   transition: background 260ms var(--ease), border-color 260ms var(--ease),
               color 260ms var(--ease);
 }
-.vfeed__foot.is-on .vfeed__gg {
+/* .is-mine, matching .play-session__gg.is-mine on the real control. The
+   footer is populated from the first frame — somebody else has already said
+   good game — and this is the state the viewer's own press turns on. */
+.vfeed__foot.is-mine .vfeed__gg {
   background: var(--accent-quiet);
   border-color: var(--accent);
   color: var(--accent);
 }
-.vfeed__faces { display: inline-flex; flex: none; opacity: 0; transition: opacity 300ms var(--ease); }
-.vfeed__foot.is-on .vfeed__faces { opacity: 1; }
-/* Overlapped, each ringed in the ground so the stack reads as separate faces. */
-.vfeed__faces .vig-av { margin-left: -5px; box-shadow: 0 0 0 1.5px var(--bg-0); }
+.vfeed__faces { display: inline-flex; flex: none; }
+/* Overlapped and ringed in the ground, so the stack reads as depth — the
+   same treatment .play-session__face gets on the real footer, at this scene's
+   size. THE RING IS --bg-1: that is what .vig paints. It rang in --bg-0,
+   which is a step darker, so every face carried a halo instead of reading as
+   cut out of the surface it sits on. */
+.vfeed__faces .vig-av {
+  margin-left: -5px;
+  /* The base rule's highlight RESTATED: box-shadow does not merge across
+     rules, so naming only the ring here would take the edge off every face
+     in the stack — the one place it is load-bearing. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
+              0 0 0 1.5px var(--bg-1);
+}
 .vfeed__faces .vig-av:first-child { margin-left: 0; }
+/* Your face joins the stack when you press. It collapses its own width while
+   it is out, rather than holding an empty slot that reads as a missing face,
+   so the press grows the stack by one. */
+.vfeed__faces .vig-av[data-me] {
+  opacity: 0;
+  transform: scale(0.4);
+  margin-right: -14px;
+  transition: opacity 260ms var(--ease), transform 260ms var(--ease),
+              margin-right 260ms var(--ease);
+}
+.vfeed__foot.is-mine .vfeed__faces .vig-av[data-me] {
+  opacity: 1;
+  transform: none;
+  margin-right: 0;
+}
 .vfeed__ggwho {
   font-size: 8.5px;
   color: var(--ink-faint);
@@ -20477,7 +20526,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vfeed__rail, .vfeed__track, .vfeed__gg, .vfeed__faces,
+  .vfeed__rail, .vfeed__track, .vfeed__gg, .vfeed__faces .vig-av,
   .vdisc__tile, .vdisc__cover, .vstat__bar, .vstat__rate-fill,
   .vguide__scroll, .vguide__scrollinner, .vscore__stage, .vscore__seat,
   .vscore__pill, .vscore__row, .vscore__pick, .vscore__add, .vscore__lbl,
