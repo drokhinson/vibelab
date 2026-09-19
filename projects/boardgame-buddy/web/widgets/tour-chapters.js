@@ -32,9 +32,7 @@
    * @property {string} title
    * @property {string} [body]  optional — a chapter whose scene carries the
    *   argument on its own says it once rather than twice
-   * @property {(string|{text: string, beat: string})[]} points
-   *   a plain string shows with the panel; `{text, beat}` waits for that beat
-   *   of the chapter's scene, and shows anyway if the scene never runs
+   * @property {string[]} points
    * @property {string} vignette  a BgbTourVignette id
    * @property {string} mark      assets/sprites/features/bgb-feat-<mark>.svg
    * @property {string} strip     the one-liner the sign-in screen shows
@@ -85,26 +83,17 @@
     {
       slug: "scoring",
       eyebrow: "Keep score",
-      title: "Keep score for any game",
-      // No `body`, and each point below names the BEAT of the scene that
-      // demonstrates it. views/tour-view.js holds a gated point back until
-      // widgets/tour-vignette-scripted.js reports that beat, so the claim
-      // lands as the evidence does — a paragraph above the scene was making
-      // all three arguments before the scene had made any of them.
-      //
-      // A beat name here is load-bearing twice over: tools/check-tour.mjs
-      // asserts every one of them exists in the scene's beat list, because a
-      // typo is not an error anybody sees — it is one bullet that never
-      // appears, on a screen whose whole job is to make three claims.
+      title: "Rules and scoring during your game nights",
+      // No `body`. The scene runs Gather → live rounds → a community grid,
+      // and these three lines are the claims it is evidence for.
       points: [
-        { text: "Gather up — the game, its expansions, and who is playing",
-          beat: "gather" },
-        { text: "Live scoring — the same numbers on every screen",
-          beat: "scores" },
-        // "grids", not "templates": the community-authored thing is called a
-        // scoring grid everywhere the user meets it.
-        { text: "Community scoring grids, expansions and all",
-          beat: "template-on" },
+        "Gather up — the game, its expansions, and who is playing",
+        "Live scoring — no scorepad, no problem",
+        // CREATE and SHARE, not "moderated". A grid is a community-written
+        // chapter anybody can publish; what moderation exists is an admin
+        // acting on reports (api/routes/chapter_routes.py), which is not the
+        // same claim and not one this line should be making.
+        "Create and share scoring grid templates",
       ],
       vignette: "scoring",
       mark: "scoring",
@@ -115,16 +104,12 @@
       eyebrow: "Your record",
       title: "See your stats",
       // No `body`. The scene assembles four cards — the podium, one game's
-      // numbers, a head-to-head and an achievement — and each bullet below
-      // is pinned to the card that shows it, so the paragraph was making
-      // three arguments the pictures make better.
+      // numbers, a head-to-head and an achievement — which is the paragraph's
+      // argument made in pictures.
       points: [
-        { text: "Podium, win rate, personal bests", beat: "record" },
-        // One bullet, two cards: the scene shows per-game numbers and then
-        // the head-to-head, so this is pinned to the first of the pair.
-        { text: "Per game, or head-to-head against the people you play with",
-          beat: "per-game" },
-        { text: "Earn achievements as you play", beat: "achievement" },
+        "Podium, win rate, personal bests",
+        "Per game, or head-to-head against the people you play with",
+        "Earn achievements as you play",
       ],
       vignette: "stats",
       mark: "stats",
@@ -137,10 +122,6 @@
       // No `body`. The scene already shows a pick with the reason under it,
       // which is the whole of what the old paragraph said.
       //
-      // The points are NOT beat-gated here, unlike chapters 3 and 4: the
-      // scene walks four suggestions and their reasons, and says nothing
-      // about BoardGameGeek or about retail partners. Gating a claim on a
-      // beat that does not illustrate it would be worse than not gating it.
       points: [
         "Tailored recommendations, drawn from the games you play most",
         "Full BoardGameGeek integration — your collection, and what is hot",
