@@ -122,6 +122,26 @@ from `event.currentTarget`; callbacks receive the **domain object**, not an id.
 **The list is the only growable child.** That is what keeps the grip, title and
 search field on screen while the list scrolls inside the panel.
 
+**And it is the only SCROLLER.** A panel with a second `overflow: auto` box in
+it does not degrade gracefully — it breaks in a way that reads as "the sheet
+doesn't scroll". Two things go wrong at once. The outer box scrolls the pinned
+chrome away, so whatever the person was typing or reading leaves the screen. And
+the inner box, sized to its content and therefore with nothing to scroll, still
+honours its own `overscroll-behavior: contain` — a non-scrollable element with
+`contain` **refuses to pass the gesture to its ancestor**, so a drag anywhere
+over it does nothing at all, while a drag on the thin strips beside it moves the
+sheet. Boardgame-buddy's feedback compose sheet shipped exactly this: a scroller
+wrapped around a textarea *and* the topic list, with the list's own scroller
+inside it. Measured at 393×820, the outer box had 208px to give and the inner
+one had none, and the inner one covered most of the panel.
+
+So: when a sheet needs a fixed field ABOVE the list (a textarea, a note, a
+segmented control), the field is `flex: none` and sits beside the list as a
+sibling — it never wraps it. If everything together cannot fit the shortest
+panel you support, take the height out of the field and out of decoration (a
+grip nothing drags, a sub-line already read) under `:root.<prefix>-kb-open`.
+Never by adding a second scroller.
+
 Panel requirements:
 
 - `box-sizing: border-box`, **explicitly**. `max-height` caps the content box,
@@ -144,6 +164,12 @@ the base backdrop rule is later in the stylesheet and sets
 `align-items: center`, so a single-class selector *ties* and loses on source
 order — and the sheet renders centred. Same trick applies to any inline variant
 of a shared widget.
+
+**So must a per-sheet PANEL rule**, for the same reason and with no error to
+show for it. `.<sheet-class> .<shared>__panel` ties with the shared
+`.<shared-sheet-class> .<shared>__panel` and loses on source order, so a sheet
+raising its own `max-height` silently gets the shared one. Write
+`.<shared-sheet-class>.<sheet-class> .<shared>__panel`.
 
 ## 4. The software keyboard
 

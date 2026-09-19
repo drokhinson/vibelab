@@ -24,6 +24,20 @@
 // "dropdown inside a fixed panel" escape hatch names an `inlineDropdown` option
 // that was deleted with ui/dropdown-fit.js (Docs/UI_AUDIT.md).
 //
+// EXACTLY ONE CHILD OF THIS PANEL SCROLLS, AND IT IS THE TOPIC LIST. That is the
+// shared chrome's own shape ("the list is the only growable child, so the panel
+// stops at its max-height and the list scrolls inside it"), and this sheet had
+// broken it: the textarea, its label and the topic list all sat inside a
+// .feedback-sheet__scroll, which made the sheet TWO nested overflow boxes.
+// Measured at 393x820, the outer one had 208px to give and the inner one — the
+// topic list, `overflow-y: auto` and covering most of the panel — had none,
+// while still carrying `overscroll-behavior: contain`. A non-scrollable box with
+// `contain` does not pass the gesture on, so a drag anywhere over the topics did
+// nothing at all and only the thin label strips scrolled the sheet; when they
+// did, they carried the textarea off the top. Grip, title, type strip, the
+// field and the topic heading are all `flex: none` now, and the list is the one
+// thing that moves. Do not put a scroller back around the field.
+//
 // THE BACK GUARD IS THE SHELL'S. ui/bottom-sheet.js arms and releases it. Arming
 // it again here would push two history entries for one overlay.
 
@@ -89,16 +103,17 @@
             ${this._renderTypes()}
           </div>
 
-          <div class="feedback-sheet__scroll">
+          <div class="feedback-sheet__field">
             <label class="feedback-sheet__label" for="feedback-body">What's on your mind?</label>
             <textarea id="feedback-body" class="feedback-sheet__text"
                       rows="4" maxlength="2000" data-fb-body
                       placeholder="What happened, or what would you like to see?"></textarea>
 
             <div class="feedback-sheet__label" id="feedback-topic-label">Which part of the app?</div>
-            <div class="bgb-sheet__list" role="listbox" aria-labelledby="feedback-topic-label">
-              ${this._renderTopics()}
-            </div>
+          </div>
+
+          <div class="bgb-sheet__list" role="listbox" aria-labelledby="feedback-topic-label">
+            ${this._renderTopics()}
           </div>
 
           <div class="bgb-sheet__foot" data-fb-foot>${this._renderFoot()}</div>
@@ -174,6 +189,14 @@
           if (panel) {
             panel.setAttribute("tabindex", "-1");
             /** @type {HTMLElement} */ (panel).focus();
+          }
+          // The bottom fade on the topic list, only while there is more of it
+          // below the fold. Once, here: the option set is fixed for the life of
+          // the sheet, so nothing after this can change the answer.
+          const list = root.querySelector(".bgb-sheet__list");
+          if (list) {
+            list.classList.toggle("is-scrollable",
+                                  list.scrollHeight > list.clientHeight + 1);
           }
           const text = root.querySelector("[data-fb-body]");
           if (text) {

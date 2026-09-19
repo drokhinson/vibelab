@@ -3304,17 +3304,30 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .feedback__empty-art { width: 140px; height: 140px; margin: 0 auto; display: block; }
 
 /* ── Dev feedback: the compose sheet ──────────────────────────────────────
-   The first sheet in this project to hold a <textarea>, which is why it has a
-   scroller of its own: the topic list and the field together overflow the panel
-   on a small phone, and .bgb-sheet__list is only the list. The panel's own
-   height ceiling stays with .bgb-sheet__panel so the keyboard still shrinks it
+   The first sheet in this project to hold a <textarea>, and for a while the
+   only one with TWO scrollers — a .feedback-sheet__scroll wrapped around the
+   field AND the topic list, with .bgb-sheet__list's own `overflow-y: auto`
+   still on the list inside it. That is the bug this block now exists to
+   prevent, so read the arithmetic before adding anything growable here.
+
+   At 393x820 the outer scroller had 377px of box for 585px of content and the
+   inner list had 404px for 404px — nothing to scroll — yet the list still
+   carried `overscroll-behavior: contain`, which a non-scrollable box honours by
+   refusing to pass the gesture up. The list covers most of the panel, so a drag
+   over the topics moved nothing; only the two thin label strips reached the
+   real scroller, and scrolling it took the textarea off the top of the sheet.
+
+   ONE SCROLLER, AND IT IS .bgb-sheet__list — the shared chrome's own shape.
+   Everything above it is flex: none. The panel's height ceiling stays with
+   .bgb-sheet__panel so the keyboard still shrinks it
    (.claude/rules/overlays.md §4) — do not add a vh ceiling here. */
-.feedback-sheet__scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+
+/* The field band: the textarea, its label, and the topic heading under it.
+   Pinned, so what you are typing stays on screen while the topics scroll. The
+   10px inline padding is what lines it up with .bgb-sheet__title, .__sub and
+   the .bgb-sheet__opt rows below. */
+.feedback-sheet__field {
+  flex: none;
   padding: 0 10px;
 }
 .feedback-sheet__label {
@@ -3344,6 +3357,55 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+/* `resize: vertical` above is a real affordance on a long report, but the field
+   is flex: none inside a capped panel: dragged far enough it would squeeze the
+   topic list to nothing and start pushing Send off the bottom. The cap is what
+   keeps the panel's other children reachable. */
+.feedback-sheet__text { max-height: 220px; }
+/* Keyboard up, the panel is only as tall as what is left of the screen and the
+   person is typing — so the field gives its height back to the topic list
+   rather than the other way round. Roughly two lines, which is what is legible
+   above a software keyboard anyway. */
+:root.bgb-kb-open .feedback-sheet__text { height: 72px; max-height: 72px; }
+/* And the two pieces of chrome that are decoration once somebody is typing go
+   with it. This sheet has more fixed children than any other — type strip,
+   field, topic heading, Send AND Cancel — and on a 667px phone with a 300px
+   keyboard up there is not room for all of them: the overflow came off the
+   BOTTOM of the flex column, which is where Cancel is, so the sheet's visible
+   exit went off screen. The grip is a drag affordance nothing here drags, and
+   the sub-line has been read by the time the keyboard is up. */
+:root.bgb-kb-open .feedback-sheet .bgb-sheet__grip,
+:root.bgb-kb-open .feedback-sheet .bgb-sheet__sub { display: none; }
+
+/* Seven topics do not fit the ~3.4 rows the list gets under the field, and a
+   row clipped by the panel edge is a weak cue — "only three topics to pick
+   from" is what it actually read as. The fade says there is more below.
+   Same mechanism as .add-buddies__grid.is-scrollable, which is where it was
+   written: a mask costs no layout, so the cue cannot itself resize the list it
+   is a cue about. The class is toggled once on open
+   (widgets/feedback-compose-sheet.js), since the option set does not change
+   while the sheet is up. Scoped to this sheet — the picker sheets' lists are
+   tall enough that the first row off the bottom says it for them. */
+.feedback-sheet .bgb-sheet__list.is-scrollable {
+  /* 18px, not .add-buddies__grid's 28: the row that peeks over this edge is
+     only ~34px of a 56px row, and a fade deep enough to erase it removes the
+     very cue it is here to reinforce. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+}
+
+/* This sheet carries more fixed chrome than the pickers the shared ceiling was
+   written for — a type strip AND a textarea above the list, where a picker has
+   a search field — so the same 80% left it with barely three of seven topics in
+   view. A few more points of the screen buys a fourth row and a clear half of
+   the fifth, which is what makes the list read as a list. Still a PERCENTAGE of
+   the visible box, so .claude/rules/overlays.md §4 holds: the keyboard still
+   shrinks it, and :root.bgb-kb-open still takes all of it. */
+/* Doubled up on .bgb-sheet for the same reason the backdrop rules above are:
+   the shared ceiling is defined LATER in this file at the same specificity, so
+   a bare .feedback-sheet loses the tie and this silently does nothing. */
+.bgb-sheet.feedback-sheet .bgb-sheet__panel { max-height: min(88%, 720px); }
+
 .feedback-sheet__send {
   width: 100%;
   min-height: 52px;   /* commit button, per mobile-web.md §5 */

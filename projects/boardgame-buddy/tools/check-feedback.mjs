@@ -27,6 +27,13 @@
 //      closed group.
 //   6. The FLOATING ADD renders only when there is a board under it — an empty
 //      board already carries its own "Add feedback" button.
+//   7. The COMPOSE PANEL HAS ONE SCROLLER. The topic list is a SIBLING of the
+//      field, never nested inside it. This one is structural and invisible from
+//      the markup by eye, which is exactly why it is checked: a scroller
+//      wrapped around the field and the list made the sheet two nested overflow
+//      boxes, and the inner one — sized to its content and so with nothing to
+//      scroll — swallowed every drag over the topics via its own
+//      `overscroll-behavior: contain` (.claude/rules/overlays.md §3).
 //
 // (4), (5) and (6) are checked by driving the real _renderList / _renderFab
 // through a stub view rather than by re-deriving their conditions here: a copy
@@ -347,6 +354,38 @@ console.log("\n12. A stale ?compose= type is ignored rather than preselected");
      sheet._renderFoot().includes("disabled"));
   sheet._type = "bug"; sheet._topic = "feed"; sheet._body = "it broke";
   ok("and enabled once they are", !sheet._renderFoot().includes("disabled"));
+}
+
+console.log("\n13. The compose panel keeps the topic list OUT of the field");
+{
+  /**
+   * The index just past the <div> that opens at `from`, found by counting divs
+   * rather than by looking for the next `</div>` — the field contains one.
+   */
+  const closeOf = (html, from) => {
+    const re = /<\/?div\b/g;
+    re.lastIndex = from;
+    let depth = 0, m;
+    while ((m = re.exec(html))) {
+      depth += m[0][1] === "/" ? -1 : 1;
+      if (depth === 0) return re.lastIndex;
+    }
+    return -1;
+  };
+
+  const html = win.FeedbackComposeSheet._renderPanel();
+  const field = html.indexOf("feedback-sheet__field");
+  const list = html.indexOf("bgb-sheet__list");
+  const fieldEnd = closeOf(html, html.lastIndexOf("<div", field));
+
+  ok("the field band is there", field > -1);
+  ok("the old wrapper scroller is gone", !html.includes("feedback-sheet__scroll"));
+  ok("the textarea is inside the field", html.indexOf("data-fb-body") < fieldEnd);
+  ok("the topic heading is inside it too", html.indexOf("feedback-topic-label") < fieldEnd);
+  // The whole point: a sibling, so the panel has one growable child and one
+  // scroller. Nest it again and the sheet stops scrolling on touch.
+  ok("the topic list is a SIBLING of the field, not a child", list > fieldEnd);
+  ok("and it still comes before the foot", list < html.indexOf("data-fb-foot"));
 }
 
 console.log(fails ? `\n${fails} FAILED\n` : "\nAll checks passed\n");
