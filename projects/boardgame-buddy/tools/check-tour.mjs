@@ -82,6 +82,21 @@ for (const ch of CHAPTERS) {
 ok("no scene is registered that no chapter uses",
    V.ids().every((id) => CHAPTERS.some((c) => c.vignette === id)),
    `orphans: ${V.ids().filter((id) => !CHAPTERS.some((c) => c.vignette === id)).join(", ")}`);
+// A CHAPTER MAY CARRY NO BODY.
+//
+// The community chapter dropped its paragraph — the scene under it scrolls
+// through three game nights and makes the same point better than a sentence
+// restating it. That makes "no body" a supported shape, and the renderer has
+// to tolerate it: an unguarded ${ch.body} prints the string "undefined" into
+// the panel, which is not an error anybody's console reports.
+ok("the renderer guards a chapter with no body",
+   /\$\{ch\.body \? `<p class="tour__body">/.test(read("views/tour-view.js")));
+ok("at least one chapter exercises that path",
+   CHAPTERS.some((c) => !c.body),
+   "every chapter still has a body, so the guard above is untested");
+ok("a chapter with no body still has points to carry it",
+   CHAPTERS.filter((c) => !c.body).every((c) => (c.points || []).length >= 2));
+
 ok("every chapter has a one-line strip claim",
    CHAPTERS.every((c) => typeof c.strip === "string" && c.strip.length > 0));
 ok("chapter slugs are unique",

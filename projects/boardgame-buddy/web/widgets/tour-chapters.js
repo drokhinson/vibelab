@@ -30,7 +30,8 @@
    * @property {string} slug      stable — appears in the URL as /tour?c=<slug>
    * @property {string} eyebrow
    * @property {string} title
-   * @property {string} body
+   * @property {string} [body]  optional — a chapter whose scene carries the
+   *   argument on its own says it once rather than twice
    * @property {string[]} points
    * @property {string} vignette  a BgbTourVignette id
    * @property {string} mark      assets/sprites/features/bgb-feat-<mark>.svg
@@ -43,13 +44,21 @@
       slug: "community",
       eyebrow: "Your people",
       title: "Your table, and your people",
-      body: "Add the people you sit down with. Every play lands in one shared "
-        + "feed, grouped by the night it happened rather than scattered by who "
-        + "got round to logging it.",
+      // No `body`. The scene under this chapter is a feed that scrolls
+      // through three nights, and it says "every play lands in one shared
+      // feed" better than a paragraph restating it underneath ever did.
       points: [
-        "Add a buddy by QR code, or by name",
-        "One feed for everyone who was at the table",
-        "Players without accounts still get counted",
+        "Add a friend by QR code, or by username",
+        "See the games your friends are enjoying",
+        // CAN CLAIM, not "are linked", and the distinction is the feature.
+        // A ghost is a name somebody typed into a play they logged. When that
+        // person signs up they ask, and the person who logged the plays
+        // approves — widgets/ghost-claim-sheet.js promises "Nothing changes
+        // until they say yes." in so many words. Do not let this line drift
+        // into automatic matching, and do not reach for "merge accounts":
+        // the app's verb is claim, and "ghost" is a word it already says out
+        // loud on the Buddies screen and in every import step.
+        "Ghosts you logged can claim their plays when they join",
       ],
       vignette: "community",
       mark: "community",

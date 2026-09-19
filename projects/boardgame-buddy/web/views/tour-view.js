@@ -171,7 +171,7 @@
                     <div class="tour__stage" data-scene="${ch.slug}">
                       <div class="tour__stage-wait" aria-hidden="true"></div>
                     </div>
-                    <p class="tour__body">${ch.body}</p>
+                    ${ch.body ? `<p class="tour__body">${ch.body}</p>` : ""}
                     <ul class="tour__points">
                       ${ch.points.map((p, n) => `
                         <li style="--i:${n}">
