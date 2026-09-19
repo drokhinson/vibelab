@@ -152,6 +152,21 @@ function formatDateShort(dateStr) {
   return parseDate(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// "Sep 12" this year, "Sep 12, 2019" in any other — the shortest label that
+// stays unambiguous. formatDateShort drops the year unconditionally, which is
+// fine under a heading that already fixes the year but not on a standalone
+// stamp (the game-detail plays reel spans as many years as the collection
+// does); formatDate prints it every time, which is noise on a play from last
+// week.
+function formatDateCompact(dateStr) {
+  if (!dateStr) return "";
+  const d = parseDate(dateStr);
+  if (isNaN(d.getTime())) return "";
+  return d.getFullYear() === new Date().getFullYear()
+    ? formatDateShort(dateStr)
+    : formatDate(dateStr);
+}
+
 // "Today" / "Yesterday" / "Aug 12, 2019" — the header a list of events reads
 // under, where a date on every row reads as data rather than as position.
 //
