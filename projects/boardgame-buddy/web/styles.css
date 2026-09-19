@@ -19538,19 +19538,28 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .tour__body--center { text-align: center; max-width: 30ch; }
 .tour__mark { width: 56px; height: 56px; border-radius: var(--r-lg); margin-bottom: 14px; }
 
-.tour__points { list-style: none; margin: 12px 0 0; padding: 0; }
+.tour__points { list-style: none; margin: 14px 0 0; padding: 0; }
+/* 16px, NOT the 12.5px these started at. No chapter carries a paragraph any
+   more — the scene above makes the argument and these three lines are the
+   only prose on the panel — so they are body text now rather than a caption
+   under body text, and body text on a phone has a floor.
+
+   16px is the same floor .claude/rules/mobile-web.md §2 puts on form controls
+   (there because iOS zooms the page on a sub-16px focus; here because it is
+   what the platform treats as readable at arm's length). The panel has the
+   room precisely because the paragraphs left. */
 .tour__points li {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: 12.5px;
-  line-height: 1.45;
+  gap: 10px;
+  font-size: 16px;
+  line-height: 1.5;
   color: var(--ink-muted);
-  padding: 4px 0;
+  padding: 5px 0;
   animation: fadeUp 200ms ease both;
   animation-delay: calc(var(--i, 0) * 40ms);
 }
-.tour__points li [data-icon-name] { color: var(--accent); flex: none; margin-top: 2px; }
+.tour__points li [data-icon-name] { color: var(--accent); flex: none; margin-top: 4px; }
 
 /* A POINT PINNED TO A BEAT WAITS FOR THE SCENE TO MAKE ITS CASE.
    widgets/tour-chapters.js can give a point a `beat`, and views/tour-view.js
@@ -20286,8 +20295,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .vscore[data-stage="settle"] .vscore__stage--settle { opacity: 1; }
 
 .vscore__stage--lobby { align-items: center; justify-content: center; gap: 6px; }
-/* WHAT is being played, above WHERE to join it — the reverse of the real
-   Gather screen, and argued in widgets/tour-vignette-scripted.js. */
+/* What is being played, above where to join it. */
 .vscore__picks { display: flex; gap: 5px; margin-bottom: 4px; }
 .vscore__pick {
   font-size: 10px;

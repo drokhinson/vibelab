@@ -113,14 +113,6 @@
   // rule before touching its colours — a ground token here is a black box on
   // cream in one theme and invisible in the other.
   //
-  // GATHER PUTS THE GAME ABOVE THE CODE; THE REAL SCREEN DOES NOT.
-  // views/play-flow-view.js orders Gather as code → game → game type →
-  // expansions → players. The tour leads with the game deliberately: a
-  // stranger who has never opened the app reads "Arboretum · Expansion 1" as
-  // what this is a picture of, and a four-letter code above it as noise. This
-  // is the one place the vignette diverges from the screen it depicts. If the
-  // two are ever reconciled, it is the tour that should move.
-  //
   // A TEMPLATE RELABELS ROWS, IT DOES NOT ADD A SECOND KIND OF ROW.
   // A scoring grid's `rowLabels` are index-aligned to the round index, so
   // applying one renames R1/R2 in place and may make the table longer. The

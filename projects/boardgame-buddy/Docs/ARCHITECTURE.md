@@ -697,14 +697,8 @@ And `check-tour.mjs` asserts that every gated point names a beat its scene
 actually has, because a typo there is not an error anybody sees: it is one
 bullet that never appears, on a panel that still looks deliberate.
 
-Two things about what that scene shows. **Gather puts the game above the join
-code, and the real screen does not** — `views/play-flow-view.js` orders it
-code → game → game type → expansions → players. The tour leads with
-"Arboretum · Expansion 1" on purpose: a stranger reads that as what this is a
-picture of, and a four-letter code above it as noise. It is the one place a
-vignette diverges from the screen it depicts, and if the two are reconciled it
-is the tour that should move. And **a template relabels rows, it does not add
-a second kind of row**: `rowLabels` are index-aligned to the round index, so
+One thing about what that scene shows: **a template relabels rows, it does not
+add a second kind of row**: `rowLabels` are index-aligned to the round index, so
 applying one renames the R1/R2 the players already filled in and may make the
 table longer. The scores stay exactly where they are — which is what the
 confirm sheet promises in so many words, and why the scene can keep its

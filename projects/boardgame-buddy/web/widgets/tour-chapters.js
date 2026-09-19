@@ -70,9 +70,9 @@
       slug: "guides",
       eyebrow: "Reference",
       title: "The rules, without the rulebook",
-      body: "Somebody has already looked up the rule you are stuck on. Pull "
-        + "their chapter into your own guide and read it at the table, in a "
-        + "scroll built for one hand.",
+      // No `body` — no chapter has one now. This scene watches a community
+      // chapter land in your own guide, which is what the paragraph was
+      // describing in words underneath it.
       points: [
         "Setup, turn order, scoring, card references",
         "Written by players, sorted by how many use them",
@@ -134,13 +134,20 @@
       slug: "discover",
       eyebrow: "What's next",
       title: "What to play next",
-      body: "Picks drawn from the games you play most and the shelf you already "
-        + "own, each one saying why it is there. Plus what is climbing on "
-        + "BoardGameGeek this week.",
+      // No `body`. The scene already shows a pick with the reason under it,
+      // which is the whole of what the old paragraph said.
+      //
+      // The points are NOT beat-gated here, unlike chapters 3 and 4: the
+      // scene walks four suggestions and their reasons, and says nothing
+      // about BoardGameGeek or about retail partners. Gating a claim on a
+      // beat that does not illustrate it would be worse than not gating it.
       points: [
-        "Reasons, not rankings",
-        "This year's releases",
-        "The games on your shelf you have not touched",
+        "Tailored recommendations, drawn from the games you play most",
+        "Full BoardGameGeek integration — your collection, and what is hot",
+        // The feature is retail PARTNER LINKS under a game (domain/affiliate.js),
+        // and they stay hidden until an admin switches a partner on. So the
+        // line promises where to buy from a partner, not a price guarantee.
+        "Deals from our retail partners, on the game's own page",
       ],
       vignette: "discover",
       mark: "discover",

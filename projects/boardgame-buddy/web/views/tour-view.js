@@ -251,7 +251,7 @@
                         const beat = typeof p === "string" ? "" : p.beat;
                         return `
                         <li style="--i:${n}"${beat ? ` data-beat="${beat}"` : ""}>
-                          <i data-icon="check" class="w-3.5 h-3.5"></i><span>${text}</span>
+                          <i data-icon="check" class="w-4 h-4"></i><span>${text}</span>
                         </li>`;
                       }).join("")}
                     </ul>
