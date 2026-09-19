@@ -622,6 +622,20 @@ reasoning governs the sign-in screen's hero vignette, which mounts *after*
 first paint and degrades to nothing on a dead connection or under reduced
 motion.
 
+**And a stable url needs a freshness rule, which those four did not have.**
+Everything else the site ships is either content-hashed by the bundler — a
+changed file is a different url, and `_headers` pins those `immutable` for a
+year on exactly that basis — or explicitly `no-cache`. The vignette modules
+were neither: prefetch links at stable urls, matching no `_headers` rule but
+the security-only `/*`, so they went out with no `Cache-Control` at all and a
+browser was free to invent a heuristic lifetime. One did, and served a scene
+module **three releases stale** while the bundle beside it on the same page
+was current — a failure with no symptom except a screen that looks like an
+older version of itself, which is indistinguishable from work that was never
+done. `/ui/*` and `/widgets/*` are `no-cache` now. **Any new file fetched by
+url rather than folded into the bundle needs the same**, or it inherits this
+bug on the day it is written.
+
 The tour is **chrome** and joins the re-point lists in `styles.css` — with one
 paper island covering the two things inside it that are photographs: the
 Arboretum scorepad in the scoring scene, and the play cards in the feed scene.
@@ -632,15 +646,39 @@ and on cream that is 2.6:1) and `--card-border` (dark declares it
 `transparent`, which is right for a card on the app's own ground and leaves a
 cream card on that ground with no edge at all).
 
-**The feed scene scrolls through three game nights**, because one night on a
-rail demonstrates a rail. Today is a multi-game night whose rail slides
-sideways; Yesterday is a single-game night, which takes the *game name* in its
-header rather than "1 game", centres its lone card the way
-`.play-session--single` does, and carries **no** Good game footer because the
-real one is omitted when every play in the night is the viewer's own; Sat 13 is
-a second multi-game night. Sections are a uniform height so one vertical step
-is one section — the scene sets an index and the stylesheet owns the pixels,
-which is the same contract the horizontal rail has.
+**The feed scene scrolls through four game nights, and two of them are not
+yours** — because one night on a rail demonstrates a rail, and a feed of
+nothing but your own table is a log. Today is a multi-game night whose rail
+slides sideways; Yesterday and Fri 12 are nights the viewer was not at; Sat 13
+is a single-game night, which takes the *game name* in its header rather than
+"1 game", centres its lone card the way `.play-session--single` does, and
+carries **no** Good game footer because the real one is omitted when every play
+in the night is the viewer's own. Sections are a uniform height so one vertical
+step is one section — the scene sets an index and the stylesheet owns the
+pixels, which is the same contract the horizontal rail has.
+
+Two things follow from the friends-only nights rather than being decided
+separately. **No card on them carries a crown**, because the crown marks plays
+the *viewer* won and there are none — a mark that would have appeared anyway
+says nothing. And the Good game footer arrives **already populated**: somebody
+else has said good game before you get there, so the `kudos` beat is you
+*pressing the button* rather than the footer appearing from nowhere. The line
+goes from `Marcus said good game` to `You and 1 other said good game`, which is
+the shape `_reactionSentence` actually produces — the viewer always leads and
+the others are counted, never named. One deliberate divergence: the real pill
+drops the words for a bare count the moment anyone reacts, and the mock keeps
+them, because a handshake and the numeral "1" tells a stranger nothing.
+
+**The face stack is the app's own avatar, and was not.** `ui/user-badge.js`
+paints every default badge as an opaque `#2a1812` disc with `#C9922A`
+initials, in both themes, plus a hairline and a top highlight — an avatar is an
+identity mark, not a surface. The scene had invented `--accent-quiet` +
+`--accent-ink` instead, which was wrong twice: a different object from the one
+the feed shows, and **translucent**, so an overlapped stack showed the disc
+behind straight through the disc in front, initials and all. The highlight is
+what separates two adjacent discs at this size — the ring behind them is close
+in value to both — so a rule that restates the ring has to restate the
+highlight with it.
 
 **The two tracks must not share a custom property.** They did, and because
 custom properties inherit, the vertical index set on the outer track reached
