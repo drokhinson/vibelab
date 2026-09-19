@@ -178,22 +178,19 @@
 
       this.container.innerHTML = `
         ${this._renderHead()}
-        <div class="set-card-label">Getting started</div>
-        ${this._renderTourCard()}
-        <div class="set-card-label">Appearance</div>
+        <div class="set-card-label">Preferences</div>
         ${this._renderAppearanceCard()}
-        <div class="set-card-label">Notifications</div>
         ${this._renderNotificationsCard()}
+        <div class="set-card-label">What's new &amp; what's next</div>
+        ${this._renderTourCard()}
+        ${this._renderFeedbackCard()}
         <div class="set-card-label">Connections</div>
         <div id="set-bgg-host">${this._renderBggCard()}</div>
-        <div class="set-card-label">Import</div>
-        ${this._renderImportCard()}
         <div id="set-outbox-host">${this._renderPendingUploadsSection()}</div>
         <div class="set-card-label">Data management</div>
+        ${this._renderImportCard()}
         ${this._renderExportCard()}
         ${this._renderCacheCard()}
-        <div class="set-card-label">What's new &amp; what's next</div>
-        ${this._renderFeedbackCard()}
         ${me.is_admin ? `
           <div class="set-card-label">Admin tools</div>
           <div id="set-admin-host">${this._renderAdminCard()}</div>
