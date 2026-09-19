@@ -642,7 +642,7 @@
       // Every play is a tile of one of two widths now, so the rail needs no
       // size hint. `isSingle` survives only to centre a lone tile.
       const isSingle = card.plays.length === 1;
-      const cards = card.plays.map((p) => window.renderPlayCard(p)).join("");
+      const cards = railOrder(card.plays).map((p) => window.renderPlayCard(p)).join("");
       return `
         <section class="play-session${isSingle ? " play-session--single" : ""}"
                  data-session-key="${escapeAttr(sessionKey(firstPlay))}">
@@ -1096,6 +1096,34 @@
       existing.plays.push(card);
     }
     return out;
+  }
+
+  // ── Rail order ────────────────────────────────────────────────────────────
+  //
+  // A session's plays arrive in the backend's feed order, which is fine for a
+  // list but wasteful for a horizontal rail: the rail is scrolled, so only its
+  // first couple of tiles are seen without a swipe, and a night's photographs
+  // are the whole reason to look at it. So the plays whose owner uploaded a
+  // snapshot go first and the rest keep their places behind them — a stable
+  // partition, not a sort, so within each half the feed's own order (and the
+  // day's story) survives.
+  //
+  // A run card is photoless by construction: its front is a count, never a
+  // photograph (see ui/play-card.js renderStackFront), so it stays in the
+  // trailing half even when the run's first play carries a photo_url.
+  function railOrder(plays) {
+    const withPhoto = [];
+    const rest = [];
+    for (const p of plays) {
+      (hasRailPhoto(p) ? withPhoto : rest).push(p);
+    }
+    return withPhoto.concat(rest);
+  }
+
+  /** Does this card's tile actually paint a user-uploaded photo? */
+  function hasRailPhoto(card) {
+    if (!card || !card.photo_url) return false;
+    return (card.group_count || 1) <= 1;
   }
 
   /** The logger as a one-entry participant list, for an import's header. */
