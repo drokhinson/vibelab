@@ -11,7 +11,8 @@ A consistency audit of `projects/boardgame-buddy/web/`. Every claim cites code a
 > Pass 8 (the header's upload button retires) 2026-09-02,
 > Pass 9 (notifications) 2026-09-03, Pass 10 (BGG import) 2026-09-03,
 > Pass 11 (review sweep) 2026-09-10,
-> **Pass 12 (two importers become one) 2026-09-16**.
+> Pass 12 (two importers become one) 2026-09-16,
+> **Pass 13 (one FAB, one feedback door) 2026-09-19**.
 >
 > ⚠️ Every `file:line` citation in §§2-8 dates from 2026-05-23 and has drifted.
 > Treat the *claims* as current only where a later pass confirms them; re-grep
@@ -1182,3 +1183,55 @@ in a step file must name a method that exists, because those resolve at click
 time and a renamed one is a dead button with no build-time error. Splitting the
 photo step module cut `thumb()` and `emptyStep()` out of it — both files still
 parsed, both still exported — and nothing else would have said so.
+
+---
+
+## Cleanup log — Pass 13 (one FAB, one feedback door), 2026-09-19
+
+**Promoted, not copied:** `.chapter-add__fab` → **`.bgb-fab`** (and
+`.chapter-add__fab-back` → `.bgb-fab-back`, `.chapter-add__fab-spacer` →
+`.bgb-fab-spacer`). The Dev feedback board wanted a floating "Add", which made
+the reference-guide browser's FAB instance #1 of an affordance about to have
+two — and `ui-object-design.md` §4's "extract at instance #2" applies to a class
+family exactly as it does to a module. Nothing about the CSS changed; the
+rename is the whole of it, plus a section header saying out loud that the family
+belongs to no screen. Callers: `views/reference-guide-add-view.js` (unchanged
+markup, new class names) and `views/feedback-view.js`. Citations in
+`Docs/ARCHITECTURE.md` §4.6 and the two `calc()` comments in `styles.css` were
+swept with it.
+
+This is the §5 note about `.bgb-cream-screen` in its cheap form: the rename
+happened the day the surface stopped being one screen's, not two screens later.
+
+**Deleted:** `.feedback__status` / `.feedback__status-label` — the wrapper and
+label for an Open/Resolved `.spoke-toggle` above the list. The control is the
+shared `.bgb-switch` in the spoke header's trailing slot now (the slot the Add
+button vacated), which is where it belonged: it does not filter the board, it
+swaps the board for the other half of it. `.spoke-toggle` itself stays — four
+other screens use it.
+
+**Deleted:** the board's topic filter rail, and the per-row topic tag with it.
+Topic is the board's grouping now (one collapsible `.feedback-group` header per
+topic that has rows), and a grouping plus a filter over the same axis is the
+same control twice. The row no longer repeats its own group's label.
+
+**One row where there were two:** Settings' *Add feedback* and *Report a bug*
+both went to `/settings/feedback?compose=<type>` — same destination, same
+sheet, differing only in a preselection the sheet's own type picker asks for
+anyway. One *Feedback & bugs* row now, landing on the board. `?compose=` is
+still read by the view and still a supported deep link; it just has no caller in
+`web/`.
+
+**Extended, not forked:** `ui/switch.js` grew an `id` option rather than the
+feedback board growing its own switch to get a focusable id. Any host that
+repaints by replacing `innerHTML` and restores focus by id needs it; the
+collection's "Show all expansions" does not pass one today because its host
+does not restore focus that way.
+
+**Gate extended:** `tools/check-feedback.mjs`, 24 assertions to 56. The five new
+groups drive the real `_groups` / `_renderList` / `_renderFab` / `_renderHead`
+rather than re-deriving their conditions, so the checks can disagree with the
+code. The ones that earn their place: a collapsed group must render **none** of
+its rows (not `display: none` on all of them — that is what keeps a
+hundred-item board cheap), and a topic the lookup table has forgotten must
+still get a header from the row's own denormalised label.

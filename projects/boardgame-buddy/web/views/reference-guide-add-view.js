@@ -965,14 +965,14 @@ components above.
             ${dislikedSection}
           </div>
         </div>
-        <div class="chapter-add__fab-spacer"></div>
-        <button class="chapter-add__fab-back"
+        <div class="bgb-fab-spacer"></div>
+        <button class="bgb-fab-back"
                 title="${escapeAttr(backLabel)}"
                 onclick="${backOnClick}">
           <i data-icon="arrow-left" class="w-4 h-4"></i>
           <span>${escapeHtml(backLabel)}</span>
         </button>
-        <button class="chapter-add__fab"
+        <button class="bgb-fab"
                 title="Create a new chapter"
                 onclick="window.referenceGuideAddView._enterCreate()">
           <i data-icon="plus" class="w-5 h-5"></i>
