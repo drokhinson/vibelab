@@ -98,44 +98,88 @@
     ],
   });
 
-  // ── Scoring — Gather, then a template, then an expansion, then a winner ────
+  // ── Scoring — Gather, live rounds, then a community grid ──────────────────
+  //
+  // THREE STAGES, AND THE CHAPTER'S THREE BULLETS ARE PINNED TO THEM.
+  // widgets/tour-chapters.js gives each scoring point a `beat`, and
+  // views/tour-view.js reveals that point when the shell reports the beat — so
+  // a claim arrives as the scene demonstrates it rather than sitting above it
+  // making all three at once. Renaming a beat here therefore breaks a bullet
+  // as well as a store screenshot; tools/check-tour.mjs pins both.
   //
   // The scorepad is a PAPER surface (.claude/rules/theming.md §6) sitting on a
   // chrome screen, so .vscore__pad is a paper island in styles.css with its
   // class doubled to out-specify the (0,3,0) dark chrome branch. Read that
   // rule before touching its colours — a ground token here is a black box on
   // cream in one theme and invisible in the other.
+  //
+  // GATHER PUTS THE GAME ABOVE THE CODE; THE REAL SCREEN DOES NOT.
+  // views/play-flow-view.js orders Gather as code → game → game type →
+  // expansions → players. The tour leads with the game deliberately: a
+  // stranger who has never opened the app reads "Arboretum · Expansion 1" as
+  // what this is a picture of, and a four-letter code above it as noise. This
+  // is the one place the vignette diverges from the screen it depicts. If the
+  // two are ever reconciled, it is the tour that should move.
+  //
+  // A TEMPLATE RELABELS ROWS, IT DOES NOT ADD A SECOND KIND OF ROW.
+  // A scoring grid's `rowLabels` are index-aligned to the round index, so
+  // applying one renames R1/R2 in place and may make the table longer. The
+  // scores already typed stay exactly where they are — which is what the
+  // confirm sheet promises in so many words, and why this scene can keep its
+  // numbers across the template beat instead of re-entering them.
   const SEATS = ["Priya", "Marcus", "You"];
-  // [row label, class, the three scores]
-  const ROWS = [
-    ["Score", "", ["—", "—", "—"]],
-    ["Species", "is-tmpl", ["12", "9", "15"]],
-    ["Largest path", "is-tmpl", ["6", "8", "6"]],
-    ["Cards in hand", "is-tmpl", ["3", "4", "2"]],
-    ["Promo trees", "is-exp", ["0", "2", "4"]],
-  ];
-  const TOTALS = ["21", "23", "27"];
+  // Per round, then what the template and the expansion each add. The running
+  // total is precomputed rather than summed at runtime: a beat is a state
+  // application, and a beat that accumulates is a beat that cannot be applied
+  // twice.
+  const R1 = ["8", "6", "11"];
+  const R2 = ["4", "3", "4"];
+  const T3 = ["3", "4", "2"];
+  const E1 = ["0", "2", "4"];
+  const TOT = {
+    r1:   ["8", "6", "11"],
+    r2:   ["12", "9", "15"],
+    tmpl: ["15", "13", "17"],
+    exp:  ["15", "15", "21"],
+  };
 
-  const cells = (vals) => vals
-    .map((v) => `<span class="vscore__c" data-v="${v}">·</span>`).join("");
+  const cells = () => SEATS
+    .map(() => '<span class="vscore__c" data-v>·</span>').join("");
+  /** Write a row's cells left to right; anything unnamed goes back to the dot. */
+  const fill = (root, sel, vals) => {
+    root.querySelectorAll(sel).forEach((c, i) => {
+      c.textContent = vals[i] == null ? "·" : vals[i];
+    });
+  };
 
   V.register({
     id: "scoring",
-    label: "A live game: a blank scorepad becomes Arboretum's, then settles up",
+    label: "A live game: rounds scored as they happen, then a community "
+      + "scoring grid and its expansion",
     // PACING IS THE POINT OF THIS SCENE, NOT DECORATION.
     //
     // It ran at roughly one beat a second and read as a flicker: one second to
     // take in a join code and three names, and one second on the GENERIC
     // scorepad before a template rewrote it. That second one is the whole
-    // scene — you have to register "this grid is generic" before it changes,
-    // or the change is just a grid appearing. Every gap below is ~2s now, and
-    // the generic pad gets the longest of them.
+    // scene — you have to register "this grid is R1, R2 and nothing else"
+    // before it changes, or the change is just a grid appearing. The gaps
+    // between the three STAGES are ~2s each.
+    //
+    // The two round beats inside the play stage are the deliberate exception,
+    // at 1.4s and 1.2s: typing a score and adding a round is one continuous
+    // action at a table, and stretching it to the stage cadence made the
+    // scorepad look slow to use, which is the opposite of the claim.
     hold: 3000,
     html: `
       <div class="vig-chrome"><span class="vig-chrome__title" data-step>Play · Gather</span></div>
       <div class="vscore">
 
         <div class="vscore__stage vscore__stage--lobby">
+          <div class="vscore__picks">
+            <span class="vscore__pick" data-pick="0">Arboretum</span>
+            <span class="vscore__pick vscore__pick--exp" data-pick="1"
+                  style="--exp-accent: var(--row-purple)">Expansion 1</span>
+          </div>
           <span class="vscore__codelbl">Join code</span>
           <span class="vscore__code">RPX4</span>
           <div class="vscore__seats">
@@ -150,27 +194,39 @@
         <div class="vscore__stage vscore__stage--pad">
           <div class="vscore__pills">
             <span class="vscore__pill is-base">Arboretum</span>
-            <span class="vscore__pill" data-pill="tmpl">Community scoring</span>
-            <span class="vscore__pill" data-pill="exp">+ Promo trees</span>
+            <span class="vscore__pill" data-pill="tmpl">Community grid</span>
+            <span class="vscore__pill" data-pill="exp">Expansion 1</span>
           </div>
           <div class="vscore__pad vscore__pad">
             <div class="vscore__row vscore__row--head">
               <span class="vscore__lbl"></span>${SEATS
                 .map((n) => `<span class="vscore__c">${n.slice(0, 3)}</span>`).join("")}
             </div>
-            ${ROWS.map(([label, cls, vals]) => `
-              <div class="vscore__row ${cls}">
-                <span class="vscore__lbl">${label}</span>${cells(vals)}
-              </div>`).join("")}
+            <div class="vscore__row" data-row="r1" style="--row-accent: var(--row-green)">
+              <span class="vscore__lbl" data-lbl>R1</span>${cells()}
+            </div>
+            <div class="vscore__row vscore__row--grow" data-row="r2" data-grow="r2"
+                 style="--row-accent: var(--row-blue)">
+              <span class="vscore__lbl" data-lbl>R2</span>${cells()}
+            </div>
+            <div class="vscore__row vscore__row--grow is-tinted" data-row="t3" data-grow="tmpl"
+                 style="--row-accent: var(--row-gold)">
+              <span class="vscore__lbl" data-lbl>Cards in hand</span>${cells()}
+            </div>
+            <div class="vscore__row vscore__row--grow is-tinted is-exp" data-row="e1" data-grow="exp"
+                 style="--row-accent: var(--row-rust); --exp-accent: var(--row-purple)">
+              <span class="vscore__lbl" data-lbl>Expansion 1</span>${cells()}
+            </div>
             <div class="vscore__row vscore__row--total">
-              <span class="vscore__lbl">Total</span>${cells(TOTALS)}
+              <span class="vscore__lbl">Total</span>${cells()}
             </div>
           </div>
+          <span class="vscore__add" data-add>+ Round</span>
         </div>
 
         <div class="vscore__stage vscore__stage--settle">
           <i data-icon="crown" class="w-6 h-6"></i>
-          <p class="vscore__winner">You win, 27</p>
+          <p class="vscore__winner">You win, 21</p>
           <p class="vscore__settlesub">Logged for all three of you</p>
         </div>
 
@@ -178,34 +234,60 @@
     reset(root) {
       stage(root, "lobby");
       put(root, "[data-step]", "Play · Gather");
+      mark(root, ".vscore__pick", "is-in", false);
       mark(root, ".vscore__seat", "is-in", false);
       mark(root, "[data-pill]", "is-on", false);
-      body(root, ".vscore").classList.remove("has-tmpl", "has-exp", "is-scored");
-      root.querySelectorAll(".vscore__c[data-v]").forEach((c) => { c.textContent = "·"; });
+      mark(root, '[data-row="r1"], [data-row="r2"]', "is-tinted", false);
+      mark(root, ".vscore__add", "is-armed", false);
+      body(root, ".vscore").classList.remove("has-r2", "has-tmpl", "has-exp");
+      put(root, '[data-row="r1"] [data-lbl]', "R1");
+      put(root, '[data-row="r2"] [data-lbl]', "R2");
+      fill(root, ".vscore__c[data-v]", []);
     },
     beats: [
-      { name: "lobby", at: 600, apply: (r) => mark(r, ".vscore__seat", "is-in", true) },
-      { name: "play", at: 2600, apply: (r) => {
-        stage(r, "pad");
-        put(r, "[data-step]", "Play · Scoring");
+      // Bullet 1 — "the game, its expansions, and who is playing".
+      { name: "gather", at: 700, apply: (r) => {
+        mark(r, ".vscore__pick", "is-in", true);
+        mark(r, ".vscore__seat", "is-in", true);
       } },
-      { name: "template-on", at: 4800, apply: (r) => {
+      { name: "play", at: 2900, apply: (r) => {
+        stage(r, "pad");
+        put(r, "[data-step]", "Play · Round 1");
+      } },
+      // Bullet 2 — "the same numbers on every screen at the table".
+      { name: "scores", at: 4300, apply: (r) => {
+        fill(r, '[data-row="r1"] .vscore__c[data-v]', R1);
+        fill(r, ".vscore__row--total .vscore__c[data-v]", TOT.r1);
+        mark(r, ".vscore__add", "is-armed", true);
+      } },
+      { name: "round2", at: 5500, apply: (r) => {
+        body(r, ".vscore").classList.add("has-r2");
+        put(r, "[data-step]", "Play · Round 2");
+        fill(r, '[data-row="r2"] .vscore__c[data-v]', R2);
+        fill(r, ".vscore__row--total .vscore__c[data-v]", TOT.r2);
+        mark(r, ".vscore__add", "is-armed", false);
+      } },
+      // Bullet 3 — "community scoring grids, expansions and all". The rows
+      // that were R1 and R2 keep their scores and take the grid's own labels
+      // and palette tint; the table gets one row longer.
+      { name: "template-on", at: 7500, apply: (r) => {
         const p = r.querySelector('[data-pill="tmpl"]');
         if (p) p.classList.add("is-on");
         body(r, ".vscore").classList.add("has-tmpl");
+        put(r, '[data-row="r1"] [data-lbl]', "Species");
+        put(r, '[data-row="r2"] [data-lbl]', "Largest path");
+        mark(r, '[data-row="r1"], [data-row="r2"]', "is-tinted", true);
+        fill(r, '[data-row="t3"] .vscore__c[data-v]', T3);
+        fill(r, ".vscore__row--total .vscore__c[data-v]", TOT.tmpl);
       } },
-      { name: "expansion-on", at: 6800, apply: (r) => {
+      { name: "expansion-on", at: 9500, apply: (r) => {
         const p = r.querySelector('[data-pill="exp"]');
         if (p) p.classList.add("is-on");
         body(r, ".vscore").classList.add("has-exp");
+        fill(r, '[data-row="e1"] .vscore__c[data-v]', E1);
+        fill(r, ".vscore__row--total .vscore__c[data-v]", TOT.exp);
       } },
-      { name: "scored", at: 8600, apply: (r) => {
-        body(r, ".vscore").classList.add("is-scored");
-        r.querySelectorAll(".vscore__c[data-v]").forEach((c) => {
-          c.textContent = /** @type {HTMLElement} */ (c).dataset.v || "·";
-        });
-      } },
-      { name: "settle", at: 11000, apply: (r) => {
+      { name: "settle", at: 11700, apply: (r) => {
         stage(r, "settle");
         put(r, "[data-step]", "Play · Settle up");
       } },

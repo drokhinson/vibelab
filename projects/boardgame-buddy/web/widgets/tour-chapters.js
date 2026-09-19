@@ -32,7 +32,9 @@
    * @property {string} title
    * @property {string} [body]  optional — a chapter whose scene carries the
    *   argument on its own says it once rather than twice
-   * @property {string[]} points
+   * @property {(string|{text: string, beat: string})[]} points
+   *   a plain string shows with the panel; `{text, beat}` waits for that beat
+   *   of the chapter's scene, and shows anyway if the scene never runs
    * @property {string} vignette  a BgbTourVignette id
    * @property {string} mark      assets/sprites/features/bgb-feat-<mark>.svg
    * @property {string} strip     the one-liner the sign-in screen shows
@@ -84,13 +86,25 @@
       slug: "scoring",
       eyebrow: "Keep score",
       title: "Keep score for any game",
-      body: "Start a game, share the code, and everyone watches the same "
-        + "scorepad. It stays generic until a community template turns it into "
-        + "this game's — expansions and all.",
+      // No `body`, and each point below names the BEAT of the scene that
+      // demonstrates it. views/tour-view.js holds a gated point back until
+      // widgets/tour-vignette-scripted.js reports that beat, so the claim
+      // lands as the evidence does — a paragraph above the scene was making
+      // all three arguments before the scene had made any of them.
+      //
+      // A beat name here is load-bearing twice over: tools/check-tour.mjs
+      // asserts every one of them exists in the scene's beat list, because a
+      // typo is not an error anybody sees — it is one bullet that never
+      // appears, on a screen whose whole job is to make three claims.
       points: [
-        "A join code, and room for spectators",
-        "A scoring template per game, kept by the community",
-        "An expansion adds rows, or replaces them",
+        { text: "Gather up — the game, its expansions, and who is playing",
+          beat: "gather" },
+        { text: "Live scoring — the same numbers on every screen",
+          beat: "scores" },
+        // "grids", not "templates": the community-authored thing is called a
+        // scoring grid everywhere the user meets it.
+        { text: "Community scoring grids, expansions and all",
+          beat: "template-on" },
       ],
       vignette: "scoring",
       mark: "scoring",

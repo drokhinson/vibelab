@@ -40,6 +40,12 @@
   ];
   // Horizontal travel, in px, past which a drag is a chapter change.
   const SWIPE_PX = 40;
+  // How long a beat-gated bullet list waits for its scene's first beat before
+  // giving up and showing everything (see _armPointsWatchdog). Comfortably
+  // past the first beat of every scene — the earliest is at 600ms — and short
+  // enough that a reader who lands on a dead panel is not left reading
+  // headings.
+  const POINTS_WATCHDOG_MS = 6000;
 
   class TourView extends window.View {
     constructor() {
@@ -53,6 +59,8 @@
       this._scenes = {};
       this._scenesLoaded = false;
       this._dragX = null;
+      clearTimeout(this._pointsTimer);
+      this._pointsTimer = 0;
       // Cleared here so the next mount re-binds — see _bindOnce().
       this._bound = false;
     }
@@ -132,12 +140,76 @@
         if (this._scenes[ch.slug]) return;
         const host = root.querySelector(`[data-scene="${ch.slug}"]`);
         if (!host) return;
-        const ctl = window.BgbTourVignette.mount(host, ch.vignette);
-        if (ctl) this._scenes[ch.slug] = ctl;
+        const list = root.querySelector(`[data-points="${ch.slug}"]`);
+        const gated = !!(list && list.querySelector("li[data-beat]"));
+        const beats = window.BgbTourVignette.beatsOf(ch.vignette);
+        const ctl = window.BgbTourVignette.mount(host, ch.vignette, gated ? {
+          onBeat: (name, index) => this._revealPoints(list, beats, index),
+        } : undefined);
+        if (!ctl) return;
+        this._scenes[ch.slug] = ctl;
+        // ONLY NOW is the gate armed. The hiding rule is scoped to this class,
+        // so a scene that failed to register or failed to load never gets one
+        // — the chapter keeps the plain staggered reveal and every claim is
+        // on screen. A marketing screen does not hide its own copy because a
+        // decoration did not arrive.
+        if (gated) list.classList.add("tour__points--live");
       });
       // Every scene pauses itself when its panel is off-screen, so the four
       // chapters either side of this one cost nothing while they wait.
       Object.values(this._scenes).forEach((s) => s.play());
+    }
+
+    /**
+     * Show every gated point the scene has reached, and hide the rest.
+     *
+     * By INDEX, not by name-equality with the beat that just fired. Two
+     * reasons, and each one is a bug on its own:
+     *
+     *   • prefers-reduced-motion never runs the clock. The shell seeks
+     *     straight to the last beat and reports only that one, so a
+     *     name-equality test would leave the first two bullets of a
+     *     three-bullet chapter permanently invisible to exactly the readers
+     *     least able to wait for them.
+     *   • A cycle restart reports (null, -1), which is what clears the list
+     *     so the reveal can happen again with the scene.
+     *
+     * A beat name the scene does not have resolves to -1 and so never shows.
+     * That is deliberate — silently showing an unknown name would hide the
+     * typo — and tools/check-tour.mjs is what catches it before a user does.
+     */
+    _revealPoints(list, beats, index) {
+      list.querySelectorAll("li[data-beat]").forEach((li) => {
+        const at = beats.indexOf(li.dataset.beat);
+        li.classList.toggle("is-shown", at >= 0 && at <= index);
+      });
+    }
+
+    /**
+     * Last resort for a gated list whose scene never gets going.
+     *
+     * The clock is held while a vignette is off-screen or the tab is
+     * backgrounded, and it is started from an IntersectionObserver callback —
+     * so "the scene mounted" is not the same as "the scene will run". If the
+     * reader is looking at a chapter whose first beat has not landed several
+     * seconds later, something upstream is not going to happen, and the
+     * honest failure is all three claims at once rather than a panel of
+     * headings with nothing under them.
+     *
+     * Dropping the class is one-way on purpose: whatever went wrong, having
+     * seen the copy is not a state worth reversing.
+     */
+    _armPointsWatchdog(slug) {
+      clearTimeout(this._pointsTimer);
+      const root = this.container;
+      const list = root && root.querySelector(`[data-points="${slug}"]`);
+      if (!list || !list.classList.contains("tour__points--live")) return;
+      if (list.querySelector("li[data-beat].is-shown")) return;
+      this._pointsTimer = window.setTimeout(() => {
+        if (!list.querySelector("li[data-beat].is-shown")) {
+          list.classList.remove("tour__points--live");
+        }
+      }, POINTS_WATCHDOG_MS);
     }
 
     render() {
@@ -172,11 +244,15 @@
                       <div class="tour__stage-wait" aria-hidden="true"></div>
                     </div>
                     ${ch.body ? `<p class="tour__body">${ch.body}</p>` : ""}
-                    <ul class="tour__points">
-                      ${ch.points.map((p, n) => `
-                        <li style="--i:${n}">
-                          <i data-icon="check" class="w-3.5 h-3.5"></i><span>${p}</span>
-                        </li>`).join("")}
+                    <ul class="tour__points" data-points="${ch.slug}">
+                      ${ch.points.map((p, n) => {
+                        const text = typeof p === "string" ? p : p.text;
+                        const beat = typeof p === "string" ? "" : p.beat;
+                        return `
+                        <li style="--i:${n}"${beat ? ` data-beat="${beat}"` : ""}>
+                          <i data-icon="check" class="w-3.5 h-3.5"></i><span>${text}</span>
+                        </li>`;
+                      }).join("")}
                     </ul>
                   </div>
                   <div class="tour__actions">
@@ -305,6 +381,8 @@
           : `Chapter <b>${step + 1}</b> of ${last}`;
       }
       segs.forEach((seg, n) => seg.classList.toggle("is-done", n <= step));
+
+      if (chapters[step]) this._armPointsWatchdog(chapters[step].slug);
 
       if (!(opts && opts.silent)) {
         const slug = chapters[step] ? chapters[step].slug : "end";

@@ -19552,6 +19552,28 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .tour__points li [data-icon-name] { color: var(--accent); flex: none; margin-top: 2px; }
 
+/* A POINT PINNED TO A BEAT WAITS FOR THE SCENE TO MAKE ITS CASE.
+   widgets/tour-chapters.js can give a point a `beat`, and views/tour-view.js
+   reveals it when ui/tour-vignette.js reports that beat — so a chapter whose
+   scene is the argument states each claim as it is demonstrated, instead of
+   stacking all three above a scene that has not started.
+
+   THE GATE IS THE --live CLASS, AND ONLY THE VIEW ADDS IT, ONLY AFTER a
+   vignette actually mounted. A dead connection, a scene that failed to
+   register, a typo in `vignette` — every one of those leaves the list plain
+   and every claim on screen. Putting the hiding on [data-beat] alone would
+   mean a marketing screen whose copy is invisible whenever a decoration did
+   not load, which is the one failure mode this must not have. There is a
+   watchdog behind it too, for the case where the scene mounts and its clock
+   never runs. */
+.tour__points--live li[data-beat] {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: none;
+  transition: opacity 320ms var(--ease), transform 320ms var(--ease);
+}
+.tour__points--live li[data-beat].is-shown { opacity: 1; transform: none; }
+
 /* The stage a vignette mounts into. It holds its own height BEFORE the scene
    modules land, so the paragraph under it does not jump up the screen when a
    lazily-loaded scene arrives — the same reason a list reserves its skeleton. */
@@ -19597,6 +19619,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .tour__track { transition: none; }
   .tour__seg::after { transition: none; }
   .tour__points li { animation: none; }
+  /* Reduced motion seeks the scene to its LAST beat and holds it, and the
+     reveal is by beat index — so every gated point is already shown here.
+     Dropping the transition is what stops them fading in one behind another
+     on a viewer who asked for none of that. */
+  .tour__points--live li[data-beat] { transition: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -20120,6 +20147,34 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .vscore[data-stage="settle"] .vscore__stage--settle { opacity: 1; }
 
 .vscore__stage--lobby { align-items: center; justify-content: center; gap: 6px; }
+/* WHAT is being played, above WHERE to join it — the reverse of the real
+   Gather screen, and argued in widgets/tour-vignette-scripted.js. */
+.vscore__picks { display: flex; gap: 5px; margin-bottom: 4px; }
+.vscore__pick {
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 300ms var(--ease), transform 300ms var(--ease);
+}
+.vscore__pick.is-in { opacity: 1; transform: none; }
+.vscore__pick[data-pick="1"] { transition-delay: 140ms; }
+/* The expansion carries its colour from the moment it is picked, on the SAME
+   EDGE the scoring grid shows it on two beats later. That continuity is the
+   whole reason the chip is not just another gold pill: by the time a row
+   turns up with a purple right edge, the reader has already been told what a
+   purple right edge means. */
+.vscore__pick--exp {
+  /* Squarer than the pill beside it: at the pill radius the 3px inset edge
+     curves round the end and reads as a blob rather than as a rule. */
+  border-radius: 3px;
+  border-color: var(--line-strong);
+  color: var(--ink-muted);
+  box-shadow: inset -3px 0 0 var(--exp-accent);
+}
 .vscore__codelbl { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
 .vscore__code {
   font-family: var(--font-score);
@@ -20143,8 +20198,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .vscore__seat.is-in { opacity: 1; transform: none; }
 /* Staggered so the three players arrive one after another rather than as a
    block — the same --i convention the app's card lists use. */
-.vscore__seat[data-seat="1"] { transition-delay: 120ms; }
-.vscore__seat[data-seat="2"] { transition-delay: 240ms; }
+.vscore__seat[data-seat="0"] { transition-delay: 220ms; }
+.vscore__seat[data-seat="1"] { transition-delay: 340ms; }
+.vscore__seat[data-seat="2"] { transition-delay: 460ms; }
 
 .vscore__pills { display: flex; gap: 5px; flex: none; margin-bottom: 8px; flex-wrap: wrap; }
 .vscore__pill {
@@ -20178,43 +20234,92 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .vscore__row--head { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--polaroid-muted); }
 .vscore__row--total { border-bottom: none; font-weight: 800; }
-.vscore__lbl { font-size: 10.5px; }
+.vscore__lbl {
+  font-size: 10.5px;
+  /* Padding and a radius the row does not need until a template tints it —
+     declared unconditionally so applying the tint changes colour only, and
+     not the height of a row that is mid-transition. */
+  padding: 1px 5px;
+  border-radius: 2px;
+}
 .vscore__c {
   font-family: var(--font-score);
   font-size: 11px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-/* The template's rows and the expansion's rows are collapsed until their pill
-   turns on. Collapsing the ROW rather than hiding it is what makes the grid
-   visibly grow, which is the whole story this scene tells. */
-.vscore__row.is-tmpl, .vscore__row.is-exp {
+/* THE ROWS A LIVE GAME GROWS. R2 arrives when the host adds a round; the
+   template's extra row and the expansion's row arrive with their pills.
+   Collapsing the ROW rather than hiding it is what makes the grid visibly
+   grow, which is half of what this scene has to say. */
+.vscore__row--grow {
   max-height: 0;
   opacity: 0;
   padding-block: 0;
   border-bottom-color: transparent;
   overflow: hidden;
-  /* 420ms rather than 300: the rows arriving IS the story this scene tells,
-     and at 300ms they appeared rather than grew. Paired with the ~2s dwell on
-     the generic pad above it in the beat list. */
+  /* 420ms rather than 300: the row arriving IS the story this scene tells,
+     and at 300ms it appeared rather than grew. */
   transition: max-height 420ms var(--ease), opacity 300ms var(--ease), padding 420ms var(--ease);
 }
-.vscore.has-tmpl .vscore__row.is-tmpl,
-.vscore.has-exp .vscore__row.is-exp {
-  max-height: 26px;
+.vscore.has-r2   .vscore__row--grow[data-grow="r2"],
+.vscore.has-tmpl .vscore__row--grow[data-grow="tmpl"],
+.vscore.has-exp  .vscore__row--grow[data-grow="exp"] {
+  max-height: 30px;
   opacity: 1;
   padding-block: 3px;
   border-bottom-color: var(--polaroid-line);
 }
-/* The generic row is what the template REPLACES, so it leaves as the real rows
-   arrive rather than sitting above them meaning nothing. */
-.vscore.has-tmpl .vscore__row:not(.is-tmpl):not(.is-exp):not(.vscore__row--head):not(.vscore__row--total) {
-  max-height: 0;
-  opacity: 0;
-  padding-block: 0;
-  border-bottom-color: transparent;
-  overflow: hidden;
-  transition: max-height 420ms var(--ease), opacity 260ms var(--ease), padding 420ms var(--ease);
+
+/* A TEMPLATE ROW IS TINTED ON ITS LEFT EDGE; AN EXPANSION'S ROW ON BOTH.
+   These are the live scorepad's own two rules (.scoring-round-th--tpl and its
+   --exp pair), down to the 14% mix and the 3px inset — this scene is built
+   from the app's surface rather than drawn to resemble it. The left edge says
+   what the row IS and the right says which box it CAME FROM; two independent
+   facts cannot share a channel.
+
+   The palette slugs come from :root's --row-* set, which was measured against
+   cream and is never re-pointed by a theme branch — so a row reads the same
+   on this paper island as on the real pad.
+
+   NOTE what does NOT happen here: the scores do not move. A grid's rowLabels
+   are index-aligned to the round index, so applying one renames the rows the
+   players already filled in and may make the table longer. That is the app's
+   actual behaviour and the reason the chapter can claim it. */
+.vscore__row.is-tinted .vscore__lbl {
+  background: color-mix(in srgb, var(--row-accent) 14%, var(--polaroid-bg));
+  box-shadow: inset 3px 0 0 var(--row-accent);
+  transition: background 320ms var(--ease), box-shadow 320ms var(--ease);
+}
+.vscore__row.is-tinted.is-exp .vscore__lbl {
+  /* Both restated: box-shadow does not merge across rules, so dropping the
+     first would silently take the row's own colour off every expansion row. */
+  box-shadow:
+    inset  3px 0 0 var(--row-accent),
+    inset -3px 0 0 var(--exp-accent, var(--row-accent));
+}
+
+/* The affordance that grows the grid. It lights while a round is open and
+   goes quiet once the next row is on the table, so the row that appears has
+   something visible that caused it — a beat is a STATE, so this cannot be a
+   flash of press feedback and has to be a condition instead. */
+.vscore__add {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 6px;
+  font-size: 9.5px;
+  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  border: 1px dashed var(--line-strong);
+  color: var(--ink-faint);
+  transition: background 260ms var(--ease), color 260ms var(--ease),
+              border-color 260ms var(--ease);
+}
+.vscore__add.is-armed {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-quiet);
+  color: var(--accent);
 }
 
 .vscore__stage--settle { align-items: center; justify-content: center; gap: 4px; text-align: center; }
@@ -20255,7 +20360,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .vfeed__rail, .vfeed__track, .vfeed__gg, .vfeed__faces,
   .vdisc__tile, .vdisc__cover, .vstat__bar, .vstat__rate-fill,
   .vguide__scroll, .vguide__scrollinner, .vscore__stage, .vscore__seat,
-  .vscore__pill, .vscore__row, .vstat__h2h, .vguide__row, .vguide__tick {
+  .vscore__pill, .vscore__row, .vscore__pick, .vscore__add, .vscore__lbl,
+  .vstat__h2h, .vguide__row, .vguide__tick {
     transition: none;
   }
 }

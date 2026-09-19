@@ -641,12 +641,50 @@ by cutting each card off below its game name — taking the winner line, which
 is the thing the cards are there for. `.tour__stage`'s floor is set by this
 scene for the same reason.
 
-**A chapter may carry no `body`.** The community chapter has none: its scene
-scrolls through three game nights and makes the same point the paragraph used
-to. `views/tour-view.js` guards the field, and `check-tour.mjs` pins both the
-guard and the fact that a chapter actually exercises it — an unguarded
-`${ch.body}` prints the string "undefined" into the panel, which nothing
-reports.
+**A chapter may carry no `body`.** The community and scoring chapters have
+none: the scene under each makes the same point the paragraph used to.
+`views/tour-view.js` guards the field, and `check-tour.mjs` pins both the guard
+and the fact that a chapter actually exercises it — an unguarded `${ch.body}`
+prints the string "undefined" into the panel, which nothing reports.
+
+**The scoring scene is three stages, and the chapter's three bullets are
+pinned to its beats.** A point in `widgets/tour-chapters.js` may be a plain
+string or `{text, beat}`; the shell reports every state change through
+`opts.onBeat`, and the deck reveals a gated point when its beat lands — so a
+claim arrives as the scene demonstrates it rather than making all three
+arguments above a scene that has not started. The reveal is by beat **index**,
+not by name-equality with the beat that just fired, and that is load-bearing
+twice: reduced motion seeks straight to the last beat and reports only that
+one (a name test would leave the first two bullets permanently invisible to
+exactly the readers least able to wait), and a cycle restart reports
+`(null, -1)`, which is what clears the list so the reveal can happen again.
+
+The gate fails **open**, in three layers, because a marketing screen that
+hides its own copy is worse than one that shows it all at once. The hiding
+rule is scoped to `.tour__points--live`, which the deck adds only after
+`mount()` returned a controller — so an unregistered scene, a typo in
+`vignette` or a dead connection leaves every claim on screen. A watchdog
+covers the remaining case, a scene that mounts but whose clock never runs.
+And `check-tour.mjs` asserts that every gated point names a beat its scene
+actually has, because a typo there is not an error anybody sees: it is one
+bullet that never appears, on a panel that still looks deliberate.
+
+Two things about what that scene shows. **Gather puts the game above the join
+code, and the real screen does not** — `views/play-flow-view.js` orders it
+code → game → game type → expansions → players. The tour leads with
+"Arboretum · Expansion 1" on purpose: a stranger reads that as what this is a
+picture of, and a four-letter code above it as noise. It is the one place a
+vignette diverges from the screen it depicts, and if the two are reconciled it
+is the tour that should move. And **a template relabels rows, it does not add
+a second kind of row**: `rowLabels` are index-aligned to the round index, so
+applying one renames the R1/R2 the players already filled in and may make the
+table longer. The scores stay exactly where they are — which is what the
+confirm sheet promises in so many words, and why the scene can keep its
+numbers across the template beat. The row tints are the live scorepad's own
+two rules, down to the 14% mix and the 3px inset: the left edge says what the
+row **is**, the right says which box it **came from**, and the expansion chip
+carries that same right-edge colour from the moment it is picked, so by the
+time a row turns up with one the reader has been told what it means.
 
 **The ghost-player line is constrained by what the flow actually does.** A
 ghost is a `play_players` row with a null user id and a typed name, owned by
