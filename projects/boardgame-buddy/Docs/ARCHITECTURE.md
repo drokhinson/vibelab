@@ -604,6 +604,24 @@ and on cream that is 2.6:1) and `--card-border` (dark declares it
 `transparent`, which is right for a card on the app's own ground and leaves a
 cream card on that ground with no edge at all).
 
+**The feed scene scrolls through three game nights**, because one night on a
+rail demonstrates a rail. Today is a multi-game night whose rail slides
+sideways; Yesterday is a single-game night, which takes the *game name* in its
+header rather than "1 game", centres its lone card the way
+`.play-session--single` does, and carries **no** Good game footer because the
+real one is omitted when every play in the night is the viewer's own; Sat 13 is
+a second multi-game night. Sections are a uniform height so one vertical step
+is one section — the scene sets an index and the stylesheet owns the pixels,
+which is the same contract the horizontal rail has.
+
+**The two tracks must not share a custom property.** They did, and because
+custom properties inherit, the vertical index set on the outer track reached
+every inner rail: scrolling to the third night shoved that night's cards
+sideways out of their clip, leaving a header, a Good game pill and no games.
+Vertical is `--vig-vstep`, horizontal is `--vig-step`. Relatedly, the clip
+carries no vertical padding: `overflow: hidden` clips at the padding box, so a
+top pad is a strip the outgoing section keeps showing through mid-scroll.
+
 **The feed scene is a miniature of `ui/play-card.js`, not an impression of
 one.** Paper body, a photo frame whose empty state is the same flat
 `--polaroid-line` rectangle the real card's is, the game name in the display
@@ -622,6 +640,22 @@ because the clip was otherwise the one that gave on a short frame, and it gave
 by cutting each card off below its game name — taking the winner line, which
 is the thing the cards are there for. `.tour__stage`'s floor is set by this
 scene for the same reason.
+
+**A chapter may carry no `body`.** The community chapter has none: its scene
+scrolls through three game nights and makes the same point the paragraph used
+to. `views/tour-view.js` guards the field, and `check-tour.mjs` pins both the
+guard and the fact that a chapter actually exercises it — an unguarded
+`${ch.body}` prints the string "undefined" into the panel, which nothing
+reports.
+
+**The ghost-player line is constrained by what the flow actually does.** A
+ghost is a `play_players` row with a null user id and a typed name, owned by
+whoever logged the play. The person it names can **claim** it once they sign
+up, and the owner approves — `widgets/ghost-claim-sheet.js` says "Nothing
+changes until they say yes." So the chapter says *can claim*, never *are
+linked*, and never "merge accounts", which is not vocabulary this app uses.
+"Ghost" itself is safe: the Buddies claim list and every import step already
+say it out loud.
 
 One mark in the tour has no equivalent in the app: the **crown** on a feed
 card. It is there because at 96px wide the caption's winner line is 8.5px of
