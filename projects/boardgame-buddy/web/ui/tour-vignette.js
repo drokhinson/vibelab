@@ -82,19 +82,12 @@
    * the vignette modules load lazily and a dead connection is an ordinary
    * outcome on a phone.
    *
-   * `opts.onBeat(name, index)` fires every time the scene's state moves —
-   * once per beat as the clock reaches it, and once with `(null, -1)` at the
-   * top of each cycle when the scene resets. A caller can hang UI outside the
-   * frame off it; views/tour-view.js reveals a chapter's bullets that way, so
-   * a claim appears as the scene demonstrates it.
-   *
    * @param {HTMLElement} host
    * @param {string} id
-   * @param {{onBeat?: function(?string, number): void}} [opts]
    * @returns {?{play: function(): void, pause: function(): void,
    *            seek: function(string): void, destroy: function(): void}}
    */
-  function mount(host, id, opts) {
+  function mount(host, id) {
     const def = REGISTRY.get(id);
     if (!host || !def) return null;
 
@@ -103,7 +96,6 @@
         <div class="vig__screen">${def.html}</div>
       </div>
     `;
-    const onBeat = (opts && opts.onBeat) || function () {};
     const root = /** @type {HTMLElement} */ (host.querySelector(".vig"));
     const scene = /** @type {HTMLElement} */ (root.querySelector(".vig__screen"));
     window.BgbIcons.render(root);
@@ -147,8 +139,6 @@
         root.offsetHeight;
         root.classList.remove(INSTANT_CLASS);
       }
-      const at = def.beats[upto];
-      try { onBeat(at ? at.name : null, upto); } catch (_) {}
     }
 
     function cycle() {
@@ -159,7 +149,6 @@
           if (destroyed || !running) return;
           try { beat.apply(scene); } catch (_) {}
           window.BgbIcons.render(scene);
-          try { onBeat(beat.name, i); } catch (_) {}
           if (i === def.beats.length - 1) {
             timers.push(window.setTimeout(cycle, def.hold || 2200));
           }
