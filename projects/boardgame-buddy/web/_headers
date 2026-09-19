@@ -16,6 +16,14 @@
 # Safe to pin for a year in both cases for the same reason: the name contains a
 # hash of the contents, so a changed file is a different URL. Nothing else at
 # the root is named bgb-*.
+#
+# /assets/* is pinned on a WEAKER version of that reason, and one file under it
+# was not covered: assets/bgb-tw.css is regenerated every deploy at a stable
+# name by the Tailwind precompile step, so immutable-for-a-year meant the app's
+# whole utility layer could go a year stale. The deploy now stamps ?v=<sha> on
+# the shell's link to it, which makes the pin honest — the url identifies the
+# bytes again. Anything else that lands under /assets/ and changes in place
+# needs the same stamp.
 
 # NO Cross-Origin-Opener-Policy HERE, DELIBERATELY. Google sign-in runs
 # signInWithPopup against auth.bgbuddy.app (domain/auth.js explains why popup
@@ -58,11 +66,18 @@
 # bundle beside it was current, and nothing anywhere could tell.
 #
 # no-cache stores the file and revalidates it, so a deploy costs a 304 and
-# never a stale body. The rule covers both directories rather than the three
+# never a stale body. The rule covers both directories rather than the four
 # files, because everything else under them is bundled and never requested —
 # a freshness rule over a file nobody asks for costs nothing, and naming the
 # directories means the next lazily-loaded module is covered on the day it is
 # written rather than the day somebody notices.
+#
+# THIS IS BELT AND BRACES, NOT THE FIX, and the distinction cost a release.
+# What actually froze a scene module for three of them was sw.js serving it
+# cacheFirst from an older worker's cache — a request that never leaves the
+# device, where no header of ours can reach it. The deploy stamps ?v=<sha> on
+# these urls for that; this rule only governs the fetches that do go out
+# (sw.js's own precache, and a first load before any worker exists).
 
 /ui/*
   Cache-Control: no-cache

@@ -622,19 +622,43 @@ reasoning governs the sign-in screen's hero vignette, which mounts *after*
 first paint and degrades to nothing on a dead connection or under reduced
 motion.
 
-**And a stable url needs a freshness rule, which those four did not have.**
-Everything else the site ships is either content-hashed by the bundler — a
-changed file is a different url, and `_headers` pins those `immutable` for a
-year on exactly that basis — or explicitly `no-cache`. The vignette modules
-were neither: prefetch links at stable urls, matching no `_headers` rule but
-the security-only `/*`, so they went out with no `Cache-Control` at all and a
-browser was free to invent a heuristic lifetime. One did, and served a scene
-module **three releases stale** while the bundle beside it on the same page
-was current — a failure with no symptom except a screen that looks like an
-older version of itself, which is indistinguishable from work that was never
-done. `/ui/*` and `/widgets/*` are `no-cache` now. **Any new file fetched by
-url rather than folded into the bundle needs the same**, or it inherits this
-bug on the day it is written.
+**And a stable url is one `sw.js` cannot refresh — which froze this scene for
+three releases.** The worker serves same-origin subresources `cacheFirst`, and
+it used to do so with revalidation *off*, on the argument that the cache is
+keyed by build id so a hit is by construction this build's file. That holds
+only while the **active worker** is this build's worker. A new worker replaces
+the cache when it installs and activates, and an iOS standalone PWA can keep
+an old one indefinitely.
+
+Meanwhile **navigations are network-first**, so the shell is always current
+and with it the content-hashed bundle, whose url changes every deploy. The
+result is the worst shape a caching bug can take: an app that looks updated,
+serving lazily-loaded modules frozen at some older build. A device showed the
+pre-#751 feed scene beside that same release's chapter copy, and the only
+symptom was a screen that resembled an older version of itself —
+indistinguishable from work that was never done.
+
+Two mechanisms fix it, and the first is the one that does not depend on the
+worker updating:
+
+- **The deploy stamps `?v=<sha>`** on every stable url the page fetches by
+  name — the seven `rel=prefetch` modules and `assets/bgb-tw.css`, which is
+  regenerated each deploy at a stable name under a rule that pins `/assets/*`
+  immutable for a year. A stamped url is one no cache has ever held, so the
+  fresh shell's reference reaches the network whatever state the worker is in.
+  `ui/lazy-script.js` resolves a bare path through those links, so the stamp
+  arrives without any call site knowing it exists, and local dev keeps the
+  bare path.
+- **The worker revalidates anything whose url does not identify its own
+  bytes** — no content hash, no `?v=`. Stale-while-revalidate, so nothing
+  blocks and an already-frozen entry heals on the next open.
+
+`tools/check-lazy-assets.mjs` pins the join: that the stamp step runs after
+the bundler and fails loudly on a drifted shell, that every lazily-loaded
+module has a prefetch link to carry the stamp (including the three
+`tour-view.js` holds in an array rather than passing as literals), that
+`extractHtmlRefs` and `sameOriginPath` keep the query, and that the loader
+resolves through the links without prefix-matching a longer path.
 
 The tour is **chrome** and joins the re-point lists in `styles.css` — with one
 paper island covering the two things inside it that are photographs: the

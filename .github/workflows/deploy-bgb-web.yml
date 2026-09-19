@@ -117,6 +117,56 @@ jobs:
       - name: Bundle + minify JS/CSS
         run: node scripts/bgb-bundle.mjs web
 
+      # STABLE URLS ARE THE ONE THING sw.js CANNOT REFRESH.
+      #
+      # Its fetch handler serves every same-origin subresource cacheFirst with
+      # revalidation OFF, on the argument that the cache is keyed by build id
+      # so a hit is by construction this build's file. That holds only while
+      # the ACTIVE WORKER is this build's worker — and an iOS standalone PWA
+      # can keep an old one for a long time. Navigations are network-first, so
+      # the shell and the content-hashed bundle stay current either way; what
+      # freezes is every file whose url never changes. The tour's scene modules
+      # sat three releases stale on a device whose bullets, in the same bundle,
+      # were current.
+      #
+      # Stamping the url is the only fix that does not depend on the worker
+      # updating: the shell is fetched fresh, so it names a url no cache has
+      # ever held, and a miss goes to the network. Two sets need it — the
+      # lazily-loaded modules behind rel=prefetch (ui/lazy-script.js resolves a
+      # bare path through these links, so the stamp reaches the loader with no
+      # call site knowing about it), and assets/bgb-tw.css, which the Tailwind
+      # step above rewrites every deploy at a stable name while _headers pins
+      # /assets/* immutable for a year.
+      #
+      # AFTER the bundle step, which rewrites index.html; before the upload.
+      # sw.js's own precache sweep reads src=/href= off the final shell, so it
+      # picks up the stamped urls with no change of its own.
+      - name: Stamp cache-busting version on stable-url assets
+        working-directory: ./projects/boardgame-buddy/web
+        env:
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          node << 'STAMP'
+          const fs = require("fs");
+          const v = process.env.BUILD_SHA;
+          let html = fs.readFileSync("index.html", "utf8");
+          let n = 0;
+          html = html.replace(
+            /(<link rel="prefetch" href=")([^"?]+)(")/g,
+            (_m, a, href, c) => { n++; return a + href + "?v=" + v + c; });
+          let m = 0;
+          html = html.replace(
+            /(<link rel="stylesheet" href=")(assets\/bgb-tw\.css)(")/,
+            (_x, a, href, c) => { m++; return a + href + "?v=" + v + c; });
+          // Loud, not silent: a shell that drifted out from under either
+          // pattern would go back to serving stale files forever, and the
+          // whole failure mode is that nothing looks wrong.
+          if (!n) { console.error("no rel=prefetch links found — aborting stamp"); process.exit(1); }
+          if (!m) { console.error("assets/bgb-tw.css link not found — aborting stamp"); process.exit(1); }
+          fs.writeFileSync("index.html", html);
+          console.log(`stamped ?v=${v} on ${n} prefetch links and the Tailwind sheet`);
+          STAMP
+
       # sw.js keys its cache on this id, so a fresh SHA per deploy means the new
       # build lands in a new cache and activate() deletes the old one. Left
       # literal in the repo, which sw.js reads as "local dev" and disables

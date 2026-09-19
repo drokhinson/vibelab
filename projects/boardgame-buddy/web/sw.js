@@ -106,7 +106,9 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin === self.location.origin) {
-    event.respondWith(cacheFirst(req, false));
+    // Revalidate unless the URL ITSELF identifies the bytes — see cacheFirst.
+    const pinned = /^\/bgb-/.test(url.pathname) || url.searchParams.has("v");
+    event.respondWith(cacheFirst(req, !pinned));
     return;
   }
 
@@ -289,17 +291,31 @@ async function navigationResponse(req) {
  * Serve from cache, fall back to the network, and revalidate behind the
  * response only where revalidating can actually change the answer.
  *
- * `revalidate` is false for same-origin and true for the CDN entries, and the
- * asymmetry is the point. CACHE carries the deploy's build id, so a same-origin
- * hit is BY CONSTRUCTION the byte-for-byte file this build shipped — a deploy
- * lands in a fresh cache and activate() deletes the old one. Re-fetching it can
- * only ever return what we already hold.
+ * WHAT DECIDES IT IS THE URL, NOT THE ORIGIN. A url that identifies its own
+ * bytes — a content hash in the name (`/bgb-<sha>.js`) or the deploy's `?v=`
+ * stamp — either holds exactly the right file or has never been seen, so a
+ * hit cannot be wrong and re-fetching it cannot change the answer. Skipping
+ * that is free, and keeping it is not: the bundle and the stylesheet are the
+ * two largest files on the site.
  *
- * That made it free to skip and expensive to keep: the shell is every file
- * index.html names (precache() derives the list), so every warm load fired
- * that many background requests that could not change
- * anything, over the same radio the boot's own /bootstrap was waiting on. The
- * CDN entries are the genuinely different case — cached opportunistically on a
+ * EVERYTHING ELSE IS A STABLE URL AND CAN GO STALE UNDER US. This used to be
+ * `false` for all of same-origin, on the argument that CACHE carries the
+ * build id so a hit is by construction this build's file. That argument has a
+ * hole, and the tour fell in it: the cache belongs to whichever worker is
+ * ACTIVE, and a new worker only replaces it once it installs and activates.
+ * An iOS standalone PWA can keep an old one indefinitely. Meanwhile
+ * navigations are network-first, so the shell and the hashed bundle stay
+ * current — and the result is an app that looks updated while every
+ * stable-url file it lazily loads is frozen at some older build, with no
+ * symptom but a screen that looks like an older version of itself. A scene
+ * module sat three releases stale that way.
+ *
+ * So the default is now stale-while-revalidate: the cached copy is returned
+ * immediately, nothing blocks, and the entry heals on the next open. The
+ * deploy's `?v=` stamp is what fixes a frozen device on the FIRST open, since
+ * it makes the url one no cache has ever held; this is the net under it.
+ *
+ * The CDN entries were always the other case — cached opportunistically on a
  * first online load, possibly from an error response, and not versioned by
  * anything we control.
  */
@@ -435,13 +451,17 @@ async function precacheOne(cache, url) {
   // `reload` would have made and at best a 304 with no body.
   //
   // "The browser's own freshness rules" is only safe where the origin states
-  // them. It did not for the three lazily-loaded tour vignette modules — they
-  // are prefetch links at stable urls, matched no _headers rule, and so shipped
-  // with no Cache-Control at all; a browser invented a heuristic lifetime and
-  // served one of them three releases stale while this precache happily stored
-  // the result. They now carry no-cache via the /ui/* and /widgets/* rules. A
-  // new file fetched by url rather than bundled needs the same, or it inherits
-  // the same bug.
+  // them, which is why /ui/* and /widgets/* carry no-cache — the lazily-loaded
+  // modules are prefetch links that matched no other rule and so went out with
+  // no Cache-Control at all.
+  //
+  // That is worth having and was NOT what froze the tour's scene. This fetch
+  // runs inside the worker and reaches the network; the one that was being
+  // answered stale never left the device, because the fetch handler served it
+  // from an older worker's cache. The url stamp and the revalidate default are
+  // the fixes for that. A new file fetched by url rather than bundled wants
+  // the no-cache rule too, but do not mistake it for protection against a
+  // worker that is not updating.
   const res = await fetchWithDeadline(url, PRECACHE_TIMEOUT_MS);
   if (!res.ok) throw new Error(`sw: precache ${url} failed (${res.status})`);
   const type = res.headers.get("content-type") || "";
