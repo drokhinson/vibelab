@@ -11,7 +11,9 @@
 // (.play-card__photo-bg), so a landscape shot gets blur above and below and a
 // portrait shot gets blur down each side.
 //   Front  → maximize button (top-right, over the photo) into the in-place
-//            play-detail popup, the photo, then a two-row caption:
+//            play-detail popup, a date stamp facing it at top-left (painted
+//            only in the game-detail reel — the feed dates its groups with a
+//            .day-divider instead), the photo, then a two-row caption:
 //              title row — game name + an explicit open button
 //              meta row  — the winner, on its own above a hairline
 //            When the user uploaded their own snapshot the game's box art
@@ -321,6 +323,20 @@
          </div>`
       : `<div class="play-card__photo">${noteHtml}</div>`;
 
+    // Date stamp — top-left of the photo, mirroring the maximize button on the
+    // right. It is rendered on EVERY front but only painted inside the
+    // game-detail reel (a `display: none` the reel's own scope overrides in
+    // styles.css), rather than being switched on by a flag on the card. A flag
+    // would have to ride the card payload, and rerenderCard() renders one HTML
+    // string from the registry and applies it to every mounted copy of the
+    // play — so a card flipped in the reel would have handed its stamp to the
+    // feed's hidden copy of the same play. The feed prints the day once as a
+    // .day-divider above each group; the reel has no such grouping, so the play
+    // has nowhere else to say when it happened.
+    const dateHtml = card.played_at
+      ? `<div class="play-card__date">${escapeHtml(formatRelativeDay(card.played_at, formatDateCompact))}</div>`
+      : "";
+
     // The band carries no data-no-flip and is not a button or a link, so
     // handleClick lets the tap through and the card flips — tapping a truncated
     // preview to read the rest of it is exactly what it should do, and the
@@ -336,6 +352,7 @@
               onclick="${detailNav}">
         <i data-icon="maximize-2" class="w-3.5 h-3.5"></i>
       </button>
+      ${dateHtml}
       ${photoHtml}
       <div class="play-card__caption">
         <div class="play-card__title-row">

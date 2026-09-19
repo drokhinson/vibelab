@@ -4699,6 +4699,46 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   background: var(--photo-plate, rgba(255,255,255,0.86));
 }
 
+/* Date stamp — top-left of the photo, the maximize button's mirror image. Same
+   plate/ink pair (--photo-plate / --on-photo) for the same reason: it lands on
+   an uploaded photograph, which is bright under either theme and is not a
+   surface the token family owns.
+
+   HIDDEN EVERYWHERE BUT THE GAME-DETAIL REEL. The markup is on every front
+   (see ui/play-card.js#renderFront for why the switch is CSS and not a flag on
+   the card), but the feed already prints each day once as a .day-divider above
+   its group — a stamp per card there would repeat the divider twenty times.
+   The reel groups by nothing, so it is the one surface where the card has to
+   carry its own date. */
+.play-card__date {
+  display: none;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 4;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--photo-plate, rgba(255,255,255,0.86));
+  border: 1px solid rgba(0,0,0,0.10);
+  color: var(--on-photo, #2A2118);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  /* The polaroid face at the caption's weight — this is a stamp on the print,
+     not chrome. max-width keeps "Sep 12, 2019" clear of the maximize button on
+     the narrower (wide-variant) card. */
+  font-family: var(--font-polaroid);
+  font-size: 11px;
+  line-height: 15px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  max-width: calc(100% - 3.2rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.game-detail__plays-scroll .play-card__date { display: block; }
+
 /* ── Play sessions (same-day, same-buddy-set plays) ───────────────────────
    The session wrapper is the dark gallery wall the polaroids sit on. Every
    play is a tile of one of the two widths, so a session holding a single play
