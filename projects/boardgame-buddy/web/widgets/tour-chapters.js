@@ -73,8 +73,8 @@
       // describing in words underneath it.
       points: [
         "Setup, turn order, scoring, card references",
-        "Written by players, sorted by how many use them",
-        "Yours to edit once it is in your guide",
+        "Write a chapter or select from community generated content",
+        "Personalize your guide with game rules and tips",
       ],
       vignette: "guides",
       mark: "guides",
