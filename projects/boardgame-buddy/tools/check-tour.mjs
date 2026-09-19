@@ -5,7 +5,7 @@
 //
 // There is no test runner for web/ (the authoring model is ~120 script tags,
 // see .claude/rules/web-frontend.md), so this loads the real modules into a VM
-// context and checks the seven things about the tour that break SILENTLY —
+// context and checks the eight things about the tour that break SILENTLY —
 // every one of which renders as "it looks fine, just wrong" rather than as an
 // error anybody would notice:
 //
@@ -29,10 +29,14 @@
 //   6. THE TOUR IS PUBLIC AND CHROMELESS. Missing from PUBLIC_VIEWS, a
 //      signed-out visitor following the marketing link is bounced to /auth —
 //      indistinguishable from a broken link.
-//   7. THE TOUR ARMS NO BACK GUARD, and its scenes stay off the boot path.
+//   7. A BEAT-GATED BULLET NAMES A BEAT THAT EXISTS, and the rule that hides
+//      it is scoped to a class only a successfully mounted scene earns. Both
+//      halves fail silently: the first as a claim that never appears, the
+//      second as a whole panel of copy that disappears on a bad connection.
+//   8. THE TOUR ARMS NO BACK GUARD, and its scenes stay off the boot path.
 //      The first is .claude/rules/overlays.md §8b: a routed screen already has
 //      a history entry, and arming over it is the double-entry bug the chapter
-//      wizard shipped. The second is why the three scene modules are
+//      wizard shipped. The second is why the scene modules are
 //      <link rel=prefetch> rather than <script src> — a <script src> would put
 //      them on every sign-in's critical path AND inside the bundler's
 //      manifest, costing every visitor for a tour most never open.
@@ -65,6 +69,7 @@ for (const rel of [
   "ui/tour-vignette.js",
   "widgets/tour-vignette-ambient.js",
   "widgets/tour-vignette-scripted.js",
+  "widgets/tour-vignette-stats.js",
   "widgets/tour-chapters.js",
 ]) {
   vm.runInContext(read(rel), sandbox, { filename: rel });
@@ -82,6 +87,54 @@ for (const ch of CHAPTERS) {
 ok("no scene is registered that no chapter uses",
    V.ids().every((id) => CHAPTERS.some((c) => c.vignette === id)),
    `orphans: ${V.ids().filter((id) => !CHAPTERS.some((c) => c.vignette === id)).join(", ")}`);
+// A CHAPTER MAY CARRY NO BODY.
+//
+// The community chapter dropped its paragraph — the scene under it scrolls
+// through three game nights and makes the same point better than a sentence
+// restating it. That makes "no body" a supported shape, and the renderer has
+// to tolerate it: an unguarded ${ch.body} prints the string "undefined" into
+// the panel, which is not an error anybody's console reports.
+ok("the renderer guards a chapter with no body",
+   /\$\{ch\.body \? `<p class="tour__body">/.test(read("views/tour-view.js")));
+ok("at least one chapter exercises that path",
+   CHAPTERS.some((c) => !c.body),
+   "every chapter still has a body, so the guard above is untested");
+ok("a chapter with no body still has points to carry it",
+   CHAPTERS.filter((c) => !c.body).every((c) => (c.points || []).length >= 2));
+
+// 8. EVERY BEAT-GATED POINT NAMES A BEAT ITS SCENE ACTUALLY HAS.
+//
+// A point may be `{text, beat}`, which views/tour-view.js holds back until
+// ui/tour-vignette.js reports that beat. The reveal resolves the name against
+// the scene's beat list and a miss resolves to -1, so a typo — or a beat
+// renamed in the scene and not here — is one bullet that never appears. No
+// error, no console warning, and the panel still looks deliberate: it is just
+// a chapter making two claims where it meant to make three. This is the whole
+// reason the gating is allowed to exist.
+for (const ch of CHAPTERS) {
+  const gated = (ch.points || []).filter((p) => p && typeof p === "object");
+  if (!gated.length) continue;
+  const beats = V.beatsOf(ch.vignette);
+  for (const p of gated) {
+    ok(`"${ch.slug}" point is gated on a real beat: ${p.beat}`,
+        !!p.text && beats.includes(p.beat),
+        `beats: ${beats.join(", ")}`);
+  }
+}
+ok("the renderer reads a gated point's text and beat",
+   /typeof p === "string" \? p : p\.text/.test(read("views/tour-view.js")));
+// The hiding rule is scoped to a class the view adds ONLY once mount()
+// returned a controller — so a scene that never loads leaves its chapter's
+// copy on screen. If the CSS ever hides [data-beat] unconditionally, a dead
+// connection becomes a blank marketing panel.
+const pointsCss = read("styles.css");
+ok("gated points are hidden only under the --live class",
+   /\.tour__points--live li\[data-beat\]\s*\{/.test(pointsCss)
+   && !/^\.tour__points li\[data-beat\]/m.test(pointsCss));
+ok("...which the view arms only after the scene mounted",
+   /if \(!ctl\) return;[\s\S]{0,600}classList\.add\("tour__points--live"\)/
+     .test(read("views/tour-view.js")));
+
 ok("every chapter has a one-line strip claim",
    CHAPTERS.every((c) => typeof c.strip === "string" && c.strip.length > 0));
 ok("chapter slugs are unique",
@@ -103,7 +156,9 @@ for (const id of V.ids()) {
 // `at` has to rise across the list, or "reset, then apply 0..N" — which is how
 // seek() and every loop restart get to a frame — produces a scene the timed
 // run never shows.
-const rawSrc = read("widgets/tour-vignette-ambient.js") + read("widgets/tour-vignette-scripted.js");
+const rawSrc = read("widgets/tour-vignette-ambient.js")
+  + read("widgets/tour-vignette-scripted.js")
+  + read("widgets/tour-vignette-stats.js");
 ok("no beat carries a negative delay", !/\bat:\s*-/.test(rawSrc));
 
 // ── The store listing cites beats, not timestamps ───────────────────────────
@@ -214,7 +269,8 @@ console.log("\nboot cost");
 const html = read("index.html");
 for (const rel of ["ui/tour-vignette.js",
                    "widgets/tour-vignette-ambient.js",
-                   "widgets/tour-vignette-scripted.js"]) {
+                   "widgets/tour-vignette-scripted.js",
+                   "widgets/tour-vignette-stats.js"]) {
   ok(`${rel} is prefetched`, html.includes(`<link rel="prefetch" href="${rel}"`));
   ok(`${rel} is NOT a <script src>`, !html.includes(`<script src="${rel}"`));
 }
@@ -222,6 +278,17 @@ for (const rel of ["views/tour-view.js", "widgets/tour-chapters.js", "ui/feature
   ok(`${rel} IS loaded`, html.includes(`<script src="${rel}">`));
 }
 ok('index.html has a <main data-view="tour">', html.includes('data-view="tour"'));
+// EVERY SCENE MODULE IS IN THE DECK'S OWN LOAD LIST. A module that is
+// prefetched but never loaded registers nothing, and the only symptom is one
+// chapter stuck on its loading frame — which is exactly the failure the
+// chapter→scene assertion at the top of this file cannot catch, because it
+// loads all three itself.
+const srcList = read("views/tour-view.js");
+for (const rel of ["widgets/tour-vignette-ambient.js",
+                   "widgets/tour-vignette-scripted.js",
+                   "widgets/tour-vignette-stats.js"]) {
+  ok(`${rel} is in SCENE_SRCS`, srcList.includes(`"${rel}"`));
+}
 
 console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
 process.exit(fails ? 1 : 0);

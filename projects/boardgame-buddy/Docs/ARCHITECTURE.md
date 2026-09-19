@@ -584,7 +584,35 @@ nothing — the title bar updates and the stage under it stays blank. And the
 were just mounted into; `render()` therefore destroys every scene before it
 repaints, exactly as the sign-in screen's hero does.
 
-**The scenes are not on the boot path.** All three vignette modules are
+**The stats scene assembles a board, one card at a time.** Four quadrants —
+the podium and win rate, one game's numbers, a head-to-head, and an
+achievement. Each arrives centre-stage at 1.75x and holds while it is the only
+thing to read, then settles into its corner as the next one arrives; the last
+beat leaves all four up. Three of those arrivals carry the chapter's three
+bullets, so a claim never appears without a picture of itself.
+
+**A card never leaves its grid cell.** Centre-stage is a *transform* — half a
+cell towards the middle, then a scale — not a change of `position`. Absolute
+while centred and back to the grid to dock cannot animate, because `position`
+is not an animatable property, and under the beat model that jump would happen
+on every loop rather than once. The four hero rules differ only in the sign of
+the translate, and the sign is the corner. The achievement's pop is on the
+**badge**, not the card: a keyframe animation on the card's own `transform`
+would overwrite the hero translate and drop it back into its corner mid-flight
+— the two cannot share the property.
+
+That scene lives in `widgets/tour-vignette-stats.js`, its own module, because
+it outgrew a loop: `tour-vignette-ambient.js` was at the ~300-line guideline
+with it inside. It duplicates two four-line DOM helpers rather than sharing
+them, and that is the intended answer, not laziness — `ui-object-design.md` §4
+puts the *lifecycle* in the shell and leaves each caller its own markup, so
+sugar for setting text on a scene's own nodes is the caller's side of the line.
+The badge is the achievements screen's own sprite for a real seeded
+achievement (`wins_10`, "Crowned"), and it keeps its dark medallion ground in
+both themes by design — a coin on the table, not a mark drawn against the
+surface.
+
+**The scenes are not on the boot path.** All four vignette modules are
 `<link rel="prefetch" as="script">` in `index.html` rather than `<script src>`,
 and load through `ui/lazy-script.js` when somebody opens the tour. That keeps
 them out of `scripts/bgb-bundle.mjs`'s manifest (which reads `<script src>`)
@@ -604,6 +632,24 @@ and on cream that is 2.6:1) and `--card-border` (dark declares it
 `transparent`, which is right for a card on the app's own ground and leaves a
 cream card on that ground with no edge at all).
 
+**The feed scene scrolls through three game nights**, because one night on a
+rail demonstrates a rail. Today is a multi-game night whose rail slides
+sideways; Yesterday is a single-game night, which takes the *game name* in its
+header rather than "1 game", centres its lone card the way
+`.play-session--single` does, and carries **no** Good game footer because the
+real one is omitted when every play in the night is the viewer's own; Sat 13 is
+a second multi-game night. Sections are a uniform height so one vertical step
+is one section — the scene sets an index and the stylesheet owns the pixels,
+which is the same contract the horizontal rail has.
+
+**The two tracks must not share a custom property.** They did, and because
+custom properties inherit, the vertical index set on the outer track reached
+every inner rail: scrolling to the third night shoved that night's cards
+sideways out of their clip, leaving a header, a Good game pill and no games.
+Vertical is `--vig-vstep`, horizontal is `--vig-step`. Relatedly, the clip
+carries no vertical padding: `overflow: hidden` clips at the padding box, so a
+top pad is a strip the outgoing section keeps showing through mid-scroll.
+
 **The feed scene is a miniature of `ui/play-card.js`, not an impression of
 one.** Paper body, a photo frame whose empty state is the same flat
 `--polaroid-line` rectangle the real card's is, the game name in the display
@@ -622,6 +668,54 @@ because the clip was otherwise the one that gave on a short frame, and it gave
 by cutting each card off below its game name — taking the winner line, which
 is the thing the cards are there for. `.tour__stage`'s floor is set by this
 scene for the same reason.
+
+**A chapter may carry no `body`.** The community, scoring and stats chapters
+have none: the scene under each makes the same point the paragraph used to.
+`views/tour-view.js` guards the field, and `check-tour.mjs` pins both the guard
+and the fact that a chapter actually exercises it — an unguarded `${ch.body}`
+prints the string "undefined" into the panel, which nothing reports.
+
+**The scoring scene is three stages, and the chapter's three bullets are
+pinned to its beats.** A point in `widgets/tour-chapters.js` may be a plain
+string or `{text, beat}`; the shell reports every state change through
+`opts.onBeat`, and the deck reveals a gated point when its beat lands — so a
+claim arrives as the scene demonstrates it rather than making all three
+arguments above a scene that has not started. The reveal is by beat **index**,
+not by name-equality with the beat that just fired, and that is load-bearing
+twice: reduced motion seeks straight to the last beat and reports only that
+one (a name test would leave the first two bullets permanently invisible to
+exactly the readers least able to wait), and a cycle restart reports
+`(null, -1)`, which is what clears the list so the reveal can happen again.
+
+The gate fails **open**, in three layers, because a marketing screen that
+hides its own copy is worse than one that shows it all at once. The hiding
+rule is scoped to `.tour__points--live`, which the deck adds only after
+`mount()` returned a controller — so an unregistered scene, a typo in
+`vignette` or a dead connection leaves every claim on screen. A watchdog
+covers the remaining case, a scene that mounts but whose clock never runs.
+And `check-tour.mjs` asserts that every gated point names a beat its scene
+actually has, because a typo there is not an error anybody sees: it is one
+bullet that never appears, on a panel that still looks deliberate.
+
+One thing about what that scene shows: **a template relabels rows, it does not
+add a second kind of row**: `rowLabels` are index-aligned to the round index, so
+applying one renames the R1/R2 the players already filled in and may make the
+table longer. The scores stay exactly where they are — which is what the
+confirm sheet promises in so many words, and why the scene can keep its
+numbers across the template beat. The row tints are the live scorepad's own
+two rules, down to the 14% mix and the 3px inset: the left edge says what the
+row **is**, the right says which box it **came from**, and the expansion chip
+carries that same right-edge colour from the moment it is picked, so by the
+time a row turns up with one the reader has been told what it means.
+
+**The ghost-player line is constrained by what the flow actually does.** A
+ghost is a `play_players` row with a null user id and a typed name, owned by
+whoever logged the play. The person it names can **claim** it once they sign
+up, and the owner approves — `widgets/ghost-claim-sheet.js` says "Nothing
+changes until they say yes." So the chapter says *can claim*, never *are
+linked*, and never "merge accounts", which is not vocabulary this app uses.
+"Ghost" itself is safe: the Buddies claim list and every import step already
+say it out loud.
 
 One mark in the tour has no equivalent in the app: the **crown** on a feed
 card. It is there because at 96px wide the caption's winner line is 8.5px of

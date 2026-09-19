@@ -19538,19 +19538,50 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .tour__body--center { text-align: center; max-width: 30ch; }
 .tour__mark { width: 56px; height: 56px; border-radius: var(--r-lg); margin-bottom: 14px; }
 
-.tour__points { list-style: none; margin: 12px 0 0; padding: 0; }
+.tour__points { list-style: none; margin: 14px 0 0; padding: 0; }
+/* 16px, NOT the 12.5px these started at. No chapter carries a paragraph any
+   more — the scene above makes the argument and these three lines are the
+   only prose on the panel — so they are body text now rather than a caption
+   under body text, and body text on a phone has a floor.
+
+   16px is the same floor .claude/rules/mobile-web.md §2 puts on form controls
+   (there because iOS zooms the page on a sub-16px focus; here because it is
+   what the platform treats as readable at arm's length). The panel has the
+   room precisely because the paragraphs left. */
 .tour__points li {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: 12.5px;
-  line-height: 1.45;
+  gap: 10px;
+  font-size: 16px;
+  line-height: 1.5;
   color: var(--ink-muted);
-  padding: 4px 0;
+  padding: 5px 0;
   animation: fadeUp 200ms ease both;
   animation-delay: calc(var(--i, 0) * 40ms);
 }
-.tour__points li [data-icon-name] { color: var(--accent); flex: none; margin-top: 2px; }
+.tour__points li [data-icon-name] { color: var(--accent); flex: none; margin-top: 4px; }
+
+/* A POINT PINNED TO A BEAT WAITS FOR THE SCENE TO MAKE ITS CASE.
+   widgets/tour-chapters.js can give a point a `beat`, and views/tour-view.js
+   reveals it when ui/tour-vignette.js reports that beat — so a chapter whose
+   scene is the argument states each claim as it is demonstrated, instead of
+   stacking all three above a scene that has not started.
+
+   THE GATE IS THE --live CLASS, AND ONLY THE VIEW ADDS IT, ONLY AFTER a
+   vignette actually mounted. A dead connection, a scene that failed to
+   register, a typo in `vignette` — every one of those leaves the list plain
+   and every claim on screen. Putting the hiding on [data-beat] alone would
+   mean a marketing screen whose copy is invisible whenever a decoration did
+   not load, which is the one failure mode this must not have. There is a
+   watchdog behind it too, for the case where the scene mounts and its clock
+   never runs. */
+.tour__points--live li[data-beat] {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: none;
+  transition: opacity 320ms var(--ease), transform 320ms var(--ease);
+}
+.tour__points--live li[data-beat].is-shown { opacity: 1; transform: none; }
 
 /* The stage a vignette mounts into. It holds its own height BEFORE the scene
    modules land, so the paragraph under it does not jump up the screen when a
@@ -19564,7 +19595,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
      the flex child that gave, and it gave by cutting every card off below its
      game name. The chapter panel has the room — its points list leaves ~150px
      of slack above the actions row. */
-  height: clamp(232px, 34vh, 272px);
+  /* The floor is set by the tallest scene, the feed, and the feed now
+     SCROLLS: a section is ~196px, so at the old 232px floor barely one showed
+     and the scroll beats had nothing to reveal. At 268 about one and a half
+     sit in the frame and the next day's divider peeks, which is what reads as
+     a feed rather than as a rail. The chapter panel has the room because the
+     paragraph left it — see widgets/tour-chapters.js. */
+  height: clamp(268px, 38vh, 318px);
 }
 .tour__stage-wait {
   width: 100%;
@@ -19591,6 +19628,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .tour__track { transition: none; }
   .tour__seg::after { transition: none; }
   .tour__points li { animation: none; }
+  /* Reduced motion seeks the scene to its LAST beat and holds it, and the
+     reveal is by beat index — so every gated point is already shown here.
+     Dropping the transition is what stops them fading in one behind another
+     on a viewer who asked for none of that. */
+  .tour__points--live li[data-beat] { transition: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -19667,11 +19709,16 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .vfeed {
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 0 6px 9px;
-  justify-content: center;
+  /* A CLIP now, not a column. The feed scrolls, so the sections live on a
+     track inside this and the track is what moves. */
+  overflow: hidden;
+  /* NO VERTICAL PADDING. overflow: hidden clips at the padding box, not the
+     content box, so a top pad is a strip the outgoing section keeps showing
+     through mid-scroll — a sliver of the previous night's Good game pill
+     hanging above the new day's divider, which reads as a glitch rather than
+     as a feed. The breathing room lives inside each section instead, where it
+     scrolls away with the section it belongs to. */
+  padding: 0 0 0 9px;
   /* A fixed measure rather than the column's. The rail's slide only reads as
      a slide while the rail is wider than what shows of it, and the tour panel
      is 448px wide on a tablet against 342 on a phone — enough of a spread to
@@ -19679,6 +19726,33 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
      geometry the same everywhere; a vignette is a picture, not a layout. */
   max-width: 339px;
 }
+/* One vertical step is one SECTION, which is why every section is the same
+   height. That keeps the arithmetic identical to the rail's — the scene sets
+   an index and this owns the pixels — and it is the reason the single-game
+   night carries a little slack rather than the track needing a per-section
+   offset table the JS would have to know about. */
+/* One step. A section's content is ~191px (day, header, a 134px rail band and
+   a 20px footer) plus its 6px top pad, so 204 leaves a little air and keeps
+   every section the same height — which is what makes one vertical step one
+   section. */
+.vfeed { --vfeed-sec-h: 204px; }
+.vfeed__track {
+  /* --vig-vstep, NOT --vig-step: custom properties inherit, and every
+     horizontal rail below this reads --vig-step. Sharing the name made a
+     scroll to the third night also shove that night's cards sideways out of
+     their clip. Two axes, two names. */
+  transform: translateY(calc(var(--vig-vstep, 0) * -1 * var(--vfeed-sec-h)));
+  transition: transform 620ms var(--ease);
+}
+.vfeed__sec {
+  min-height: var(--vfeed-sec-h);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* The clip's former top pad, moved inside — see .vfeed above. */
+  padding-top: 6px;
+}
+
 /* The .day-divider analogue: accent, upper, tracked out. */
 .vfeed__day {
   margin: 0;
@@ -19707,6 +19781,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    name — taking the winner line, which is the thing the cards are here for. */
 .vfeed__day, .vfeed__header, .vfeed__foot { flex: none; }
 .vfeed__railclip { flex: none; overflow: hidden; padding: 3px 0 5px; }
+/* A one-game night uses the SAME rail and only centres its lone tile —
+   .play-session--single does exactly this and nothing more (styles.css above),
+   so the mock does not invent a second layout for it. */
+.vfeed__rail--single { justify-content: center; transform: none; }
 .vfeed__rail {
   display: flex;
   gap: 8px;
@@ -19903,19 +19981,95 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 /* ── Scene: stats ─────────────────────────────────────────────────────────── */
-.vstat { flex: 1 1 auto; display: flex; flex-direction: column; gap: 9px; padding: 10px; min-height: 0; }
-.vstat__podium { flex: 1 1 auto; display: flex; align-items: flex-end; justify-content: center; gap: 12px; min-height: 0; }
-.vstat__col { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; justify-content: flex-end; }
+/* FOUR CARDS THAT ASSEMBLE A BOARD. Each one arrives centre-stage, holds
+   while it is the only thing to read, then settles into its own quadrant as
+   the next arrives — so by the last beat the chapter's three claims are all
+   on screen at once.
+
+   THE CARD NEVER LEAVES ITS GRID CELL. Centre-stage is a transform: half a
+   cell towards the middle, then a scale. Doing it by position — absolute
+   while centred, back to the grid to dock — cannot animate, because
+   `position` is not an animatable property; and under the beat model that
+   jump would happen on every loop rather than once. */
+.vstat { flex: 1 1 auto; min-height: 0; display: flex; padding: 8px; }
+.vstat__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+}
+.vstat__q {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
+  box-sizing: border-box;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  opacity: 0;
+  transform: scale(0.94);
+  transition: opacity 320ms var(--ease), transform 420ms var(--ease),
+              box-shadow 320ms var(--ease);
+}
+.vstat__q.is-in { opacity: 1; transform: none; }
+/* The four hero transforms differ only in sign, and the sign is the corner
+   the card sits in. A translate percentage resolves against the element's
+   UNSCALED box and is applied after the scale (transforms compose
+   right-to-left), so 50% is half a cell — exactly the distance from a cell's
+   centre to the centre of a 2x2 grid.
+
+   These must stay AFTER the .is-in rule above: both are (0,2,0), so the tie
+   is settled on source order (.claude/rules/mobile-web.md §3). */
+.vstat__q.is-hero { z-index: 2; box-shadow: var(--sh-2); border-color: var(--line-strong); }
+.vstat__q--record.is-hero { transform: translate( 50%,  50%) scale(1.75); }
+.vstat__q--game.is-hero   { transform: translate(-50%,  50%) scale(1.75); }
+.vstat__q--h2h.is-hero    { transform: translate( 50%, -50%) scale(1.75); }
+.vstat__q--ach.is-hero    { transform: translate(-50%, -50%) scale(1.75); }
+/* What has already docked stays on screen — the board is being built, and
+   hiding the built part would throw that away — but it steps back while
+   something is centre-stage over the top of it. */
+.vstat__grid.has-hero .vstat__q.is-in:not(.is-hero) { opacity: 0.3; }
+
+.vstat__qt {
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* The record card: podium, then the rate bar under it. */
+.vstat__podium {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 9px;
+  min-height: 0;
+}
+.vstat__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  justify-content: flex-end;
+}
 .vstat__n {
   font-family: var(--font-score);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 .vstat__bar {
-  width: 26px;
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  width: 20px;
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
   background: var(--accent-quiet);
   border: 1px solid var(--line);
   border-bottom: none;
@@ -19924,9 +20078,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .vstat__bar--gold { background: var(--accent); border-color: var(--accent); }
 .vstat__bar--silver { background: color-mix(in srgb, var(--accent) 45%, transparent); }
-.vstat__lbl { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
-.vstat__rate { display: flex; flex-direction: column; gap: 4px; }
-.vstat__rate-track { height: 5px; border-radius: var(--r-pill); background: var(--line-strong); overflow: hidden; }
+.vstat__lbl { font-size: 7.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.vstat__rate-track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  overflow: hidden;
+  flex: none;
+}
 .vstat__rate-fill {
   display: block;
   height: 100%;
@@ -19935,23 +20094,81 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   width: var(--vig-w, 0%);
   transition: width 520ms var(--ease);
 }
-.vstat__rate-txt { font-size: 10px; color: var(--ink-faint); }
+.vstat__rate-txt { margin: 0; font-size: 8.5px; color: var(--ink-faint); }
 .vstat__rate-txt b { font-family: var(--font-score); color: var(--ink); }
-.vstat__h2h {
+
+/* The per-game card: one game, three numbers. */
+.vstat__rows {
+  margin: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+.vstat__rows > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--line);
+}
+.vstat__rows > div:last-child { border-bottom: none; padding-bottom: 0; }
+.vstat__rows dt { font-size: 9px; color: var(--ink-muted); }
+.vstat__rows dd {
+  margin: 0;
+  font-family: var(--font-score);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The head-to-head card: two faces and the record between them. */
+.vstat__vs {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--bg-2);
-  opacity: 0.45;
-  transition: opacity 300ms var(--ease);
+  justify-content: center;
+  gap: 8px;
 }
-.vstat__h2h.is-on { opacity: 1; }
-.vstat__h2h-lbl { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
-.vstat__h2h-name { font-size: 11px; color: var(--ink); flex: 1 1 auto; }
-.vstat__h2h-score { font-family: var(--font-score); font-size: 12px; font-weight: 700; color: var(--win); }
+.vstat__side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 8.5px;
+  color: var(--ink-muted);
+}
+.vstat__score {
+  font-family: var(--font-score);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.vstat__vsnote { margin: 0; font-size: 8px; color: var(--ink-faint); text-align: center; }
+
+/* The achievement card. The badge is the same sprite the achievements screen
+   paints, and it keeps its own dark medallion ground in both themes — a coin
+   on the table rather than a mark drawn against the surface
+   (.claude/rules/assets.md), so there is nothing to recolour here. */
+.vstat__q--ach { align-items: center; justify-content: center; text-align: center; gap: 3px; }
+.vstat__badge { width: 46px; height: 46px; flex: none; }
+.vstat__achname { margin: 0; font-family: var(--font-display); font-size: 12px; color: var(--ink); }
+.vstat__achsub { margin: 0; font-size: 8px; color: var(--ink-faint); }
+/* THE POP IS ON THE BADGE, NOT ON THE CARD. An animation on the card's own
+   transform would overwrite the hero translate above and drop it back into
+   its corner mid-flight — the two cannot share the property. Scoping it to
+   the badge also means it plays once, when the card takes the stage, and
+   re-plays on the next loop because reset() removes the class. */
+@keyframes vstatPop {
+  0%   { transform: scale(0.35); opacity: 0; }
+  62%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.vstat__q--ach.is-hero .vstat__badge { animation: vstatPop 620ms var(--ease) both; }
 
 /* ── Scene: discover ──────────────────────────────────────────────────────── */
 .vdisc { flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px; padding: 10px; min-height: 0; justify-content: center; }
@@ -20078,6 +20295,33 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .vscore[data-stage="settle"] .vscore__stage--settle { opacity: 1; }
 
 .vscore__stage--lobby { align-items: center; justify-content: center; gap: 6px; }
+/* What is being played, above where to join it. */
+.vscore__picks { display: flex; gap: 5px; margin-bottom: 4px; }
+.vscore__pick {
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 300ms var(--ease), transform 300ms var(--ease);
+}
+.vscore__pick.is-in { opacity: 1; transform: none; }
+.vscore__pick[data-pick="1"] { transition-delay: 140ms; }
+/* The expansion carries its colour from the moment it is picked, on the SAME
+   EDGE the scoring grid shows it on two beats later. That continuity is the
+   whole reason the chip is not just another gold pill: by the time a row
+   turns up with a purple right edge, the reader has already been told what a
+   purple right edge means. */
+.vscore__pick--exp {
+  /* Squarer than the pill beside it: at the pill radius the 3px inset edge
+     curves round the end and reads as a blob rather than as a rule. */
+  border-radius: 3px;
+  border-color: var(--line-strong);
+  color: var(--ink-muted);
+  box-shadow: inset -3px 0 0 var(--exp-accent);
+}
 .vscore__codelbl { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
 .vscore__code {
   font-family: var(--font-score);
@@ -20101,8 +20345,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .vscore__seat.is-in { opacity: 1; transform: none; }
 /* Staggered so the three players arrive one after another rather than as a
    block — the same --i convention the app's card lists use. */
-.vscore__seat[data-seat="1"] { transition-delay: 120ms; }
-.vscore__seat[data-seat="2"] { transition-delay: 240ms; }
+.vscore__seat[data-seat="0"] { transition-delay: 220ms; }
+.vscore__seat[data-seat="1"] { transition-delay: 340ms; }
+.vscore__seat[data-seat="2"] { transition-delay: 460ms; }
 
 .vscore__pills { display: flex; gap: 5px; flex: none; margin-bottom: 8px; flex-wrap: wrap; }
 .vscore__pill {
@@ -20136,43 +20381,92 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .vscore__row--head { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--polaroid-muted); }
 .vscore__row--total { border-bottom: none; font-weight: 800; }
-.vscore__lbl { font-size: 10.5px; }
+.vscore__lbl {
+  font-size: 10.5px;
+  /* Padding and a radius the row does not need until a template tints it —
+     declared unconditionally so applying the tint changes colour only, and
+     not the height of a row that is mid-transition. */
+  padding: 1px 5px;
+  border-radius: 2px;
+}
 .vscore__c {
   font-family: var(--font-score);
   font-size: 11px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-/* The template's rows and the expansion's rows are collapsed until their pill
-   turns on. Collapsing the ROW rather than hiding it is what makes the grid
-   visibly grow, which is the whole story this scene tells. */
-.vscore__row.is-tmpl, .vscore__row.is-exp {
+/* THE ROWS A LIVE GAME GROWS. R2 arrives when the host adds a round; the
+   template's extra row and the expansion's row arrive with their pills.
+   Collapsing the ROW rather than hiding it is what makes the grid visibly
+   grow, which is half of what this scene has to say. */
+.vscore__row--grow {
   max-height: 0;
   opacity: 0;
   padding-block: 0;
   border-bottom-color: transparent;
   overflow: hidden;
-  /* 420ms rather than 300: the rows arriving IS the story this scene tells,
-     and at 300ms they appeared rather than grew. Paired with the ~2s dwell on
-     the generic pad above it in the beat list. */
+  /* 420ms rather than 300: the row arriving IS the story this scene tells,
+     and at 300ms it appeared rather than grew. */
   transition: max-height 420ms var(--ease), opacity 300ms var(--ease), padding 420ms var(--ease);
 }
-.vscore.has-tmpl .vscore__row.is-tmpl,
-.vscore.has-exp .vscore__row.is-exp {
-  max-height: 26px;
+.vscore.has-r2   .vscore__row--grow[data-grow="r2"],
+.vscore.has-tmpl .vscore__row--grow[data-grow="tmpl"],
+.vscore.has-exp  .vscore__row--grow[data-grow="exp"] {
+  max-height: 30px;
   opacity: 1;
   padding-block: 3px;
   border-bottom-color: var(--polaroid-line);
 }
-/* The generic row is what the template REPLACES, so it leaves as the real rows
-   arrive rather than sitting above them meaning nothing. */
-.vscore.has-tmpl .vscore__row:not(.is-tmpl):not(.is-exp):not(.vscore__row--head):not(.vscore__row--total) {
-  max-height: 0;
-  opacity: 0;
-  padding-block: 0;
-  border-bottom-color: transparent;
-  overflow: hidden;
-  transition: max-height 420ms var(--ease), opacity 260ms var(--ease), padding 420ms var(--ease);
+
+/* A TEMPLATE ROW IS TINTED ON ITS LEFT EDGE; AN EXPANSION'S ROW ON BOTH.
+   These are the live scorepad's own two rules (.scoring-round-th--tpl and its
+   --exp pair), down to the 14% mix and the 3px inset — this scene is built
+   from the app's surface rather than drawn to resemble it. The left edge says
+   what the row IS and the right says which box it CAME FROM; two independent
+   facts cannot share a channel.
+
+   The palette slugs come from :root's --row-* set, which was measured against
+   cream and is never re-pointed by a theme branch — so a row reads the same
+   on this paper island as on the real pad.
+
+   NOTE what does NOT happen here: the scores do not move. A grid's rowLabels
+   are index-aligned to the round index, so applying one renames the rows the
+   players already filled in and may make the table longer. That is the app's
+   actual behaviour and the reason the chapter can claim it. */
+.vscore__row.is-tinted .vscore__lbl {
+  background: color-mix(in srgb, var(--row-accent) 14%, var(--polaroid-bg));
+  box-shadow: inset 3px 0 0 var(--row-accent);
+  transition: background 320ms var(--ease), box-shadow 320ms var(--ease);
+}
+.vscore__row.is-tinted.is-exp .vscore__lbl {
+  /* Both restated: box-shadow does not merge across rules, so dropping the
+     first would silently take the row's own colour off every expansion row. */
+  box-shadow:
+    inset  3px 0 0 var(--row-accent),
+    inset -3px 0 0 var(--exp-accent, var(--row-accent));
+}
+
+/* The affordance that grows the grid. It lights while a round is open and
+   goes quiet once the next row is on the table, so the row that appears has
+   something visible that caused it — a beat is a STATE, so this cannot be a
+   flash of press feedback and has to be a condition instead. */
+.vscore__add {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 6px;
+  font-size: 9.5px;
+  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  border: 1px dashed var(--line-strong);
+  color: var(--ink-faint);
+  transition: background 260ms var(--ease), color 260ms var(--ease),
+              border-color 260ms var(--ease);
+}
+.vscore__add.is-armed {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-quiet);
+  color: var(--accent);
 }
 
 .vscore__stage--settle { align-items: center; justify-content: center; gap: 4px; text-align: center; }
@@ -20210,12 +20504,19 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vfeed__rail, .vfeed__gg, .vfeed__faces,
+  .vfeed__rail, .vfeed__track, .vfeed__gg, .vfeed__faces,
   .vdisc__tile, .vdisc__cover, .vstat__bar, .vstat__rate-fill,
   .vguide__scroll, .vguide__scrollinner, .vscore__stage, .vscore__seat,
-  .vscore__pill, .vscore__row, .vstat__h2h, .vguide__row, .vguide__tick {
+  .vscore__pill, .vscore__row, .vscore__pick, .vscore__add, .vscore__lbl,
+  .vstat__q, .vguide__row, .vguide__tick {
     transition: none;
   }
+  /* The one keyframe animation in any scene. Reduced motion seeks to the
+     last beat, where the achievement card has already docked and the rule
+     that plays this does not match — but a future beat order could put a
+     hero card last, and a badge that springs out of nothing is exactly what
+     the preference is asking not to see. */
+  .vstat__q--ach.is-hero .vstat__badge { animation: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

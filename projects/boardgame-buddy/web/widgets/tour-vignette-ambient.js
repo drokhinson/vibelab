@@ -1,10 +1,14 @@
-// widgets/tour-vignette-ambient.js — the three looping tour scenes.
+// widgets/tour-vignette-ambient.js — the two looping tour scenes.
 //
-// Community, Stats and Discover. Each is a short ambient loop rather than a
+// Community and Discover. Each is a short ambient loop rather than a
 // narrative: the feature is legible from one frame, so the motion's job is to
-// say "this is live data", not to tell a story. The two features that DO need
-// a story — a scoring template turning a blank scorepad into a specific game's,
-// and a community chapter landing in your guide — are in the scripted module.
+// say "this is live data", not to tell a story. The features that DO need a
+// story are elsewhere — a scoring template turning a blank scorepad into a
+// specific game's, and a community chapter landing in your guide, both in the
+// scripted module; and the stats board, which assembles itself a card at a
+// time, in widgets/tour-vignette-stats.js. Stats used to live here and left
+// when it outgrew a loop, taking this file back under the ~300-line
+// guideline it had reached.
 //
 // Loaded lazily by views/tour-view.js via ui/lazy-script.js. See that file's
 // header for why these are <link rel=prefetch> in index.html rather than
@@ -27,10 +31,21 @@
     const el = root.querySelector(sel);
     if (el) el.classList.toggle(cls, on !== false);
   };
-  /** Move a track by N steps; the stylesheet decides what a step is. */
-  const shift = (root, sel, n) => {
+  /**
+   * Move a track by N steps; the stylesheet decides what a step is.
+   *
+   * THE PROPERTY NAME IS AN ARGUMENT BECAUSE CUSTOM PROPERTIES INHERIT. The
+   * feed nests one track inside another — the vertical one scrolls between
+   * game nights and each night holds a horizontal rail of polaroids — and
+   * with both reading `--vig-step` the value set on the outer track
+   * inherited into every inner rail. Scrolling to the third night therefore
+   * also shoved that night's cards two card-widths sideways, out of the clip:
+   * a section with a header, a Good game pill and no games. Two axes, two
+   * property names.
+   */
+  const shift = (root, sel, n, prop) => {
     const el = /** @type {HTMLElement} */ (root.querySelector(sel));
-    if (el) el.style.setProperty("--vig-step", String(n));
+    if (el) el.style.setProperty(prop || "--vig-step", String(n));
   };
 
   const avatar = (initials, cls) =>
@@ -80,139 +95,109 @@
       </div>
     </article>`;
 
-  // ── 1. Community — a game night, as the feed actually lays it out ─────────
+  // ── 1. Community — the feed, scrolling, as feed-view.js lays it out ──────
   //
-  // The real feed is not a vertical list of rows. views/feed-view.js emits a
-  // day divider, then a session header naming who played, then a SIDEWAYS RAIL
-  // of polaroids (.play-session__scroll), then one "Good game" pill for the
-  // whole night — the pill sits outside the cards on purpose, because it
-  // reacts to the night rather than to any one play. This mirrors that,
-  // including the part that carries the most: the cards are paper and
-  // everything around them is ground.
-  // SIX, and the count is geometry rather than taste: the rail has to be
-  // meaningfully wider than its clip or the slide beats move a rail that had
-  // already fitted, leaving a third of the frame empty at the end of the loop.
-  // styles.css caps the clip at 330px so this holds on every layout tier;
-  // six 96px cards plus their gaps come to 616px, so both slide steps land
-  // well inside the content.
-  const NIGHT = [
+  // Three sessions across three days, because one game night demonstrates a
+  // rail and the feature is a FEED. What the real screen does, and therefore
+  // what this mirrors (views/feed-view.js):
+  //
+  //   • A day divider above that day's first session — Today / Yesterday /
+  //     a short date (helpers.js#formatRelativeDay).
+  //   • A header naming who played. Names join as "You and Priya" or
+  //     "You, Marcus, and Ada", with "You" floated to the front, and the
+  //     trailing clause is the GAME NAME when the night is one play and
+  //     "N games" otherwise — never "1 game".
+  //   • A sideways rail of polaroids. A one-game night uses the SAME rail and
+  //     only centres its lone tile (styles.css:4110); it does not get a
+  //     second layout, so neither does this.
+  //   • One "Good game" pill per night — and none at all when every play in
+  //     the night is the viewer's own, which is why Yesterday has none.
+  const TODAY = [
     { game: "Arboretum", winner: "You",    score: "87",  mine: true, hue: 104 },
-    { game: "Wingspan",  winner: "Priya",  score: "102", hue: 196 },
-    { game: "Cascadia",  winner: "You",    score: "94",  mine: true, hue: 28 },
-    { game: "Sagrada",   winner: "Marcus", score: "71", hue: 268 },
+    { game: "Wingspan",  winner: "Priya",  score: "102",             hue: 196 },
+    { game: "Cascadia",  winner: "You",    score: "94",  mine: true, hue: 28  },
+    { game: "Sagrada",   winner: "Marcus", score: "71",              hue: 268 },
     { game: "Azul",      winner: "You",    score: "68",  mine: true, hue: 220 },
-    { game: "Calico",    winner: "Priya",  score: "55", hue: 340 },
+    { game: "Calico",    winner: "Priya",  score: "55",              hue: 340 },
   ];
+  const SOLO = [
+    { game: "Cascadia",  winner: "You",    score: "104", mine: true, hue: 28  },
+  ];
+  const SATURDAY = [
+    { game: "Verdant",   winner: "Ada",    score: "63",              hue: 128 },
+    { game: "Sky Team",  winner: "You",    score: "9",   mine: true, hue: 202 },
+  ];
+
+  const goodGame = () => `
+    <div class="vfeed__foot" data-kudos>
+      <span class="vfeed__gg">
+        <i data-icon="handshake" class="w-3 h-3"></i><span>Good game</span>
+      </span>
+      <span class="vfeed__faces">
+        ${avatar("PR", "vig-av--xs")}${avatar("MA", "vig-av--xs")}
+      </span>
+      <span class="vfeed__ggwho" data-ggwho></span>
+    </div>`;
+
+  /**
+   * One day's session. `single` centres the lone card and drops the rail's
+   * travel, exactly as .play-session--single does.
+   */
+  const session = (day, header, plays, opts) => {
+    const o = opts || {};
+    return `
+      <section class="vfeed__sec">
+        <p class="vfeed__day">${day}</p>
+        <p class="vfeed__header">${header}</p>
+        <div class="vfeed__railclip">
+          <div class="vfeed__rail${o.single ? " vfeed__rail--single" : ""}"
+               ${o.rail ? "data-rail" : ""}>
+            ${plays.map(playCard).join("")}
+          </div>
+        </div>
+        ${o.foot ? goodGame() : ""}
+      </section>`;
+  };
 
   V.register({
     id: "community",
-    label: "A game night in the feed: three plays, and the table saying good game",
-    hold: 2600,
+    label: "Three game nights in the feed, scrolling, with the table saying good game",
+    hold: 2800,
     html: `
       <div class="vig-chrome"><span class="vig-chrome__title">Feed</span></div>
       <div class="vfeed">
-        <p class="vfeed__day">Saturday</p>
-        <p class="vfeed__header"><b>You</b> and <b>Priya</b> played 6 games</p>
-        <div class="vfeed__railclip">
-          <div class="vfeed__rail" data-rail>
-            ${NIGHT.map(playCard).join("")}
-          </div>
-        </div>
-        <div class="vfeed__foot" data-kudos>
-          <span class="vfeed__gg">
-            <i data-icon="handshake" class="w-3 h-3"></i><span>Good game</span>
-          </span>
-          <span class="vfeed__faces">
-            ${avatar("PR", "vig-av--xs")}${avatar("MA", "vig-av--xs")}
-          </span>
-          <span class="vfeed__ggwho" data-ggwho></span>
+        <div class="vfeed__track" data-feed>
+          ${session("Today", "<b>You</b> and <b>Priya</b> played 6 games",
+                    TODAY, { rail: true, foot: true })}
+          ${session("Yesterday", "<b>You</b> played Cascadia",
+                    SOLO, { single: true })}
+          ${session("Sat 13", "<b>You</b>, <b>Marcus</b>, and <b>Ada</b> played 2 games",
+                    SATURDAY, { foot: true })}
         </div>
       </div>`,
     reset(root) {
+      shift(root, "[data-feed]", 0, "--vig-vstep");
       shift(root, "[data-rail]", 0);
       flag(root, "[data-kudos]", "is-on", false);
       put(root, "[data-ggwho]", "");
     },
     beats: [
-      // Sideways, because the rail is sideways. One step is one card plus its
-      // gap; styles.css turns --vig-step into the travel, so this never has to
-      // know a pixel measurement that lives there. Two steps is as far as the
-      // rail can go without running out of cards — see NIGHT above.
-      { name: "slide", at: 1800, apply: (r) => shift(r, "[data-rail]", 1) },
-      { name: "kudos", at: 3400, apply: (r) => {
+      // Sideways first, on the night that has somewhere to go. One step is one
+      // card plus its gap; the stylesheet turns --vig-step into the travel, so
+      // this never has to know a pixel measurement that lives there.
+      { name: "slide", at: 1600, apply: (r) => shift(r, "[data-rail]", 1) },
+      { name: "kudos", at: 3200, apply: (r) => {
         flag(r, "[data-kudos]", "is-on", true);
         put(r, "[data-ggwho]", "Priya and Marcus said good game");
       } },
-      { name: "more", at: 5200, apply: (r) => shift(r, "[data-rail]", 2) },
+      // Then down the feed. Sections are a uniform height, so one vertical
+      // step is one section and the arithmetic is the rail's again.
+      { name: "scroll", at: 5000, apply: (r) => shift(r, "[data-feed]", 1, "--vig-vstep") },
+      { name: "more",   at: 7000, apply: (r) => shift(r, "[data-feed]", 2, "--vig-vstep") },
     ],
   });
 
-  // ── 2. Stats — the podium, the rate, the head-to-head ──────────────────────
-  // The numbers are set from JS rather than animated in CSS: a count-up is a
-  // sequence of values, and a value is exactly what a beat is for.
-  const PODIUM = [
-    { k: "gold", label: "1st", to: 18, h: 100 },
-    { k: "silver", label: "2nd", to: 11, h: 64 },
-    { k: "bronze", label: "3rd", to: 7, h: 42 },
-  ];
-
-  V.register({
-    id: "stats",
-    label: "A podium, a win rate and a head-to-head record",
-    hold: 2000,
-    html: `
-      <div class="vig-chrome"><span class="vig-chrome__title">Your record</span></div>
-      <div class="vstat">
-        <div class="vstat__podium">
-          ${PODIUM.map((p) => `
-            <div class="vstat__col">
-              <span class="vstat__n" data-n="${p.k}">0</span>
-              <span class="vstat__bar vstat__bar--${p.k}" data-bar="${p.k}"></span>
-              <span class="vstat__lbl">${p.label}</span>
-            </div>`).join("")}
-        </div>
-        <div class="vstat__rate">
-          <span class="vstat__rate-track"><span class="vstat__rate-fill" data-rate></span></span>
-          <span class="vstat__rate-txt"><b data-rate-n>0%</b> win rate · 36 plays</span>
-        </div>
-        <div class="vstat__h2h" data-h2h>
-          <span class="vstat__h2h-lbl">Nemesis</span>
-          ${avatar("MA", "vig-av--sm")}
-          <span class="vstat__h2h-name">Marcus</span>
-          <span class="vstat__h2h-score" data-h2h-score>—</span>
-        </div>
-      </div>`,
-    reset(root) {
-      PODIUM.forEach((p) => {
-        put(root, `[data-n="${p.k}"]`, "0");
-        const bar = /** @type {HTMLElement} */ (root.querySelector(`[data-bar="${p.k}"]`));
-        if (bar) bar.style.setProperty("--vig-h", "0%");
-      });
-      const fill = /** @type {HTMLElement} */ (root.querySelector("[data-rate]"));
-      if (fill) fill.style.setProperty("--vig-w", "0%");
-      put(root, "[data-rate-n]", "0%");
-      flag(root, "[data-h2h]", "is-on", false);
-      put(root, "[data-h2h-score]", "—");
-    },
-    beats: [
-      { name: "podium", at: 500, apply: (r) => PODIUM.forEach((p) => {
-        put(r, `[data-n="${p.k}"]`, String(p.to));
-        const bar = /** @type {HTMLElement} */ (r.querySelector(`[data-bar="${p.k}"]`));
-        if (bar) bar.style.setProperty("--vig-h", p.h + "%");
-      }) },
-      { name: "rate", at: 1500, apply: (r) => {
-        const fill = /** @type {HTMLElement} */ (r.querySelector("[data-rate]"));
-        if (fill) fill.style.setProperty("--vig-w", "50%");
-        put(r, "[data-rate-n]", "50%");
-      } },
-      { name: "nemesis", at: 2500, apply: (r) => {
-        flag(r, "[data-h2h]", "is-on", true);
-        put(r, "[data-h2h-score]", "4–7");
-      } },
-    ],
-  });
-
-  // ── 3. Discover — a rail, and the reason under it ──────────────────────────
+  // ── 2. Discover — a rail, and the reason under it ──────────────────────────
   // The reason line is the point, not the cover art: "Label a suggestion by its
   // reason, not by the number that ranked it" (.claude/rules/web-frontend.md).
   const PICKS = [

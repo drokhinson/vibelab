@@ -30,8 +30,11 @@
    * @property {string} slug      stable — appears in the URL as /tour?c=<slug>
    * @property {string} eyebrow
    * @property {string} title
-   * @property {string} body
-   * @property {string[]} points
+   * @property {string} [body]  optional — a chapter whose scene carries the
+   *   argument on its own says it once rather than twice
+   * @property {(string|{text: string, beat: string})[]} points
+   *   a plain string shows with the panel; `{text, beat}` waits for that beat
+   *   of the chapter's scene, and shows anyway if the scene never runs
    * @property {string} vignette  a BgbTourVignette id
    * @property {string} mark      assets/sprites/features/bgb-feat-<mark>.svg
    * @property {string} strip     the one-liner the sign-in screen shows
@@ -43,13 +46,21 @@
       slug: "community",
       eyebrow: "Your people",
       title: "Your table, and your people",
-      body: "Add the people you sit down with. Every play lands in one shared "
-        + "feed, grouped by the night it happened rather than scattered by who "
-        + "got round to logging it.",
+      // No `body`. The scene under this chapter is a feed that scrolls
+      // through three nights, and it says "every play lands in one shared
+      // feed" better than a paragraph restating it underneath ever did.
       points: [
-        "Add a buddy by QR code, or by name",
-        "One feed for everyone who was at the table",
-        "Players without accounts still get counted",
+        "Add a friend by QR code, or by username",
+        "See the games your friends are enjoying",
+        // CAN CLAIM, not "are linked", and the distinction is the feature.
+        // A ghost is a name somebody typed into a play they logged. When that
+        // person signs up they ask, and the person who logged the plays
+        // approves — widgets/ghost-claim-sheet.js promises "Nothing changes
+        // until they say yes." in so many words. Do not let this line drift
+        // into automatic matching, and do not reach for "merge accounts":
+        // the app's verb is claim, and "ghost" is a word it already says out
+        // loud on the Buddies screen and in every import step.
+        "Ghosts you logged can claim their plays when they join",
       ],
       vignette: "community",
       mark: "community",
@@ -59,9 +70,9 @@
       slug: "guides",
       eyebrow: "Reference",
       title: "The rules, without the rulebook",
-      body: "Somebody has already looked up the rule you are stuck on. Pull "
-        + "their chapter into your own guide and read it at the table, in a "
-        + "scroll built for one hand.",
+      // No `body` — no chapter has one now. This scene watches a community
+      // chapter land in your own guide, which is what the paragraph was
+      // describing in words underneath it.
       points: [
         "Setup, turn order, scoring, card references",
         "Written by players, sorted by how many use them",
@@ -75,13 +86,25 @@
       slug: "scoring",
       eyebrow: "Keep score",
       title: "Keep score for any game",
-      body: "Start a game, share the code, and everyone watches the same "
-        + "scorepad. It stays generic until a community template turns it into "
-        + "this game's — expansions and all.",
+      // No `body`, and each point below names the BEAT of the scene that
+      // demonstrates it. views/tour-view.js holds a gated point back until
+      // widgets/tour-vignette-scripted.js reports that beat, so the claim
+      // lands as the evidence does — a paragraph above the scene was making
+      // all three arguments before the scene had made any of them.
+      //
+      // A beat name here is load-bearing twice over: tools/check-tour.mjs
+      // asserts every one of them exists in the scene's beat list, because a
+      // typo is not an error anybody sees — it is one bullet that never
+      // appears, on a screen whose whole job is to make three claims.
       points: [
-        "A join code, and room for spectators",
-        "A scoring template per game, kept by the community",
-        "An expansion adds rows, or replaces them",
+        { text: "Gather up — the game, its expansions, and who is playing",
+          beat: "gather" },
+        { text: "Live scoring — the same numbers on every screen",
+          beat: "scores" },
+        // "grids", not "templates": the community-authored thing is called a
+        // scoring grid everywhere the user meets it.
+        { text: "Community scoring grids, expansions and all",
+          beat: "template-on" },
       ],
       vignette: "scoring",
       mark: "scoring",
@@ -90,14 +113,18 @@
     {
       slug: "stats",
       eyebrow: "Your record",
-      title: "Your record, and the head-to-head",
-      body: "Wins, podiums, streaks, and the game you are quietly bad at. And "
-        + "because the log is shared, the comparison nothing else gives you: how you "
-        + "do against the people you play with.",
+      title: "See your stats",
+      // No `body`. The scene assembles four cards — the podium, one game's
+      // numbers, a head-to-head and an achievement — and each bullet below
+      // is pinned to the card that shows it, so the paragraph was making
+      // three arguments the pictures make better.
       points: [
-        "Podium, win rate, personal bests",
-        "Head-to-head with everyone you have played",
-        "Achievements, and a shelf of shame you can laugh at",
+        { text: "Podium, win rate, personal bests", beat: "record" },
+        // One bullet, two cards: the scene shows per-game numbers and then
+        // the head-to-head, so this is pinned to the first of the pair.
+        { text: "Per game, or head-to-head against the people you play with",
+          beat: "per-game" },
+        { text: "Earn achievements as you play", beat: "achievement" },
       ],
       vignette: "stats",
       mark: "stats",
@@ -107,13 +134,20 @@
       slug: "discover",
       eyebrow: "What's next",
       title: "What to play next",
-      body: "Picks drawn from the games you play most and the shelf you already "
-        + "own, each one saying why it is there. Plus what is climbing on "
-        + "BoardGameGeek this week.",
+      // No `body`. The scene already shows a pick with the reason under it,
+      // which is the whole of what the old paragraph said.
+      //
+      // The points are NOT beat-gated here, unlike chapters 3 and 4: the
+      // scene walks four suggestions and their reasons, and says nothing
+      // about BoardGameGeek or about retail partners. Gating a claim on a
+      // beat that does not illustrate it would be worse than not gating it.
       points: [
-        "Reasons, not rankings",
-        "This year's releases",
-        "The games on your shelf you have not touched",
+        "Tailored recommendations, drawn from the games you play most",
+        "Full BoardGameGeek integration — your collection, and what is hot",
+        // The feature is retail PARTNER LINKS under a game (domain/affiliate.js),
+        // and they stay hidden until an admin switches a partner on. So the
+        // line promises where to buy from a partner, not a price guarantee.
+        "Deals from our retail partners, on the game's own page",
       ],
       vignette: "discover",
       mark: "discover",
