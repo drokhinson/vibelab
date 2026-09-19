@@ -425,13 +425,23 @@ async function precacheOne(cache, url) {
   // Nothing else here has that property, and forcing a full network fetch for
   // all of them re-downloaded the whole shell after every deploy.
   //
-  // A plain fetch is still correct. The bundle and the stylesheet are
+  // A plain fetch is still correct, but only because _headers makes it so,
+  // and that is worth saying precisely. The bundle and the stylesheet are
   // content-hashed by the deploy bundler, so their URL either holds exactly the
   // right bytes or has never been seen — _headers marks those two immutable
-  // for a year on that basis, via its /bgb-* rule. For everything else (the vendored QR codecs,
-  // manifest.json, the icons) a normal fetch goes through the browser's own
-  // freshness rules, which is at worst the same request `reload` would have
-  // made and at best a 304 with no body.
+  // for a year on that basis, via its /bgb-* rule. For everything else (the
+  // vendored QR codecs, manifest.json, the icons) a normal fetch goes through
+  // the browser's own freshness rules, which is at worst the same request
+  // `reload` would have made and at best a 304 with no body.
+  //
+  // "The browser's own freshness rules" is only safe where the origin states
+  // them. It did not for the three lazily-loaded tour vignette modules — they
+  // are prefetch links at stable urls, matched no _headers rule, and so shipped
+  // with no Cache-Control at all; a browser invented a heuristic lifetime and
+  // served one of them three releases stale while this precache happily stored
+  // the result. They now carry no-cache via the /ui/* and /widgets/* rules. A
+  // new file fetched by url rather than bundled needs the same, or it inherits
+  // the same bug.
   const res = await fetchWithDeadline(url, PRECACHE_TIMEOUT_MS);
   if (!res.ok) throw new Error(`sw: precache ${url} failed (${res.status})`);
   const type = res.headers.get("content-type") || "";

@@ -622,6 +622,20 @@ reasoning governs the sign-in screen's hero vignette, which mounts *after*
 first paint and degrades to nothing on a dead connection or under reduced
 motion.
 
+**And a stable url needs a freshness rule, which those four did not have.**
+Everything else the site ships is either content-hashed by the bundler — a
+changed file is a different url, and `_headers` pins those `immutable` for a
+year on exactly that basis — or explicitly `no-cache`. The vignette modules
+were neither: prefetch links at stable urls, matching no `_headers` rule but
+the security-only `/*`, so they went out with no `Cache-Control` at all and a
+browser was free to invent a heuristic lifetime. One did, and served a scene
+module **three releases stale** while the bundle beside it on the same page
+was current — a failure with no symptom except a screen that looks like an
+older version of itself, which is indistinguishable from work that was never
+done. `/ui/*` and `/widgets/*` are `no-cache` now. **Any new file fetched by
+url rather than folded into the bundle needs the same**, or it inherits this
+bug on the day it is written.
+
 The tour is **chrome** and joins the re-point lists in `styles.css` — with one
 paper island covering the two things inside it that are photographs: the
 Arboretum scorepad in the scoring scene, and the play cards in the feed scene.

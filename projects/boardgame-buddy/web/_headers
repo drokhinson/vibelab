@@ -45,6 +45,31 @@
 /manifest.json
   Cache-Control: public, max-age=3600
 
+# THE LAZILY-LOADED MODULES, AND THE ONE GAP IN THE HASHING ARGUMENT.
+#
+# Everything else the app ships is one of two things: folded into the
+# content-hashed bundle (so its URL changes when its bytes do, covered by
+# /bgb-* above), or named in the no-cache list below. The three tour vignette
+# modules are neither. They are <link rel="prefetch"> at STABLE urls —
+# deliberately, so scripts/bgb-bundle.mjs leaves them out of the manifest and
+# sw.js still precaches them — which meant they shipped with no Cache-Control
+# at all and a browser was free to invent a heuristic freshness lifetime for
+# them. One did: a phone served a scene module three releases old while the
+# bundle beside it was current, and nothing anywhere could tell.
+#
+# no-cache stores the file and revalidates it, so a deploy costs a 304 and
+# never a stale body. The rule covers both directories rather than the three
+# files, because everything else under them is bundled and never requested —
+# a freshness rule over a file nobody asks for costs nothing, and naming the
+# directories means the next lazily-loaded module is covered on the day it is
+# written rather than the day somebody notices.
+
+/ui/*
+  Cache-Control: no-cache
+
+/widgets/*
+  Cache-Control: no-cache
+
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
