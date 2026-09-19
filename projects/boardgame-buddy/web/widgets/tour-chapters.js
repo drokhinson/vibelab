@@ -83,7 +83,7 @@
     {
       slug: "scoring",
       eyebrow: "Keep score",
-      title: "Rules and scoring during your game nights",
+      title: "Rules and scoring",
       // No `body`. The scene runs Gather → live rounds → a community grid,
       // and these three lines are the claims it is evidence for.
       points: [
