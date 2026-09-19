@@ -36,7 +36,7 @@
 //   8. THE TOUR ARMS NO BACK GUARD, and its scenes stay off the boot path.
 //      The first is .claude/rules/overlays.md §8b: a routed screen already has
 //      a history entry, and arming over it is the double-entry bug the chapter
-//      wizard shipped. The second is why the three scene modules are
+//      wizard shipped. The second is why the scene modules are
 //      <link rel=prefetch> rather than <script src> — a <script src> would put
 //      them on every sign-in's critical path AND inside the bundler's
 //      manifest, costing every visitor for a tour most never open.
@@ -69,6 +69,7 @@ for (const rel of [
   "ui/tour-vignette.js",
   "widgets/tour-vignette-ambient.js",
   "widgets/tour-vignette-scripted.js",
+  "widgets/tour-vignette-stats.js",
   "widgets/tour-chapters.js",
 ]) {
   vm.runInContext(read(rel), sandbox, { filename: rel });
@@ -155,7 +156,9 @@ for (const id of V.ids()) {
 // `at` has to rise across the list, or "reset, then apply 0..N" — which is how
 // seek() and every loop restart get to a frame — produces a scene the timed
 // run never shows.
-const rawSrc = read("widgets/tour-vignette-ambient.js") + read("widgets/tour-vignette-scripted.js");
+const rawSrc = read("widgets/tour-vignette-ambient.js")
+  + read("widgets/tour-vignette-scripted.js")
+  + read("widgets/tour-vignette-stats.js");
 ok("no beat carries a negative delay", !/\bat:\s*-/.test(rawSrc));
 
 // ── The store listing cites beats, not timestamps ───────────────────────────
@@ -266,7 +269,8 @@ console.log("\nboot cost");
 const html = read("index.html");
 for (const rel of ["ui/tour-vignette.js",
                    "widgets/tour-vignette-ambient.js",
-                   "widgets/tour-vignette-scripted.js"]) {
+                   "widgets/tour-vignette-scripted.js",
+                   "widgets/tour-vignette-stats.js"]) {
   ok(`${rel} is prefetched`, html.includes(`<link rel="prefetch" href="${rel}"`));
   ok(`${rel} is NOT a <script src>`, !html.includes(`<script src="${rel}"`));
 }
@@ -274,6 +278,17 @@ for (const rel of ["views/tour-view.js", "widgets/tour-chapters.js", "ui/feature
   ok(`${rel} IS loaded`, html.includes(`<script src="${rel}">`));
 }
 ok('index.html has a <main data-view="tour">', html.includes('data-view="tour"'));
+// EVERY SCENE MODULE IS IN THE DECK'S OWN LOAD LIST. A module that is
+// prefetched but never loaded registers nothing, and the only symptom is one
+// chapter stuck on its loading frame — which is exactly the failure the
+// chapter→scene assertion at the top of this file cannot catch, because it
+// loads all three itself.
+const srcList = read("views/tour-view.js");
+for (const rel of ["widgets/tour-vignette-ambient.js",
+                   "widgets/tour-vignette-scripted.js",
+                   "widgets/tour-vignette-stats.js"]) {
+  ok(`${rel} is in SCENE_SRCS`, srcList.includes(`"${rel}"`));
+}
 
 console.log(fails ? `\n${fails} FAILED\n` : "\nall good\n");
 process.exit(fails ? 1 : 0);

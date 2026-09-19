@@ -37,6 +37,7 @@
     "ui/tour-vignette.js",
     "widgets/tour-vignette-ambient.js",
     "widgets/tour-vignette-scripted.js",
+    "widgets/tour-vignette-stats.js",
   ];
   // Horizontal travel, in px, past which a drag is a chapter change.
   const SWIPE_PX = 40;

@@ -1,10 +1,14 @@
-// widgets/tour-vignette-ambient.js — the three looping tour scenes.
+// widgets/tour-vignette-ambient.js — the two looping tour scenes.
 //
-// Community, Stats and Discover. Each is a short ambient loop rather than a
+// Community and Discover. Each is a short ambient loop rather than a
 // narrative: the feature is legible from one frame, so the motion's job is to
-// say "this is live data", not to tell a story. The two features that DO need
-// a story — a scoring template turning a blank scorepad into a specific game's,
-// and a community chapter landing in your guide — are in the scripted module.
+// say "this is live data", not to tell a story. The features that DO need a
+// story are elsewhere — a scoring template turning a blank scorepad into a
+// specific game's, and a community chapter landing in your guide, both in the
+// scripted module; and the stats board, which assembles itself a card at a
+// time, in widgets/tour-vignette-stats.js. Stats used to live here and left
+// when it outgrew a loop, taking this file back under the ~300-line
+// guideline it had reached.
 //
 // Loaded lazily by views/tour-view.js via ui/lazy-script.js. See that file's
 // header for why these are <link rel=prefetch> in index.html rather than
@@ -193,72 +197,7 @@
     ],
   });
 
-  // ── 2. Stats — the podium, the rate, the head-to-head ──────────────────────
-  // The numbers are set from JS rather than animated in CSS: a count-up is a
-  // sequence of values, and a value is exactly what a beat is for.
-  const PODIUM = [
-    { k: "gold", label: "1st", to: 18, h: 100 },
-    { k: "silver", label: "2nd", to: 11, h: 64 },
-    { k: "bronze", label: "3rd", to: 7, h: 42 },
-  ];
-
-  V.register({
-    id: "stats",
-    label: "A podium, a win rate and a head-to-head record",
-    hold: 2000,
-    html: `
-      <div class="vig-chrome"><span class="vig-chrome__title">Your record</span></div>
-      <div class="vstat">
-        <div class="vstat__podium">
-          ${PODIUM.map((p) => `
-            <div class="vstat__col">
-              <span class="vstat__n" data-n="${p.k}">0</span>
-              <span class="vstat__bar vstat__bar--${p.k}" data-bar="${p.k}"></span>
-              <span class="vstat__lbl">${p.label}</span>
-            </div>`).join("")}
-        </div>
-        <div class="vstat__rate">
-          <span class="vstat__rate-track"><span class="vstat__rate-fill" data-rate></span></span>
-          <span class="vstat__rate-txt"><b data-rate-n>0%</b> win rate · 36 plays</span>
-        </div>
-        <div class="vstat__h2h" data-h2h>
-          <span class="vstat__h2h-lbl">Nemesis</span>
-          ${avatar("MA", "vig-av--sm")}
-          <span class="vstat__h2h-name">Marcus</span>
-          <span class="vstat__h2h-score" data-h2h-score>—</span>
-        </div>
-      </div>`,
-    reset(root) {
-      PODIUM.forEach((p) => {
-        put(root, `[data-n="${p.k}"]`, "0");
-        const bar = /** @type {HTMLElement} */ (root.querySelector(`[data-bar="${p.k}"]`));
-        if (bar) bar.style.setProperty("--vig-h", "0%");
-      });
-      const fill = /** @type {HTMLElement} */ (root.querySelector("[data-rate]"));
-      if (fill) fill.style.setProperty("--vig-w", "0%");
-      put(root, "[data-rate-n]", "0%");
-      flag(root, "[data-h2h]", "is-on", false);
-      put(root, "[data-h2h-score]", "—");
-    },
-    beats: [
-      { name: "podium", at: 500, apply: (r) => PODIUM.forEach((p) => {
-        put(r, `[data-n="${p.k}"]`, String(p.to));
-        const bar = /** @type {HTMLElement} */ (r.querySelector(`[data-bar="${p.k}"]`));
-        if (bar) bar.style.setProperty("--vig-h", p.h + "%");
-      }) },
-      { name: "rate", at: 1500, apply: (r) => {
-        const fill = /** @type {HTMLElement} */ (r.querySelector("[data-rate]"));
-        if (fill) fill.style.setProperty("--vig-w", "50%");
-        put(r, "[data-rate-n]", "50%");
-      } },
-      { name: "nemesis", at: 2500, apply: (r) => {
-        flag(r, "[data-h2h]", "is-on", true);
-        put(r, "[data-h2h-score]", "4–7");
-      } },
-    ],
-  });
-
-  // ── 3. Discover — a rail, and the reason under it ──────────────────────────
+  // ── 2. Discover — a rail, and the reason under it ──────────────────────────
   // The reason line is the point, not the cover art: "Label a suggestion by its
   // reason, not by the number that ranked it" (.claude/rules/web-frontend.md).
   const PICKS = [

@@ -584,7 +584,35 @@ nothing — the title bar updates and the stage under it stays blank. And the
 were just mounted into; `render()` therefore destroys every scene before it
 repaints, exactly as the sign-in screen's hero does.
 
-**The scenes are not on the boot path.** All three vignette modules are
+**The stats scene assembles a board, one card at a time.** Four quadrants —
+the podium and win rate, one game's numbers, a head-to-head, and an
+achievement. Each arrives centre-stage at 1.75x and holds while it is the only
+thing to read, then settles into its corner as the next one arrives; the last
+beat leaves all four up. Three of those arrivals carry the chapter's three
+bullets, so a claim never appears without a picture of itself.
+
+**A card never leaves its grid cell.** Centre-stage is a *transform* — half a
+cell towards the middle, then a scale — not a change of `position`. Absolute
+while centred and back to the grid to dock cannot animate, because `position`
+is not an animatable property, and under the beat model that jump would happen
+on every loop rather than once. The four hero rules differ only in the sign of
+the translate, and the sign is the corner. The achievement's pop is on the
+**badge**, not the card: a keyframe animation on the card's own `transform`
+would overwrite the hero translate and drop it back into its corner mid-flight
+— the two cannot share the property.
+
+That scene lives in `widgets/tour-vignette-stats.js`, its own module, because
+it outgrew a loop: `tour-vignette-ambient.js` was at the ~300-line guideline
+with it inside. It duplicates two four-line DOM helpers rather than sharing
+them, and that is the intended answer, not laziness — `ui-object-design.md` §4
+puts the *lifecycle* in the shell and leaves each caller its own markup, so
+sugar for setting text on a scene's own nodes is the caller's side of the line.
+The badge is the achievements screen's own sprite for a real seeded
+achievement (`wins_10`, "Crowned"), and it keeps its dark medallion ground in
+both themes by design — a coin on the table, not a mark drawn against the
+surface.
+
+**The scenes are not on the boot path.** All four vignette modules are
 `<link rel="prefetch" as="script">` in `index.html` rather than `<script src>`,
 and load through `ui/lazy-script.js` when somebody opens the tour. That keeps
 them out of `scripts/bgb-bundle.mjs`'s manifest (which reads `<script src>`)
@@ -641,8 +669,8 @@ by cutting each card off below its game name — taking the winner line, which
 is the thing the cards are there for. `.tour__stage`'s floor is set by this
 scene for the same reason.
 
-**A chapter may carry no `body`.** The community and scoring chapters have
-none: the scene under each makes the same point the paragraph used to.
+**A chapter may carry no `body`.** The community, scoring and stats chapters
+have none: the scene under each makes the same point the paragraph used to.
 `views/tour-view.js` guards the field, and `check-tour.mjs` pins both the guard
 and the fact that a chapter actually exercises it — an unguarded `${ch.body}`
 prints the string "undefined" into the panel, which nothing reports.

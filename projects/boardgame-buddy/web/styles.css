@@ -19972,19 +19972,95 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 /* ── Scene: stats ─────────────────────────────────────────────────────────── */
-.vstat { flex: 1 1 auto; display: flex; flex-direction: column; gap: 9px; padding: 10px; min-height: 0; }
-.vstat__podium { flex: 1 1 auto; display: flex; align-items: flex-end; justify-content: center; gap: 12px; min-height: 0; }
-.vstat__col { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; justify-content: flex-end; }
+/* FOUR CARDS THAT ASSEMBLE A BOARD. Each one arrives centre-stage, holds
+   while it is the only thing to read, then settles into its own quadrant as
+   the next arrives — so by the last beat the chapter's three claims are all
+   on screen at once.
+
+   THE CARD NEVER LEAVES ITS GRID CELL. Centre-stage is a transform: half a
+   cell towards the middle, then a scale. Doing it by position — absolute
+   while centred, back to the grid to dock — cannot animate, because
+   `position` is not an animatable property; and under the beat model that
+   jump would happen on every loop rather than once. */
+.vstat { flex: 1 1 auto; min-height: 0; display: flex; padding: 8px; }
+.vstat__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+}
+.vstat__q {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
+  box-sizing: border-box;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg-2);
+  opacity: 0;
+  transform: scale(0.94);
+  transition: opacity 320ms var(--ease), transform 420ms var(--ease),
+              box-shadow 320ms var(--ease);
+}
+.vstat__q.is-in { opacity: 1; transform: none; }
+/* The four hero transforms differ only in sign, and the sign is the corner
+   the card sits in. A translate percentage resolves against the element's
+   UNSCALED box and is applied after the scale (transforms compose
+   right-to-left), so 50% is half a cell — exactly the distance from a cell's
+   centre to the centre of a 2x2 grid.
+
+   These must stay AFTER the .is-in rule above: both are (0,2,0), so the tie
+   is settled on source order (.claude/rules/mobile-web.md §3). */
+.vstat__q.is-hero { z-index: 2; box-shadow: var(--sh-2); border-color: var(--line-strong); }
+.vstat__q--record.is-hero { transform: translate( 50%,  50%) scale(1.75); }
+.vstat__q--game.is-hero   { transform: translate(-50%,  50%) scale(1.75); }
+.vstat__q--h2h.is-hero    { transform: translate( 50%, -50%) scale(1.75); }
+.vstat__q--ach.is-hero    { transform: translate(-50%, -50%) scale(1.75); }
+/* What has already docked stays on screen — the board is being built, and
+   hiding the built part would throw that away — but it steps back while
+   something is centre-stage over the top of it. */
+.vstat__grid.has-hero .vstat__q.is-in:not(.is-hero) { opacity: 0.3; }
+
+.vstat__qt {
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* The record card: podium, then the rate bar under it. */
+.vstat__podium {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 9px;
+  min-height: 0;
+}
+.vstat__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  justify-content: flex-end;
+}
 .vstat__n {
   font-family: var(--font-score);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 .vstat__bar {
-  width: 26px;
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  width: 20px;
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
   background: var(--accent-quiet);
   border: 1px solid var(--line);
   border-bottom: none;
@@ -19993,9 +20069,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .vstat__bar--gold { background: var(--accent); border-color: var(--accent); }
 .vstat__bar--silver { background: color-mix(in srgb, var(--accent) 45%, transparent); }
-.vstat__lbl { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
-.vstat__rate { display: flex; flex-direction: column; gap: 4px; }
-.vstat__rate-track { height: 5px; border-radius: var(--r-pill); background: var(--line-strong); overflow: hidden; }
+.vstat__lbl { font-size: 7.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.vstat__rate-track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  overflow: hidden;
+  flex: none;
+}
 .vstat__rate-fill {
   display: block;
   height: 100%;
@@ -20004,23 +20085,81 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   width: var(--vig-w, 0%);
   transition: width 520ms var(--ease);
 }
-.vstat__rate-txt { font-size: 10px; color: var(--ink-faint); }
+.vstat__rate-txt { margin: 0; font-size: 8.5px; color: var(--ink-faint); }
 .vstat__rate-txt b { font-family: var(--font-score); color: var(--ink); }
-.vstat__h2h {
+
+/* The per-game card: one game, three numbers. */
+.vstat__rows {
+  margin: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+.vstat__rows > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--line);
+}
+.vstat__rows > div:last-child { border-bottom: none; padding-bottom: 0; }
+.vstat__rows dt { font-size: 9px; color: var(--ink-muted); }
+.vstat__rows dd {
+  margin: 0;
+  font-family: var(--font-score);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The head-to-head card: two faces and the record between them. */
+.vstat__vs {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--bg-2);
-  opacity: 0.45;
-  transition: opacity 300ms var(--ease);
+  justify-content: center;
+  gap: 8px;
 }
-.vstat__h2h.is-on { opacity: 1; }
-.vstat__h2h-lbl { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
-.vstat__h2h-name { font-size: 11px; color: var(--ink); flex: 1 1 auto; }
-.vstat__h2h-score { font-family: var(--font-score); font-size: 12px; font-weight: 700; color: var(--win); }
+.vstat__side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 8.5px;
+  color: var(--ink-muted);
+}
+.vstat__score {
+  font-family: var(--font-score);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.vstat__vsnote { margin: 0; font-size: 8px; color: var(--ink-faint); text-align: center; }
+
+/* The achievement card. The badge is the same sprite the achievements screen
+   paints, and it keeps its own dark medallion ground in both themes — a coin
+   on the table rather than a mark drawn against the surface
+   (.claude/rules/assets.md), so there is nothing to recolour here. */
+.vstat__q--ach { align-items: center; justify-content: center; text-align: center; gap: 3px; }
+.vstat__badge { width: 46px; height: 46px; flex: none; }
+.vstat__achname { margin: 0; font-family: var(--font-display); font-size: 12px; color: var(--ink); }
+.vstat__achsub { margin: 0; font-size: 8px; color: var(--ink-faint); }
+/* THE POP IS ON THE BADGE, NOT ON THE CARD. An animation on the card's own
+   transform would overwrite the hero translate above and drop it back into
+   its corner mid-flight — the two cannot share the property. Scoping it to
+   the badge also means it plays once, when the card takes the stage, and
+   re-plays on the next loop because reset() removes the class. */
+@keyframes vstatPop {
+  0%   { transform: scale(0.35); opacity: 0; }
+  62%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.vstat__q--ach.is-hero .vstat__badge { animation: vstatPop 620ms var(--ease) both; }
 
 /* ── Scene: discover ──────────────────────────────────────────────────────── */
 .vdisc { flex: 1 1 auto; display: flex; flex-direction: column; gap: 10px; padding: 10px; min-height: 0; justify-content: center; }
@@ -20361,9 +20500,15 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .vdisc__tile, .vdisc__cover, .vstat__bar, .vstat__rate-fill,
   .vguide__scroll, .vguide__scrollinner, .vscore__stage, .vscore__seat,
   .vscore__pill, .vscore__row, .vscore__pick, .vscore__add, .vscore__lbl,
-  .vstat__h2h, .vguide__row, .vguide__tick {
+  .vstat__q, .vguide__row, .vguide__tick {
     transition: none;
   }
+  /* The one keyframe animation in any scene. Reduced motion seeks to the
+     last beat, where the achievement card has already docked and the rule
+     that plays this does not match — but a future beat order could put a
+     hero card last, and a badge that springs out of nothing is exactly what
+     the preference is asking not to see. */
+  .vstat__q--ach.is-hero .vstat__badge { animation: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

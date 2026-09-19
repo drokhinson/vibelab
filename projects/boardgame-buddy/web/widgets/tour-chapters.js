@@ -113,14 +113,18 @@
     {
       slug: "stats",
       eyebrow: "Your record",
-      title: "Your record, and the head-to-head",
-      body: "Wins, podiums, streaks, and the game you are quietly bad at. And "
-        + "because the log is shared, the comparison nothing else gives you: how you "
-        + "do against the people you play with.",
+      title: "See your stats",
+      // No `body`. The scene assembles four cards — the podium, one game's
+      // numbers, a head-to-head and an achievement — and each bullet below
+      // is pinned to the card that shows it, so the paragraph was making
+      // three arguments the pictures make better.
       points: [
-        "Podium, win rate, personal bests",
-        "Head-to-head with everyone you have played",
-        "Achievements, and a shelf of shame you can laugh at",
+        { text: "Podium, win rate, personal bests", beat: "record" },
+        // One bullet, two cards: the scene shows per-game numbers and then
+        // the head-to-head, so this is pinned to the first of the pair.
+        { text: "Per game, or head-to-head against the people you play with",
+          beat: "per-game" },
+        { text: "Earn achievements as you play", beat: "achievement" },
       ],
       vignette: "stats",
       mark: "stats",
