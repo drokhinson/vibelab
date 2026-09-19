@@ -588,8 +588,8 @@ repaints, exactly as the sign-in screen's hero does.
 the podium and win rate, one game's numbers, a head-to-head, and an
 achievement. Each arrives centre-stage at 1.75x and holds while it is the only
 thing to read, then settles into its corner as the next one arrives; the last
-beat leaves all four up. Three of those arrivals carry the chapter's three
-bullets, so a claim never appears without a picture of itself.
+beat leaves all four up. Three of those arrivals are the chapter's three
+bullets, in the order the bullets make them.
 
 **A card never leaves its grid cell.** Centre-stage is a *transform* — half a
 cell towards the middle, then a scale — not a change of `position`. Absolute
@@ -675,27 +675,19 @@ have none: the scene under each makes the same point the paragraph used to.
 and the fact that a chapter actually exercises it — an unguarded `${ch.body}`
 prints the string "undefined" into the panel, which nothing reports.
 
-**The scoring scene is three stages, and the chapter's three bullets are
-pinned to its beats.** A point in `widgets/tour-chapters.js` may be a plain
-string or `{text, beat}`; the shell reports every state change through
-`opts.onBeat`, and the deck reveals a gated point when its beat lands — so a
-claim arrives as the scene demonstrates it rather than making all three
-arguments above a scene that has not started. The reveal is by beat **index**,
-not by name-equality with the beat that just fired, and that is load-bearing
-twice: reduced motion seeks straight to the last beat and reports only that
-one (a name test would leave the first two bullets permanently invisible to
-exactly the readers least able to wait), and a cycle restart reports
-`(null, -1)`, which is what clears the list so the reveal can happen again.
+**The scoring scene is three stages**, in the order the chapter's three
+bullets claim them: Gather, the live rounds, then a community grid.
 
-The gate fails **open**, in three layers, because a marketing screen that
-hides its own copy is worse than one that shows it all at once. The hiding
-rule is scoped to `.tour__points--live`, which the deck adds only after
-`mount()` returned a controller — so an unregistered scene, a typo in
-`vignette` or a dead connection leaves every claim on screen. A watchdog
-covers the remaining case, a scene that mounts but whose clock never runs.
-And `check-tour.mjs` asserts that every gated point names a beat its scene
-actually has, because a typo there is not an error anybody sees: it is one
-bullet that never appears, on a panel that still looks deliberate.
+**A chapter's bullets are on screen the whole time, and that was tried the
+other way.** For one release the scoring and stats points each named a beat
+and the deck held them back until the scene reached it — a claim arriving as
+its evidence did. It reads worse than it sounds. A reader landing on the panel
+sees one line where there are three, the block under the scene grows while
+they are reading it, and anyone who glances away has no way to know whether
+they have seen everything. So the bullets paint with the panel, on the
+`fadeUp` + `--i` stagger every list in the app uses, and `opts.onBeat` came
+back off `ui/tour-vignette.js` with them — it had exactly one consumer. Don't
+reintroduce it without a reason that survives being watched.
 
 One thing about what that scene shows: **a template relabels rows, it does not
 add a second kind of row**: `rowLabels` are index-aligned to the round index, so

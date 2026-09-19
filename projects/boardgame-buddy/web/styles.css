@@ -19561,28 +19561,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .tour__points li [data-icon-name] { color: var(--accent); flex: none; margin-top: 4px; }
 
-/* A POINT PINNED TO A BEAT WAITS FOR THE SCENE TO MAKE ITS CASE.
-   widgets/tour-chapters.js can give a point a `beat`, and views/tour-view.js
-   reveals it when ui/tour-vignette.js reports that beat — so a chapter whose
-   scene is the argument states each claim as it is demonstrated, instead of
-   stacking all three above a scene that has not started.
-
-   THE GATE IS THE --live CLASS, AND ONLY THE VIEW ADDS IT, ONLY AFTER a
-   vignette actually mounted. A dead connection, a scene that failed to
-   register, a typo in `vignette` — every one of those leaves the list plain
-   and every claim on screen. Putting the hiding on [data-beat] alone would
-   mean a marketing screen whose copy is invisible whenever a decoration did
-   not load, which is the one failure mode this must not have. There is a
-   watchdog behind it too, for the case where the scene mounts and its clock
-   never runs. */
-.tour__points--live li[data-beat] {
-  opacity: 0;
-  transform: translateY(6px);
-  animation: none;
-  transition: opacity 320ms var(--ease), transform 320ms var(--ease);
-}
-.tour__points--live li[data-beat].is-shown { opacity: 1; transform: none; }
-
 /* The stage a vignette mounts into. It holds its own height BEFORE the scene
    modules land, so the paragraph under it does not jump up the screen when a
    lazily-loaded scene arrives — the same reason a list reserves its skeleton. */
@@ -19628,11 +19606,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .tour__track { transition: none; }
   .tour__seg::after { transition: none; }
   .tour__points li { animation: none; }
-  /* Reduced motion seeks the scene to its LAST beat and holds it, and the
-     reveal is by beat index — so every gated point is already shown here.
-     Dropping the transition is what stops them fading in one behind another
-     on a viewer who asked for none of that. */
-  .tour__points--live li[data-beat] { transition: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

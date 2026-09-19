@@ -17,9 +17,9 @@
 // FOUR CARDS, ONE AT A TIME, THEN ALL FOUR.
 // Each card arrives at the centre of the frame at 1.75x and holds while it is
 // the only thing to read, then settles into its own quadrant as the next one
-// arrives. The chapter's three bullets are pinned to three of those arrivals
-// (widgets/tour-chapters.js), so every claim has a picture of itself on
-// screen as it is made — and the last beat leaves all four up at once.
+// arrives. Three of the four are the claims widgets/tour-chapters.js makes
+// under the frame, in the order it makes them — and the last beat leaves
+// all four cards up at once.
 //
 // THE DOCKING IS A TRANSFORM, NOT A CHANGE OF POSITION. Every card sits in
 // its own grid cell the whole time; `is-hero` translates it half a cell
@@ -151,7 +151,7 @@
       put(root, "[data-h2h]", "—");
     },
     beats: [
-      // Bullet 1 — "Podium, win rate, personal bests".
+      // The podium and the win rate.
       { name: "record", at: 700, apply: (r) => {
         focus(r, "record");
         PODIUM.forEach((p) => {
@@ -161,15 +161,14 @@
         setv(r, "[data-rate]", "--vig-w", "50%");
         put(r, "[data-rate-n]", "50%");
       } },
-      // Bullet 2 — "Per game, or head-to-head …". It covers both of the next
-      // two cards, so it is pinned to the first of them.
+      // One game's own numbers; the head-to-head follows it.
       { name: "per-game", at: 2900, apply: (r) => focus(r, "game") },
       // `nemesis` keeps its name: Docs/STORE_LISTING.md cuts shot 6 from it.
       { name: "nemesis", at: 5100, apply: (r) => {
         focus(r, "h2h");
         put(r, "[data-h2h]", "4–7");
       } },
-      // Bullet 3 — "Earn achievements as you play".
+      // The badge pops.
       { name: "achievement", at: 7300, apply: (r) => focus(r, "ach") },
       // Everything docked, nothing singled out: the four claims side by side,
       // which is the frame the chapter ends on and the one reduced motion

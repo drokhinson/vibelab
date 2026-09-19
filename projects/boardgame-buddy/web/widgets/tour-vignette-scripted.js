@@ -100,12 +100,11 @@
 
   // ── Scoring — Gather, live rounds, then a community grid ──────────────────
   //
-  // THREE STAGES, AND THE CHAPTER'S THREE BULLETS ARE PINNED TO THEM.
-  // widgets/tour-chapters.js gives each scoring point a `beat`, and
-  // views/tour-view.js reveals that point when the shell reports the beat — so
-  // a claim arrives as the scene demonstrates it rather than sitting above it
-  // making all three at once. Renaming a beat here therefore breaks a bullet
-  // as well as a store screenshot; tools/check-tour.mjs pins both.
+  // THREE STAGES: Gather, the live rounds, and a community grid. They are
+  // the three claims widgets/tour-chapters.js makes under the frame, in the
+  // order it makes them. Beat NAMES are a published contract —
+  // Docs/STORE_LISTING.md cuts three screenshots from this scene by name,
+  // and tools/check-tour.mjs pins them — so renaming one is a doc change.
   //
   // The scorepad is a PAPER surface (.claude/rules/theming.md §6) sitting on a
   // chrome screen, so .vscore__pad is a paper island in styles.css with its
@@ -237,7 +236,7 @@
       fill(root, ".vscore__c[data-v]", []);
     },
     beats: [
-      // Bullet 1 — "the game, its expansions, and who is playing".
+      // The game, its expansions, and who is playing.
       { name: "gather", at: 700, apply: (r) => {
         mark(r, ".vscore__pick", "is-in", true);
         mark(r, ".vscore__seat", "is-in", true);
@@ -246,7 +245,7 @@
         stage(r, "pad");
         put(r, "[data-step]", "Play · Round 1");
       } },
-      // Bullet 2 — "the same numbers on every screen at the table".
+      // The first round goes on the table.
       { name: "scores", at: 4300, apply: (r) => {
         fill(r, '[data-row="r1"] .vscore__c[data-v]', R1);
         fill(r, ".vscore__row--total .vscore__c[data-v]", TOT.r1);
@@ -259,9 +258,9 @@
         fill(r, ".vscore__row--total .vscore__c[data-v]", TOT.r2);
         mark(r, ".vscore__add", "is-armed", false);
       } },
-      // Bullet 3 — "community scoring grids, expansions and all". The rows
-      // that were R1 and R2 keep their scores and take the grid's own labels
-      // and palette tint; the table gets one row longer.
+      // The community grid lands. The rows that were R1 and R2 keep their
+      // scores and take the grid's own labels and palette tint; the table
+      // gets one row longer.
       { name: "template-on", at: 7500, apply: (r) => {
         const p = r.querySelector('[data-pill="tmpl"]');
         if (p) p.classList.add("is-on");
