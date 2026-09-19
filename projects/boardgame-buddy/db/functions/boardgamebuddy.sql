@@ -1,6 +1,27 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 047_usage_stats.sql (adds bgb_admin_usage_stats — the admin
+-- Last updated: 048_play_teams.sql (re-emits bgb_log_play, bgb_feed_plays and
+--               bgb_plays_page so a seat carries the side it played on.
+--               play_players gains a nullable `team`; bgb_log_play writes it
+--               (normalizing "" to NULL, which is the common case — the client
+--               seeds every seat with team:"") and echoes it, and the two read
+--               RPCs project it. bgb_feed_plays is not optional: the detail
+--               popup paints from the feed card's roster in the same frame as
+--               the tap, so a play opened from the feed would otherwise show
+--               an ungrouped roster that reshuffled a moment later.
+--
+--               Each was copied from its CURRENT definition, which for
+--               bgb_plays_page is 018 and for bgb_feed_plays is 031 — not the
+--               highest-numbered file mentioning them. bgb_finalize_session
+--               and bgb_import_plays inherit it (both delegate to
+--               bgb_log_play); bgb_session_bundle does NOT, because the lobby
+--               participant table has no team and the tags live on the host's
+--               local draft until finalize.
+--
+--               NOTE THE NUMBER. archive/048_play_client_key.sql is a
+--               different 048, and a few code comments saying "migration 048"
+--               mean that one.)
+--               Before that: 047_usage_stats.sql (adds bgb_admin_usage_stats — the admin
 --               Usage spoke's whole payload in one call: accounts, active
 --               accounts from api_logs, the Postgres footprint, the screen
 --               leaderboard from analytics_events, per-feature counters and
@@ -267,6 +288,9 @@
 --            import_group_id UUID, players JSONB, expansions JSONB,
 --            country_code TEXT, reaction_count INT, viewer_reacted BOOLEAN,
 --            reactors JSONB, import_batch_id UUID, scoring_template JSONB)
+--   `players` entries carry `team` (048), because the detail popup seeds
+--   itself from this roster and repainting it a moment later is the exact
+--   thing that seed exists to avoid.
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/014_feed_order_by_played_at.sql)
 --               (originally 012; signature changed to a composite cursor)
@@ -758,6 +782,9 @@
 --     game_thumbnail, played_at, notes, players[], photo_url, expansions[],
 --     created_at, play_mode, country_code, scoring_template, logged_by_id,
 --     logged_by_name, is_own }
+--     Each players[] entry carries `team` (048) — the side that seat played
+--     on, echoed from the same NULLIF(btrim(...)) the INSERT used, so "" from
+--     the client reads back as null rather than as a side everyone shares.
 --     or {"error": "game_not_found"}
 --     or {"error": "no_players"} / {"error": "duplicate_player"} (023)
 --     or {"duplicate": true, "id": <uuid>} when p_payload.client_key is one
@@ -891,6 +918,7 @@
 --                p_game UUID DEFAULT NULL, p_buddy UUID DEFAULT NULL,
 --                p_search TEXT DEFAULT NULL, p_own_only BOOLEAN DEFAULT false)
 --   → JSONB { plays: [models.PlayResponse-shaped...], total }
+--   `players` entries carry `team` (048), same roster shape as bgb_feed_plays.
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/039_perf_rpcs_and_indexes.sql)
 --               (body replaced by 065_play_country.sql, which adds the

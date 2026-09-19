@@ -203,10 +203,21 @@
       const game = (c.game && c.game.name) || "Unknown game";
       const me = window.store && window.store.get && window.store.get("user");
       const mine = isOwn(c);
-      const isSelf = !!(me && me.display_name && c.winner_display_name === me.display_name);
-      const winner = c.winner_display_name
-        ? (isSelf ? "You" : c.winner_display_name)
-        : null;
+      // The ROSTER decides, the way the card's own caption does: it carries the
+      // ids, so the alias resolves and "You" is an identity test rather than a
+      // string match against a display name the account may since have changed.
+      // `winner_display_name` is the pre-015 fallback — a comma-joined string
+      // with nothing beside it to resolve or compare by.
+      const crowned = this._players().filter((p) => p && p.is_winner);
+      const winner = crowned.length
+        ? (crowned.length === 1 && me && String(crowned[0].user_id || "") === String(me.id)
+            ? "You"
+            : crowned.map((p) => window.Buddy.nameFor(p.user_id, p.name)).join(", "))
+        : (c.winner_display_name
+            ? (me && me.display_name && c.winner_display_name === me.display_name
+                ? "You"
+                : c.winner_display_name)
+            : null);
       const owner = c.user
         ? (window.Buddy ? window.Buddy.nameFor(c.user.id, c.user.display_name) : c.user.display_name)
         : null;

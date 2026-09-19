@@ -452,6 +452,99 @@
 
 
   // ── View mode ─────────────────────────────────────────────────────────────
+  /**
+   * One seat. Extracted so the flat list and the team bands below emit the same
+   * row from one place — the whole point of banding is that nothing about a
+   * player's row changes, only what surrounds it.
+   */
+  function renderSeat(pl, p, me) {
+    // Registered players' rows open their profile; a ghost's opens the claim
+    // sheet, with its own trailing icon because it is a different destination.
+    // Either way the popup dismisses first. A ghost the viewer cannot be stays
+    // inert.
+    const act = playerAction(pl, p, me);
+    const nav = act ? act.handler : "";
+    // Only an accepted buddy has an edge to hold an alias, so a ghost or a
+    // stranger gets no pencil rather than one whose save would 404.
+    const aliasEdgeId = window.Buddy.edgeIdFor(pl.user_id);
+    return `
+      <li class="play-detail__player ${pl.is_winner ? "is-winner" : ""}${act ? " is-link" : ""}${act && act.kind === "claim" ? " play-detail__player--claim" : ""}"
+          ${act ? `role="button" tabindex="0"
+          aria-label="${escapeAttr(act.ariaLabel)}"
+          onclick="${escapeAttr(nav)}"
+          onkeydown="${escapeAttr(`if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}`)}"` : ""}>
+        <span class="play-detail__player-name">
+          ${window.BgbBadge ? window.BgbBadge.render({
+            avatar: pl.avatar || null,
+            displayName: window.Buddy.nameFor(pl.user_id, pl.name),
+            size: "xs",
+            isGhost: !pl.user_id,
+            isMe: !!(me && pl.user_id === me.id),
+            extraClass: "play-detail__player-badge",
+          }) : ""}
+          <span class="play-detail__player-text">${escapeHtml(window.Buddy.nameFor(pl.user_id, pl.name))}</span>
+          ${pl.is_winner ? `<i data-icon="crown" class="w-3.5 h-3.5 play-detail__player-crown"></i>` : ""}
+          <!-- Inside the name span, not a sibling of it: the row is
+               flex with justify-content:space-between, so a third
+               top-level child would float in the gap between the
+               name and the score instead of sitting with the name
+               it belongs to. -->
+          ${aliasEdgeId ? `
+            <button class="bgb-alias-btn" type="button"
+                    aria-label="${escapeAttr("Rename " + pl.name + " for yourself")}"
+                    title="Rename just for you"
+                    onclick="event.stopPropagation();window.PlayDetailPopup._openAlias('${aliasEdgeId}','${pl.user_id}')">
+              <i data-icon="pencil" class="w-3.5 h-3.5"></i>
+            </button>
+          ` : ""}
+        </span>
+        <span class="play-detail__player-score">${pl.score != null ? pl.score : ""}</span>
+        ${act ? `<i data-icon="${escapeAttr(act.icon)}" class="w-3.5 h-3.5 play-detail__player-go"></i>` : ""}
+      </li>
+    `;
+  }
+
+  /**
+   * The scoreboard: one flat list, or — when the seats carry sides
+   * (migration 048) — one labelled, colour-coded band per side.
+   *
+   * A team night is the one case where the ranked list alone is misleading:
+   * four rows sorted by score say nothing about the pairing the evening
+   * actually turned on, and a table that won together can read as two winners
+   * and two losers who happen to be adjacent.
+   *
+   * BgbTeams.bands returns null unless some seat names a side, so a
+   * competitive play, a co-op play, a play logged before the column existed and
+   * a team play nobody tagged all take the flat branch and render byte for byte
+   * as they did before. The untagged remainder of a HALF-tagged roster is the
+   * trailing band, drawn bare for the same reason: leftovers must look like a
+   * plain list, not like a side called nothing.
+   */
+  function renderRoster(ranked, p, me) {
+    // Computed over the WHOLE roster, not per band. .has-links reserves the
+    // chevron's width on the rows that don't have one, which is what keeps
+    // every score in one column — so a band whose seats happen to be all
+    // ghosts has to reserve it too, or its numbers would sit 14px right of
+    // the band above and reintroduce the exact misalignment the class exists
+    // to prevent.
+    const hasLinks = ranked.some((pl) => playerAction(pl, p, me));
+    const list = (seats) =>
+      `<ul class="play-detail__players${hasLinks ? " has-links" : ""}">
+        ${seats.map((pl) => renderSeat(pl, p, me)).join("")}
+      </ul>`;
+    const bands = window.BgbTeams ? window.BgbTeams.bands(ranked) : null;
+    if (!bands) return list(ranked);
+    // <section> + <h4> per band rather than a heading row inside one <ul>: a
+    // screen reader has to hear which seats belong to which side, and a nested
+    // list would fight .play-detail__players' own column flex.
+    return bands.map((b) => (b.key === null
+      ? list(b.players)
+      : `<section class="play-detail__team" style="--team-tint: var(--team-${b.index})">
+          <h4 class="play-detail__team-label">${escapeHtml(b.label)}</h4>
+          ${list(b.players)}
+        </section>`)).join("");
+  }
+
   function renderView(p) {
     // Score descending, so the scoreboard reads top-down by rank. Via
     // Play.rankPlayers because the ranking has to be a TOTAL order: the feed
@@ -508,54 +601,7 @@
           </h3>
           ${ranked.length === 0
             ? `<div class="text-sm opacity-60">No players recorded.</div>`
-            : `<ul class="play-detail__players${ranked.some((pl) => playerAction(pl, p, me)) ? " has-links" : ""}">
-                ${ranked.map((pl) => {
-                  // Registered players' rows open their profile; a ghost's
-                  // opens the claim sheet, with its own trailing icon because
-                  // it is a different destination. Either way the popup
-                  // dismisses first. A ghost the viewer cannot be stays inert.
-                  const act = playerAction(pl, p, me);
-                  const nav = act ? act.handler : "";
-                  // Only an accepted buddy has an edge to hold an alias, so a
-                  // ghost or a stranger gets no pencil rather than one whose
-                  // save would 404.
-                  const aliasEdgeId = window.Buddy.edgeIdFor(pl.user_id);
-                  return `
-                  <li class="play-detail__player ${pl.is_winner ? "is-winner" : ""}${act ? " is-link" : ""}${act && act.kind === "claim" ? " play-detail__player--claim" : ""}"
-                      ${act ? `role="button" tabindex="0"
-                      aria-label="${escapeAttr(act.ariaLabel)}"
-                      onclick="${escapeAttr(nav)}"
-                      onkeydown="${escapeAttr(`if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}`)}"` : ""}>
-                    <span class="play-detail__player-name">
-                      ${window.BgbBadge ? window.BgbBadge.render({
-                        avatar: pl.avatar || null,
-                        displayName: window.Buddy.nameFor(pl.user_id, pl.name),
-                        size: "xs",
-                        isGhost: !pl.user_id,
-                        isMe: !!(me && pl.user_id === me.id),
-                        extraClass: "play-detail__player-badge",
-                      }) : ""}
-                      <span class="play-detail__player-text">${escapeHtml(window.Buddy.nameFor(pl.user_id, pl.name))}</span>
-                      ${pl.is_winner ? `<i data-icon="crown" class="w-3.5 h-3.5 play-detail__player-crown"></i>` : ""}
-                      <!-- Inside the name span, not a sibling of it: the row is
-                           flex with justify-content:space-between, so a third
-                           top-level child would float in the gap between the
-                           name and the score instead of sitting with the name
-                           it belongs to. -->
-                      ${aliasEdgeId ? `
-                        <button class="bgb-alias-btn" type="button"
-                                aria-label="${escapeAttr("Rename " + pl.name + " for yourself")}"
-                                title="Rename just for you"
-                                onclick="event.stopPropagation();window.PlayDetailPopup._openAlias('${aliasEdgeId}','${pl.user_id}')">
-                          <i data-icon="pencil" class="w-3.5 h-3.5"></i>
-                        </button>
-                      ` : ""}
-                    </span>
-                    <span class="play-detail__player-score">${pl.score != null ? pl.score : ""}</span>
-                    ${act ? `<i data-icon="${escapeAttr(act.icon)}" class="w-3.5 h-3.5 play-detail__player-go"></i>` : ""}
-                  </li>
-                `;}).join("")}
-              </ul>`}
+            : renderRoster(ranked, p, me)}
         </section>
 
         ${hasRoundGrid(p.players, null, p.scoring_template) ? `
@@ -574,6 +620,9 @@
                 is_winner: !!pl.is_winner,
                 user_id: pl.user_id || null,
                 avatar: pl.avatar || null,
+                // So a column's header carries the same tint as its seat's band
+                // in the list above — same roster, same order, same colours.
+                team: pl.team || null,
                 roundScores: Array.isArray(pl.round_scores) ? pl.round_scores : [],
               })),
               "PlayDetailPopup",

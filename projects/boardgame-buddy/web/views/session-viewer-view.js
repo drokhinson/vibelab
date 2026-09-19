@@ -570,7 +570,9 @@
         const t = this._liveScores.totalFor(p.id, this._renderedRounds);
         if (t > bestTotal) {
           bestTotal = t;
-          best = p.display_name;
+          // Under the viewer's alias — the splash names a person, and this is
+          // the same name their seat carries on every other screen.
+          best = window.Buddy.nameFor(p.user_id, p.display_name);
         }
       }
       return best;
@@ -691,7 +693,9 @@
       const game = s.game || null;
       const participants = s.participants || [];
       const host = participants.find((p) => p.user_id === s.host_user_id);
-      const sub = host ? "Hosted by " + escapeHtml(host.display_name) : "";
+      const sub = host
+        ? "Hosted by " + escapeHtml(window.Buddy.nameFor(host.user_id, host.display_name))
+        : "";
       return `
         <section class="cascade-card">
           <label class="cascade-card__label">Game</label>
@@ -783,10 +787,12 @@
       const isHost = p.user_id && p.user_id === hostId;
       const me = window.store.get("user");
       const isMe = !!(p.user_id && me && p.user_id === me.id);
-      // Ghosts have no user_id; real users get their customized badge.
+      // Ghosts have no user_id; real users get their customized badge — and,
+      // for the same reason, only they can carry a private alias.
+      const shown = window.Buddy.nameFor(p.user_id, p.display_name);
       const badge = window.BgbBadge.render({
         avatar: p.avatar,
-        displayName: p.display_name,
+        displayName: shown,
         size: "sm",
         isGhost: !p.user_id,
         isMe,
@@ -794,7 +800,7 @@
       return `
         <li class="cascade-player cascade-player--read">
           ${badge}
-          <span class="cascade-player__name">${escapeHtml(p.display_name)}</span>
+          <span class="cascade-player__name">${escapeHtml(shown)}</span>
           ${isHost
             ? `<span class="session-viewer__host-tag"><i data-icon="crown" class="w-3 h-3"></i> Host</span>`
             : ""}

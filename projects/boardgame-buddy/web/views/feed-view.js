@@ -706,7 +706,7 @@
       const label = count ? String(count) : "Good game";
       const stack = faces.slice(0, 3).map((f) => window.BgbBadge.render({
         avatar: f.avatar || null,
-        displayName: f.display_name || "",
+        displayName: window.Buddy.nameFor(f.user_id, f.display_name) || "",
         size: "sm",
         extraClass: "play-session__face",
       })).join("");
@@ -732,7 +732,9 @@
       const me = window.store && window.store.get && window.store.get("user");
       const lead = mine
         ? "You"
-        : escapeHtml((faces[0] && faces[0].display_name) || "Someone");
+        : escapeHtml(
+            (faces[0] && window.Buddy.nameFor(faces[0].user_id, faces[0].display_name)) || "Someone"
+          );
       const others = count - 1;
       if (others <= 0) return `${lead} said good game`;
       return `${lead} and ${others} other${others === 1 ? "" : "s"} said good game`;
@@ -1204,7 +1206,14 @@
     // into a parent flippable card (the session header isn't inside a
     // .play-card today, but defensive in case it ever is).
     const isViewer = viewer && participant.user_id === viewer.id;
-    const label = isViewer ? "You" : (participant.display_name || "Someone");
+    // Under the viewer's private alias when they set one. This line is the
+    // most-read sentence in the app — "Mick D and David R played 500" sits
+    // directly above every polaroid — and it was the last place still naming
+    // people by the account's own display name while the card beneath it used
+    // the alias. Paint-only: nothing here is written back.
+    const label = isViewer
+      ? "You"
+      : window.Buddy.nameFor(participant.user_id, participant.display_name) || "Someone";
     const route = isViewer
       ? `window.router.go('profile-self')`
       : `window.router.go('profile-other',{userId:'${escapeHtml(participant.user_id)}'})`;

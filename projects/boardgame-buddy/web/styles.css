@@ -6295,6 +6295,31 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   border-radius: 0.45rem;
 }
 .play-detail__player.is-winner { border-color: var(--accent); }
+/* One side of a team play (migration 048). The 3px rule down the left edge is
+   what identifies the band — the wash behind the label is deliberately too
+   subtle to carry it on its own — and both mix into the surface's own ground
+   rather than a literal, so the section works unchanged wherever the popup is
+   drawn. Same idiom as .scoring-round-th--tpl; the grid's column headers carry
+   their rule on the BOTTOM edge so the two never read as one mark. */
+.play-detail__team { margin-bottom: 0.45rem; }
+.play-detail__team-label {
+  display: inline-block;
+  margin: 0 0 0.3rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--polaroid-ink);
+  background: color-mix(in srgb, var(--team-tint) 16%, var(--polaroid-bg));
+  box-shadow: inset 3px 0 0 var(--team-tint);
+}
+.play-detail__team .play-detail__players {
+  padding-left: 0.4rem;
+  box-shadow: inset 3px 0 0 var(--team-tint);
+  border-radius: 0.3rem;
+}
 .play-detail__player-name { font-weight: 500; display: inline-flex; align-items: center; gap: 0.4rem; min-width: 0; }
 .play-detail__player.is-winner .play-detail__player-name { color: var(--accent); }
 .play-detail__player-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -9050,6 +9075,23 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   max-width: 5.5rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* A column belonging to a side (migration 048). Background plus a rule on the
+   BOTTOM edge, never the left: the first player column abuts
+   .scoring-head-corner, which is sticky-left and opaque, so a left rule would
+   read as that corner's border rather than as this column's. The bottom edge is
+   also the band's own boundary — where the side's identity meets its scores —
+   and it keeps the mark on a different axis from the row labels' left-edge
+   --row-accent rule inside the body.
+
+   Mixed into --polaroid-bg rather than being a literal, so the same rule works
+   on the play-detail popup's card and on the Play screen's scorepad island, and
+   follows either if one is re-pointed. Opaque by construction, which this cell
+   needs: .rg__head is sticky, so a translucent tint would let the rows scroll
+   through it. */
+.scoring-head.is-team {
+  background: color-mix(in srgb, var(--team-tint) 16%, var(--polaroid-bg));
+  box-shadow: inset 0 -3px 0 var(--team-tint);
+}
 .scoring-head.is-named .scoring-head__bubble { display: none; }
 .scoring-head.is-named .scoring-head__name { display: inline-block; }
 /* NOT `opacity: 0.7`, which is what this carried until the round-label column
@@ -9577,6 +9619,44 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   --row-green:  #4A7A4A;
   --row-blue:   #4A6F94;
   --row-purple: #7A5293;
+}
+
+/* ── Team colours (migration 048) ─────────────────────────────────────────────
+   Six slots, assigned by order of first appearance in the RANKED roster
+   (ui/team-colors.js), so the play detail's banded player list and the scoring
+   grid's column headers cannot disagree about which side is which.
+
+   Bare :root and full-strength hues, for exactly the two reasons --row-* above
+   gives. Every surface that carries a team tint is PAPER — the play-detail
+   popup's card, and the scorepad island the Play screen's grid sits on, which
+   re-points --polaroid-bg back to --paper — and paper is light in BOTH themes,
+   so this is theme-independent ink (theming.md §5). And the tint always mixes
+   into var(--polaroid-bg), which resolves ON THE ELEMENT, so the rules below
+   follow whatever surface they land on without a dark branch to keep in step.
+   If a band is ever drawn on chrome, add ONE override block mirroring the
+   re-point list further up — do not fork these into two theme blocks.
+
+   Measured, not eyeballed. Every pair is at least dE 28 apart at full strength
+   (the closest are blue/slate 28.2 and orange/crimson 32.8), which beats the
+   dE 23 bar --row-* holds itself to. The ink over each 16% wash stays at or
+   above 11.9:1 on both papers, and each 3px rule is at least 3.3:1 against its
+   own wash — the rule is what identifies a column, so it is the one that has to
+   clear the non-text 3:1 floor.
+
+   These sit in the same TABLE as --row-* (row labels down the left, team
+   headers across the top), and the nearest cross-set pairs are 8-16 dE apart,
+   which is close. That is deliberate rather than overlooked: the two sets run
+   on perpendicular axes, in different scroll regions, and carry their 3px rule
+   on opposite edges (--row-* on the left, teams on the bottom). Nobody is ever
+   asked whether a column matches a row, so separating the palettes further
+   would cost real hue distance inside each set to buy nothing. */
+:root {
+  --team-1: #2F6FA8;   /* blue    */
+  --team-2: #C2562A;   /* orange  */
+  --team-3: #2E7D5B;   /* green   */
+  --team-4: #8A4A9C;   /* violet  */
+  --team-5: #9E2B3F;   /* crimson */
+  --team-6: #5A6370;   /* slate   */
 }
 /* The slug arrives from a database column, so the set is open and an unknown
    name has to render as something rather than as nothing (web-frontend.md, the
@@ -13321,6 +13401,17 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   font-weight: 600;
   line-height: 1.05;
   color: oklch(var(--bc));
+  /* A flex row since the rename pencil sits inside it — the truncation moved
+     down to __name-text, because text-overflow has nothing to do on a flex
+     container and a long name would otherwise push the pencil off the row
+     instead of ellipsising. */
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  overflow: hidden;
+}
+.profile-hub__name-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -13331,6 +13422,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-top: 0.2rem;
   font-weight: 700;
 }
+/* Their account's own name, shown on the handle line only while an alias is
+   covering it above. Lighter than the handle it sits beside: the handle is an
+   address you might type, this is a reminder of who you renamed. */
+.profile-hub__realname { font-weight: 500; opacity: 0.85; }
+.profile-hub__who .bgb-alias-btn { flex: none; }
 /* ── 4 stat tiles — profile-other ONLY ─────────────────────────────────────
    The hub moved to .statsblock; another user's profile still shows four
    static tiles, so this family is live, not dead. ─────────────────────── */

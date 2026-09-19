@@ -10,6 +10,7 @@ from pydantic import (
     Field,
     SecretStr,
     computed_field,
+    field_validator,
     model_validator,
 )
 
@@ -27,6 +28,7 @@ from .constants import (
     FeedbackStatus,
     IMPORT_CHUNK_MAX,
     MAX_BUDDY_ALIAS_CHARS,
+    MAX_PLAY_TEAM_CHARS,
     MAX_FEEDBACK_BODY_CHARS,
     MAX_IMPORT_CHARS,
     MAX_IMPORT_HINT_CHARS,
@@ -956,6 +958,25 @@ class PlayerEntry(BaseModel):
     # one round was tracked — the FE drops it for ≤1-round plays so the
     # column stays NULL for the simple-score path.
     round_scores: list[int | None] | None = None
+    # The side this seat played on, free text as the host typed it
+    # (migration 048). None for every competitive and co-op play. The client
+    # caps its own input at 6 characters for column width; this cap is about
+    # the data, not that column — see MAX_PLAY_TEAM_CHARS.
+    team: str | None = Field(None, max_length=MAX_PLAY_TEAM_CHARS)
+
+    @field_validator("team")
+    @classmethod
+    def _blank_team_is_none(cls, v: str | None) -> str | None:
+        """An untagged seat is NULL, never "".
+
+        Not an edge case — it is the common one. PlaySession seeds every seat
+        with team:"" and writes "" back when a tag is cleared, so without this
+        every untagged seat in the app would carry the same empty-string tag and
+        group into one anonymous side. bgb_log_play does the same NULLIF for the
+        RPC path; this covers PUT /plays/{id}, which writes the rows directly.
+        """
+        v = (v or "").strip()
+        return v or None
 
     @model_validator(mode="after")
     def _score_matches_rounds(self) -> "PlayerEntry":
@@ -1158,6 +1179,12 @@ class PlayPlayerResponse(BaseModel):
     # and for any play with ≤1 rounds — the FE only persists the array
     # when there were multiple rounds.
     round_scores: list[int | None] | None = None
+    # The side this seat played on (migration 048). NULL for every play logged
+    # before it, every competitive and co-op play, and a team play whose sides
+    # were never named. Defaulted rather than required because the roster RPCs
+    # this model validates are not all re-emitted — one that omits the key must
+    # still parse.
+    team: str | None = None
 
 
 class PlayResponse(BaseModel):

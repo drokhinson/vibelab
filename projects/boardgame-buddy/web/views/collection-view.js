@@ -613,8 +613,11 @@
       const p = this._targetProfile;
       let titleHtml;
       if (other && p && p.display_name) {
-        const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: p.display_name, size: "sm" });
-        titleHtml = `${badge}<span class="spoke-head__title-text">${escapeHtml(p.display_name)}'s collection</span>`;
+        // Aliased for the same reason the plays spoke is: the header names a
+        // person, so it says what the rest of the app calls them.
+        const shown = window.Buddy.nameFor(this._targetUserId, p.display_name);
+        const badge = window.BgbBadge.render({ avatar: p.avatar, displayName: shown, size: "sm" });
+        titleHtml = `${badge}<span class="spoke-head__title-text">${escapeHtml(shown)}'s collection</span>`;
       } else {
         titleHtml = `<span class="spoke-head__title-text">Collection</span>`;
       }

@@ -129,6 +129,13 @@
     // new last round when this render added one. See RoundGridScroll.
     RoundGridScroll.schedule(host, roundCount);
 
+    // tag → colour slot, or null when no seat carries a side — which covers a
+    // competitive play, a co-op play, and a team play whose sides were never
+    // named. Built once and read by every header below, so the grid and the
+    // banded player list above it cannot land on different colours.
+    const teams = window.BgbTeams ? window.BgbTeams.indexMap(safePlayers) : null;
+    const slotOf = (p) => (teams && teams.get(window.BgbTeams.keyOf(p && p.team))) || 0;
+
     const cols = renderColGroup(safePlayers.length);
 
     return `
@@ -140,9 +147,16 @@
               <thead>
                 <tr>
                   <th class="scoring-head-corner"></th>
-                  ${safePlayers.map((p) => `
-                    <th class="scoring-head${headerNames ? " is-named" : ""}" scope="col" title="${escapeAttr(p.name)}">${renderScoringHead(renderHeadBadge(p), p.name, headerNames, headerNamesDefault)}</th>
-                  `).join("")}
+                  ${safePlayers.map((p) => {
+                    // A custom property set inline from data — the one
+                    // legitimate inline-colour case (theming.md §10), and the
+                    // same shape the row-label cells use for --row-accent.
+                    const slot = slotOf(p);
+                    return `
+                    <th class="scoring-head${headerNames ? " is-named" : ""}${slot ? " is-team" : ""}" scope="col"
+                        ${slot ? `style="--team-tint: var(--team-${slot})"` : ""}
+                        title="${escapeAttr(shownName(p))}">${renderScoringHead(renderHeadBadge(p), shownName(p), headerNames, headerNamesDefault)}</th>
+                  `;}).join("")}
                 </tr>
               </thead>
             </table>
@@ -187,8 +201,8 @@
                 ${safePlayers.map((p, i) => `
                   <td>
                     ${editable
-                      ? renderEditableCell(getCell(p, r), i, r, host, showSign, `${p.name} — ${rowName}`)
-                      : `<span class="scoring-cell--read" data-score-cell="${i}-${r}" aria-label="${escapeAttr(`${p.name} — ${rowName}`)}">${escapeHtml(getCell(p, r))}</span>`}
+                      ? renderEditableCell(getCell(p, r), i, r, host, showSign, `${shownName(p)} — ${rowName}`)
+                      : `<span class="scoring-cell--read" data-score-cell="${i}-${r}" aria-label="${escapeAttr(`${shownName(p)} — ${rowName}`)}">${escapeHtml(getCell(p, r))}</span>`}
                   </td>
                 `).join("")}
               </tr>`;
@@ -294,7 +308,7 @@
     // Labelled for the same reason the score cells are: the Total row is its
     // own table now, so "which column is this" is no longer answerable from
     // the markup around it.
-    const totalLabel = escapeAttr(`${p.name} total`);
+    const totalLabel = escapeAttr(`${shownName(p)} total`);
     if (mode === "coop") {
       return `<td class="${tdClass}">
         <div class="scoring-total-cell">
@@ -307,7 +321,7 @@
         ${showWinner
           ? `<button class="scoring-winner-btn ${p.is_winner ? "is-winner" : ""}"
                      title="${p.is_winner ? "Winner" : "Mark as winner"}"
-                     aria-label="${escapeAttr(p.name)} — ${p.is_winner ? "winner" : "mark as winner"}"
+                     aria-label="${escapeAttr(shownName(p))} — ${p.is_winner ? "winner" : "mark as winner"}"
                      onclick="window.${host}._toggleWinner(${i})">
               <i data-icon="${p.is_winner ? "trophy" : "circle"}" class="w-4 h-4"></i>
             </button>`
@@ -376,7 +390,7 @@
     const me = window.store && window.store.get && window.store.get("user");
     return window.BgbBadge.render({
       avatar: p.avatar || null,
-      displayName: p.name,
+      displayName: shownName(p),
       initials: p.initials || undefined,
       size: "xs",
       isGhost: !p.user_id,
@@ -410,9 +424,23 @@
             </button>`;
   }
 
+  // What a column READS AS: the viewer's private alias when they set one,
+  // otherwise the name the seat carries. Resolved HERE rather than in each of
+  // the six hosts, because a host that forgot it produced a grid whose headers
+  // disagreed with the scoreboard printed directly above them — which is
+  // exactly what the play-detail popup did.
+  //
+  // Safe in every host including the editable ones: the grid writes SCORES.
+  // A name only ever reaches the DOM through this function, never a value, so
+  // the paint-only contract in domain/buddy.js holds. Guarded because the
+  // tools/check-*.mjs harnesses load this file into a bare VM context.
+  function shownName(p) {
+    return window.Buddy ? window.Buddy.nameFor(p.user_id, p.name) : p.name;
+  }
+
   function initialsFor(p) {
     if (p.initials) return p.initials;
-    const parts = String(p.name || "").trim().split(/[\s.]+/).filter(Boolean);
+    const parts = String(shownName(p) || "").trim().split(/[\s.]+/).filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return (parts[0] || "?").slice(0, 2).toUpperCase();
   }

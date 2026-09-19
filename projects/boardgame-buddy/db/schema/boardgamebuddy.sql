@@ -593,10 +593,20 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_players (
   -- a created_at watermark would never ring for exactly the case the
   -- notifications bell most exists for. Added by migration 008.
   linked_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  -- Free-text side this seat played on, as the host typed it (migration 048).
+  -- NULL for every competitive and co-op play, and for a team play whose sides
+  -- were never named — nothing infers a side from a shared win flag, because
+  -- two people can tie without being teammates. Matched case-insensitively
+  -- after trimming, the same comparison PlaySession.applyTeamTag uses to keep
+  -- one side's win flags in step, so "Red" and "red" are one side.
+  team TEXT,
   CONSTRAINT boardgamebuddy_play_players_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_play_players_play_id_fkey FOREIGN KEY (play_id) REFERENCES boardgamebuddy_plays(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_play_players_player_user_id_fkey FOREIGN KEY (player_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
-  CONSTRAINT bgb_play_players_identity_chk CHECK (((player_user_id IS NOT NULL) OR (player_display_name IS NOT NULL)))
+  CONSTRAINT bgb_play_players_identity_chk CHECK (((player_user_id IS NOT NULL) OR (player_display_name IS NOT NULL))),
+  -- 16, not the 6 the Gather input enforces: that 6 is a layout fact about one
+  -- grid column, not a fact about the data.
+  CONSTRAINT bgb_play_players_team_len_chk CHECK ((team IS NULL OR char_length(team) <= 16))
 );
 ALTER TABLE public.boardgamebuddy_play_players ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_play_players_display_name_trgm ON public.boardgamebuddy_play_players USING gin (player_display_name extensions.gin_trgm_ops);

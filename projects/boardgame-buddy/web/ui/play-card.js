@@ -247,8 +247,7 @@
       return `<span class="win">${we} won all ${n}</span>`;
     }
     const joined = winners.join(", ");
-    const isSelf = !!(me && me.display_name && joined === me.display_name);
-    const name = isSelf ? "You" : escapeHtml(joined);
+    const name = winnerIsViewer(card, me, joined) ? "You" : escapeHtml(joined);
     // ONE flex item, not two. .win is inline-flex with a 5px gap, so a bare
     // <span>name</span> followed by text renders as two items with that gap
     // between them — a visibly wider space than the sentence wants.
@@ -410,8 +409,7 @@
         : `<span class="win-loss">We lost</span>`;
     }
     const joined = winners.join(", ");
-    const winnerIsSelf = !!(me && me.display_name && joined === me.display_name);
-    const winnerName = winnerIsSelf ? "You" : escapeHtml(joined);
+    const winnerName = winnerIsViewer(card, me, joined) ? "You" : escapeHtml(joined);
     const winnerScore = winnerScoreFor(card);
     // The winner has its own caption row now, so a bare name would read as an
     // unexplained label. The team buckets above already read as sentences and
@@ -441,9 +439,17 @@
     if (Array.isArray(players) && players.length) {
       return players
         .filter((p) => p && p.is_winner)
-        .map((p) => String(p.name == null ? "" : p.name).trim())
+        // Under the viewer's private alias, exactly like the back-side
+        // scoreboard three functions down. Before this, renaming someone left
+        // the two halves of the SAME card calling them different things — the
+        // scoreboard said "Dickaloo", the caption over it still said the name
+        // their account carries. Paint-only: `p.name` is untouched and is
+        // still what any edit path would persist.
+        .map((p) => { const n = shownName(p); return String(n == null ? "" : n).trim(); })
         .filter(Boolean);
     }
+    // No roster: `winner_display_name` is a comma-joined string the feed RPC
+    // built, with no user ids beside it, so there is nothing here to resolve.
     const raw = card.winner_display_name;
     if (!raw) return [];
     return String(raw).split(",").map((s) => s.trim()).filter(Boolean);
@@ -456,6 +462,33 @@
     const players = card.players;
     if (Array.isArray(players) && players.length) return players.length;
     return card.participant_count || 0;
+  }
+
+  // What one seat READS AS: the viewer's private alias when they set one,
+  // otherwise the name the seat was logged under. The one resolver, per
+  // domain/buddy.js — a ghost (null user_id) has no account to alias and comes
+  // back verbatim.
+  function shownName(p) {
+    return window.Buddy ? window.Buddy.nameFor(p.user_id, p.name) : p.name;
+  }
+
+  // True when the ONLY winner is the viewer, which is what licenses "You" in
+  // place of a name.
+  //
+  // By user id, not by comparing the joined name list against me.display_name.
+  // That compare was already wrong for two players sharing a display name, and
+  // once the list above resolves aliases it is wrong for the viewer too: the
+  // string it tests is no longer the string the account carries. The roster
+  // holds the ids, so ask it. A card with no roster keeps the old name compare
+  // — it is all such a payload has.
+  function winnerIsViewer(card, me, joined) {
+    if (!me || !me.id) return false;
+    const players = card.players;
+    if (!Array.isArray(players) || !players.length) {
+      return !!(me.display_name && joined === me.display_name);
+    }
+    const winners = players.filter((p) => p && p.is_winner);
+    return winners.length === 1 && String(winners[0].user_id || "") === String(me.id);
   }
 
   // The viewer's own seat at this play, or null when they weren't at it. Ghost
@@ -601,7 +634,7 @@
     // Under the viewer's private alias when they set one. Read-only: nothing on
     // a card writes a name, so this is purely what the row SAYS — pl.name is
     // untouched and is still what any edit path would persist.
-    const shown = window.Buddy.nameFor(pl.user_id, pl.name);
+    const shown = shownName(pl);
     const nameHtml = `<span class="play-card__back-player-name">${escapeHtml(shown)}</span>`;
     const badge = window.BgbBadge.render({
       avatar: pl.user_id ? (pl.avatar || null) : null,

@@ -38,7 +38,12 @@ const win = {};
 const sandbox = { window: win, console, Date, Number, Math, Map, Set, String, Array,
                   Object, JSON, Promise, URL };
 vm.createContext(sandbox);
-for (const f of ["helpers.js", "domain/play.js", "domain/play-session.js", "ui/play-card.js"]) {
+// buddy.js loads standalone: every network call is inside a method, and
+// _accountFor guards on window.bgbCache, so with no cache present aliasFor
+// returns null and nameFor is the identity. rememberAliases is then the whole
+// seam the alias cases below need.
+for (const f of ["helpers.js", "domain/buddy.js", "domain/play.js",
+                 "domain/play-session.js", "ui/play-card.js"]) {
   vm.runInContext(fs.readFileSync(path.join(WEB, f), "utf8"), sandbox, { filename: f });
 }
 
@@ -102,6 +107,51 @@ console.log("\nteam plays read as the viewer's own side:");
   // scoreboard on the back of the same card uses.
   eq("spectator sees the winners named", text(caption(won, { id: "u-x", display_name: "Sam" })),
      "Won byYou, Britt");
+}
+
+console.log("\nthe caption names people the way the viewer does:");
+{
+  // The complaint: rename someone, and the back of the card calls them the new
+  // thing while the caption on the front still calls them the old one.
+  win.Buddy.forgetAliases();
+  win.Buddy.rememberAliases([
+    { other_user_id: "u-b", other_alias: "Dickaloo", id: "edge-b" },
+  ]);
+  const c = card([
+    seat("Britt", { user_id: "u-b", is_winner: true, score: 640 }),
+    seat("Dana", { user_id: "u-d", score: 310 }),
+  ]);
+  eq("the winner reads as the alias", text(caption(c)), "Won byDickaloo640");
+
+  // A ghost seat has no account to alias, so it comes back verbatim.
+  const ghost = card([
+    seat("Uncle Ray", { is_winner: true, score: 90 }),
+    seat("Britt", { user_id: "u-b", score: 40 }),
+  ]);
+  eq("a ghost winner is untouched", text(caption(ghost)), "Won byUncle Ray90");
+
+  // "You" is decided by user id now, not by comparing the joined winner list
+  // against me.display_name — that compare was already wrong for two players
+  // sharing a name, and an aliased viewer would break it outright.
+  const mine = card([
+    seat("You", { user_id: "u-me", is_winner: true, score: 500 }),
+    seat("Britt", { user_id: "u-b", score: 420 }),
+  ]);
+  eq("the viewer's own win says You", text(caption(mine)), "Won byYou500");
+
+  win.Buddy.forgetAliases();
+  // Two people called Britt: the viewer, and the person who won. The old
+  // compare tested the joined winner list against me.display_name and so
+  // handed the viewer someone else's win.
+  const BRITT_VIEWER = { id: "u-me", display_name: "Britt" };
+  const twin = card([
+    seat("Britt", { user_id: "u-b", is_winner: true, score: 500 }),
+    seat("Britt", { user_id: "u-me", score: 420 }),
+  ]);
+  eq("a winner who merely shares the viewer's name is not You",
+     text(caption(twin, BRITT_VIEWER)), "Won byBritt500");
+
+  win.Buddy.forgetAliases();
 }
 
 console.log("\nthe roster is the source of truth, not the aggregate:");
@@ -208,6 +258,33 @@ console.log("\nan edit carries the aggregates with it (Play.mergeIntoCard):");
   eq("the aggregate follows the roster", c.winner_display_name, "Britt, You");
   eq("so does the seat count", c.participant_count, 2);
   eq("and the card now says what happened", text(caption(c)), "We won!");
+}
+
+console.log("\na saved play remembers the sides (PlaySession.toPlayCreate):");
+{
+  // Before migration 048 the tag settled the side's win flags and was then
+  // dropped on the floor, so a team night saved as N seats and no sides.
+  const ps = new win.PlaySession({
+    gameId: "g1",
+    playedAt: "2026-09-18",
+    playMode: "team",
+    players: [
+      { name: "Ana", user_id: "u-a", is_winner: true, team: " Red " },
+      { name: "Bo", user_id: "u-b", is_winner: true, team: "red" },
+      { name: "Cy", user_id: "u-c", team: "" },
+      { name: "Di", user_id: "u-d" },
+    ],
+  });
+  const sent = ps.toPlayCreate().players.map((p) => p.team);
+  // Trimmed, and case is left alone — the UI folds case when it GROUPS, so
+  // "Red" and "red" are one side without the row having to pick a spelling.
+  eq("a tagged seat sends its side", sent[0], "Red");
+  eq("...and its teammate's own spelling survives", sent[1], "red");
+  // null, not "": PlaySession seeds every seat with "" and writes "" back when
+  // a tag is cleared, so an empty string on the wire would make every untagged
+  // seat in the app one anonymous side.
+  eq("a cleared tag sends null", sent[2], null);
+  eq("a seat that never had one sends null", sent[3], null);
 }
 
 console.log("\nnaming a team never drops a recorded win (PlaySession.applyTeamTag):");
