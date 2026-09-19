@@ -19564,7 +19564,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
      the flex child that gave, and it gave by cutting every card off below its
      game name. The chapter panel has the room — its points list leaves ~150px
      of slack above the actions row. */
-  height: clamp(232px, 34vh, 272px);
+  /* The floor is set by the tallest scene, the feed, and the feed now
+     SCROLLS: a section is ~196px, so at the old 232px floor barely one showed
+     and the scroll beats had nothing to reveal. At 268 about one and a half
+     sit in the frame and the next day's divider peeks, which is what reads as
+     a feed rather than as a rail. The chapter panel has the room because the
+     paragraph left it — see widgets/tour-chapters.js. */
+  height: clamp(268px, 38vh, 318px);
 }
 .tour__stage-wait {
   width: 100%;
@@ -19667,11 +19673,16 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .vfeed {
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 0 6px 9px;
-  justify-content: center;
+  /* A CLIP now, not a column. The feed scrolls, so the sections live on a
+     track inside this and the track is what moves. */
+  overflow: hidden;
+  /* NO VERTICAL PADDING. overflow: hidden clips at the padding box, not the
+     content box, so a top pad is a strip the outgoing section keeps showing
+     through mid-scroll — a sliver of the previous night's Good game pill
+     hanging above the new day's divider, which reads as a glitch rather than
+     as a feed. The breathing room lives inside each section instead, where it
+     scrolls away with the section it belongs to. */
+  padding: 0 0 0 9px;
   /* A fixed measure rather than the column's. The rail's slide only reads as
      a slide while the rail is wider than what shows of it, and the tour panel
      is 448px wide on a tablet against 342 on a phone — enough of a spread to
@@ -19679,6 +19690,33 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
      geometry the same everywhere; a vignette is a picture, not a layout. */
   max-width: 339px;
 }
+/* One vertical step is one SECTION, which is why every section is the same
+   height. That keeps the arithmetic identical to the rail's — the scene sets
+   an index and this owns the pixels — and it is the reason the single-game
+   night carries a little slack rather than the track needing a per-section
+   offset table the JS would have to know about. */
+/* One step. A section's content is ~191px (day, header, a 134px rail band and
+   a 20px footer) plus its 6px top pad, so 204 leaves a little air and keeps
+   every section the same height — which is what makes one vertical step one
+   section. */
+.vfeed { --vfeed-sec-h: 204px; }
+.vfeed__track {
+  /* --vig-vstep, NOT --vig-step: custom properties inherit, and every
+     horizontal rail below this reads --vig-step. Sharing the name made a
+     scroll to the third night also shove that night's cards sideways out of
+     their clip. Two axes, two names. */
+  transform: translateY(calc(var(--vig-vstep, 0) * -1 * var(--vfeed-sec-h)));
+  transition: transform 620ms var(--ease);
+}
+.vfeed__sec {
+  min-height: var(--vfeed-sec-h);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* The clip's former top pad, moved inside — see .vfeed above. */
+  padding-top: 6px;
+}
+
 /* The .day-divider analogue: accent, upper, tracked out. */
 .vfeed__day {
   margin: 0;
@@ -19707,6 +19745,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    name — taking the winner line, which is the thing the cards are here for. */
 .vfeed__day, .vfeed__header, .vfeed__foot { flex: none; }
 .vfeed__railclip { flex: none; overflow: hidden; padding: 3px 0 5px; }
+/* A one-game night uses the SAME rail and only centres its lone tile —
+   .play-session--single does exactly this and nothing more (styles.css above),
+   so the mock does not invent a second layout for it. */
+.vfeed__rail--single { justify-content: center; transform: none; }
 .vfeed__rail {
   display: flex;
   gap: 8px;
@@ -20210,7 +20252,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vfeed__rail, .vfeed__gg, .vfeed__faces,
+  .vfeed__rail, .vfeed__track, .vfeed__gg, .vfeed__faces,
   .vdisc__tile, .vdisc__cover, .vstat__bar, .vstat__rate-fill,
   .vguide__scroll, .vguide__scrollinner, .vscore__stage, .vscore__seat,
   .vscore__pill, .vscore__row, .vstat__h2h, .vguide__row, .vguide__tick {

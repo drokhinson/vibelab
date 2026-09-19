@@ -27,10 +27,21 @@
     const el = root.querySelector(sel);
     if (el) el.classList.toggle(cls, on !== false);
   };
-  /** Move a track by N steps; the stylesheet decides what a step is. */
-  const shift = (root, sel, n) => {
+  /**
+   * Move a track by N steps; the stylesheet decides what a step is.
+   *
+   * THE PROPERTY NAME IS AN ARGUMENT BECAUSE CUSTOM PROPERTIES INHERIT. The
+   * feed nests one track inside another — the vertical one scrolls between
+   * game nights and each night holds a horizontal rail of polaroids — and
+   * with both reading `--vig-step` the value set on the outer track
+   * inherited into every inner rail. Scrolling to the third night therefore
+   * also shoved that night's cards two card-widths sideways, out of the clip:
+   * a section with a header, a Good game pill and no games. Two axes, two
+   * property names.
+   */
+  const shift = (root, sel, n, prop) => {
     const el = /** @type {HTMLElement} */ (root.querySelector(sel));
-    if (el) el.style.setProperty("--vig-step", String(n));
+    if (el) el.style.setProperty(prop || "--vig-step", String(n));
   };
 
   const avatar = (initials, cls) =>
@@ -80,70 +91,105 @@
       </div>
     </article>`;
 
-  // ── 1. Community — a game night, as the feed actually lays it out ─────────
+  // ── 1. Community — the feed, scrolling, as feed-view.js lays it out ──────
   //
-  // The real feed is not a vertical list of rows. views/feed-view.js emits a
-  // day divider, then a session header naming who played, then a SIDEWAYS RAIL
-  // of polaroids (.play-session__scroll), then one "Good game" pill for the
-  // whole night — the pill sits outside the cards on purpose, because it
-  // reacts to the night rather than to any one play. This mirrors that,
-  // including the part that carries the most: the cards are paper and
-  // everything around them is ground.
-  // SIX, and the count is geometry rather than taste: the rail has to be
-  // meaningfully wider than its clip or the slide beats move a rail that had
-  // already fitted, leaving a third of the frame empty at the end of the loop.
-  // styles.css caps the clip at 330px so this holds on every layout tier;
-  // six 96px cards plus their gaps come to 616px, so both slide steps land
-  // well inside the content.
-  const NIGHT = [
+  // Three sessions across three days, because one game night demonstrates a
+  // rail and the feature is a FEED. What the real screen does, and therefore
+  // what this mirrors (views/feed-view.js):
+  //
+  //   • A day divider above that day's first session — Today / Yesterday /
+  //     a short date (helpers.js#formatRelativeDay).
+  //   • A header naming who played. Names join as "You and Priya" or
+  //     "You, Marcus, and Ada", with "You" floated to the front, and the
+  //     trailing clause is the GAME NAME when the night is one play and
+  //     "N games" otherwise — never "1 game".
+  //   • A sideways rail of polaroids. A one-game night uses the SAME rail and
+  //     only centres its lone tile (styles.css:4110); it does not get a
+  //     second layout, so neither does this.
+  //   • One "Good game" pill per night — and none at all when every play in
+  //     the night is the viewer's own, which is why Yesterday has none.
+  const TODAY = [
     { game: "Arboretum", winner: "You",    score: "87",  mine: true, hue: 104 },
-    { game: "Wingspan",  winner: "Priya",  score: "102", hue: 196 },
-    { game: "Cascadia",  winner: "You",    score: "94",  mine: true, hue: 28 },
-    { game: "Sagrada",   winner: "Marcus", score: "71", hue: 268 },
+    { game: "Wingspan",  winner: "Priya",  score: "102",             hue: 196 },
+    { game: "Cascadia",  winner: "You",    score: "94",  mine: true, hue: 28  },
+    { game: "Sagrada",   winner: "Marcus", score: "71",              hue: 268 },
     { game: "Azul",      winner: "You",    score: "68",  mine: true, hue: 220 },
-    { game: "Calico",    winner: "Priya",  score: "55", hue: 340 },
+    { game: "Calico",    winner: "Priya",  score: "55",              hue: 340 },
   ];
+  const SOLO = [
+    { game: "Cascadia",  winner: "You",    score: "104", mine: true, hue: 28  },
+  ];
+  const SATURDAY = [
+    { game: "Verdant",   winner: "Ada",    score: "63",              hue: 128 },
+    { game: "Sky Team",  winner: "You",    score: "9",   mine: true, hue: 202 },
+  ];
+
+  const goodGame = () => `
+    <div class="vfeed__foot" data-kudos>
+      <span class="vfeed__gg">
+        <i data-icon="handshake" class="w-3 h-3"></i><span>Good game</span>
+      </span>
+      <span class="vfeed__faces">
+        ${avatar("PR", "vig-av--xs")}${avatar("MA", "vig-av--xs")}
+      </span>
+      <span class="vfeed__ggwho" data-ggwho></span>
+    </div>`;
+
+  /**
+   * One day's session. `single` centres the lone card and drops the rail's
+   * travel, exactly as .play-session--single does.
+   */
+  const session = (day, header, plays, opts) => {
+    const o = opts || {};
+    return `
+      <section class="vfeed__sec">
+        <p class="vfeed__day">${day}</p>
+        <p class="vfeed__header">${header}</p>
+        <div class="vfeed__railclip">
+          <div class="vfeed__rail${o.single ? " vfeed__rail--single" : ""}"
+               ${o.rail ? "data-rail" : ""}>
+            ${plays.map(playCard).join("")}
+          </div>
+        </div>
+        ${o.foot ? goodGame() : ""}
+      </section>`;
+  };
 
   V.register({
     id: "community",
-    label: "A game night in the feed: three plays, and the table saying good game",
-    hold: 2600,
+    label: "Three game nights in the feed, scrolling, with the table saying good game",
+    hold: 2800,
     html: `
       <div class="vig-chrome"><span class="vig-chrome__title">Feed</span></div>
       <div class="vfeed">
-        <p class="vfeed__day">Saturday</p>
-        <p class="vfeed__header"><b>You</b> and <b>Priya</b> played 6 games</p>
-        <div class="vfeed__railclip">
-          <div class="vfeed__rail" data-rail>
-            ${NIGHT.map(playCard).join("")}
-          </div>
-        </div>
-        <div class="vfeed__foot" data-kudos>
-          <span class="vfeed__gg">
-            <i data-icon="handshake" class="w-3 h-3"></i><span>Good game</span>
-          </span>
-          <span class="vfeed__faces">
-            ${avatar("PR", "vig-av--xs")}${avatar("MA", "vig-av--xs")}
-          </span>
-          <span class="vfeed__ggwho" data-ggwho></span>
+        <div class="vfeed__track" data-feed>
+          ${session("Today", "<b>You</b> and <b>Priya</b> played 6 games",
+                    TODAY, { rail: true, foot: true })}
+          ${session("Yesterday", "<b>You</b> played Cascadia",
+                    SOLO, { single: true })}
+          ${session("Sat 13", "<b>You</b>, <b>Marcus</b>, and <b>Ada</b> played 2 games",
+                    SATURDAY, { foot: true })}
         </div>
       </div>`,
     reset(root) {
+      shift(root, "[data-feed]", 0, "--vig-vstep");
       shift(root, "[data-rail]", 0);
       flag(root, "[data-kudos]", "is-on", false);
       put(root, "[data-ggwho]", "");
     },
     beats: [
-      // Sideways, because the rail is sideways. One step is one card plus its
-      // gap; styles.css turns --vig-step into the travel, so this never has to
-      // know a pixel measurement that lives there. Two steps is as far as the
-      // rail can go without running out of cards — see NIGHT above.
-      { name: "slide", at: 1800, apply: (r) => shift(r, "[data-rail]", 1) },
-      { name: "kudos", at: 3400, apply: (r) => {
+      // Sideways first, on the night that has somewhere to go. One step is one
+      // card plus its gap; the stylesheet turns --vig-step into the travel, so
+      // this never has to know a pixel measurement that lives there.
+      { name: "slide", at: 1600, apply: (r) => shift(r, "[data-rail]", 1) },
+      { name: "kudos", at: 3200, apply: (r) => {
         flag(r, "[data-kudos]", "is-on", true);
         put(r, "[data-ggwho]", "Priya and Marcus said good game");
       } },
-      { name: "more", at: 5200, apply: (r) => shift(r, "[data-rail]", 2) },
+      // Then down the feed. Sections are a uniform height, so one vertical
+      // step is one section and the arithmetic is the rail's again.
+      { name: "scroll", at: 5000, apply: (r) => shift(r, "[data-feed]", 1, "--vig-vstep") },
+      { name: "more",   at: 7000, apply: (r) => shift(r, "[data-feed]", 2, "--vig-vstep") },
     ],
   });
 
