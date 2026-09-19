@@ -19394,7 +19394,18 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-bottom: 8px;
+  display: flex;
+  flex-direction: column;
 }
+/* Centre the chapter in what is left after the pinned actions row, instead of
+   stacking it at the top with 300px of ground underneath. AUTO MARGINS rather
+   than justify-content: center — on a scroll container, centring overflowing
+   content pushes its top out of the scrollable area and makes it permanently
+   unreachable, while auto margins collapse to zero the moment the content
+   fills the box. The one that reads the same and is not a bug on a short
+   phone. */
+.tour__scroll > * { flex: none; }
+.tour__scroll::before, .tour__scroll::after { content: ""; margin: auto; }
 .tour__scroll--center {
   display: flex;
   flex-direction: column;
@@ -19638,15 +19649,52 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
      invented here (.play-card__photo's own background). */
   background: var(--polaroid-line);
 }
+/* STAND-IN BOX ART.
+   ──────────────────────────────────────────────────────────────────────────
+   The real card's no-art state is a flat --polaroid-line rectangle, which is
+   honest inside the app and reads as a broken image in a marketing mock. Each
+   fixture carries a --vig-hue instead and this builds an abstract cover from
+   it — a wash, a disc and a diagonal band, which is enough for six of them in
+   a row to read as six different games without pretending to be photographs
+   of real boxes we do not have the rights to.
+
+   The lightness and saturation are fixed and the hue is the only variable, so
+   every cover carries the same weight and none of them can come out muddier
+   than its neighbours. Theme-independent by construction: a cover sits on
+   PAPER, which is light in both themes. */
+.vfeed-card__art, .vdisc__cover {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(155deg,
+                    hsl(var(--vig-hue, 30) 58% 54%),
+                    hsl(calc(var(--vig-hue, 30) + 26) 52% 33%));
+}
+.vfeed-card__art::before, .vdisc__cover::before,
+.vfeed-card__art::after,  .vdisc__cover::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+/* The disc — an off-centre highlight, so the cover has a focal point. */
+.vfeed-card__art::before, .vdisc__cover::before {
+  inset: 0;
+  background:
+    radial-gradient(circle at 32% 30%,
+                    hsl(var(--vig-hue, 30) 78% 72% / 0.75) 0 21%, transparent 22%);
+}
+/* The band — one diagonal stripe, which is what stops six discs reading as
+   six of the same cover. */
+.vfeed-card__art::after, .vdisc__cover::after {
+  inset: -20%;
+  background: linear-gradient(58deg,
+    transparent 46%,
+    hsl(calc(var(--vig-hue, 30) + 180) 62% 76% / 0.30) 46% 56%,
+    transparent 56%);
+}
 .vfeed-card__art {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse 70% 55% at 30% 28%,
-                    color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%),
-    linear-gradient(150deg,
-                    color-mix(in srgb, var(--paper-ink) 22%, var(--polaroid-line)),
-                    var(--polaroid-line));
 }
 /* The bottom-darkening wash the real photo carries, so the frame has depth. */
 .vfeed-card__photo::after {
@@ -19824,12 +19872,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .vdisc__tile.is-on { opacity: 1; transform: translateY(-3px); }
 .vdisc__cover {
-  height: 62px;
+  height: 84px;
   border-radius: var(--r-md);
-  background: linear-gradient(140deg, var(--accent-quiet), var(--bg-2));
   border: 1px solid var(--line);
-  transition: border-color 320ms var(--ease);
+  transition: border-color 320ms var(--ease), box-shadow 320ms var(--ease);
 }
+.vdisc__tile.is-on .vdisc__cover { box-shadow: 0 0 0 2px var(--accent); }
 .vdisc__tile.is-on .vdisc__cover { border-color: var(--accent); }
 .vdisc__name {
   font-family: var(--font-polaroid);
