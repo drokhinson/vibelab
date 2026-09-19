@@ -67,8 +67,8 @@
   }
 
   /**
-   * Register a scene. Called by widgets/tour-vignette-ambient.js and
-   * widgets/tour-vignette-scripted.js, both of which load lazily.
+   * Register a scene. Called by each of the widgets/tour-vignette-*.js
+   * modules, all of which load lazily.
    * @param {VignetteDef} def
    */
   function register(def) {

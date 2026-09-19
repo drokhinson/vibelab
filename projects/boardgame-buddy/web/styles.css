@@ -20233,8 +20233,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 /* ── Scene: guides ────────────────────────────────────────────────────────── */
-.vguide { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; padding: 9px; gap: 8px; }
-.vguide__poolhead {
+.vguide { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; padding: 9px; gap: 7px; }
+.vguide__poolhead, .vguide__scrollhead {
   margin: 0;
   font-size: 9px;
   font-weight: 800;
@@ -20242,60 +20242,130 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-transform: uppercase;
   color: var(--ink-faint);
 }
-.vguide__pool { display: flex; flex-direction: column; gap: 5px; }
+.vguide__pool { display: flex; flex-direction: column; gap: 4px; flex: none; }
 .vguide__row {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 7px;
+  gap: 6px;
+  /* Tightened from 5px/7px: four pool rows over a three-row scroll is the
+     most this frame has had to hold, and it has to fit the 268px floor. */
+  padding: 3.5px 7px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--bg-2);
   transition: border-color 240ms var(--ease), background 240ms var(--ease);
 }
 .vguide__row [data-icon-name] { color: var(--ink-faint); flex: none; }
-.vguide__rowtitle { font-size: 11px; color: var(--ink); flex: 1 1 auto; }
-.vguide__rowby { font-size: 9.5px; color: var(--ink-faint); flex: none; }
+.vguide__rowtitle { font-size: 10.5px; color: var(--ink); flex: 1 1 auto; }
+.vguide__rowby { font-size: 9px; color: var(--ink-faint); flex: none; }
+/* THE TICK IS AN EMPTY RING FIRST, AND THAT IS THE WHOLE FIRST BEAT.
+   It used to be opacity:0 until picked, so nothing on screen said these rows
+   were selectable — the pick read as a row lighting up rather than as a
+   choice being made. Empty ring by default, filled with the check when the
+   row is in your guide; one row in the scene never ticks, so both states are
+   on screen at the end. */
 .vguide__tick {
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   display: grid;
   place-items: center;
+  box-sizing: border-box;
+  border: 1.5px solid var(--line-strong);
+  background: transparent;
+  color: transparent;
+  transition: background 240ms var(--ease), border-color 240ms var(--ease),
+              color 240ms var(--ease);
+}
+.vguide__tick [data-icon-name] { color: inherit; }
+.vguide__row.is-added .vguide__tick {
+  border-color: var(--accent);
   background: var(--accent);
   color: var(--on-accent);
-  opacity: 0;
-  transform: scale(0.5);
-  transition: opacity 240ms var(--ease), transform 240ms var(--ease);
 }
-.vguide__row.is-picked { border-color: var(--accent); background: var(--accent-quiet); }
-.vguide__row.is-added .vguide__tick { opacity: 1; transform: scale(1); }
-.vguide__row.is-added [data-icon-name] { color: var(--accent); }
-/* The guide itself, rolled open like the app's parchment scroll. */
+.vguide__row.is-added { border-color: var(--accent); background: var(--accent-quiet); }
+.vguide__row.is-added > [data-icon-name] { color: var(--accent); }
+
+/* ── Your guide: the scroll ────────────────────────────────────────────────
+   PAPER, not chrome, and the contrast is doing work. The pool above is a
+   list of rows and so is this; on the same dark ground the two read as one
+   column and the thing the scene exists to show — that two of them MOVED
+   from the community into your guide — is carried by position alone. The
+   real surface is a parchment scroll, light in both themes. The island
+   below is what makes this one light too. */
 .vguide__scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
   border-radius: var(--r-md);
+  border: 1px solid var(--card-border);
+  background: var(--polaroid-bg);
+  color: var(--polaroid-ink);
+}
+.vguide__scroll .vguide__scrollhead { color: var(--polaroid-muted); }
+/* A chapter you have collected. Collapsed until it is in the guide, and
+   collapsed once it is — a guide is a short list you OPEN, not a wall. */
+.vguide__ch {
+  flex: none;
   max-height: 0;
   opacity: 0;
-  transition: max-height 420ms var(--ease), opacity 260ms var(--ease);
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  transition: max-height 380ms var(--ease), opacity 260ms var(--ease);
 }
-.vguide.is-open .vguide__scroll { max-height: 200px; opacity: 1; }
-.vguide__scrollinner {
-  padding: 8px 10px;
-  transform: translateY(0);
-  transition: transform 700ms var(--ease);
+.vguide__ch.is-in { max-height: 24px; opacity: 1; }
+.vguide__ch.is-open { max-height: 80px; }
+/* The list scrolls when a chapter opens — one row's worth, which puts the
+   open chapter and the scoring grid under it in view and takes the chapter
+   above off the top. Without it the grid, which is deliberately LAST, is the
+   row an expanding body pushes out of the clip. */
+/* The list's OWN clip. The head above it is a sibling in the padded box, and
+   a translate inside that box slid the rows up over the head rather than out
+   of sight — the clip has to be around the thing that moves, not around
+   both. */
+.vguide__chclip { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.vguide__chlist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform 420ms var(--ease);
 }
-.vguide.is-read .vguide__scrollinner { transform: translateY(-26px); }
-.vguide__scrollinner h4 {
-  margin: 0 0 5px;
+.vguide__scroll.has-open .vguide__chlist { transform: translateY(-28px); }
+.vguide__chrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--polaroid-line);
+}
+.vguide__chrow [data-icon-name] { color: var(--polaroid-muted); flex: none; }
+.vguide__chtitle {
+  flex: 1 1 auto;
   font-family: var(--font-polaroid);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 10.5px;
+  color: var(--polaroid-ink);
 }
-.vguide__scrollinner p { margin: 0 0 6px; font-size: 10px; line-height: 1.45; }
+.vguide__chev { transition: transform 300ms var(--ease); }
+.vguide__ch.is-open .vguide__chev { transform: rotate(90deg); }
+/* The body, and the scroll-through. The inner div is what translates, so the
+   clip stays put and the text runs under it — same shape the old single-body
+   scroll had, moved onto the one chapter that opens. */
+.vguide__chbody { overflow: hidden; padding: 0 4px; }
+.vguide__chbody > div { transition: transform 700ms var(--ease); }
+.vguide__ch.is-read .vguide__chbody > div { transform: translateY(-22px); }
+.vguide__chbody p {
+  margin: 5px 0 0;
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: var(--polaroid-ink);
+}
 
 /* ── Scene: scoring ───────────────────────────────────────────────────────── */
 .vscore { flex: 1 1 auto; position: relative; min-height: 0; }
@@ -20509,7 +20579,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    settle the rest on source order — which is the drift .claude/rules/
    theming.md §7 exists to stop. Do not "simplify" it. */
 :root :is([data-view="tour"], [data-view="auth"])
-      :is(.vscore__pad.vscore__pad, .vfeed-card.vfeed-card) {
+      :is(.vscore__pad.vscore__pad, .vfeed-card.vfeed-card,
+          .vguide__scroll.vguide__scroll) {
   --polaroid-bg:       var(--paper);
   --polaroid-bg-soft:  color-mix(in srgb, var(--paper) 92%, var(--paper-line));
   --polaroid-ink:      var(--paper-ink);
@@ -20528,7 +20599,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 @media (prefers-reduced-motion: reduce) {
   .vfeed__rail, .vfeed__track, .vfeed__gg, .vfeed__faces .vig-av,
   .vdisc__tile, .vdisc__cover, .vstat__bar, .vstat__rate-fill,
-  .vguide__scroll, .vguide__scrollinner, .vscore__stage, .vscore__seat,
+  .vguide__ch, .vguide__chbody > div, .vguide__chev, .vguide__tick,
+  .vguide__chlist,
+  .vscore__stage, .vscore__seat,
   .vscore__pill, .vscore__row, .vscore__pick, .vscore__add, .vscore__lbl,
   .vstat__q, .vguide__row, .vguide__tick {
     transition: none;

@@ -1,22 +1,26 @@
-// widgets/tour-vignette-scripted.js — the two tour scenes that tell a story.
+// widgets/tour-vignette-scoring.js — chapter 3's scene: Gather, live rounds,
+// then a community scoring grid.
 //
-// GUIDES and SCORING. These two are scripted rather than ambient because a
-// single frame of either one is a lie:
+// Scripted rather than ambient, because a single frame of it is a lie. A
+// scorepad is just a grid until you watch a community grid turn it into THIS
+// game's scorepad — that transformation is the feature, and a screenshot of
+// the finished table looks like a spreadsheet.
 //
-//   • A scorepad is just a grid until you watch a community template turn it
-//     into THIS game's scorepad. That transformation is the feature; a
-//     screenshot of the finished grid looks like a spreadsheet.
-//   • A reference guide is just text until you watch a chapter somebody else
-//     wrote land in yours.
+// It was tour-vignette-scripted.js and held the guides scene too, until the
+// pair crossed the repo's ~300-line guideline and guides left for
+// tour-vignette-guides.js. The file is named for what it contains now: a
+// module called "scripted" holding one of the two scripted scenes would be
+// the kind of name that outlives what it described
+// (.claude/rules/ui-object-design.md §5).
 //
-// Beat names are a published contract — Docs/STORE_LISTING.md cites
-// `scoring @ template-on` as the frame a store screenshot is cut from, and
-// tools/check-tour.mjs pins them. Renaming one is a doc change too.
+// Beat names are a published contract — Docs/STORE_LISTING.md cuts three
+// screenshots from this scene by name, and tools/check-tour.mjs pins them.
+// Renaming one is a doc change too.
 //
-// The cast (Priya, Marcus, You) is shared with the ambient scenes so the tour
-// reads as one evening rather than five unrelated demos. The game is Arboretum
-// throughout, which is also what makes the expansion beat legible: you can see
-// which rows were not there a moment ago.
+// The cast (Priya, Marcus, You) is shared with the other scenes so the tour
+// reads as one evening rather than five unrelated demos. The game is
+// Arboretum throughout, which is also what makes the expansion beat legible:
+// you can see which rows were not there a moment ago.
 
 (function () {
   const V = window.BgbTourVignette;
@@ -41,62 +45,6 @@
    */
   const body = (root, sel) => root.querySelector(sel) || root;
   const stage = (root, name) => { body(root, ".vscore").dataset.stage = name; };
-
-  // ── Guides — a community chapter lands in your own guide ───────────────────
-  const POOL = [
-    { title: "Setup, 2–4 players", by: "used by 310", kind: "box" },
-    { title: "Scoring, walked through", by: "used by 142", kind: "trophy" },
-    { title: "The path rule, plainly", by: "used by 96", kind: "lightbulb" },
-  ];
-
-  V.register({
-    id: "guides",
-    label: "Adding a community-written chapter to your own reference guide",
-    hold: 3000,
-    html: `
-      <div class="vig-chrome"><span class="vig-chrome__title">Arboretum · Guide</span></div>
-      <div class="vguide">
-        <div class="vguide__pool">
-          <p class="vguide__poolhead">From the community</p>
-          ${POOL.map((c, i) => `
-            <div class="vguide__row" data-row="${i}">
-              <i data-icon="${c.kind}" class="w-4 h-4"></i>
-              <span class="vguide__rowtitle">${c.title}</span>
-              <span class="vguide__rowby">${c.by}</span>
-              <span class="vguide__tick" aria-hidden="true">
-                <i data-icon="check" class="w-3 h-3"></i>
-              </span>
-            </div>`).join("")}
-        </div>
-        <div class="vguide__scroll" data-scroll>
-          <div class="vguide__scrollinner">
-            <h4>Scoring, walked through</h4>
-            <p>Count each species you have the longest path of. Ties go to the
-               player whose path has the higher-value end card.</p>
-            <p>A path scores its full value only if every card in it shares a
-               suit with the species you're claiming.</p>
-          </div>
-        </div>
-      </div>`,
-    reset(root) {
-      mark(root, ".vguide__row", "is-picked", false);
-      mark(root, ".vguide__row", "is-added", false);
-      body(root, ".vguide").classList.remove("is-open", "is-read");
-    },
-    beats: [
-      { name: "pick", at: 1200, apply: (r) => {
-        const row = r.querySelector('[data-row="1"]');
-        if (row) row.classList.add("is-picked");
-      } },
-      { name: "added", at: 2600, apply: (r) => {
-        const row = r.querySelector('[data-row="1"]');
-        if (row) row.classList.add("is-added");
-        put(r, '[data-row="1"] .vguide__rowby', "in your guide");
-      } },
-      { name: "open", at: 4000, apply: (r) => body(r, ".vguide").classList.add("is-open") },
-      { name: "read", at: 6200, apply: (r) => body(r, ".vguide").classList.add("is-read") },
-    ],
-  });
 
   // ── Scoring — Gather, live rounds, then a community grid ──────────────────
   //
