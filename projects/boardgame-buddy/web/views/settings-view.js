@@ -282,7 +282,7 @@
             <span class="set-card__row-icon"><i data-icon="compass" class="w-4 h-4"></i></span>
             <span class="set-card__row-body">
               <span class="set-card__row-title">Take the tour</span>
-              <span class="set-card__row-sub">Five chapters on what BoardgameBuddy does.</span>
+              <span class="set-card__row-sub">Walkthrough of key BoardgameBuddy features.</span>
             </span>
             <span class="set-card__row-chev"><i data-icon="chevron-right" class="w-4 h-4"></i></span>
           </button>
