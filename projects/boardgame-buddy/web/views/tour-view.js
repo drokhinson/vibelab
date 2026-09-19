@@ -36,7 +36,8 @@
   const SCENE_SRCS = [
     "ui/tour-vignette.js",
     "widgets/tour-vignette-ambient.js",
-    "widgets/tour-vignette-scripted.js",
+    "widgets/tour-vignette-guides.js",
+    "widgets/tour-vignette-scoring.js",
     "widgets/tour-vignette-stats.js",
   ];
   // Horizontal travel, in px, past which a drag is a chapter change.

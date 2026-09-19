@@ -64,7 +64,8 @@ vm.createContext(sandbox);
 for (const rel of [
   "ui/tour-vignette.js",
   "widgets/tour-vignette-ambient.js",
-  "widgets/tour-vignette-scripted.js",
+  "widgets/tour-vignette-guides.js",
+  "widgets/tour-vignette-scoring.js",
   "widgets/tour-vignette-stats.js",
   "widgets/tour-chapters.js",
 ]) {
@@ -120,7 +121,8 @@ for (const id of V.ids()) {
 // seek() and every loop restart get to a frame — produces a scene the timed
 // run never shows.
 const rawSrc = read("widgets/tour-vignette-ambient.js")
-  + read("widgets/tour-vignette-scripted.js")
+  + read("widgets/tour-vignette-guides.js")
+  + read("widgets/tour-vignette-scoring.js")
   + read("widgets/tour-vignette-stats.js");
 ok("no beat carries a negative delay", !/\bat:\s*-/.test(rawSrc));
 
@@ -232,7 +234,8 @@ console.log("\nboot cost");
 const html = read("index.html");
 for (const rel of ["ui/tour-vignette.js",
                    "widgets/tour-vignette-ambient.js",
-                   "widgets/tour-vignette-scripted.js",
+                   "widgets/tour-vignette-guides.js",
+                   "widgets/tour-vignette-scoring.js",
                    "widgets/tour-vignette-stats.js"]) {
   ok(`${rel} is prefetched`, html.includes(`<link rel="prefetch" href="${rel}"`));
   ok(`${rel} is NOT a <script src>`, !html.includes(`<script src="${rel}"`));
@@ -248,7 +251,8 @@ ok('index.html has a <main data-view="tour">', html.includes('data-view="tour"')
 // loads all three itself.
 const srcList = read("views/tour-view.js");
 for (const rel of ["widgets/tour-vignette-ambient.js",
-                   "widgets/tour-vignette-scripted.js",
+                   "widgets/tour-vignette-guides.js",
+                   "widgets/tour-vignette-scoring.js",
                    "widgets/tour-vignette-stats.js"]) {
   ok(`${rel} is in SCENE_SRCS`, srcList.includes(`"${rel}"`));
 }

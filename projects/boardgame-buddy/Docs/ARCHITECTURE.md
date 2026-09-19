@@ -601,8 +601,15 @@ the translate, and the sign is the corner. The achievement's pop is on the
 would overwrite the hero translate and drop it back into its corner mid-flight
 — the two cannot share the property.
 
-That scene lives in `widgets/tour-vignette-stats.js`, its own module, because
-it outgrew a loop: `tour-vignette-ambient.js` was at the ~300-line guideline
+`widgets/tour-vignette-guides.js` is its own module for the same reason, and
+took `tour-vignette-scripted.js` with it: that file held guides and scoring,
+and the pair crossed the ~300-line guideline when guides grew. What was left
+is the scoring scene, so the file is `tour-vignette-scoring.js` now — a module
+called "scripted" holding one of the two scripted scenes is the kind of name
+that outlives what it described (`ui-object-design.md` §5).
+
+The stats scene lives in `widgets/tour-vignette-stats.js`, its own module, for
+the same reason — it outgrew a loop: `tour-vignette-ambient.js` was at the ~300-line guideline
 with it inside. It duplicates two four-line DOM helpers rather than sharing
 them, and that is the intended answer, not laziness — `ui-object-design.md` §4
 puts the *lifecycle* in the shell and leaves each caller its own markup, so
@@ -612,7 +619,7 @@ achievement (`wins_10`, "Crowned"), and it keeps its dark medallion ground in
 both themes by design — a coin on the table, not a mark drawn against the
 surface.
 
-**The scenes are not on the boot path.** All four vignette modules are
+**The scenes are not on the boot path.** All five vignette modules are
 `<link rel="prefetch" as="script">` in `index.html` rather than `<script src>`,
 and load through `ui/lazy-script.js` when somebody opens the tour. That keeps
 them out of `scripts/bgb-bundle.mjs`'s manifest (which reads `<script src>`)
@@ -736,6 +743,33 @@ have none: the scene under each makes the same point the paragraph used to.
 `views/tour-view.js` guards the field, and `check-tour.mjs` pins both the guard
 and the fact that a chapter actually exercises it — an unguarded `${ch.body}`
 prints the string "undefined" into the panel, which nothing reports.
+
+**The guides scene is a pool over a guide that fills up.** Four community
+rows, each carrying a **visible empty tick** — the control used to appear only
+once it had been used, so the first beat read as a row lighting up rather than
+as a choice — and the scoring-grid row already ticked, which is why the scroll
+underneath starts with it. Two of the other three tick during the scene and
+land in the scroll as collapsed chapters; **one never ticks**, so both states
+of the control are on screen at the end. The last beats open a chapter and
+scroll its body.
+
+Three things it borrows from `widgets/reference-guide-scroll.js`. A **scoring
+grid is a chapter of a different kind and is drawn last** — that file's header
+explains why (by `display_order` it came first, and a table above the rule
+somebody opened the scroll for is the wrong thing at the top), so chapters land
+*above* it here. Chapters are **collapsed** by default, because a guide is a
+short list you open rather than a wall of text. And the scroll is **paper**:
+the real one is parchment, light in both themes, and on the chrome ground the
+two lists of rows read as one column with nothing to say that two of them
+moved. It is the third paper island in the tour, alongside the scorepad and
+the feed's play cards.
+
+The list carries **its own clip**, inside the padded box rather than around
+it. It translates by a row when a chapter opens, which is what a real guide
+does and what keeps the scoring grid — deliberately last — from being pushed
+out by the expanding body above it. Clipping the whole box instead slid the
+rows up *over* the "Your guide" heading, because the heading is a sibling that
+does not move.
 
 **The scoring scene is three stages**, in the order the chapter's three
 bullets claim them: Gather, the live rounds, then a community grid.
