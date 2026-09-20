@@ -8,7 +8,7 @@
 //   • THE STEPS ARE SLIDES. One track, one transform. Nothing opens, closes
 //     and hands off, so the user never sees the empty feed flash between
 //     cards, and Back is a real move rather than a dead end.
-//   • THE COUNTER IS PINNED. "Step 2 of 5" plus a segment bar, above every
+//   • THE COUNTER IS PINNED. "Step 2 of 4" plus a segment bar, above every
 //     slide. Someone deciding whether to skip can see what skipping costs.
 //   • CONTINUE AND SKIP NEVER AWAIT. The handler queues the write and moves
 //     the track in the same frame. There is no spinner, no disabled button
@@ -16,7 +16,9 @@
 //     travelling, not a request. Results land on the finale slide's ledger.
 //
 // The finale is deliberately UNCOUNTED: the bar is full and the counter says
-// "All set", so "Step 6 of 5" never has to be printed.
+// "All set", so "Step 5 of 4" never has to be printed. It is also the only
+// slide that can hand off somewhere else — "Show me around" finishes the deck
+// and routes to /tour, which is why finish() takes an options object.
 //
 // Slide bodies live in widgets/onboarding-deck-slides.js — this file is the
 // shell, the queue and the ledger. Both stay under the ~300-line rule in
@@ -31,7 +33,7 @@
   // one number drives the segment bar, the clamp, the counter, "All set" and
   // the back-hidden rule. The PANEL geometry does not follow from it — see the
   // width/transform below, and .ob-slide's width in styles.css.
-  const STEPS = 5;
+  const STEPS = 4;
 
   let _open = false;
 
@@ -160,8 +162,12 @@
         queue: queue.push,
         /** Advance one slide. */
         next: function () { go(step + 1); },
-        /** Leave the deck (the finale's "Start playing"). */
-        finish: function () { finish(); },
+        /**
+         * Leave the deck (the finale's two buttons).
+         * @param {{tour?: boolean}} [opts] tour:true routes to /tour once the
+         *   deck has finished closing.
+         */
+        finish: function (opts) { finish(opts); },
       };
 
       slides = window.OnboardingDeckSlides.build(deck);
@@ -170,11 +176,11 @@
       // index→slide lookup for onEnter, and a mismatch shows as the wrong
       // slide's hook firing rather than as an error.
       const PANELS = [
-        slides.profile, slides.buddies, slides.notifications, slides.bgg,
-        slides.importHint, slides.finale,
+        slides.profile, slides.buddies, slides.bgg, slides.notifications,
+        slides.finale,
       ];
       PANELS.forEach(function (s) { track.appendChild(s.el); });
-      // 6 panels: five counted steps plus the uncounted finale. The panel
+      // 5 panels: four counted steps plus the uncounted finale. The panel
       // count used to live in FOUR places — this width, the transform below,
       // and .ob-slide's width AND flex-basis in styles.css — so adding a slide
       // meant changing all four or watching the track land on two half-slides.
@@ -199,7 +205,7 @@
         if (slide && slide.onEnter) slide.onEnter();
       }
 
-      function finish() {
+      function finish(opts) {
         if (settled) return;
         settled = true;
         if (window.BgbBackGuard) window.BgbBackGuard.release(backGuard);
@@ -212,6 +218,9 @@
           // is now true.
           document.body.style.overflow = "";
           _open = false;
+          // AFTER the teardown, never before: the tour is a routed screen and
+          // would otherwise paint under a deck that still owns the scroll lock.
+          if (opts && opts.tour && window.router) window.router.go("tour");
           resolve();
         }, CLOSE_MS);
       }

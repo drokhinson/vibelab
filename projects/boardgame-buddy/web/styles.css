@@ -17683,15 +17683,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   overscroll-behavior: contain;
   padding-bottom: 8px;
 }
-.ob-slide__eyebrow {
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent-ink);
-  margin-bottom: 6px;
-}
-:root[data-bgb="dark"] .ob-slide__eyebrow { color: var(--accent); }
 .ob-slide__title {
   font-family: var(--font-polaroid);
   font-weight: 600;
@@ -17709,6 +17700,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin: 0 0 14px;
 }
 .ob-slide__title--center, .ob-slide__body--center { text-align: center; }
+/* Slides 1 and 2 carry no subtitle — the title is the only thing between the
+   counter and the first control, so it holds open the space .ob-slide__body
+   used to. Every other slide still has a body paragraph and keeps the 6px. */
+.ob-slide--profile .ob-slide__title,
+.ob-slide--buddies .ob-slide__title { margin-bottom: 16px; }
 .ob-slide__note { font-size: 11.5px; line-height: 1.45; color: var(--ink-faint); margin: 10px 0 0; }
 .ob-field { margin-bottom: 12px; }
 .ob-field__label { color: var(--ink-faint); }

@@ -440,11 +440,20 @@ Three details that are load-bearing rather than cosmetic. Both columns print **o
 First-run setup used to be three modals opened back to back, each awaiting its
 own write before the next appeared. It is now **one mounted deck** —
 `widgets/onboarding-deck.js` (the shell, the queue and the ledger) plus
-`widgets/onboarding-deck-slides.js` (the six panels) — and the split between
+`widgets/onboarding-deck-slides.js` (the five panels) — and the split between
 those two files is the same lifecycle-vs-appearance seam the bottom-sheet shell
 uses: the shell owns the track, the counter and the write queue and knows
 nothing about what a slide contains; a slide says `deck.next()` and stops
 caring.
+
+The four counted steps are **display name and badge → buddies → collection
+import → notifications**, and the uncounted finale carries both the ledger and
+the hand-off into the feature tour: "You're all set", and a choice between the
+walkthrough (`/tour`, §4.3e) and diving straight in. The tour is a *routed
+screen*, so "Show me around" is `deck.finish({ tour: true })` — the deck tears
+itself down, releases the scroll lock, and only then calls `router.go("tour")`,
+because a routed screen painted under a deck that still owns the scroll lock is
+the same bug as an overlay arming a guard over a screen that has one.
 
 Four properties are load-bearing, and each is a rule this codebase already had:
 
@@ -459,8 +468,11 @@ Four properties are load-bearing, and each is a rule this codebase already had:
   lists in `styles.css`, so its tiles and fields follow the ground in both
   themes; `.ob-paper` restores the alias family for the badge carousel at
   (0,4,0), for the reason §4.2b spells out.
-- **The notifications slide asks before the browser does.** Notifications stay
-  off by default (`push_tier: 'none'`, migration 017) — this slide and
+- **The notifications slide asks last, and before the browser does.** It sits
+  at position four so the offer lands on things the person just did — buddy
+  requests sent, a collection import in flight — rather than as an abstract
+  question. Notifications stay off by default (`push_tier: 'none'`,
+  migration 017) — this slide and
   `ui/push-prompt.js` are how an opt-in nobody would otherwise find becomes a
   choice somebody actually makes. It asks in the app's own words first because a
   browser answers the real question exactly once: a "block" can never be re-asked
