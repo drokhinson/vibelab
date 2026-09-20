@@ -50,6 +50,8 @@ DECLARE
   p5     CONSTANT uuid := gen_random_uuid();   -- B's play, A seated → untouched
   p6     CONSTANT uuid := gen_random_uuid();   -- photo under A's prefix → B
   p7     CONSTANT uuid := gen_random_uuid();   -- A's seat has NO display name
+  p8     CONSTANT uuid := gen_random_uuid();   -- every candidate collides → gone
+  p8b    CONSTANT uuid := gen_random_uuid();   -- B's own row for that table
   res    jsonb;
   owner_of uuid;
   n      int;
@@ -70,7 +72,12 @@ BEGIN
     (p7, b_id, game, 'Test Game', DATE '2026-01-07');
   INSERT INTO boardgamebuddy_plays (id, user_id, game_id, game_name, played_at, bga_table_id) VALUES
     (p4b, b_id, game, 'Test Game', DATE '2026-01-04', 987654321),
-    (p4,  a_id, game, 'Test Game', DATE '2026-01-04', 987654321);
+    (p4,  a_id, game, 'Test Game', DATE '2026-01-04', 987654321),
+    -- p8 is p4 with the fallback removed: B is the ONLY other account seated,
+    -- and B already holds this table. No candidate survives the collision
+    -- guard, so there is nobody to pass it to and the cascade takes it.
+    (p8b, b_id, game, 'Test Game', DATE '2026-01-08', 123456789),
+    (p8,  a_id, game, 'Test Game', DATE '2026-01-08', 123456789);
   INSERT INTO boardgamebuddy_plays (id, user_id, game_id, game_name, played_at, photo_url) VALUES
     (p6, a_id, game, 'Test Game', DATE '2026-01-06',
      'https://img.bgbuddy.app/' || a_id::text || '/deadbeef.jpg');
@@ -88,7 +95,9 @@ BEGIN
     (p5, a_id, 'Dave',  '2026-01-05 10:01Z'),
     (p6, b_id, 'Bella', '2026-01-06 10:00Z'),
     (p7, b_id, 'Bella', '2026-01-07 10:00Z'),
-    (p7, a_id, NULL,    '2026-01-07 10:01Z');   -- the identity-CHECK landmine
+    (p7, a_id, NULL,    '2026-01-07 10:01Z'),   -- the identity-CHECK landmine
+    (p8, a_id, 'Dave',  '2026-01-08 10:00Z'),
+    (p8, b_id, 'Bella', '2026-01-08 10:01Z');   -- the only heir, and it collides
 
   -- ── the act ────────────────────────────────────────────────────────────────
   res := bgb_delete_account_rows(a_id);
@@ -96,8 +105,8 @@ BEGIN
   -- ── 1. the counts ──────────────────────────────────────────────────────────
   ASSERT (res->>'plays_reassigned')::int = 3,
     'expected 3 plays handed over, got ' || COALESCE(res->>'plays_reassigned','?');
-  ASSERT (res->>'plays_deleted')::int = 2,
-    'expected 2 plays deleted, got ' || COALESCE(res->>'plays_deleted','?');
+  ASSERT (res->>'plays_deleted')::int = 3,
+    'expected 3 plays deleted, got ' || COALESCE(res->>'plays_deleted','?');
   ASSERT (res->>'photos_unlinked')::int = 1,
     'expected 1 photo unlinked, got ' || COALESCE(res->>'photos_unlinked','?');
   ASSERT (res->>'names_backfilled')::int = 1,
@@ -124,6 +133,15 @@ BEGIN
     'a play with only the deleted account seated must not survive';
   ASSERT NOT EXISTS (SELECT 1 FROM boardgamebuddy_plays WHERE id = p3),
     'a ghost is not an account and must not keep a play alive';
+
+  -- The other way to have nobody to pass to: the only seated account is one
+  -- the play cannot legally move to. "No candidate" and "no other player" have
+  -- to end the same way, or a collision would silently keep a play alive under
+  -- a deleted account's id.
+  ASSERT NOT EXISTS (SELECT 1 FROM boardgamebuddy_plays WHERE id = p8),
+    'a play whose every candidate heir collides must fall through to the cascade';
+  ASSERT EXISTS (SELECT 1 FROM boardgamebuddy_plays WHERE id = p8b AND user_id = b_id),
+    'and the heir''s own colliding play must still be left alone';
 
   -- ── 5. the photo link is cleared, not left dangling ────────────────────────
   SELECT photo_url INTO txt FROM boardgamebuddy_plays WHERE id = p6;
