@@ -1084,6 +1084,31 @@ first-class value throughout — an unresolvable device, a host who opted out,
 and every play predating the column all land there, and any future aggregate
 filters them out and reports its own coverage.
 
+**The roster is the draft's, and the lobby never adds to it.** Two arrays
+describe who is at the table: `_ps.players`, which is the play (it becomes
+`toPlayCreate().players`, which `bgb_log_play` stores verbatim), and the lobby's
+`participants`, which exists so joiners and spectators can see the table. The
+Gather poll reads the second and may promote a genuinely new joiner into the
+first — that is the one direction it flows, and it flowed too far. Removing a
+seat is local and its `DELETE` is not, so for a round trip the lobby still lists
+someone the draft does not, and *any* bundle fetched inside that window used to
+seat them again: at the END of the roster, i.e. the rightmost off-screen column
+of the grid, on a play the host then saved without ever seeing the extra seat.
+(`biggest_table` counts seats, so a table of four unlocked *Full Table*.)
+
+So a removal is recorded on the draft — `PlaySession.forgetSeat` /
+`rememberSeat` / `isRemovedParticipant`, persisted with the roster — and the
+poll refuses any participant matching a tombstone, on the branch that would
+create a row and nowhere else (a participant that matches a seat is the ordinary
+`participant_id` backfill and is untouched). The identity rule is same lobby row,
+same account, or same name **ghost-to-ghost only**: an account sharing a removed
+ghost's name is the swap a host makes on purpose. Everything else is cleanup
+around that invariant — the poll re-reads its guards after its fetch, a push
+whose seat left during the round trip deletes the row it created, and a stale row
+the poll meets is reaped once per mount so the spectators' list converges too.
+`tools/check-roster-removal.mjs` drives the real modules through all three
+resurrection paths.
+
 ---
 
 ## 6. How OOD shows up in the code

@@ -28,12 +28,58 @@
   // minting fresh is safer than adopting it.
   const PREFETCH_MAX_AGE_MS = 30 * 1000;
 
+  // ── Removed seats ──────────────────────────────────────────────────────────
+  //
+  // Taking a seat off the roster is a local act — splice the array, DELETE the
+  // lobby row — and for one round trip the two disagree: the draft says four
+  // players, the lobby still says five. PlayFlowView's Gather poll reads the
+  // lobby and seats anyone it doesn't recognise, so any bundle fetched inside
+  // that window puts the removed seat straight back, at the END of the roster
+  // (the rightmost, off-screen column of the scoring grid). That is how a
+  // four-person table saved FIVE seats and unlocked Full Table: nobody saw the
+  // fifth column, and bgb_log_play writes exactly the roster it is handed.
+  //
+  // So a removal is recorded, not just applied. The tombstone outlives the
+  // DELETE — which can be slow, can fail (only a definitive 404/410 surfaces,
+  // see _withLobby), or can never have been issued at all because the row had
+  // no id yet — and it is PERSISTED, because a refresh re-reads the same lobby
+  // and would otherwise re-seat the same ghost.
+  const REMOVED_SEAT_MAX = 40;
+
+  /** A seat's name as the identity rules below compare it. */
+  function _seatName(name) {
+    return String(name || "").trim().toLowerCase();
+  }
+
+  // Two seat identities are the same person when they name the same lobby row,
+  // the same account, or — for a GHOST, which has no account and no handle but
+  // its spelling — the same name.
+  //
+  // The name rule is ghost-to-ghost ONLY, and that restriction is the whole
+  // reason this is a function rather than a string key. "Take the ghost Dave
+  // off, put Dave's real account on" is the commonest thing a host does next,
+  // and it is exactly the sequence that produced the report; a tombstone that
+  // matched the account by name would block the seat the host meant to keep,
+  // which is the same bug with the sign flipped.
+  function _sameSeat(a, b) {
+    if (a.participant_id && b.participant_id && a.participant_id === b.participant_id) return true;
+    if (a.user_id && b.user_id) return a.user_id === b.user_id;
+    if (a.user_id || b.user_id) return false;
+    return !!a.name && a.name === b.name;
+  }
+
   class PlaySession {
     constructor(initial = {}) {
       this.gameId       = initial.gameId || null;
       this.gameSnapshot = initial.gameSnapshot || null; // {id,name,thumbnail_url,image_url,...}
       this.playedAt     = initial.playedAt || new Date().toISOString().slice(0, 10);
       this.players      = initial.players || [];
+      // Seats the host has taken OFF this draft — see REMOVED_SEAT_MAX above.
+      // Persisted with the roster, because the thing that re-seats them is a
+      // lobby read and a refresh does one.
+      this.removedSeats = Array.isArray(initial.removedSeats)
+        ? initial.removedSeats.slice(-REMOVED_SEAT_MAX)
+        : [];
       this.notes        = initial.notes || "";
       this.expansionIds = initial.expansionIds || [];
       this.playMode     = initial.playMode || null;
@@ -122,6 +168,7 @@
         gameSnapshot: this.gameSnapshot,
         playedAt: this.playedAt,
         players: this.players,
+        removedSeats: this.removedSeats,
         notes: this.notes,
         expansionIds: this.expansionIds,
         playMode: this.playMode,
@@ -157,6 +204,7 @@
       this.gameId = null;
       this.gameSnapshot = null;
       this.players = [];
+      this.removedSeats = [];
       this.notes = "";
       this.expansionIds = [];
       this.playMode = null;
@@ -183,6 +231,72 @@
 
     isActive() {
       return !!(this.gameId || this.players.length || this.code);
+    }
+
+    /**
+     * Record that a seat was taken off the roster.
+     *
+     * Called by the removal itself, not by whatever settles the lobby row: the
+     * point is to survive a DELETE that is slow, that fails, or that could not
+     * be issued because the row had no id yet. Newest last, capped — a host
+     * shuffling a line-up all evening must not grow the persisted draft without
+     * bound, and the oldest removal is the one least likely to still be in a
+     * lobby bundle.
+     *
+     * @param {any} seat a row from `players`
+     */
+    forgetSeat(seat) {
+      if (!seat) return;
+      const tomb = {
+        participant_id: seat.participant_id || null,
+        user_id: seat.user_id || null,
+        name: _seatName(seat.name),
+      };
+      // Nothing to match on later — a blank row the host never filled in.
+      if (!tomb.participant_id && !tomb.user_id && !tomb.name) return;
+      this.removedSeats = this.removedSeats
+        .filter((t) => !_sameSeat(t, tomb))
+        .concat([tomb])
+        .slice(-REMOVED_SEAT_MAX);
+    }
+
+    /**
+     * Drop the tombstone for a seat that is back on the table.
+     *
+     * Every add goes through here, so a removal is never permanent: a host who
+     * takes a ghost off and then types the same name again has changed their
+     * mind, and the poll must be free to hand that row its participant_id.
+     *
+     * @param {any} seat a row from `players`
+     */
+    rememberSeat(seat) {
+      if (!seat || this.removedSeats.length === 0) return;
+      const id = {
+        participant_id: seat.participant_id || null,
+        user_id: seat.user_id || null,
+        name: _seatName(seat.name),
+      };
+      this.removedSeats = this.removedSeats.filter((t) => !_sameSeat(t, id));
+    }
+
+    /**
+     * Would seating this lobby participant put back someone the host removed?
+     *
+     * Asked by PlayFlowView's Gather poll, and only on the branch that would
+     * CREATE a local row — a participant that already matches a seat is the
+     * ordinary backfill path and has nothing to do with this.
+     *
+     * @param {{id?: string, user_id?: string|null, display_name?: string}} part
+     * @returns {boolean}
+     */
+    isRemovedParticipant(part) {
+      if (!part || this.removedSeats.length === 0) return false;
+      const id = {
+        participant_id: part.id || null,
+        user_id: part.user_id || null,
+        name: _seatName(part.display_name),
+      };
+      return this.removedSeats.some((t) => _sameSeat(t, id));
     }
 
     /**
