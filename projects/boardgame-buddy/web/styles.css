@@ -20857,12 +20857,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   .feat-strip__cta:hover { background: var(--bg-2); border-color: var(--line-strong); }
 }
 
-/* The sign-in screen's hero scene. Empty until ui/tour-vignette.js lands —
-   and it stays empty on a dead connection or under reduced motion, so it
-   reserves no height of its own. */
-.auth-hero { width: 100%; max-width: 24rem; margin-bottom: 1.25rem; }
-.auth-hero:not(:empty) { height: clamp(168px, 26vh, 220px); }
-
 @media (prefers-reduced-motion: reduce) {
   .feat-strip__row { animation: none; }
 }

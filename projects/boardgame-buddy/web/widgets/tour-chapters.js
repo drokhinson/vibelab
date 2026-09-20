@@ -62,7 +62,7 @@
       ],
       vignette: "community",
       mark: "community",
-      strip: "One shared feed with the people you play with",
+      strip: "See the games your friends are playing on the feed",
     },
     {
       slug: "guides",
@@ -78,7 +78,7 @@
       ],
       vignette: "guides",
       mark: "guides",
-      strip: "Community rules and references, read at the table",
+      strip: "Jot down notes and rule clarifications in your own reference guide",
     },
     {
       slug: "scoring",
@@ -97,7 +97,7 @@
       ],
       vignette: "scoring",
       mark: "scoring",
-      strip: "Live scoring, with per-game templates and expansions",
+      strip: "Record your games with the built-in score sheet",
     },
     {
       slug: "stats",
@@ -113,7 +113,7 @@
       ],
       vignette: "stats",
       mark: "stats",
-      strip: "Your record — and the head-to-head against your table",
+      strip: "See your boardgaming stats — dig down per game, or per opponent",
     },
     {
       slug: "discover",
@@ -132,9 +132,17 @@
       ],
       vignette: "discover",
       mark: "discover",
-      strip: "What to play next, with the reason it was picked",
+      strip: "Discover what to play next, based on the games you play now",
     },
   ];
+
+  // The sign-in strip's order, which is NOT the deck's. The deck opens on
+  // "your people" because a tour is a narrative and that is where the app
+  // starts for a newcomer; the strip is a pitch read in three seconds, so it
+  // leads with the thing a stranger came for — the score sheet. The lines
+  // themselves still live on the chapters, so the two surfaces cannot end up
+  // advertising different products.
+  const STRIP_ORDER = ["scoring", "community", "guides", "stats", "discover"];
 
   const CLOSER = {
     title: "Your Games, Your People, Your Record.",
@@ -146,6 +154,10 @@
 
   window.TourChapters = {
     all: () => CHAPTERS.slice(),
+    /** The chapters in the sign-in strip's order. @returns {TourChapter[]} */
+    strip: () => STRIP_ORDER
+      .map((slug) => CHAPTERS.find((c) => c.slug === slug))
+      .filter(Boolean),
     closer: () => CLOSER,
     /**
      * Resolve a `?c=` value to an index. Unknown or missing lands on 0 rather

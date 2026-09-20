@@ -2,8 +2,10 @@
 // ui/feature-strip.js — the five features, condensed to one line each.
 //
 // The sign-in screen's whole sell, and the one thing a stranger who has not
-// made an account can read. The lines come from widgets/tour-chapters.js, so
-// the strip and the tour cannot disagree about what the app does.
+// made an account can read — the screen carries no other pitch, so these five
+// lines and the button under them are it. The lines come from
+// widgets/tour-chapters.js, so the strip and the tour cannot disagree about
+// what the app does.
 //
 // WHY THE MARKS ARE PAINTED THROUGH A CSS MASK
 // --------------------------------------------
@@ -30,9 +32,12 @@
    */
   function render(opts) {
     const o = opts || {};
-    const heading = o.heading === undefined ? "What you get" : o.heading;
+    const heading = o.heading === undefined
+      ? "What's in Boardgame Buddy" : o.heading;
     const showCta = o.cta !== false;
-    const rows = window.TourChapters.all().map((ch, i) => `
+    // .strip(), not .all(): the pitch's order, not the deck's — see
+    // widgets/tour-chapters.js.
+    const rows = window.TourChapters.strip().map((ch, i) => `
       <li class="feat-strip__row" style="--i:${i}; --feat-mark:url('${BASE}${ch.mark}.svg')">
         <span class="feat-strip__mark" aria-hidden="true"></span>
         <span class="feat-strip__txt">${ch.strip}</span>
