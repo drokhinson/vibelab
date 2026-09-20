@@ -239,5 +239,36 @@ console.log("\nthe header of a merged column: badges by default, tag AND roster 
      render(ones, "team", true).indexOf('data-rg-scope="solo"') !== -1);
 }
 
+// Not a team fact, but this is the one harness that renders the real grid, and
+// the thing it pins is the same width a merged column is competing for: every
+// px the row-header column holds is a px off the score columns beside it.
+console.log("\nthe row-header column reserves what it draws and no more:");
+{
+  const roster = [seat("Ana", "A", [null]), seat("Bo", "B", [null])];
+  const grid = (rounds, opts) => win.renderRoundGrid(
+    roster.map((p) => ({ ...p, roundScores: new Array(rounds).fill(null) })),
+    "checkHost", { playMode: "team", editable: true, minRounds: 1, ...(opts || {}) });
+
+  // The Play screen's opening state: one round, which is the one it refuses to
+  // go below, so there is no remove × on the table.
+  const opening = grid(1);
+  ok("five characters, for Total", opening.indexOf("--rg-label-ch: 5") !== -1);
+  ok("...and no room reserved for an × that is not drawn",
+     opening.indexOf("rg--removable") === -1);
+
+  // Press Next round and the × appears, so now it is paid for.
+  ok("a second round brings the × and its room", grid(2).indexOf("rg--removable") !== -1);
+  // A template's rows carry no × at all, however many there are.
+  ok("a template's rows never draw one",
+     grid(2, { rowLabels: [{ label: "Prosperity" }, { label: "Events" }] })
+       .indexOf("rg--removable") === -1);
+  ok("...and size the column to the longest of them",
+     grid(2, { rowLabels: [{ label: "Prosperity" }, { label: "Events" }] })
+       .indexOf("--rg-label-ch: 10") !== -1);
+  // A read-only mirror can never remove a round.
+  ok("a read-only grid reserves nothing",
+     grid(3, { editable: false }).indexOf("rg--removable") === -1);
+}
+
 console.log(fails ? `\n${fails} check(s) failed.\n` : "\nAll checks passed.\n");
 process.exit(fails ? 1 : 0);

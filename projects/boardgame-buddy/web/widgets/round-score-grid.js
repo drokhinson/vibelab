@@ -188,11 +188,13 @@
 
     const cols = renderColGroup(columns);
     // The label column is sized to what it actually holds, not to a fixed
-    // block. See roundGridLabelChars.
+    // block: the longest header it draws (roundGridLabelChars) plus room for
+    // the remove × on the renders that draw one (roundGridHasRemove).
     const labelCh = roundGridLabelChars(rowLabels, roundCount);
+    const removable = roundGridHasRemove(rowLabels, roundCount, editable, minRounds);
 
     return `
-      <div class="rg${editable ? " rg--editable" : ""}" data-round-grid="${escapeAttr(host)}"
+      <div class="rg${editable ? " rg--editable" : ""}${removable ? " rg--removable" : ""}" data-round-grid="${escapeAttr(host)}"
            data-rg-scope="${scope}"
            style="--rg-cols: ${columns.length}; --rg-label-ch: ${labelCh}">
         <div class="rg__pinzone">
@@ -514,7 +516,17 @@
   }
 
   // How wide the row-header column has to be, in characters: the longest
-  // header this grid will draw, plus two.
+  // header this grid will draw, and nothing on top of it.
+  //
+  // NOT "plus two". The count is already generous per character and the cell
+  // already has 0.4rem of padding either side, which is the breathing room;
+  // two extra characters on top of both was a third of the column on the
+  // R1..R9 grids this is for. The generosity is in the unit: `ch` is the width
+  // of a ZERO in the table's font — 7.1px where the row label's average letter
+  // is ~5.3px — so five characters of "Total" are budgeted about 20% wider
+  // than "Total" actually measures, and a digit-heavy label like "R10", which
+  // is the one case the estimate is tight on, is exactly what `ch` is measured
+  // from.
   //
   // It used to be a flat 6.6rem, which is about eleven characters of room
   // spent on a column whose contents are "R1" through "R9" on most tables —
@@ -539,8 +551,9 @@
   //
   // The controls that share the cell with the label are NOT in the count: they
   // are not text, and styles.css reserves their width on its own terms —
-  // :has() for the info glyph, and the rg--editable class below for the remove
-  // ×, which is deliberately NOT :has() (see the rule for why).
+  // :has() for the info glyph, and the rg--removable class for the remove ×,
+  // which is a class rather than :has() only because the renderer already
+  // knows the answer (see roundGridHasRemove).
   //
   // @param {any[]} rowLabels @param {number} roundCount @returns {number}
   function roundGridLabelChars(rowLabels, roundCount) {
@@ -550,7 +563,33 @@
       const text = tpl && tpl.label ? String(tpl.label) : `R${r + 1}`;
       if (text.length > longest) longest = text.length;
     }
-    return longest + 2;
+    return longest;
+  }
+
+  // Does this render draw a remove × ANYWHERE? The room for one is 1.4rem off
+  // a column that is otherwise about 45px wide, so it is reserved on the
+  // renders that draw one and on no others.
+  //
+  // This used to be a flat "the grid is editable", on the argument that an
+  // exact rule would widen the column on the first press of Next round, every
+  // game. The argument was right about the mechanics and wrong about the
+  // price: the last remaining round draws no × (minRounds) and a template's
+  // rows never do, so the Play screen — a grid that opens on Round 1 and holds
+  // exactly one — spent 22px of a phone on a control that was not on it, for
+  // the whole of the first round of every game. The shift is still real; it
+  // now lands on the press of Next round, in the same frame as the new row
+  // that press adds, rather than being paid for up front and forever.
+  //
+  // Asked of the same values the row renders from, and in the same terms
+  // (`editable && !tpl && roundCount > minRounds`), so the reservation cannot
+  // disagree with what is drawn.
+  //
+  // @param {any[]} rowLabels @param {number} roundCount @param {boolean} editable
+  // @param {number} minRounds @returns {boolean}
+  function roundGridHasRemove(rowLabels, roundCount, editable, minRounds) {
+    if (!editable || roundCount <= minRounds) return false;
+    for (let r = 0; r < roundCount; r++) if (!rowLabels[r]) return true;
+    return false;
   }
 
   // The row's own label, and — on a template row whose author wrote a

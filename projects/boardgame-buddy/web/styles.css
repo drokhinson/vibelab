@@ -9185,17 +9185,21 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 
    The glyph is asked for with :has(), because a grid either has described rows
    or it does not and that does not change while anyone is looking at it. The ×
-   is NOT, even though :has(.scoring-round-remove) would be exact: the last
-   remaining round draws no × (minRounds), so an exact rule would widen the
-   column by 22px on the first press of Next round, every game. An editable
-   grid reserves the room whether or not this particular render drew one — and
-   it can always draw one, since the host can always append a round. A
-   read-only mirror pays for neither.
+   is asked for by CLASS, and the class means "this render drew one" rather
+   than "this grid is editable" — the renderer knows, in the same terms the row
+   itself is written in (roundGridHasRemove). It used to mean the latter, on
+   the argument that an exact rule would widen the column on the first press of
+   Next round, every game; but the last remaining round draws no × (minRounds)
+   and a template's rows never do, so the Play screen — which opens on Round 1
+   and holds exactly one — was spending 22px of a phone on a control that was
+   not on it, for the whole of the first round of every game. The shift is
+   still real and now lands on the press that adds the row it is for. A
+   read-only mirror reserves neither.
 
-   Second, and doubled to (0,2,0), so an editable grid with described rows
-   takes the wider of the two rather than losing to the :has() above. */
+   Second, and doubled to (0,2,0), so a grid with both takes the wider of the
+   two rather than losing to the :has() above. */
 .rg:has(.scoring-round-note) { --rg-label-pad: 1.8rem; }
-.rg.rg--editable             { --rg-label-pad: 2.2rem; }
+.rg.rg--removable            { --rg-label-pad: 2.2rem; }
 .rg__pinzone { position: relative; }
 .rg__head {
   position: sticky;
