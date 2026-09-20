@@ -880,9 +880,14 @@
         rowLabels,
         getCellValue: (p, r) => this._cellValue(p, r),
       });
+      // No "Scoring" label over the table, for the same reason the host's card
+      // dropped its own (play-flow-view#_renderScoringSection): the card holds
+      // one thing and the column headers already say whose each column is.
+      // The two cards are meant to be the same scoreboard seen from two
+      // phones, so a heading on one and not the other would be a difference
+      // that means nothing.
       return `
         <section class="cascade-card cascade-card--scoring">
-          <label class="cascade-card__label">Scoring</label>
           ${grid}
         </section>
       `;

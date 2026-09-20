@@ -195,16 +195,12 @@
 
         ${hasRoundGrid(d.players, "roundScores", d.scoring_template) ? `
           <section class="play-detail__section">
-            <div class="scoring-section__head">
-              <h3 class="play-detail__section-title">
-                <i data-icon="layers" class="w-4 h-4"></i> Rounds
-              </h3>
-              ${window.RoundGridSign.renderToggle("PlayDetailPopup")}
-            </div>
+            <h3 class="play-detail__section-title">
+              <i data-icon="layers" class="w-4 h-4"></i> Rounds
+            </h3>
             ${window.renderRoundGrid(d.players, "PlayDetailPopup", {
               editable: true,
               playMode: p.play_mode || "competitive",
-              showSign: window.RoundGridSign.enabled(),
               // The labels are frozen here on purpose: changing them is a
               // CHAPTER edit, and this play's copy is its own record of how it
               // was scored.
@@ -466,26 +462,6 @@
     player.roundScores[r] = clean === "" ? null : clean;
     resyncScores(state.draft.players);
     autoSelectWinners();
-    render();
-  }
-  // Per-cell +/− button: cycle "" → "-" → cleared, or flip the sign.
-  function toggleRoundSign(i, r) {
-    if (!state.draft) return;
-    const player = state.draft.players[i];
-    if (!player) return;
-    if (!Array.isArray(player.roundScores)) player.roundScores = [];
-    const cur = player.roundScores[r] == null ? "" : String(player.roundScores[r]);
-    const next = window.nextSignToggle(cur);
-    player.roundScores[r] = next === "" ? null : next;
-    resyncScores(state.draft.players);
-    autoSelectWinners();
-    render();
-    const el = document.getElementById(`rg-PlayDetailPopup-${i}-${r}`);
-    if (el && el.focus) el.focus();
-  }
-  // Header pill: flip the global "± Negative" preference and repaint.
-  function toggleSignButtons() {
-    window.RoundGridSign.toggle();
     render();
   }
   function addRound() {
@@ -999,8 +975,6 @@
       // Round-grid handlers (signatures match play-flow-view so the
       // shared round-score-grid widget can target either host).
       _setRoundScore: setRoundScore,
-      _toggleRoundSign: toggleRoundSign,
-      _toggleSignButtons: toggleSignButtons,
       _addRound: addRound,
       _removeRoundAt: removeRoundAt,
       _toggleWinner: toggleWinner,
