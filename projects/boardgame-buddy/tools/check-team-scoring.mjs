@@ -211,8 +211,18 @@ console.log("\nthe header of a merged column: badges by default, tag AND roster 
   ok("...and says so, so one tap moves team headers only",
      teamHtml.indexOf('data-rg-scope="team"') !== -1);
   ok("the tap flips it toward names", teamHtml.indexOf("toggleAll(false, 'team')") !== -1);
-  ok("the text state carries the tag AND the roster",
-     teamHtml.indexOf("Red: Ana, Bo") !== -1 && teamHtml.indexOf("Blue: Cy, Di") !== -1);
+  // Drawn as two lines — the tag over the roster, the tag underlined by CSS —
+  // because a ~4.3rem column broke the one-line form wherever the box ran out.
+  ok("the text state draws the tag over the roster",
+     teamHtml.indexOf('<span class="scoring-head__team">Red</span>'
+                      + '<span class="scoring-head__roster">Ana, Bo</span>') !== -1
+     && teamHtml.indexOf('<span class="scoring-head__team">Blue</span>'
+                         + '<span class="scoring-head__roster">Cy, Di</span>') !== -1);
+  // Flat for the tooltip and the button's accessible name, where a sentence is
+  // what a hover and a screen reader want.
+  ok("...and says it in one line where it has to be one line",
+     teamHtml.indexOf('title="Red: Ana, Bo"') !== -1
+     && teamHtml.indexOf("Blue: Cy, Di — show player names") !== -1);
   ok("...and the badges are still there under it, one per seat",
      (teamHtml.match(/data-head-seat=/g) || []).length === 4);
 

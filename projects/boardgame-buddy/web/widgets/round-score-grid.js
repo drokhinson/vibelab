@@ -213,7 +213,7 @@
                     return `
                     <th class="scoring-head${headerNames ? " is-named" : ""}${slot ? " is-team" : ""}${col.merged ? " is-merged" : ""}" scope="col"
                         ${slot ? `style="--team-tint: var(--team-${slot})"` : ""}
-                        title="${escapeAttr(label)}">${renderScoringHead(renderColumnBadges(col), label, headerNames, headerNamesDefault, scope)}</th>
+                        title="${escapeAttr(label)}">${renderScoringHead(renderColumnBadges(col), columnLabelHtml(col), label, headerNames, headerNamesDefault, scope)}</th>
                   `;}).join("")}
                 </tr>
               </thead>
@@ -484,10 +484,38 @@
   //
   // Names through shownName, so a viewer's private alias reaches this header
   // exactly as it reaches the badge stack under it.
+  //
+  // This is the flat form — one string, for the `title` and the button's
+  // accessible name, where a tooltip and a screen reader both want a sentence.
+  // What is DRAWN is the stacked form below.
   function columnLabel(col) {
     if (!col.merged) return shownName(col.players[0]);
     const roster = col.players.map(shownName).filter(Boolean).join(TEAM_NAME_DELIM);
     return roster ? `${col.label}: ${roster}` : col.label;
+  }
+
+  // The same thing, drawn: the side's tag on its own line, underlined, with
+  // the roster under it —
+  //
+  //     Red
+  //     Ana, Bo
+  //
+  // rather than the one run-on line the colon made of it. A column header is
+  // about 4.3rem wide, so "Red: Ana, Bo" wrapped wherever the box ran out and
+  // the break landed mid-list as often as after the tag; stacking puts the
+  // break where the meaning already is. The underline is what keeps the two
+  // lines from reading as one list with a stray first item — it is the tag
+  // doing the job a heading does, which is also what it is.
+  //
+  // A seat column is one name and stays one span: there is no second thing to
+  // put under it, and the markup it has always emitted is what the nowrap
+  // ellipsis rule is written against.
+  function columnLabelHtml(col) {
+    if (!col.merged) return escapeHtml(shownName(col.players[0]));
+    const roster = col.players.map(shownName).filter(Boolean).join(TEAM_NAME_DELIM);
+    if (!roster) return escapeHtml(col.label);
+    return `<span class="scoring-head__team">${escapeHtml(col.label)}</span>`
+         + `<span class="scoring-head__roster">${escapeHtml(roster)}</span>`;
   }
 
   // The header's bubble state, and a team grid's DEFAULT one. A merged column
@@ -803,14 +831,18 @@
   // `fallback` is the caller's opts.headerNames default — already forced to
   // the badges on a team grid — so the first tap on a surface the user has
   // never toggled flips away from what it actually shows.
-  function renderScoringHead(badgeHtml, name, isNamed, fallback, scope) {
+  //
+  // `labelHtml` arrives ESCAPED (columnLabelHtml does it, because only that
+  // function knows which parts are markup and which are a person's name);
+  // `name` is the same thing flat and is escaped here, for the two attributes.
+  function renderScoringHead(badgeHtml, labelHtml, name, isNamed, fallback, scope) {
     return `<button type="button" class="scoring-head__toggle"
               aria-pressed="${isNamed ? "true" : "false"}"
               aria-label="${escapeAttr(name)} — show player names on every column"
               title="${escapeAttr(name)}"
               onclick="window.RoundGridNames.toggleAll(${!!fallback}, '${scope === "team" ? "team" : "solo"}')">
               <span class="scoring-head__bubble">${badgeHtml}</span>
-              <span class="scoring-head__name">${escapeHtml(name)}</span>
+              <span class="scoring-head__name">${labelHtml}</span>
             </button>`;
   }
 
