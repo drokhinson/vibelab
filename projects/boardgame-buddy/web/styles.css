@@ -9077,7 +9077,36 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    keyboard up. Whatever remains here is the app's existing sticky-chrome
    behaviour, not a new bug class in the grid. */
 .rg {
-  --rg-label-w: 6.6rem;
+  /* THE ROW-HEADER COLUMN IS SIZED TO ITS OWN CONTENTS: the longest header it
+     draws plus two characters, never a fixed block. --rg-label-ch is that
+     count, emitted per grid on this element by renderRoundGrid (which explains
+     why "Total" is one of the headers counted, and why the unit is characters
+     and not pixels).
+
+     The `ch` resolves where the width is USED — .rg-col--label and the table
+     below — so it follows the table's font rather than this element's, and the
+     offer preview's 0.68rem shrinks the column with everything else. The 0.9
+     is the one correction that needs making by hand: all three use sites are
+     at the table's 0.8rem while a row header renders at the 0.72rem
+     `.scoring-table tbody th` gives it, so an uncorrected `ch` would buy 11%
+     more room than the characters it is counting. It is applied HERE, once, in
+     the single declaration all three read — the three tables agree on their
+     columns by sharing one value, and a per-use-site correction is exactly the
+     kind of thing that puts them back out of step.
+
+     The cap is the 6.6rem this used to be, flat, for every grid. So a template
+     with long row names is no narrower than it has always been — with the
+     editable padding below, it keeps exactly the 4.4rem of text room it had —
+     and a plain R1..R9 grid, which is most of them, hands ~19px back to the
+     score columns a player across the table is trying to read (measured at
+     390px: 105.6px before, 86.5px after; a read-only mirror, which reserves
+     neither control, 64px). */
+  --rg-label-ch: 12;
+  --rg-label-pad: 0.8rem;   /* the th's own 0.4rem either side */
+  --rg-label-w: min(
+    calc(var(--rg-label-ch) * 0.9ch + var(--rg-label-pad)),
+    6.6rem
+  );
   --rg-col-min: 4.3rem;
   /* The pinned band's height, as an ALLOWANCE rather than a constraint: the
      scroll-margin below has to reserve room for it, but nothing sets it. The
@@ -9098,6 +9127,24 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 :is([data-view="play-flow"], [data-view="session-viewer"]) .rg {
   --rg-pin-top: calc(var(--bgb-header-height) + var(--bgb-cascade-head-height));
 }
+/* What else shares the label cell, and therefore what the character count
+   cannot cover: the info glyph on a described template row (0.75rem plus
+   .scoring-round-label's 0.25rem gap), and the remove × on a plain editable
+   row (1.1rem plus a 0.3rem gap).
+
+   The glyph is asked for with :has(), because a grid either has described rows
+   or it does not and that does not change while anyone is looking at it. The ×
+   is NOT, even though :has(.scoring-round-remove) would be exact: the last
+   remaining round draws no × (minRounds), so an exact rule would widen the
+   column by 22px on the first press of Next round, every game. An editable
+   grid reserves the room whether or not this particular render drew one — and
+   it can always draw one, since the host can always append a round. A
+   read-only mirror pays for neither.
+
+   Second, and doubled to (0,2,0), so an editable grid with described rows
+   takes the wider of the two rather than losing to the :has() above. */
+.rg:has(.scoring-round-note) { --rg-label-pad: 1.8rem; }
+.rg.rg--editable             { --rg-label-pad: 2.2rem; }
 .rg__pinzone { position: relative; }
 .rg__head {
   position: sticky;
@@ -9743,8 +9790,14 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   font-variant-numeric: tabular-nums;
 }
 .scoring-round-th { white-space: nowrap; }
+/* `flex`, not `inline-flex`, and `min-width: 0` on both it and the text: the
+   COLUMN is what bounds a row name now, so the label has to be able to give
+   its width back to it. An inline-flex row is shrink-to-fit, and a nowrap
+   inline-block inside one has a min-content width equal to its whole text, so
+   a long name simply pushed out of the cell and — the column being sticky and
+   opaque — painted over the first score column. */
 .scoring-round-label {
-  display: inline-flex; align-items: center; gap: 0.3rem;
+  display: flex; align-items: center; gap: 0.3rem; min-width: 0;
 }
 /* ── Scoring-template rows (migration 018) ──────────────────────────────────
    A row of a custom scoring grid — Everdell's "Prosperity", an Arboretum
@@ -9873,10 +9926,18 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    the column that stays pinned while it scrolls, so a long row name has to stop
    rather than eat the screen the score columns have left. The full text is on
    the th's title=; a row's description, when it has one, is behind the info
-   button beside the label. */
+   button beside the label.
+
+   Where it stops is the column, not a number. This carried `max-width: 7.5rem`
+   against a 6.6rem column — which is to say it was allowed to be wider than
+   the cell holding it — and that stopped being survivable when the column
+   started sizing itself (--rg-label-ch on .rg). `flex: 0 1 auto` + `min-width:
+   0` is the ellipsis-inside-flex recipe: the text shrinks, the glyph beside it
+   does not. */
 .scoring-round-text {
-  display: inline-block;
-  max-width: 7.5rem;
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 /* A template row whose author wrote a description: the LABEL is the button that
@@ -9886,7 +9947,8 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    mark and the press feedback are what say it is tappable. */
 .scoring-round-note {
   display: inline-flex; align-items: center; gap: 0.25rem;
-  max-width: 100%;
+  /* A flex item in .scoring-round-label, and the one that has to yield. */
+  flex: 0 1 auto; min-width: 0; max-width: 100%;
   margin: 0; padding: 0;
   border: none; background: none;
   font: inherit; color: inherit;
@@ -9901,13 +9963,12 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   flex: none;
   color: var(--polaroid-muted);
 }
-/* The glyph has to fit beside the label inside the same 7.5rem column, so the
-   text gives up its width rather than pushing the score columns off-screen. */
-.scoring-round-note .scoring-round-text { max-width: 6.2rem; }
 .scoring-round-note:active { opacity: 0.55; }
 .scoring-round-note:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; border-radius: 4px; }
 .scoring-round-remove {
   display: inline-flex; align-items: center; justify-content: center;
+  /* Never the item that yields — the label beside it is (.scoring-round-text). */
+  flex: none;
   width: 1.1rem; height: 1.1rem;
   background: transparent;
   border: none;
@@ -11094,10 +11155,20 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    the fade around them still hand taps to the grid underneath. */
 .cascade-cta-row { display: flex; gap: 8px; }
 .cascade-cta-row .cascade-cta { flex: 1 1 0; min-width: 0; }
-/* The alternative move on the same strip, and deliberately not a second
-   accent chip: two filled buttons side by side would be two primary actions.
-   Ground tokens, because the docked bar fades into --bg-0 — the scorepad's
-   paper stops at the card above it. */
+/* Next round takes the larger share of the strip — 60/40 rather than half
+   each. The two are alternatives, but they are not equally likely: a host
+   presses Next round once a round and Wrap up once a night, on a phone lying
+   flat on a table in the middle of a conversation, so the frequent one gets
+   the bigger target and the terminal one gets the smaller. A ratio, not a
+   width: both buttons still flex, so the split holds at 320px and on the
+   left pane of a tablet alike. */
+.cascade-cta-row .cascade-cta--wide { flex: 1.5 1 0; }
+/* The quiet half of the pair, and deliberately not a second accent chip: two
+   filled buttons side by side would be two primary actions. It is Wrap up
+   that takes it — the docked bar's one filled button belongs to the move made
+   every few minutes, not to the one that ENDS the screen, where an accidental
+   press costs more than a missed one. Ground tokens, because the docked bar
+   fades into --bg-0 — the scorepad's paper stops at the card above it. */
 .cascade-cta--alt {
   background: var(--bg-1);
   color: var(--ink);

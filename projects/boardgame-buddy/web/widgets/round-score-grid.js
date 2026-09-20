@@ -65,9 +65,10 @@
 //                     and the .scoring-round-th--tpl block in styles.css.
 //                     `note` is the template author's optional explanation of
 //                     HOW the row is scored. It is never printed in the header
-//                     — the label column is 7.5rem wide on a phone and already
-//                     ellipsises — but a row that has one grows an info button
-//                     beside its label that opens the text (RoundGridNotes).
+//                     — the label column is a handful of characters wide on a
+//                     phone and already ellipsises — but a row that has one
+//                     grows an info button beside its label that opens the
+//                     text (RoundGridNotes).
 //                     That button is the ONLY surface the note has: the
 //                     template's own listing never shows it, which is what
 //                     makes an explanation safe to write at length.
@@ -152,9 +153,13 @@
     const slotOf = (p) => (teams && teams.get(window.BgbTeams.keyOf(p && p.team))) || 0;
 
     const cols = renderColGroup(safePlayers.length);
+    // The label column is sized to what it actually holds, not to a fixed
+    // block. See roundGridLabelChars.
+    const labelCh = roundGridLabelChars(rowLabels, roundCount);
 
     return `
-      <div class="rg" data-round-grid="${escapeAttr(host)}" style="--rg-cols: ${safePlayers.length}">
+      <div class="rg${editable ? " rg--editable" : ""}" data-round-grid="${escapeAttr(host)}"
+           style="--rg-cols: ${safePlayers.length}; --rg-label-ch: ${labelCh}">
         <div class="rg__pinzone">
           <div class="rg__head" data-rg-sync>
             <table class="scoring-table scoring-table--head">
@@ -257,6 +262,46 @@
     let cols = `<col class="rg-col--label" />`;
     for (let i = 0; i < n; i++) cols += `<col class="rg-col--player" />`;
     return `<colgroup>${cols}</colgroup>`;
+  }
+
+  // How wide the row-header column has to be, in characters: the longest
+  // header this grid will draw, plus two.
+  //
+  // It used to be a flat 6.6rem, which is about eleven characters of room
+  // spent on a column whose contents are "R1" through "R9" on most tables —
+  // width taken off the score columns beside it, which are the ones a player
+  // across the table is trying to read. A template's labels are the case the
+  // 6.6rem was for, and they still get it: the cap in styles.css is exactly
+  // the width this was, so a labelled grid is no narrower than before and a
+  // plain one is much.
+  //
+  // "TOTAL" IS ONE OF THE HEADERS. It sits in the same column, drawn by the
+  // foot table off the same colgroup, so a count taken over the round rows
+  // alone would size a column the word Total then has to wrap inside — which
+  // would make the totals band two lines tall on exactly the R1..R9 grids this
+  // exists to make narrower.
+  //
+  // Characters rather than pixels, because nothing in this widget measures the
+  // DOM and this is not the place to start (see the colgroup note above). The
+  // count is handed to CSS as --rg-label-ch and turned into a width where it is
+  // used, which is inside the table — so it follows the table's own font,
+  // including the offer preview's 0.68rem, with no second rule to keep in
+  // step.
+  //
+  // The controls that share the cell with the label are NOT in the count: they
+  // are not text, and styles.css reserves their width on its own terms —
+  // :has() for the info glyph, and the rg--editable class below for the remove
+  // ×, which is deliberately NOT :has() (see the rule for why).
+  //
+  // @param {any[]} rowLabels @param {number} roundCount @returns {number}
+  function roundGridLabelChars(rowLabels, roundCount) {
+    let longest = 5; // "Total"
+    for (let r = 0; r < roundCount; r++) {
+      const tpl = rowLabels[r];
+      const text = tpl && tpl.label ? String(tpl.label) : `R${r + 1}`;
+      if (text.length > longest) longest = text.length;
+    }
+    return longest + 2;
   }
 
   // The row's own label, and — on a template row whose author wrote a
