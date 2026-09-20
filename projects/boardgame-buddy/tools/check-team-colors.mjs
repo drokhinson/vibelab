@@ -3,10 +3,12 @@
 //
 //     node projects/boardgame-buddy/tools/check-team-colors.mjs
 //
-// Two widgets read ui/team-colors.js — the play-detail popup's banded player
-// list and the scoring grid's column headers — and they are in the SAME modal,
-// inches apart. If they ever disagreed about which side is which colour, the
-// error would be invisible in the code and glaring on screen.
+// Three surfaces read ui/team-colors.js — the play-detail popup's banded player
+// list and the scoring grid's column headers, which are in the SAME modal,
+// inches apart; and the spectator's live mirror (migration 050), which is not
+// in the room at all but is looking at the same table from another phone. If
+// any two disagreed about which side is which colour, the error would be
+// invisible in the code and glaring on screen.
 //
 // The load-bearing agreement is with PlaySession.applyTeamTag, which settles a
 // side's win flags by trimmed, case-folded tag. If the grouping here folded
@@ -117,6 +119,59 @@ console.log("\na seventh side wraps rather than losing its colour:");
   const slots = [...T.indexMap(players).values()];
   eq("slots cycle through the six", slots, [1, 2, 3, 4, 5, 6, 1]);
   ok("no side is left uncoloured", slots.every((n) => n >= 1 && n <= T.TEAM_SLOTS));
+}
+
+// ── The spectator reads the same sides as the host (migration 050) ──────────
+//
+// Two DIFFERENT rosters describe one table. The host's screens are handed
+// `ps.players` off the local draft; a spectator's mirror is handed the
+// session bundle's `participants`, whose seats are a different shape with a
+// different name field. Both go through indexMap, and if they disagreed the
+// two phones at the same table would paint the same side two colours — the
+// exact failure this file exists to prevent, one wire further out.
+//
+// The agreement rests on one thing: both arrays are in the SAME ORDER. The
+// bundle sorts by `position NULLS LAST, joined_at` (migration 056) and the
+// host's list IS that order — it is what the host dragged and what the order
+// write published. Slots are assigned by order of first appearance, so equal
+// order plus equal tags is equal colours, with neither side told which slot a
+// side got.
+console.log("\nthe spectator's roster lands on the host's colours:");
+{
+  // What the host's grid is handed.
+  const draft = [
+    seat("Ana", { team: "Red" }),
+    seat("Bo", { team: "Blue" }),
+    seat("Cy", { team: "red" }),     // same side, host typed it differently
+  ];
+  // What the same table looks like in the bundle: display_name, not name, and
+  // the tag read straight off boardgamebuddy_play_session_participants.team.
+  const participants = [
+    { id: "p-1", display_name: "Ana", team: "Red" },
+    { id: "p-2", display_name: "Bo", team: "Blue" },
+    { id: "p-3", display_name: "Cy", team: "red" },
+  ];
+  const host = T.indexMap(draft);
+  const spectator = T.indexMap(participants);
+  eq("same sides, same slots",
+     [...spectator.entries()], [...host.entries()]);
+  eq("and the mirror's seats resolve to the host's columns",
+     participants.map((p) => spectator.get(T.keyOf(p.team))),
+     draft.map((p) => host.get(T.keyOf(p.team))));
+}
+
+console.log("\na lobby whose host has not named any side is untinted:");
+{
+  // Every participant row written before migration 050 has no team key at all,
+  // and the bundle RPC deploys separately from the web build that reads it.
+  // Both have to read as "no sides", which is the untinted grid this screen
+  // rendered before — not as one anonymous side every seat shares.
+  ok("a roster with no team key at all",
+     T.indexMap([{ id: "p-1", display_name: "Ana" },
+                 { id: "p-2", display_name: "Bo" }]) === null);
+  ok("a roster whose tags are all null",
+     T.indexMap([{ id: "p-1", display_name: "Ana", team: null },
+                 { id: "p-2", display_name: "Bo", team: null }]) === null);
 }
 
 console.log(fails ? `\n${fails} check(s) failed.\n` : "\nAll checks passed.\n");

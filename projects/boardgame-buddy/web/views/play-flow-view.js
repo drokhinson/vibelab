@@ -57,6 +57,15 @@
   // each renumbering the same rows.
   const ORDER_PUSH_DEBOUNCE_MS = 300;
 
+  // A team tag is TYPED, so it debounces longer than a drag does. A drop is
+  // over the moment it lands; a word has pauses inside it, and at the order
+  // write's 300ms a host hunting for the R on a phone keyboard publishes "R"
+  // and then "Re" — two sides nobody is on, each one briefly a colour on every
+  // spectator's grid. Long enough to let a short word finish, short enough
+  // that the side appears within a beat of the host saying it out loud. The
+  // gather→play advance doesn't wait for the timer; it flushes.
+  const TEAM_PUSH_DEBOUNCE_MS = 700;
+
   class PlayFlowView extends window.View {
     constructor() {
       super("play-flow");
@@ -141,6 +150,13 @@
       this._orderTimer = null;
       this._orderPromise = null;
       this._orderDirty = false;
+      // The same three, for the TEAM TAG write. Separate rather than folded
+      // into the order write: the two are entered by different gestures (a drag
+      // versus a keystroke), they debounce at different rates for that reason,
+      // and only one of them is refused once Play starts.
+      this._teamsTimer = null;
+      this._teamsPromise = null;
+      this._teamsDirty = false;
       // Monotonic token for phase-change PATCHes. After a call's PATCH
       // resolves it only reconciles state if it is still the latest — a
       // stale earlier PATCH resolving after a newer navigation must not yank
@@ -479,6 +495,11 @@
       if (this._orderTimer) { clearTimeout(this._orderTimer); this._orderTimer = null; }
       this._orderPromise = null;
       this._orderDirty = false;
+      // Same for a queued team write: its ids address the previous run's
+      // roster rows, and the next run's tags are pushed by its own first edit.
+      if (this._teamsTimer) { clearTimeout(this._teamsTimer); this._teamsTimer = null; }
+      this._teamsPromise = null;
+      this._teamsDirty = false;
       this._saving = false;
       this._error = null;
     }
@@ -706,7 +727,14 @@
       //   3. live scores — RLS only accepts score writes while phase='play',
       //      so re-subscribing before step 2 would have its first mirror
       //      rejected.
+      // The tags are keyed by participant_id, and every one of those was just
+      // cleared above — so the replacement lobby has no sides until they are
+      // re-published against its new roster rows. Marked dirty here and flushed
+      // after the sync, which is what gives those rows their ids.
+      this._teamsDirty = true;
       this._syncRosterToLobby()
+        .catch(() => {})
+        .then(() => this._flushTeamsToLobby())
         .catch(() => {})
         .then(() => this._replayPhaseToLobby())
         .then(() => { if (hadLiveScores) return this._startLiveScores(); })
@@ -1029,6 +1057,10 @@
               if (existing && !existing.participant_id) {
                 existing.participant_id = part.id;
                 playersChanged = true;
+                // Same as _adoptParticipantId: a tag typed while this row had
+                // no id was skipped by the team writes, and this tick is the
+                // first moment it can be named.
+                if ((existing.team || "").trim()) this._pushTeamsToLobby();
               }
               continue;
             }
@@ -1241,6 +1273,88 @@
     }
 
     /**
+     * Mirror the local team tags into the lobby roster.
+     *
+     * Until migration 050 the tags lived only in this draft: the host's own
+     * grid banded its columns into sides (widgets/round-score-grid.js reads
+     * `p.team` off the roster it is handed) and every spectator's mirror,
+     * built from the lobby's participants, had nothing to band by. A team
+     * night therefore looked like six identical columns to everyone but the
+     * host, and the pairings only became visible once the play was saved and
+     * the game was over.
+     *
+     * Debounced for the same reason the order write is, and best-effort in the
+     * same way: losing it costs the spectators a tint, not the host their play.
+     * Unlike the order write it is NOT frozen at the gather→play edge — see
+     * migration 050's header. The case that needs it: the tags are typed on the
+     * Gather roster, so naming a side after the first round means rolling the
+     * cascade back (_phaseBack), and that phase PATCH is a round trip this
+     * debounced write can beat. Gather-gated, it would 409 and be swallowed.
+     */
+    _pushTeamsToLobby() {
+      if (this._isOffline()) return;
+      this._teamsDirty = true;
+      if (this._teamsTimer) clearTimeout(this._teamsTimer);
+      this._teamsTimer = setTimeout(() => {
+        this._teamsTimer = null;
+        this._flushTeamsToLobby();
+      }, TEAM_PUSH_DEBOUNCE_MS);
+    }
+
+    _flushTeamsToLobby() {
+      if (this._teamsTimer) { clearTimeout(this._teamsTimer); this._teamsTimer = null; }
+      if (this._teamsPromise) return this._teamsPromise;
+      if (!this._teamsDirty || this._isOffline()) return Promise.resolve();
+      this._teamsDirty = false;
+      // Only seats that HAVE a roster row can be named. Anyone still waiting on
+      // their POST is picked up by the next edit, or by the pre-Play flush,
+      // which syncs the roster first.
+      const teams = {};
+      let any = false;
+      for (const p of this._ps.players || []) {
+        if (!p.participant_id) continue;
+        any = true;
+        // Every seat is sent, including the untagged ones: the write is a full
+        // replacement, so an omitted seat is a CLEARED seat — which is exactly
+        // what a host deleting a tag means, and would be wrong for a seat that
+        // simply never had one only if the two disagreed. They don't: "" and
+        // absent both land as NULL.
+        teams[p.participant_id] = (p.team || "").trim();
+      }
+      if (!any) return Promise.resolve();
+      // Nothing to say, so don't spend a round trip saying it — and
+      // _setPlayMode marks this dirty on every mode tap, so without the guard
+      // the gather→play advance, which AWAITS the flush, would publish an
+      // empty map on the one screen transition the host watches.
+      //
+      // Three things can be worth saying. The draft's tags; the lobby's own
+      // copy of them, because CLEARING the last tag has to reach the
+      // spectators and by then the draft is as bare as a table that never had
+      // sides; and a mode that isn't the default, since a co-op or team table
+      // reads differently on the mirror even before anyone is on a side.
+      const lobbyHasTags = ((this._lobby && this._lobby.participants) || [])
+        .some((part) => (part.team || "").trim());
+      const draftHasTags = Object.values(teams).some((t) => t);
+      const modeWorthSaying = this._resolvePlayMode() !== "competitive"
+        || ((this._lobby && this._lobby.play_mode) || "competitive") !== "competitive";
+      if (!draftHasTags && !lobbyHasTags && !modeWorthSaying) return Promise.resolve();
+      this._teamsPromise = this._withLobby((code) =>
+        window.PlaySession.setSessionTeams(code, {
+          playMode: this._resolvePlayMode(),
+          teams,
+        })
+      ).then((updated) => {
+        if (updated) this._lobby = updated;
+        return updated;
+      }).finally(() => {
+        this._teamsPromise = null;
+        // A keystroke landed while the write was in flight — send the newer map.
+        if (this._teamsDirty) this._flushTeamsToLobby();
+      });
+      return this._teamsPromise;
+    }
+
+    /**
      * Arm the poll in Gather, disarm it everywhere else.
      *
      * Called from _advancePhase — the one funnel every phase change goes
@@ -1320,19 +1434,22 @@
 
     _patchScoringCells() {
       const focused = this.container.querySelector("input.scoring-cell:focus");
-      const players = this._ps.players;
+      // COLUMNS, not players: in a team play one cell stands for a whole side
+      // and is keyed by that side's first seat, so walking the roster would
+      // look up keys the grid never emitted (harmless) and read the value off
+      // the wrong seat (not). Same resolver the render used, so a patched cell
+      // and a freshly rendered one can't disagree.
+      const columns = this._gridColumns();
       // The grid renders max(roundScores.length) rows for EVERY column, so
-      // patch that many cells per player — a per-player length would leave a
+      // patch that many cells per column — a per-player length would leave a
       // short column's live cells frozen at whatever they last rendered as.
       const n = this._maxRoundCount();
       const cells = window.BgbCascade.scoreCells(this.container);
-      for (let i = 0; i < players.length; i++) {
-        const p = players[i];
+      for (const col of columns) {
         for (let r = 0; r < n; r++) {
-          const input = cells.get(`${i}-${r}`);
+          const input = cells.get(`${col.head}-${r}`);
           if (!input || input === focused || input.tagName !== "INPUT") continue;
-          const v = this._resolvedScore(p, r);
-          const text = v == null ? "" : String(v);
+          const text = window.roundGridColumnValue(col, r, (pl, rr) => this._cellValue(pl, rr));
           // Programmatic .value assignment does not fire `oninput`, so the
           // cell's _setRoundScore handler is untouched (no feedback loop).
           if (input.value !== text) input.value = text;
@@ -2175,6 +2292,26 @@
       return v == null ? "" : String(v);
     }
 
+    /**
+     * The grid's columns, from the SAME arguments _renderScoringSection
+     * renders them with. One column per seat outside team mode; one per side
+     * in it (widgets/round-score-grid.js#roundGridColumns).
+     *
+     * Everything on this screen that walks the grid positionally — the cell
+     * patcher, the totals row, the winner arithmetic — goes through here
+     * rather than through `_ps.players`, because in a team play those two are
+     * no longer the same list. Derived rather than cached: the merge depends
+     * on the numbers, and the numbers change on every keystroke.
+     */
+    _gridColumns() {
+      return window.roundGridColumns(
+        this._ps.players,
+        this._resolvePlayMode(),
+        this._maxRoundCount(),
+        (p, r) => this._cellValue(p, r)
+      );
+    }
+
     // Sum the same per-round resolved values the grid renders, over the same
     // round range, through the same helper the widget itself uses — so the
     // Total is the visible cells added up, by construction.
@@ -2226,8 +2363,14 @@
     // a hand-copied duplicate of it, which is how a patched row and a freshly
     // rendered one get to disagree — the same failure mode this change is
     // about, one level up.
-    _renderTotalsCell(p, i, mode, total) {
-      return window.renderRoundGridTotalsCell(p, i, mode, total, "playFlowView", true);
+    _renderTotalsCell(col, mode) {
+      // The total comes from the widget too, off the column's own cells — not
+      // from _playerTotal, which answers for ONE SEAT and would count a merged
+      // side once per member.
+      const total = window.roundGridColumnTotal(
+        col, this._maxRoundCount(), (p, r) => this._cellValue(p, r)
+      );
+      return window.renderRoundGridTotalsCell(col, mode, total, "playFlowView", true);
     }
 
     _renderCoopOutcome() {
@@ -2445,6 +2588,13 @@
           // rather than placed. bgb_reorder_participants is Gather-only too, so
           // a debounced write still sitting in its timer would come back 409.
           try { await this._flushOrderToLobby(); } catch (_) {}
+          // And the sides, for the id reason rather than the lock one: the
+          // tags are typed in Gather and this is the first moment every seat
+          // has a roster row to hang one on. bgb_set_session_teams accepts
+          // a later write too, so a tag named mid-game still lands — this is
+          // only what makes the grid land ALREADY banded on the spectator's
+          // very first Play paint, instead of a debounce later.
+          try { await this._flushTeamsToLobby(); } catch (_) {}
         }
         // The cascade has ALREADY moved — the phase above is local truth and
         // the draft is complete on its own. This PATCH only catches the server
@@ -2663,6 +2813,11 @@
       this._ps.playMode = mode;
       this._ps.persist();
       this._autoSelectWinners();
+      // The tags themselves don't change here, but the grid they tint does:
+      // leaving team mode hides the inputs while the draft keeps its tags, and
+      // both grids read `p.team` regardless of mode. Re-publishing keeps the
+      // spectators' mirror agreeing with the host's screen either way.
+      this._pushTeamsToLobby();
       // Patch the three surfaces the mode actually touches instead of
       // rebuilding the full cascade: the selector's active pill, the Gather
       // player rows (team column appears in team mode), and the scoring
@@ -2758,6 +2913,10 @@
       if (!hit) return;
       player.participant_id = hit.id;
       this._ps.persist();
+      // A tag typed BEFORE this row had an id was skipped by every team write
+      // so far (they can only name a seat the roster knows). This is the first
+      // moment it can be published — see _flushTeamsToLobby.
+      if ((player.team || "").trim()) this._pushTeamsToLobby();
     }
 
     _removePlayer(i) {
@@ -2786,12 +2945,16 @@
       this._ps.persist();
       // Patch the badge's initials text in place — full re-render would
       // yank focus out of the initials input mid-typing.
-      const heads = this.container.querySelectorAll(".scoring-head");
+      // Addressed by SEAT rather than by header position. A team play's
+      // headers are one per side, not one per player, so the i-th header
+      // stopped being the i-th seat's the moment a side could hold two of
+      // them — and the badge inside a merged header is still this seat's.
+      const head = this.container.querySelector(`[data-head-seat="${i}"]`);
       // Off the RESOLVED name, matching what _renderPlayerRow's placeholder and
       // the grid's own header derive from. Clearing the field otherwise painted
       // the account-name initials over the aliased ones until the next render.
       const label = p.initials || computeInitials(window.Buddy.nameFor(p.user_id, p.name));
-      const span = heads[i] && heads[i].querySelector(".user-badge__initials");
+      const span = head && head.querySelector(".user-badge__initials");
       if (span) span.textContent = label;
     }
 
@@ -2803,13 +2966,50 @@
     _setTeam(i, value) {
       const ps = this._ps;
       if (!ps.players[i]) return;
+      // The tag decides which seats share a column, so take the shape BEFORE
+      // it changes — typing the second "Red" of a 2v2 is the keystroke that
+      // turns two columns into one, and nothing else on this path would know
+      // to repaint for it.
+      const shapeBefore = this._columnsSignature();
       const winnersMoved = window.PlaySession.applyTeamTag(ps.players, i, value);
+      // The side scores as one column, so a seat joining one mid-game takes
+      // the numbers that column is already showing — otherwise it would save
+      // zeroes under a cell the grid is quite correctly painting as the
+      // side's. Only fills blanks, and only onto a seat with no numbers of its
+      // own; see PlaySession.adoptTeamScores.
+      const scoresMoved = window.PlaySession.adoptTeamScores(ps.players, i);
       ps.persist();
+      if (scoresMoved && this._liveScores) {
+        // Republish the whole grid rather than the cells that moved: it is a
+        // handful of rows, it is idempotent, and this is the one path where a
+        // seat's entire column changes at once.
+        try { this._liveScores.syncGrid(ps.players).catch(() => {}); } catch (_) {}
+      }
       this._autoSelectWinners();
+      // Publish the sides so every spectator's mirror bands its grid the way
+      // this one does (migration 050). Debounced — see _pushTeamsToLobby.
+      this._pushTeamsToLobby();
       // Only the trophy row changed, but it is rendered by the cascade — and
       // only when something actually moved, so typing a tag that settles
       // nothing doesn't yank focus out of the input mid-word.
-      if (winnersMoved) this.render();
+      if (winnersMoved) { this.render(); return; }
+      // The scoring card is a different card from the input being typed in, so
+      // repainting it costs the host nothing — but only do it when the columns
+      // or their contents actually moved, or every keystroke of "Red" would
+      // rebuild the grid three times for one change.
+      if (scoresMoved || this._columnsSignature() !== shapeBefore) {
+        this._refreshScoringSection();
+      }
+    }
+
+    /**
+     * The grid's column SHAPE, as a string that changes exactly when a
+     * repaint is owed: which seats share a column, and in what order. Read
+     * either side of a team-tag edit — the one input on this screen that can
+     * re-shape the scoring grid without touching a number in it.
+     */
+    _columnsSignature() {
+      return this._gridColumns().map((c) => c.indexes.join("+")).join("|");
     }
 
     // ── Scoring templates (migration 018) ───────────────────────────────────
@@ -3589,11 +3789,30 @@
     _setRoundScore(playerIndex, roundIndex, value) {
       const p = this._ps.players[playerIndex];
       if (!p) return;
-      if (!Array.isArray(p.roundScores)) p.roundScores = [];
+      // Which seats does this cell write to? Every one on the side in a team
+      // play, because their column is ONE cell — the grid hands back the
+      // column's first seat and expects the host to fan the value out, and a
+      // host that wrote only the index it was given would put the side's score
+      // on one member and save the rest as zeroes. Asked of the same arguments
+      // the grid rendered from, so the fan-out can never cover a different set
+      // of seats than the cell on screen does. Outside team mode this is
+      // always [playerIndex] and the loop below is the line it used to be.
+      const seats = window.roundGridSeatsFor(
+        this._ps.players,
+        this._resolvePlayMode(),
+        this._maxRoundCount(),
+        (pl, r) => this._cellValue(pl, r),
+        playerIndex
+      );
       // Keep cells as sanitized strings so a leading "-" survives; store null
       // for an empty cell. A lone "-" is kept until digits arrive.
       const clean = window.sanitizeRoundScore(value);
-      p.roundScores[roundIndex] = clean === "" ? null : clean;
+      for (const idx of seats) {
+        const seat = this._ps.players[idx];
+        if (!seat) continue;
+        if (!Array.isArray(seat.roundScores)) seat.roundScores = [];
+        seat.roundScores[roundIndex] = clean === "" ? null : clean;
+      }
       this._normalizeRoundArrays();
       // The text input doesn't auto-reject stray characters the way type=number
       // did — write the sanitized value back when they differ (e.g. a pasted
@@ -3618,12 +3837,21 @@
       // repainting first read the digit typed BEFORE this one — the totals row
       // got a second, corrected pass from the emit, but the winner did not and
       // stayed a keystroke behind.
-      if (this._liveScores && p.participant_id) {
-        try {
-          this._liveScores
-            .setAnyScore(p.participant_id, roundIndex, window.parseRoundScore(clean))
-            .catch(() => {});
-        } catch (_) {}
+      if (this._liveScores) {
+        // One write per seat the cell covers. A spectator's grid merges the
+        // same side the host's does, and its merged cell shows the first
+        // number any of its seats holds — so the value lands on their screen
+        // with the first of these rows and the rest only make the side's seats
+        // agree, which is what keeps the column merged.
+        for (const idx of seats) {
+          const seat = this._ps.players[idx];
+          if (!seat || !seat.participant_id) continue;
+          try {
+            this._liveScores
+              .setAnyScore(seat.participant_id, roundIndex, window.parseRoundScore(clean))
+              .catch(() => {});
+          } catch (_) {}
+        }
       }
       // Never wait on the network to repaint. This method is an oninput
       // handler: awaiting the live-scores upsert before refreshing meant that
@@ -3639,10 +3867,13 @@
       const totalsRow = this.container.querySelector(".scoring-total-row");
       if (!totalsRow) return;
       const mode = this._resolvePlayMode();
+      // One cell per COLUMN, so a merged side gets one Total and one trophy —
+      // and that Total is the side's, not the sum of its seats, which on a
+      // side of three would read three times too big.
       totalsRow.innerHTML =
         `<th scope="row">Total</th>` +
-        this._ps.players
-          .map((pl, i) => this._renderTotalsCell(pl, i, mode, this._playerTotal(pl)))
+        this._gridColumns()
+          .map((col) => this._renderTotalsCell(col, mode))
           .join("");
       this.refreshIcons();
     }
@@ -3665,15 +3896,26 @@
       if (totals.every((t) => t === 0)) return;
       let next;
       if (this._resolvePlayMode() === "team") {
+        // A side's total is the sum over its COLUMNS, which is the one form
+        // that is right either way a side can be drawn. Merged, the side is a
+        // single column and its total is the number in it — summing the seats
+        // instead would multiply it by the size of the side, and hand a 3v2
+        // game to whichever side had three people on it. Split (a play scored
+        // seat by seat, before merged cells or after a tag landed on an
+        // already-scored seat), the side is its seats and the sum is exactly
+        // what it has always been.
         const groupKey = (p, i) => {
           const tag = (p.team || "").trim().toLowerCase();
           return tag || `__solo_${i}`;
         };
         const groupTotals = new Map();
-        ps.players.forEach((p, i) => {
-          const key = groupKey(p, i);
-          groupTotals.set(key, (groupTotals.get(key) || 0) + totals[i]);
-        });
+        for (const col of this._gridColumns()) {
+          const key = groupKey(col.players[0], col.head);
+          const total = window.roundGridColumnTotal(
+            col, this._maxRoundCount(), (pl, r) => this._cellValue(pl, r)
+          );
+          groupTotals.set(key, (groupTotals.get(key) || 0) + total);
+        }
         const max = Math.max(...groupTotals.values());
         next = ps.players.map((p, i) => groupTotals.get(groupKey(p, i)) === max);
       } else {

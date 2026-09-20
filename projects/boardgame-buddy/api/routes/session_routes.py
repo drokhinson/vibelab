@@ -40,6 +40,7 @@ from .models import (
     SessionAddParticipantBody,
     SessionCreate,
     SessionJoinBody,
+    SessionTeamsBody,
     SessionPhaseUpdate,
     SessionReorderParticipantsBody,
     SessionResponse,
@@ -192,6 +193,36 @@ async def reorder_session_participants(
         viewer_id=user.user_id,
         code=code,
         participant_ids=body.participant_ids,
+    )
+
+
+@router.put(
+    "/sessions/{code}/teams",
+    response_model=SessionResponse,
+    status_code=200,
+    summary="Publish the lobby's team setup (host-only)",
+)
+async def set_session_teams(
+    body: SessionTeamsBody,
+    code: str = Path(..., description="Session code"),
+    user: CurrentUser = Depends(get_current_user),
+) -> SessionResponse:
+    """Host publishes how the table is being scored and the team tags typed on
+    their Gather roster, so every spectator's mirror draws the scoring grid the
+    way the host's does — banded into sides, and with each side's seats sharing
+    ONE cell per round. Without it the tags live only in the host's local draft
+    until the play is saved, and a team night reads as identical columns to
+    everyone else. `teams` is the WHOLE map — a participant it omits has their
+    tag cleared — and `play_mode` omitted leaves the stored value alone.
+    Allowed in any open phase, unlike the roster writes: naming a side never
+    renumbers a column, and a host who rolls back to Gather to name one can
+    have the debounced write land before the phase PATCH does."""
+    return session_service.set_session_teams(
+        get_supabase(),
+        viewer_id=user.user_id,
+        code=code,
+        play_mode=body.play_mode.value if body.play_mode else None,
+        teams=body.teams,
     )
 
 

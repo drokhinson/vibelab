@@ -456,13 +456,39 @@
     if (!state.draft) return;
     const player = state.draft.players[i];
     if (!player) return;
-    if (!Array.isArray(player.roundScores)) player.roundScores = [];
+    // A team play's side shares ONE cell, and the grid hands back that
+    // column's first seat — so ask which seats the cell actually covers and
+    // write to all of them. A merged cell that wrote one seat would save the
+    // side's score on one member and zeroes on the rest, which is precisely
+    // the shape of play this popup exists to correct. Outside team mode, and
+    // on a side the grid left split, this is [i].
+    const seats = gridSeatsFor(i);
     // Sanitized string ("-5") so a leading minus survives; null for empty.
     const clean = window.sanitizeRoundScore(value);
-    player.roundScores[r] = clean === "" ? null : clean;
+    for (const idx of seats) {
+      const seat = state.draft.players[idx];
+      if (!seat) continue;
+      if (!Array.isArray(seat.roundScores)) seat.roundScores = [];
+      seat.roundScores[r] = clean === "" ? null : clean;
+    }
     resyncScores(state.draft.players);
     autoSelectWinners();
     render();
+  }
+
+  /**
+   * The seats one grid cell writes to, asked of the same arguments the grid
+   * was rendered with (widgets/round-score-grid.js#roundGridSeatsFor). The
+   * mode comes off the PLAY rather than the draft because that is what the
+   * render passes — a popup cannot change a play's mode, so the two can only
+   * agree.
+   */
+  function gridSeatsFor(i) {
+    const players = (state.draft && state.draft.players) || [];
+    const mode = (state.play && state.play.play_mode) || "competitive";
+    return window.roundGridSeatsFor(
+      players, mode, window.roundGridRoundCount(players), null, i
+    );
   }
   function addRound() {
     if (!state.draft) return;
@@ -496,7 +522,17 @@
     if (!state.draft) return;
     const player = state.draft.players[i];
     if (!player) return;
-    player.is_winner = !player.is_winner;
+    // One trophy per COLUMN, so on a merged side the tap crowns the side —
+    // the same union the Play screen's toggle applies (play-flow-view
+    // #_toggleWinner) and the same one PlaySession.applyTeamTag settles when
+    // a tag arrives after the win. A merged column showing one trophy that
+    // crowned one member would record half a side as having won.
+    const seats = gridSeatsFor(i);
+    const next = !player.is_winner;
+    for (const idx of seats) {
+      const seat = state.draft.players[idx];
+      if (seat) seat.is_winner = next;
+    }
     render();
   }
   function initRounds() {

@@ -6600,6 +6600,40 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      as --accent, 8.7:1 as the surface's accent ink. */
   color: var(--accent-ink);
 }
+/* The side a seat is on, in the spectator's read-only lobby list (migration
+   050). The same fact the scoring grid's column headers carry, on the screen
+   the spectator is looking at BEFORE the grid exists — the host types the
+   sides during Gather, and a spectator who only learns them when the first
+   round is scored has spent the whole lobby not knowing who is with whom.
+
+   The 3px rule runs down the LEFT edge, matching .play-detail__team's banded
+   player list rather than the grid's bottom-edge rule: this is a row in a list
+   of people, which is the shape that band has. */
+.session-viewer__team-tag {
+  /* Its own paper plate, and the reason this needs no dark branch. The
+     --team-* hues are full-strength and assume they are mixing into PAPER
+     (see the token block), but a lobby card is CHROME here — the view
+     re-points --polaroid-bg to --bg-2, which is dark in dark. Re-pointing the
+     variable ON THE CHIP is the same move .cascade-card--scoring makes for the
+     grid it is a miniature of, so both read as the same side on the same
+     paper. --polaroid-ink is NOT re-pointed by that block, so the ink is named
+     outright rather than inherited light onto cream. */
+  --polaroid-bg: var(--paper);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  max-width: 8ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.1rem 0.35rem 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--paper-ink);
+  background: color-mix(in srgb, var(--team-tint) 16%, var(--polaroid-bg));
+  box-shadow: inset 3px 0 0 var(--team-tint);
+}
 .session-viewer__guide-mount { margin-top: 0.25rem; }
 /* Edit mode */
 .play-detail--edit .play-detail__game-info { gap: 0.35rem; }
@@ -9275,6 +9309,31 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-table thead th:has(.scoring-head__badge) { padding: 0.35rem 0.35rem; }
 .scoring-head__badge { width: 36px; height: 36px; vertical-align: middle; }
 .scoring-head__badge .user-badge__initials { font-size: 16px; }
+/* One seat inside a column header. Always present, so _setInitials can address
+   a badge by SEAT — a team column holds two or three of them and the i-th
+   header stopped being the i-th player's. Contributes no box of its own. */
+.scoring-head__seat { display: inline-flex; }
+/* A MERGED column's header: the side's badges, side by side, because the
+   column is those people and the tag alone (which the name state shows) does
+   not say who is on it.
+
+   Sized down rather than given a wider column. All three tables share one
+   colgroup at `table-layout: fixed` (see renderColGroup), so a per-column
+   width here would have to be true in three places at once; shrinking the
+   badges keeps the grid's geometry exactly as it was and buys the room out of
+   the 36px bubble, which was sized for a single initials pair and has it to
+   spare. Two at 28px is 58px inside a 4.3rem (68.8px) column; three at 22px
+   with a 5px overlap is 56px, and the overlap is what keeps a four-person side
+   inside the same box rather than widening every column in the table for it. */
+.scoring-head__stack { display: inline-flex; align-items: center; }
+.scoring-head__stack[data-seats="2"] { gap: 2px; }
+.scoring-head__stack[data-seats="2"] .scoring-head__badge { width: 28px; height: 28px; }
+.scoring-head__stack[data-seats="2"] .scoring-head__badge .user-badge__initials { font-size: 12px; }
+.scoring-head__stack:not([data-seats="2"]) .scoring-head__seat + .scoring-head__seat {
+  margin-left: -5px;
+}
+.scoring-head__stack:not([data-seats="2"]) .scoring-head__badge { width: 22px; height: 22px; }
+.scoring-head__stack:not([data-seats="2"]) .scoring-head__badge .user-badge__initials { font-size: 10px; }
 /* Tap any column header to flip EVERY header between the bubble and the
    player's display name; the choice is remembered across sessions
    (RoundGridNames in round-score-grid.js).
