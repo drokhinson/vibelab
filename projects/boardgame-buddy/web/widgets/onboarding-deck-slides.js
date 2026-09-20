@@ -1,4 +1,4 @@
-// widgets/onboarding-deck-slides.js — the six panels the deck slides between.
+// widgets/onboarding-deck-slides.js — the five panels the deck slides between.
 //
 // Each slide is `{ el, onEnter? }`: an element the shell appends to the track,
 // and an optional hook run when it arrives on screen. Nothing here knows how
@@ -10,16 +10,13 @@
 //       PolaroidPopup.avatarCustomizer when this became its second caller
 //   2 · buddies — ui/buddy-suggestion-rail.js's select-mode tile, the same one
 //       the Add-buddies card and both rails render
-//   3 · notifications — the offer, sharing its decline receipt with
-//       ui/push-prompt.js so the boot-time card does not re-ask a question
-//       this slide already put
-//   4 · BoardGameGeek — the fields and copy of the deleted
+//   3 · BoardGameGeek — the fields and copy of the deleted
 //       widgets/onboarding-bgg-modal.js, whose import readout stays shared
 //       with Settings as ui/bgg-import-log.js
-//   5 · import hint — the one slide that reuses nothing, because it IS
-//       nothing: no fields, no write, no request. It exists because the note
-//       importer was otherwise invisible to a new account, and first-run is
-//       the one screen everybody passes through.
+//   4 · notifications — the offer, sharing its decline receipt with
+//       ui/push-prompt.js so the boot-time card does not re-ask a question
+//       this slide already put
+// The uncounted finale carries the ledger and the walkthrough hand-off.
 //
 // THE RULE THIS FILE EXISTS TO KEEP: no handler below awaits anything. Continue
 // and Skip queue a write through deck.queue() and call deck.next() in the same
@@ -45,10 +42,7 @@
     const seeded = String(me.display_name || "").slice(0, nameMax);
     const el = slideEl("ob-slide--profile", `
       <div class="ob-slide__scroll">
-        <div class="ob-slide__eyebrow">Your table name</div>
-        <h2 class="ob-slide__title">Who's playing?</h2>
-        <p class="ob-slide__body">Pick the name and badge your buddies will see
-          on a scorecard.</p>
+        <h2 class="ob-slide__title">Set your display name and badge</h2>
         <div class="polaroid-field ob-field">
           <label class="polaroid-field__label" for="ob-name">Display name</label>
           <input id="ob-name" type="text" maxlength="${nameMax}" autocomplete="off"
@@ -130,10 +124,7 @@
   function buildBuddies(deck) {
     const el = slideEl("ob-slide--buddies", `
       <div class="ob-slide__scroll">
-        <div class="ob-slide__eyebrow">Your table</div>
         <h2 class="ob-slide__title">Add your buddies</h2>
-        <p class="ob-slide__body">Tick anyone you know. We'll send the requests
-          while you carry on.</p>
         <div class="ob-tiles" data-tiles>
           <p class="ob-tiles__msg">Finding people you may know…</p>
         </div>
@@ -266,7 +257,7 @@
     return { el, onEnter: load, prefetch: load };
   }
 
-  // ── 3 · Notifications ──────────────────────────────────────────────────────
+  // ── 4 · Notifications ──────────────────────────────────────────────────────
   //
   // The one slide whose Continue is a REAL permission prompt, and the reason
   // this step exists rather than the app calling requestPermission() on its
@@ -275,9 +266,10 @@
   // So the deck asks in its own words first, where there is room to say what
   // the notifications are FOR, and only a yes here reaches the browser's own.
   //
-  // Placed straight after the buddy step on purpose. The person has just fired
-  // off a handful of requests; "we'll tell you when they say yes" is a promise
-  // about something they did ten seconds ago rather than an abstract offer.
+  // Last of the counted steps on purpose. By the time it arrives the person
+  // has fired off a handful of buddy requests and put a collection import in
+  // flight; "we'll tell you when they say yes, and when your shelf lands" is a
+  // promise about things they did a minute ago rather than an abstract offer.
   //
   // Notifications are OFF until somebody says otherwise — push_tier defaults to
   // 'none' and nothing here changes that on the user's behalf. So this slide is
@@ -290,7 +282,7 @@
         <div class="ob-done__mark">
           <span class="ob-done__ring"><i data-icon="bell" class="w-8 h-8"></i></span>
         </div>
-        <h2 class="ob-slide__title ob-slide__title--center">Know when it's your turn</h2>
+        <h2 class="ob-slide__title ob-slide__title--center">Turn on notifications</h2>
         <p class="ob-slide__body ob-slide__body--center">
           A buddy accepts your request, adds you to last night's play, or invites
           you to a table — we'll tap you on the shoulder instead of waiting for
@@ -416,7 +408,7 @@
     return { el, onEnter: read };
   }
 
-  // ── 4 · BoardGameGeek ──────────────────────────────────────────────────────
+  // ── 3 · BoardGameGeek ──────────────────────────────────────────────────────
   function buildBgg(deck) {
     const el = slideEl("ob-slide--bgg", `
       <div class="ob-slide__scroll">
@@ -424,7 +416,7 @@
           <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek"
                class="ob-plate__mark" />
         </div>
-        <h2 class="ob-slide__title">Bring your shelf across</h2>
+        <h2 class="ob-slide__title">Import your collection</h2>
         <p class="ob-slide__body">
           Already keep your games on BGG? Link it and we'll pull your collection,
           wishlist and play history. We use your password once to sign in, then
@@ -516,41 +508,14 @@
     return { el };
   }
 
-  // ── 5 · Import your history ────────────────────────────────────────────────
-  // Purely informational — the only slide here that queues nothing and asks
-  // nothing. Placed after BoardGameGeek on purpose: someone who just tapped
-  // Skip on that step because they do not use BGG is exactly who the note
-  // importer is for, and this reaches them in the same breath.
-  //
-  // Deliberately does NOT offer a "take me there" button. Jumping into a
-  // six-step wizard from inside first-run setup would strand the user
-  // mid-onboarding with a half-finished deck behind them.
-  function buildImport(deck) {
-    const el = slideEl("ob-slide--import", `
-      <div class="ob-slide__scroll">
-        <div class="ob-done__mark">
-          <span class="ob-done__ring"><i data-icon="history" class="w-8 h-8"></i></span>
-        </div>
-        <h2 class="ob-slide__title ob-slide__title--center">Already keep score somewhere?</h2>
-        <p class="ob-slide__body ob-slide__body--center">
-          A page of tally marks, a note full of who-beat-who, a table you've kept
-          for years — paste it into <b>Settings &rsaquo; Import plays</b> and it
-          becomes real plays, with your scores and winners intact.
-        </p>
-        <p class="ob-slide__note">
-          Nothing to do now. You review every play it reads before anything is
-          saved, so there's no way to make a mess of your history by trying it.
-        </p>
-      </div>
-      <div class="ob-slide__actions">
-        <button type="button" class="btn btn-primary ob-btn ob-btn--go">Continue</button>
-      </div>
-    `);
-    el.querySelector(".ob-btn--go").addEventListener("click", () => deck.next());
-    return { el };
-  }
-
   // ── The finale (uncounted) ─────────────────────────────────────────────────
+  //
+  // Two jobs on one slide, and they belong together: it is where the queued
+  // writes report (the ledger), and it is the hand-off into the walkthrough.
+  // The tour is a route of its own (views/tour-view.js) rather than more
+  // slides, so "Show me around" is the deck finishing AND a navigation — see
+  // deck.finish({ tour: true }), which waits for the close animation so the
+  // tour is not painted underneath a deck still sliding off.
   function buildFinale(deck) {
     const el = slideEl("ob-slide--done", `
       <div class="ob-slide__scroll">
@@ -559,16 +524,20 @@
         </div>
         <h2 class="ob-slide__title ob-slide__title--center">You're all set</h2>
         <p class="ob-slide__body ob-slide__body--center">
-          Everything below is already on its way. Nothing here needs you.
+          Everything below is already on its way. Want the BoardgameBuddy
+          walkthrough — a quick tour of what it does — or would you rather dive
+          straight in?
         </p>
         <div class="ob-ledger" data-ledger aria-live="polite"></div>
       </div>
       <div class="ob-slide__actions">
-        <button type="button" class="btn btn-primary ob-btn ob-btn--go">Start playing</button>
+        <button type="button" class="btn btn-ghost ob-btn ob-btn--skip">Skip</button>
+        <button type="button" class="btn btn-primary ob-btn ob-btn--go">Show me around</button>
       </div>
     `);
     const ledger = el.querySelector("[data-ledger]");
-    el.querySelector(".ob-btn--go").addEventListener("click", () => deck.finish());
+    el.querySelector(".ob-btn--go").addEventListener("click", () => deck.finish({ tour: true }));
+    el.querySelector(".ob-btn--skip").addEventListener("click", () => deck.finish());
 
     /**
      * The ledger is the ONLY place a queued write ever reports. It repaints
@@ -612,16 +581,15 @@
 
   window.OnboardingDeckSlides = {
     /**
-     * @returns {{profile: Object, buddies: Object, notifications: Object,
-     *            bgg: Object, importHint: Object, finale: Object}}
+     * @returns {{profile: Object, buddies: Object, bgg: Object,
+     *            notifications: Object, finale: Object}}
      */
     build(deck) {
       return {
         profile: buildProfile(deck),
         buddies: buildBuddies(deck),
-        notifications: buildNotifications(deck),
         bgg: buildBgg(deck),
-        importHint: buildImport(deck),
+        notifications: buildNotifications(deck),
         finale: buildFinale(deck),
       };
     },

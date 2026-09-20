@@ -713,7 +713,7 @@
     });
   }
 
-  // First-run setup: one deck, three counted slides and an uncounted finale
+  // First-run setup: one deck, four counted slides and an uncounted finale
   // (widgets/onboarding-deck.js). It replaced three modals opened back to back,
   // each awaiting its own write before the next appeared — so this function is
   // now a mount rather than a sequence, and every write it makes is queued
@@ -723,7 +723,9 @@
   // a no-op, and every exit leaves the user on their feed. What changed is
   // where a failure lands — the deck's finale ledger says what did not go
   // through and that Settings is where to do it again, instead of an alert
-  // that ends the flow.
+  // that ends the flow. The finale's one forward door is the walkthrough: it
+  // offers /tour and routes there itself once the deck has closed, so this
+  // function still has nothing to do with where the user ends up.
   async function maybePromptFirstTimeSetup(me) {
     if (!window.OnboardingDeck) return;
     try {
