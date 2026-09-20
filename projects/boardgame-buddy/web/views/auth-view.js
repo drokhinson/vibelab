@@ -35,6 +35,12 @@
       // Firebase reports as auth/cancelled-popup-request, which kills the
       // sign-in already in progress.
       this._oauthBusy = false;
+      // Whether THIS visit has painted the screen's outer shell — the logo,
+      // the wordmark and the feature strip, i.e. everything a re-render has
+      // no new value for. Cleared here (so a fresh arrival paints the whole
+      // thing, feature-strip entrance animation and all) and set by the first
+      // render of each visit; see render() for what it buys.
+      this._shellPainted = false;
     }
 
     onMount() {
@@ -166,6 +172,55 @@
       });
       const errLine = this._error
         ? `<div class="text-error text-sm mb-3">${escapeHtml(this._error)}</div>` : "";
+      // Everything a re-render can change lives in here. The card body is the
+      // whole of this screen's state: which tab is active, what is typed, what
+      // went wrong, whether the provider buttons are live.
+      const cardBody = `
+        ${configBanner}
+        ${oauth}
+        <div class="tabs tabs-boxed mb-4">
+          <button class="tab ${this._mode === "login" ? "tab-active" : ""}" onclick="window.authView.switchMode('login')">Log In</button>
+          <button class="tab ${this._mode === "signup" ? "tab-active" : ""}" onclick="window.authView.switchMode('signup')">Sign Up</button>
+        </div>
+        <form onsubmit="window.authView.submit(event)">
+          <div class="form-control mb-3">
+            <input type="email" id="auth-email" placeholder="Email" class="input input-bordered w-full" value="${escapeAttr(this._email || "")}" required />
+          </div>
+          <div class="form-control mb-4">
+            <input type="password" id="auth-password" placeholder="Password" class="input input-bordered w-full" required minlength="6" />
+          </div>
+          ${errLine}
+          <button type="submit" id="auth-submit" class="btn btn-primary w-full" ${configMissing ? "disabled" : ""}>
+            ${this._mode === "login" ? "Log In" : "Sign Up"}
+          </button>
+        </form>`;
+
+      // REPAINT THE CARD, NOT THE SCREEN.
+      //
+      // Every re-render used to rewrite the container, which meant the logo,
+      // the wordmark and the feature strip were thrown away and rebuilt for a
+      // change that never touches them. The strip's rows carry a staggered
+      // entrance animation (.feat-strip__row in styles.css), so rebuilding
+      // them re-runs it: tapping between Log In and Sign Up made the five
+      // lines under the card flicker out and cascade back in, which reads as
+      // the page reloading under a tap that should only have moved a tab.
+      // Same for every setError() — including the signup path that flips to
+      // Log In and explains why, where the flicker lands on the one message
+      // the user most needs to sit still and read.
+      //
+      // So the shell is painted once per visit and the card body is patched
+      // after that. `_shellPainted` is reset by _resetFormState (constructor,
+      // mount, unmount), so a fresh arrival still gets the full paint and the
+      // strip still animates in — it just no longer re-animates in place.
+      const body = this.container.querySelector("#auth-card-body");
+      if (this._shellPainted && body) {
+        body.innerHTML = cardBody;
+        // Scoped to the patched subtree: the only icons outside it are the
+        // strip's, and they were never removed.
+        this.refreshIcons(body);
+        return;
+      }
+
       this.container.innerHTML = `
         <div class="flex flex-col items-center justify-center min-h-[60vh] px-4">
           <div class="mb-8 text-center">
@@ -174,30 +229,12 @@
             <p class="text-base-content/60 mt-2">Games Played, Nights Remembered.</p>
           </div>
           <div class="card bg-base-200 w-full max-w-sm">
-            <div class="card-body">
-              ${configBanner}
-              ${oauth}
-              <div class="tabs tabs-boxed mb-4">
-                <button class="tab ${this._mode === "login" ? "tab-active" : ""}" onclick="window.authView.switchMode('login')">Log In</button>
-                <button class="tab ${this._mode === "signup" ? "tab-active" : ""}" onclick="window.authView.switchMode('signup')">Sign Up</button>
-              </div>
-              <form onsubmit="window.authView.submit(event)">
-                <div class="form-control mb-3">
-                  <input type="email" id="auth-email" placeholder="Email" class="input input-bordered w-full" value="${escapeAttr(this._email || "")}" required />
-                </div>
-                <div class="form-control mb-4">
-                  <input type="password" id="auth-password" placeholder="Password" class="input input-bordered w-full" required minlength="6" />
-                </div>
-                ${errLine}
-                <button type="submit" id="auth-submit" class="btn btn-primary w-full" ${configMissing ? "disabled" : ""}>
-                  ${this._mode === "login" ? "Log In" : "Sign Up"}
-                </button>
-              </form>
-            </div>
+            <div class="card-body" id="auth-card-body">${cardBody}</div>
           </div>
           ${window.BgbFeatureStrip.render()}
         </div>
       `;
+      this._shellPainted = true;
       this.refreshIcons();
     }
 
