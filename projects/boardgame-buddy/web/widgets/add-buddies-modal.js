@@ -3,10 +3,12 @@
 // Both of them put the same question to the user — who do you want to add? —
 // so they get the same screen rather than two that drift:
 //   • first-run setup, as step 2 of 3 — until widgets/onboarding-deck.js
-//     replaced that sequence with one deck. The deck renders the same
-//     select-mode tile and shares this card's promote logic
-//     (domain/buddy-network.js), so the two surfaces still agree
-//     (the deck's BGG slide).
+//     replaced that sequence with one deck. The deck's own slide 2 lives in
+//     widgets/onboarding-buddies-slide.js and is this card's twin: the same
+//     select-mode tile, the same /profiles/search field with the same debounce
+//     and sequence guard, and the same promote logic (domain/buddy-network.js).
+//     Only the shell differs, which is the lifecycle-vs-appearance split
+//     .claude/rules/ui-object-design.md §4 asks for.
 //   • the Buddies screen's Add button, which replaced the profile-search bar
 //     that used to sit at the top of that page (views/buddies-view.js).
 //
