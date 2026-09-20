@@ -20797,13 +20797,18 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    ══════════════════════════════════════════════════════════════════════════ */
 
 .feat-strip { width: 100%; max-width: 24rem; margin: 1.75rem auto 0; }
+/* This line is the strip's only heading, and the strip is the sign-in
+   screen's whole pitch — at eyebrow size in --ink-faint it read as a caption
+   for the card above it rather than as the title of the five lines below.
+   Full-strength ink and a size the eye stops on; the tracking comes down as
+   it goes up, because 0.14em on a 13px uppercase line reads as stretched. */
 .feat-strip__head {
-  margin: 0 0 0.6rem;
-  font-size: 10.5px;
+  margin: 0 0 0.75rem;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--ink);
   text-align: center;
 }
 .feat-strip__list { list-style: none; margin: 0; padding: 0; }
