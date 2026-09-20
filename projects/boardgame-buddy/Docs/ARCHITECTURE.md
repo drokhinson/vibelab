@@ -465,10 +465,17 @@ query is up is **deferred, not skipped** — the rows go into `list` and the nex
 full paint renders them, because a suggestion tile does not belong in a list of
 search hits.
 
-The four counted steps are **display name and badge → buddies → collection
-import → notifications**, and the uncounted finale carries both the ledger and
-the hand-off into the feature tour: "You're all set", and a choice between the
-walkthrough (`/tour`, §4.3e) and diving straight in. The tour is a *routed
+The five counted steps are **name and badge → buddies → collection import →
+notifications → all set**. The last carries both the ledger and the hand-off
+into the feature tour: "You're all set", and a choice between the walkthrough
+(`/tour`, §4.3e) and diving straight in. It used to be uncounted, on the
+grounds that it asks for nothing — but it does ask now, and a deck that
+announces four steps and then shows a fifth screen has under-counted itself at
+exactly the moment the person is deciding whether they are done. So `STEPS`
+is the panel count rather than the panel count minus one, and the only thing
+that still marks the finale out is that Back is hidden on it: every write
+behind it has already fired, and walking back into a step whose job is queued
+would offer to do it twice. The tour is a *routed
 screen*, so "Show me around" is `deck.finish({ tour: true })` — the deck tears
 itself down, releases the scroll lock, and only then calls `router.go("tour")`,
 because a routed screen painted under a deck that still owns the scroll lock is

@@ -713,7 +713,7 @@
     });
   }
 
-  // First-run setup: one deck, four counted slides and an uncounted finale
+  // First-run setup: one deck, five counted slides
   // (widgets/onboarding-deck.js). It replaced three modals opened back to back,
   // each awaiting its own write before the next appeared — so this function is
   // now a mount rather than a sequence, and every write it makes is queued

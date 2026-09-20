@@ -8,17 +8,23 @@
 //   • THE STEPS ARE SLIDES. One track, one transform. Nothing opens, closes
 //     and hands off, so the user never sees the empty feed flash between
 //     cards, and Back is a real move rather than a dead end.
-//   • THE COUNTER IS PINNED. "Step 2 of 4" plus a segment bar, above every
+//   • THE COUNTER IS PINNED. "Step 2 of 5" plus a segment bar, above every
 //     slide. Someone deciding whether to skip can see what skipping costs.
 //   • CONTINUE AND SKIP NEVER AWAIT. The handler queues the write and moves
 //     the track in the same frame. There is no spinner, no disabled button
 //     and no "Sending…" anywhere in this flow — the 240ms is the slide
 //     travelling, not a request. Results land on the finale slide's ledger.
 //
-// The finale is deliberately UNCOUNTED: the bar is full and the counter says
-// "All set", so "Step 5 of 4" never has to be printed. It is also the only
-// slide that can hand off somewhere else — "Show me around" finishes the deck
-// and routes to /tour, which is why finish() takes an options object.
+// EVERY PANEL IS COUNTED, the finale included: it reads "Step 5 of 5" with the
+// bar full. The finale used to be uncounted on the grounds that it asks for
+// nothing — but it does ask now (the walkthrough or Skip), and a deck that
+// announces four steps and then shows a fifth screen has under-counted itself
+// at exactly the moment the person is deciding whether they are done. So STEPS
+// is the panel count, not the panel count minus one.
+//
+// The finale is still the only slide that can hand off somewhere else —
+// "Show me around" finishes the deck and routes to /tour, which is why
+// finish() takes an options object.
 //
 // Slide bodies live in widgets/onboarding-deck-slides.js — this file is the
 // shell, the queue and the ledger. Both stay under the ~300-line rule in
@@ -29,11 +35,13 @@
   const ROOT_ID = "bgb-onboarding-deck";
   // Must match the .is-closing animation duration in styles.css.
   const CLOSE_MS = 200;
-  // Counted steps. The finale sits at index STEPS and is uncounted, so this
-  // one number drives the segment bar, the clamp, the counter, "All set" and
-  // the back-hidden rule. The PANEL geometry does not follow from it — see the
-  // width/transform below, and .ob-slide's width in styles.css.
-  const STEPS = 4;
+  // Every panel is a counted step, so this one number drives the segment bar,
+  // the counter, the clamp and the back-hidden rule — and it must equal
+  // PANELS.length below. The PANEL geometry still does not follow from it: the
+  // track width and the transform read PANELS.length directly, so a slide
+  // added without touching this constant lands on a track of the right width
+  // with a counter that is one short, which is visible rather than silent.
+  const STEPS = 5;
 
   let _open = false;
 
@@ -180,27 +188,27 @@
         slides.finale,
       ];
       PANELS.forEach(function (s) { track.appendChild(s.el); });
-      // 5 panels: four counted steps plus the uncounted finale. The panel
-      // count used to live in FOUR places — this width, the transform below,
-      // and .ob-slide's width AND flex-basis in styles.css — so adding a slide
-      // meant changing all four or watching the track land on two half-slides.
-      // It is now one number, published to CSS as a custom property.
+      // 5 panels, all five counted (STEPS above). The panel count used to live
+      // in FOUR places — this width, the transform below, and .ob-slide's
+      // width AND flex-basis in styles.css — so adding a slide meant changing
+      // all four or watching the track land on two half-slides. It is now one
+      // number, published to CSS as a custom property.
       track.style.width = `${PANELS.length * 100}%`;
       track.style.setProperty("--ob-panels", String(PANELS.length));
 
       function go(i) {
-        step = Math.max(0, Math.min(STEPS, i));
+        step = Math.max(0, Math.min(PANELS.length - 1, i));
         // Percent OF THE TRACK, which is PANELS.length screens wide — so one
         // screen is 100/PANELS.length of it, not a hardcoded 25.
         track.style.transform = `translateX(-${step * (100 / PANELS.length)}%)`;
-        countEl.innerHTML = step >= STEPS
-          ? "All set"
-          : `Step <b>${step + 1}</b> of ${STEPS}`;
+        countEl.innerHTML = `Step <b>${step + 1}</b> of ${STEPS}`;
         segs.forEach(function (seg, n) { seg.classList.toggle("is-done", n <= step); });
         // Back is hidden on the first slide (nowhere to go) and on the finale
         // (every write behind it has already fired — walking back into a step
-        // whose job is queued would offer to do it twice).
-        backBtn.hidden = step === 0 || step === STEPS;
+        // whose job is queued would offer to do it twice). The finale is now a
+        // counted step, so it is the LAST panel rather than the one past the
+        // count.
+        backBtn.hidden = step === 0 || step === PANELS.length - 1;
         const slide = PANELS[step];
         if (slide && slide.onEnter) slide.onEnter();
       }

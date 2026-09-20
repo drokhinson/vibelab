@@ -18,7 +18,8 @@
 //   4 · notifications — the offer, sharing its decline receipt with
 //       ui/push-prompt.js so the boot-time card does not re-ask a question
 //       this slide already put
-// The uncounted finale carries the ledger and the walkthrough hand-off.
+//   5 · finale — the ledger and the walkthrough hand-off. Counted like the
+//       rest: it asks a question of its own, so it is a step, not an outro.
 //
 // THE RULE THIS FILE EXISTS TO KEEP: no handler below awaits anything. Continue
 // and Skip queue a write through deck.queue() and call deck.next() in the same
@@ -381,7 +382,7 @@
     return { el };
   }
 
-  // ── The finale (uncounted) ─────────────────────────────────────────────────
+  // ── 5 · The finale ─────────────────────────────────────────────────────────
   //
   // Two jobs on one slide, and they belong together: it is where the queued
   // writes report (the ledger), and it is the hand-off into the walkthrough.
