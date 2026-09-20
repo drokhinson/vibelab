@@ -17,6 +17,15 @@
 //      one that was connected and quiet.
 //   3. `onWriteDenied` fires once per session for a PERMANENT refusal (an RLS
 //      42501, a rejected JWT) and never for a transient one (a timeout).
+//   4. `canWrite` gates the SEND, not just the report: in a phase the scores
+//      table will not accept a write in, nothing leaves the module and nothing
+//      is reported. The write policy takes the host only while the session row
+//      reads phase='play', and the host's phase is a local flip a background
+//      PATCH catches up to — so Gather, Settle and the round trip between them
+//      are windows where a perfectly healthy session refuses writes.
+//   5. `syncGrid` publishes the host's WHOLE grid, which includes pruning the
+//      rounds the host no longer has — a removeRoundAt whose DELETE never went
+//      out otherwise leaves spectators a phantom trailing round.
 //
 // Written after a live session where the host's writes were refused with
 // `42501 new row violates row-level security policy` on every keystroke and
@@ -28,7 +37,14 @@ import vm from "node:vm";
 
 const W = "/home/user/vibelab/projects/boardgame-buddy/web";
 const win = {};
-const sandbox = { window: win, console, AbortSignal, Date, Number, Math, Map, Set, Promise };
+const sandbox = { window: win, console, AbortSignal, Date, Number, Math, Map, Set, Promise, Array };
+// The one helper live-scores.js borrows from the grid widget, which is a DOM
+// module and not loadable here. Same body as round-score-grid.js.
+win.parseRoundScore = (v) => {
+  if (v == null || v === "" || v === "-") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 vm.createContext(sandbox);
 for (const f of ["domain/score-write-queue.js", "domain/live-scores.js"]) {
   vm.runInContext(fs.readFileSync(`${W}/${f}`, "utf8"), sandbox, { filename: f });
@@ -41,7 +57,9 @@ const ok = (name, cond) => {
 };
 
 function fakeClient({ selectRows = [], selectError = null, upsertError = null } = {}) {
-  const captured = {};
+  // upserts / deletes: every write this client was ASKED to make. A gate that
+  // only silenced the toast would still fill these.
+  const captured = { upserts: [], deletes: [] };
   const thenable = (value) => ({ then: (f) => Promise.resolve(value).then(f) });
   return {
     captured,
@@ -50,8 +68,21 @@ function fakeClient({ selectRows = [], selectError = null, upsertError = null } 
         select() { return this; },
         eq() { return this; },
         abortSignal() { return thenable({ data: selectRows, error: selectError }); },
-        upsert() {
+        upsert(rows) {
+          captured.upserts.push(rows);
           return { abortSignal: () => thenable({ data: null, error: upsertError }) };
+        },
+        delete() {
+          const filters = {};
+          const chain = {
+            eq(col, val) { filters[col] = val; return chain; },
+            gte(col, val) { filters[`${col}>=`] = val; return chain; },
+            abortSignal() {
+              captured.deletes.push(filters);
+              return thenable({ data: null, error: null });
+            },
+          };
+          return chain;
         },
       };
     },
@@ -136,6 +167,110 @@ console.log("\n3. onWriteDenied: once, and only for a permanent refusal");
   await ls.start();
   await ls._sendRows([{ participant_id: "p1", round_index: 0, score: 3 }]).catch(() => {});
   ok("reported for PGRST301 (rejected token)", calls === 1);
+}
+
+console.log("\n4. canWrite gates the send, not just the report");
+{
+  // The exact error a write off-phase comes back with — the one the Supabase
+  // log showed twice during a team night that had otherwise saved fine.
+  const rls = { code: "42501",
+    message: 'new row violates row-level security policy for table "boardgamebuddy_play_session_scores"' };
+  const client = fakeClient({ upsertError: rls });
+  win.supabaseClient = client;
+  let calls = 0;
+  let phase = "gather";
+  const ls = new win.LiveScores({ sessionId: "s6", isHost: true,
+    onWriteDenied: () => calls++, canWrite: () => phase === "play" });
+  await ls.start();
+
+  await ls.setAnyScore("p1", 0, 5);
+  ok("no request made while the session is in Gather", client.captured.upserts.length === 0);
+  ok("nothing reported for a write that was never sent", calls === 0);
+  ok("the host's own cell keeps the value anyway", ls.getScore("p1", 0) === 5);
+
+  phase = "play";
+  await ls.setAnyScore("p1", 1, 7);
+  ok("the write goes out once the phase opens", client.captured.upserts.length === 1);
+  ok("and a real refusal there IS reported", calls === 1);
+
+  // Leaving Play closes it again — the second half of the same incident, where
+  // a queued write landed just after Wrap up.
+  const before = client.captured.upserts.length;
+  phase = "settle";
+  await ls.setAnyScore("p1", 2, 9);
+  ok("no request made after Wrap up", client.captured.upserts.length === before);
+}
+{
+  // A refusal collected as the window closes under an in-flight request must
+  // not spend the one-per-session report either.
+  const rls = { code: "42501", message: "new row violates row-level security policy" };
+  win.supabaseClient = fakeClient({ upsertError: rls });
+  let calls = 0;
+  let phase = "play";
+  const ls = new win.LiveScores({ sessionId: "s7", isHost: true,
+    onWriteDenied: () => calls++, canWrite: () => phase === "play" });
+  await ls.start();
+  const inflight = ls._sendRows([{ participant_id: "p1", round_index: 0, score: 3 }])
+    .catch(() => {});
+  phase = "settle";                                  // the host taps Wrap up
+  await inflight;
+  ok("a refusal that races the phase is not reported", calls === 0);
+}
+{
+  // A spectator passes no predicate; the default must not gate anything off.
+  win.supabaseClient = fakeClient();
+  const ls = new win.LiveScores({ sessionId: "s8", isHost: true });
+  await ls.start();
+  await ls.setAnyScore("p1", 0, 4);
+  ok("no predicate means writes still go out", win.supabaseClient.captured.upserts.length === 1);
+}
+
+console.log("\n5. syncGrid publishes the whole grid, prune included");
+{
+  const client = fakeClient();
+  win.supabaseClient = client;
+  const ls = new win.LiveScores({ sessionId: "s9", isHost: true, canWrite: () => true });
+  await ls.start();
+  await ls.syncGrid([
+    { participant_id: "p1", roundScores: ["3", "4"] },
+    { participant_id: "p2", roundScores: ["5", ""] },
+  ]);
+  ok("one upsert for the whole grid", client.captured.upserts.length === 1);
+  ok("four cells published", client.captured.upserts[0].length === 4);
+  ok("every row carries the session", client.captured.upserts[0].every((r) => r.session_id === "s9"));
+  ok("blank cells publish as null",
+     client.captured.upserts[0].some((r) => r.participant_id === "p2" && r.round_index === 1
+       && r.score === null));
+  ok("rounds past the host's last one are pruned",
+     client.captured.deletes.length === 1
+     && client.captured.deletes[0]["round_index>="] === 2
+     && client.captured.deletes[0].session_id === "s9");
+}
+{
+  const client = fakeClient();
+  win.supabaseClient = client;
+  const ls = new win.LiveScores({ sessionId: "s10", isHost: true, canWrite: () => true });
+  await ls.start();
+  // Roster rows whose participant_id hasn't landed yet: nothing to publish, so
+  // nothing to prune either — a prune here would wipe the live grid.
+  await ls.syncGrid([{ roundScores: ["3", "4"] }]);
+  ok("a grid with no ids publishes nothing", client.captured.upserts.length === 0);
+  ok("and prunes nothing", client.captured.deletes.length === 0);
+}
+{
+  const client = fakeClient();
+  win.supabaseClient = client;
+  let phase = "gather";
+  const ls = new win.LiveScores({ sessionId: "s11", isHost: true,
+    canWrite: () => phase === "play" });
+  await ls.start();
+  await ls.syncGrid([{ participant_id: "p1", roundScores: ["3"] }]);
+  ok("syncGrid in Gather sends nothing at all",
+     client.captured.upserts.length === 0 && client.captured.deletes.length === 0);
+  ok("but the host's overlay still holds the cell", ls.getScore("p1", 0) === 3);
+  await ls.removeRoundAt(0);
+  ok("removeRoundAt off-phase makes no partial write",
+     client.captured.deletes.length === 0 && client.captured.upserts.length === 0);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall assertions passed");

@@ -1412,6 +1412,12 @@
       this._liveScores = new window.LiveScores({
         sessionId: this._ps.sessionId,
         isHost: true,
+        // The scores table's RLS policy accepts the host only while the
+        // SERVER's phase is 'play', and the phase the host is looking at is a
+        // local flip a background PATCH catches up to. So this is what
+        // LiveScores asks before every write leaves it — see
+        // _liveWritesAllowed.
+        canWrite: () => this._liveWritesAllowed(),
         // The host's score writes go browser-direct to Supabase under RLS, and
         // a refusal there is silent by construction: the local cell is already
         // painted and the write queue keeps the value on screen so an offline
@@ -1436,6 +1442,11 @@
       // can hold cells the table has never seen, and spectators are read-only
       // now, so nobody else would ever fill them in. Fire-and-forget — the
       // host's screen already shows this state.
+      //
+      // This runs on every mount, including the one where the lobby was minted
+      // a second ago and the session is still in Gather. syncGrid no-ops there
+      // rather than being refused, and _advancePhase republishes on the way
+      // into Play, which is the first moment the table would have taken it.
       this._liveScores.syncGrid(this._ps.players).catch(() => {});
     }
 
@@ -2656,21 +2667,72 @@
           }
           return updated;
         });
-        // Republish the grid under any id the flush above just adopted. It
-        // has to happen HERE and not where the id lands: the flush runs while
-        // the server is still in 'gather', and the scores table's RLS write
-        // policy only accepts the host while phase='play' (migration 053), so
-        // an upsert issued any earlier is refused. Without this a column whose
-        // roster row arrived at the last moment would start at whatever round
-        // the host next types in, and every round before it would read blank
-        // on every spectator's screen. Fire-and-forget; a failed PATCH above
-        // just means the write is refused again, harmlessly.
-        if (next === "play" && this._liveScores) {
-          this._liveScores.syncGrid(this._ps.players).catch(() => {});
-        }
       } finally {
         this._pendingPhase--;
       }
+      // Republish the grid under any id the flush above just adopted. It has
+      // to happen HERE and not where the id lands: the flush runs while the
+      // server is still in 'gather', and the scores table's RLS write policy
+      // only accepts the host while phase='play' (migration 053), so an upsert
+      // issued any earlier is refused. Without this a column whose roster row
+      // arrived at the last moment would start at whatever round the host next
+      // types in, and every round before it would read blank on every
+      // spectator's screen.
+      //
+      // Outside the finally, not inside it: _liveWritesAllowed is false while
+      // a phase PATCH is in flight, so a republish issued before the counter
+      // came back down would be the one write the gate is wrong about. A
+      // Continue → back → Continue burst still resolves once, because the
+      // newest call owns _ps.phase and an older one finds it is no longer
+      // 'play'. Fire-and-forget; a failed PATCH above just means the write is
+      // refused again, harmlessly.
+      //
+      // Off _ps.phase rather than off `next`, so the server-override branch
+      // above lands here too — and so this reads as what it is: EVERY path
+      // that opens the write window ends in a republish. That is what makes
+      // the window safe to close, because the draft (which every keystroke
+      // writes to first, gated or not) is what syncGrid publishes.
+      if (this._liveScores && this._liveWritesAllowed()) {
+        this._liveScores.syncGrid(this._ps.players).catch(() => {});
+      }
+    }
+
+    /**
+     * May a live-score write go out right now?
+     *
+     * The scores table is the one table this client writes directly, and its
+     * RLS policy (migration 029, splitting 053's) takes the host only while
+     * the SESSION ROW says phase='play'. Everything else about the phase here
+     * is local and optimistic: _advancePhase flips _ps.phase, repaints, and
+     * lets a background PATCH catch the server up. So there are three windows
+     * where the host's browser holds a grid the database will refuse, and all
+     * three were being discovered by sending a write and reading the 42501:
+     *
+     *   1. Gather. _startLiveScores runs on mount, in whatever phase the host
+     *      is in, and syncGrid publishes the draft's cells — which a session
+     *      minted seconds ago has never accepted.
+     *   2. Settle, and anything after it. A queued keystroke, a debounced
+     *      write, or a syncGrid from a superseded transition can land after
+     *      Wrap up; the policy's phase test is what stops a finalized play
+     *      being rewritten (archive/053), so it refuses them, correctly.
+     *   3. The PATCH round trip itself, in either direction.
+     *
+     * None of the three is a session that cannot save. Each one is a write
+     * that should not have been sent, which is why this gates the SEND and not
+     * just the toast: the refusal a host does need to hear about — a policy
+     * that genuinely will not take their writes — is the one that survives
+     * this returning true, and _pendingPhase being back at 0 is what keeps a
+     * phase PATCH that silently failed reporting itself through the next
+     * keystroke.
+     *
+     * Nothing is lost while it answers false. Every keystroke writes the
+     * draft before it writes the table (_setRoundScore), and the only way
+     * this flips back to true is a phase step into Play — which ends in a
+     * syncGrid of that draft, on every path that reaches one: _advancePhase
+     * above, and _startLiveScores on mount.
+     */
+    _liveWritesAllowed() {
+      return (this._ps.phase || "gather") === "play" && !this._pendingPhase;
     }
 
     async _abandon() {
