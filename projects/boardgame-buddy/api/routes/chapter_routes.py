@@ -3,8 +3,15 @@
 Each user builds their own reference guide for each game by adding
 chapters one at a time. Two ways to add: create a new chapter (type +
 title + markdown), or browse the pool of existing chapters for that
-game and add the ones they want. No curated defaults, no review queue
-— moderation is reactive via per-chapter reports.
+game and add the ones they want. No curated defaults, and for prose no
+review queue — moderation is reactive via per-chapter reports.
+
+ONE chapter kind is different: a rulebook link (layout='rulebook_link',
+migration 052) sends a reader off this origin, so it carries a gate of its
+own and every read path in this file filters on it. The rule itself, and the
+argument for it, live in services/chapter_rulebook.py; here it is one call —
+`chapter_rulebook.filter_visible` — that each read passes its rows through,
+plus the admin queue at the foot of the file.
 
 The wizard's optional AI head start — the markdown drafter and the scoring-grid
 one both — lives next door in `chapter_ai_routes.py`, so the two prompts and
@@ -30,7 +37,7 @@ from .dependencies import (
     get_current_user,
     maybe_supabase_user,
 )
-from .constants import ChapterLayout
+from .constants import ChapterLayout, RulebookStatus
 from .models import (
     AddChapterRequest,
     ChapterCreate,
@@ -44,7 +51,7 @@ from .models import (
     MessageResponse,
     MyGuideChapterResponse,
 )
-from .services import chapter_grid
+from .services import chapter_grid, chapter_rulebook
 from .services._helpers import parse_csv_param
 
 logger = logging.getLogger(__name__)
@@ -52,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 _CHAPTER_SELECT = (
     "id, game_id, chapter_type, title, layout, content, grid,"
+    " link_url, moderation_status,"
     " created_by, updated_at, created_at,"
     " boardgamebuddy_chapter_types(label, icon, display_order),"
     " boardgamebuddy_profiles(display_name)"
@@ -140,6 +148,13 @@ def _chapter_row_to_response(
         # with no grid; every reader treats that as plain text rather than
         # throwing, so `grid` is read defensively here too.
         grid=row.get("grid"),
+        # Migration 052. Both are NULL on every layout but 'rulebook_link', and
+        # a row only reaches this function at all once
+        # services/chapter_rulebook has decided the viewer may see it — the
+        # response carries the status so the AUTHOR's copy can say it is
+        # waiting, or was turned down, not so a client can do the filtering.
+        link_url=row.get("link_url"),
+        moderation_status=row.get("moderation_status"),
         created_by=row.get("created_by"),
         created_by_name=created_by_name,
         updated_at=row["updated_at"],
@@ -204,6 +219,12 @@ def _browse_chapter_pool_sync(
         needle = f"%{q}%"
         pool_q = pool_q.or_(f"title.ilike.{needle},content.ilike.{needle}")
     pool_rows = pool_q.limit(1000).execute().data or []
+
+    # THE GATE, applied before anything else looks at these rows (migration
+    # 052). A rulebook link the viewer may not see must not reach the sort, the
+    # popularity tally or the wire — filtering client-side would ship the URL to
+    # the browser that is not allowed to have it, which is not filtering.
+    pool_rows = chapter_rulebook.filter_visible(sb, pool_rows, viewer_id)
 
     if not pool_rows:
         return []
@@ -330,7 +351,7 @@ def _chapter_pool_count_sync(
     )
     total = count_q.execute().count or 0
 
-    if viewer_id is None or not total:
+    if not total:
         return total
 
     # Migration 033: a chapter this viewer has turned down is not one their
@@ -342,18 +363,58 @@ def _chapter_pool_count_sync(
     # never pulls the chapter rows, so it has no id list to filter on, and
     # game_id is on the dislike row anyway. The partial index from 033 serves
     # exactly this shape.
-    dis_q = (
-        sb.table("boardgamebuddy_user_chapters")
-        .select("chapter_id", count="exact", head=True)
-        .eq("user_id", viewer_id)
-        .eq("state", "disliked")
+    #
+    # Anonymous callers skip this and NOT the rulebook pass below: a signed-out
+    # reader has no dislikes, but they are the strictest case there is for the
+    # gate — approved links and nothing else.
+    disliked = 0
+    if viewer_id is not None:
+        dis_q = (
+            sb.table("boardgamebuddy_user_chapters")
+            .select("chapter_id", count="exact", head=True)
+            .eq("user_id", viewer_id)
+            .eq("state", "disliked")
+        )
+        dis_q = (
+            dis_q.in_("game_id", all_game_ids) if exp_ids else dis_q.eq("game_id", game_id)
+        )
+        disliked = dis_q.execute().count or 0
+
+    # The rulebook gate's share of the denominator (migration 052). The count
+    # endpoints are the one read path that cannot filter rows it never fetched,
+    # so the links are fetched — id, author and status only, no bodies, off the
+    # partial index idx_bgb_chapters_rulebook_status — and the ones this viewer
+    # may not see come off the total. Without this a guide reads "2 of 3" with
+    # nothing anywhere to be the third.
+    link_q = (
+        sb.table("boardgamebuddy_guide_chapters")
+        .select("id, game_id, layout, chapter_type, created_by, moderation_status")
+        .eq("layout", str(ChapterLayout.RULEBOOK_LINK))
     )
-    dis_q = dis_q.in_("game_id", all_game_ids) if exp_ids else dis_q.eq("game_id", game_id)
-    disliked = dis_q.execute().count or 0
+    link_q = link_q.in_("game_id", all_game_ids) if exp_ids else link_q.eq("game_id", game_id)
+    link_rows = link_q.execute().data or []
+    visible = chapter_rulebook.visible_ids(sb, link_rows, viewer_id)
+    hidden = {r["id"] for r in link_rows if r["id"] not in visible}
+
+    if hidden:
+        # A hidden link the viewer had also DISLIKED is already off the total by
+        # way of `disliked` above, and subtracting it twice would put the
+        # denominator below the number of chapters actually on their screen. The
+        # id list is tiny by construction, so this is a cheap intersection
+        # rather than a second full query.
+        dupes = (
+            sb.table("boardgamebuddy_user_chapters")
+            .select("chapter_id")
+            .eq("user_id", viewer_id)
+            .eq("state", "disliked")
+            .in_("chapter_id", list(hidden))
+            .execute()
+        ).data or [] if viewer_id else []
+        hidden -= {r["chapter_id"] for r in dupes}
 
     # A dislike row can outlive nothing here — it cascades with its chapter —
     # but clamp anyway: a negative total would render as "3 of -1".
-    return max(total - disliked, 0)
+    return max(total - disliked - len(hidden), 0)
 
 
 @router.get(
@@ -398,7 +459,7 @@ async def count_chapter_pool(
 
 
 def _create_chapter_sync(
-    sb: Client, game_id: str, body: ChapterCreate, user_id: str
+    sb: Client, game_id: str, body: ChapterCreate, user: CurrentUser
 ) -> MyGuideChapterResponse:
     game = (
         sb.table("boardgamebuddy_games")
@@ -414,23 +475,56 @@ def _create_chapter_sync(
     if not game.data:
         raise HTTPException(status_code=404, detail="Game not found")
 
+    user_id = user.user_id
+
     _validate_chapter_type(sb, body.chapter_type)
     chapter_grid.validate_layout_pairing(body.layout, body.chapter_type)
+    chapter_rulebook.validate_layout_pairing(body.layout, body.chapter_type)
 
-    # For a scoring grid the rows ARE the chapter: both `content` and `title`
-    # are generated rather than anything the author typed — see
-    # services/chapter_grid.py for why neither is a field on the form.
+    # For a scoring grid the rows ARE the chapter, and for a rulebook link the
+    # URL is: in both cases `content` and `title` are generated rather than
+    # anything the author typed — see services/chapter_grid.py and
+    # services/chapter_rulebook.py for why neither is a field on those forms.
     is_grid = body.layout is ChapterLayout.SCORING_GRID and body.grid is not None
-    content = (
-        chapter_grid.grid_to_content(body.grid)
-        if is_grid
-        else body.content
-    )
-    title = (
-        chapter_grid.grid_title(game.data[0].get("name"))
-        if is_grid
-        else body.title
-    )
+    is_link = body.layout is ChapterLayout.RULEBOOK_LINK
+    link_url = chapter_rulebook.clean_url(body.link_url) if is_link else None
+
+    if is_link:
+        # One rulebook link per (game, author) — idx_bgb_chapters_rulebook_author
+        # says so, and this check is what turns that into a sentence rather than
+        # a Postgres unique violation surfacing as a 500. Checked against the
+        # author's row WHATEVER its status: a denied link still occupies the
+        # slot, deliberately, so re-posting the same URL under a new row is not
+        # a way around a decision. Editing the existing one is the way to change
+        # it, and that re-opens the gate.
+        mine = (
+            sb.table("boardgamebuddy_guide_chapters")
+            .select("id, moderation_status")
+            .eq("game_id", game_id)
+            .eq("layout", str(ChapterLayout.RULEBOOK_LINK))
+            .eq("created_by", user_id)
+            .execute()
+        )
+        if mine.data:
+            denied = mine.data[0].get("moderation_status") == RulebookStatus.DENIED
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "An admin turned down your rulebook link for this game. Edit that"
+                    " one to submit a different URL."
+                    if denied
+                    else "You already have a rulebook link for this game — edit it instead."
+                ),
+            )
+
+    content = body.content
+    title = body.title
+    if is_grid:
+        content = chapter_grid.grid_to_content(body.grid)
+        title = chapter_grid.grid_title(game.data[0].get("name"))
+    elif is_link:
+        content = chapter_rulebook.url_to_content(link_url)
+        title = chapter_rulebook.rulebook_title(game.data[0].get("name"))
 
     insert = (
         sb.table("boardgamebuddy_guide_chapters")
@@ -447,6 +541,17 @@ def _create_chapter_sync(
                 if body.grid
                 else None
             ),
+            "link_url": link_url,
+            # An admin's own link is born approved (see
+            # services/chapter_rulebook.initial_status): the decision this queue
+            # collects is theirs, and a queue item they would only approve
+            # themselves carries no information. NULL on every other layout,
+            # which bgb_chapters_link_shape requires.
+            "moderation_status": (
+                str(chapter_rulebook.initial_status(user.is_admin)) if is_link else None
+            ),
+            "moderated_by": user_id if (is_link and user.is_admin) else None,
+            "moderated_at": "now()" if (is_link and user.is_admin) else None,
             "created_by": user_id,
         })
         .execute()
@@ -496,17 +601,26 @@ async def create_chapter(
     game_id: str = Path(..., description="Game UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MyGuideChapterResponse:
-    """Create a new chapter attached to a game and immediately add it to the creator's guide."""
+    """Create a new chapter attached to a game and immediately add it to the creator's guide.
+
+    A rulebook link written by an admin is live immediately; anyone else's is
+    visible to them and their accepted buddies while it waits in the admin queue
+    (migration 052).
+    """
     sb = get_supabase()
-    return await asyncio.to_thread(_create_chapter_sync, sb, game_id, body, user.user_id)
+    return await asyncio.to_thread(_create_chapter_sync, sb, game_id, body, user)
 
 
 def _update_chapter_sync(
-    sb: Client, chapter_id: str, body: ChapterUpdate, user_id: str
+    sb: Client, chapter_id: str, body: ChapterUpdate, user: CurrentUser
 ) -> ChapterResponse:
+    user_id = user.user_id
     existing = (
         sb.table("boardgamebuddy_guide_chapters")
-        .select("id, game_id, created_by, layout, chapter_type")
+        .select(
+            "id, game_id, created_by, layout, chapter_type, link_url,"
+            " moderation_status"
+        )
         .eq("id", chapter_id)
         .execute()
     )
@@ -521,10 +635,11 @@ def _update_chapter_sync(
     # all, so validating the body alone would happily strand a scoring grid
     # under a type the guide scroll files elsewhere.
     layout = body.layout if body.layout is not None else row.get("layout")
-    chapter_grid.validate_layout_pairing(
-        layout,
-        body.chapter_type if body.chapter_type is not None else row.get("chapter_type"),
+    chapter_type = (
+        body.chapter_type if body.chapter_type is not None else row.get("chapter_type")
     )
+    chapter_grid.validate_layout_pairing(layout, chapter_type)
+    chapter_rulebook.validate_layout_pairing(layout, chapter_type)
 
     updates: dict[str, Any] = {"updated_at": "now()"}
     if body.chapter_type is not None:
@@ -562,6 +677,42 @@ def _update_chapter_sync(
         # not the caller also sent `content`.
         updates["content"] = chapter_grid.grid_to_content(body.grid)
 
+    # ── A rulebook link's URL, and its gate ──────────────────────────────────
+    #
+    # Editing the URL RE-OPENS the gate, which is the whole reason this branch
+    # is not three lines. An approval is a decision about a destination, not
+    # about a row: without this, an author could get an innocuous PDF approved
+    # and then point the same approved row anywhere, and every reader following
+    # the app's own "approved" badge would go there. So a changed URL on a
+    # non-admin's link goes back to pending — losing the badge it had, which is
+    # the intended cost — while an admin editing one is itself the decision.
+    #
+    # Unchanged URL, unchanged status: re-submitting the same link by saving the
+    # form again must not send an approved link back to the queue.
+    if str(layout) == str(ChapterLayout.RULEBOOK_LINK) and body.link_url is not None:
+        link_url = chapter_rulebook.clean_url(body.link_url)
+        updates["link_url"] = link_url
+        updates["content"] = chapter_rulebook.url_to_content(link_url)
+        # Derived on every save, exactly as a grid's is above and for the same
+        # reason — a renamed game re-titles its rulebook link the next time one
+        # is edited. Its own lookup rather than the grid branch's, because the
+        # two branches are mutually exclusive and neither pays for the other.
+        link_game = (
+            sb.table("boardgamebuddy_games")
+            .select("name")
+            .eq("id", row["game_id"])
+            .execute()
+        )
+        updates["title"] = chapter_rulebook.rulebook_title(
+            link_game.data[0].get("name") if link_game.data else None
+        )
+        if link_url != (row.get("link_url") or "") or user.is_admin:
+            updates["moderation_status"] = str(
+                chapter_rulebook.initial_status(user.is_admin)
+            )
+            updates["moderated_by"] = user_id if user.is_admin else None
+            updates["moderated_at"] = "now()" if user.is_admin else None
+
     sb.table("boardgamebuddy_guide_chapters").update(updates).eq("id", chapter_id).execute()
 
     fetched = (
@@ -586,9 +737,13 @@ async def update_chapter(
     chapter_id: str = Path(..., description="Chapter UUID"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ChapterResponse:
-    """Edit an existing chapter. Creator-only (admins can edit by deleting + recreating)."""
+    """Edit an existing chapter. Creator-only (admins can edit by deleting + recreating).
+
+    Changing a rulebook link's URL sends it back to the admin queue — an
+    approval is a decision about a destination, not about a row (migration 052).
+    """
     sb = get_supabase()
-    return await asyncio.to_thread(_update_chapter_sync, sb, chapter_id, body, user.user_id)
+    return await asyncio.to_thread(_update_chapter_sync, sb, chapter_id, body, user)
 
 
 def _delete_chapter_sync(sb: Client, chapter_id: str, user: CurrentUser) -> MessageResponse:
@@ -701,6 +856,13 @@ def _get_my_chapters_sync(
         .execute()
     ).data or []
 
+    # The gate again, and this is the half that would be easy to forget: a
+    # rulebook link ADOPTED while it was pending, and denied afterwards, is in
+    # this viewer's guide and must stop being served to them. "Denial hides it
+    # for everyone else" is only true if the guide filters too. The author's own
+    # copy survives — see services/chapter_rulebook.is_visible_to.
+    chapters = chapter_rulebook.filter_visible(sb, chapters, user_id)
+
     source_map = _build_source_map(sb, all_game_ids) if exp_ids else {}
 
     # Preserve insertion order (added_at ascending).
@@ -754,6 +916,14 @@ def _add_chapter_to_my_guide_sync(
         .execute()
     )
     if not chapter.data:
+        raise HTTPException(status_code=404, detail="Chapter not found for this game")
+
+    # A chapter the caller cannot see is a chapter they cannot adopt. 404 rather
+    # than 403 for the reason the pool never ships the row in the first place:
+    # "this link exists but is not for you" is itself something a stranger does
+    # not get to learn, and adopting by id would otherwise be the way around
+    # every filter above.
+    if not chapter_rulebook.filter_visible(sb, chapter.data, user_id):
         raise HTTPException(status_code=404, detail="Chapter not found for this game")
 
     existing = (

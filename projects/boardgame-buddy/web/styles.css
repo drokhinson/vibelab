@@ -936,6 +936,118 @@ body {
    dismiss — so it pays back the room that X was holding on the right. */
 .scroll-panel__notice--create { padding-right: var(--s-3); }
 
+/* ── The Rulebook section (migration 051) ─────────────────────────────────────
+   The link to the actual rules, first in the scroll, and the one section that
+   renders when it has nothing to show — "No rulebook link available" is
+   information, where a missing section is indistinguishable from one that
+   failed to draw.
+
+   Two placements, one renderer, exactly like the notice above: in the peek so
+   it survives the scroll being rolled up (which is how the Play screen opens
+   it), and at the top of the body when it is open. The peek copy is shown only
+   while rolled, so the two are never on screen at once.
+
+   Literal colours, like the rest of this family: the scroll is a photograph of
+   parchment and stays light in both themes (.claude/rules/theming.md §6). */
+.scroll-panel__rulebook-host:empty { display: none; }
+.scroll-paper:not(.scroll-paper--rolled) .scroll-panel__rulebook-host--peek { display: none; }
+.scroll-rulebook {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+/* An anchor, not a button: long-pressing a real link is how a phone offers
+   "open in new tab" and "copy link", and a rulebook is usually a PDF somebody
+   wants somewhere other than in front of the game they are playing. */
+.scroll-rulebook__cta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  /* 44px floor — this is the affordance the whole section exists for
+     (.claude/rules/mobile-web.md §5). */
+  min-height: 44px;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid rgba(107, 74, 26, 0.32);
+  border-radius: var(--r-md);
+  background: rgba(201, 146, 42, 0.14);
+  color: #5C3F14;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.scroll-rulebook__cta > span { flex: 1; min-width: 0; }
+.scroll-rulebook__cta > [data-icon-name] { flex: none; color: #8A5F0B; }
+.scroll-rulebook__cta:active { background: rgba(201, 146, 42, 0.24); }
+@media (hover: hover) {
+  .scroll-rulebook__cta:hover { background: rgba(201, 146, 42, 0.2); }
+}
+.scroll-rulebook__cta:focus-visible { outline: 2px solid #8A5F0B; outline-offset: 2px; }
+.scroll-rulebook__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  font-size: 0.68rem;
+  color: rgba(92, 63, 20, 0.72);
+}
+/* Where the link actually goes, under the button rather than inside it: a
+   reader deciding whether to follow an outbound link is deciding on the host,
+   and the button's label cannot carry 200 characters of URL. */
+.scroll-rulebook__host {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+.scroll-rulebook__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: rgba(107, 74, 26, 0.14);
+  color: #6B4A1A;
+  font-weight: 700;
+}
+.scroll-rulebook__actions { display: flex; gap: var(--s-1); }
+/* The peek copy: the link and nothing else (see _renderRulebookPeek). It sits
+   in the same strip as the scoring offer, so it wears that notice's height and
+   sits flush with it rather than reading as a second kind of thing. */
+.scroll-rulebook__cta--peek {
+  min-height: 44px;
+  font-size: 0.74rem;
+}
+.scroll-rulebook__none--peek {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 var(--s-1);
+}
+.scroll-rulebook__none {
+  margin: 0;
+  font-size: 0.74rem;
+  color: rgba(92, 63, 20, 0.7);
+}
+/* The author's own link when something else is on show. Nobody else is ever
+   sent this row — the API does not send them the chapter — so it says plainly
+   what happened to it. */
+.scroll-rulebook__mine {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: rgba(92, 63, 20, 0.8);
+}
+.scroll-rulebook__mine > [data-icon-name] { flex: none; color: #8A5F0B; }
+.scroll-rulebook__mine > span { flex: 1; min-width: 0; }
+/* A denial reads in the destructive colour the rest of the app uses, as a
+   literal here because this surface is paper in both themes. */
+.scroll-rulebook__mine--denied { color: #8C3A1E; }
+.scroll-rulebook__mine--denied > [data-icon-name] { color: #8C3A1E; }
+
 /* Inside the empty state the notice is the only thing between the copy and the
    Add button, so it gets air on both sides rather than just below. */
 
@@ -1891,7 +2003,28 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-weight: 600;
   font-size: 1.05rem;
 }
+/* The rulebook URL reuses the title field's box (one text input on this screen,
+   one look) but not its display face: a URL is read character by character to
+   decide whether to trust it, and a display serif at 1.05rem is the wrong tool
+   for telling boardgamegeek.com from boardgarnegeek.com. Migration 051. */
+.chapter-edit__titlefield--url {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
 .chapter-edit__titlefield::placeholder { color: oklch(var(--bc) / 0.4); }
+/* What happens to the link after Save — see _renderLinkStep for why this
+   sentence is on screen rather than implied by a badge afterwards. */
+.chapter-edit__linknote {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: oklch(var(--bc) / 0.72);
+}
+.chapter-edit__linknote > [data-icon-name] { flex: none; margin-top: 1px; color: var(--accent); }
 .chapter-edit__titlefield:focus {
   outline: none;
   border-color: var(--accent);
@@ -3094,6 +3227,35 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   opacity: 0.75;
 }
 .admin-reports__actions { display: inline-flex; gap: 0.4rem; }
+
+/* ── The rulebook queue (migration 051) ──────────────────────────────────────
+   views/admin-rulebooks-view.js reuses the .admin-reports__* family above —
+   same spoke chrome, same row, same footer — and adds only the two things a
+   URL decision needs that a prose report does not. A second row family would
+   be the parallel implementation ui-object-design.md §2 exists to prevent. */
+
+/* The full address under the host. It wraps rather than ellipsising: an admin
+   deciding whether to trust a link has to be able to read all of it, and a
+   truncated URL hides exactly the tail a bad one relies on. */
+.admin-rulebooks__url {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-top: 2px;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--accent);
+  word-break: break-all;
+}
+.admin-rulebooks__url > [data-icon-name] { flex: none; align-self: center; }
+.admin-rulebooks__reach {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--rust);
+  font-weight: 600;
+}
 
 /* ── Dev feedback board ─────────────────────────────────────────────────────
    views/feedback-view.js. Lives on a .bgb-spoke-screen, which is CHROME rather
@@ -10528,25 +10690,13 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
      the gold-accented project actions. */
   background: #ff5100;
 }
-.game-detail__link-btn--rulebook {
-  background: var(--accent);
-  color: #1a0d00;
-}
-/* Admin "add" variant — shown when no rulebook URL is set yet. Reads as
-   the same slot in the action row but visually invites a tap-to-fill
-   instead of the greyed/struck-through "not available" state. */
-.game-detail__link-btn--add {
-  background: transparent;
-  border: 1px dashed var(--accent);
-  color: var(--accent);
-}
-.game-detail__link-btn--add:hover:not(:disabled) {
-  background: rgba(201, 146, 42, 0.12);
-  filter: none;
-}
-/* Greyed + crossed-out variant rendered when the underlying link
-   (`bgg_id` / `rulebook_url`) is unavailable. Keeps the button slot in
-   the row so the action layout stays consistent across games. */
+/* --rulebook and --add went with migration 051: the game page no longer draws
+   a rulebook button (the reference guide on the same screen does) and there is
+   no admin-only "set the URL" slot left to invite a tap. */
+/* Greyed + crossed-out variant rendered when the underlying link (`bgg_id`) is
+   unavailable. Keeps the button slot in the row so the action layout stays
+   consistent across games. It served the rulebook button too until migration
+   051 moved that into the reference guide. */
 .game-detail__link-btn--disabled {
   position: relative;
   background: oklch(var(--b3));
@@ -11799,7 +11949,6 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .collapsible-header--static { cursor: default; }
 
 /* Reference guide section header inside Play */
-.cascade-card--guide .cascade-rulebook-row { margin-bottom: 8px; }
 .cascade-card--guide #play-flow-guide-mount,
 .cascade-card--guide #session-viewer-guide-mount { background: transparent; }
 

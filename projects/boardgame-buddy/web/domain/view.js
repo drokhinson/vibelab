@@ -238,6 +238,7 @@
         { name: "notifications",       pattern: /^\/notifications\/?$/,           build: () => "/notifications" },
         { name: "settings",            pattern: /^\/settings\/?$/,                build: () => "/settings" },
         { name: "admin-reports",       pattern: /^\/admin\/reports\/?$/,          build: () => "/admin/reports" },
+        { name: "admin-rulebooks",     pattern: /^\/admin\/rulebook-links\/?$/,   build: () => "/admin/rulebook-links" },
         { name: "admin-bgg-data",      pattern: /^\/admin\/bgg-data\/?$/,         build: () => "/admin/bgg-data" },
         // The four backfills were four spokes, then four panels on one, and are
         // two panels now — descriptions, stats and publishers became one queue.

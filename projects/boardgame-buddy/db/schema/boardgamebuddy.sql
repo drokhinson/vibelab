@@ -1,6 +1,16 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 046_affiliate_partners.sql (boardgamebuddy_affiliate_partners —
+-- Last updated: 052_rulebook_links.sql (boardgamebuddy_guide_chapters grows
+--               link_url + moderation_status/_by/_at, the layout CHECK learns
+--               'rulebook_link', bgb_chapters_grid_shape gains its third branch
+--               and bgb_chapters_link_shape is new, plus the two rulebook
+--               indexes; hand-added to the chapters block below. The
+--               'rulebook' chapter_types row is seed data, not shape, and so
+--               is not in this file.)
+--               Before that: 051_account_deletion_handover.sql (boardgamebuddy_plays
+--               grows inherited_at / inherited_from_name — a play outliving the
+--               account that logged it — already folded into the plays block below.)
+--               Before that: 046_affiliate_partners.sql (boardgamebuddy_affiliate_partners —
 --               the four retailers, seeded DISABLED with no credential — and
 --               boardgamebuddy_affiliate_clicks, a userless tap log; hand-added
 --               below).
@@ -279,21 +289,51 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
   -- (migration 032) says how an EXPANSION's grid meets the base game's —
   -- add_on|replace — and is NULL/absent on a base game's own grid.
   grid JSONB,
+  -- The outbound rulebook URL of a layout='rulebook_link' chapter (migration
+  -- 052), NULL for every other layout. `content` carries a generated markdown
+  -- mirror of it for the same three readers the grid's mirror serves.
+  link_url TEXT,
+  -- pending | approved | denied, on a rulebook link only. Approved is public,
+  -- pending reaches the author and their accepted buddies, denied reaches the
+  -- author and admins. Applied by routes/services/chapter_rulebook.py on every
+  -- read path — NOT by RLS, which this service-role API bypasses.
+  moderation_status TEXT,
+  moderated_by UUID,
+  moderated_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
   CONSTRAINT boardgamebuddy_guide_chunks_pkey PRIMARY KEY (id),
+  CONSTRAINT bgb_chapters_moderated_by_fkey FOREIGN KEY (moderated_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_guide_chunks_chunk_type_fkey FOREIGN KEY (chapter_type) REFERENCES boardgamebuddy_chapter_types(id),
   CONSTRAINT boardgamebuddy_guide_chunks_created_by_fkey FOREIGN KEY (created_by) REFERENCES boardgamebuddy_profiles(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_guide_chunks_game_id_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE CASCADE,
-  CONSTRAINT boardgamebuddy_guide_chunks_layout_check CHECK ((layout = ANY (ARRAY['text'::text, 'scoring_grid'::text]))),
+  CONSTRAINT boardgamebuddy_guide_chunks_layout_check CHECK ((layout = ANY (ARRAY['text'::text, 'scoring_grid'::text, 'rulebook_link'::text]))),
   -- Layout and body move together or not at all. The 1..24 ceiling is set by
   -- play_session_scores.round_index (CHECK 0..63) — template rows take the low
-  -- indexes, so 24 leaves 40 rounds of headroom for appended extras.
+  -- indexes, so 24 leaves 40 rounds of headroom for appended extras. The
+  -- rulebook branch (052) carries no grid; it is listed rather than folded into
+  -- the text one so the rule stays exhaustive over `layout`.
   CONSTRAINT bgb_chapters_grid_shape CHECK (
     ((layout = 'text'::text) AND (grid IS NULL))
+    OR ((layout = 'rulebook_link'::text) AND (grid IS NULL))
     OR ((layout = 'scoring_grid'::text)
         AND (jsonb_typeof(grid -> 'rows'::text) = 'array'::text)
         AND (jsonb_array_length(grid -> 'rows'::text) BETWEEN 1 AND 24))
+  ),
+  -- Migration 052. Layout, link and gate move together or not at all, and the
+  -- SCHEME test is here rather than only in the API because this column's whole
+  -- risk is where it sends a reader: a javascript: or data: URL from any future
+  -- caller that forgot to validate would otherwise be one render away.
+  CONSTRAINT bgb_chapters_link_shape CHECK (
+    -- The IS NOT NULL tests are load-bearing: a CHECK whose expression is NULL
+    -- PASSES, so the regex alone would admit a rulebook link with no URL and
+    -- the status test alone one with no gate.
+    ((layout = 'rulebook_link'::text)
+     AND (link_url IS NOT NULL)
+     AND (link_url ~* '^https?://[^[:space:]]+$'::text)
+     AND (moderation_status IS NOT NULL)
+     AND (moderation_status = ANY (ARRAY['pending'::text, 'approved'::text, 'denied'::text])))
+    OR ((layout <> 'rulebook_link'::text) AND (link_url IS NULL) AND (moderation_status IS NULL))
   ),
   -- The mode's VALUE DOMAIN only (migration 032). Absent and JSON null both
   -- mean "no mode" and are both legal; whether a base game's grid is allowed
@@ -308,6 +348,13 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
 ALTER TABLE public.boardgamebuddy_guide_chapters ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_chapters_game_type ON public.boardgamebuddy_guide_chapters USING btree (game_id, chapter_type);
 CREATE INDEX IF NOT EXISTS idx_bgb_chapters_scoring_grid ON public.boardgamebuddy_guide_chapters USING btree (game_id) WHERE (layout = 'scoring_grid'::text);
+-- One rulebook link per (game, author) — the anti-spam property, and what makes
+-- a denial stick: a denied row stays, so a re-submission collides here instead
+-- of quietly re-entering every buddy's guide. NULL created_by rows (the 052
+-- backfill, an author since deleted) do not collide, which is wanted on both
+-- paths.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_chapters_rulebook_author ON public.boardgamebuddy_guide_chapters USING btree (game_id, created_by) WHERE (layout = 'rulebook_link'::text);
+CREATE INDEX IF NOT EXISTS idx_bgb_chapters_rulebook_status ON public.boardgamebuddy_guide_chapters USING btree (moderation_status, created_at) WHERE (layout = 'rulebook_link'::text);
 GRANT SELECT ON public.boardgamebuddy_guide_chapters TO boardgamebuddy_role;
 
 
@@ -1053,6 +1100,9 @@ COMMENT ON COLUMN public.boardgamebuddy_plays.country_code IS 'ISO 3166-1 alpha-
 COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Denormalised snapshot of the scoring grid this play was scored with: {"v":1,"chapter_id":…,"title":…,"rows":[…],"parts":[…]}. NOT a foreign key, on purpose. The chapter is community-owned, editable by its author and deletable by author or admin, so a play holding only an id would render bare R1..Rn the moment a moderator cleared the chapter, and would silently RELABEL a two-year-old play if the author reordered its rows — labels that stop describing the numbers under them is precisely the failure widgets/round-score-grid.js is written to prevent. ON DELETE SET NULL loses the labels and CASCADE deletes plays, so neither constraint tells the truth. chapter_id rides INSIDE the document as provenance: a bare uuid column would imply an integrity the database is not enforcing. Same reasoning as game_name / game_thumbnail_url on this table. `rows` may be COMPOSED from several grids (migration 032) — a base game''s plus each add-on expansion''s, the add-ons appended in ascending BGG id so every client composes the same scorepad — in which case `chapter_id` names the grid that supplied the leading rows and `parts` lists every contributor in row order as {chapter_id,game_id,game_name,mode,row_count}. A row an add-on contributed also carries that expansion''s `source_color` (boardgamebuddy_games.expansion_color), which draws a rule down the RIGHT edge of its header cell (the left edge carries the row''s own palette tint, so the two never collide); the leading grid''s rows carry none. `parts` is absent, and no row carries a source_color, when one grid supplied the whole thing — so a pre-032 snapshot reads exactly as it always did.';
 COMMENT ON COLUMN public.boardgamebuddy_play_sessions.scoring_template IS 'The template the host applied to this live grid, same shape as boardgamebuddy_plays.scoring_template — composed parts and all. Copied onto the play at finalize.';
 COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS 'Row definitions for a layout=''scoring_grid'' chapter: {"v":1,"mode":…,"rows":[{"label":…,"color":…,"note":…}]}. `color` is a SLUG from a fixed palette (neutral|red|pink|rust|brown|gold|yellow|green|blue|purple), never a hex — the grid lands on the cream scorepad, and only a fixed palette can be guaranteed legible there in both themes. `mode` (migration 032) is add_on|replace on a grid whose game is an EXPANSION — its rows either join the base game''s grid or stand in for it — and NULL/absent on a base game''s own grid, where the question does not arise. The API resolves it (services/chapter_grid.resolve_grid_mode); the bgb_chapters_grid_mode CHECK only pins the value domain, because a CHECK cannot look up whether the chapter''s game is an expansion. NULL for layout=''text''; see the bgb_chapters_grid_shape constraint.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.link_url IS 'The outbound rulebook URL of a layout=''rulebook_link'' chapter (migration 052). http(s) only, pinned by bgb_chapters_link_shape — this is a link the app sends readers to, so the scheme is not left to the client. NULL for every other layout. `content` carries a generated markdown mirror ("[Rulebook](url)") so the pool''s ILIKE search, the moderation preview and renderMarkdown need no branch; `link_url` is the source of truth and the mirror is derived from it.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'pending | approved | denied, on a layout=''rulebook_link'' chapter only (NULL everywhere else). Approved is visible to everyone; pending only to its author and their ACCEPTED buddies; denied only to its author and admins. A link authored by an admin is born approved. The rule is applied by routes/services/chapter_rulebook.py on every chapter read path, NOT by RLS — this API is service-role and bypasses RLS, and nothing reads chapters browser-direct. A denial is deliberately not a delete: the row is what stops the same author re-posting the same link past idx_bgb_chapters_rulebook_author.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderated_by IS 'The admin whose decision moderation_status records. NULL while pending, and NULL on the rows migration 052 backfilled out of boardgamebuddy_games.rulebook_url — those were approved by having been admin-only data in the first place, and naming an admin who never looked at them would be a lie the audit trail cannot tell apart from a real decision.';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.avatar IS 'Customizable badge config: {icon, iconColor, bgColor}. icon is "initials" or an icon key from the client library. NULL = use BGB default (brown badge + gold initials).';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.needs_setup IS 'TRUE for brand-new accounts that have not yet completed the "Create your profile" modal. Cleared by the first successful POST /profile.';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS 'First time this account was seen running as an installed PWA (migration 062). Drives the "Pocket Buddy" achievement; nothing else reads it.';

@@ -332,10 +332,10 @@
      * and the roster carry over, the results do not, and no participant_id
      * comes along — those belong to the finished lobby.
      *
-     * The play row has no rulebook_url / is_expansion, so callers that can
-     * cheaply resolve the game (e.g. a warmed "game.bundle" cache entry) pass
-     * it as `gameExtras`; absent it the guide link just stays unset until the
-     * host flow loads the game itself.
+     * The play row has no is_expansion, so callers that can cheaply resolve the
+     * game (e.g. a warmed "game.bundle" cache entry) pass it as `gameExtras`.
+     * (It carried rulebook_url too until migration 052 made the rulebook a
+     * guide chapter, which the Play screen's own scroll fetches.)
      */
     static seedFromPlayRow(row, gameExtras = {}) {
       if (!row || !row.game_id) return null;
@@ -350,7 +350,6 @@
           // the caller could resolve the game (warm "game.bundle"), which is
           // what keeps the wrap-up card sharp on an Another-Round seed.
           image_url: g.image_url || null,
-          rulebook_url: g.rulebook_url || null,
           is_expansion: !!g.is_expansion,
         },
         expansionIds: (row.expansions || [])

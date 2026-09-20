@@ -44,7 +44,6 @@ from .models import (
     GameListResponse,
     GameSummary,
     MissingMetadataGame,
-    RulebookUrlUpdate,
 )
 from .services import admin_run_progress, game_service, search_service
 from .services._helpers import chunked, game_select_clause, page_all, parse_csv_param
@@ -949,44 +948,18 @@ async def refresh_single_game_images(
     return GameSummary(**refreshed.data[0])
 
 
-@router.patch(
-    "/games/admin/{game_id}/rulebook-url",
-    response_model=GameSummary,
-    status_code=200,
-    summary="Set or clear a game's rulebook URL (admin)",
-)
-async def update_game_rulebook_url(
-    body: RulebookUrlUpdate,
-    game_id: str = Path(..., description="Game UUID"),
-    _admin: CurrentUser = Depends(get_current_admin),
-) -> GameSummary:
-    """Admin-only: write rulebook_url on a game row. Pass null to clear it."""
-    sb = get_supabase()
-    existing = (
-        sb.table("boardgamebuddy_games")
-        .select("id")
-        .eq("id", game_id)
-        .execute()
-    )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    # Minimal http(s) validation — accept null/empty to clear, otherwise must
-    # look like a URL. Anything richer than this we leave to the admin's eyes.
-    url = body.rulebook_url.strip() if body.rulebook_url else None
-    if url and not (url.startswith("http://") or url.startswith("https://")):
-        raise HTTPException(status_code=400, detail="rulebook_url must start with http:// or https://")
-
-    updated = (
-        sb.table("boardgamebuddy_games")
-        .update({"rulebook_url": url})
-        .eq("id", game_id)
-        .execute()
-    )
-    if not updated.data:
-        raise HTTPException(status_code=500, detail="Failed to update rulebook_url")
-    _invalidate_game_caches()
-    return GameSummary(**updated.data[0])
+# RETIRED: PATCH /games/admin/{game_id}/rulebook-url (migration 052).
+#
+# It wrote boardgamebuddy_games.rulebook_url, the one admin-curated rulebook
+# link a game could have. A rulebook link is now a reference-guide chapter —
+# anyone can write one, an admin approves it, and who may see an unapproved one
+# is decided per reader (services/chapter_rulebook.py). Every value this
+# endpoint ever wrote was backfilled into an approved chapter by 052, and the
+# column is legacy: still selected by forty RPCs, read by nothing.
+#
+# Deleted rather than left in place because a second write path into a column
+# nothing reads is how a game ends up with two different rulebooks and no way to
+# tell which one anybody sees.
 
 
 # ── Admin: the catalog metadata sweep (migration 045) ────────────────────────

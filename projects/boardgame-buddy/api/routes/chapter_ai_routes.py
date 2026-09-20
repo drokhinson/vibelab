@@ -40,7 +40,7 @@ from .models import (
     ChapterGridGenerateRequest,
     ChapterGridGenerateResponse,
 )
-from .services import chapter_ai, chapter_grid, chapter_grid_ai
+from .services import chapter_ai, chapter_grid, chapter_grid_ai, chapter_rulebook
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +157,17 @@ async def generate_chapter(
                 "Scoring grid templates are drafted as rows — "
                 "POST to chapters/generate-grid instead."
             ),
+        )
+    # And a rulebook link's body is a URL somebody already has (migration 052).
+    # There is no drafter for it and there must not be: a model asked for a
+    # rulebook's address invents a plausible one, which on the single chapter
+    # kind that sends a reader off this origin is the worst possible output.
+    # The wizard skips the head-start step for this layout entirely; this is the
+    # refusal for anything that reaches the endpoint another way.
+    if body.chapter_type == chapter_rulebook.RULEBOOK_CHAPTER_TYPE:
+        raise HTTPException(
+            status_code=400,
+            detail="A rulebook link is a URL you paste, not a chapter to draft.",
         )
 
     sb = get_supabase()

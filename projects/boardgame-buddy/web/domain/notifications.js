@@ -75,6 +75,17 @@
     // It was FOUR, and collapsing three of them was a fix rather than tidying:
     // they counted three overlapping queues, so a game short of both its blurb
     // and its year was counted twice here and the gear's dot over-reported.
+    // The rulebook queue (migration 051). It passes the transience test the
+    // header comment sets for the same reason the reports one does — an admin
+    // approves or denies and it is gone — but it is the one admin signal where
+    // the number is not work outstanding so much as exposure: every pending
+    // link is already reachable by its author's buddies.
+    {
+      slot: "adminRulebookLinkCount",
+      gear: true,
+      adminTool: "rulebooks",
+      label: (n) => `${n} rulebook link${n === 1 ? "" : "s"} to review`,
+    },
     {
       slot: "adminMissingImageCount",
       gear: true,

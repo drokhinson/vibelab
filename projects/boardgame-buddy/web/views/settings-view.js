@@ -505,6 +505,17 @@
           title: "Chapter reports",
           sub: "Moderate community-reported reference-guide chapters.",
         },
+        // The rulebook queue (migration 052). Its own row rather than a tab on
+        // Chapter reports above: a report is a reader objecting to prose after
+        // publication, a rulebook link is an outbound destination reviewed on
+        // the way in, and one row could only carry one badge for the two.
+        {
+          route: "admin-rulebooks",
+          tool: "rulebooks",
+          icon: "book-open",
+          title: "Rulebook links",
+          sub: "Approve the rulebook links players add to their reference guides.",
+        },
         // ONE row for the catalog backfills. They were four Settings rows —
         // Missing images, Missing descriptions, Missing BGG stats, Missing
         // publishers — which is four rows saying the same sentence with a

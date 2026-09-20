@@ -72,6 +72,11 @@
         adminChapterReportCount: 0,
         adminMissingImageCount: 0,
         adminMissingMetaCount: 0,
+        // Rulebook links waiting on a decision (migration 052). The one admin
+        // queue here that is not tidy-up: a pending link is already live for
+        // its author's buddies, so this number is readers following an
+        // unreviewed outbound link.
+        adminRulebookLinkCount: 0,
         // The last /discover bundle, published by domain/discovery.js so the
         // Discover view repaints when a background SWR refresh lands. Declared
         // here for the reason profileBundle's comment gives: an undeclared
@@ -169,6 +174,7 @@
         adminChapterReportCount: 0,
         adminMissingImageCount: 0,
         adminMissingMetaCount: 0,
+        adminRulebookLinkCount: 0,
         // Zeroed: the picks are one account's taste, and the next account's
         // Discover tab must not open on them.
         discover: null,

@@ -1,4 +1,8 @@
-// views/game-detail-view.js — game detail w/ collection toggle + rulebook link
+// views/game-detail-view.js — game detail w/ collection toggle.
+//
+// The rulebook used to be an action button here, writing one admin-curated URL
+// onto the game row. Since migration 052 it is a reference-guide chapter and
+// the guide mounted further down this screen is the surface that shows it.
 // + expansions list (base game → expansions, expansion → base game)
 // + the viewer's own record with the game, above the plays it summarises.
 
@@ -218,7 +222,12 @@
                                 title="No BGG link available">
                 <i data-icon="external-link" class="w-4 h-4"></i> BGG
               </button>`}
-              ${this._renderRulebookButton(g)}
+              <!-- No Rulebook button here since migration 052. The link is a
+                   reference-guide chapter now, and the guide is mounted on this
+                   same screen a few rows down — where it also says "No rulebook
+                   link available" when there is none, and offers to add one.
+                   Two buttons on one screen opening the same URL is the
+                   duplicate .claude/rules/ui-object-design.md §3b is about. -->
             </div>
             ${this._renderDescription(g)}
             <div id="game-detail-buy">${this._renderBuy()}</div>
@@ -604,124 +613,21 @@
       this._guide.mount(host);
     }
 
-    // Rulebook button. Three shapes:
-    //  - has URL → link out, opens in new tab. Admins additionally get a
-    //    long-press handler that prompts to delete the URL.
-    //  - no URL + admin → "+ Rulebook" button that prompts for a URL and
-    //    writes it via the admin endpoint.
-    //  - no URL + non-admin → the original greyed-out button.
-    _renderRulebookButton(g) {
-      const me = window.store && window.store.get && window.store.get("user");
-      const isAdmin = !!(me && me.is_admin);
-      const url = g.rulebookUrl();
-      if (url) {
-        const adminAttrs = isAdmin
-          ? ` onpointerdown="window.gameDetailView._rulebookHoldStart()"
-              onpointerup="window.gameDetailView._rulebookHoldEnd()"
-              onpointercancel="window.gameDetailView._rulebookHoldEnd()"
-              onpointerleave="window.gameDetailView._rulebookHoldEnd()"
-              onclick="if(window.gameDetailView._rulebookSuppressClick(event)){return false;}"
-              title="Long-press to delete rulebook (admin)"`
-          : "";
-        return `<a class="btn game-detail__action game-detail__link-btn game-detail__link-btn--rulebook"
-                   href="${url}" target="_blank" rel="noopener"${adminAttrs}>
-                  <i data-icon="book-open" class="w-4 h-4"></i> Rulebook
-                </a>`;
-      }
-      if (isAdmin) {
-        return `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--add"
-                        onclick="window.gameDetailView._promptAddRulebook()"
-                        title="Set rulebook URL (admin)">
-                  <i data-icon="plus" class="w-4 h-4"></i> Rulebook
-                </button>`;
-      }
-      return `<button class="btn game-detail__action game-detail__link-btn game-detail__link-btn--disabled" disabled
-                      title="No rulebook available">
-                <i data-icon="book-open" class="w-4 h-4"></i> Rulebook
-              </button>`;
-    }
-
-    async _promptAddRulebook() {
-      const url = await window.PolaroidPopup.prompt({
-        title: "Rulebook URL", value: "https://", confirmLabel: "Save",
-      });
-      if (url == null) return;                    // user hit Cancel
-      const trimmed = url.trim();
-      if (!trimmed) return;
-      if (!/^https?:\/\//i.test(trimmed)) {
-        await window.PolaroidPopup.alert({ title: "Rulebook URL must start with http:// or https://" });
-        return;
-      }
-      try {
-        await window.Game.adminSetRulebookUrl(this._game.id, trimmed);
-        await this._reload();
-      } catch (e) {
-        const status = e && e.status ? ` (HTTP ${e.status})` : "";
-        await window.PolaroidPopup.alert({
-          title: "Couldn't set the rulebook URL",
-          body: `${status ? status.trim() + " " : ""}${(e && e.message) || e}`,
-        });
-      }
-    }
-
-    async _promptDeleteRulebook() {
-      const ok = await window.PolaroidPopup.confirm({
-        title: "Delete the rulebook URL for this game?",
-        confirmLabel: "Delete", cancelLabel: "Keep it", destructive: true,
-      });
-      if (!ok) return;
-      try {
-        await window.Game.adminSetRulebookUrl(this._game.id, null);
-        await this._reload();
-      } catch (e) {
-        // 404 on a delete usually means the URL is already gone (game record
-        // dropped, or the admin endpoint isn't deployed on this environment
-        // yet). Refresh the view so the user sees the current state instead
-        // of a scary error toast — the no-rulebook state is the goal anyway.
-        if (e && e.status === 404) {
-          console.warn("Rulebook delete 404 — refreshing view", e);
-          await this._reload();
-          return;
-        }
-        const status = e && e.status ? ` (HTTP ${e.status})` : "";
-        await window.PolaroidPopup.alert({
-          title: "Couldn't delete the rulebook URL",
-          body: `${status ? status.trim() + " " : ""}${(e && e.message) || e}`,
-        });
-      }
-    }
+    // RETIRED with migration 052: _renderRulebookButton, _promptAddRulebook,
+    // _promptDeleteRulebook and the long-press pair that armed them.
+    //
+    // They were the whole rulebook UI — an admin-only prompt writing
+    // boardgamebuddy_games.rulebook_url, a link for everybody else, and a
+    // greyed-out button for a game nobody had curated. A rulebook link is a
+    // reference-guide chapter now: anyone can write one, an admin approves it,
+    // and the guide mounted on this screen draws it (and says so when there is
+    // none). The admin endpoint they called is gone with them.
 
     async _reload() {
       // Bust the cached detail bundle and re-render so the new state shows.
       // _load() reads this.params, so no arg needed — just refresh.
       window.Game.invalidateBundle(this._game.id);
       await this._load();
-    }
-
-    // Long-press detector. Starts a 600ms timer on pointerdown; if it fires
-    // before pointerup, the delete prompt opens and a "suppress next click"
-    // flag is raised so the link doesn't ALSO navigate to the rulebook PDF.
-    _rulebookHoldStart() {
-      this._rulebookHoldTimer = setTimeout(() => {
-        this._rulebookHoldTimer = null;
-        this._rulebookSuppressNextClick = true;
-        this._promptDeleteRulebook();
-      }, 600);
-    }
-    _rulebookHoldEnd() {
-      if (this._rulebookHoldTimer) {
-        clearTimeout(this._rulebookHoldTimer);
-        this._rulebookHoldTimer = null;
-      }
-    }
-    _rulebookSuppressClick(event) {
-      if (this._rulebookSuppressNextClick) {
-        this._rulebookSuppressNextClick = false;
-        event.preventDefault();
-        event.stopPropagation();
-        return true;
-      }
-      return false;
     }
 
     async _startPlay() {
@@ -754,7 +660,6 @@
         name: this._game.name,
         thumbnail_url: this._game.thumbnail_url,
         image_url: this._game.image_url || null,
-        rulebook_url: this._game.rulebook_url,
       };
       ps.playMode = this._game.play_mode || null;
       ps.persist();

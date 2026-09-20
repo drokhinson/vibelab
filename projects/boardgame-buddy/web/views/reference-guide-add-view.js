@@ -36,6 +36,13 @@
   // backend pairs it with — the two are 1:1, which is why _pickType derives one
   // from the other rather than asking twice.
   const GRID_TYPE = "scoring_grid";
+  // The rulebook link's chapter type and its layout (migration 052). Two
+  // constants because, unlike the grid, the two strings differ: the type says
+  // the chapter IS the rulebook, the layout says its body is a URL in
+  // `link_url`. The API cross-checks the pair in both directions
+  // (services/chapter_rulebook.validate_layout_pairing).
+  const LINK_TYPE = "rulebook";
+  const LINK_LAYOUT = "rulebook_link";
 
   // The body of an expanded chapter. A scoring grid's rows live in `grid`, not
   // in `content` — `content` holds a generated bullet mirror of them, which is
@@ -217,6 +224,12 @@ components above.
       // Only the `scoring` type offers the choice; every other type is text.
       this._formLayout = "text";
       this._formRows = [];           // [{label, color, note}] — scoring_grid only
+      // The URL of a rulebook_link chapter (migration 052). Its own field
+      // rather than reusing _formContent: `content` is a mirror this view
+      // GENERATES from the URL, the same way it generates one from the grid's
+      // rows, and the two must not be one buffer or an edit to the mirror would
+      // read as an edit to the link.
+      this._formLinkUrl = "";
       // How an EXPANSION's grid meets the base game's (migration 032):
       // "add_on" appends its rows to the base template, "replace" stands in
       // for it. Only asked when the save target IS an expansion — see
@@ -427,6 +440,20 @@ components above.
         this._loadChapterIntoForm(c);
         this._tab = "edit";
         this._arrivedByRoute = true;
+      } else if (p.mode === "create" && p.layout === LINK_LAYOUT) {
+        // External create entry: the reference guide's Rulebook section, from
+        // either "No rulebook link available" or "Add another" (migration 052).
+        //
+        // Straight to the URL field. Step 0 asks for a chapter type the caller
+        // has already named, and step 1 offers an AI head start on a body no
+        // model can draft — the author is pasting an address they already have.
+        // Same reasoning as the grid route below, one step shorter.
+        this._tab = "create";
+        this._pickType(LINK_TYPE);
+        this._step = 2;
+        this._arrivedByRoute = true;
+        // No wizard guard, for the reason spelled out in the grid branch below:
+        // a routed wizard owns the screen's own history entry already.
       } else if (p.mode === "create" && p.layout === GRID_TYPE) {
         // External create entry: the reference guide's Scoring section, on a
         // game that has no scoring grid at all, offers "tap to build one" and
@@ -800,11 +827,11 @@ components above.
     // whatever the current step requires (a chapter type on step 0).
     _wizNext() {
       if (this._tab !== "create") return;
-      // Every layout walks all three steps. A grid used to jump 0 → 2 past the
-      // AI head start, because that step drafted markdown and a grid holds no
-      // markdown; it has a drafter of its own now (_onGenerateGrid), so there
-      // is nothing left to skip here and no asymmetry to mirror in _wizBack.
-      this._step = Math.min(2, this._step + 1);
+      // Every layout walks all three steps, EXCEPT a rulebook link, which
+      // jumps 0 → 2 past the AI head start because there is nothing there to
+      // draft (see _wizardSteps). _wizBack mirrors the jump, or Back off the
+      // editor would land on a step with no content and no way forward.
+      this._step = this._isLinkLayout() ? 2 : Math.min(2, this._step + 1);
       this._error = null;
       this.render();
     }
@@ -812,6 +839,25 @@ components above.
     /** True when the create wizard is authoring a scoring grid, not markdown. */
     _isGridLayout() {
       return this._formLayout === "scoring_grid";
+    }
+
+    /** True when it is authoring a rulebook link (migration 052). */
+    _isLinkLayout() {
+      return this._formLayout === LINK_LAYOUT;
+    }
+
+    /**
+     * How many steps this wizard actually has.
+     *
+     * Two for a rulebook link, three for everything else. The middle step is
+     * the AI head start, and a link has nothing to draft — the author is
+     * pasting a URL they already have, and no model can guess it. This is not
+     * the asymmetry migration 021 removed from the grid wizard: a grid's rows
+     * CAN be drafted and now are, where a link step 1 would be a screen
+     * offering to invent somebody else's web address.
+     */
+    _wizardSteps() {
+      return this._isLinkLayout() ? 2 : 3;
     }
 
     // Step back, and off the front of the wizard back to browse. Shared by the
@@ -837,7 +883,9 @@ components above.
         this._exitEditor();
         return;
       }
-      this._step -= 1;
+      // The mirror of _wizNext's jump: a link's step 2 goes back to step 0,
+      // never to the drafting step it skipped on the way in.
+      this._step = this._isLinkLayout() ? 0 : this._step - 1;
       this._error = null;
       this.render();
     }
@@ -1269,7 +1317,14 @@ components above.
       this._formContent = c.content || "";
       this._formType = c.chapter_type || "";
       const rows = (c.grid && Array.isArray(c.grid.rows)) ? c.grid.rows : null;
-      this._formLayout = c.layout === "scoring_grid" && rows ? "scoring_grid" : "text";
+      // A rulebook link is recognised off the layout AND the URL it must carry
+      // — the same defensive pair the grid uses one line down. A row claiming
+      // the layout with no link would otherwise open an editor with nothing in
+      // it and save a chapter the API refuses.
+      this._formLayout = c.layout === "scoring_grid" && rows
+        ? "scoring_grid"
+        : (c.layout === LINK_LAYOUT && c.link_url ? LINK_LAYOUT : "text");
+      this._formLinkUrl = c.link_url || "";
       this._formRows = rows
         ? rows.map((r) => ({
             label: r.label || "",
@@ -1405,9 +1460,15 @@ components above.
       // Three steps whatever the layout. The grid wizard used to count two,
       // because it skipped the AI head start; it visits that step now
       // (_onGenerateGrid), so a two-step bar would be undercounting.
+      // A rulebook link's wizard is two steps, not three (see _wizardSteps).
+      // Its editor step is index 2 internally — the shared shell's step slot —
+      // so the BAR is told index 1 of 2 rather than 2 of 3, which is what the
+      // author actually walked.
+      const total = this._wizardSteps();
+      const barStep = (total === 2 && step === 2) ? 1 : step;
       const bar = isEditing
         ? ""
-        : window.BgbWizardProgress.render({ step, total: 3 });
+        : window.BgbWizardProgress.render({ step: barStep, total });
 
       let body;
       if (step === 0) {
@@ -1595,7 +1656,70 @@ components above.
     // selection, and the popovers restore a caret the re-render destroyed.
     _renderEditStep(isEditing) {
       if (this._isGridLayout()) return this._renderGridStep(isEditing);
+      if (this._isLinkLayout()) return this._renderLinkStep(isEditing);
       return this._renderMarkdownStep(isEditing);
+    }
+
+    /**
+     * The rulebook-link body: one URL field, and the sentence that says what
+     * happens to it next.
+     *
+     * No title field, no markdown toolbar, no Write/Preview toggle and no
+     * Import — the same subtraction the grid step makes, for the same reason.
+     * The title is derived by the backend from the game
+     * (services/chapter_rulebook.rulebook_title) and `content` is a generated
+     * mirror of the URL, so there is exactly one thing here to type.
+     *
+     * The "what happens next" line is not decoration. This is the one chapter
+     * an author writes that does not appear for everybody the moment they save
+     * it, and finding that out from a badge afterwards reads as the save having
+     * half-failed. An admin's own link skips the queue, so they are told that
+     * instead — saying "an admin will review it" to the admin who would review
+     * it is the kind of copy that makes a feature look unfinished.
+     *
+     * type="url" for the keyboard it raises on a phone (a slash and a dot on
+     * the main plane), with inputmode and the autocorrect trio off: a URL
+     * autocapitalised to "Https://" is a link that 400s on save.
+     */
+    _renderLinkStep(isEditing) {
+      const me = window.store && window.store.get("user");
+      const isAdmin = !!(me && me.is_admin);
+      const note = isAdmin
+        ? "Your link goes live for everyone as soon as you save it."
+        : "Your buddies can use it straight away. Everyone else sees it once an admin approves it.";
+      return `
+        ${this._renderTypeRow(isEditing)}
+
+        <div class="chapter-edit__titlerow">
+          <input id="chapter-link-url" type="url" required
+                 class="chapter-edit__titlefield chapter-edit__titlefield--url"
+                 maxlength="2048"
+                 inputmode="url" autocomplete="off"
+                 autocapitalize="off" autocorrect="off" spellcheck="false"
+                 placeholder="https://…"
+                 value="${escapeAttr(this._formLinkUrl)}"
+                 oninput="window.referenceGuideAddView._onLinkInput(this.value)" />
+        </div>
+
+        <p class="chapter-edit__linknote">
+          <i data-icon="info" class="w-4 h-4"></i>
+          <span>${escapeHtml(note)}</span>
+        </p>
+
+        ${this._error ? `<div class="text-error text-sm chapter-edit__error">${escapeHtml(this._error)}</div>` : ""}
+      `;
+    }
+
+    /**
+     * Buffer the URL without repainting.
+     *
+     * No render(): the input already shows what was typed, and a repaint would
+     * destroy the field along with its focus and caret mid-keystroke — the
+     * hazard .claude/rules/overlays.md §6 is about, and the same reason
+     * _tmplSetLabel does not repaint either.
+     */
+    _onLinkInput(v) {
+      this._formLinkUrl = v || "";
     }
 
     // The scoring-grid body: a row list and nothing else — no title field, no
@@ -1889,7 +2013,9 @@ components above.
       // and the backend's services/chapter_grid.py 400s the pair that disagrees
       // (as does the DB's bgb_chapters_grid_shape CHECK). Deriving it here is
       // what keeps the two in step without asking the user twice.
-      this._formLayout = id === "scoring_grid" ? "scoring_grid" : "text";
+      this._formLayout = id === GRID_TYPE
+        ? "scoring_grid"
+        : (id === LINK_TYPE ? LINK_LAYOUT : "text");
       // Seed one empty row so the grid editor opens on something to fill in
       // rather than on its own empty state.
       if (this._formLayout === "scoring_grid" && !this._formRows.length) {
@@ -2538,6 +2664,28 @@ components above.
       this.render();
     }
 
+    /**
+     * What a saved rulebook link is told.
+     *
+     * Not "saved": the whole point of the gate is that this one chapter does
+     * not go live for everyone when the author hits Save, and a toast that says
+     * nothing about it is how somebody concludes the link is broken when a
+     * stranger cannot see it. An admin's link IS live, and hears that instead.
+     *
+     * Editing the URL re-opens the gate server-side
+     * (chapter_routes._update_chapter_sync), so the edit path gets the same
+     * sentence rather than a quieter one.
+     */
+    _linkSavedMessage(isEditing) {
+      const me = window.store && window.store.get("user");
+      if (me && me.is_admin) {
+        return isEditing ? "Rulebook link updated — it's live" : "Rulebook link added — it's live";
+      }
+      return isEditing
+        ? "Rulebook link updated — back to an admin for approval"
+        : "Rulebook link added — your buddies can see it while an admin reviews it";
+    }
+
     async _submitForm(event) {
       event.preventDefault();
       // Only the editor step saves. The earlier steps live inside the same
@@ -2556,6 +2704,7 @@ components above.
       }
       const title = (this._formTitle || "").trim();
       const isGrid = this._isGridLayout();
+      const isLink = this._isLinkLayout();
 
       // A grid's rows ARE its body, so they answer the "is there anything to
       // save" question that `content` answers for markdown. `content` is then
@@ -2565,6 +2714,7 @@ components above.
       // the same string from the rows; sending it here just means an offline
       // reader of the cached row sees prose rather than an empty body.
       let rows = null;
+      let linkUrl = null;
       let content = (this._formContent || "").trim();
       if (isGrid) {
         rows = (this._formRows || [])
@@ -2590,6 +2740,28 @@ components above.
         content = rows
           .map((r) => (r.note ? `- ${r.label} (${r.note})` : `- ${r.label}`))
           .join("\n");
+      } else if (isLink) {
+        // A rulebook link's URL is its body, so it answers the "is there
+        // anything to save" question `content` answers for markdown. The
+        // scheme test is the same one the API applies
+        // (services/chapter_rulebook.clean_url) and the DB pins
+        // (bgb_chapters_link_shape) — checked here as well so a typo is a
+        // sentence under the field rather than a round trip and a 400.
+        linkUrl = (this._formLinkUrl || "").trim();
+        if (!linkUrl) {
+          this._error = "Paste the link to the rulebook.";
+          this.render();
+          return;
+        }
+        if (!/^https?:\/\/\S+$/i.test(linkUrl)) {
+          this._error = "A rulebook link must start with http:// or https://";
+          this.render();
+          return;
+        }
+        // Mirrors services/chapter_rulebook.url_to_content, which regenerates
+        // this server-side; the copy sent here is only so an offline reader of
+        // the cached row sees a link rather than an empty body.
+        content = `[Rulebook](${linkUrl})`;
       } else if (!title || !content) {
         this._error = "Title and content are required.";
         this.render();
@@ -2599,7 +2771,7 @@ components above.
       // on create and absent entirely on update, which was invisible while
       // 'text' was the only value the column's CHECK allowed and is a hard error
       // the moment it isn't.
-      const layout = isGrid ? "scoring_grid" : "text";
+      const layout = isGrid ? "scoring_grid" : (isLink ? LINK_LAYOUT : "text");
       // The mode rides on the document but is only MEANINGFUL for an
       // expansion's grid, and the backend is the authority on which games those
       // are — it re-resolves the field against the chapter's own game
@@ -2611,7 +2783,15 @@ components above.
       // A grid has no title of its own: the backend derives one from the game
       // (services/chapter_grid.grid_title) and overwrites whatever a client
       // sends, so sending one would only invite the two to disagree.
-      const titleFields = isGrid ? {} : { title };
+      // Neither generated layout carries a typed title: the backend derives one
+      // from the game (services/chapter_grid.grid_title,
+      // services/chapter_rulebook.rulebook_title) and overwrites whatever a
+      // client sends, so sending one would only invite the two to disagree.
+      const titleFields = (isGrid || isLink) ? {} : { title };
+      // Sent only on the layout that has one — the API 422s a link_url on any
+      // other layout, which is the mirror of the grid rule above and is what
+      // keeps a stale client from writing a link onto a prose chapter.
+      const linkFields = isLink ? { link_url: linkUrl } : {};
       this._saving = true;
       this.render();
       const isEditing = this._tab === "edit";
@@ -2622,20 +2802,28 @@ components above.
           await window.Chapter.update(this._editingChapterId, {
             chapter_type: this._formType,
             ...titleFields,
+            ...linkFields,
             content,
             layout,
             grid,
           });
-          showToast("Chapter updated", "success");
+          showToast(
+            isLink ? this._linkSavedMessage(true) : "Chapter updated",
+            "success"
+          );
         } else {
           await window.Chapter.create(targetGameId, {
             chapter_type: this._formType,
             ...titleFields,
+            ...linkFields,
             content,
             layout,
             grid,
           });
-          showToast("Chapter added to your guide", "success");
+          showToast(
+            isLink ? this._linkSavedMessage(false) : "Chapter added to your guide",
+            "success"
+          );
         }
         window.Chapter.invalidateChaptersCache();
         document.dispatchEvent(new CustomEvent("chapters-changed", {

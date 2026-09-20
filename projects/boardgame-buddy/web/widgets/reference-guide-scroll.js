@@ -33,6 +33,25 @@
     return c.layout === "scoring_grid" || c.chapter_type === "scoring_grid";
   }
 
+  // A rulebook link is the other chapter drawn outside the type-ordered flow
+  // (migration 052), and it is drawn FIRST rather than last. The order is the
+  // argument: the rulebook is the document every other chapter is a shortcut
+  // around, so it heads the scroll, where the score sheet — a table you fill in
+  // rather than read — sits at the foot.
+  //
+  // Read defensively off either column, exactly as the API's
+  // services/chapter_rulebook.is_rulebook_row does: a row that is a rulebook
+  // link by either measure must not end up rendered as markdown whose whole
+  // body is a bare URL.
+  function isRulebook(c) {
+    return c.layout === "rulebook_link" || c.chapter_type === "rulebook";
+  }
+
+  /** Host of a URL, for the one-line "where this goes" under the button. */
+  function linkHost(url) {
+    try { return new URL(url).host; } catch (_) { return url || ""; }
+  }
+
   /**
    * The rows of a scoring grid, or null for any other chapter. Read
    * defensively: a row cached before migration 018, and a stale layout with no
@@ -108,14 +127,22 @@
      *   renders the live scorepad (the Play cascade, the session viewer) —
      *   there the same table two cards apart is a duplicate, not a reference.
      *   The "a grid exists for this game" offer is unaffected either way.
+     * @param {boolean} [opts.showRulebook=true] draw the Rulebook section
+     *   (migration 052). There is no surface that needs it off today — the
+     *   game page and both cascade screens all want it, and it is THE place the
+     *   link lives since 052 took it off the game row. The flag exists so a
+     *   future screen that shows the link itself can turn the section off
+     *   rather than showing it twice, which is the rule
+     *   .claude/rules/ui-object-design.md §3b states.
      */
     constructor({ gameIds, baseGameId, expansionMeta, onAfterMutate, defaultOpen = true, gameImage = null,
-                  showScoringGrids = true } = {}) {
+                  showScoringGrids = true, showRulebook = true } = {}) {
       this._baseGameId = baseGameId || (gameIds && gameIds[0]) || null;
       this._gameIds = (gameIds && gameIds.length) ? gameIds.slice() : (this._baseGameId ? [this._baseGameId] : []);
       this._expansionMeta = expansionMeta || {};
       this._onAfterMutate = onAfterMutate || (() => {});
       this._showScoringGrids = showScoringGrids !== false;
+      this._showRulebook = showRulebook !== false;
       // Set once the scoring-grid pool has actually been fetched — see
       // _fetchTemplates. Until then "this game has no grid" is unknown, not false.
       this._templatesLoaded = false;
@@ -130,6 +157,14 @@
       // Scoring-grid chapters that EXIST for this game, adopted or not
       // (migration 018). Drives the "templates available" notice.
       this._templates = [];
+      // The rulebook links this viewer is allowed to see for this game
+      // (migration 052), and whether that answer has actually landed. Same
+      // split as _templatesLoaded above and for the same reason: an empty list
+      // before the fetch is silence, and "no rulebook link available" is a
+      // CLAIM — printing it while the request is still out would flash the one
+      // sentence that is worst to be wrong about.
+      this._rulebooks = [];
+      this._rulebooksLoaded = false;
       // How many chapters exist for this game at all — the denominator of the
       // Edit-chapters button. `null` is "not known yet", which is a different
       // thing from 0 ("nobody has written one"), exactly as _templatesLoaded
@@ -203,6 +238,13 @@
       if (!window.session) {
         this._chapters = [];
         this._render();
+        // A signed-out reader has no guide, and still has a rulebook: the pool
+        // endpoint takes optional auth and hands an anonymous caller the
+        // APPROVED links and nothing else (migration 052). This matters for a
+        // real screen rather than in theory — a guest watching a session from a
+        // join code is signed out, and before 052 the link reached them on the
+        // session payload.
+        this._fetchRulebooks();
         return;
       }
       const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
@@ -246,8 +288,74 @@
         // awaited: the notice is a nudge and must never hold up the chapters
         // somebody opened the scroll to read.
         this._fetchTemplates();
+        this._fetchRulebooks();
         this._fetchPoolCount();
       }
+    }
+
+    // ── The rulebook link (migration 052) ───────────────────────────────────
+
+    /**
+     * The rulebook links this viewer may see for this game.
+     *
+     * Same cache-then-revalidate shape as _fetchTemplates below, and fired
+     * beside it for the same reason: the guide's own chapters are what somebody
+     * opened the scroll to read and must not wait on this.
+     *
+     * The list arrives ALREADY FILTERED by the server — a pending link reaches
+     * its author and their buddies and nobody else
+     * (api/routes/services/chapter_rulebook.py). Nothing here re-checks that,
+     * and nothing here may: a client that filtered would be filtering rows it
+     * had already been handed.
+     */
+    async _fetchRulebooks() {
+      // No `window.session` gate, unlike every other fetch on this widget: the
+      // rulebook pool is the one read here that serves a signed-out caller.
+      if (!this._baseGameId) return;
+      const expansionIds = this._gameIds.filter((id) => id !== this._baseGameId);
+      const cached = window.Chapter && window.Chapter.cachedRulebookLinks
+        ? window.Chapter.cachedRulebookLinks(this._baseGameId, expansionIds, { stale: true })
+        : null;
+      if (cached) {
+        this._rulebooks = cached;
+        this._paintRulebook();
+      }
+      try {
+        const rows = await window.Chapter.rulebookLinks(
+          this._baseGameId, { expansionIds }
+        ) || [];
+        this._rulebooks = rows;
+        if (window.Chapter.cacheRulebookLinks) {
+          window.Chapter.cacheRulebookLinks(this._baseGameId, expansionIds, rows);
+        }
+        // Only a live answer sets this, exactly as _templatesLoaded works: "no
+        // rulebook link available" is a claim, and a seeded empty array is not
+        // that claim.
+        this._rulebooksLoaded = true;
+      } catch (_) {
+        // Leave whatever the cache seeded. A guide that cannot reach the
+        // network still shows yesterday's link, which at a table is the whole
+        // point of the cache.
+      }
+      this._paintRulebook();
+    }
+
+    /**
+     * THE link for this game.
+     *
+     * The choice lives in domain/chapter.js rather than here, even though this
+     * widget is its only caller today: a game can have several links and every
+     * surface that shows "the rulebook" has to pick the same one, so the moment
+     * a second surface wants it the answer must already be somewhere shared.
+     * There is deliberately no `guide-rulebook-loaded` event to go with the
+     * scoring pool's: nothing outside this widget draws the link any more (the
+     * game page's button and both cascade rows went with migration 052), and an
+     * announcement nobody listens to is dead code that reads as a contract.
+     */
+    _currentRulebook() {
+      return window.Chapter && window.Chapter.resolveRulebook
+        ? window.Chapter.resolveRulebook(this._rulebooks)
+        : null;
     }
 
     // ── "Scoring templates available" notice (migration 018) ────────────────
@@ -352,7 +460,7 @@
      * the play screen, and that one wants the grids.
      */
     _visibleChapters() {
-      return (this._chapters || []).filter((c) => !isScoringGrid(c));
+      return (this._chapters || []).filter((c) => !isScoringGrid(c) && !isRulebook(c));
     }
 
     /**
@@ -513,6 +621,236 @@
       // "Edit guide" → "Edit guide (3 of 12)" can change the button's height,
       // and the count lands asynchronously — including in the middle of an
       // unroll, against a cap measured before it existed.
+      this._syncOpenHeight();
+    }
+
+    /**
+     * The Rulebook section — always the FIRST section of the scroll, and the
+     * one section that renders something even when it has nothing.
+     *
+     * "No rulebook link available" is printed, not omitted. An absent section
+     * is indistinguishable from a section that has not loaded, and the question
+     * it answers — where are the actual rules — is the one somebody opens a
+     * reference guide holding. Saying nothing made every game with no link look
+     * exactly like a game whose link had failed to draw, which is the bug this
+     * section exists to fix.
+     *
+     * Silence is kept for exactly one state: before the fetch lands. An empty
+     * `_rulebooks` then is not an answer (see _fetchRulebooks), and flashing
+     * "none available" a beat before a link appears is worse than a blank.
+     *
+     * Three things can be on it, in order:
+     *   * the resolved link — the one every surface agrees on
+     *     (domain/chapter.js#resolveRulebook), with a badge when it is not
+     *     approved yet;
+     *   * the viewer's OWN link when it is not the resolved one — the only
+     *     place a denial is ever visible, and the reason a denial is a status
+     *     rather than a delete;
+     *   * the add affordance, when there is no link or the viewer has not
+     *     written one.
+     */
+    _renderRulebookSection() {
+      if (!this._showRulebook) return "";
+      if (!this._rulebooksLoaded && !(this._rulebooks || []).length) return "";
+
+      const link = this._currentRulebook();
+      const me = window.store && window.store.get("user");
+      const myId = me && me.id;
+      const mine = myId
+        ? (this._rulebooks || []).find((r) => r.created_by === myId)
+        : null;
+      const mineIsShown = !!(mine && link && mine.id === link.id);
+
+      const body = link
+        ? this._renderRulebookLink(link, myId)
+        : `<p class="scroll-rulebook__none">No rulebook link available.</p>`;
+
+      // The author's own link, when it is not the one on show: pending behind
+      // somebody else's approved link, or turned down. Nobody else is ever sent
+      // this row — the server does not send them the chapter — so it is safe to
+      // say plainly what happened to it.
+      const mineNote = (mine && !mineIsShown) ? this._renderMyRulebookNote(mine) : "";
+
+      return `
+        <section class="scroll-section scroll-section--rulebook" data-type="rulebook">
+          <h4 class="scroll-section__header">
+            <i data-icon="book-open" class="w-4 h-4"></i>
+            Rulebook
+          </h4>
+          ${body}
+          ${mineNote}
+          ${mine || !window.session ? "" : this._renderAddRulebook(!!link)}
+        </section>
+      `;
+    }
+
+    /**
+     * The rolled-up copy: the link, and nothing else.
+     *
+     * The peek is a strip, not a section — it is ALL you see on the Play
+     * screen with the scroll rolled — so it carries the one thing somebody
+     * mid-game reaches for and none of the chrome the open section has room
+     * for: no heading (the strip sits under a card already labelled Reference
+     * guide), no author line, no Report or Edit, and no Add. Adding a link is a
+     * deliberate act and belongs on the open scroll; reaching the rules is not.
+     *
+     * It still says "No rulebook link available", because rolled up is the one
+     * state where the section saying it is hidden — and silence there is the
+     * ambiguity this whole section exists to remove.
+     */
+    _renderRulebookPeek() {
+      if (!this._showRulebook) return "";
+      if (!this._rulebooksLoaded && !(this._rulebooks || []).length) return "";
+      const link = this._currentRulebook();
+      if (!link) {
+        return `<p class="scroll-rulebook__none scroll-rulebook__none--peek">No rulebook link available.</p>`;
+      }
+      const pending = link.moderation_status === "pending";
+      return `
+        <a class="scroll-rulebook__cta scroll-rulebook__cta--peek"
+           href="${escapeAttr(link.link_url || "")}" target="_blank" rel="noopener">
+          <i data-icon="book-open" class="w-4 h-4"></i>
+          <span>Rulebook</span>
+          ${pending ? `<span class="scroll-rulebook__badge">Not reviewed yet</span>` : ""}
+          <i data-icon="external-link" class="w-3.5 h-3.5"></i>
+        </a>
+      `;
+    }
+
+    /**
+     * The link itself. An anchor, not a button that navigates: a rulebook is
+     * usually a PDF somebody wants in another tab, and long-pressing a real
+     * anchor is how a phone offers "open in new tab" and "copy link".
+     *
+     * `rel="noopener"` is not optional here and not ceremony: this is the one
+     * place in the app that sends a reader to a URL a stranger typed.
+     */
+    _renderRulebookLink(link, myId) {
+      const url = link.link_url || "";
+      const pending = link.moderation_status === "pending";
+      const author = link.created_by_name
+        ? `Added by ${link.created_by_name}`
+        : "Added by an admin";
+      const badge = pending
+        ? `<span class="scroll-rulebook__badge" title="An admin has not reviewed this link yet">
+             <i data-icon="clock" class="w-3 h-3"></i>
+             ${link.created_by === myId ? "Waiting for approval" : "Not reviewed yet"}
+           </span>`
+        : "";
+      return `
+        <div class="scroll-rulebook">
+          <a class="scroll-rulebook__cta" href="${escapeAttr(url)}"
+             target="_blank" rel="noopener">
+            <i data-icon="book-open" class="w-4 h-4"></i>
+            <span>Open the rulebook</span>
+            <i data-icon="external-link" class="w-3.5 h-3.5"></i>
+          </a>
+          <div class="scroll-rulebook__meta">
+            <span class="scroll-rulebook__host">${escapeHtml(linkHost(url))}</span>
+            <span class="scroll-rulebook__by">${escapeHtml(author)}</span>
+            ${badge}
+          </div>
+          <div class="scroll-rulebook__actions">
+            ${link.created_by === myId ? `
+              <button class="btn btn-ghost btn-xs"
+                      onclick="window.referenceGuideScroll._editChapter('${link.id}', event)">
+                <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit
+              </button>` : `
+              <button class="btn btn-ghost btn-xs"
+                      onclick="window.referenceGuideScroll._reportChapter('${link.id}', event)">
+                <i data-icon="flag" class="w-3.5 h-3.5"></i> Report
+              </button>`}
+          </div>
+        </div>
+      `;
+    }
+
+    /** The author's own link when something else is on show, or nothing is. */
+    _renderMyRulebookNote(mine) {
+      const denied = mine.moderation_status === "denied";
+      const text = denied
+        ? "An admin turned your rulebook link down. Edit it to submit a different one."
+        : "Your rulebook link is waiting for approval — your buddies can see it already.";
+      return `
+        <p class="scroll-rulebook__mine${denied ? " scroll-rulebook__mine--denied" : ""}">
+          <i data-icon="${denied ? "x" : "clock"}" class="w-3.5 h-3.5"></i>
+          <span>${text}</span>
+          <button class="btn btn-ghost btn-xs"
+                  onclick="window.referenceGuideScroll._editChapter('${mine.id}', event)">
+            <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit
+          </button>
+        </p>
+      `;
+    }
+
+    /**
+     * "Add a rulebook link" — offered to anyone signed in who has not written
+     * one for this game, whether or not a link is already on show. A second
+     * link is a legitimate thing to add: the one on show may be for a different
+     * printing, a different language, or a dead host.
+     *
+     * Not offered to somebody who already has one, because the API refuses that
+     * (one link per game per author, idx_bgb_chapters_rulebook_author) — the
+     * button would be a tap into a 409. Editing theirs is the path, and the row
+     * above carries that button.
+     */
+    _renderAddRulebook(hasLink) {
+      return `
+        <button class="scroll-panel__notice scroll-panel__notice--create" type="button"
+                onclick="window.referenceGuideScroll._addRulebook(event)">
+          <i data-icon="plus" class="w-4 h-4"></i>
+          <span class="scroll-panel__notice-text">
+            ${hasLink ? "Add another rulebook link" : "Add a rulebook link"}
+          </span>
+        </button>
+      `;
+    }
+
+    /**
+     * Into the chapter wizard on its link step, against the BASE game.
+     *
+     * Always the base game and never an active expansion, for the reason
+     * _openCreateTemplate gives about grids: the rulebook is the book for the
+     * table, and the base game is the pool every player of it reads. Filing one
+     * against an expansion deliberately is still possible from the Browse
+     * screen's own target selector.
+     */
+    _addRulebook(event) {
+      if (event) event.stopPropagation();
+      window.router.go("reference-guide-add", {
+        gameId: this._baseGameId,
+        gameName: this._baseGameName(),
+        expansionIds: this._gameIds.filter((id) => id !== this._baseGameId).join(","),
+        mode: "create",
+        layout: "rulebook_link",
+      });
+    }
+
+    /**
+     * Patch the rulebook hosts in place — the body's section and the peek's
+     * copy — rather than re-rendering. Same hazard, and the same reason, as
+     * _paintNotice: a full render destroys the search field mid-keystroke.
+     */
+    _paintRulebook() {
+      if (!this._container) return;
+      const html = this._renderRulebookSection();
+      const peekHtml = this._renderRulebookPeek();
+      const hosts = this._container.querySelectorAll("[data-rulebook-host]");
+      if (!hosts.length) {
+        // No host in the DOM: the scroll is anonymous or still loading. A full
+        // render is right if there is now something to say and harmless
+        // otherwise — the same fallback _paintNotice takes.
+        if (html) this._render();
+        return;
+      }
+      for (const host of hosts) {
+        host.innerHTML = host.classList.contains("scroll-panel__rulebook-host--peek")
+          ? peekHtml
+          : html;
+        window.BgbIcons.render(host);
+      }
+      // The section just changed height under a cap that may have been measured
+      // before it existed.
       this._syncOpenHeight();
     }
 
@@ -973,6 +1311,11 @@
         return `
           <div class="scroll-panel">
             <div class="scroll-panel__body">
+              <!-- The rulebook is the one thing here a signed-out reader can
+                   still use, so it sits above the sign-in line rather than
+                   behind it. A guest watching a session from a join code is
+                   exactly this viewer. -->
+              <div class="scroll-panel__rulebook-host" data-rulebook-host>${this._renderRulebookSection()}</div>
               <div class="scroll-panel__empty">
                 <p>Sign in to build a reference guide.</p>
                 <button class="btn btn-primary btn-sm mt-2" onclick="window.router.go('auth')">
@@ -1001,10 +1344,14 @@
             <div class="scroll-panel__body">
               <div class="scroll-panel__empty">
                 <p>Add chapters for quick rule lookup and clarification.</p>
-                <!-- No whitespace inside either host: :empty does not match an
+                <!-- No whitespace inside any host: :empty does not match an
                      element holding a whitespace text node, and an empty host is
                      a flex item that would otherwise buy a gap with nothing in
                      it. Same reason in State C below. -->
+                <!-- The rulebook leads even the empty state. A guide with
+                     nothing in it is exactly where "where are the rules" is the
+                     live question. -->
+                <div class="scroll-panel__rulebook-host" data-rulebook-host>${this._renderRulebookSection()}</div>
                 <div class="scroll-panel__notice-host" data-notice-host>${this._renderScoringCta()}</div>
                 <div class="scroll-panel__add-host" data-add-host>${this._renderAddButton()}</div>
               </div>
@@ -1071,6 +1418,15 @@
                    suppressed — and the strip itself goes with them rather than
                    being left as a band of padding between the roll and the body.
                    That is the --nosearch:not(--rolled) rule in styles.css. -->
+              <!-- The rulebook rides in the peek for the same reason the
+                   scoring offer does: rolled up is how the Play screen opens
+                   this scroll, and "where are the rules" is a question asked
+                   mid-game, not one worth an unroll. Shown only while rolled —
+                   open, the section at the top of the body says it in the place
+                   the link belongs, and two copies of one link on one screen is
+                   the duplicate .claude/rules/ui-object-design.md §3b is about.
+                   Both are the same anchor to the same URL. -->
+              <div class="scroll-panel__rulebook-host scroll-panel__rulebook-host--peek" data-rulebook-host>${this._renderRulebookPeek()}</div>
               <div class="scroll-panel__notice-host" data-notice-host>${this._renderScoringCta()}</div>
               <div class="scroll-panel__search-row" data-search-host>
                 <i data-icon="search" class="w-4 h-4 scroll-panel__search-icon"></i>
@@ -1086,6 +1442,10 @@
               </div>
             </div>
             <div class="scroll-panel__body" id="guide-scroll-body">
+              <!-- First, always: the rulebook is the document every other
+                   chapter is a shortcut around (migration 052). The score sheet
+                   is the mirror of this and sits last. -->
+              <div class="scroll-panel__rulebook-host" data-rulebook-host>${this._renderRulebookSection()}</div>
               ${bodyInner}
               <!-- Last, always: a scoring grid is the shape of the scorepad
                    rather than a rule anybody opened the scroll to look up, and
@@ -1203,7 +1563,11 @@
 
     _editChapter(chapterId, event) {
       if (event) event.preventDefault();
-      const chapter = this._chapters.find((c) => c.id === chapterId);
+      // The rulebook pool is searched too (migration 052): a link the author
+      // has removed from their own guide is still theirs to edit, and the
+      // Rulebook section draws it from `_rulebooks` rather than from the guide.
+      const chapter = this._chapters.find((c) => c.id === chapterId)
+        || (this._rulebooks || []).find((c) => c.id === chapterId);
       if (!chapter) return;
       // Stash the chapter on the add-view singleton — onMount picks it up
       // when mode === "edit" and prefills the editor with the chapter's

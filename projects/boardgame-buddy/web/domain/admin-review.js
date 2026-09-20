@@ -1,8 +1,9 @@
 // domain/admin-review.js — the admin review queues behind the Settings gear.
 //
-// Publishes three store slots (see domain/store.js) from ONE
-// /admin/review-counts call: open chapter reports, games missing images, and
-// games short of anything one BoardGameGeek read would give them.
+// Publishes four store slots (see domain/store.js) from ONE
+// /admin/review-counts call: open chapter reports, games missing images, games
+// short of anything one BoardGameGeek read would give them, and — since
+// migration 052 — rulebook links waiting on a decision.
 // domain/notifications.js turns them into the gear's dot and the per-row
 // badges in the Settings admin card.
 //
@@ -54,6 +55,7 @@
       window.store.set("adminChapterReportCount", n(counts.chapter_reports));
       window.store.set("adminMissingImageCount", n(counts.missing_images));
       window.store.set("adminMissingMetaCount", n(counts.missing_metadata));
+      window.store.set("adminRulebookLinkCount", n(counts.rulebook_links));
     },
 
     /**

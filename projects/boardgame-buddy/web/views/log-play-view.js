@@ -331,9 +331,8 @@
         open.clear();
       }
 
-      // rulebook_url / is_expansion aren't on a play row. Bootstrap warms the
-      // game bundle for owned games, so this is usually a free sync hit; when
-      // it misses the guide link just resolves later in the host flow.
+      // is_expansion isn't on a play row. Bootstrap warms the game bundle for
+      // owned games, so this is usually a free sync hit.
       const cached = window.bgbCache && window.bgbCache.get("game.bundle", p.game_id);
       const seed = window.PlaySession.seedFromPlayRow(p, (cached && cached.game) || {});
       if (!seed) return;

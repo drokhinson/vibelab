@@ -27,7 +27,7 @@ projects/boardgame-buddy/
 │   ├── object_store.py     Cloudflare R2 uploads and deletes (see below)
 │   ├── identity_admin.py   deletes the Identity Platform credential (see below)
 │   └── tests/
-├── db/migrations/          001–051, plus _shared/ (analytics + api_logs)
+├── db/migrations/          001–052, plus _shared/ (analytics + api_logs)
 ├── db/tests/               SQL the api/ suite cannot reach — run by hand, see below
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  generators, operator scripts, and web/'s only tests —
@@ -162,6 +162,28 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    to, which that function reports as success — every deletion green, every
    credential alive. `tests/test_account_deletion.py` is the only thing that
    catches it.
+
+20. **`boardgamebuddy_games.rulebook_url` is read by nothing and still stays.**
+   It was the one admin-curated rulebook link a game could have. Since `052` a
+   rulebook link is a reference-guide chapter (`layout='rulebook_link'`), that
+   migration backfilled every value into an approved chapter, and the endpoint
+   that wrote the column is gone. The column survives only because ~forty RPCs
+   and bundles select it, and dropping it would be a large risky diff to delete
+   something that costs nothing. Treat it as the pre-052 seed the backfill drew
+   from — do not wire anything new to it, and do not "restore" a rulebook by
+   writing it.
+21. **A rulebook link is the one chapter with a gate, and the gate is not RLS.**
+   Every other chapter is text this app renders; this one sends a reader to
+   somebody else's server, so `moderation_status` decides who may see it —
+   approved to everyone, pending to its author and their accepted buddies,
+   denied to its author alone. The rule lives in
+   `routes/services/chapter_rulebook.py` and **every** chapter read path calls
+   it, the user's own guide included: a link adopted while pending and denied
+   afterwards has to stop being served to the people who adopted it. There are
+   no RLS policies for it, for the reason in 11 — this API is service-role and
+   nothing reads chapters browser-direct. The SQL half (the CHECK that a NULL
+   would otherwise pass, the one-link-per-author index, the backfill) is covered
+   by `db/tests/052_rulebook_links.sql`.
 
 ## Secrets that must never be rotated casually
 

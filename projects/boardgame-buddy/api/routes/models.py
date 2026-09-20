@@ -62,6 +62,7 @@ from .constants import (
     PlayMode,
     PlaySessionStatus,
     PushTier,
+    RulebookStatus,
     RunState,
     RunStepState,
     ScoringGridMode,
@@ -143,11 +144,21 @@ class AdminReviewCounts(BaseModel):
     # is not expected to reach zero. The queue that has to terminate is
     # `bgg_meta_synced_at IS NULL`, and it lives in the endpoint.
     missing_metadata: int = 0
+    # Rulebook links waiting on a decision (migration 052). The one queue here
+    # that is not merely tidy-up: until an admin looks, the link is live for its
+    # author's buddies, so a number sitting here is readers already following an
+    # unreviewed outbound link.
+    rulebook_links: int = 0
 
     @computed_field  # type: ignore[misc]
     @property
     def total(self) -> int:
-        return self.chapter_reports + self.missing_images + self.missing_metadata
+        return (
+            self.chapter_reports
+            + self.missing_images
+            + self.missing_metadata
+            + self.rulebook_links
+        )
 
 
 # ── Scoring grids (migration 018) ─────────────────────────────────────────────
@@ -1256,28 +1267,46 @@ class ChapterTypeResponse(BaseModel):
 
 class ChapterCreate(BaseModel):
     chapter_type: str
-    # Optional for (and only for) layout='scoring_grid', whose title is DERIVED
-    # from the game rather than typed — see services/chapter_grid.grid_title.
-    # A text chapter still requires one, which the validator below enforces:
-    # widening the field would otherwise let a titleless prose chapter through
-    # to a NOT NULL column.
+    # Optional for (and only for) the two layouts whose title is DERIVED from
+    # the game rather than typed — see services/chapter_grid.grid_title and
+    # services/chapter_rulebook.rulebook_title. A text chapter still requires
+    # one, which the validator below enforces: widening the field would
+    # otherwise let a titleless prose chapter through to a NOT NULL column.
     title: str | None = None
-    content: str
+    # Same story: a rulebook link's body is its URL, and `content` is generated
+    # from it, so the field is optional for that layout and required for prose.
+    content: str | None = None
     layout: ChapterLayout = ChapterLayout.TEXT
     # Required for (and only for) layout='scoring_grid'. Mirrors the DB's
     # bgb_chapters_grid_shape CHECK so a mismatched pair is a 422 here rather
     # than a constraint violation from Postgres.
     grid: ScoringGrid | None = None
+    # Required for (and only for) layout='rulebook_link' (migration 052), and
+    # mirroring bgb_chapters_link_shape the same way. The SCHEME is not checked
+    # here but in services/chapter_rulebook.clean_url, which turns a bad one
+    # into a 400 naming the problem — a 422 listing a regex is not an error an
+    # author can act on.
+    link_url: str | None = None
 
     @model_validator(mode="after")
-    def _grid_matches_layout(self) -> "ChapterCreate":
+    def _body_matches_layout(self) -> "ChapterCreate":
         wants_grid = self.layout is ChapterLayout.SCORING_GRID
+        wants_link = self.layout is ChapterLayout.RULEBOOK_LINK
         if wants_grid and self.grid is None:
             raise ValueError("layout 'scoring_grid' requires a grid")
         if not wants_grid and self.grid is not None:
             raise ValueError("grid is only valid with layout 'scoring_grid'")
-        if not wants_grid and not (self.title or "").strip():
-            raise ValueError("title is required")
+        if wants_link and not (self.link_url or "").strip():
+            raise ValueError("layout 'rulebook_link' requires a link_url")
+        if not wants_link and self.link_url is not None:
+            raise ValueError("link_url is only valid with layout 'rulebook_link'")
+        # Only prose carries a typed title and a typed body; the other two
+        # layouts generate both from what they are.
+        if not wants_grid and not wants_link:
+            if not (self.title or "").strip():
+                raise ValueError("title is required")
+            if not (self.content or "").strip():
+                raise ValueError("content is required")
         return self
 
 
@@ -1349,6 +1378,11 @@ class ChapterUpdate(BaseModel):
     # correct: a chapter never changes layout in practice, and the editor sends
     # layout + grid together or neither.
     grid: ScoringGrid | None = None
+    # The same "not supplied" reading, for the same reason. Editing a rulebook
+    # link's URL re-opens its moderation gate (chapter_routes._update_chapter_sync)
+    # — the point of the gate is that an admin approved THIS link, not whatever
+    # the author points it at next.
+    link_url: str | None = None
 
 
 class ChapterResponse(BaseModel):
@@ -1364,6 +1398,17 @@ class ChapterResponse(BaseModel):
     # Present only for layout='scoring_grid'. Inherited by ChapterPoolItem and
     # MyGuideChapterResponse, which is every surface that renders a chapter.
     grid: ScoringGrid | None = None
+    # Present only for layout='rulebook_link' (migration 052). A row that
+    # reaches a client at all is one that viewer is allowed to see — the gate is
+    # applied server-side on every read path
+    # (services/chapter_rulebook.filter_visible), never by the client hiding a
+    # row it was sent.
+    link_url: str | None = None
+    # pending | approved | denied, and None for every other layout. On the wire
+    # because the AUTHOR's own copy renders differently for each — a pending
+    # link says only buddies can see it yet, a denied one says it was turned
+    # down — and because the admin queue reads the same shape.
+    moderation_status: RulebookStatus | None = None
     created_by: str | None = None
     created_by_name: str | None = None
     updated_at: datetime
@@ -1429,6 +1474,43 @@ class ChapterReportCreate(BaseModel):
     reason: str | None = Field(None, max_length=500)
 
 
+class RulebookLinkReviewItem(BaseModel):
+    """One row of the admin's rulebook queue (migration 052).
+
+    A flatter shape than ChapterResponse on purpose: an admin triaging links is
+    deciding about a URL and who submitted it, and the fields that matter are
+    the ones this row makes impossible to miss — the destination, the game it
+    claims to be the rules for, and the author whose buddies can already see it.
+    """
+
+    chapter_id: str
+    game_id: str
+    game_name: str
+    title: str
+    link_url: str
+    # Host only, split out of link_url so the queue can show where a link GOES
+    # at a glance without an admin parsing 200 characters of query string. The
+    # full URL is still on the row and is what the decision is about.
+    link_host: str
+    moderation_status: RulebookStatus
+    created_by: str | None = None
+    created_by_name: str | None = None
+    # How many readers can already see this link on the strength of a buddy edge
+    # — the number that says how urgent a pending row is. Not a popularity
+    # count: it is the blast radius of leaving it pending.
+    buddy_reach: int = 0
+    created_at: datetime
+    moderated_at: datetime | None = None
+
+
+class RulebookModerationResponse(BaseModel):
+    """What an approve/deny returns: the decision, echoed."""
+
+    chapter_id: str
+    moderation_status: RulebookStatus
+    message: str
+
+
 class ChapterReportResponse(BaseModel):
     id: str
     chapter_id: str
@@ -1484,12 +1566,6 @@ class ExpansionToggleRequest(BaseModel):
     is_enabled: bool
 
 
-
-
-class RulebookUrlUpdate(BaseModel):
-    """Admin override to set or clear a game's rulebook_url. Pass null to clear."""
-
-    rulebook_url: str | None = None
 
 
 # ── Mutual buddy graph (migration 008) ────────────────────────────────────────
@@ -1846,7 +1922,7 @@ class Notification(BaseModel):
 
     PLAY_INHERITED IS THE ONE KIND WITH NO `actor_id`, and it cannot have one:
     the actor is an account that no longer exists. `actor_display_name` is the
-    name captured at deletion (plays.inherited_from_name, migration 051) and
+    name captured at deletion (plays.inherited_from_name, migration 052) and
     `actor_id` / `actor_username` / `actor_avatar` are all None — so any reader
     that routes to a profile on `actor_id` already does nothing here, which is
     the correct behaviour rather than a lucky one. It reuses the PLAY_LINK

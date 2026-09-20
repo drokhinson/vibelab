@@ -47,6 +47,7 @@
   window.bggSyncView    = new window.BggSyncView();
   window.feedbackView   = new window.FeedbackView();
   window.adminReportsView = new window.AdminReportsView();
+  window.adminRulebooksView = new window.AdminRulebooksView();
   // One spoke stacking four panels — the tools differ only in their strings
   // and which three API calls they make. The configs live with the view rather
   // than here so init.js stays a registry. See views/admin-backfill-view.js.
@@ -90,6 +91,7 @@
   window.router.register("bgg-sync",      window.bggSyncView);
   window.router.register("feedback",       window.feedbackView);
   window.router.register("admin-reports",      window.adminReportsView);
+  window.router.register("admin-rulebooks",    window.adminRulebooksView);
   window.router.register("admin-bgg-data",     window.adminBggDataView);
   window.router.register("admin-release-notices", window.adminReleaseNoticesView);
   window.router.register("admin-affiliates",   window.adminAffiliatesView);

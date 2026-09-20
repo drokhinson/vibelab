@@ -819,14 +819,46 @@ class ChapterLayout(StrEnum):
     ARE these values.
 
     This is not the same axis as `chapter_type`, though the two are 1:1 for
-    grids. The type is an FK to a lookup table and says what the chapter is
-    ABOUT; the layout says what shape its body is stored in, and so is what the
-    grid-shape CHECK, the ?layout= pool filter and every renderer branch read.
-    services/chapter_grid.validate_layout_pairing keeps the pair honest.
+    grids and for rulebook links. The type is an FK to a lookup table and says
+    what the chapter is ABOUT; the layout says what shape its body is stored in,
+    and so is what the grid-shape CHECK, the ?layout= pool filter and every
+    renderer branch read. services/chapter_grid.validate_layout_pairing and
+    services/chapter_rulebook.validate_layout_pairing keep each pair honest.
     """
 
     TEXT = "text"                  # Markdown, rendered by web/ui/markdown.js
     SCORING_GRID = "scoring_grid"  # Labelled rows the play screen fills in
+    # An outbound link to the game's rules, in `link_url` (migration 052). The
+    # one chapter body that is not this app's own words, which is why it — and
+    # only it — carries a moderation gate; see RulebookStatus below.
+    RULEBOOK_LINK = "rulebook_link"
+
+
+class RulebookStatus(StrEnum):
+    """The moderation gate on a layout='rulebook_link' chapter (migration 052).
+
+    Mirrors the values bgb_chapters_link_shape pins, and NULL on every other
+    layout — a chapter whose body this app wrote has nothing to gate.
+
+    Why a gate at all, when prose chapters have only the reactive
+    boardgamebuddy_chapter_reports queue: a rulebook link sends a reader to
+    somebody else's server, so the first report is already too late. Who sees
+    what is one function — services/chapter_rulebook.is_visible_to — and the
+    prose above it in that module is the argument.
+    """
+
+    # Written by a non-admin, waiting for a decision. Visible to its author and
+    # to their ACCEPTED buddies, and to nobody else.
+    PENDING = "pending"
+    # An admin put their name to it (or wrote it — an admin's own link is born
+    # approved). Visible to everyone, signed in or not.
+    APPROVED = "approved"
+    # Turned down. Visible to its author, struck through so they know it was
+    # looked at rather than lost, and to admins. Deliberately not a delete: the
+    # row is what stops the same link being re-submitted past
+    # idx_bgb_chapters_rulebook_author and quietly re-entering every buddy's
+    # guide.
+    DENIED = "denied"
 
 
 class ScoringRowColor(StrEnum):
