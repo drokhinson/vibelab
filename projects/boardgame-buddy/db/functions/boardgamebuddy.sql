@@ -1,6 +1,24 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 049_play_partners_pending.sql (re-emits bgb_play_partners with
+-- Last updated: 050_session_participant_teams.sql (adds bgb_set_participant_teams
+--               and re-emits bgb_session_bundle so a LIVE lobby's roster
+--               carries the side each seat is on. 048 gave a saved seat its
+--               `team` and said plainly what it was leaving open: a
+--               spectator's mirror shows untinted columns until the play is
+--               saved. This closes it — the lobby participant table gets the
+--               same nullable column, the bundle emits it on every participant,
+--               and one host-only write publishes the host's draft tags.
+--
+--               bgb_session_bundle was copied from 018, its CURRENT definition
+--               and not the highest-numbered file naming it; 003 holds the
+--               pre-018 body and would have silently dropped scoring_template.
+--
+--               Unlike add / remove / reorder, the new write is NOT
+--               Gather-only: a tag repaints a header rather than renumbering
+--               the array every spectator's cells are keyed off, and a
+--               debounced write can outrun the phase PATCH of a host rolling
+--               back to Gather to name a side.)
+--               Before that: 049_play_partners_pending.sql (re-emits bgb_play_partners with
 --               a fourth key, `pending`: live buddy requests either way, so a
 --               person you asked (or who asked you) minutes ago can be seated
 --               in Gather before anyone taps Accept. `recent` has carried the
@@ -683,6 +701,10 @@
 --     or {"error": "not_found"}
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/036_session_rpcs.sql)
+--   Last updated in: db/migrations/boardgamebuddy/050_session_participant_teams.sql
+--               (each participant carries `team`, the side that seat is on, so
+--               a spectator's mirror can band its grid columns while the game
+--               is still running rather than after the save)
 --   Last updated in: db/migrations/boardgamebuddy/056_participant_order.sql
 --               (participants sort by `position NULLS LAST, joined_at` — the
 --               one and only live participant-ordering site. 054 added
@@ -1088,6 +1110,30 @@
 --               the drag and the write — are appended in joined_at order
 --               rather than dropped, so a race can't drop someone off the
 --               end of the grid.
+
+-- bgb_set_participant_teams(p_host UUID, p_code TEXT, p_teams JSONB)
+--   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
+--     "host_only" | "invalid_teams"}
+--   Defined in: db/migrations/boardgamebuddy/050_session_participant_teams.sql
+--   Called by:  projects/boardgame-buddy/api/routes/services/session_service.py
+--               (set_participant_teams —
+--                PUT /sessions/{code}/participants/teams)
+--   Purpose:    Publish which side each seat is on, so a spectator's live
+--               mirror tints its grid columns into sides the way the host's
+--               does. The tags are typed on the host's local draft and had no
+--               server-side home before this, which is why 048 could give a
+--               SAVED seat its team and still leave every live mirror
+--               untinted. p_teams is the whole {participant_id: tag} map and a
+--               participant it omits is CLEARED — that is how a side the host
+--               deletes stops tinting. Ids from another session are ignored,
+--               as in bgb_reorder_participants. Tags are trimmed, truncated to
+--               16 and "" is stored as NULL (the client seeds every seat with
+--               team:"", so the blank is the common case, not the edge one).
+--               NOT Gather-only, unlike add / remove / reorder: a tag repaints
+--               a header rather than renumbering a column (the one reason those
+--               three are frozen), and a host rolling back to Gather to name a
+--               side can have this debounced write land before their phase
+--               PATCH does.
 
 -- bgb_remove_participant(p_host UUID, p_code TEXT, p_participant UUID)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |

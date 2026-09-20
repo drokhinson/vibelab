@@ -6600,6 +6600,40 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      as --accent, 8.7:1 as the surface's accent ink. */
   color: var(--accent-ink);
 }
+/* The side a seat is on, in the spectator's read-only lobby list (migration
+   050). The same fact the scoring grid's column headers carry, on the screen
+   the spectator is looking at BEFORE the grid exists — the host types the
+   sides during Gather, and a spectator who only learns them when the first
+   round is scored has spent the whole lobby not knowing who is with whom.
+
+   The 3px rule runs down the LEFT edge, matching .play-detail__team's banded
+   player list rather than the grid's bottom-edge rule: this is a row in a list
+   of people, which is the shape that band has. */
+.session-viewer__team-tag {
+  /* Its own paper plate, and the reason this needs no dark branch. The
+     --team-* hues are full-strength and assume they are mixing into PAPER
+     (see the token block), but a lobby card is CHROME here — the view
+     re-points --polaroid-bg to --bg-2, which is dark in dark. Re-pointing the
+     variable ON THE CHIP is the same move .cascade-card--scoring makes for the
+     grid it is a miniature of, so both read as the same side on the same
+     paper. --polaroid-ink is NOT re-pointed by that block, so the ink is named
+     outright rather than inherited light onto cream. */
+  --polaroid-bg: var(--paper);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  max-width: 8ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.1rem 0.35rem 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--paper-ink);
+  background: color-mix(in srgb, var(--team-tint) 16%, var(--polaroid-bg));
+  box-shadow: inset 3px 0 0 var(--team-tint);
+}
 .session-viewer__guide-mount { margin-top: 0.25rem; }
 /* Edit mode */
 .play-detail--edit .play-detail__game-info { gap: 0.35rem; }

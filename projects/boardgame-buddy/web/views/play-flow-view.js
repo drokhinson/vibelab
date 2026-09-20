@@ -57,6 +57,15 @@
   // each renumbering the same rows.
   const ORDER_PUSH_DEBOUNCE_MS = 300;
 
+  // A team tag is TYPED, so it debounces longer than a drag does. A drop is
+  // over the moment it lands; a word has pauses inside it, and at the order
+  // write's 300ms a host hunting for the R on a phone keyboard publishes "R"
+  // and then "Re" — two sides nobody is on, each one briefly a colour on every
+  // spectator's grid. Long enough to let a short word finish, short enough
+  // that the side appears within a beat of the host saying it out loud. The
+  // gather→play advance doesn't wait for the timer; it flushes.
+  const TEAM_PUSH_DEBOUNCE_MS = 700;
+
   class PlayFlowView extends window.View {
     constructor() {
       super("play-flow");
@@ -141,6 +150,13 @@
       this._orderTimer = null;
       this._orderPromise = null;
       this._orderDirty = false;
+      // The same three, for the TEAM TAG write. Separate rather than folded
+      // into the order write: the two are entered by different gestures (a drag
+      // versus a keystroke), they debounce at different rates for that reason,
+      // and only one of them is refused once Play starts.
+      this._teamsTimer = null;
+      this._teamsPromise = null;
+      this._teamsDirty = false;
       // Monotonic token for phase-change PATCHes. After a call's PATCH
       // resolves it only reconciles state if it is still the latest — a
       // stale earlier PATCH resolving after a newer navigation must not yank
@@ -479,6 +495,11 @@
       if (this._orderTimer) { clearTimeout(this._orderTimer); this._orderTimer = null; }
       this._orderPromise = null;
       this._orderDirty = false;
+      // Same for a queued team write: its ids address the previous run's
+      // roster rows, and the next run's tags are pushed by its own first edit.
+      if (this._teamsTimer) { clearTimeout(this._teamsTimer); this._teamsTimer = null; }
+      this._teamsPromise = null;
+      this._teamsDirty = false;
       this._saving = false;
       this._error = null;
     }
@@ -706,7 +727,14 @@
       //   3. live scores — RLS only accepts score writes while phase='play',
       //      so re-subscribing before step 2 would have its first mirror
       //      rejected.
+      // The tags are keyed by participant_id, and every one of those was just
+      // cleared above — so the replacement lobby has no sides until they are
+      // re-published against its new roster rows. Marked dirty here and flushed
+      // after the sync, which is what gives those rows their ids.
+      this._teamsDirty = true;
       this._syncRosterToLobby()
+        .catch(() => {})
+        .then(() => this._flushTeamsToLobby())
         .catch(() => {})
         .then(() => this._replayPhaseToLobby())
         .then(() => { if (hadLiveScores) return this._startLiveScores(); })
@@ -1029,6 +1057,10 @@
               if (existing && !existing.participant_id) {
                 existing.participant_id = part.id;
                 playersChanged = true;
+                // Same as _adoptParticipantId: a tag typed while this row had
+                // no id was skipped by the team writes, and this tick is the
+                // first moment it can be named.
+                if ((existing.team || "").trim()) this._pushTeamsToLobby();
               }
               continue;
             }
@@ -1238,6 +1270,80 @@
         if (this._orderDirty) this._flushOrderToLobby();
       });
       return this._orderPromise;
+    }
+
+    /**
+     * Mirror the local team tags into the lobby roster.
+     *
+     * Until migration 050 the tags lived only in this draft: the host's own
+     * grid banded its columns into sides (widgets/round-score-grid.js reads
+     * `p.team` off the roster it is handed) and every spectator's mirror,
+     * built from the lobby's participants, had nothing to band by. A team
+     * night therefore looked like six identical columns to everyone but the
+     * host, and the pairings only became visible once the play was saved and
+     * the game was over.
+     *
+     * Debounced for the same reason the order write is, and best-effort in the
+     * same way: losing it costs the spectators a tint, not the host their play.
+     * Unlike the order write it is NOT frozen at the gather→play edge — see
+     * migration 050's header. The case that needs it: the tags are typed on the
+     * Gather roster, so naming a side after the first round means rolling the
+     * cascade back (_phaseBack), and that phase PATCH is a round trip this
+     * debounced write can beat. Gather-gated, it would 409 and be swallowed.
+     */
+    _pushTeamsToLobby() {
+      if (this._isOffline()) return;
+      this._teamsDirty = true;
+      if (this._teamsTimer) clearTimeout(this._teamsTimer);
+      this._teamsTimer = setTimeout(() => {
+        this._teamsTimer = null;
+        this._flushTeamsToLobby();
+      }, TEAM_PUSH_DEBOUNCE_MS);
+    }
+
+    _flushTeamsToLobby() {
+      if (this._teamsTimer) { clearTimeout(this._teamsTimer); this._teamsTimer = null; }
+      if (this._teamsPromise) return this._teamsPromise;
+      if (!this._teamsDirty || this._isOffline()) return Promise.resolve();
+      this._teamsDirty = false;
+      // Only seats that HAVE a roster row can be named. Anyone still waiting on
+      // their POST is picked up by the next edit, or by the pre-Play flush,
+      // which syncs the roster first.
+      const teams = {};
+      let any = false;
+      for (const p of this._ps.players || []) {
+        if (!p.participant_id) continue;
+        any = true;
+        // Every seat is sent, including the untagged ones: the write is a full
+        // replacement, so an omitted seat is a CLEARED seat — which is exactly
+        // what a host deleting a tag means, and would be wrong for a seat that
+        // simply never had one only if the two disagreed. They don't: "" and
+        // absent both land as NULL.
+        teams[p.participant_id] = (p.team || "").trim();
+      }
+      if (!any) return Promise.resolve();
+      // Nothing to say. A competitive or co-op table never names a side, and
+      // _setPlayMode marks this dirty on every mode tap — without this the
+      // gather→play advance, which AWAITS the flush, would spend a round trip
+      // publishing an empty map on the one screen transition the host watches.
+      // The lobby's own copy is checked too, not just the draft: clearing the
+      // last tag has to reach the spectators, and by then the draft is as bare
+      // as a table that never had sides.
+      const lobbyHasTags = ((this._lobby && this._lobby.participants) || [])
+        .some((part) => (part.team || "").trim());
+      const draftHasTags = Object.values(teams).some((t) => t);
+      if (!draftHasTags && !lobbyHasTags) return Promise.resolve();
+      this._teamsPromise = this._withLobby((code) =>
+        window.PlaySession.setParticipantTeams(code, teams)
+      ).then((updated) => {
+        if (updated) this._lobby = updated;
+        return updated;
+      }).finally(() => {
+        this._teamsPromise = null;
+        // A keystroke landed while the write was in flight — send the newer map.
+        if (this._teamsDirty) this._flushTeamsToLobby();
+      });
+      return this._teamsPromise;
     }
 
     /**
@@ -2445,6 +2551,13 @@
           // rather than placed. bgb_reorder_participants is Gather-only too, so
           // a debounced write still sitting in its timer would come back 409.
           try { await this._flushOrderToLobby(); } catch (_) {}
+          // And the sides, for the id reason rather than the lock one: the
+          // tags are typed in Gather and this is the first moment every seat
+          // has a roster row to hang one on. bgb_set_participant_teams accepts
+          // a later write too, so a tag named mid-game still lands — this is
+          // only what makes the grid land ALREADY banded on the spectator's
+          // very first Play paint, instead of a debounce later.
+          try { await this._flushTeamsToLobby(); } catch (_) {}
         }
         // The cascade has ALREADY moved — the phase above is local truth and
         // the draft is complete on its own. This PATCH only catches the server
@@ -2663,6 +2776,11 @@
       this._ps.playMode = mode;
       this._ps.persist();
       this._autoSelectWinners();
+      // The tags themselves don't change here, but the grid they tint does:
+      // leaving team mode hides the inputs while the draft keeps its tags, and
+      // both grids read `p.team` regardless of mode. Re-publishing keeps the
+      // spectators' mirror agreeing with the host's screen either way.
+      this._pushTeamsToLobby();
       // Patch the three surfaces the mode actually touches instead of
       // rebuilding the full cascade: the selector's active pill, the Gather
       // player rows (team column appears in team mode), and the scoring
@@ -2758,6 +2876,10 @@
       if (!hit) return;
       player.participant_id = hit.id;
       this._ps.persist();
+      // A tag typed BEFORE this row had an id was skipped by every team write
+      // so far (they can only name a seat the roster knows). This is the first
+      // moment it can be published — see _flushTeamsToLobby.
+      if ((player.team || "").trim()) this._pushTeamsToLobby();
     }
 
     _removePlayer(i) {
@@ -2806,6 +2928,9 @@
       const winnersMoved = window.PlaySession.applyTeamTag(ps.players, i, value);
       ps.persist();
       this._autoSelectWinners();
+      // Publish the sides so every spectator's mirror bands its grid the way
+      // this one does (migration 050). Debounced — see _pushTeamsToLobby.
+      this._pushTeamsToLobby();
       // Only the trophy row changed, but it is rendered by the cascade — and
       // only when something actually moved, so typing a tag that settles
       // nothing doesn't yank focus out of the input mid-word.

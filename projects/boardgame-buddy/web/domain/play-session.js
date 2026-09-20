@@ -427,6 +427,27 @@
       });
     }
 
+    // Host-only. Publish which side each seat is on — the whole
+    // {participant_id: tag} map, exactly as the host's draft holds it.
+    //
+    // The team tags are typed on the Gather roster and used to live ONLY in
+    // that draft until the play was saved, so the host read a grid banded into
+    // sides while every spectator read the same grid with identical columns,
+    // and the pairings surfaced only once the game was over. This is what
+    // carries them across while it still matters (migration 050).
+    //
+    // Full replacement: a participant the map omits has their tag cleared,
+    // which is how a side the host deletes stops tinting. Unlike the order
+    // write this is NOT Gather-only — naming a side repaints a header, it
+    // doesn't renumber a column — so a debounced write that lands before the
+    // phase PATCH of a host rolling back to Gather still counts, instead of
+    // coming back 409 and being swallowed with the tag.
+    static setParticipantTeams(code, teams) {
+      return window.api.put(`/sessions/${code}/participants/teams`, {
+        teams: teams || {},
+      });
+    }
+
     // Host-only. Remove a participant row by id.
     static removeParticipant(code, participantId) {
       return window.api.del(`/sessions/${code}/participants/${participantId}`);

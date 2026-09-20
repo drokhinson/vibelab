@@ -118,6 +118,11 @@ RPC_ERROR_STATUS: dict[str, tuple[int, str]] = {
     "participant_not_found": (404, "Participant not found"),
     "cannot_remove_host": (400, "Cannot remove the host"),
     "display_name_required": (400, "display_name is required"),
+    # Migration 050. Unreachable through PUT /participants/teams — the body
+    # model guarantees an object — so this is here for the direct RPC caller,
+    # and it is a 400 rather than the unmapped default so a malformed argument
+    # never presents as a server fault.
+    "invalid_teams": (400, "teams must be a {participant_id: tag} object"),
     # Ghost account claims (migration 070). None of these reuse `not_found`
     # above — its detail is session-specific ("Session not found") and
     # widening it would change bgb_finalize_session's message for no reason.

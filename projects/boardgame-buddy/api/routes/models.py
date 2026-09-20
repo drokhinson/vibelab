@@ -1995,6 +1995,14 @@ class SessionParticipantResponse(BaseModel):
     display_name: str
     joined_at: datetime
     avatar: Avatar | None = None
+    # The side this seat is on, free text as the host typed it (migration 050).
+    # None on every competitive and co-op lobby, and on a team lobby whose sides
+    # were never named — which is also every row written before that migration,
+    # so the default is what keeps an old session valid. This is the only way a
+    # spectator learns the pairings: their mirror holds no local draft, and
+    # until it existed a team night looked like six identical columns to
+    # everyone but the host.
+    team: str | None = None
 
 
 class SessionScoreRow(BaseModel):
@@ -2084,6 +2092,39 @@ class SessionReorderParticipantsBody(BaseModel):
     """
 
     participant_ids: list[str] = Field(default_factory=list, max_length=64)
+
+
+class SessionParticipantTeamsBody(BaseModel):
+    """Host-only "publish the sides" body: the WHOLE {participant_id: tag} map.
+
+    Full replacement, not a patch. A participant the map omits has their tag
+    cleared, which is how a side the host deletes — or a whole set of tags
+    abandoned when they switch the game type back to competitive — stops
+    tinting every spectator's grid. The host's draft is the only place a tag is
+    ever typed, so the map is always complete with respect to it.
+
+    Tags normalize the way PlayerEntry.team does: trimmed, and "" stored as
+    NULL. That blank is the common case rather than an edge one — PlaySession
+    seeds every seat with team:"" and writes "" back when a tag is cleared, so
+    without it every untagged seat would share one anonymous side.
+    """
+
+    teams: dict[str, str | None] = Field(default_factory=dict)
+
+    @field_validator("teams")
+    @classmethod
+    def _normalize_tags(cls, v: dict[str, str | None]) -> dict[str, str | None]:
+        if len(v) > 64:
+            raise ValueError("too many participants")
+        out: dict[str, str | None] = {}
+        for pid, tag in v.items():
+            tag = (tag or "").strip()
+            if len(tag) > MAX_PLAY_TEAM_CHARS:
+                raise ValueError(
+                    f"team tag longer than {MAX_PLAY_TEAM_CHARS} characters"
+                )
+            out[pid] = tag or None
+        return out
 
 
 class JoinableSession(BaseModel):

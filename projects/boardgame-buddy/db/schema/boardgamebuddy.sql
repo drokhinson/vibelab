@@ -730,7 +730,13 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_session_participants (
   display_name TEXT NOT NULL,
   joined_at TIMESTAMPTZ DEFAULT now() NOT NULL,
   position SMALLINT,
+  -- The side this seat is on, as the host typed it (migration 050). The lobby
+  -- twin of play_players.team: it is what lets a SPECTATOR's mirror tint its
+  -- grid columns into sides while the game is still being played, instead of
+  -- only once the play is saved.
+  team TEXT,
   CONSTRAINT boardgamebuddy_play_session_participants_pkey PRIMARY KEY (id),
+  CONSTRAINT bgb_play_session_participants_team_len_chk CHECK ((team IS NULL OR char_length(team) <= 16)),
   CONSTRAINT boardgamebuddy_play_session_participants_session_id_fkey FOREIGN KEY (session_id) REFERENCES boardgamebuddy_play_sessions(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_play_session_participants_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE
 );

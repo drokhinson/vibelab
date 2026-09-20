@@ -204,6 +204,47 @@ def reorder_participants(
     return _bundle_to_response(data)
 
 
+def set_participant_teams(
+    sb: Client,
+    *,
+    viewer_id: str,
+    code: str,
+    teams: dict[str, str | None],
+) -> SessionResponse:
+    """Host-only: publish which side each seat is on.
+
+    The tags are typed on the host's local draft, and until migration 050 they
+    had nowhere to live server-side — so a team night showed the host a grid
+    banded into sides and every spectator the same grid with identical columns,
+    and the pairings only became visible once the play was saved and the tints
+    no longer mattered.
+
+    Full replacement: `teams` is the whole map and a participant it omits is
+    cleared. NOT Gather-only, unlike add / remove / reorder — a tag repaints a
+    column header rather than renumbering the array every spectator's cells are
+    keyed off, which is the only reason those three are frozen. Naming a side
+    after the first round means rolling the cascade back to Gather, and that
+    phase PATCH is asynchronous: a debounced tag write can land while the
+    session still reads 'play', where require_gather would answer
+    `roster_locked` and the client would swallow it.
+
+    One RPC: bgb_set_participant_teams (migration 050), on the same gate every
+    other host write uses, so it answers with the host_only / not_found /
+    expired vocabulary _helpers already maps.
+    """
+    data = (
+        sb.rpc("bgb_set_participant_teams", {
+            "p_host": viewer_id,
+            "p_code": code,
+            "p_teams": teams,
+        })
+        .execute()
+        .data
+    )
+    _reject_non_host(data, "Only the host can set teams")
+    return _bundle_to_response(data)
+
+
 def remove_participant(
     sb: Client,
     *,

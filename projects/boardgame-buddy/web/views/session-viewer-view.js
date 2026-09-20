@@ -756,6 +756,12 @@
     _renderGather(s) {
       const participants = s.participants || [];
       const hostId = s.host_user_id;
+      // tag → colour slot, or null when no seat carries a side (migration 050).
+      // Built from the roster in the order it arrived, which is the order the
+      // host's own list is in, so the lobby's Red and the scoring grid's Red
+      // are the same Red — ui/team-colors.js is the one place either answer
+      // comes from.
+      const teams = window.BgbTeams ? window.BgbTeams.indexMap(participants) : null;
       // Same pane wrappers as the host's Gather (play-flow-view.js
       // _renderGather): game and code left, the lobby right on the tablet and
       // wide tiers; display:contents on a phone.
@@ -775,7 +781,7 @@
           ${participants.length === 0
             ? `<div class="text-sm opacity-60">No players yet.</div>`
             : `<ul class="cascade-players cascade-players--read">
-                 ${participants.map((p) => this._renderParticipantRow(p, hostId)).join("")}
+                 ${participants.map((p) => this._renderParticipantRow(p, hostId, teams)).join("")}
                </ul>`}
         </section>
         </div>
@@ -783,8 +789,13 @@
       `;
     }
 
-    _renderParticipantRow(p, hostId) {
+    _renderParticipantRow(p, hostId, teams) {
       const isHost = p.user_id && p.user_id === hostId;
+      // The host types the sides on their roster; this is that row read back.
+      // A half-tagged lobby leaves the untagged seats bare rather than giving
+      // them a side called nothing — the same rule ui/team-colors.js#bands
+      // applies to the play-detail popup's trailing band.
+      const slot = (teams && teams.get(window.BgbTeams.keyOf(p.team))) || 0;
       const me = window.store.get("user");
       const isMe = !!(p.user_id && me && p.user_id === me.id);
       // Ghosts have no user_id; real users get their customized badge — and,
@@ -801,6 +812,9 @@
         <li class="cascade-player cascade-player--read">
           ${badge}
           <span class="cascade-player__name">${escapeHtml(shown)}</span>
+          ${slot
+            ? `<span class="session-viewer__team-tag" style="--team-tint: var(--team-${slot})">${escapeHtml(String(p.team).trim())}</span>`
+            : ""}
           ${isHost
             ? `<span class="session-viewer__host-tag"><i data-icon="crown" class="w-3 h-3"></i> Host</span>`
             : ""}
@@ -871,6 +885,15 @@
         participant_id: p.id,
         user_id: p.user_id,
         avatar: p.avatar,
+        // The side this seat is on (migration 050). The widget bands its
+        // column headers off this field alone — ui/team-colors.js assigns the
+        // colour slots by order of first appearance in the roster it is
+        // handed, and both screens are handed the SAME roster in the same
+        // order, so the host's Red is the spectator's Red without either side
+        // being told which slot that is. Absent on a lobby whose host hasn't
+        // deployed the write yet, which reads as a play with no sides — the
+        // untinted grid this screen showed before.
+        team: p.team || null,
         roundScores: [],
       }));
       const grid = window.renderRoundGrid(players, "sessionViewerView", {
