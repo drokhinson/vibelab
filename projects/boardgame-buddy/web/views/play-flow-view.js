@@ -137,6 +137,12 @@
       // between optimistic local removal and server confirmation from
       // snapping the player back into the grid via a stale poll.
       this._pendingDeletes = 0;
+      // Lobby rows already reaped for a seat the host removed — see
+      // _reapParticipant. A Set so the Gather poll, which sees the same stale
+      // row every 2s until the DELETE lands, asks for it once per mount rather
+      // than once per tick.
+      /** @type {Set<string>} */
+      this._reapedParticipants = new Set();
       // In-flight roster push, so the three callers that can want one at once
       // (the Gather poll's reconcile, the pre-Play flush, a fresh mint) share
       // a single batch instead of stacking one per tick.
@@ -478,6 +484,9 @@
       this._phaseSeq++;
       this._pendingPhase = 0;
       this._pendingDeletes = 0;
+      // The next run mints its own lobby, so every id in here names a row that
+      // no longer exists.
+      this._reapedParticipants = new Set();
       // _phaseSeq's sibling for the save path: a write that resolves after this
       // must not clear the draft, null activePlay, or re-disable the Save button
       // of the run that replaced it. See _isStaleSave.
@@ -1021,7 +1030,16 @@
       // it landed, so acting on it would repaint the pre-drag order back in.
       if (this._orderPromise || this._orderDirty) return;
       try {
-        const next = await window.PlaySession.fetchLobby(this._lobby.code);
+        const code = this._lobby.code;
+        const next = await window.PlaySession.fetchLobby(code);
+        // Every guard above was read BEFORE the fetch, and what came back is a
+        // snapshot of the lobby as it was when the fetch started. Read them
+        // again: a removal, a phase change or a heal that landed in between
+        // makes this bundle stale, and merging a stale bundle is precisely how a
+        // seat the host removed got seated again.
+        if (!this._lobby || this._lobby.code !== code) return;
+        if (this._pendingDeletes > 0 || this._pendingPhase > 0) return;
+        if (this._ps.phase !== "gather") return;
         const prevIds = new Set((this._lobby.participants || []).map((p) => p.id));
         const nextParts = next.participants || [];
         const participantsChanged =
@@ -1065,6 +1083,15 @@
               continue;
             }
             if (!key) continue;
+            // A seat the host has taken off stays off. This is the last line of
+            // the fix and the load-bearing one: the counter above only covers a
+            // DELETE that is in flight, and a DELETE can also have failed, or
+            // never have been issued, or have been issued by a previous page
+            // load. Reaped so the spectators' list catches up too.
+            if (this._ps.isRemovedParticipant(part)) {
+              this._reapParticipant(part.id);
+              continue;
+            }
             this._ps.players.push({
               name: part.display_name,
               is_winner: false,
@@ -1463,13 +1490,18 @@
       if (this._ps.players.length > 0) return;
       const me = window.store.get("user");
       if (!me) return;
-      this._ps.players.push({
+      const self = {
         name: me.display_name,
         is_winner: false,
         score: null,
         user_id: me.id,
         avatar: me.avatar || null,
-      });
+      };
+      this._ps.players.push(self);
+      // Same reason as _addPlayer: a host who emptied the roster down to nothing
+      // has a tombstone for their own seat, and the poll has to be free to hand
+      // this row the participant_id bgb_create_session already minted for them.
+      this._ps.rememberSeat(self);
       this._ps.persist();
     }
 
@@ -2864,6 +2896,10 @@
           roundScores: Array(currentRounds).fill(null),
         };
         this._ps.players.push(row);
+        // A host who re-types a name they just removed has changed their mind,
+        // so the tombstone goes with the add — otherwise the poll would refuse
+        // this row its participant_id and its column would never stream.
+        this._ps.rememberSeat(row);
         this._ps.persist();
         // Sync to the backend participants table so spectators see this
         // player. Fire-and-forget, and handed the row itself so the response's
@@ -2889,7 +2925,18 @@
           displayName: player.name,
         })
       );
-      if (bundle) this._adoptParticipantId(player, bundle);
+      if (!bundle) return;
+      // The host can take this seat off again INSIDE the round trip — type a
+      // ghost, think better of it, remove it — and _removePlayer had no id to
+      // DELETE when it ran. Without this the row outlives the seat, and the
+      // Gather poll seats it again off the next bundle: one extra ghost on a
+      // play the host never saw. The tombstone keeps it off the roster; this is
+      // what keeps it off the lobby the spectators are watching.
+      if ((this._ps.players || []).indexOf(player) === -1) {
+        this._reapParticipant(this._participantIdFor(player, bundle));
+        return;
+      }
+      this._adoptParticipantId(player, bundle);
     }
 
     /**
@@ -2905,13 +2952,9 @@
      */
     _adoptParticipantId(player, bundle) {
       if (!player || player.participant_id) return;
-      const parts = (bundle && bundle.participants) || [];
-      const key = (player.name || "").toLowerCase();
-      const hit = parts.find((part) => (player.user_id
-        ? part.user_id === player.user_id
-        : !part.user_id && (part.display_name || "").toLowerCase() === key));
-      if (!hit) return;
-      player.participant_id = hit.id;
+      const id = this._participantIdFor(player, bundle);
+      if (!id) return;
+      player.participant_id = id;
       this._ps.persist();
       // A tag typed BEFORE this row had an id was skipped by every team write
       // so far (they can only name a seat the roster knows). This is the first
@@ -2919,9 +2962,36 @@
       if ((player.team || "").trim()) this._pushTeamsToLobby();
     }
 
+    /**
+     * The lobby row that stands for one local seat, or null.
+     *
+     * Matched on the same keys the poll uses: user_id for an account, a
+     * case-insensitive display name for a guest (their only handle). Split out
+     * of _adoptParticipantId so the removed-mid-push path above can name the
+     * row it has to delete without adopting anything.
+     */
+    _participantIdFor(player, bundle) {
+      if (!player) return null;
+      const parts = (bundle && bundle.participants) || [];
+      const key = (player.name || "").trim().toLowerCase();
+      const hit = parts.find((part) => (player.user_id
+        ? part.user_id === player.user_id
+        : !part.user_id && (part.display_name || "").trim().toLowerCase() === key));
+      return hit ? hit.id : null;
+    }
+
     _removePlayer(i) {
       const removed = this._ps.players[i];
       this._ps.players.splice(i, 1);
+      // Written down, not just applied — see REMOVED_SEAT_MAX in
+      // domain/play-session.js. The lobby goes on listing this row until the
+      // DELETE below lands, and the merge in _lobbyPollTick seats anything the
+      // roster doesn't recognise, so any bundle already in flight would put it
+      // straight back at the end of the roster: an extra seat on the saved play
+      // that the host never sees, because the grid's last column is off the
+      // right edge of a phone. This is the record that survives a DELETE that
+      // is slow, that fails, that was never issued, or a refresh.
+      this._ps.forgetSeat(removed);
       this._ps.persist();
       this._autoSelectWinners();
       this.render();
@@ -2930,12 +3000,53 @@
       // toast on failure: the player is already gone from the host's roster and
       // therefore from the play, which is what the tap meant. A stale name left
       // in a spectator's lobby list isn't worth interrupting the host over.
+      //
+      // With no id yet the POST is still in flight, and it is
+      // _pushParticipantToBackend that deletes the row it created — by then
+      // there is an id to name.
       if (removed && removed.participant_id) {
-        this._pendingDeletes++;
-        this._withLobby((code) =>
-          window.PlaySession.removeParticipant(code, removed.participant_id)
-        ).finally(() => { this._pendingDeletes--; });
+        this._deleteParticipant(removed.participant_id);
       }
+    }
+
+    /**
+     * Drop one lobby participant row, holding the Gather poll while it goes.
+     *
+     * _pendingDeletes is what stops a tick STARTING mid-delete; the tombstone
+     * on the draft is what covers a tick that had already started. Both are
+     * needed — the counter is back to zero the moment this settles, and a fetch
+     * that overlapped it still answers with the row.
+     *
+     * @param {?string} participantId
+     */
+    _deleteParticipant(participantId) {
+      if (!participantId) return null;
+      this._pendingDeletes++;
+      return this._withLobby((code) =>
+        window.PlaySession.removeParticipant(code, participantId)
+      ).finally(() => {
+        // Floored, because _resetRunState zeroes the counter: a DELETE from the
+        // round that just ended can still resolve afterwards, and a negative
+        // count would read as "nothing in flight" forever.
+        this._pendingDeletes = Math.max(0, this._pendingDeletes - 1);
+      });
+    }
+
+    /**
+     * Delete a lobby row for a seat that is no longer on the roster, once.
+     *
+     * The tombstone already keeps such a row off the host's own draft, so this
+     * is for everyone else: a spectator's mirror otherwise lists a name nobody
+     * is scoring for the rest of the evening. Bounded by the set, because the
+     * poll meets the same stale row every two seconds — a DELETE that keeps
+     * failing is retried on the next mount, not on the next tick.
+     *
+     * @param {?string} participantId
+     */
+    _reapParticipant(participantId) {
+      if (!participantId || this._reapedParticipants.has(participantId)) return;
+      this._reapedParticipants.add(participantId);
+      this._deleteParticipant(participantId);
     }
 
     _setInitials(i, value) {
