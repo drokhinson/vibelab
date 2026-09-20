@@ -32,6 +32,20 @@
 // Opts:
 //   editable        — when false, cells render as static spans, "Add round"
 //                     and remove buttons are hidden.
+//   minRounds       — editable grids only. How many rows this surface refuses
+//                     to go below, default 0. The live play screen passes 1:
+//                     its grid opens on Round 1 and always has one
+//                     (play-flow-view#_ensureOpeningRound), so the last
+//                     remaining round's remove button would be a control that
+//                     undoes itself on the next repaint. The play-detail popup
+//                     leaves it at 0 — emptying the grid there is how a play
+//                     scored in rounds goes back to a single score per player.
+//   showAddRound    — editable grids only. The "Round" button under the table,
+//                     on by default. The live play screen passes false: its
+//                     copy of the control is docked in the screen's CTA bar as
+//                     "Next round" (play-flow-view#_renderPlayCta), beside the
+//                     "Wrap up" it is the alternative to. The play-detail
+//                     popup has no docked bar, so it keeps the one here.
 //   playMode        — "competitive" | "team" | "coop". Co-op hides the
 //                     per-player trophy button (the whole table wins or
 //                     loses together).
@@ -111,7 +125,8 @@
     const o = opts || {};
     const editable = o.editable !== false;
     const mode = o.playMode || "competitive";
-    const showSign = !!o.showSign;
+    const showAddRound = editable && o.showAddRound !== false;
+    const minRounds = Math.max(0, Number(o.minRounds) || 0);
     // opts.headerNames is this surface's DEFAULT; a stored user choice wins.
     const headerNamesDefault = !!o.headerNames;
     const headerNames = RoundGridNames.enabled(headerNamesDefault);
@@ -189,7 +204,7 @@
                     ${tpl ? `data-row-color="${escapeAttr(tpl.color || "neutral")}"` : ""}
                     ${tpl ? `title="${escapeAttr(tpl.label)}"` : ""}>
                   <span class="scoring-round-label">
-                    ${editable && !tpl ? `
+                    ${editable && !tpl && roundCount > minRounds ? `
                       <button class="scoring-round-remove" title="Remove round"
                               onclick="window.${host}._removeRoundAt(${r})">
                         <i data-icon="x" class="w-3 h-3"></i>
@@ -201,7 +216,7 @@
                 ${safePlayers.map((p, i) => `
                   <td>
                     ${editable
-                      ? renderEditableCell(getCell(p, r), i, r, host, showSign, `${shownName(p)} — ${rowName}`)
+                      ? renderEditableCell(getCell(p, r), i, r, host, `${shownName(p)} — ${rowName}`)
                       : `<span class="scoring-cell--read" data-score-cell="${i}-${r}" aria-label="${escapeAttr(`${shownName(p)} — ${rowName}`)}">${escapeHtml(getCell(p, r))}</span>`}
                   </td>
                 `).join("")}
@@ -223,7 +238,7 @@
           </table>
         </div>
       </div>
-      ${editable ? `
+      ${showAddRound ? `
         <div class="scoring-actions">
           <button class="btn btn-ghost btn-xs scoring-add-round" onclick="window.${host}._addRound()">
             <i data-icon="plus" class="w-3.5 h-3.5"></i> Round
@@ -276,26 +291,58 @@
             </button>`;
   }
 
-  // One editable cell: a sanitized text input (so a leading "-" survives —
-  // `type=number` strips it on some engines) plus an optional +/− sign button.
-  // The sign button is gated by the host's "± Negative" toggle so that, by
-  // default, phones whose keyboard already has a minus key aren't cluttered.
-  function renderEditableCell(rawValue, i, r, host, showSign, label) {
+  // One editable cell.
+  //
+  // `type="number"` WITH NO `inputmode` AND NO `pattern`, and both omissions
+  // are the point. A score can be negative, and on iOS the minus key exists on
+  // exactly one software keyboard: the numbers-and-punctuation plane, which is
+  // what Safari raises for a bare `type="number"`. `inputmode="numeric"` (or
+  // `pattern="[0-9]*"`) is the documented way to ask for the 10-key pad
+  // INSTEAD — digits and nothing else, no sign — and either one overrides the
+  // type. This cell used to carry both, which is why it needed a per-cell +/−
+  // button and a preference to turn that button on; the keyboard carries the
+  // sign now, so the button and the preference are gone.
+  //
+  // The cost of `type=number` is that the element sanitizes its own value: a
+  // half-typed "-" reads back as "" (with `validity.badInput` set) rather than
+  // as "-", and so does "+5" or "3e4". Three places cover that, and all three
+  // are load-bearing:
+  //
+  //   * Neither editable host re-renders the cell it is being typed into —
+  //     play-flow-view patches only the totals row, and the popup morphs
+  //     (ui/dom-patch.js), whose syncValue no-ops when the live value and the
+  //     rendered one agree, which "" and "" do. So the "-" on screen survives
+  //     until a digit follows it and the value becomes real.
+  //   * `onblur` clears text the element is refusing to parse, so a cell can
+  //     never sit there reading "+5" while its column totals it as nothing.
+  //   * `onwheel` blurs rather than letting a scroll over a focused cell
+  //     spin its value — the grid body is a horizontal scroller inside a
+  //     vertical page, so a wheel gesture over a cell is a scroll, never an
+  //     edit.
+  function renderEditableCell(rawValue, i, r, host, label) {
     const val = rawValue == null ? "" : String(rawValue);
     const neg = val.charAt(0) === "-";
     return `<div class="scoring-cell-wrap${neg ? " is-neg" : ""}">
-      ${showSign
-        ? `<button type="button" class="scoring-sign-btn${neg ? " is-neg" : ""}" tabindex="-1"
-                   aria-label="Toggle positive or negative"
-                   onclick="window.${host}._toggleRoundSign(${i}, ${r})">${neg ? "−" : "+"}</button>`
-        : ""}
-      <input type="text" inputmode="numeric" pattern="-?[0-9]*"
+      <input type="number" step="1"
              id="rg-${host}-${i}-${r}" data-score-cell="${i}-${r}"
              class="scoring-cell"
              aria-label="${escapeAttr(label || "Score")}"
              value="${escapeAttr(val)}"
+             onwheel="window.roundGridCellWheel(this)"
+             onblur="window.roundGridCellBlur(this)"
              oninput="window.${host}._setRoundScore(${i}, ${r}, this.value)" />
     </div>`;
+  }
+
+  // The two `type=number` guards the comment above describes. Globals rather
+  // than host methods on purpose: they are about the ELEMENT, identical on
+  // every surface, and adding them to the host contract would mean six
+  // consumers implementing the same two lines.
+  function roundGridCellBlur(el) {
+    if (el && el.validity && el.validity.badInput) el.value = "";
+  }
+  function roundGridCellWheel(el) {
+    if (el && el.ownerDocument && el.ownerDocument.activeElement === el) el.blur();
   }
 
   // Exported as window.renderRoundGridTotalsCell for hosts that repaint the
@@ -446,9 +493,12 @@
   }
 
   // ── Score value helpers (shared by every grid host) ──────────────────────
-  // Cells are stored as STRINGS ("", "-", "-5", "12") so a leading minus and
-  // the transient "-"-only state survive editing. These helpers convert to a
-  // clean string for storage / display and to a number|null for math.
+  // Cells are stored as STRINGS ("", "-5", "12") so a leading minus survives
+  // the round trip through the draft. A lone "-" is still handled: the number
+  // input can no longer produce one, but drafts persisted before it was a
+  // number input can, and parseRoundScore has to read those back as empty
+  // rather than as NaN. These helpers convert to a clean string for storage /
+  // display and to a number|null for math.
 
   // Strip anything that isn't a digit or a leading minus.
   function sanitizeRoundScore(raw) {
@@ -462,14 +512,6 @@
     if (v == null || v === "" || v === "-") return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
-  }
-
-  // Sign-toggle transition: "" → "-", "-" → "", "-5" → "5", "5" → "-5".
-  function nextSignToggle(v) {
-    const s = String(v == null ? "" : v);
-    if (s === "") return "-";
-    if (s === "-") return "";
-    return s.charAt(0) === "-" ? s.slice(1) : "-" + s;
   }
 
   // ── Horizontal continuity, and the new round ───────────────────────
@@ -541,35 +583,6 @@
           last.scrollIntoView({ block: "nearest" });
         }
       });
-    },
-  };
-
-  // Persisted user preference for whether the per-cell +/− sign buttons show.
-  // Defaults OFF — many phone keyboards already expose a minus key, so the
-  // toggle is opt-in for the ones that don't.
-  const SIGN_PREF_KEY = "bgb.scoring.showSign";
-  const RoundGridSign = {
-    enabled() {
-      try { return localStorage.getItem(SIGN_PREF_KEY) === "1"; } catch (_) { return false; }
-    },
-    set(on) {
-      try { localStorage.setItem(SIGN_PREF_KEY, on ? "1" : "0"); } catch (_) {}
-    },
-    toggle() {
-      const next = !this.enabled();
-      this.set(next);
-      return next;
-    },
-    // Header pill that flips the preference. `host` is the global object name
-    // (e.g. "playFlowView") whose `_toggleSignButtons()` re-renders the grid.
-    renderToggle(host) {
-      const on = this.enabled();
-      return `<button type="button" class="scoring-sign-toggle${on ? " is-on" : ""}"
-                aria-pressed="${on}" title="Toggle +/− sign buttons on each score cell"
-                onclick="window.${host}._toggleSignButtons()">
-                <span class="scoring-sign-toggle__glyph">±</span>
-                <span>toggle</span>
-              </button>`;
     },
   };
 
@@ -668,10 +681,10 @@
   window.roundGridTotal = roundGridTotal;
   window.roundGridHasAnyScore = roundGridHasAnyScore;
   window.sanitizeRoundScore = sanitizeRoundScore;
+  window.roundGridCellBlur = roundGridCellBlur;
+  window.roundGridCellWheel = roundGridCellWheel;
   window.parseRoundScore = parseRoundScore;
-  window.nextSignToggle = nextSignToggle;
   window.RoundGridScroll = RoundGridScroll;
-  window.RoundGridSign = RoundGridSign;
   window.RoundGridNames = RoundGridNames;
   window.RoundGridNotes = RoundGridNotes;
 })();

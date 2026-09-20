@@ -36,9 +36,9 @@
   // notice in the guide, then get asked again at the table two taps later.
   // Turning a grid down is turning it down, wherever the viewer was standing.
   //
-  // Every access is wrapped, the way RoundGridSign / RoundGridNames wrap
-  // theirs — a browser that refuses localStorage should show the offer every
-  // time, not throw on the way to painting the guide.
+  // Every access is wrapped, the way RoundGridNames wraps its own — a browser
+  // that refuses localStorage should show the offer every time, not throw on
+  // the way to painting the guide.
   const DISMISS_KEY = "bgb.guide.tmplNotice";
 
   function readDismissed() {

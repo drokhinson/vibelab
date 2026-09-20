@@ -9308,18 +9308,15 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   font-size: 0.8rem;
 }
 .scoring-cell:focus { outline: none; border-color: var(--accent-ink); }
+/* The cell is `type=number` so that iOS raises a keyboard with a minus key on
+   it (widgets/round-score-grid.js#renderEditableCell). The spinner that comes
+   with the type is not wanted anywhere: the column is ~69px wide and the
+   stepper would eat a third of it, and a pointer near a cell is there to type
+   in it or to scroll the grid sideways, never to nudge a score by one. */
+.scoring-cell::-webkit-outer-spin-button,
+.scoring-cell::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.scoring-cell { -moz-appearance: textfield; appearance: textfield; }
 
-/* ── Negative scores: per-cell sign toggle + header on/off pill ───────────
-   --rust-ink / --on-rust rather than the four #b4472b literals these carried.
-   Both are theme-independent (declared in the bare :root block) because this
-   control only ever lands on paper, and paper is light in every theme —
-   the same reasoning as --ghost-ink beside it. --rust itself is NOT usable
-   here: the chrome block lifts it to #E87B63 for the espresso ground, which
-   is 2.6:1 on cream. */
-.scoring-section__head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.5rem; margin-bottom: 0.35rem;
-}
 /* The strip above the grid: which scorepad the table is built on, and which
    expansions are appending rows to it (migrations 018 / 032). Absent entirely
    when the game has no grid adopted, so the scoring card is untouched for every
@@ -9704,40 +9701,18 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   background: var(--rust-soft);
   color: var(--rust);
 }
-.scoring-cell-wrap {
-  display: flex; align-items: center; gap: 0.25rem; min-width: 0;
-}
-.scoring-cell-wrap .scoring-cell { flex: 1 1 auto; min-width: 2.4rem; }
+/* The cell and the one thing wrapping it still does: carry `is-neg` so a
+   negative score reads in rust. It used to hold a +/− sign button beside the
+   input as well — the input is a `type=number` now and the software keyboard
+   carries the sign, so the button and the preference that turned it on are
+   gone (widgets/round-score-grid.js#renderEditableCell).
+
+   --rust-ink, not --rust: this ink only ever lands on paper, which is light in
+   every theme, and the chrome block lifts --rust to #E87B63 for the espresso
+   ground — 2.6:1 on cream. Same reasoning as --ghost-ink beside it. */
+.scoring-cell-wrap { display: flex; align-items: center; min-width: 0; }
+.scoring-cell-wrap .scoring-cell { flex: 1 1 auto; min-width: 0; }
 .scoring-cell-wrap.is-neg .scoring-cell { color: var(--rust-ink); }
-.scoring-sign-btn {
-  flex: 0 0 auto;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 1.7rem; height: 1.9rem; padding: 0;
-  border: 1px solid var(--polaroid-line);
-  border-radius: 0.4rem;
-  background: var(--well, var(--polaroid-bg));
-  color: var(--polaroid-muted);
-  font-size: 1.15rem; font-weight: 800; line-height: 1; cursor: pointer;
-  transition: background .12s, color .12s, border-color .12s;
-}
-.scoring-sign-btn:hover { color: var(--polaroid-ink); }
-.scoring-sign-btn.is-neg {
-  background: var(--rust-ink); border-color: var(--rust-ink); color: var(--on-rust);
-}
-.scoring-sign-toggle {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  border: 1px solid var(--polaroid-line);
-  border-radius: 999px; padding: 0.2rem 0.6rem;
-  font-size: 0.72rem; font-weight: 700; line-height: 1;
-  background: transparent; color: var(--polaroid-muted);
-  cursor: pointer; white-space: nowrap;
-  transition: background .12s, color .12s, border-color .12s;
-}
-.scoring-sign-toggle:hover { color: var(--polaroid-ink); }
-.scoring-sign-toggle.is-on {
-  background: var(--rust-ink); border-color: var(--rust-ink); color: var(--on-rust);
-}
-.scoring-sign-toggle__glyph { font-size: 0.95rem; line-height: 1; }
 .scoring-total.is-neg { color: var(--rust-ink); }
 
 /* The totals band, as a wash of the surface's own hairline rather than the
@@ -11069,7 +11044,8 @@ main[data-view="session-viewer"].hidden {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
   column-gap: 16px;
 }
-:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .cascade-cta-wrap .cascade-cta {
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .cascade-cta-wrap > .cascade-cta,
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]) .cascade-cta-wrap > .cascade-cta-row {
   grid-column: 1;
 }
 /* The joiner's read-only mirror reuses .cascade-screen but renders no CTA
@@ -11110,6 +11086,25 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 .cascade-cta:disabled:hover,
 .cascade-cta[disabled]:hover { background: var(--polaroid-muted); }
+
+/* The Play screen docks TWO buttons — "Next round" and "Wrap up"
+   (play-flow-view#_renderPlayCta) — so its bar carries a row instead of a
+   lone block. The row itself stays click-through: only the buttons in it take
+   pointer events, exactly as a single CTA does, so the gap between them and
+   the fade around them still hand taps to the grid underneath. */
+.cascade-cta-row { display: flex; gap: 8px; }
+.cascade-cta-row .cascade-cta { flex: 1 1 0; min-width: 0; }
+/* The alternative move on the same strip, and deliberately not a second
+   accent chip: two filled buttons side by side would be two primary actions.
+   Ground tokens, because the docked bar fades into --bg-0 — the scorepad's
+   paper stops at the card above it. */
+.cascade-cta--alt {
+  background: var(--bg-1);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  box-shadow: none;
+}
+.cascade-cta--alt:hover { background: var(--bg-2); }
 
 .cascade-error {
   /* Rides on top of the docked CTA bar, so it docks the same way and to

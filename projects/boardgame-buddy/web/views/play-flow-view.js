@@ -1383,7 +1383,7 @@
         <section class="cascade-screen ${lockPlay ? "is-locked" : ""}" id="screen-play">
           ${this._renderScreenHeader("Play", 2, true)}
           ${this._renderPlay()}
-          ${this._renderContinue("Wrap up", () => "_advanceToSettle()")}
+          ${this._renderPlayCta()}
         </section>
 
         <section class="cascade-screen ${lockSettle ? "is-locked" : ""}" id="screen-settle">
@@ -1500,6 +1500,43 @@
             ${escapeHtml(label)}
             <i data-icon="arrow-down" class="w-4 h-4"></i>
           </button>
+        </div>
+      `;
+    }
+
+    /**
+     * The Play screen's docked bar, and the two moves it offers: score another
+     * round, or stop scoring. The host presses one or the other all evening.
+     *
+     * "Next round" is the "+ Round" button that used to live under the grid,
+     * in the widget's own .scoring-actions row. That put the one control the
+     * host reaches for every few minutes at the BOTTOM of a table that grows a
+     * row every time they use it — by round eight it was below the fold, under
+     * the Total, behind a scroll. It is also the exact alternative to "Wrap
+     * up" ("we're going again" / "we're done"), and those two belong on the
+     * same strip rather than 400px apart. The strip is already pinned, so
+     * neither can scroll away.
+     *
+     * The play-detail popup keeps the in-card button: it has no docked bar to
+     * move one into (widgets/round-score-grid.js, `showAddRound`).
+     *
+     * @returns {string}
+     */
+    _renderPlayCta() {
+      return `
+        <div class="cascade-cta-wrap">
+          <div class="cascade-cta-row">
+            <button class="btn cascade-cta cascade-cta--alt" type="button"
+                    onclick="window.playFlowView._addRound()">
+              <i data-icon="plus" class="w-4 h-4"></i>
+              Next round
+            </button>
+            <button class="btn btn-primary cascade-cta" type="button"
+                    onclick="window.playFlowView._advanceToSettle()">
+              Wrap up
+              <i data-icon="arrow-down" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
       `;
     }
@@ -1806,22 +1843,32 @@
       // Every player carries a dense roundScores array of the same length
       // before we render, so the grid's round count, the cells it paints and
       // the totals it sums are all the same size for every column.
-      if (this._normalizeRoundArrays()) ps.persist();
+      // The grid is never empty: a scorepad with no rows is a table the host
+      // has to press a button before they can use, and round one is what
+      // every table starts on. Both writes go out under one persist().
+      const opened = this._ensureOpeningRound();
+      if (this._normalizeRoundArrays() || opened) ps.persist();
       const tpl = ps.scoringTemplate;
       const grid = window.renderRoundGrid(ps.players, "playFlowView", {
         editable: true,
         playMode: mode,
         headerNames: true,
-        showSign: window.RoundGridSign.enabled(),
+        // "Next round" is docked in the CTA bar instead (_renderPlayCta), so
+        // the grid renders no action row of its own.
+        showAddRound: false,
+        // This grid always has a Round 1 (_ensureOpeningRound), so the last
+        // remaining round carries no remove button.
+        minRounds: 1,
         rowLabels: tpl ? tpl.rows : null,
         getCellValue: (p, r) => this._cellValue(p, r),
       });
+      // No "Scoring" label and no ± pill above the table. The card holds one
+      // thing, the scorepad bar underneath already names which scorepad it is,
+      // and the column headers say who each column belongs to — a heading
+      // repeating the word "Scoring" over all of that was a row of vertical
+      // space spent on the phone screen the host stares at all evening.
       return `
         <section class="cascade-card cascade-card--scoring">
-          <div class="scoring-section__head">
-            <label class="cascade-card__label">Scoring</label>
-            ${window.RoundGridSign.renderToggle("playFlowView")}
-          </div>
           ${this._renderTemplateBar()}
           ${mode === "coop" ? this._renderCoopOutcome() : ""}
           ${grid}
@@ -2093,34 +2140,6 @@
           try { el.setSelectionRange(n, n); } catch (_) {}
         }
       }
-    }
-
-    // Flip the global "± Negative" preference and repaint the grid so cells
-    // gain/lose their per-cell sign buttons.
-    _toggleSignButtons() {
-      window.RoundGridSign.toggle();
-      this._refreshScoringSection();
-    }
-
-    // Sign button on a single cell: cycle "" → "-" → cleared, or flip an
-    // existing value's sign. Repaints the section so the button glyph and
-    // negative colouring update, then refocuses the cell for fast entry.
-    _toggleRoundSign(playerIndex, roundIndex) {
-      const p = this._ps.players[playerIndex];
-      if (!p) return;
-      if (!Array.isArray(p.roundScores)) p.roundScores = [];
-      const cur = p.roundScores[roundIndex] == null ? "" : String(p.roundScores[roundIndex]);
-      const next = window.nextSignToggle(cur);
-      p.roundScores[roundIndex] = next === "" ? null : next;
-      this._normalizeRoundArrays();
-      this._ps.persist();
-      if (this._liveScores && p.participant_id) {
-        this._liveScores
-          .setAnyScore(p.participant_id, roundIndex, window.parseRoundScore(next))
-          .catch(() => {});
-      }
-      this._autoSelectWinners();
-      this._refreshScoringSection(`${playerIndex}-${roundIndex}`);
     }
 
     // Resolved score for one (player, round) cell: the live-scoring overlay
@@ -3435,6 +3454,36 @@
 
     // ── Scoring rounds ──────────────────────────────────────────────────────
 
+    /**
+     * Put Round 1 on an empty grid.
+     *
+     * The table used to open on a header, a Total row and nothing between
+     * them, which made "press + Round" a step every single play began with and
+     * made the first thing the host saw look like a grid that had failed to
+     * load. A scorepad has a first row.
+     *
+     * MODEL ONLY, and idempotent by construction — it fires exactly once,
+     * because after it the round count is 1. That is what makes it safe to
+     * call from the render path: no network write goes out from here. The
+     * spectators' copy is covered either way — a draft that reaches the Play
+     * screen with this row already on it is published by LiveScores#syncGrid
+     * when the channel opens (it publishes every index in the array, nulls
+     * included), and a row added after that goes out with the first score
+     * typed into it.
+     *
+     * @returns {boolean} whether it added the round (i.e. whether to persist)
+     */
+    _ensureOpeningRound() {
+      const players = (this._ps && this._ps.players) || [];
+      if (players.length === 0) return false;
+      if (this._maxRoundCount() > 0) return false;
+      for (const p of players) {
+        if (!Array.isArray(p.roundScores)) p.roundScores = [];
+        p.roundScores.push(null);
+      }
+      return true;
+    }
+
     _addRound() {
       this._normalizeRoundArrays();
       for (const p of this._ps.players) p.roundScores.push(null);
@@ -3493,6 +3542,13 @@
     _removeRoundAt(r) {
       const n = this._maxRoundCount();
       if (!(r >= 0 && r < n)) return;
+      // The grid always has a Round 1 (_ensureOpeningRound), so the last
+      // remaining round is not removable — the row would come straight back on
+      // the repaint, and on a live session the spectators' mirror would have
+      // taken the delete. The renderer hides the × at a count of one; this is
+      // the same rule where it is enforced, for the stale paint and the
+      // console.
+      if (n <= 1) return;
       // A template's rows have no remove button, but this is a global inline
       // handler: a stale paint or the console can still reach it, and a hole
       // punched in the middle of a labelled grid would leave every label below
