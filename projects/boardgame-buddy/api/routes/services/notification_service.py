@@ -1,8 +1,9 @@
 """Notifications — the things that happened TO you.
 
-Three signals share one feed, one cursor and one read watermark: somebody
+Four signals share one feed, one cursor and one read watermark: somebody
 seated you in a play they logged, somebody asked to be your buddy, somebody
-accepted the request you sent.
+accepted the request you sent, and a play passed to you because the account
+that logged it was deleted (migration 049).
 
 The list is DERIVED, not stored. `bgb_notifications` reads plays where the
 viewer is a player and somebody else is the logger, plus the viewer's own rows
@@ -14,13 +15,19 @@ row would duplicate a column the edge already carries. Deriving it also means
 each kind empties itself by construction: unlinking drops a play row, and
 accepting or declining drops a request row.
 
-What cannot be derived is three facts, and they are the only stored state:
+The fourth kind is derived the same way, off `plays.inherited_at` — which is
+why the handover stamps a column rather than writing an event: the play row
+already knows it changed hands, and a second source of truth about that would
+have to be written by the one path that does it and be correct forever after.
+
+What cannot be derived is four facts, and they are the only stored state:
 `play_players.linked_at` (when a seat happened — NOT the play's created_at,
 because linking a ghost to an account retroactively re-seats plays that are
 years old), `profiles.link_notifications_seen_at` (how far the viewer has read,
 named for plays but covering all three kinds since migration 009), and
 `buddy_edges.accepted_by` (who said yes, which a QR-scanned edge makes
-underivable).
+underivable), and `plays.inherited_from_name` (what the deleted account was
+called — there is no profile row left to join to).
 """
 
 import asyncio

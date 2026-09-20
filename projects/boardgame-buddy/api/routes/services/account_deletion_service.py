@@ -18,6 +18,20 @@ had not happened.
    fixing this." The URLs cascaded away with the plays; the objects stayed,
    public to anyone still holding the link.
 
+And then fixing (1) exposed a third thing, which is the opposite problem:
+deletion was destroying data that was never only the deleter's.
+
+3. **Everybody else's game nights.** `plays.user_id` is ON DELETE CASCADE and
+   `play_players.play_id` cascades off the play, so deleting the person who
+   LOGGED a night deleted the night — and the seat of every other account at
+   that table with it. They lost a play, a win, a "played with" edge and
+   achievement progress, for an act they had no part in. Since migration 049
+   such a play is HANDED OVER instead: it passes to the account that was
+   seated earliest, and only a play nobody else was at still goes. That is
+   `bgb_delete_account_rows`, and the reasoning for the heir, the collisions
+   that would otherwise abort the whole delete, and what the heir gains lives
+   in the migration.
+
 ORDER IS THE DESIGN HERE, so read `delete_account` before changing it.
 """
 import asyncio
@@ -137,7 +151,10 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
     `provider_uid` is `SupabaseUser.provider_uid` — the Identity Platform uid.
     They are equal only for the 23 migrated accounts; see `jwt_auth.py`.
 
-    THE ORDER IS PHOTOS, ROWS, CREDENTIAL, and each boundary is a decision:
+    THE ORDER IS PHOTOS, ROWS, CREDENTIAL, and each boundary is a decision.
+    "Rows" is one RPC rather than one DELETE since migration 049 — the
+    handover and the profile delete have to be the same transaction — but the
+    three steps and their boundaries are unchanged:
 
     * **Photos first, and a failure here aborts before anything is
       destroyed.** The keys are derived from the uid, not read from the rows,
@@ -158,8 +175,10 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
       after the cascade. This is why `identity_admin.configured()` is False
       rather than silently no-op.
 
-    Returns a count per step for the log line. Raises `DeletionBlocked` when
-    nothing was touched, `DeletionFailed` when something was.
+    Returns a count per step for the log line — the photo counts this function
+    gathered, plus whatever `bgb_delete_account_rows` reports about the rows.
+    Raises `DeletionBlocked` when nothing was touched, `DeletionFailed` when
+    something was.
     """
     if not identity_admin.configured():
         # The operator-facing reason goes to the log; the caller gets a generic
@@ -175,17 +194,27 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
     supabase_count = await asyncio.to_thread(_purge_supabase_photos_sync, app_uid)
 
     sb = get_supabase()
-    # The cascades do the rest: collections, plays, play_players, reactions,
-    # buddies, buddy_edges, sessions, participants, achievements, push
-    # subscriptions, pending imports, feedback, BGA links. Chapters the account
-    # authored keep their text with `created_by` set NULL, so they do not
-    # vanish out of other people's guides.
+    # ONE RPC, ONE TRANSACTION (migration 049). This was a direct
+    # `.table("boardgamebuddy_profiles").delete()` until plays started
+    # surviving their logger, and it cannot be one any more: the handover
+    # decides an heir, clears the photo links, backfills the names the FK is
+    # about to null, and deletes the profile — and a failure between any two of
+    # those would leave plays owned by other people while the account they were
+    # taken from is still signed in and still holds them in its own log.
+    #
+    # What the DELETE inside it still cascades: collections, the plays nobody
+    # else was at, buddies, buddy_edges, sessions, participants, achievements,
+    # push subscriptions, pending imports, feedback, BGA links. Chapters the
+    # account authored keep their text with `created_by` set NULL, and seats on
+    # the plays that were handed over keep theirs with `player_user_id` set
+    # NULL — a named ghost, which every reader already renders.
     try:
-        await asyncio.to_thread(
-            sb.table("boardgamebuddy_profiles").delete().eq("id", app_uid).execute
+        result = await asyncio.to_thread(
+            sb.rpc("bgb_delete_account_rows", {"p_user": app_uid}).execute
         )
     except Exception as exc:
-        raise DeletionFailed(f"deleting the profile row failed: {exc}") from exc
+        raise DeletionFailed(f"deleting the account rows failed: {exc}") from exc
+    counts = result.data if isinstance(getattr(result, "data", None), dict) else {}
 
     try:
         await identity_admin.delete_user(provider_uid)
@@ -200,9 +229,16 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
         raise DeletionFailed("Your data was deleted but your login was not") from exc
 
     logger.info(
-        "account %s deleted: %d R2 photo(s), %d Supabase photo(s), rows, credential",
+        "account %s deleted: %d R2 photo(s), %d Supabase photo(s), "
+        "%s play(s) handed over, %s play(s) deleted, credential",
         app_uid,
         r2_count,
         supabase_count,
+        counts.get("plays_reassigned", "?"),
+        counts.get("plays_deleted", "?"),
     )
-    return {"r2_photos": r2_count, "supabase_photos": supabase_count}
+    return {
+        "r2_photos": r2_count,
+        "supabase_photos": supabase_count,
+        **counts,
+    }

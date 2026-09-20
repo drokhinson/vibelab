@@ -28,6 +28,7 @@ projects/boardgame-buddy/
 │   ├── identity_admin.py   deletes the Identity Platform credential (see below)
 │   └── tests/
 ├── db/migrations/          001–049, plus _shared/ (analytics + api_logs)
+├── db/tests/               SQL the api/ suite cannot reach — run by hand, see below
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  generators, operator scripts, and web/'s only tests —
 │                           `node tools/check-*.mjs`; never deploy steps
@@ -129,7 +130,31 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    standing, which is the exact bug the module was added to fix. So account
    deletion answers 503 and destroys nothing rather than half-succeeding, and
    local dev cannot delete accounts without `GCP_SERVICE_ACCOUNT_JSON`.
-16. **`SupabaseUser.sub` is the app_uid; the provider's uid is
+16. **A play can outlive the account that logged it, and `plays.user_id` is
+   therefore not authorship.** Deleting an account used to CASCADE its plays
+   away, taking every other player's seat at those tables with them — other
+   people's stats, wins and "played with" edges, destroyed by somebody else's
+   deletion. Since `049` such a play is HANDED OVER to the account seated
+   earliest, and `inherited_at` / `inherited_from_name` mark it. So the heir
+   holds edit and delete rights over a record they did not write, and two
+   logger-only achievement metrics count notes they did not type. Check
+   `inherited_at` before treating `user_id` as "who wrote this".
+17. **Account deletion is one RPC, not a DELETE.** `bgb_delete_account_rows`
+   does the photo unlink, the name backfill, the handover and the profile
+   delete in ONE transaction, because a failure between any two of them would
+   leave plays owned by other people while the account they were taken from is
+   still signed in. `tests/test_account_deletion.py` asserts the service never
+   reaches for `.table()` here. The SQL itself is covered by
+   `db/tests/049_account_deletion_handover.sql`, which is rollback-wrapped and
+   run by hand — there is no Postgres in the api/ suite.
+18. **Adding a `NotificationKind` member is a DEPLOY-ORDER constraint.**
+   `Notification.kind` is typed by that enum, so a row carrying a value the
+   running backend does not know fails `model_validate` and 500s
+   `/notifications` AND the `/bootstrap` gather. Ship the API first, then run
+   the migration that starts emitting it. `049` is the live example:
+   `play_inherited` cannot appear until an account is deleted, but the order
+   still matters.
+19. **`SupabaseUser.sub` is the app_uid; the provider's uid is
    `provider_uid`.** `jwt_auth.py` rewrites `sub` from the `app_uid` claim
    (see 11), so the field named `sub` is NOT the token's subject. Only
    `identity_admin.delete_user` wants the real one. Passing it `sub` addresses

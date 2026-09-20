@@ -176,12 +176,13 @@ class FeedCardKind(StrEnum):
 class NotificationKind(StrEnum):
     """What one row on the notifications feed is about.
 
-    The feed is a UNION of three derived sources rather than a table — see
-    bgb_notifications, migration 009 — and each member names both its source
-    and the timestamp it is ordered by: PLAY_LINK from play_players.linked_at,
-    BUDDY_REQUEST from buddy_edges.created_at, BUDDY_ACCEPTED from
-    buddy_edges.accepted_at. The kind also says which block of optional fields
-    on the Notification model is populated.
+    The feed is a UNION of four derived sources rather than a table — see
+    bgb_notifications, migrations 009 and 049 — and each member names both its
+    source and the timestamp it is ordered by: PLAY_LINK from
+    play_players.linked_at, BUDDY_REQUEST from buddy_edges.created_at,
+    BUDDY_ACCEPTED from buddy_edges.accepted_at, PLAY_INHERITED from
+    plays.inherited_at. The kind also says which block of optional fields on
+    the Notification model is populated.
 
     "Good game" reactions are deliberately NOT here. They live on the feed card
     that earned them and nowhere else — see reaction_service.
@@ -196,6 +197,13 @@ class NotificationKind(StrEnum):
     PLAY_LINK = "play_link"
     BUDDY_REQUEST = "buddy_request"
     BUDDY_ACCEPTED = "buddy_accepted"
+    # A play passed to you because the account that logged it was deleted
+    # (migration 049). The one kind with NO actor id: the actor is the deleted
+    # person, so there is no profile left to link to — `actor_display_name`
+    # carries the name off plays.inherited_from_name and `actor_id`,
+    # `actor_username` and `actor_avatar` are all None. It reuses the PLAY_LINK
+    # field block for the play itself, always as a group of exactly one.
+    PLAY_INHERITED = "play_inherited"
 
 
 # ── Web Push (migration 017) ─────────────────────────────────────────────────

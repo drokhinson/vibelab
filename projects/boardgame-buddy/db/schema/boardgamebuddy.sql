@@ -180,7 +180,11 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   bga_last_login_at TIMESTAMPTZ,
   bga_last_import_at TIMESTAMPTZ,
   CONSTRAINT boardgamebuddy_profiles_pkey PRIMARY KEY (id),
-  CONSTRAINT boardgamebuddy_profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- NO FK TO auth.users. 035_drop_profiles_auth_users_fk.sql dropped it at the
+  -- Identity Platform cutover: accounts live in GCP now and auth.users is not
+  -- written any more, so the constraint refused every new profile. This
+  -- snapshot carried the dead line until 049 replayed it into a scratch
+  -- database and every INSERT failed on it.
   CONSTRAINT bgb_profiles_username_format CHECK ((username ~ '^[a-z0-9_]{3,30}$'::text)),
   CONSTRAINT boardgamebuddy_profiles_push_tier_check CHECK ((push_tier = ANY (ARRAY['none'::text, 'actionable'::text, 'all'::text])))
 );
@@ -557,6 +561,12 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   -- The Board Game Arena table this play was imported from, or NULL for every
   -- other origin (migration 043).
   bga_table_id BIGINT,
+  -- When this play changed hands because its logger deleted their account, and
+  -- what that account was called (migration 049). NULL on every play whose
+  -- author still owns it. Together they are the standing caveat on user_id as
+  -- authorship, and what the play_inherited notification is derived from.
+  inherited_at TIMESTAMPTZ,
+  inherited_from_name TEXT,
   CONSTRAINT boardgamebuddy_plays_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_plays_game_id_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE CASCADE,
   CONSTRAINT boardgamebuddy_plays_user_id_fkey FOREIGN KEY (user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,
@@ -573,6 +583,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_plays_played_at ON public.boardgamebuddy_play
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bgg_play ON public.boardgamebuddy_plays USING btree (user_id, bgg_play_id) WHERE (bgg_play_id IS NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bgb_plays_user_bga_table ON public.boardgamebuddy_plays USING btree (user_id, bga_table_id) WHERE (bga_table_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_plays_user_played ON public.boardgamebuddy_plays USING btree (user_id, played_at DESC, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bgb_plays_inherited ON public.boardgamebuddy_plays USING btree (user_id, inherited_at DESC) WHERE (inherited_at IS NOT NULL);
 GRANT SELECT ON public.boardgamebuddy_plays TO boardgamebuddy_role;
 
 

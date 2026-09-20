@@ -92,6 +92,7 @@ DECLARE
     'bgb_collection_status_map',
     'bgb_create_ghost_claim',
     'bgb_create_session',
+    'bgb_delete_account_rows',
     'bgb_delete_import_batch',
     'bgb_delete_import_group',
     'bgb_dismiss_ghost_claim',

@@ -1835,14 +1835,22 @@ class PlayLeaveResponse(BaseModel):
 class Notification(BaseModel):
     """One row on the unified notifications feed.
 
-    Three kinds share one row shape, one cursor and one read watermark, which is
-    the whole point: a feed assembled client-side from three endpoints cannot
-    page, and would need three unread counts to add up to one dot.
+    Four kinds share one row shape, one cursor and one read watermark, which is
+    the whole point: a feed assembled client-side from four endpoints cannot
+    page, and would need four unread counts to add up to one dot.
 
     `kind` says which block below is populated. `actor_*` is the only group
-    present on every kind, because "who did this" is the one question all three
+    present on every kind, because "who did this" is the one question they all
     answer — a play_link's actor logged the play, a buddy_request's sent it, a
-    buddy_accepted's said yes.
+    buddy_accepted's said yes, a play_inherited's deleted their account.
+
+    PLAY_INHERITED IS THE ONE KIND WITH NO `actor_id`, and it cannot have one:
+    the actor is an account that no longer exists. `actor_display_name` is the
+    name captured at deletion (plays.inherited_from_name, migration 049) and
+    `actor_id` / `actor_username` / `actor_avatar` are all None — so any reader
+    that routes to a profile on `actor_id` already does nothing here, which is
+    the correct behaviour rather than a lucky one. It reuses the PLAY_LINK
+    block for the play itself, always as a group of exactly one.
 
     On a play_link row, an entry is not a play but one act of linking, and
     `play_group` says which grouping produced it. `play_id` is the entry's
@@ -1862,9 +1870,11 @@ class Notification(BaseModel):
     actor_username: str | None = None
     actor_avatar: dict[str, Any] | None = None
 
-    # PLAY_LINK only. Every field in this block is None on a buddy row —
-    # play_ids included, rather than an empty list: one rule with no exception
-    # is what lets a reader check `kind` and stop thinking about it.
+    # PLAY_LINK and PLAY_INHERITED only. Every field in this block is None on a
+    # buddy row — play_ids included, rather than an empty list: one rule with no
+    # exception is what lets a reader check `kind` and stop thinking about it.
+    # On a PLAY_INHERITED row `group_count` and `game_count` are always 1 and
+    # `play_group` is None: a handover is not a grouping, it is one play.
     play_group: PlayLinkGroup | None = None
     play_id: str | None = None
     play_ids: list[str] | None = None

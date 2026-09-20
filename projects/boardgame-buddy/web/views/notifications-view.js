@@ -385,9 +385,64 @@
     }
 
     _renderRow(it, i) {
-      if (it.kind === "buddy_request")  return this._renderRequestRow(it, i);
-      if (it.kind === "buddy_accepted") return this._renderAcceptedRow(it, i);
+      if (it.kind === "buddy_request")   return this._renderRequestRow(it, i);
+      if (it.kind === "buddy_accepted")  return this._renderAcceptedRow(it, i);
+      if (it.kind === "play_inherited")  return this._renderInheritedRow(it, i);
       return this._renderPlayRow(it, i);
+    }
+
+    /**
+     * A play that passed to you because the account that logged it was deleted
+     * (migration 049).
+     *
+     * NO SELECT CIRCLE, and that is a correctness matter rather than a tidiness
+     * one. The circle feeds the action bar, which takes you OUT of plays — and
+     * this is a play you now own. `POST /plays/{id}/leave` refuses the owner
+     * outright ("You logged this play — edit or delete it instead"), so
+     * offering the tick would offer an action guaranteed to fail.
+     *
+     * A GHOST BADGE, because the person is not an account any more — the same
+     * silhouette their seat on the play now renders as, so the row and the
+     * scorecard agree about what happened to them. `actor_display_name` is read
+     * straight rather than through `Buddy.nameFor`: an alias lives on a buddy
+     * edge, and the edge went with the account.
+     *
+     * The sub-line says out loud that the play is editable. Inheriting one
+     * hands over edit and delete rights on a record somebody else wrote, and
+     * this row is the only place that is ever said.
+     */
+    _renderInheritedRow(it, i) {
+      const who = it.actor_display_name || "Someone";
+      const game = it.game_name || "a game";
+
+      const art = it.game_thumbnail_url
+        ? `<img class="bgbnotif-row__art" src="${escapeAttr(it.game_thumbnail_url)}"
+                alt="" loading="lazy" />`
+        : `<span class="bgbnotif-row__art bgbnotif-row__art--none" aria-hidden="true">
+             <i data-icon="dices" class="w-4 h-4"></i>
+           </span>`;
+
+      const badge = window.BgbBadge.render({
+        size: "sm",
+        displayName: who,
+        isGhost: true,
+        extraClass: "bgbnotif-row__who",
+      });
+
+      return `
+        <div class="bgbnotif-row ${it.is_unread ? "is-unread" : ""}"
+             data-key="${escapeAttr(it.entry_key)}" style="--i:${i}">
+          <button class="bgbnotif-row__main" type="button"
+                  onclick="window.notificationsView._open('${jsStr(it.play_id)}')">
+            ${badge}
+            ${art}
+            <span class="bgbnotif-row__body">
+              <span class="bgbnotif-row__title">${`<strong>${escapeHtml(who)}</strong> deleted their account — their ${escapeHtml(game)} play is yours now`}</span>
+              <span class="bgbnotif-row__sub">${this._span(it)} · yours to edit or delete</span>
+            </span>
+          </button>
+        </div>
+      `;
     }
 
     /**

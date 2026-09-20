@@ -8,6 +8,16 @@ identity — and signing up again with the same address and a password answered
 `auth/email-already-in-use`. Both outcomes tell the user the deletion did not
 take, and both were right.
 
+Migration 049 then added a third failure to the list, in the other direction:
+deleting an account CASCADEd `plays.user_id`, so deleting the person who
+LOGGED a game night deleted the night and every other account's seat on it.
+Such a play is handed over now. **The handover itself is SQL and is not
+exercised here** — these tests drive the service with a fake PostgREST and
+there is no Postgres in this suite — so what they pin at this layer is that
+the service calls `bgb_delete_account_rows` and never a direct table delete,
+which is what keeps the handover and the profile delete in one transaction.
+`db/tests/049_account_deletion_handover.sql` is the behavioural half.
+
 Four properties carry the fix, and each one is a way it could silently regress:
 
   1. **The provider uid is not the app uid.** `jwt_auth` rewrites `sub` to the
@@ -128,36 +138,44 @@ class _FakeStorage:
         return self.bucket
 
 
-class _FakeTable:
-    def __init__(self, log, fail=False):
-        self.log, self.fail = log, fail
-        self._eq = None
+class _FakeRpc:
+    """The one RPC this service calls, recording the name and args it got."""
 
-    def delete(self):
-        return self
-
-    def eq(self, col, val):
-        self._eq = (col, val)
-        return self
+    def __init__(self, log, name, params, fail=False, data=None):
+        self.log, self.name, self.params = log, name, params
+        self.fail = fail
+        self.data = data if data is not None else {
+            "plays_reassigned": 2, "plays_deleted": 1,
+            "photos_unlinked": 1, "names_backfilled": 0,
+        }
 
     def execute(self):
         if self.fail:
             raise RuntimeError("postgrest exploded")
-        self.log.append(("row-delete", self._eq))
-        return type("R", (), {"data": []})()
+        self.log.append(("rows-delete", self.name, self.params))
+        return type("R", (), {"data": self.data})()
 
 
 class _FakeSupabase:
-    def __init__(self, log, bucket, table_fails=False):
+    def __init__(self, log, bucket, rpc_fails=False, rpc_data=None):
         self.log = log
         self.storage = _FakeStorage(bucket)
-        self._table_fails = table_fails
-        self.tables = []
+        self._rpc_fails = rpc_fails
+        self._rpc_data = rpc_data
+        self.rpcs = []
 
-    def table(self, name):
-        self.tables.append(name)
-        t = _FakeTable(self.log, fail=self._table_fails)
-        return t
+    def rpc(self, name, params):
+        self.rpcs.append((name, params))
+        return _FakeRpc(
+            self.log, name, params, fail=self._rpc_fails, data=self._rpc_data
+        )
+
+    def table(self, name):  # pragma: no cover - a regression guard, see below
+        raise AssertionError(
+            "account deletion must go through bgb_delete_account_rows, not a "
+            f"direct table write ({name}). The handover and the profile delete "
+            "have to be one transaction — see migration 049."
+        )
 
 
 @pytest.fixture
@@ -225,8 +243,25 @@ def test_the_rows_are_deleted_by_the_app_uid(wired):
     """The mirror image: the schema is keyed on the UUID, not the Firebase uid.
     Swapping the two arguments must not quietly work."""
     _run()
-    assert ("row-delete", ("id", APP_UID)) in wired.log
-    assert wired.sb.tables == ["boardgamebuddy_profiles"]
+    assert ("rows-delete", "bgb_delete_account_rows", {"p_user": APP_UID}) in wired.log
+    assert wired.sb.rpcs == [("bgb_delete_account_rows", {"p_user": APP_UID})]
+
+
+def test_the_rows_go_through_the_handover_rpc_not_a_direct_delete(wired):
+    """The profile delete lives INSIDE bgb_delete_account_rows so the handover
+    and the delete are one transaction. A direct `.table(...).delete()` here
+    would reassign plays to other people and then be able to fail before the
+    account is gone. The fake asserts on `.table` being touched at all."""
+    _run()
+    assert [name for name, _ in wired.sb.rpcs] == ["bgb_delete_account_rows"]
+
+
+def test_the_rpc_counts_are_reported_back(wired):
+    """The route logs them and the caller returns them, so a handover that
+    silently moved nothing is visible in the log rather than only in the DB."""
+    result = _run()
+    assert result["plays_reassigned"] == 2
+    assert result["plays_deleted"] == 1
 
 
 # ── 2. Unconfigured refuses rather than half-deleting ────────────────────────
@@ -260,8 +295,8 @@ def test_photos_go_before_rows_and_the_credential_goes_last(wired):
     caller's hands and a retry that finishes the job."""
     _run()
     kinds = [entry[0] for entry in wired.log]
-    assert kinds.index("r2-delete") < kinds.index("row-delete")
-    assert kinds.index("supabase-delete") < kinds.index("row-delete")
+    assert kinds.index("r2-delete") < kinds.index("rows-delete")
+    assert kinds.index("supabase-delete") < kinds.index("rows-delete")
     assert kinds[-1] == "credential-delete"
 
 
@@ -285,14 +320,14 @@ def test_a_credential_failure_still_reports_failure_after_the_rows_went(wired, m
     monkeypatch.setattr(S.identity_admin, "delete_user", boom)
     with pytest.raises(S.DeletionFailed):
         _run()
-    assert ("row-delete", ("id", APP_UID)) in wired.log
+    assert ("rows-delete", "bgb_delete_account_rows", {"p_user": APP_UID}) in wired.log
 
 
 def test_a_row_failure_never_reaches_the_credential(wired, monkeypatch):
     """Deleting the login while the rows survive would strand them behind an
     account nobody can sign into and no token can retry."""
     monkeypatch.setattr(S, "get_supabase", lambda: _FakeSupabase(
-        wired.log, wired.bucket, table_fails=True
+        wired.log, wired.bucket, rpc_fails=True
     ))
     with pytest.raises(S.DeletionFailed):
         _run()
@@ -308,7 +343,8 @@ def test_both_photo_stores_are_purged(wired):
     result = _run()
     assert ("r2-delete", object_store.PLAYS, f"{APP_UID}/") in wired.log
     assert ("supabase-delete", (f"{APP_UID}/a.jpg", f"{APP_UID}/b.jpg")) in wired.log
-    assert result == {"r2_photos": 3, "supabase_photos": 2}
+    assert result["r2_photos"] == 3
+    assert result["supabase_photos"] == 2
 
 
 def test_the_supabase_bucket_name_matches_the_upload_path():

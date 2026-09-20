@@ -1228,8 +1228,10 @@
               ${this._deleting ? "Deleting…" : "Delete account"}
             </button>
             <p class="settings-account__note">
-              Permanently removes your profile, plays, photos, collection and
-              buddies, and your sign-in with it. This can't be undone.
+              Permanently removes your profile, photos, collection and buddies,
+              and your sign-in with it. Game nights you shared with other
+              members stay in their history under your name. This can't be
+              undone.
             </p>
           </div>
         </div>
@@ -1244,9 +1246,10 @@
       if (this._deleting) return;
       const ok = await window.PolaroidPopup.confirm({
         title: "Delete your account?",
-        body: "This permanently deletes your profile, plays, photos, collection, "
-            + "buddies and chapters, and your sign-in itself. This cannot be "
-            + "undone.",
+        body: "This permanently deletes your profile, photos, collection, "
+            + "buddies, chapters and your sign-in. Game nights you logged with "
+            + "other members stay in their history, still under your name, and "
+            + "pass to someone who was at the table. This cannot be undone.",
         confirmLabel: "Delete forever",
         cancelLabel: "Keep my account",
         destructive: true,
