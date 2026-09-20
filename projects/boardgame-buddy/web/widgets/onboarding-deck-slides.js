@@ -1,4 +1,5 @@
-// widgets/onboarding-deck-slides.js — the five panels the deck slides between.
+// widgets/onboarding-deck-slides.js — four of the five panels the deck slides
+// between; the fifth, buddies, is widgets/onboarding-buddies-slide.js.
 //
 // Each slide is `{ el, onEnter? }`: an element the shell appends to the track,
 // and an optional hook run when it arrives on screen. Nothing here knows how
@@ -8,8 +9,9 @@
 // the same three screens first-run always had; only their container changed:
 //   1 · profile — ui/avatar-picker.js, the picker extracted out of
 //       PolaroidPopup.avatarCustomizer when this became its second caller
-//   2 · buddies — ui/buddy-suggestion-rail.js's select-mode tile, the same one
-//       the Add-buddies card and both rails render
+//   2 · buddies — its own file, widgets/onboarding-buddies-slide.js: a
+//       search field, a suggestion grid and the second-hop promotion are a
+//       small application rather than a panel, and the other three are not
 //   3 · BoardGameGeek — the fields and copy of the deleted
 //       widgets/onboarding-bgg-modal.js, whose import readout stays shared
 //       with Settings as ui/bgg-import-log.js
@@ -42,7 +44,7 @@
     const seeded = String(me.display_name || "").slice(0, nameMax);
     const el = slideEl("ob-slide--profile", `
       <div class="ob-slide__scroll">
-        <h2 class="ob-slide__title">Set your display name and badge</h2>
+        <h2 class="ob-slide__title">Your Name and Badge</h2>
         <div class="polaroid-field ob-field">
           <label class="polaroid-field__label" for="ob-name">Display name</label>
           <input id="ob-name" type="text" maxlength="${nameMax}" autocomplete="off"
@@ -51,7 +53,15 @@
           <div class="polaroid-field__count ob-field__count"></div>
           <div class="polaroid-field__error ob-field__error text-error text-xs" hidden></div>
         </div>
-        <div class="ob-paper"><div class="ob-avatar-picker"></div></div>
+        <!-- The picker is a group of controls rather than one, so its heading
+             is a labelled group and not a <label for>. Same .polaroid-field
+             wrapper as the name field above, so the two headings line up and
+             sit the same distance off what they name. -->
+        <div class="polaroid-field ob-field ob-field--badge" role="group"
+             aria-labelledby="ob-badge-label">
+          <div class="polaroid-field__label" id="ob-badge-label">Badge</div>
+          <div class="ob-paper"><div class="ob-avatar-picker"></div></div>
+        </div>
       </div>
       <div class="ob-slide__actions">
         <button type="button" class="btn btn-primary ob-btn ob-btn--go">Continue</button>
@@ -118,143 +128,6 @@
     });
 
     return { el, onEnter: () => picker.refresh() };
-  }
-
-  // ── 2 · Buddies ────────────────────────────────────────────────────────────
-  function buildBuddies(deck) {
-    const el = slideEl("ob-slide--buddies", `
-      <div class="ob-slide__scroll">
-        <h2 class="ob-slide__title">Add your buddies</h2>
-        <div class="ob-tiles" data-tiles>
-          <p class="ob-tiles__msg">Finding people you may know…</p>
-        </div>
-      </div>
-      <div class="ob-slide__actions">
-        <button type="button" class="btn btn-ghost ob-btn ob-btn--skip">Skip</button>
-        <button type="button" class="btn btn-primary ob-btn ob-btn--go">Send requests</button>
-      </div>
-    `);
-
-    const grid = el.querySelector("[data-tiles]");
-    const sendBtn = el.querySelector(".ob-btn--go");
-    /** @type {Set<string>} */
-    const selected = new Set();
-    /** Everyone rendered, by id, so a promotion knows what is already here. */
-    const shown = new Map();
-    let network = null;
-    let loaded = false;
-
-    function tileHtml(s) {
-      return window.renderBuddySuggestionTile(s, {
-        mode: "select",
-        selected: selected.has(s.user_id),
-      });
-    }
-
-    function syncFooter() {
-      const n = selected.size;
-      sendBtn.textContent = n === 0
-        ? "Send requests"
-        : `Send ${n} request${n === 1 ? "" : "s"}`;
-    }
-
-    function render(rows) {
-      loaded = true;
-      shown.clear();
-      rows.forEach((r) => shown.set(r.user_id, r));
-      grid.innerHTML = rows.length
-        ? rows.map(tileHtml).join("")
-        : `<p class="ob-tiles__msg">No one to suggest yet — you can add buddies
-             any time from the Buddies screen.</p>`;
-      window.BgbIcons.render(grid);
-      syncFooter();
-    }
-
-    /**
-     * Ticking someone introduces the people they know (migration 072), out of
-     * the payload that arrived with the suggestions — so this costs no request
-     * and happens in the tap's own frame.
-     *
-     * APPENDS, and only appends. Nothing already on screen is re-rendered or
-     * moved, so the tile under the user's finger survives and the grid does
-     * not scroll (.claude/rules/overlays.md §6, mobile-web.md §5). An untick
-     * takes nothing back, by the same rule.
-     */
-    function promoteFrom(userId) {
-      if (!network || network.isEmpty) return;
-      const rows = network.promote(userId, new Set(shown.keys()));
-      if (!rows.length) return;
-      rows.forEach((r) => shown.set(r.user_id, r));
-      grid.insertAdjacentHTML("beforeend", rows.map(tileHtml).join(""));
-      window.BgbIcons.render(grid);
-    }
-
-    grid.addEventListener("click", (ev) => {
-      const tile = ev.target.closest ? ev.target.closest(".buddy-tile") : null;
-      if (!tile || tile.disabled) return;
-      const id = tile.getAttribute("data-user-id");
-      if (!id) return;
-      const nowOn = !selected.has(id);
-      if (nowOn) selected.add(id); else selected.delete(id);
-      tile.classList.toggle("is-selected", nowOn);
-      tile.setAttribute("aria-pressed", nowOn ? "true" : "false");
-      syncFooter();
-      if (nowOn) promoteFrom(id);
-    });
-
-    function leave(send) {
-      const ids = Array.from(selected);
-      if (send && ids.length) {
-        deck.queue(
-          `${ids.length} buddy request${ids.length === 1 ? "" : "s"} sent`,
-          () => window.Buddy.sendRequests(ids).then((res) => {
-            // The graph moved, so anything cached off it is stale.
-            if (window.Buddy.invalidate) window.Buddy.invalidate();
-            return res;
-          }),
-          (res) => {
-            const sent = (res && res.sent) || [];
-            const failed = (res && res.failed) || [];
-            // Says what actually happened rather than what was asked for — a
-            // batch where two of five bounced is not "5 sent".
-            return failed.length
-              ? `${sent.length} sent, ${failed.length} didn't go through`
-              : `All ${sent.length} delivered`;
-          },
-        );
-      }
-      deck.next();
-    }
-    el.querySelector(".ob-btn--go").addEventListener("click", () => leave(true));
-    el.querySelector(".ob-btn--skip").addEventListener("click", () => leave(false));
-
-    /**
-     * The suggestions were asked for the moment first-run began — while the
-     * user was still naming themselves on slide 1 — so by the time this slide
-     * arrives the grid is usually already painted. When it is not, this slide
-     * shows its loading line and fills in behind the user, who can carry on
-     * regardless: Skip works on an empty grid.
-     */
-    function load() {
-      if (loaded) return;
-      const pending = window.Buddy.takePrefetchedOnboarding
-        ? window.Buddy.takePrefetchedOnboarding()
-        : null;
-      (pending || window.Buddy.onboardingSuggestions(12)).then(
-        (res) => {
-          network = window.BuddyNetwork.from(res);
-          render((res && res.suggestions) || []);
-        },
-        (err) => {
-          // Best-effort by design: a discovery step is not worth blocking a
-          // signup on. The grid says so and Skip still works.
-          console.warn("Buddy suggestions unavailable:", err);
-          render([]);
-        },
-      );
-    }
-
-    return { el, onEnter: load, prefetch: load };
   }
 
   // ── 4 · Notifications ──────────────────────────────────────────────────────
@@ -587,7 +460,7 @@
     build(deck) {
       return {
         profile: buildProfile(deck),
-        buddies: buildBuddies(deck),
+        buddies: window.OnboardingBuddiesSlide.build(deck),
         bgg: buildBgg(deck),
         notifications: buildNotifications(deck),
         finale: buildFinale(deck),

@@ -440,11 +440,30 @@ Three details that are load-bearing rather than cosmetic. Both columns print **o
 First-run setup used to be three modals opened back to back, each awaiting its
 own write before the next appeared. It is now **one mounted deck** —
 `widgets/onboarding-deck.js` (the shell, the queue and the ledger) plus
-`widgets/onboarding-deck-slides.js` (the five panels) — and the split between
-those two files is the same lifecycle-vs-appearance seam the bottom-sheet shell
-uses: the shell owns the track, the counter and the write queue and knows
-nothing about what a slide contains; a slide says `deck.next()` and stops
-caring.
+`widgets/onboarding-deck-slides.js` (four of the five panels) — and the split
+between those two files is the same lifecycle-vs-appearance seam the
+bottom-sheet shell uses: the shell owns the track, the counter and the write
+queue and knows nothing about what a slide contains; a slide says
+`deck.next()` and stops caring. The buddies slide is a third file,
+`widgets/onboarding-buddies-slide.js`, because it is the one panel with real
+state — a query, a debounce, a sequence guard, two lists and a promotion rule
+— and CLAUDE.md's ~300-line split falls naturally between that and four panels
+of markup.
+
+**Slide 2 is the same screen as `widgets/add-buddies-modal.js`, deliberately.**
+Both put one question to the user, both render the canonical select-mode tile
+from `ui/buddy-suggestion-rail.js`, both reach past the ranked suggestions
+through `GET /profiles/search` with the same 300ms debounce and the same
+capture-after-the-timer sequence guard, and both promote the second hop through
+`domain/buddy-network.js`. What they do **not** share is the shell: a modal and
+a deck slide have different lifecycles, which is the split §4 of
+`ui-object-design.md` asks for. Two behaviours are worth naming because they
+are easy to lose. A tick made inside a search result is held in a `picked` map
+and **pinned above the suggestions** when the query clears, or the footer would
+count somebody the grid no longer shows. And a promotion that lands while a
+query is up is **deferred, not skipped** — the rows go into `list` and the next
+full paint renders them, because a suggestion tile does not belong in a list of
+search hits.
 
 The four counted steps are **display name and badge → buddies → collection
 import → notifications**, and the uncounted finale carries both the ledger and
@@ -463,7 +482,8 @@ Four properties are load-bearing, and each is a rule this codebase already had:
 - **A promotion appends.** Ticking a suggestion inserts the people they know
   below the grid rather than re-rendering it, so the tile under the thumb
   survives (`.claude/rules/overlays.md` §6). Untick takes nothing back for the
-  same reason.
+  same reason, and `BuddyNetworkIndex` records what it has issued so a second
+  tick of somebody who knows the same people offers them once.
 - **The deck is chrome, the picker is paper.** `.ob-deck` joins the re-point
   lists in `styles.css`, so its tiles and fields follow the ground in both
   themes; `.ob-paper` restores the alias family for the badge carousel at

@@ -17705,6 +17705,11 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    used to. Every other slide still has a body paragraph and keeps the 6px. */
 .ob-slide--profile .ob-slide__title,
 .ob-slide--buddies .ob-slide__title { margin-bottom: 16px; }
+/* The badge picker is wrapped in a .polaroid-field so its heading sits where
+   the name field's does. That wrapper's own bottom margin would then stack
+   with .ob-paper's, which is the island's to own. */
+.ob-field--badge { margin-bottom: 0; }
+.ob-field--badge .ob-paper { margin-bottom: 0; }
 .ob-slide__note { font-size: 11.5px; line-height: 1.45; color: var(--ink-faint); margin: 10px 0 0; }
 .ob-field { margin-bottom: 12px; }
 .ob-field__label { color: var(--ink-faint); }
@@ -17764,7 +17769,14 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-bottom: 12px;
 }
 
-/* ── Slide 2: the suggestion grid ─────────────────────────────────────────── */
+/* ── Slide 2: the search field and the suggestion grid ────────────────────── */
+.search-field.ob-search { flex: none; display: flex; margin-bottom: 12px; }
+/* .polaroid-field__input declares the `padding` SHORTHAND and sits later in
+   this file than .search-field__input's `padding-right: 40px`, at the same
+   0,1,0 — so it wins on source order and the × lands on top of the caret.
+   0,2,0 here so the clearance cannot be tied away again. Exactly the fix
+   .add-buddies__search carries, for exactly the same pairing. */
+.ob-search .search-field__input { padding-right: 40px; }
 .ob-tiles {
   display: grid;
   grid-template-columns: 1fr 1fr;
