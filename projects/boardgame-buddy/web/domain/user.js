@@ -19,16 +19,31 @@
     /**
      * Permanently delete the signed-in account.
      *
-     * DELETE /profile removes the profile row; the schema cascades it to
-     * collections, plays, buddy edges and chapters, and leaves community
-     * chapters authored by this account with created_by NULL. There is no
-     * soft-delete and no undo — the caller MUST confirm first
-     * (.claude/rules/web-frontend.md), and must sign out afterwards, because
-     * the token in hand still looks valid to the client while pointing at a
-     * row that is gone.
+     * DELETE /profile removes three things in a fixed order, and the server
+     * owns all of it (api/routes/services/account_deletion_service.py): the
+     * play photos out of both object stores, then the profile row — which
+     * the schema cascades to collections, plays, buddy edges and the rest,
+     * leaving community chapters authored by this account with created_by
+     * NULL — and then THE IDENTITY PLATFORM ACCOUNT ITSELF.
      *
-     * Same endpoint the native app calls (app/src/api/client.js#deleteAccount),
-     * so the two platforms delete exactly the same way.
+     * That last step is why this is not a client-side
+     * `firebase.auth().currentUser.delete()`. The SDK refuses one on a
+     * session older than a few minutes (`auth/requires-recent-login`), so
+     * every deletion would have to detour through a re-authentication; the
+     * server holds a service-account credential that has no such condition.
+     * It also means the browser is never the thing that decides the account
+     * is gone.
+     *
+     * There is no soft-delete and no undo — the caller MUST confirm first
+     * (.claude/rules/web-frontend.md), and must sign out afterwards, because
+     * the token in hand still verifies for up to an hour (it is checked
+     * against Google's JWKS, not against the account existing) while pointing
+     * at rows that are gone.
+     *
+     * ON FAILURE, STAY SIGNED IN. A 503 means nothing was deleted; a 500
+     * means part of it was. Every step is idempotent, so the same call
+     * retried finishes the job — but only while the caller still holds a
+     * token, which signing out would throw away.
      */
     static deleteAccount() {
       return window.api.del("/profile");

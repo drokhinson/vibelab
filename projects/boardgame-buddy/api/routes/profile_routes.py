@@ -19,7 +19,7 @@ from .models import (
     ProfileSearchResult,
     PublicProfileResponse,
 )
-from .services import profile_service
+from .services import account_deletion_service, profile_service
 
 
 @router.get(
@@ -240,15 +240,47 @@ async def get_profile_bundle(
 async def delete_profile(
     su_user: SupabaseUser = Depends(get_current_supabase_user),
 ) -> MessageResponse:
-    """Delete the current user's profile. Cascades to collections, plays, user_chapters, etc."""
-    sb = get_supabase()
-    # Deleting the profile cascades via ON DELETE CASCADE to collections, plays,
-    # buddies, user_chapters, chapter_reports. Guide chapters the user authored
-    # have created_by set to NULL (ON DELETE SET NULL).
-    await asyncio.to_thread(
-        sb.table("boardgamebuddy_profiles").delete().eq("id", su_user.sub).execute
-    )
-    # The row is gone; a cached CurrentUser for it would keep a deleted account
-    # authenticating for up to a TTL on this worker.
+    """Delete the current user's account: play photos, rows, and the login itself.
+
+    Thin on purpose — the order of the three steps and what each failure
+    leaves behind is the substance, and it lives in
+    `services/account_deletion_service.py`. The short version: photos first
+    (so a flaky object store costs a retry, not the photos), rows second
+    (cascading to collections, plays, buddies, sessions, achievements and the
+    rest, with authored guide chapters keeping their text under a NULL
+    `created_by`), and the Identity Platform credential last, so a failure
+    always leaves a signed-in caller able to retry.
+
+    THE CREDENTIAL IS THE POINT. Deleting only the rows left the account alive
+    at the provider, so signing back in with Google re-created an empty
+    profile and signing up again with the same address answered
+    `auth/email-already-in-use` — a deletion that told the user it had not
+    happened.
+
+    Depends on `get_current_supabase_user` rather than `get_current_user`, and
+    must keep doing so: the latter auto-creates a profile row for a caller who
+    has none, which on a retry after a partial failure would resurrect the
+    account this endpoint just deleted.
+    """
+    try:
+        await account_deletion_service.delete_account(
+            app_uid=su_user.sub, provider_uid=su_user.provider_uid
+        )
+    except account_deletion_service.DeletionBlocked as exc:
+        # Nothing was touched. 503 rather than 500: the account is intact and
+        # the same request will work once the operator fixes the config.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except account_deletion_service.DeletionFailed as exc:
+        # Something was — and if it got as far as the rows, a cached
+        # CurrentUser would go on serving a profile that no longer exists for
+        # up to a TTL. Dropped here as well as on the success path, because
+        # the failure that leaves rows deleted is the one where a stale cache
+        # is most confusing.
+        invalidate_current_user(su_user.sub)
+        # The client keeps the session so the user can retry; every step is
+        # idempotent, so a retry finishes the job.
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    # The rows are gone; a cached CurrentUser for this id would keep a deleted
+    # account authenticating for up to a TTL on this worker.
     invalidate_current_user(su_user.sub)
     return MessageResponse(message="Account deleted")

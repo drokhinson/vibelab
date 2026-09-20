@@ -24,7 +24,8 @@ projects/boardgame-buddy/
 │   ├── routes/             the project package; routes/services/ under it
 │   ├── analytics_routes.py own copy — web/domain/api.js pings /analytics/track
 │   ├── db.py jwt_auth.py cache.py api_logger.py gemini.py auth.py shared_models.py
-│   ├── object_store.py     Cloudflare R2 uploads (see below)
+│   ├── object_store.py     Cloudflare R2 uploads and deletes (see below)
+│   ├── identity_admin.py   deletes the Identity Platform credential (see below)
 │   └── tests/
 ├── db/migrations/          001–049, plus _shared/ (analytics + api_logs)
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
@@ -120,6 +121,22 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    Auth.** Both sides were removed once accounts existed only in Identity
    Platform. A consequence: local dev needs the four `BGB_FIREBASE_*` values in
    its `config.js` to sign in at all. They are repo variables, not secrets.
+15. **`identity_admin.py` treats "not configured" as an ERROR, and
+   `object_store.py` treats it as normal.** The two stances are opposite on
+   purpose. An unconfigured R2 has a working fallback — the bytes go to
+   Supabase Storage. An unconfigured identity admin has none: the only thing
+   `DELETE /profile` could still do is delete the rows and leave the login
+   standing, which is the exact bug the module was added to fix. So account
+   deletion answers 503 and destroys nothing rather than half-succeeding, and
+   local dev cannot delete accounts without `GCP_SERVICE_ACCOUNT_JSON`.
+16. **`SupabaseUser.sub` is the app_uid; the provider's uid is
+   `provider_uid`.** `jwt_auth.py` rewrites `sub` from the `app_uid` claim
+   (see 11), so the field named `sub` is NOT the token's subject. Only
+   `identity_admin.delete_user` wants the real one. Passing it `sub` addresses
+   a uid Identity Platform has never seen, which it answers `USER_NOT_FOUND`
+   to, which that function reports as success — every deletion green, every
+   credential alive. `tests/test_account_deletion.py` is the only thing that
+   catches it.
 
 ## Secrets that must never be rotated casually
 

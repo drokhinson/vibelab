@@ -64,9 +64,20 @@ _fb_jwks_client = (
 
 class SupabaseUser(BaseModel):
     """Decoded Supabase Auth JWT payload."""
-    sub: str          # user UUID
+    sub: str          # app_uid — the UUID the DATABASE knows this account by
     email: str
     role: str = ""    # e.g. "authenticated"
+    # The token's raw `sub`: the Identity Platform uid, which is what the
+    # provider knows the account by and the only id its admin API accepts as
+    # `localId`. It is NOT `sub` above — see `_app_uid`, which rewrites that
+    # field to the UUID the schema's 35 uuid columns require. For the 23
+    # migrated accounts the two are equal; for every account created since,
+    # they are different strings, and deleting the wrong one is a silent no-op
+    # (`accounts:delete` answers USER_NOT_FOUND for a uid that never existed).
+    #
+    # Only `identity_admin.delete_user` reads this. Everything else wants
+    # `sub`, which is why the app id keeps the short, obvious name.
+    provider_uid: str = ""
 
 
 # ── The app's user id, which is not always the token's subject ───────────────
@@ -193,6 +204,7 @@ async def get_current_supabase_user(
         sub=_app_uid(payload),
         email=payload.get("email", ""),
         role=payload.get("role", ""),
+        provider_uid=str(payload.get("sub") or ""),
     )
     if state is not None:
         state.supabase_user = user

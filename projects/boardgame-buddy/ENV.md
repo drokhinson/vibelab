@@ -33,6 +33,7 @@ Supersedes the root `ENV.md` for anything BoardgameBuddy. Domain: **bgbuddy.app*
 | `BGA_MAX_PAGES` | hand-set (default `20`) | The same ceiling expressed in `getGames` pages, whichever is hit first. |
 | `BGA_SWEEP_BUDGET_SECONDS` | hand-set (default `90`) | Wall-clock wall on the sweep, so a slow BGA cannot hold the single uvicorn worker's request open indefinitely. |
 | `GEMINI_API_KEY` | aistudio.google.com → API Keys | Chapter drafting and play-note import. Missing key → those two endpoints 502; nothing else breaks. |
+| `GCP_SERVICE_ACCOUNT_JSON` | GCP → IAM → Service Accounts → Keys → Add key (JSON) | **The only credential that can delete an Identity Platform account.** Read by `api/identity_admin.py`, whose one caller is `DELETE /profile`. The service account needs the **Firebase Authentication Admin** role (`roles/firebaseauth.admin`) on `GCP_PROJECT_ID` and nothing else; the token is requested for the single scope `.../auth/identitytoolkit`. Paste the whole key file as one line, or base64 it — both are accepted, since a JSON string holding a multi-line PEM is easy for a dashboard to reflow. **Unset, account deletion answers 503 and deletes nothing at all**, which is deliberate: the alternative is deleting a person's rows and leaving their login standing, which is the bug this variable exists to fix. Local dev therefore cannot delete accounts, and that is the intended state. |
 
 ### Added by the migration (see `Docs/MIGRATION_PLAN.md`)
 

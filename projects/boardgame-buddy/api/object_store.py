@@ -4,14 +4,22 @@ Replaces Supabase Storage for image objects. Image bytes are ~93% of this
 app's egress and Supabase bills egress; **R2 never does, at any volume**, which
 is the entire reason this module exists.
 
-WHAT IS AND IS NOT HERE. Three operations: `put()`, `public_url()`, and
-`usage()`. No object read, no delete. Reads never come through the API at all —
-the client loads an absolute URL straight from the row, so an image is an
-`<img src>` and nothing more, and `usage()` does not change that: it lists
-KEYS AND SIZES for the admin Usage spoke and never fetches an object's bytes.
-Delete is absent because nothing deletes an image today; the privacy policy
-discloses that, and when it stops being true this module gains a `delete()`
-rather than a caller reaching for boto3 itself.
+WHAT IS AND IS NOT HERE. Four operations: `put()`, `public_url()`, `usage()`
+and `delete_prefix()`. No object read. Reads never come through the API at all
+— the client loads an absolute URL straight from the row, so an image is an
+`<img src>` and nothing more, and neither of the other two changes that:
+`usage()` lists KEYS AND SIZES for the admin Usage spoke and `delete_prefix()`
+lists keys to delete them, and neither ever fetches an object's bytes.
+
+`delete_prefix()` arrived when account deletion stopped being rows-only. This
+header used to say delete was absent "because nothing deletes an image today;
+the privacy policy discloses that, and when it stops being true this module
+gains a `delete()` rather than a caller reaching for boto3 itself" — which is
+what happened. It is a PREFIX delete and not a `delete(key)` because the
+plays layout is a directory per user (see below), so "everything this account
+uploaded" is expressible as one prefix and needs no list of URLs gathered
+before the rows cascade away. There is deliberately no single-object delete:
+nothing needs one yet, and the same reasoning applies.
 
 PATHS ARE UNCHANGED FROM THE SUPABASE LAYOUT.
   plays: `{user_id}/{uuid4hex}.{ext}`     games: `{bgg_id}_{kind}.{ext}`
@@ -293,6 +301,96 @@ def put(
             f": {exc}"
         ) from exc
     return public_url(kind, path)
+
+
+# An account can hold a lot of photos but not an unbounded number, and a
+# TRUNCATED DELETE IS THE FAILURE THIS FUNCTION EXISTS TO PREVENT — it would
+# report success over objects it left behind, on the one path where "we
+# deleted your data" is a promise rather than a status. So `delete_prefix`
+# takes no page ceiling, unlike `usage()`, which can honestly report a floor.
+# The bound that does apply is S3's: 1000 keys per DeleteObjects call.
+_DELETE_BATCH = 1000
+
+
+def delete_prefix(kind: str, prefix: str) -> int:
+    """Delete every object under `prefix` in `kind`; returns how many went.
+
+    The one caller is account deletion, which passes `f"{user_id}/"` against
+    PLAYS — the plays layout is `{user_id}/{uuid4hex}.{ext}`, so that prefix
+    is exactly one account's photos and nothing else. GAMES is a cache of
+    public cover art keyed by BGG id, shared across every account, and must
+    never be handed a prefix from a user id.
+
+    THE TRAILING SLASH IS REQUIRED, and this is the whole safety story. S3
+    prefix matching is a string prefix, not a path prefix: `"abc"` also
+    matches `abcdef/photo.jpg`, so a caller that forgot the slash would delete
+    another account's photos whenever one uid happened to prefix another. An
+    empty prefix would match the entire bucket. Both raise rather than run.
+
+    Raises `NotConfigured` when R2 is not set up for `kind` — callers that
+    treat that as "nothing to do" must check `configured()` first, because
+    here it means the delete did not happen and the objects may still exist.
+    Any other failure raises `ObjectStoreError`; a partial delete is reported
+    as a failure with the count that did land in the message, since the caller
+    can safely re-run it.
+    """
+    if not _cfg.ready(kind):
+        raise NotConfigured(f"R2 is not configured for {kind!r}")
+
+    key_prefix = (prefix or "").lstrip("/")
+    if not key_prefix or not key_prefix.endswith("/"):
+        raise ObjectStoreError(
+            f"delete_prefix refuses {prefix!r}: a prefix must be non-empty and "
+            "end in '/' so it cannot match a sibling key"
+        )
+
+    bucket = _cfg.buckets[kind]
+    deleted = 0
+    try:
+        s3 = _s3()
+        batch: list[dict] = []
+        paginator = s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=key_prefix):
+            for obj in page.get("Contents") or ():
+                batch.append({"Key": obj["Key"]})
+                if len(batch) >= _DELETE_BATCH:
+                    deleted += _delete_batch(s3, bucket, batch)
+                    batch = []
+        if batch:
+            deleted += _delete_batch(s3, bucket, batch)
+    except ObjectStoreError:
+        raise
+    except Exception as exc:
+        # Same error shape as put(): name the bucket and the jurisdiction,
+        # never the account id. `AccessDenied` here is most likely a token
+        # scoped to read and write but not delete.
+        raise ObjectStoreError(
+            f"R2 delete failed under {kind}/{key_prefix} after {deleted} object(s) "
+            f"[bucket={bucket} jurisdiction={_cfg.jurisdiction or '(default)'}]"
+            f": {exc}"
+        ) from exc
+    return deleted
+
+
+def _delete_batch(s3, bucket: str, batch: list[dict]) -> int:
+    """One DeleteObjects call; returns how many keys it removed.
+
+    `Quiet=True` suppresses the per-key success entries and leaves `Errors`,
+    which is the only part worth reading. A DeleteObjects that reports errors
+    comes back HTTP 200, so not inspecting them is how a partial delete gets
+    counted as a whole one.
+    """
+    resp = s3.delete_objects(
+        Bucket=bucket, Delete={"Objects": batch, "Quiet": True}
+    )
+    errors = resp.get("Errors") or ()
+    if errors:
+        first = errors[0]
+        raise ObjectStoreError(
+            f"{len(errors)} of {len(batch)} key(s) would not delete; first: "
+            f"{first.get('Key')} ({first.get('Code')} {first.get('Message')})"
+        )
+    return len(batch)
 
 
 # The page ceiling on `usage()`. 100 pages x 1000 keys is 100k objects, which

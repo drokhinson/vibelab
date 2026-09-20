@@ -156,12 +156,16 @@
         <p><strong>Deletion.</strong> Settings has a delete-account control. It
         removes your profile and everything that hangs off it: plays, scores,
         collection, wishlist, buddy connections, achievements and push
-        registrations. Guide chapters you published stay, with your name
-        detached, so they do not vanish from other people's guides.</p>
-        <p><strong>One gap, stated plainly:</strong> deleting a play or your
-        account removes the records but does <em>not</em> currently delete the
-        stored image files, which remain at their unguessable addresses. We are
-        fixing this. Until then, email us and we will remove them by hand.</p>
+        registrations. It also deletes the photos you uploaded and your
+        sign-in itself, so the address you signed up with is free to use
+        again. Guide chapters you published stay, with your name detached, so
+        they do not vanish from other people's guides.</p>
+        <p><strong>One gap, stated plainly:</strong> deleting a single
+        <em>play</em> removes the record but does <em>not</em> yet delete the
+        photo attached to it, which remains at its unguessable address until
+        you delete your account. Deleting your account now removes every one
+        of them. Until the per-play case is fixed, email us and we will remove
+        an individual photo by hand.</p>
 
         <h2 class="text-xl font-semibold mt-8 mb-2">8. Storage on your device</h2>
         <p>The app keeps your sign-in session, your light/dark choice and some
