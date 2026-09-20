@@ -418,9 +418,7 @@
         </div>
         <h2 class="ob-slide__title">Import your collection</h2>
         <p class="ob-slide__body">
-          Already keep your games on BGG? Link it and we'll pull your collection,
-          wishlist and play history. We use your password once to sign in, then
-          store it encrypted so later syncs run on their own.
+          Link your BGG account to import your collection and plays.
         </p>
         <form novalidate>
           <div class="polaroid-field ob-field">
@@ -439,8 +437,10 @@
           <div class="ob-field__error text-error text-xs" hidden></div>
         </form>
         <p class="ob-slide__note">
-          No BGG account, or rather not right now? Skip — you can link one any
-          time from Settings. The import runs in the background either way.
+          We use your password once to sign in, then store it encrypted so later
+          syncs run on their own. No BGG account, or rather not right now? Skip
+          — you can link one any time from Settings. The import runs in the
+          background either way.
         </p>
       </div>
       <div class="ob-slide__actions">
