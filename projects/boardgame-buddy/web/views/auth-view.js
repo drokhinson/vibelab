@@ -35,19 +35,6 @@
       // Firebase reports as auth/cancelled-popup-request, which kills the
       // sign-in already in progress.
       this._oauthBusy = false;
-      // The hero vignette's controller. Not merely nulled: it owns interval
-      // timers, an IntersectionObserver and a visibilitychange listener, so
-      // dropping the reference would leave a scene animating a node that is
-      // no longer in the document.
-      this._teardownHero();
-    }
-
-    /** Stop and unwire the hero vignette, if one is running. */
-    _teardownHero() {
-      if (this._heroCtl) {
-        try { this._heroCtl.destroy(); } catch (_) {}
-      }
-      this._heroCtl = null;
     }
 
     onMount() {
@@ -177,10 +164,6 @@
         onGoogle: "window.authView.oauth('google')",
         onApple: "window.authView.oauth('apple')",
       });
-      // Every paint replaces the container's innerHTML, so whatever scene the
-      // last one mounted is about to be detached. Tear it down before it
-      // becomes a set of timers animating an orphan.
-      this._teardownHero();
       const errLine = this._error
         ? `<div class="text-error text-sm mb-3">${escapeHtml(this._error)}</div>` : "";
       this.container.innerHTML = `
@@ -190,7 +173,6 @@
             <h1 class="text-3xl font-bold font-display text-base-content">Boardgame Buddy</h1>
             <p class="text-base-content/60 mt-2">Games Played, Nights Remembered.</p>
           </div>
-          <div class="auth-hero" data-auth-hero></div>
           <div class="card bg-base-200 w-full max-w-sm">
             <div class="card-body">
               ${configBanner}
@@ -217,45 +199,6 @@
         </div>
       `;
       this.refreshIcons();
-      this._mountHero();
-    }
-
-    /**
-     * The sign-in screen's one animated scene, mounted AFTER first paint.
-     *
-     * This is a signed-out visitor's boot path, so none of the tour's scene
-     * modules may be on it — they arrive through ui/lazy-script.js, and the
-     * strip above is the sell whether or not they ever land. A dead connection,
-     * a reduced-motion preference or a failed load all end the same way: the
-     * hero host stays empty and the screen reads exactly as it did before,
-     * which is why there is no error branch here. Nobody should have to dismiss
-     * a warning on a login screen.
-     */
-    _mountHero() {
-      const host = this.container && this.container.querySelector("[data-auth-hero]");
-      // BgbLazyScript is checked, not assumed: the hero is an enhancement,
-      // and "the screen reads exactly as it did before" has to hold when
-      // the loader is not there either.
-      if (!host || this._heroCtl || !window.BgbLazyScript) return;
-      let reduced = false;
-      try {
-        reduced = !!(window.matchMedia
-          && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-      } catch (_) {}
-      if (reduced) return;
-      window.BgbLazyScript
-        .load("ui/tour-vignette.js")
-        .then(() => window.BgbLazyScript.load("widgets/tour-vignette-ambient.js"))
-        .then(() => {
-          // render() can have run again while the modules were in the air —
-          // a mode switch, a failed submit — which detaches the host we
-          // resolved above. Re-resolve rather than mounting into a dead node.
-          const live = this.container && this.container.querySelector("[data-auth-hero]");
-          if (!live || !window.BgbTourVignette) return;
-          this._heroCtl = window.BgbTourVignette.mount(live, "community");
-          if (this._heroCtl) this._heroCtl.play();
-        })
-        .catch(() => {});
     }
 
     switchMode(mode) {
