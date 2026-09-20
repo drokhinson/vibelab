@@ -2,11 +2,21 @@
 //
 // Wraps a Supabase Realtime channel on boardgamebuddy_play_session_scores.
 // The host's browser writes straight to the table via the anon key and
-// everybody else reads — RLS (migration 053) enforces that only the host of
-// the session can write, and only while phase='play'.
+// everybody else reads — RLS (migration 053, now 029's split policies)
+// enforces that only the host of the session can write, and only while
+// phase='play'.
+//
+// That second half is the one this module has to respect rather than discover.
+// The host's phase is a LOCAL flip that a background PATCH catches the server
+// up to, so there are windows — the Gather screen, the moment after Wrap up,
+// the round trip in between — where the host's browser holds a grid the
+// database will refuse. A write issued in one of them is not a failure worth
+// reporting; it is a write that should not have been sent. `canWrite` is how
+// the caller says which window it is in, and nothing leaves this module while
+// it answers false.
 //
 // Lifecycle:
-//   const ls = new LiveScores({ sessionId, isHost });
+//   const ls = new LiveScores({ sessionId, isHost, canWrite });
 //   await ls.start();                                  // backfill + subscribe
 //   const off = ls.subscribe(() => render());
 //   ls.setAnyScore(participantId, roundIndex, value);   // host only
@@ -64,9 +74,15 @@
    */
 
   class LiveScores {
-    constructor({ sessionId, isHost, onWriteDenied }) {
+    constructor({ sessionId, isHost, onWriteDenied, canWrite }) {
       this.sessionId = sessionId;
       this.isHost = !!isHost;
+      // "Would the database accept a write from me right now?", asked at the
+      // moment of sending rather than answered once at construction: the
+      // answer changes with every phase step and every phase PATCH in flight.
+      // Defaults to yes so a caller that never had to think about it (the
+      // spectator path, which never writes) is unaffected.
+      this._canWrite = typeof canWrite === "function" ? canWrite : () => true;
       // Called once per session the first time a write comes back permanently
       // refused (see isPermanentWriteFailure). Optional, and only the host
       // passes one — a spectator never writes.
@@ -311,6 +327,24 @@
       return this._realtimeDead;
     }
 
+    /**
+     * May a write leave this module right now?
+     *
+     * Host-only is structural (a spectator's client never calls a write path,
+     * and the policy would refuse it anyway); the phase half is the caller's
+     * to answer, because only it knows whether the phase the host is looking
+     * at has reached the database yet. See the header.
+     */
+    _writable() {
+      if (!this.isHost) return false;
+      try {
+        return !!this._canWrite();
+      } catch (_) {
+        // A predicate that throws must not wedge the grid for the session.
+        return true;
+      }
+    }
+
     _cloneSeed() {
       const copy = new Map();
       for (const [playerId, m] of this._seed) copy.set(playerId, new Map(m));
@@ -350,6 +384,12 @@
       this._writes.shiftRounds(idx);
       this._emit();
       if (!window.supabaseClient || !this.sessionId) return;
+      // Nothing to reconcile against a table that will refuse both halves of
+      // it. Skipping as a UNIT matters: a DELETE that landed without its
+      // rewrite would take the shifted tail off every spectator's grid. The
+      // orphan rows the skip leaves behind are what syncGrid's prune exists
+      // for, and the next entry to Play fires one.
+      if (!this._writable()) return;
       try {
         // Let every per-cell write settle first. One landing AFTER the DELETE
         // below would re-insert its row at the PRE-shift index — precisely the
@@ -470,9 +510,13 @@
       if (!this.isHost) throw new Error("Only the host can score");
       if (!window.supabaseClient || !this.sessionId) return;
       const rows = [];
+      // How many rounds the host's grid actually has — the prune below deletes
+      // everything at or past it.
+      let maxRounds = 0;
       for (const p of players || []) {
         if (!p || !p.participant_id) continue;
         const scores = Array.isArray(p.roundScores) ? p.roundScores : [];
+        if (scores.length > maxRounds) maxRounds = scores.length;
         for (let r = 0; r < scores.length; r++) {
           const numeric = window.parseRoundScore(scores[r]);
           // Ingest locally too, so the host's own totals and maxRound() agree
@@ -487,6 +531,7 @@
       }
       if (!rows.length) return;
       this._emit();
+      if (!this._writable()) return;
       try {
         // Settle per-cell writes first so this bulk copy can't be overtaken by
         // one of them. At the only call site today (entering Play) the queue is
@@ -494,6 +539,20 @@
         // mid-game.
         await this._writes.drain();
         await this._sendRows(rows);
+        // Publishing the WHOLE grid means saying what is not on it either.
+        // Rounds past the host's last one are rows the table holds and the
+        // host's screen does not — a removeRoundAt whose DELETE never went out
+        // (refused, offline, or skipped above), which otherwise leaves every
+        // spectator a phantom trailing round for the rest of the game. Guarded
+        // by rows.length, so a draft whose participant_ids have not landed yet
+        // publishes nothing and therefore prunes nothing.
+        const del = await window.supabaseClient
+          .from("boardgamebuddy_play_session_scores")
+          .delete()
+          .eq("session_id", this.sessionId)
+          .gte("round_index", maxRounds)
+          .abortSignal(AbortSignal.timeout(DB_TIMEOUT_MS));
+        if (del && del.error) throw del.error;
       } catch (_) {
         // Best-effort, exactly like every other mirror write — the next
         // keystroke or refresh() reconciles.
@@ -517,6 +576,12 @@
       if (!window.supabaseClient || !this.sessionId || !rows || !rows.length) {
         return Promise.resolve();
       }
+      // Closed window: the session is not in a phase whose RLS policy accepts
+      // a write from us. Resolve as though nothing needed sending — which is
+      // true. The queue keeps its intent either way (nothing confirms it), so
+      // the host's value stays on their screen and the next syncGrid, fired
+      // the moment the window opens, publishes it for real.
+      if (!this._writable()) return Promise.resolve();
       return window.supabaseClient
         .from("boardgamebuddy_play_session_scores")
         .upsert(
@@ -538,7 +603,12 @@
           //
           // Once, not per keystroke: the condition is a property of the
           // session, and a toast per digit typed would be its own outage.
-          if (!this._deniedReported && isPermanentWriteFailure(err)) {
+          // …and only while the window is still open. A refusal collected
+          // just after the host left Play is the phase moving under an
+          // in-flight request, not a session that cannot save — reporting it
+          // would spend the one-per-session budget on a race and tell the
+          // host their scores are lost when they are already in the table.
+          if (!this._deniedReported && this._writable() && isPermanentWriteFailure(err)) {
             this._deniedReported = true;
             if (this._onWriteDenied) {
               try { this._onWriteDenied(err); } catch (_) {}
