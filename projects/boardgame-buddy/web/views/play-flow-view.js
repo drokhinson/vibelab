@@ -1523,6 +1523,14 @@
      * same strip rather than 400px apart. The strip is already pinned, so
      * neither can scroll away.
      *
+     * NEXT ROUND IS THE ACCENT ONE, and the wider of the two. A docked bar
+     * gets one filled button, and the one it belongs on is the button that is
+     * pressed six or ten times a night rather than the one pressed once at the
+     * end — the host is reaching for it in the middle of a conversation, on a
+     * phone lying flat on a table, without looking. Wrap up takes the quiet
+     * treatment for the same reason it always deserved it: it ENDS the thing
+     * the screen is for, so an accidental press costs more than a missed one.
+     *
      * The play-detail popup keeps the in-card button: it has no docked bar to
      * move one into (widgets/round-score-grid.js, `showAddRound`).
      *
@@ -1532,12 +1540,12 @@
       return `
         <div class="cascade-cta-wrap">
           <div class="cascade-cta-row">
-            <button class="btn cascade-cta cascade-cta--alt" type="button"
+            <button class="btn btn-primary cascade-cta cascade-cta--wide" type="button"
                     onclick="window.playFlowView._addRound()">
               <i data-icon="plus" class="w-4 h-4"></i>
               Next round
             </button>
-            <button class="btn btn-primary cascade-cta" type="button"
+            <button class="btn cascade-cta cascade-cta--alt" type="button"
                     onclick="window.playFlowView._advanceToSettle()">
               Wrap up
               <i data-icon="arrow-down" class="w-4 h-4"></i>

@@ -11094,10 +11094,20 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    the fade around them still hand taps to the grid underneath. */
 .cascade-cta-row { display: flex; gap: 8px; }
 .cascade-cta-row .cascade-cta { flex: 1 1 0; min-width: 0; }
-/* The alternative move on the same strip, and deliberately not a second
-   accent chip: two filled buttons side by side would be two primary actions.
-   Ground tokens, because the docked bar fades into --bg-0 — the scorepad's
-   paper stops at the card above it. */
+/* Next round takes the larger share of the strip — 60/40 rather than half
+   each. The two are alternatives, but they are not equally likely: a host
+   presses Next round once a round and Wrap up once a night, on a phone lying
+   flat on a table in the middle of a conversation, so the frequent one gets
+   the bigger target and the terminal one gets the smaller. A ratio, not a
+   width: both buttons still flex, so the split holds at 320px and on the
+   left pane of a tablet alike. */
+.cascade-cta-row .cascade-cta--wide { flex: 1.5 1 0; }
+/* The quiet half of the pair, and deliberately not a second accent chip: two
+   filled buttons side by side would be two primary actions. It is Wrap up
+   that takes it — the docked bar's one filled button belongs to the move made
+   every few minutes, not to the one that ENDS the screen, where an accidental
+   press costs more than a missed one. Ground tokens, because the docked bar
+   fades into --bg-0 — the scorepad's paper stops at the card above it. */
 .cascade-cta--alt {
   background: var(--bg-1);
   color: var(--ink);
