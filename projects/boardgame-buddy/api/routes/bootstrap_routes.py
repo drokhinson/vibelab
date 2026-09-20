@@ -9,8 +9,8 @@ cached identity to boot from. It returns:
   - feed_first_page + feed_cursor (composed in Python; reuses feed_service so
     Hot Games / Suggested Buddies interspersing is not duplicated)
   - recently_played_games (host flow game-picker seed)
-  - play_partners (host flow player-picker seed: accounts + ghosts + recent,
-    from one bgb_play_partners RPC)
+  - play_partners (host flow player-picker seed: accounts + pending buddy
+    requests + ghosts + recent, from one bgb_play_partners RPC)
   - notifications_first_page (the bell's first page AND its unread count, from
     one notification_service.list_notifications call)
   - release_notices_unseen (the what's-new popup's slides, oldest-first, capped;

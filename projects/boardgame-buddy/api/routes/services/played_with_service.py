@@ -8,7 +8,9 @@ promotes them by stamping player_user_id on every matching row.
 The three read paths — buddies, ghosts, played-with — are one RPC
 (bgb_play_partners, migration 047). They were twelve round trips across three
 endpoints, one of which pulled every play id the viewer touches into Python to
-count them in a dict.
+count them in a dict. Migration 049 adds a fourth list to the same call:
+`pending`, the buddy requests waiting on an answer either way, which the player
+picker offers as seatable people — the request is why they are at your table.
 """
 
 from fastapi import HTTPException
@@ -18,6 +20,7 @@ from ..constants import MAX_IMPORT_NAME_CHARS
 from ..models import (
     BuddyEdgeResponse,
     GhostPlayer,
+    PendingBuddyEdge,
     PlayedWithUser,
     PlayPartnersResponse,
 )
@@ -35,6 +38,11 @@ def fetch_play_partners(sb: Client, viewer_id: str) -> PlayPartnersResponse:
     data = sb.rpc("bgb_play_partners", {"p_viewer": viewer_id}).execute().data or {}
     return PlayPartnersResponse(
         accounts=[BuddyEdgeResponse.model_validate(x) for x in (data.get("accounts") or [])],
+        # `or []` is doing real work here, not being defensive for its own sake:
+        # the key only exists once migration 049 has been applied, and a Railway
+        # deploy that lands before the SQL does would otherwise 500 the picker
+        # seed on every boot rather than serving one fewer list.
+        pending=[PendingBuddyEdge.model_validate(x) for x in (data.get("pending") or [])],
         ghosts=[GhostPlayer.model_validate(x) for x in (data.get("ghosts") or [])],
         recent=[PlayedWithUser.model_validate(x) for x in (data.get("recent") or [])],
     )

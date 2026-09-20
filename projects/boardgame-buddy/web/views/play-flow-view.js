@@ -62,6 +62,9 @@
       super("play-flow");
       this._ps = null;
       this._buddies = [];
+      // Live buddy requests either way (migration 049) — seatable people the
+      // picker offers alongside the accepted buddies. See _buddyCandidates.
+      this._pending = [];
       this._ghosts = [];
       this._recent = [];
       this._lobby = null;
@@ -322,6 +325,7 @@
         const seededBuddies = window.bgbCache.get("buddy", "all");
         if (seededBuddies) {
           this._buddies = seededBuddies.accounts || [];
+          this._pending = seededBuddies.pending || [];
           this._ghosts = seededBuddies.ghosts || [];
           this._recent = seededBuddies.recent || [];
           this._buddyDataReady = true;
@@ -348,11 +352,13 @@
           // forgets everyone the moment the network does.
           combined = {
             accounts: this._buddies,
+            pending: this._pending,
             ghosts: this._ghosts,
             recent: this._recent,
           };
         }
         this._buddies = combined.accounts || [];
+        this._pending = combined.pending || [];
         this._ghosts = combined.ghosts || [];
         this._recent = combined.recent || [];
         this._buddyDataReady = true;
@@ -4264,6 +4270,31 @@
           avatar: b.other_avatar || null,
         });
       }
+      // Then anyone with a buddy request waiting, either direction (migration
+      // 049). The accept is a notification on somebody else's phone and the
+      // play is happening now, so "we are not buddies YET" is not a reason to
+      // make the host add them as a guest — which would write a ghost seat
+      // beside the account that is about to hold the rest of their history.
+      // Marked `pending`, which is what gives them their own section at the
+      // top of the picker while the search box is empty.
+      for (const q of (this._pending || [])) {
+        const name = q.other_display_name || "";
+        const userId = q.other_user_id;
+        if (!name || !userId || seenIds.has(userId)) continue;
+        if (already.has(name.toLowerCase())) continue;
+        seenIds.add(userId);
+        seen.add(name.toLowerCase());
+        out.push({
+          source: "account",
+          user_id: userId,
+          name,
+          // No alias: an alias needs an accepted edge (the endpoint 409s
+          // otherwise), so a pending row can never have one to paint.
+          username: q.other_username || null,
+          avatar: q.other_avatar || null,
+          pending: q.direction === "outgoing" ? "outgoing" : "incoming",
+        });
+      }
       for (const g of (this._ghosts || [])) {
         const name = g.display_name || "";
         const key = name.toLowerCase();
@@ -4333,9 +4364,38 @@
         candidates: this._buddyCandidates(),
         recent: this._recentCandidates(),
         seated: this._ps.players.length,
+        seatedNames: this._ps.players.map((p) => p.name || ""),
+        searchAll: (q) => this._searchEveryone(q),
+        searchAllLabel: "Search all of BoardgameBuddy",
         returnFocus: (event && event.currentTarget) || null,
         onConfirm: (picks) => this._addPlayers(picks),
       });
+    }
+
+    /**
+     * The rest of the app, for a name the host's own lists don't hold.
+     *
+     * Gather is where a club night gets logged, and a club night is full of
+     * people you have never added and never played with — they are in neither
+     * `accounts` nor `recent`, so before this the only thing the picker could
+     * offer for them was a guest seat. A guest seat is a dead end: the play
+     * never reaches their history, their win never counts, and the two of you
+     * end up with one evening recorded as two different people.
+     *
+     * The sheet runs this itself, debounced behind the local filter, and drops
+     * anyone the local list already holds — so this stays a plain search and
+     * says nothing about who is already on screen.
+     * @param {string} q
+     */
+    async _searchEveryone(q) {
+      const rows = await window.ImportPeople.searchEveryone(q);
+      // Someone already at the table is not addable, and _addPlayer would drop
+      // the pick anyway — an offered row that does nothing is worse than no
+      // row. By id AND by name, because a seat may be a ghost with no id.
+      const seatedIds = new Set(this._ps.players.map((p) => p.user_id).filter(Boolean));
+      const seatedNames = new Set(this._ps.players.map((p) => (p.name || "").toLowerCase()));
+      return (rows || []).filter(
+        (r) => !seatedIds.has(r.user_id) && !seatedNames.has(String(r.name).toLowerCase()));
     }
 
     /**

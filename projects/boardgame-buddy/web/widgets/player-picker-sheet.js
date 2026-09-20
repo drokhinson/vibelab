@@ -36,10 +36,41 @@
 //     importer ranks its buddies against the name a note wrote) passes them as
 //     `suggestions`, and they sit above the full list rather than replacing it.
 //     Nobody is hidden; the likely answers are just first.
-//   - A GLOBAL SEARCH BUTTON. `candidates` is a cached bundle and filters with
-//     no round trip, which is what makes typing feel instant — so reaching past
-//     it is a separate, explicit act (`searchAll`) rather than a debounce that
-//     quietly turns every keystroke into a request.
+//   - A GLOBAL SEARCH. `candidates` is a cached bundle, so typing filters it
+//     with no round trip at all; `searchAll` reaches past it to every account
+//     in the app. See the next block for how the two now run together.
+//
+// ── TWO LISTS, ONE QUERY ────────────────────────────────────────────────────
+//
+// The global search used to be a BUTTON, on the reasoning that a round trip
+// should be something you ask for. What that actually produced was a search
+// box that answers "who is Dan?" with "no buddy matches Dan" while an account
+// called Dan sits one unpressed button away — and the button only reads as an
+// offer if you already suspect the list you are looking at is not the whole
+// app. People do not suspect that. They type a name, read "no match", and add
+// a guest with the same name as an account that was there all along, which is
+// a play that never reaches the other person's history.
+//
+// So both lists answer every query now, in the order they can:
+//   1. `candidates` filters SYNCHRONOUSLY on the keystroke — no debounce, no
+//      request, no spinner over rows that were already right.
+//   2. `searchAll` is debounced GLOBAL_DEBOUNCE_MS behind it and APPENDS its
+//      rows underneath, in their own section, once they land.
+// The local list never waits on the remote one, a late response can never
+// land under a query the user has typed past (`_globalSeq`), and anyone the
+// local list already holds is dropped from the remote rows rather than shown
+// twice. The button survives only as a retry after a failed request — which
+// is the one moment pressing something is the user's actual intent.
+//
+// ── PENDING BUDDIES ARE PEOPLE ──────────────────────────────────────────────
+//
+// A candidate can carry `pending`: a buddy request between the viewer and that
+// person that nobody has answered yet (migration 049). They are offered like
+// any other account — the request is evidence they are at the table tonight,
+// and the accept happens later on someone else's phone — and while the search
+// box is empty they get their own section at the top, because "the person I
+// just added" is the likeliest answer to "who else is playing?" and the empty
+// box would otherwise open on a list they are not in at all.
 //
 // The shell is ui/bottom-sheet.js and the panel chrome is the shared
 // .bgb-sheet__* family; only the .player-picker__* row family is ours.
@@ -58,6 +89,10 @@
    * @property {string|null} [username]
    * @property {string|null} [avatar]
    * @property {number} [plays]        Plays together, when known.
+   * @property {"incoming"|"outgoing"|null} [pending]  A buddy request between
+   *   the viewer and this person that nobody has answered yet — "incoming"
+   *   they asked, "outgoing" the viewer did. Seatable either way; it only
+   *   changes what the row says and which section it opens in.
    * @property {boolean} [isViewer]    This candidate is the signed-in user.
    *   Labelled "You" and pinned first — the play importer is the one caller
    *   that offers the viewer at all, since everywhere else they are already
@@ -102,11 +137,14 @@
    *   them suggestions ("Closest to “Jas”"), not that they are suggestions.
    * @property {string} [restLabel]            Heading over everyone else.
    * @property {(q: string) => Promise<PlayerCandidate[]>} [searchAll]
-   *   Look beyond the caller's own list — the whole app's accounts. A round
-   *   trip, so it is a BUTTON rather than something that fires as you type:
-   *   `candidates` is cached and filters instantly, and quietly turning every
-   *   keystroke into a request would spend that.
-   * @property {string} [searchAllLabel]       The button's title.
+   *   Look beyond the caller's own list — the whole app's accounts. Runs
+   *   automatically, debounced behind the local filter, and its rows are
+   *   APPENDED under their own heading rather than replacing anything: see
+   *   "TWO LISTS, ONE QUERY" at the top of this file. Given one, every caller
+   *   gets the same contract, so there is nothing to opt into per screen.
+   * @property {string} [searchAllLabel]       Titles the retry button a failed
+   *   search leaves behind. Nothing else shows it now that the search is not
+   *   something the user presses.
    * @property {boolean} [allowGuest]          Default true. False when a name
    *   that matches nobody is not an answer the caller can take — linking a
    *   ghost player to an account is a choice among people who already exist,
@@ -117,6 +155,22 @@
   const LIST_SEL = "[data-picker-list]";
   const INPUT_ID = "player-picker-search";
   const key = (name) => String(name || "").toLowerCase();
+
+  // How long the global search waits behind the last keystroke. Long enough
+  // that typing a name end to end costs ONE request rather than one per
+  // letter, short enough that it lands while the user is still reading the
+  // local rows it will sit under. The local list is not gated on it at all.
+  const GLOBAL_DEBOUNCE_MS = 350;
+  // And how much has to be typed before it runs. One letter matches a
+  // meaningful fraction of every account in the app, so the answer would be a
+  // truncated list of strangers — a worse answer than the local one, arriving
+  // later and pushing it around. Two is where a query starts being about a
+  // person.
+  const GLOBAL_MIN_CHARS = 2;
+  // The heading over people with an unanswered buddy request. Says what they
+  // are, not that they were ranked: a row here is here because of a request
+  // the viewer or the other person actually sent.
+  const PENDING_LABEL = "Buddy requests";
 
   class PlayerPickerSheet {
     constructor() {
@@ -151,6 +205,8 @@
       this._globalQuery = "";
       this._globalBusy = false;
       this._globalError = "";
+      /** The pending debounce, so a keystroke can cancel the one before it. */
+      this._globalTimer = /** @type {any} */ (null);
       // Monotonic, so a slow search the user has typed past can't land under a
       // different question (.claude/rules/web-frontend.md § Async state).
       this._globalSeq = 0;
@@ -233,6 +289,12 @@
       if (c.alias) bits.push(c.name);
       if (c.username) bits.push("@" + c.username);
       if (c.plays) bits.push(`${c.plays} play${c.plays === 1 ? "" : "s"} together`);
+      // Which way the unanswered request points, in the words of whoever is
+      // reading it. The pill beside the name says THAT it is pending; this
+      // says whose move it is, which is the half that decides whether the
+      // viewer should go and accept something after the play.
+      if (c.pending === "outgoing") bits.push("Buddy request sent");
+      else if (c.pending === "incoming") bits.push("Wants to be buddies");
       const meta = bits.length
         ? `<span class="player-picker__meta">${escapeHtml(bits.join(" · "))}</span>`
         : "";
@@ -246,7 +308,8 @@
             ${meta}
           </span>
           ${c.isViewer ? `<span class="player-picker__pill">You</span>`
-            : (ghost ? `<span class="player-picker__pill">Guest</span>` : "")}
+            : (ghost ? `<span class="player-picker__pill">Guest</span>`
+              : (c.pending ? `<span class="player-picker__pill">Pending</span>` : ""))}
           <span class="player-picker__tick" aria-hidden="true">
             ${on ? `<i data-icon="check" class="w-4 h-4"></i>` : ""}
           </span>
@@ -271,9 +334,16 @@
       // or ticked, because that row is the better action. Single-select keeps
       // it: "keep this name as a ghost" stays a legitimate answer even when a
       // buddy of the same name exists, and it is often the RIGHT one.
+      const named = (list) => (list || []).some(
+        (c) => key(c.name) === key(q) || (c.alias && key(c.alias) === key(q)));
       if (!this._single
-          && (this._candidates.some(
-                (c) => key(c.name) === key(q) || (c.alias && key(c.alias) === key(q)))
+          && (named(this._candidates)
+              // Global rows count from the moment they land. They arrive
+              // unasked now, so "add Dana Okoro as a guest" can sit directly
+              // under the account of that exact name without anyone having
+              // pressed anything — and a guest seat beside the real account is
+              // the mistake this whole search exists to prevent.
+              || named(this._globalRows)
               || this._seatedNames.has(key(q))
               || this._isPicked(q))) {
         return "";
@@ -322,10 +392,15 @@
     }
 
     /**
-     * What the global search has to say right now: nothing before it is used,
-     * then a spinner, then either its rows or the fact that it found none.
-     * Rendered above the guest row, because "this person has an account after
-     * all" is a better answer than "keep them as a ghost".
+     * What the global search has to say right now: nothing until a query is
+     * long enough to run one, then a spinner, then either its rows or the fact
+     * that it found none. Rendered UNDER the local rows and above the guest
+     * row — the local list answered first and keeps its place, and "this
+     * person has an account after all" still beats "keep them as a ghost".
+     *
+     * The spinner is the one thing here that is not a row, and it is why the
+     * local list is never gated on this: whatever the box matched locally is
+     * already on screen above it while this waits.
      */
     _globalSection() {
       if (this._globalBusy) {
@@ -346,62 +421,102 @@
     }
 
     /**
-     * The button that reaches past the buddy list. Disabled until something is
-     * typed — searching everyone for the empty string is not a question — and
-     * it stands down once its own results are on screen, reappearing as a
-     * retry if the request failed or the query moved on.
+     * What is left of the old "search everyone" button: a RETRY, and only
+     * after a request actually failed.
+     *
+     * The search itself is automatic now (see _scheduleGlobal), so offering a
+     * button for it would be offering to do a thing already done. A failure is
+     * the exception — the next keystroke would retry it, but a user who has
+     * finished typing the name has no next keystroke to give, and without this
+     * the sheet would sit on "couldn't search" with no way to ask again.
      */
     _globalRow() {
-      if (!this._searchAll || this._globalBusy) return "";
+      if (!this._searchAll || this._globalBusy || !this._globalError) return "";
       const q = this._query.trim();
-      if (!this._globalError && this._globalQuery && key(this._globalQuery) === key(q)) return "";
+      if (!q) return "";
       const label = this._searchAllLabel || "Search all of BoardgameBuddy";
-      const hint = this._globalError
-        ? "Tap to try again"
-        : (q ? `Look beyond your buddies for “${escapeHtml(q)}”`
-             : "Type a name first — your buddies filter as you type");
       return `
         <button class="player-picker__row player-picker__row--global" type="button"
-                data-picker-action="global" ${q ? "" : "disabled"}>
+                data-picker-action="global">
           <span class="player-picker__plus"><i data-icon="search" class="w-5 h-5"></i></span>
           <span class="player-picker__body">
             <span class="player-picker__name">${escapeHtml(label)}</span>
-            <span class="player-picker__meta">${hint}</span>
+            <span class="player-picker__meta">Tap to try again</span>
           </span>
         </button>
       `;
     }
 
     /**
+     * People with an unanswered buddy request, for the EMPTY box only.
+     *
+     * With a query they need nothing special: they are in `candidates`, so
+     * _matches() finds them and they sit in the filtered list with their pill
+     * like anyone else. The empty box is the problem — its list is whatever
+     * the caller passed as `recent`, and somebody you have never played with
+     * is by construction not in it, so the person you added an hour ago would
+     * be reachable only by typing a name you may not know how to spell.
+     *
+     * Read off `_candidates` rather than a list of its own so there is exactly
+     * one place a candidate can live. Already-ticked rows belong to Selected,
+     * and anything the caller ranked as a suggestion stays there — a row
+     * painted twice reads as two people.
+     * @param {PlayerCandidate[]} sugg Rows already claimed by the suggestions
+     *   section.
+     */
+    _pendingRows(sugg) {
+      const claimed = new Set((sugg || []).map((c) => key(c.name)));
+      return this._candidates.filter(
+        (c) => c.pending && !claimed.has(key(c.name)) && !this._isPicked(c.name));
+    }
+
+    /**
      * The local rows, sectioned. With a query it is one flat filtered list;
-     * without one it is either the caller's ranking (closest first, everyone
-     * else underneath) or the old recent-first behaviour.
+     * without one it is the caller's ranking (closest first), then anyone with
+     * a buddy request waiting, then everyone else — or the old recent-first
+     * behaviour when the caller ranked nothing.
      * @param {string} q
      * @param {PlayerCandidate[]} sugg  The caller's ranking, already stripped of
      *   anything ticked — those rows belong to the Selected section, and a row
      *   painted in both places is one person the sheet appears to seat twice.
      * @param {PlayerCandidate[]} local
+     * @param {PlayerCandidate[]} pending  Unanswered buddy requests, already
+     *   empty when a query is on — see _pendingRows.
      */
-    _localSections(q, sugg, local) {
+    _localSections(q, sugg, local, pending) {
+      // Pending people lead the empty box, under their own heading, whether or
+      // not the caller ranked anything — see _pendingRows. Their rows are
+      // pulled out of `local` below so the two sections cannot both paint the
+      // same person.
+      const pendingKeys = new Set(pending.map((c) => key(c.name)));
+      const pendingSec = pending.length
+        ? this._sec(PENDING_LABEL) + pending.map((c) => this._row(c)).join("")
+        : "";
+      const rest = pending.length
+        ? local.filter((c) => !pendingKeys.has(key(c.name)))
+        : local;
+
       if (q || !sugg.length) {
         // The header describes the BASE _matches() chose, so it asks the same
         // question _matches() did — otherwise a caller with suggestions gets
-        // "Recently played with" over its full candidate list. `local` can be
+        // "Recently played with" over its full candidate list. `rest` can be
         // empty here with the Selected section holding everyone, and a heading
         // over nothing is a section the user cannot find.
-        const header = !q && !this._suggestions.length && this._recent.length && local.length
+        const header = !q && !this._suggestions.length && this._recent.length && rest.length
           ? this._sec("Recently played with")
           : "";
-        return header + local.map((c) => this._row(c)).join("");
+        return pendingSec + header + rest.map((c) => this._row(c)).join("");
       }
       // Both lists are already in memory, so "search my whole buddy list" is
       // scrolling rather than typing — the suggestions do not hide anyone.
       const shown = new Set(sugg.map((c) => key(c.name)));
-      const rest = local.filter((c) => !shown.has(key(c.name)));
+      const others = rest.filter((c) => !shown.has(key(c.name)));
       return this._sec(this._suggestionsLabel || "Closest matches")
         + sugg.map((c) => this._row(c)).join("")
-        + (rest.length
-            ? this._sec(this._restLabel || "Everyone else") + rest.map((c) => this._row(c)).join("")
+        + pendingSec
+        + (others.length
+            ? this._sec(this._restLabel || "Everyone else")
+              + others.map((c) => this._row(c)).join("")
             : "");
     }
 
@@ -413,7 +528,13 @@
       // not a query is on — painting one in both places reads as two people.
       const local = this._matches().filter((c) => !this._isPicked(c.name));
       const sugg = q ? [] : this._suggestions.filter((c) => !this._isPicked(c.name));
-      const hasLocal = local.length || sugg.length;
+      // Counted as local rows, because they ARE rows and the branch below is
+      // "is this list empty". They can be the only thing in it: an empty box
+      // whose `recent` list is all seated already has nothing else to paint,
+      // and answering that with "no buddies yet" while a request sits unread
+      // would hide the one person the sheet had to offer.
+      const pending = q ? [] : this._pendingRows(sugg);
+      const hasLocal = local.length || sugg.length || pending.length;
       const tail = this._globalSection() + this._globalRow();
 
       if (!hasLocal && !pickedFirst) {
@@ -444,7 +565,7 @@
       // "add somebody new" one — and it is offered even when a buddy of the
       // same name is listed, so "Not in your buddies?" would be a lie there.
       const guestSec = this._single ? "Or" : "Not in your buddies?";
-      return pickedFirst + this._localSections(q, sugg, local) + tail
+      return pickedFirst + this._localSections(q, sugg, local, pending) + tail
         + (guest ? this._sec(guestSec) + guest : "");
     }
 
@@ -464,6 +585,13 @@
 
     _renderPanel() {
       const seated = this._seated;
+      // Name both lists when both are searched. A box that says "buddies" on a
+      // sheet that also answers with strangers is describing the old
+      // behaviour, and the promise a placeholder makes is the reason people
+      // stop typing when it is not kept.
+      const ph = this._searchAll
+        ? "Search people, or type a name…"
+        : "Search buddies, or type a name…";
       return `
         <div class="bgb-sheet__panel" tabindex="-1">
           <div class="bgb-sheet__grip" aria-hidden="true"></div>
@@ -475,8 +603,8 @@
             <i data-icon="search" class="w-4 h-4 game-finder__icon"></i>
             <input type="text" id="${INPUT_ID}"
                    class="input input-bordered game-finder__input"
-                   placeholder="Search buddies, or type a name…"
-                   aria-label="Search buddies, or type a name"
+                   placeholder="${escapeAttr(ph)}"
+                   aria-label="${escapeAttr(ph.replace(/…$/, ""))}"
                    autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" />
             ${window.BgbSearchField.clearButton()}
           </div>
@@ -599,7 +727,23 @@
       if (suggestions !== undefined) {
         this._suggestions = Array.isArray(suggestions) ? suggestions : [];
       }
+      // _runGlobalSearch dropped anyone the candidate list held AT THE TIME.
+      // On a cold cache that list was empty, so a global hit for a person who
+      // turns out to be a buddy would now be painted twice — once as the buddy
+      // row that arrived, once as the stranger found before it did.
+      this._globalRows = this._dedupeGlobal(this._globalRows);
       this._repaintList(true);
+    }
+
+    /**
+     * Global rows minus anyone the local list already offers, by account id.
+     * The local row is the better one — it carries the alias, the play count
+     * and the pending state — and two rows for one person read as two people.
+     * @param {PlayerCandidate[]} rows
+     */
+    _dedupeGlobal(rows) {
+      const listed = new Set(this._candidates.map((c) => c.user_id).filter(Boolean));
+      return (rows || []).filter((r) => r && r.name && !listed.has(r.user_id));
     }
 
     // ── Filtering ───────────────────────────────────────────────────────────
@@ -613,14 +757,40 @@
       if (this._globalQuery && key(this._globalQuery) !== key(this._query.trim())) {
         this._resetGlobal();
       } else if (this._globalError) {
+        // A keystroke is a fresh ask, so a stale failure stops being the
+        // answer on screen — and _scheduleGlobal below is what retries it.
         this._globalError = "";
       }
+      // The local list is painted from this same call, synchronously, below:
+      // the remote pass is scheduled, never awaited.
+      this._scheduleGlobal();
       this._repaintList();
+    }
+
+    /**
+     * Queue the global search behind the last keystroke.
+     *
+     * Every entry point is a query change, so this is also where the search is
+     * DECLINED: too short to be about a person, or already answered by the
+     * rows on screen. Asking again for a query whose results are already
+     * painted would replace them with a spinner and then with themselves.
+     */
+    _scheduleGlobal() {
+      if (this._globalTimer) { clearTimeout(this._globalTimer); this._globalTimer = null; }
+      if (!this._searchAll) return;
+      const q = this._query.trim();
+      if (q.length < GLOBAL_MIN_CHARS) return;
+      if (!this._globalError && this._globalQuery && key(this._globalQuery) === key(q)) return;
+      this._globalTimer = setTimeout(() => {
+        this._globalTimer = null;
+        this._runGlobalSearch();
+      }, GLOBAL_DEBOUNCE_MS);
     }
 
     /** Forget the global search entirely, dropping anything in flight. */
     _resetGlobal() {
       this._globalSeq++;
+      if (this._globalTimer) { clearTimeout(this._globalTimer); this._globalTimer = null; }
       this._globalRows = [];
       this._globalQuery = "";
       this._globalBusy = false;
@@ -628,13 +798,20 @@
     }
 
     /**
-     * Search every account in the app for the typed name, on purpose and once.
-     * Anyone already listed above is filtered out rather than offered twice —
-     * the buddy row carries their play count and is the better row.
+     * Search every account in the app for the typed name. Anyone already
+     * listed above is filtered out rather than offered twice — the local row
+     * carries their play count, their alias and their pending state, and is
+     * the better row.
+     *
+     * Deliberately NOT gated on `_globalBusy`. Under the debounce a second
+     * query can arrive while the first is in the air, and refusing it would
+     * answer the new question with the old one's results; `_globalSeq` is what
+     * makes the loser harmless. The retry button is the same call, and a
+     * double tap on it costs a request rather than a wrong list.
      */
     async _runGlobalSearch() {
       const q = this._query.trim();
-      if (!q || !this._searchAll || this._globalBusy) return;
+      if (!q || !this._searchAll) return;
       const seq = ++this._globalSeq;
       this._globalRows = [];
       this._globalError = "";
@@ -655,8 +832,7 @@
       }
       if (seq !== this._globalSeq || !this._sheet.isOpen) return;
       this._globalBusy = false;
-      const listed = new Set(this._candidates.map((c) => c.user_id).filter(Boolean));
-      this._globalRows = (rows || []).filter((r) => r && r.name && !listed.has(r.user_id));
+      this._globalRows = this._dedupeGlobal(rows);
       this._repaintList(true);
     }
 

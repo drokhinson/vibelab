@@ -1649,6 +1649,25 @@ class GhostPlayer(BaseModel):
     last_played_at: date | None = None
 
 
+class PendingBuddyEdge(BaseModel):
+    """A live buddy request the viewer is a party to, either direction.
+
+    Not an accepted edge and not offered as one: the picker seats these people
+    (they have accounts, and the request is evidence they are at the table
+    tonight) while the client paints the direction as the row's reason. No
+    alias field — an alias needs an accepted edge, so a pending one can never
+    carry a nickname to show.
+    """
+
+    id: str
+    other_user_id: str
+    other_display_name: str
+    other_username: str | None = None
+    other_avatar: Avatar | None = None
+    direction: Literal["incoming", "outgoing"]
+    created_at: datetime
+
+
 class PlayPartnersResponse(BaseModel):
     """Everything the Gather player picker needs, in one payload.
 
@@ -1657,6 +1676,10 @@ class PlayPartnersResponse(BaseModel):
     """
 
     accounts: list[BuddyEdgeResponse] = []
+    # Migration 049. Its own list rather than more `accounts` rows: every
+    # surface that reads this bundle paints `accounts` as "your buddies", and
+    # these people are not buddies yet.
+    pending: list[PendingBuddyEdge] = []
     ghosts: list[GhostPlayer] = []
     recent: list[PlayedWithUser] = []
 

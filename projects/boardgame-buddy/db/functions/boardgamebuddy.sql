@@ -1,6 +1,15 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 048_play_teams.sql (re-emits bgb_log_play, bgb_feed_plays and
+-- Last updated: 049_play_partners_pending.sql (re-emits bgb_play_partners with
+--               a fourth key, `pending`: live buddy requests either way, so a
+--               person you asked (or who asked you) minutes ago can be seated
+--               in Gather before anyone taps Accept. `recent` has carried the
+--               pending flags since 047/061, but only for someone already in a
+--               play with the viewer — which is never the person they just
+--               met. Nothing else about the function changes, and the new key
+--               is additive: a client that does not read it sees today's
+--               behaviour.)
+--               Before that: 048_play_teams.sql (re-emits bgb_log_play, bgb_feed_plays and
 --               bgb_plays_page so a seat carries the side it played on.
 --               play_players gains a nullable `team`; bgb_log_play writes it
 --               (normalizing "" to NULL, which is the common case — the client
@@ -1141,11 +1150,22 @@
 --               entirely — every path through that module is now one RPC.
 
 -- bgb_play_partners(p_viewer UUID)
---   → JSONB { "accounts": [BuddyEdgeResponse…], "ghosts": [GhostPlayer…],
---             "recent": [PlayedWithUser…] }
+--   → JSONB { "accounts": [BuddyEdgeResponse…], "pending": [PendingBuddyEdge…],
+--             "ghosts": [GhostPlayer…], "recent": [PlayedWithUser…] }
 --   Defined in: db/migrations/boardgamebuddy/003_rpcs.sql
 --               (collapsed from archive/047_play_partners_rpc.sql)
---   Last updated in: db/migrations/boardgamebuddy/012_buddy_aliases.sql
+--   Last updated in: projects/boardgame-buddy/db/migrations/049_play_partners_pending.sql
+--               (adds `pending`: one row per LIVE buddy request the viewer is
+--                a party to, either direction, newest first —
+--                {id, other_user_id, other_display_name, other_username,
+--                 other_avatar, direction: 'incoming'|'outgoing', created_at}.
+--                The picker seats them like any other account; the client
+--                paints the direction as the row's reason. No alias key: a
+--                pending edge cannot hold one (POST /buddies/{id}/alias 409s
+--                unless accepted). Rejected and cancelled requests are deleted
+--                rows, not statuses, so this list is only ever people still
+--                waiting on an answer.)
+--               Before that: db/migrations/boardgamebuddy/012_buddy_aliases.sql
 --               (`accounts` rows gained other_alias: the viewer's OWN private
 --                nickname for that buddy, projected off alias_by_a/alias_by_b
 --                by which side of the canonical edge the viewer is. Per-viewer

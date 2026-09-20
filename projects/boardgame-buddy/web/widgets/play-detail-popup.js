@@ -52,7 +52,7 @@
     // ghost names from past plays, and accounts shared a table with but never
     // added. Held whole because window.Buddy.toPlayerCandidates() takes the
     // bundle, not its parts.
-    partners: { accounts: [], ghosts: [], recent: [] },
+    partners: { accounts: [], pending: [], ghosts: [], recent: [] },
   };
 
   // The card markup currently painted into the backdrop. render() compares
@@ -105,6 +105,9 @@
         if (state.playId !== playId) return;
         state.partners = {
           accounts: (bundle && bundle.accounts) || [],
+          // Buddy requests nobody has answered yet (migration 049) — seatable
+          // people, same as the accepted edges beside them.
+          pending: (bundle && bundle.pending) || [],
           ghosts: (bundle && bundle.ghosts) || [],
           recent: (bundle && bundle.recent) || [],
         };
@@ -157,7 +160,7 @@
       editError: null,
       draft: null,
       buddies: [],
-      partners: { accounts: [], ghosts: [], recent: [] },
+      partners: { accounts: [], pending: [], ghosts: [], recent: [] },
     });
     mountBackdrop();
     render();
@@ -213,7 +216,7 @@
       editError: null,
       draft: null,
       buddies: [],
-      partners: { accounts: [], ghosts: [], recent: [] },
+      partners: { accounts: [], pending: [], ghosts: [], recent: [] },
     });
   }
 
