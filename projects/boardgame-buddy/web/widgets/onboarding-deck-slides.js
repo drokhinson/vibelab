@@ -403,10 +403,15 @@
           straight in?
         </p>
         <div class="ob-ledger" data-ledger aria-live="polite"></div>
-      </div>
-      <div class="ob-slide__actions">
-        <button type="button" class="btn btn-ghost ob-btn ob-btn--skip">Skip</button>
-        <button type="button" class="btn btn-primary ob-btn ob-btn--go">Show me around</button>
+        <!-- The one slide with no pinned .ob-slide__actions footer. Every other
+             step ends in a Continue, which belongs on the bottom edge where a
+             thumb already is; this one asks a question with two answers, and a
+             stacked pair in the middle of the screen reads as two roads rather
+             than as a primary with an escape hatch parked beside it. -->
+        <div class="ob-done__choices">
+          <button type="button" class="btn btn-primary ob-btn ob-btn--go">Show me around</button>
+          <button type="button" class="btn btn-ghost ob-btn ob-btn--skip">Skip</button>
+        </div>
       </div>
     `);
     const ledger = el.querySelector("[data-ledger]");
