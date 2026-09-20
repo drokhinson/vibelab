@@ -9395,6 +9395,31 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 .scoring-head.is-named .scoring-head__bubble { display: none; }
 .scoring-head.is-named .scoring-head__name { display: inline-block; }
+/* A MERGED column's text state is "Red: Ana, Bo" — the tag AND the roster,
+   because it is replacing the badges that were the only thing saying who is on
+   the side (widgets/round-score-grid.js#columnLabel). That does not fit the
+   one nowrap line a single name does, so here — and only here — it wraps.
+
+   Two lines, clamped, and the number is arithmetic rather than taste: the band
+   is held at one height across both states by the 44px floor on
+   .scoring-head__toggle, so the text may grow to 44px minus that button's 8px
+   of padding before the table jolts on a tap. Two lines at 0.72rem × 1.15 is
+   ~27px and clears it; three (~40px) would not. Whatever the clamp cuts is
+   still on the cell's `title`.
+
+   max-width drops to 100% of the column rather than the 5.5rem a single name
+   is allowed: a nowrap name overflowing its fixed-layout cell by a few px is
+   an ellipsis landing slightly wide, while a wrapping one would paint over the
+   column beside it. */
+.scoring-head.is-named.is-merged .scoring-head__name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.15;
+}
 /* NOT `opacity: 0.7`, which is what this carried until the round-label column
    became sticky. A faded sticky cell lets the score columns ghost straight
    through the label as they slide under it. The fade moves onto the ink, where

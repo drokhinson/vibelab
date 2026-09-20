@@ -92,6 +92,16 @@
 //                     tapped a header once carries a stored preference
 //                     (RoundGridNames) that wins on every surface, and one tap
 //                     flips EVERY column, not just the one tapped.
+//                     A TEAM grid ignores it and opens on the badges whichever
+//                     surface asked: a side's badges are the only thing on
+//                     screen that says WHO IS ON IT, while the tag it would
+//                     show instead is already the column's tint, its Total and
+//                     its trophy.
+//                     Tapping such a header shows "Red: Ana, Bo" — the tag and
+//                     the roster, so the tap trades one fact for two rather
+//                     than losing the badges' one. Team and solo grids keep
+//                     SEPARATE stored preferences for the same reason; see
+//                     RoundGridNames.
 //
 // Two invariants `rowLabels` deliberately does NOT touch, both of which are the
 // same bug in different clothes — the model and the paint disagreeing about how
@@ -134,15 +144,19 @@
 // total, and a total refresh awaited a network write that could hang).
 
 (function () {
+  // What separates two teammates in a merged column's header text. A comma
+  // and a space, which is how every other list of PEOPLE in this app is
+  // punctuated (a play card's winners, a plays-list row) — the middle dot is
+  // this project's separator for unlike things (players · minutes · year) and
+  // a side's members are alike by definition.
+  const TEAM_NAME_DELIM = ", ";
+
   function renderRoundGrid(players, host, opts) {
     const o = opts || {};
     const editable = o.editable !== false;
     const mode = o.playMode || "competitive";
     const showAddRound = editable && o.showAddRound !== false;
     const minRounds = Math.max(0, Number(o.minRounds) || 0);
-    // opts.headerNames is this surface's DEFAULT; a stored user choice wins.
-    const headerNamesDefault = !!o.headerNames;
-    const headerNames = RoundGridNames.enabled(headerNamesDefault);
     const getCell = o.getCellValue || defaultCellValue;
     const rowLabels = Array.isArray(o.rowLabels) ? o.rowLabels : [];
     const safePlayers = Array.isArray(players) ? players : [];
@@ -156,6 +170,18 @@
     // What this grid actually draws. One column per seat everywhere except a
     // team play, where a side is ONE column — see roundGridColumns.
     const columns = roundGridColumns(safePlayers, mode, roundCount, getCell);
+    // WHICH GRID THIS IS, and therefore which default and which memory the
+    // headers answer to. A grid holding at least one merged side is a TEAM
+    // grid: it opens on the badges whatever this surface asked for, because
+    // the badges are the only thing that says who is on which side — the tag
+    // is already the column's tint, its trophy and its Total, so spending the
+    // header on it too says nothing the column was not already saying. See
+    // RoundGridNames for why the choice is remembered per shape rather than
+    // once for the app.
+    const scope = columns.some((c) => c.merged) ? "team" : "solo";
+    // opts.headerNames is this surface's DEFAULT; a stored user choice wins.
+    const headerNamesDefault = scope === "team" ? false : !!o.headerNames;
+    const headerNames = RoundGridNames.enabled(headerNamesDefault, scope);
     // A column's cells and its Total, from the same resolver the rows use.
     const cellOf = (col, r) => roundGridColumnValue(col, r, getCell);
     const totalOf = (col) => roundGridColumnTotal(col, roundCount, getCell);
@@ -167,6 +193,7 @@
 
     return `
       <div class="rg${editable ? " rg--editable" : ""}" data-round-grid="${escapeAttr(host)}"
+           data-rg-scope="${scope}"
            style="--rg-cols: ${columns.length}; --rg-label-ch: ${labelCh}">
         <div class="rg__pinzone">
           <div class="rg__head" data-rg-sync>
@@ -180,11 +207,11 @@
                     // legitimate inline-colour case (theming.md §10), and the
                     // same shape the row-label cells use for --row-accent.
                     const slot = col.slot;
-                    const name = columnName(col);
+                    const label = columnLabel(col);
                     return `
                     <th class="scoring-head${headerNames ? " is-named" : ""}${slot ? " is-team" : ""}${col.merged ? " is-merged" : ""}" scope="col"
                         ${slot ? `style="--team-tint: var(--team-${slot})"` : ""}
-                        title="${escapeAttr(name)}">${renderScoringHead(renderColumnBadges(col), name, headerNames, headerNamesDefault)}</th>
+                        title="${escapeAttr(label)}">${renderScoringHead(renderColumnBadges(col), label, headerNames, headerNamesDefault, scope)}</th>
                   `;}).join("")}
                 </tr>
               </thead>
@@ -435,14 +462,36 @@
     return col ? col.indexes.slice() : [i];
   }
 
-  // What a column reads as: a side by its tag, a seat by its name.
+  // What a column reads as in one breath: a side by its tag, a seat by its
+  // name. This is the SHORT form — it labels the column's cells and its Total
+  // for a screen reader, where "Red — Round 3" is the whole of what the
+  // listener needs and the roster would be read out on every one of forty
+  // cells.
   function columnName(col) {
     return col.merged ? col.label : shownName(col.players[0]);
   }
 
-  // The header's bubble state. A merged column stacks its side's badges —
-  // the column is those people, and the tag alone (which the name state
-  // shows) does not say who is on it.
+  // What a column reads as in its HEADER: a side by its tag AND the people on
+  // it, "Red: Ana, Bo". The long form exists because the header is the one
+  // place the two facts are asked for together — the badges beside it are who
+  // is on the side, so the text state that replaces them has to answer the
+  // same question or tapping loses information rather than trading it. The tag
+  // alone is already on screen three other ways (the column's tint, its Total
+  // and its trophy), so it was the half of the answer the grid could afford to
+  // repeat and the names were the half it could not.
+  //
+  // Names through shownName, so a viewer's private alias reaches this header
+  // exactly as it reaches the badge stack under it.
+  function columnLabel(col) {
+    if (!col.merged) return shownName(col.players[0]);
+    const roster = col.players.map(shownName).filter(Boolean).join(TEAM_NAME_DELIM);
+    return roster ? `${col.label}: ${roster}` : col.label;
+  }
+
+  // The header's bubble state, and a team grid's DEFAULT one. A merged column
+  // stacks its side's badges — the column is those people, and the tag (which
+  // the tint, the Total and the trophy already carry) does not say who is on
+  // it.
   function renderColumnBadges(col) {
     const seats = col.players
       .map((p, k) => `<span class="scoring-head__seat" data-head-seat="${col.indexes[k]}">${renderHeadBadge(p)}</span>`)
@@ -700,9 +749,10 @@
     });
   }
 
-  // Wraps a column-header badge in a button that flips EVERY column header
-  // between the colored bubble and the player's display name, and remembers
-  // the choice (RoundGridNames). Both spans are always emitted; CSS shows one.
+  // Wraps a column-header badge in a button that flips every column header of
+  // the SAME SHAPE (`scope`: this grid's team-ness) between the colored bubble
+  // and the header's text, and remembers the choice (RoundGridNames). Both
+  // spans are always emitted; CSS shows one.
   //
   // Still no host method and still no re-render, for the same reason it never
   // had one: the two states differ by a single class, so there is nothing to
@@ -711,14 +761,15 @@
   // table snaps back to column 1 — blur whatever cell was being typed in, and
   // give the read-only spectator mirror a host contract it has never needed.
   //
-  // `fallback` is the caller's opts.headerNames default, so the first tap on a
-  // surface the user has never toggled flips away from what it actually shows.
-  function renderScoringHead(badgeHtml, name, isNamed, fallback) {
+  // `fallback` is the caller's opts.headerNames default — already forced to
+  // the badges on a team grid — so the first tap on a surface the user has
+  // never toggled flips away from what it actually shows.
+  function renderScoringHead(badgeHtml, name, isNamed, fallback, scope) {
     return `<button type="button" class="scoring-head__toggle"
               aria-pressed="${isNamed ? "true" : "false"}"
               aria-label="${escapeAttr(name)} — show player names on every column"
               title="${escapeAttr(name)}"
-              onclick="window.RoundGridNames.toggleAll(${!!fallback})">
+              onclick="window.RoundGridNames.toggleAll(${!!fallback}, '${scope === "team" ? "team" : "solo"}')">
               <span class="scoring-head__bubble">${badgeHtml}</span>
               <span class="scoring-head__name">${escapeHtml(name)}</span>
             </button>`;
@@ -840,61 +891,93 @@
   };
 
   // Persisted user preference for whether column headers show the player's
-  // display NAME instead of their colored bubble. One value for the whole app:
-  // tapping any header moves all of them, on every surface, and it is still
-  // set the next time the user opens a grid.
+  // display NAME instead of their colored bubble. Tapping any header moves all
+  // of them, on every surface, and the choice is still set the next time the
+  // user opens a grid.
   //
   // Unlike SIGN_PREF_KEY there is no single default — the live play screens
   // (host + spectator mirror) start on names, the play-detail popup on
-  // bubbles. So this key is an OVERRIDE: absent means "use this surface's own
-  // default", which the caller supplies as `fallback` (opts.headerNames). One
-  // tap anywhere and the stored value wins everywhere.
-  const NAMES_PREF_KEY = "bgb.scoring.headerNames";
-  // Mirrors the stored value for this page's lifetime. A browser that refuses
+  // bubbles, and a TEAM grid on badges whichever surface it is drawn on. So a
+  // key is an OVERRIDE: absent means "use this surface's own default", which
+  // the caller supplies as `fallback` (opts.headerNames, forced false for a
+  // team grid). One tap and the stored value wins everywhere.
+  //
+  // TWO KEYS, ONE PER GRID SHAPE, and the split is the whole of why a team
+  // grid can have a default of its own. A single value made "solo grids show
+  // names, team grids show badges" unexpressible the moment the user tapped
+  // anything: the first tap on any competitive play would have carried names
+  // into every team play the user ever opened, and the badge default — the one
+  // thing that says who is on which side — would have been reachable only by a
+  // user who had never touched a header. The shapes answer different
+  // questions (a seat column asks "who is this", a side column asks "who is on
+  // this"), so they remember different answers.
+  const NAMES_PREF_KEYS = {
+    solo: "bgb.scoring.headerNames",
+    team: "bgb.scoring.headerNames.team",
+  };
+  // Mirrors the stored values for this page's lifetime. A browser that refuses
   // localStorage (private-mode Safari, blocked site data) would otherwise flip
   // the headers and then snap back on the next repaint, which reads as a
   // broken button rather than as a browser setting.
-  let _namesChoice = null;
+  const _namesChoice = { solo: null, team: null };
+  /** @param {string} [scope] @returns {"solo"|"team"} */
+  function namesScope(scope) {
+    return scope === "team" ? "team" : "solo";
+  }
   const RoundGridNames = {
     /**
      * @param {boolean} [fallback] surface default, used only while the user
-     *   has never expressed a preference.
+     *   has never expressed a preference for this shape of grid.
+     * @param {string} [scope] "team" for a grid holding a merged side,
+     *   "solo" (the default) for one column per seat.
      * @returns {boolean}
      */
-    enabled(fallback) {
-      if (_namesChoice != null) return _namesChoice;
+    enabled(fallback, scope) {
+      const k = namesScope(scope);
+      if (_namesChoice[k] != null) return _namesChoice[k];
       try {
-        const v = localStorage.getItem(NAMES_PREF_KEY);
+        const v = localStorage.getItem(NAMES_PREF_KEYS[k]);
         if (v === "1") return true;
         if (v === "0") return false;
       } catch (_) {}
       return !!fallback;
     },
-    set(on) {
-      _namesChoice = !!on;
-      try { localStorage.setItem(NAMES_PREF_KEY, on ? "1" : "0"); } catch (_) {}
+    /** @param {boolean} on @param {string} [scope] */
+    set(on, scope) {
+      const k = namesScope(scope);
+      _namesChoice[k] = !!on;
+      try { localStorage.setItem(NAMES_PREF_KEYS[k], on ? "1" : "0"); } catch (_) {}
     },
     /** Flip relative to what is on screen (stored value, else `fallback`). */
-    toggle(fallback) {
-      const next = !this.enabled(fallback);
-      this.set(next);
+    toggle(fallback, scope) {
+      const next = !this.enabled(fallback, scope);
+      this.set(next, scope);
       return next;
     },
     /**
      * Inline-handler entry point: flip the preference, then repaint every
-     * column header in the document. Document-wide rather than per-table so a
-     * grid sitting behind the play-detail popup doesn't read stale until its
-     * own next repaint.
-     * @param {boolean} [fallback]
+     * column header in the document that answers to it. Document-wide rather
+     * than per-table so a grid sitting behind the play-detail popup doesn't
+     * read stale until its own next repaint — but scoped, so tapping a team
+     * play's header cannot rename the columns of a competitive grid open
+     * behind it.
+     * @param {boolean} [fallback] @param {string} [scope]
      */
-    toggleAll(fallback) {
-      const on = this.toggle(fallback);
-      this.apply(on);
+    toggleAll(fallback, scope) {
+      const on = this.toggle(fallback, scope);
+      this.apply(on, scope);
       return on;
     },
-    /** @param {boolean} on */
-    apply(on) {
-      const heads = document.querySelectorAll(".scoring-head");
+    /** @param {boolean} on @param {string} [scope] */
+    apply(on, scope) {
+      const k = namesScope(scope);
+      // A grid rendered before this shipped carries no data-rg-scope; it is a
+      // solo grid by construction (the attribute and the team column model
+      // ship together), so the solo selector takes it.
+      const sel = k === "team"
+        ? '.rg[data-rg-scope="team"] .scoring-head'
+        : '.rg:not([data-rg-scope="team"]) .scoring-head';
+      const heads = document.querySelectorAll(sel);
       Array.prototype.forEach.call(heads, (th) => {
         th.classList.toggle("is-named", on);
         const btn = th.querySelector(".scoring-head__toggle");

@@ -191,5 +191,53 @@ console.log("\nnothing is adopted where there is nothing to adopt:");
   ok("an untagged seat", win.PlaySession.adoptTeamScores(untagged, 0) === false);
 }
 
+console.log("\nthe header of a merged column: badges by default, tag AND roster on tap:");
+{
+  // Rendered for real, because the thing under test is what the header SAYS —
+  // the column model above cannot see it. The VM has no document and no
+  // localStorage, which is exactly the state this asserts against: no stored
+  // preference, so every grid opens on its own default.
+  const render = (roster, mode, headerNames) =>
+    win.renderRoundGrid(roster, "checkHost", { playMode: mode, editable: false, headerNames });
+  const side = [seat("Ana", "Red", [10]), seat("Bo", "Red", [10]),
+                seat("Cy", "Blue", [7]), seat("Di", "Blue", [7])];
+
+  // The live play screens pass headerNames: true — names are what you scan
+  // mid-game — and a team grid overrides it: a side's badges are the only
+  // thing on screen that says who is on it.
+  const teamHtml = render(side, "team", true);
+  ok("a team grid opens on the badges even where the surface asked for names",
+     teamHtml.indexOf("scoring-head is-named") === -1);
+  ok("...and says so, so one tap moves team headers only",
+     teamHtml.indexOf('data-rg-scope="team"') !== -1);
+  ok("the tap flips it toward names", teamHtml.indexOf("toggleAll(false, 'team')") !== -1);
+  ok("the text state carries the tag AND the roster",
+     teamHtml.indexOf("Red: Ana, Bo") !== -1 && teamHtml.indexOf("Blue: Cy, Di") !== -1);
+  ok("...and the badges are still there under it, one per seat",
+     (teamHtml.match(/data-head-seat=/g) || []).length === 4);
+
+  // Nothing about a grid with no sides changes: same default, same scope, and
+  // a seat column still reads as one name.
+  const soloHtml = render(side, "competitive", true);
+  ok("a competitive grid still opens where its surface asked",
+     soloHtml.indexOf("scoring-head is-named") !== -1);
+  ok("...in its own scope", soloHtml.indexOf('data-rg-scope="solo"') !== -1);
+  ok("...and a seat column reads as its player alone",
+     soloHtml.indexOf("Red: Ana") === -1 && soloHtml.indexOf(">Ana<") !== -1);
+
+  // A side the grid had to SPLIT (two numbers, above) is seats again, so it
+  // takes the seat default rather than the badge one — the column is one
+  // person and its name says so.
+  const split = [seat("Ana", "Red", [10]), seat("Bo", "Red", [7])];
+  const splitHtml = render(split, "team", true);
+  ok("a split side is a solo grid", splitHtml.indexOf('data-rg-scope="solo"') !== -1);
+
+  // A side of one is a seat column too (see above), so a team play whose sides
+  // are all of one never claims the team scope.
+  const ones = [seat("Ana", "Red", [10]), seat("Bo", "Blue", [7])];
+  ok("...and so is a table of one-person sides",
+     render(ones, "team", true).indexOf('data-rg-scope="solo"') !== -1);
+}
+
 console.log(fails ? `\n${fails} check(s) failed.\n` : "\nAll checks passed.\n");
 process.exit(fails ? 1 : 0);
