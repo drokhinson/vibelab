@@ -360,9 +360,8 @@
         guestTitle: `Keep “${current.kind === "ghost" ? current.label : name}” as a ghost player`,
         guestHint: "No account — they can claim these plays later",
         // Everyone the buddy list doesn't hold. The local list above is cached
-        // (domain/buddy.js SWRs it for a day) and filters instantly; this is a
-        // round trip, so it is a button the user presses rather than something
-        // that fires on every keystroke.
+        // (domain/buddy.js SWRs it for a day) and answers the keystroke; the
+        // sheet runs this debounced behind it and appends what it finds.
         searchAll: (q) => window.ImportPeople.searchEveryone(q),
         searchAllLabel: "Search all of BoardgameBuddy",
         returnFocus: document.activeElement,

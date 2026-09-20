@@ -301,6 +301,11 @@
           Buddy.rememberAliases(accounts);
           return {
             accounts,
+            // Migration 049: live buddy requests either way. Only `accounts`
+            // is fed to rememberAliases — a pending edge cannot hold an alias
+            // (the endpoint 409s unless it is accepted), and seeding an edge
+            // id for one would put the alias pencil on a row whose save 404s.
+            pending: (data && data.pending) || [],
             ghosts: (data && data.ghosts) || [],
             recent: (data && data.recent) || [],
           };
@@ -330,20 +335,26 @@
     /**
      * The WHOLE cached bundle, not just its accounts — the shape
      * toPlayerCandidates() takes. A player picker's list is buddies AND the
-     * accounts you have shared a table with AND the ghost names from past
-     * plays; a surface seeding one off cachedAccounts() offers only the first
-     * third of that and silently drops every guest the user has ever logged.
+     * people with a request waiting AND the accounts you have shared a table
+     * with AND the ghost names from past plays; a surface seeding one off
+     * cachedAccounts() offers only the first quarter of that and silently
+     * drops every guest the user has ever logged.
      *
      * Same peek() and the same trade as cachedAccounts: a bundle a few hours
-     * old beats a spinner, and allBuddies() is what corrects it. All three keys
+     * old beats a spinner, and allBuddies() is what corrects it. All four keys
      * are always present, so a caller can destructure without guarding.
      *
-     * @returns {{accounts: any[], ghosts: any[], recent: any[]}}
+     * @returns {{accounts: any[], pending: any[], ghosts: any[], recent: any[]}}
      */
     static cachedPartners() {
       const bundle = window.bgbCache ? window.bgbCache.peek(CACHE_NS, ALL_KEY) : null;
       return {
         accounts: (bundle && bundle.accounts) || [],
+        // Absent from a bundle cached before migration 049 shipped, which is
+        // why every read of it is `|| []` rather than a destructure: that copy
+        // stays fresh for a day and is corrected by the next refresh, and one
+        // missing section beats a picker that throws.
+        pending: (bundle && bundle.pending) || [],
         ghosts: (bundle && bundle.ghosts) || [],
         recent: (bundle && bundle.recent) || [],
       };
@@ -352,7 +363,7 @@
     /**
      * The partner bundle as PLAYER PICKER CANDIDATES — one shape, one place.
      *
-     * Worth its own function because the bundle speaks three dialects and the
+     * Worth its own function because the bundle speaks four dialects and the
      * picker speaks one. `accounts` are buddy EDGES, so a buddy's name is
      * `other_display_name` and their id is `other_user_id` — `id` is the edge's
      * own id. Reading them as if they were profiles is not a shape mismatch
@@ -366,10 +377,10 @@
      * caller that wants them at the table (the importer) prepends its own row
      * marked `isViewer`.
      *
-     * @param {{accounts?: any[], ghosts?: any[], recent?: any[]}|null} partners
+     * @param {{accounts?: any[], pending?: any[], ghosts?: any[], recent?: any[]}|null} partners
      * @returns {Array<{source: "account"|"ghost", user_id: string|null,
      *   name: string, alias?: string|null, username: string|null, avatar: any,
-     *   plays?: number}>}
+     *   plays?: number, pending?: "incoming"|"outgoing"}>}
      */
     static toPlayerCandidates(partners) {
       const p = partners || {};
@@ -405,6 +416,37 @@
           username: b.other_username || b.username || null,
           avatar: b.other_avatar || b.avatar || null,
           plays: together[userId] || 0,
+        });
+      }
+
+      // People with a buddy request nobody has answered yet (migration 049),
+      // ABOVE the played-with rows and below the buddies themselves. A request
+      // is a stronger signal than a shared play for the question this list
+      // answers: you added them because you are playing with them, and the
+      // accept is a notification sitting on someone else's phone.
+      //
+      // `pending` on the row is what the picker paints as the reason and what
+      // puts it in its own section while the search box is empty. The play
+      // count still comes off `recent`, so a pending person you HAVE played
+      // with keeps it — the dedupe below would otherwise drop that row and
+      // take the count with it.
+      for (const q of (p.pending || [])) {
+        if (!q) continue;
+        const userId = q.other_user_id || q.user_id || null;
+        const name = q.other_display_name || q.display_name
+          || q.other_username || q.username || "";
+        if (!userId || !name || seenIds.has(userId)) continue;
+        seenIds.add(userId);
+        out.push({
+          source: "account",
+          user_id: userId,
+          name,
+          // No alias lookup: a pending edge cannot carry one.
+          alias: null,
+          username: q.other_username || q.username || null,
+          avatar: q.other_avatar || q.avatar || null,
+          plays: together[userId] || 0,
+          pending: q.direction === "outgoing" ? "outgoing" : "incoming",
         });
       }
 

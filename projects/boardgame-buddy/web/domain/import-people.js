@@ -57,14 +57,14 @@
      * the import: every name is still pickable by hand and still importable as
      * a ghost. So this resolves rather than throws, and the caller's loading
      * flag is the caller's to clear.
-     * @returns {Promise<{accounts: any[], ghosts: any[], recent: any[]}>}
+     * @returns {Promise<{accounts: any[], pending: any[], ghosts: any[], recent: any[]}>}
      */
     async loadPartners() {
       try {
         return (await window.Buddy.allBuddies())
-          || { accounts: [], ghosts: [], recent: [] };
+          || { accounts: [], pending: [], ghosts: [], recent: [] };
       } catch (_) {
-        return { accounts: [], ghosts: [], recent: [] };
+        return { accounts: [], pending: [], ghosts: [], recent: [] };
       }
     },
 
@@ -88,8 +88,9 @@
 
     /**
      * Everyone the picker can offer without a round trip: the viewer, their
-     * buddies, everyone they've shared a table with, and their own ghosts —
-     * plus, when `extraGhosts` is passed, the ghosts this run has invented.
+     * buddies, anyone with a buddy request waiting either way, everyone
+     * they've shared a table with, and their own ghosts — plus, when
+     * `extraGhosts` is passed, the ghosts this run has invented.
      *
      * Accounts dedupe by id (a viewer who somehow also appears in their own
      * partner list would otherwise be offered twice, with only one row marked
@@ -98,14 +99,15 @@
      * row on `data-picker-name` — two rows sharing one name would both resolve
      * to whichever `_find()` reached first.
      *
-     * @param {{accounts: any[], ghosts: any[], recent: any[]}|null} partners
+     * @param {{accounts: any[], pending?: any[], ghosts: any[], recent: any[]}|null} partners
      * @param {any[]} [extraGhosts] rows from ghostsIn(), for a run in progress
      */
     candidates(partners, extraGhosts) {
       const me = viewerRow();
       const rows = [
         ...(me ? [me] : []),
-        ...window.Buddy.toPlayerCandidates(partners || { accounts: [], ghosts: [], recent: [] }),
+        ...window.Buddy.toPlayerCandidates(
+          partners || { accounts: [], pending: [], ghosts: [], recent: [] }),
       ].filter((c) => c.name);
 
       const seenIds = new Set();
@@ -249,9 +251,10 @@
      * a friend — and an import is exactly when that turns up. Picking one
      * links the plays to their real account without a buddy request.
      *
-     * A round trip, so it is a button the user presses rather than something
-     * that fires on every keystroke; the local list above is cached and
-     * filters instantly.
+     * A round trip, so the picker sheet runs it DEBOUNCED behind its own local
+     * filter and appends the results: the cached list above still answers the
+     * keystroke instantly, and this catches up underneath it a moment later
+     * (widgets/player-picker-sheet.js § TWO LISTS, ONE QUERY).
      * @param {string} q
      */
     async searchEveryone(q) {

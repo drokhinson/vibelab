@@ -14,7 +14,7 @@
 //     feed_first_page:      FeedPageResponse,
 //     feed_cursor:          string|null,
 //     recently_played_games: GameSummary[],  // host flow game-picker seed
-//     play_partners:        { accounts, ghosts, recent },  // host player-picker seed
+//     play_partners:        { accounts, pending, ghosts, recent },  // host player-picker seed
 //     notifications_first_page: NotificationsResponse,  // the bell's prefetch
 //     notifications_unread: int,                        // the bell's dot
 //     release_notices_unseen: ReleaseNotice[],  // the what's-new popup's slides

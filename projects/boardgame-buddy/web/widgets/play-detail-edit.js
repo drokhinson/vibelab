@@ -732,9 +732,31 @@
       // spelling of a seated player would be offered back as a new guest —
       // and seatPlayer would then refuse it, silently.
       seatedNames: seated.map((p) => p.name),
+      // The same reach Gather has. A play being fixed after the fact is the
+      // likeliest place to find a name that belongs to an account nobody has
+      // added yet — that is usually WHY it is being fixed — and a guest seat
+      // there is the thing this edit exists to undo.
+      searchAll: (q) => searchEveryone(q),
+      searchAllLabel: "Search all of BoardgameBuddy",
       returnFocus: (event && event.currentTarget) || null,
       onConfirm: (picks) => addPlayers(picks),
     });
+  }
+
+  /**
+   * Everyone in the app, for a name the partner bundle doesn't hold. The sheet
+   * runs it debounced behind its own local filter and drops anyone already
+   * listed, so this only has to exclude the seats — which `candidates` is
+   * already filtered of, and which seatPlayer would refuse silently.
+   * @param {string} q
+   */
+  async function searchEveryone(q) {
+    const rows = await window.ImportPeople.searchEveryone(q);
+    const seated = (state.draft && state.draft.players) || [];
+    const seatedIds = new Set(seated.map((p) => p.user_id).filter(Boolean));
+    const seatedNames = new Set(seated.map((p) => nameKey(p.name)));
+    return (rows || []).filter(
+      (r) => !seatedIds.has(r.user_id) && !seatedNames.has(nameKey(r.name)));
   }
 
   /**
