@@ -293,6 +293,64 @@
       return true;
     }
 
+    /**
+     * Give a seat the numbers its new side is already holding.
+     *
+     * The companion to applyTeamTag, and the same shape of problem. A side
+     * scores as ONE column now (widgets/round-score-grid.js#roundGridColumns):
+     * the host types once and the write fans out — through
+     * window.roundGridSeatsFor, which is what an editable host asks — so every
+     * seat on the side carries the number and each one SAVES it as their own
+     * score. A seat
+     * tagged in afterwards has none of that history — the grid would go on
+     * showing the side's cells (an empty seat is not a disagreement, by
+     * design) while this seat quietly saved zeroes and dragged the side's own
+     * result down with it.
+     *
+     * Only ever fills BLANKS, and only onto a seat that has no numbers of its
+     * own. A seat that was scored before it joined the side is a real
+     * disagreement: the grid splits the side back into seats and shows both
+     * numbers, which is the honest answer and the one a host can act on. The
+     * alternative — overwriting — is the same mistake applyTeamTag's own
+     * docstring is a monument to, where naming a team threw away something
+     * already recorded.
+     *
+     * Mutates `players` in place and reports whether anything moved, so the
+     * caller can skip a repaint and a live-scores republish.
+     *
+     * @param {any[]} players the draft roster
+     * @param {number} i the seat that was just tagged
+     * @returns {boolean} true when this seat took the side's numbers
+     */
+    static adoptTeamScores(players, i) {
+      const p = players && players[i];
+      if (!p) return false;
+      const tag = String((p.team || "")).trim().toLowerCase();
+      if (!tag) return false;
+      // Its own numbers, so there is nothing to adopt and no blank to fill.
+      const mine = Array.isArray(p.roundScores) ? p.roundScores : [];
+      if (mine.some((v) => window.parseRoundScore(v) != null)) return false;
+      const side = players.filter(
+        (o, j) => j !== i && o && String((o.team || "")).trim().toLowerCase() === tag
+      );
+      if (!side.length) return false;
+      let moved = false;
+      const n = Math.max(0, ...players.map((o) => ((o && o.roundScores) || []).length));
+      if (!Array.isArray(p.roundScores)) p.roundScores = [];
+      for (let r = 0; r < n; r++) {
+        let v = null;
+        for (const o of side) {
+          const cell = (o.roundScores || [])[r];
+          if (window.parseRoundScore(cell) != null) { v = cell; break; }
+        }
+        if (v == null) continue;
+        if (p.roundScores[r] === v) continue;
+        p.roundScores[r] = v;
+        moved = true;
+      }
+      return moved;
+    }
+
     // Remote lobby helpers ──────────────────────────────────────────────────────
 
     static async openLobby({ gameId } = {}) {
@@ -427,8 +485,9 @@
       });
     }
 
-    // Host-only. Publish which side each seat is on — the whole
-    // {participant_id: tag} map, exactly as the host's draft holds it.
+    // Host-only. Publish the lobby's team setup: how the table is being
+    // scored, and the whole {participant_id: tag} map exactly as the host's
+    // draft holds it.
     //
     // The team tags are typed on the Gather roster and used to live ONLY in
     // that draft until the play was saved, so the host read a grid banded into
@@ -436,14 +495,20 @@
     // and the pairings surfaced only once the game was over. This is what
     // carries them across while it still matters (migration 050).
     //
+    // `playMode` rides along rather than taking a call of its own because the
+    // two are one fact: a side's seats share ONE cell in the scoring grid, and
+    // that merge is gated on the mode — a mirror holding the tags but not the
+    // mode would draw a grid the host's own screen is not drawing.
+    //
     // Full replacement: a participant the map omits has their tag cleared,
-    // which is how a side the host deletes stops tinting. Unlike the order
+    // which is how a side the host deletes stops banding. Unlike the order
     // write this is NOT Gather-only — naming a side repaints a header, it
     // doesn't renumber a column — so a debounced write that lands before the
     // phase PATCH of a host rolling back to Gather still counts, instead of
     // coming back 409 and being swallowed with the tag.
-    static setParticipantTeams(code, teams) {
-      return window.api.put(`/sessions/${code}/participants/teams`, {
+    static setSessionTeams(code, { playMode, teams } = {}) {
+      return window.api.put(`/sessions/${code}/teams`, {
+        play_mode: playMode || null,
         teams: teams || {},
       });
     }

@@ -1,8 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 050_session_participant_teams.sql (adds bgb_set_participant_teams
---               and re-emits bgb_session_bundle so a LIVE lobby's roster
---               carries the side each seat is on. 048 gave a saved seat its
+-- Last updated: 050_session_participant_teams.sql (adds bgb_set_session_teams
+--               and re-emits bgb_session_bundle so a LIVE lobby carries the
+--               side each seat is on AND how the table is being scored. 048 gave a saved seat its
 --               `team` and said plainly what it was leaving open: a
 --               spectator's mirror shows untinted columns until the play is
 --               saved. This closes it — the lobby participant table gets the
@@ -1111,16 +1111,21 @@
 --               rather than dropped, so a race can't drop someone off the
 --               end of the grid.
 
--- bgb_set_participant_teams(p_host UUID, p_code TEXT, p_teams JSONB)
+-- bgb_set_session_teams(p_host UUID, p_code TEXT, p_mode TEXT, p_teams JSONB)
 --   → JSONB (SessionResponse bundle) or {"error": "not_found" | "expired" |
 --     "host_only" | "invalid_teams"}
 --   Defined in: db/migrations/boardgamebuddy/050_session_participant_teams.sql
 --   Called by:  projects/boardgame-buddy/api/routes/services/session_service.py
---               (set_participant_teams —
---                PUT /sessions/{code}/participants/teams)
---   Purpose:    Publish which side each seat is on, so a spectator's live
---               mirror tints its grid columns into sides the way the host's
---               does. The tags are typed on the host's local draft and had no
+--               (set_session_teams — PUT /sessions/{code}/teams)
+--   Purpose:    Publish the lobby's whole team setup, so a spectator's live
+--               mirror draws the grid the host's screen is drawing: which side
+--               each seat is on, and how the table is being scored.
+--               p_mode writes play_mode on the session and rides along rather
+--               than taking an RPC of its own because the two are one fact —
+--               a side's seats share ONE grid cell and that merge is gated on
+--               the mode, so tags without the mode would merge a grid the host
+--               had un-merged. NULL (or an unrecognised value) leaves the
+--               stored mode alone, so an older client cannot un-say it. The tags are typed on the host's local draft and had no
 --               server-side home before this, which is why 048 could give a
 --               SAVED seat its team and still leave every live mirror
 --               untinted. p_teams is the whole {participant_id: tag} map and a

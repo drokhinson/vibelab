@@ -10,7 +10,7 @@ file pins is the two halves of the wire that make it true.
     deployed separately from this service, and every participant row written
     before the migration has no key at all; a required field would 500 the poll
     both ends of a live session are sitting on.
-  * ``SessionParticipantTeamsBody`` normalizes ``""`` to None, exactly as
+  * ``SessionTeamsBody`` normalizes ``""`` to None, exactly as
     ``PlayerEntry.team`` does. This is the common case, not an edge one — the
     client seeds every seat with ``team:""`` and writes ``""`` back when a tag
     is cleared, so without it every untagged seat would carry one shared
@@ -32,7 +32,8 @@ import pytest  # noqa: E402
 from routes.constants import MAX_PLAY_TEAM_CHARS  # noqa: E402
 from routes.models import (  # noqa: E402
     SessionParticipantResponse,
-    SessionParticipantTeamsBody,
+    SessionResponse,
+    SessionTeamsBody,
 )
 from routes.services import session_service  # noqa: E402
 
@@ -72,27 +73,27 @@ def test_a_null_team_is_no_side():
     (None, None),
 ])
 def test_tags_normalize_like_a_saved_seat(sent, stored):
-    body = SessionParticipantTeamsBody(teams={"p-1": sent})
+    body = SessionTeamsBody(teams={"p-1": sent})
     assert body.teams == {"p-1": stored}
 
 
 def test_an_empty_map_is_a_legitimate_write():
     """It is what clearing the last tag sends, and what leaving team mode sends."""
-    assert SessionParticipantTeamsBody(teams={}).teams == {}
-    assert SessionParticipantTeamsBody().teams == {}
+    assert SessionTeamsBody(teams={}).teams == {}
+    assert SessionTeamsBody().teams == {}
 
 
 def test_a_tag_longer_than_the_cap_is_rejected():
-    SessionParticipantTeamsBody(teams={"p-1": "x" * MAX_PLAY_TEAM_CHARS})
+    SessionTeamsBody(teams={"p-1": "x" * MAX_PLAY_TEAM_CHARS})
     with pytest.raises(Exception):
-        SessionParticipantTeamsBody(teams={"p-1": "x" * (MAX_PLAY_TEAM_CHARS + 1)})
+        SessionTeamsBody(teams={"p-1": "x" * (MAX_PLAY_TEAM_CHARS + 1)})
 
 
 def test_every_seat_is_kept_including_the_untagged_ones():
     """Full replacement: an omitted seat is a CLEARED seat, so the client sends
     all of them and the blanks have to survive normalization as explicit
     Nones rather than being dropped from the map."""
-    body = SessionParticipantTeamsBody(teams={"p-1": "Red", "p-2": "", "p-3": "Blue"})
+    body = SessionTeamsBody(teams={"p-1": "Red", "p-2": "", "p-3": "Blue"})
     assert body.teams == {"p-1": "Red", "p-2": None, "p-3": "Blue"}
 
 
@@ -134,14 +135,16 @@ _BUNDLE = {
 
 def test_the_map_reaches_the_rpc_whole():
     sb = _Rpc(_BUNDLE)
-    out = session_service.set_participant_teams(
-        sb, viewer_id="u-host", code="ABCDE", teams={"p-1": "Red", "p-2": None}
+    out = session_service.set_session_teams(
+        sb, viewer_id="u-host", code="ABCDE", play_mode="team",
+        teams={"p-1": "Red", "p-2": None},
     )
     name, args = sb.calls[0]
-    assert name == "bgb_set_participant_teams"
+    assert name == "bgb_set_session_teams"
     assert args == {
         "p_host": "u-host",
         "p_code": "ABCDE",
+        "p_mode": "team",
         "p_teams": {"p-1": "Red", "p-2": None},
     }
     # ...and the bundle comes back with the sides on it, so the host's own
@@ -149,11 +152,38 @@ def test_the_map_reaches_the_rpc_whole():
     assert [p.team for p in out.participants] == ["Red", None]
 
 
+def test_the_mode_travels_with_the_sides():
+    """One write, because a mirror holding the tags but not the mode would draw
+    a grid the host's own screen is not drawing — the merge is gated on it."""
+    sb = _Rpc(dict(_BUNDLE, play_mode="team"))
+    out = session_service.set_session_teams(
+        sb, viewer_id="u-host", code="ABCDE", play_mode="team", teams={}
+    )
+    assert sb.calls[0][1]["p_mode"] == "team"
+    assert out.play_mode.value == "team"
+
+
+def test_an_unsaid_mode_reaches_the_rpc_as_null():
+    """None means "leave it alone", so a client that only knows how to publish
+    tags cannot un-say a mode the host already set."""
+    sb = _Rpc(_BUNDLE)
+    session_service.set_session_teams(
+        sb, viewer_id="u-host", code="ABCDE", play_mode=None, teams={"p-1": "Red"}
+    )
+    assert sb.calls[0][1]["p_mode"] is None
+
+
+def test_a_session_predating_the_column_has_no_mode():
+    """The bundle RPC deploys separately; both ends read absent as competitive."""
+    assert SessionResponse.model_validate(_BUNDLE).play_mode is None
+
+
 def test_a_non_host_is_told_so_in_this_endpoint_s_words():
     sb = _Rpc({"error": "host_only"})
     with pytest.raises(Exception) as e:
-        session_service.set_participant_teams(
-            sb, viewer_id="u-someone", code="ABCDE", teams={"p-1": "Red"}
+        session_service.set_session_teams(
+            sb, viewer_id="u-someone", code="ABCDE", play_mode="team",
+            teams={"p-1": "Red"},
         )
     assert "host" in str(e.value).lower()
 
@@ -162,6 +192,6 @@ def test_a_dead_lobby_is_not_reported_as_a_team_problem():
     """Same gate, same vocabulary as every other host write."""
     sb = _Rpc({"error": "not_found"})
     with pytest.raises(Exception):
-        session_service.set_participant_teams(
-            sb, viewer_id="u-host", code="ZZZZZ", teams={}
+        session_service.set_session_teams(
+            sb, viewer_id="u-host", code="ZZZZZ", play_mode=None, teams={}
         )

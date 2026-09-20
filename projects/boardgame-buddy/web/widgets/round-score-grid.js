@@ -17,6 +17,14 @@
 //
 // Each consumer implements these with identical signatures.
 //
+// `playerIdx` IS A COLUMN'S FIRST SEAT, not necessarily its only one. In a
+// team play the seats on one side share a single cell (see roundGridColumns),
+// so an editable host has to ask window.roundGridSeatsFor() — with the same
+// arguments it passed to render — which seats the cell it was handed covers,
+// and write the value to every one of them. A host that writes only the index
+// it was given puts the side's score on one member and saves the rest as
+// zeroes. The read-only hosts need none of this; the grid resolves the cell.
+//
 // The grid has exactly two modes, and `editable` picks between them:
 //
 //   editable: true  — every cell is an input and the host controls (add round,
@@ -48,7 +56,11 @@
 //                     popup has no docked bar, so it keeps the one here.
 //   playMode        — "competitive" | "team" | "coop". Co-op hides the
 //                     per-player trophy button (the whole table wins or
-//                     loses together).
+//                     loses together). "team" is what MERGES a side's seats
+//                     into one column, one cell per round and one Total — see
+//                     roundGridColumns, and note that a host which renders a
+//                     team play without passing this gets the old per-seat
+//                     grid rather than a wrong one.
 //   getCellValue    — optional resolver `(player, roundIdx) → string`. Lets
 //                     play-flow-view overlay live realtime scores when a
 //                     player has a real user_id. Defaults to reading from
@@ -137,29 +149,25 @@
     // Spectators size their grid from the live-scores round count, not from
     // each player's local roundScores array (which they don't have).
     const roundCount = roundGridRoundCount(safePlayers, o.roundCount);
-    // One total implementation, fed the same resolver and the same round
-    // range the rows below were built from.
-    const getTotal = (p) => roundGridTotal(p, roundCount, getCell);
-
     // The body keeps its column across the host's re-renders, and drops to the
     // new last round when this render added one. See RoundGridScroll.
     RoundGridScroll.schedule(host, roundCount);
 
-    // tag → colour slot, or null when no seat carries a side — which covers a
-    // competitive play, a co-op play, and a team play whose sides were never
-    // named. Built once and read by every header below, so the grid and the
-    // banded player list above it cannot land on different colours.
-    const teams = window.BgbTeams ? window.BgbTeams.indexMap(safePlayers) : null;
-    const slotOf = (p) => (teams && teams.get(window.BgbTeams.keyOf(p && p.team))) || 0;
+    // What this grid actually draws. One column per seat everywhere except a
+    // team play, where a side is ONE column — see roundGridColumns.
+    const columns = roundGridColumns(safePlayers, mode, roundCount, getCell);
+    // A column's cells and its Total, from the same resolver the rows use.
+    const cellOf = (col, r) => roundGridColumnValue(col, r, getCell);
+    const totalOf = (col) => roundGridColumnTotal(col, roundCount, getCell);
 
-    const cols = renderColGroup(safePlayers.length);
+    const cols = renderColGroup(columns);
     // The label column is sized to what it actually holds, not to a fixed
     // block. See roundGridLabelChars.
     const labelCh = roundGridLabelChars(rowLabels, roundCount);
 
     return `
       <div class="rg${editable ? " rg--editable" : ""}" data-round-grid="${escapeAttr(host)}"
-           style="--rg-cols: ${safePlayers.length}; --rg-label-ch: ${labelCh}">
+           style="--rg-cols: ${columns.length}; --rg-label-ch: ${labelCh}">
         <div class="rg__pinzone">
           <div class="rg__head" data-rg-sync>
             <table class="scoring-table scoring-table--head">
@@ -167,15 +175,16 @@
               <thead>
                 <tr>
                   <th class="scoring-head-corner"></th>
-                  ${safePlayers.map((p) => {
+                  ${columns.map((col) => {
                     // A custom property set inline from data — the one
                     // legitimate inline-colour case (theming.md §10), and the
                     // same shape the row-label cells use for --row-accent.
-                    const slot = slotOf(p);
+                    const slot = col.slot;
+                    const name = columnName(col);
                     return `
-                    <th class="scoring-head${headerNames ? " is-named" : ""}${slot ? " is-team" : ""}" scope="col"
+                    <th class="scoring-head${headerNames ? " is-named" : ""}${slot ? " is-team" : ""}${col.merged ? " is-merged" : ""}" scope="col"
                         ${slot ? `style="--team-tint: var(--team-${slot})"` : ""}
-                        title="${escapeAttr(shownName(p))}">${renderScoringHead(renderHeadBadge(p), shownName(p), headerNames, headerNamesDefault)}</th>
+                        title="${escapeAttr(name)}">${renderScoringHead(renderColumnBadges(col), name, headerNames, headerNamesDefault)}</th>
                   `;}).join("")}
                 </tr>
               </thead>
@@ -218,13 +227,20 @@
                     ${renderRowLabel(tpl, r)}
                   </span>
                 </th>
-                ${safePlayers.map((p, i) => `
-                  <td>
+                ${columns.map((col) => {
+                  // Keyed by the column's FIRST seat, which is what makes a
+                  // merged cell addressable by every host that patches by
+                  // index: `${col.head}-${r}` is a key those hosts already
+                  // compute, and a seat that shares the cell simply has no
+                  // key of its own (see _patchScoringCells in either host).
+                  const label = `${columnName(col)} — ${rowName}`;
+                  return `
+                  <td${col.merged ? ` class="scoring-td--merged"` : ""}>
                     ${editable
-                      ? renderEditableCell(getCell(p, r), i, r, host, `${shownName(p)} — ${rowName}`)
-                      : `<span class="scoring-cell--read" data-score-cell="${i}-${r}" aria-label="${escapeAttr(`${shownName(p)} — ${rowName}`)}">${escapeHtml(getCell(p, r))}</span>`}
+                      ? renderEditableCell(cellOf(col, r), col.head, r, host, label)
+                      : `<span class="scoring-cell--read" data-score-cell="${col.head}-${r}" aria-label="${escapeAttr(label)}">${escapeHtml(cellOf(col, r))}</span>`}
                   </td>
-                `).join("")}
+                `;}).join("")}
               </tr>`;
             }).join("")}
               </tbody>
@@ -237,7 +253,7 @@
             <tbody>
               <tr class="scoring-total-row">
                 <th scope="row">Total</th>
-                ${safePlayers.map((p, i) => renderTotalsCell(p, i, mode, getTotal(p), host, editable)).join("")}
+                ${columns.map((col) => renderTotalsCell(col, mode, totalOf(col), host, editable)).join("")}
               </tr>
             </tbody>
           </table>
@@ -253,14 +269,198 @@
     `;
   }
 
+  // ── Columns ─────────────────────────────────────────────────────────────
+  //
+  // What the grid draws, as opposed to who is in the play. Outside team mode
+  // the two are the same thing — one column per seat, which is every grid this
+  // widget has ever rendered — and the abstraction costs nothing there.
+  //
+  // In a TEAM play a side is ONE column. The seats that share a tag hold one
+  // cell per round between them, the host types into it once, and the write
+  // fans out so every seat on that side carries the number (see
+  // PlaySession.teamSeats and the _setRoundScore in either editable host). A
+  // side scores as a unit, so a row of identical numbers under identical
+  // headers was the table saying the same thing four times — and on a phone it
+  // was saying it in four columns that a 3v3 game could not fit.
+  //
+  // The saved rows do not change shape: each seat still stores its own
+  // round_scores and its own score, and they are equal by construction. That
+  // is what keeps every reader that never heard of this — the feed card, the
+  // stats RPCs, an export — reading a team play exactly as it did.
+  //
+  // A SIDE OF ONE IS NOT A MERGE. It keeps its own column and its own tint,
+  // because there is nothing to merge it with; the grid has never drawn a
+  // colspan around a single seat and this must not start.
+  //
+  // ── WHEN A SIDE STAYS SPLIT ─────────────────────────────────────────────
+  //
+  // A merged cell shows ONE number, so it may only exist where the seats it
+  // covers do not hold two different ones. Formally: a side merges when no
+  // round holds two different non-empty values among its seats. Three things
+  // fall out of that wording, and all three are the reason for it:
+  //
+  //   * A play scored SEAT BY SEAT stays split. Team mode has existed since
+  //     migration 007 and per-seat round scores since 028, so plays where a
+  //     side's members each carry their own number are real and already saved.
+  //     Merging those would pick one member's number and print it over
+  //     everybody's — the detail popup would misreport a play it is the record
+  //     of. They render as they always did instead.
+  //   * A seat that is merely EMPTY where its teammate has a number does not
+  //     split the side. That is not a disagreement, it is a write in flight:
+  //     the host's fan-out is local and synchronous, but a SPECTATOR receives
+  //     one Realtime row per seat, so for a few milliseconds a side genuinely
+  //     holds one number and two blanks. Counting that as a disagreement would
+  //     re-shape the mirror's grid mid-keystroke.
+  //   * A side whose seats happen to agree merges even if it was scored
+  //     seat by seat. Nothing is misreported — every number on screen is a
+  //     number in the data — so there is no reason to spend a column on it.
+  //
+  // @param {any[]} players @param {string} mode @param {number} roundCount
+  // @param {Function} [getCell]
+  // @returns {{merged: boolean, players: any[], indexes: number[], head: number,
+  //            slot: number, key: string|null, label: string}[]}
+  function roundGridColumns(players, mode, roundCount, getCell) {
+    const safe = Array.isArray(players) ? players : [];
+    const resolve = typeof getCell === "function" ? getCell : defaultCellValue;
+    const n = Math.max(0, Number(roundCount) || 0);
+    const solo = (p, i, slot, key) => ({
+      merged: false, players: [p], indexes: [i], head: i,
+      slot: slot || 0, key: key || null, label: "",
+    });
+    // Same source of truth as the header tints and the play-detail popup's
+    // banded roster: nothing here decides which side is which, or what colour
+    // it is (ui/team-colors.js). Null covers a competitive play, a co-op play
+    // and a team play whose sides were never named — all of which are one
+    // column per seat, exactly as before.
+    const teams = (mode === "team" && window.BgbTeams)
+      ? window.BgbTeams.indexMap(safe)
+      : null;
+    if (!teams) return safe.map((p, i) => solo(p, i, 0, null));
+
+    // Walk the roster ONCE, in order. A side takes the position of its first
+    // seat, so a grid whose sides are seated together is in the order the host
+    // arranged and a grid whose sides are interleaved pulls each side's later
+    // seats up to its first. Either way both ends of a live session derive the
+    // same order from the same array (migration 056), so the host's third
+    // column is the spectator's third column.
+    const draft = [];
+    const byKey = new Map();
+    safe.forEach((p, i) => {
+      const key = window.BgbTeams.keyOf(p && p.team);
+      const slot = key ? (teams.get(key) || 0) : 0;
+      if (!key) { draft.push(solo(p, i, 0, null)); return; }
+      let col = byKey.get(key);
+      if (!col) {
+        col = { merged: true, players: [], indexes: [], head: i,
+                slot, key, label: String(p.team).trim() };
+        byKey.set(key, col);
+        draft.push(col);
+      }
+      col.players.push(p);
+      col.indexes.push(i);
+    });
+
+    const out = [];
+    for (const col of draft) {
+      if (!col.merged) { out.push(col); continue; }
+      if (col.players.length >= 2 && sideAgrees(col.players, n, resolve)) {
+        out.push(col);
+        continue;
+      }
+      // Split back into seats, each keeping the side's tint — a side that
+      // cannot share a cell is still a side.
+      col.indexes.forEach((i, k) => out.push(solo(col.players[k], i, col.slot, col.key)));
+    }
+    return out;
+  }
+
+  // Does this side hold at most one number in every round? See the third
+  // bullet above for why an empty seat is not a disagreement, and why the
+  // comparison is on the parsed NUMBER rather than the stored string ("05" and
+  // "5" are one score typed two ways, not two scores).
+  function sideAgrees(seats, roundCount, resolve) {
+    for (let r = 0; r < roundCount; r++) {
+      let seen = null;
+      for (const p of seats) {
+        const v = parseRoundScore(resolve(p, r));
+        if (v == null) continue;
+        if (seen == null) seen = v;
+        else if (seen !== v) return false;
+      }
+    }
+    return true;
+  }
+
+  // What a column SHOWS in one round: the first number any of its seats holds.
+  // For a solo column that is simply the seat's own cell, so this is the one
+  // resolver every surface reads a cell through. A merged column's seats agree
+  // by construction (roundGridColumns only merges ones that do), so "first"
+  // only ever chooses between a number and the blanks of a write still in
+  // flight — which is exactly the choice that keeps a spectator's cell showing
+  // the value the instant the first of its rows lands.
+  function roundGridColumnValue(col, r, getCell) {
+    const resolve = typeof getCell === "function" ? getCell : defaultCellValue;
+    const seats = (col && col.players) || [];
+    for (const p of seats) {
+      const v = resolve(p, r);
+      if (v != null && v !== "") return v;
+    }
+    return "";
+  }
+
+  // The one true column total: the sum of the cells the grid shows for this
+  // column, which for a merged one is the SIDE's total and not the sum of its
+  // seats. Hosts that patch the totals row in place must call this rather than
+  // summing a player, or the number under a merged column stops meaning "the
+  // cells above me, added up" — it would read N times too big on a side of N.
+  function roundGridColumnTotal(col, roundCount, getCell) {
+    const n = Math.max(0, Number(roundCount) || 0);
+    let total = 0;
+    for (let r = 0; r < n; r++) {
+      total += parseRoundScore(roundGridColumnValue(col, r, getCell)) || 0;
+    }
+    return total;
+  }
+
+  // Which seats does the cell on seat `i` write to?
+  //
+  // The answer an editable host needs and must not compute for itself: a
+  // merged cell is one input over several seats, so typing in it has to reach
+  // every one of them or the play saves with the side's score on one member.
+  // Asked of the SAME arguments the render was given, so the fan-out can never
+  // cover a different set of seats than the cell on screen does.
+  function roundGridSeatsFor(players, mode, roundCount, getCell, i) {
+    const cols = roundGridColumns(players, mode, roundCount, getCell);
+    const col = cols.find((c) => c.indexes.indexOf(i) !== -1);
+    return col ? col.indexes.slice() : [i];
+  }
+
+  // What a column reads as: a side by its tag, a seat by its name.
+  function columnName(col) {
+    return col.merged ? col.label : shownName(col.players[0]);
+  }
+
+  // The header's bubble state. A merged column stacks its side's badges —
+  // the column is those people, and the tag alone (which the name state
+  // shows) does not say who is on it.
+  function renderColumnBadges(col) {
+    const seats = col.players
+      .map((p, k) => `<span class="scoring-head__seat" data-head-seat="${col.indexes[k]}">${renderHeadBadge(p)}</span>`)
+      .join("");
+    if (!col.merged) return seats;
+    return `<span class="scoring-head__stack" data-seats="${col.players.length}">${seats}</span>`;
+  }
+
   // The column contract, and the whole of it. Three tables have to agree on
   // their columns to the pixel; they do it by sharing this markup and
   // `table-layout: fixed` rather than by anyone measuring anyone else. Widths
   // come from --rg-label-w / --rg-col-min on .rg (styles.css), so a repaint
   // cannot land them out of step and there is no resize pass to forget.
-  function renderColGroup(n) {
+  function renderColGroup(columns) {
     let cols = `<col class="rg-col--label" />`;
-    for (let i = 0; i < n; i++) cols += `<col class="rg-col--player" />`;
+    for (const col of columns) {
+      cols += `<col class="rg-col--player${col.merged ? " rg-col--team" : ""}" />`;
+    }
     return `<colgroup>${cols}</colgroup>`;
   }
 
@@ -393,14 +593,22 @@
   // Exported as window.renderRoundGridTotalsCell for hosts that repaint the
   // totals row in place between full renders — same markup, same classes, so a
   // patched row can't drift from a freshly rendered one.
-  function renderTotalsCell(p, i, mode, total, host, showWinner) {
+  //
+  // Takes a COLUMN, not a player: a merged side has one Total the way it has
+  // one cell, and one trophy. `some` rather than the first seat's flag because
+  // a side crowned before this play was ever merged can carry the win on one
+  // member — the trophy is the side's, and the toggle below settles all of
+  // them (PlaySession.applyTeamTag's union rule, the same one).
+  function renderTotalsCell(col, mode, total, host, showWinner) {
     // Co-op: the whole table wins or loses together, no per-player trophy.
+    const won = col.players.some((p) => p.is_winner);
     const negClass = Number(total) < 0 ? " is-neg" : "";
-    const tdClass = p.is_winner ? "scoring-total-cell--winner" : "";
+    const tdClass = won ? "scoring-total-cell--winner" : "";
     // Labelled for the same reason the score cells are: the Total row is its
     // own table now, so "which column is this" is no longer answerable from
     // the markup around it.
-    const totalLabel = escapeAttr(`${shownName(p)} total`);
+    const name = columnName(col);
+    const totalLabel = escapeAttr(`${name} total`);
     if (mode === "coop") {
       return `<td class="${tdClass}">
         <div class="scoring-total-cell">
@@ -411,13 +619,13 @@
     return `<td class="${tdClass}">
       <div class="scoring-total-cell">
         ${showWinner
-          ? `<button class="scoring-winner-btn ${p.is_winner ? "is-winner" : ""}"
-                     title="${p.is_winner ? "Winner" : "Mark as winner"}"
-                     aria-label="${escapeAttr(shownName(p))} — ${p.is_winner ? "winner" : "mark as winner"}"
-                     onclick="window.${host}._toggleWinner(${i})">
-              <i data-icon="${p.is_winner ? "trophy" : "circle"}" class="w-4 h-4"></i>
+          ? `<button class="scoring-winner-btn ${won ? "is-winner" : ""}"
+                     title="${won ? "Winner" : "Mark as winner"}"
+                     aria-label="${escapeAttr(name)} — ${won ? "winner" : "mark as winner"}"
+                     onclick="window.${host}._toggleWinner(${col.head})">
+              <i data-icon="${won ? "trophy" : "circle"}" class="w-4 h-4"></i>
             </button>`
-          : (p.is_winner ? `<i data-icon="trophy" class="w-4 h-4"></i>` : "")}
+          : (won ? `<i data-icon="trophy" class="w-4 h-4"></i>` : "")}
         <span class="scoring-total${negClass}" aria-label="${totalLabel}">${escapeHtml(total)}</span>
       </div>
     </td>`;
@@ -722,6 +930,10 @@
 
   window.renderRoundGrid = renderRoundGrid;
   window.renderRoundGridTotalsCell = renderTotalsCell;
+  window.roundGridColumns = roundGridColumns;
+  window.roundGridColumnValue = roundGridColumnValue;
+  window.roundGridColumnTotal = roundGridColumnTotal;
+  window.roundGridSeatsFor = roundGridSeatsFor;
   window.roundGridRoundCount = roundGridRoundCount;
   window.roundGridTotal = roundGridTotal;
   window.roundGridHasAnyScore = roundGridHasAnyScore;

@@ -26,6 +26,18 @@
 -- and it carries the same three pieces: a nullable column, the tag on the
 -- bundle so every poll and every mirror sees it, and one host-only write RPC.
 --
+-- ── AND THE MODE, WHICH IS NOT OPTIONAL HERE ────────────────────────────────
+--
+-- `play_mode` lands on the session in the same breath, because the tags alone
+-- do not tell a spectator what to draw. A side's seats share ONE cell in the
+-- scoring grid now (widgets/round-score-grid.js#roundGridColumns) and that
+-- merge is gated on the mode: a host who names sides and then switches the
+-- game type back to competitive keeps the tags on their draft, so a mirror
+-- reading tags alone would merge a grid the host's own screen had un-merged.
+-- Two phones showing the same scoreboard with different columns is worse than
+-- the untinted grid this migration started out fixing. It is also what lets a
+-- spectator's co-op mirror drop the per-seat trophy the host's already has.
+--
 -- ── WHAT NULL MEANS ──────────────────────────────────────────────────────────
 --
 -- "This seat has no side": every participant row that exists today, every
@@ -70,6 +82,23 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
+
+-- How this table is being scored, mirroring boardgamebuddy_plays.play_mode
+-- (migration 007) — the same three values and the same CHECK, so the lobby and
+-- the play it becomes cannot describe one evening two ways. NULL means the
+-- host never said, which is every session written before today and reads as
+-- 'competitive' at both ends, exactly as a game with no play_mode does.
+ALTER TABLE public.boardgamebuddy_play_sessions
+  ADD COLUMN IF NOT EXISTS play_mode TEXT;
+
+ALTER TABLE public.boardgamebuddy_play_sessions
+  DROP CONSTRAINT IF EXISTS bgb_play_sessions_play_mode_chk;
+ALTER TABLE public.boardgamebuddy_play_sessions
+  ADD CONSTRAINT bgb_play_sessions_play_mode_chk
+    CHECK (play_mode IS NULL OR play_mode = ANY (ARRAY['competitive'::text, 'coop'::text, 'team'::text]));
+
+COMMENT ON COLUMN public.boardgamebuddy_play_sessions.play_mode IS
+  'How the host is scoring this table: competitive / coop / team (migration 050). NULL = never said, read as competitive. Not the same fact as boardgamebuddy_games.play_mode, which is what the BOX suggests; this is what the table actually did, and it is the gate on whether a spectator''s grid merges a side''s seats into one column.';
 
 ALTER TABLE public.boardgamebuddy_play_session_participants
   ADD COLUMN IF NOT EXISTS team TEXT;
@@ -124,7 +153,8 @@ BEGIN
            'created_at', s.created_at,
            'expires_at', s.expires_at,
            'finalized_play_id', s.finalized_play_id,
-           'scoring_template', s.scoring_template
+           'scoring_template', s.scoring_template,
+           'play_mode', s.play_mode
          ),
          s.game_id,
          COALESCE(s.phase, 'gather')
@@ -171,8 +201,18 @@ GRANT EXECUTE ON FUNCTION public.bgb_session_bundle(p_session_id uuid) TO boardg
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- bgb_set_participant_teams — new in 050. Host-only, any open phase.
+-- bgb_set_session_teams — new in 050. Host-only, any open phase.
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Publishes the whole team setup in one write: how the table is being scored,
+-- and who is on which side. ONE call rather than two because the two are one
+-- fact on the client — the mode decides whether the sides mean anything, and a
+-- mirror that had the tags but not the mode (or the other way round) would
+-- draw a grid the host's screen is not drawing.
+--
+-- p_mode: 'competitive' | 'coop' | 'team', or NULL to leave it unsaid. An
+-- unrecognised value is ignored rather than rejected, so an older client
+-- cannot fail a write the rest of which is good.
+--
 -- p_teams: {"<participant_id>": "<tag>", …}. Ids that do not belong to this
 -- session are ignored (same as bgb_reorder_participants' p_order); this
 -- session's participants that the map omits are CLEARED — see the header.
@@ -180,7 +220,7 @@ GRANT EXECUTE ON FUNCTION public.bgb_session_bundle(p_session_id uuid) TO boardg
 -- A single UPDATE over the whole roster rather than one per named seat, so a
 -- host renaming a side pays one statement and the clear-the-omitted half comes
 -- free in the same pass.
-CREATE OR REPLACE FUNCTION public.bgb_set_participant_teams(p_host uuid, p_code text, p_teams jsonb)
+CREATE OR REPLACE FUNCTION public.bgb_set_session_teams(p_host uuid, p_code text, p_mode text, p_teams jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -207,6 +247,15 @@ BEGIN
     RETURN jsonb_build_object('error', 'invalid_teams');
   END IF;
 
+  -- Left alone when the caller says nothing, so a client that only knows how
+  -- to publish tags cannot silently un-say the mode.
+  IF p_mode = ANY (ARRAY['competitive', 'coop', 'team']) THEN
+    UPDATE boardgamebuddy_play_sessions
+       SET play_mode = p_mode
+     WHERE id = v_session
+       AND play_mode IS DISTINCT FROM p_mode;
+  END IF;
+
   UPDATE boardgamebuddy_play_session_participants pp
      SET team = NULLIF(left(btrim(v_map ->> pp.id::TEXT), 16), '')
    WHERE pp.session_id = v_session
@@ -219,8 +268,8 @@ $function$;
 -- web bundle must not reach it. Same trio 028 applies to every bgb RPC, and
 -- the one piece of ceremony a new DEFINER function cannot inherit — Postgres
 -- hardcodes EXECUTE-to-PUBLIC on CREATE.
-GRANT EXECUTE ON FUNCTION public.bgb_set_participant_teams(p_host uuid, p_code text, p_teams jsonb) TO boardgamebuddy_role;
-REVOKE EXECUTE ON FUNCTION public.bgb_set_participant_teams(p_host uuid, p_code text, p_teams jsonb) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.bgb_set_participant_teams(p_host uuid, p_code text, p_teams jsonb) TO service_role;
+GRANT EXECUTE ON FUNCTION public.bgb_set_session_teams(p_host uuid, p_code text, p_mode text, p_teams jsonb) TO boardgamebuddy_role;
+REVOKE EXECUTE ON FUNCTION public.bgb_set_session_teams(p_host uuid, p_code text, p_mode text, p_teams jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.bgb_set_session_teams(p_host uuid, p_code text, p_mode text, p_teams jsonb) TO service_role;
 
 COMMIT;

@@ -707,7 +707,13 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_play_sessions (
   -- bgb_session_bundle so the spectator's read-only mirror can label its rows;
   -- copied onto the play at finalize.
   scoring_template JSONB,
+  -- How the host is scoring this table (migration 050), mirroring
+  -- boardgamebuddy_plays.play_mode. NULL = never said, read as competitive at
+  -- both ends. The gate on whether a spectator's grid MERGES a side's seats
+  -- into one column: tags alone would merge a grid the host had un-merged.
+  play_mode TEXT,
   CONSTRAINT boardgamebuddy_play_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT bgb_play_sessions_play_mode_chk CHECK ((play_mode IS NULL OR play_mode = ANY (ARRAY['competitive'::text, 'coop'::text, 'team'::text]))),
   CONSTRAINT boardgamebuddy_play_sessions_finalized_play_id_fkey FOREIGN KEY (finalized_play_id) REFERENCES boardgamebuddy_plays(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_play_sessions_game_id_fkey FOREIGN KEY (game_id) REFERENCES boardgamebuddy_games(id) ON DELETE SET NULL,
   CONSTRAINT boardgamebuddy_play_sessions_host_user_id_fkey FOREIGN KEY (host_user_id) REFERENCES boardgamebuddy_profiles(id) ON DELETE CASCADE,

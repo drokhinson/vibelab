@@ -473,16 +473,15 @@
     // the patch walk the same participants array.
     _patchScoringCells() {
       if (!this._session) return;
-      const participants = this._session.participants || [];
       const cells = window.BgbCascade.scoreCells(this.container);
-      participants.forEach((p, i) => {
+      for (const col of this._gridColumns()) {
         for (let r = 0; r < this._renderedRounds; r++) {
-          const el = cells.get(`${i}-${r}`);
+          const el = cells.get(`${col.head}-${r}`);
           if (!el) continue;
-          const text = this._cellValue({ participant_id: p.id }, r);
+          const text = window.roundGridColumnValue(col, r, (pl, rr) => this._cellValue(pl, rr));
           if (el.textContent !== text) el.textContent = text;
         }
-      });
+      }
     }
 
     // Hand the bundle's `scores` array (migration 054) to the live-scores
@@ -880,24 +879,15 @@
       this._renderedRounds = rounds;
       // Map participants into the widget's player shape. Cell values + totals
       // come from the live-scores overlay, not local roundScores.
-      const players = participants.map((p) => ({
-        name: p.display_name,
-        participant_id: p.id,
-        user_id: p.user_id,
-        avatar: p.avatar,
-        // The side this seat is on (migration 050). The widget bands its
-        // column headers off this field alone — ui/team-colors.js assigns the
-        // colour slots by order of first appearance in the roster it is
-        // handed, and both screens are handed the SAME roster in the same
-        // order, so the host's Red is the spectator's Red without either side
-        // being told which slot that is. Absent on a lobby whose host hasn't
-        // deployed the write yet, which reads as a play with no sides — the
-        // untinted grid this screen showed before.
-        team: p.team || null,
-        roundScores: [],
-      }));
+      const players = this._gridPlayers(s);
       const grid = window.renderRoundGrid(players, "sessionViewerView", {
         editable: false,
+        // How the host is scoring this table (migration 050). It is what
+        // merges a side's seats into ONE column, so without it the mirror
+        // would draw a team night as separate columns while the host's own
+        // screen drew it as sides — the two grids are meant to be the same
+        // scoreboard seen from two phones.
+        playMode: (s && s.play_mode) || "competitive",
         roundCount: rounds,
         headerNames: true,
         rowLabels,
@@ -914,6 +904,57 @@
           ${grid}
         </section>
       `;
+    }
+
+    /**
+     * The lobby roster in the shape the grid widget reads. ONE mapping, used
+     * by the render and by the column derivation below, so the columns the
+     * patchers walk can never be computed from a different roster than the
+     * one on screen.
+     *
+     * `team` is the side this seat is on (migration 050). The widget bands its
+     * column headers off this field and MERGES a side's seats into one column
+     * from it — ui/team-colors.js assigns the colour slots by order of first
+     * appearance in the roster it is handed, and both screens are handed the
+     * same roster in the same order, so the host's Red is the spectator's Red
+     * without either side being told which slot that is. Absent on a lobby
+     * whose host hasn't deployed the write yet, which reads as a play with no
+     * sides — the plain per-seat grid this screen showed before.
+     *
+     * Cell values come from the live-scores overlay, never from here, so the
+     * roundScores array is deliberately empty.
+     */
+    _gridPlayers(s) {
+      const session = s || this._session;
+      return ((session && session.participants) || []).map((p) => ({
+        name: p.display_name,
+        participant_id: p.id,
+        user_id: p.user_id,
+        avatar: p.avatar,
+        team: p.team || null,
+        roundScores: [],
+      }));
+    }
+
+    /**
+     * The grid's columns, from the SAME arguments _renderViewerScoring renders
+     * them with. One per participant outside a team play; one per SIDE in one,
+     * where the seats sharing a tag share a cell
+     * (widgets/round-score-grid.js#roundGridColumns).
+     *
+     * Both patchers below walk this rather than `participants`, because in a
+     * team play those are no longer the same list — the cells and the Total
+     * spans on screen are one per column, and indexing them by participant
+     * would write the fourth player's score into the second side's cell.
+     */
+    _gridColumns(s) {
+      const session = s || this._session;
+      return window.roundGridColumns(
+        this._gridPlayers(session),
+        (session && session.play_mode) || "competitive",
+        this._renderedRounds,
+        (pl, r) => this._cellValue(pl, r)
+      );
     }
 
     // The spectator has no local roundScores — every cell it shows comes from
@@ -939,12 +980,14 @@
       if (!this._session) return;
       const totals = this.container.querySelectorAll(".scoring-total-row .scoring-total");
       if (!totals.length) return;
-      const participants = this._session.participants || [];
-      participants.forEach((p, i) => {
-        const span = totals[i];
+      // One span per COLUMN, in the order the grid emitted them — a merged
+      // side has one Total, so indexing these by participant would put the
+      // fourth player's number under the second side.
+      this._gridColumns().forEach((col, c) => {
+        const span = totals[c];
         if (!span) return;
-        const v = window.roundGridTotal(
-          { participant_id: p.id },
+        const v = window.roundGridColumnTotal(
+          col,
           this._renderedRounds,
           (pl, r) => this._cellValue(pl, r)
         );

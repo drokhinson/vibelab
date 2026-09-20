@@ -204,14 +204,15 @@ def reorder_participants(
     return _bundle_to_response(data)
 
 
-def set_participant_teams(
+def set_session_teams(
     sb: Client,
     *,
     viewer_id: str,
     code: str,
+    play_mode: str | None,
     teams: dict[str, str | None],
 ) -> SessionResponse:
-    """Host-only: publish which side each seat is on.
+    """Host-only: publish how the table is scored and which side each seat is on.
 
     The tags are typed on the host's local draft, and until migration 050 they
     had nowhere to live server-side — so a team night showed the host a grid
@@ -228,14 +229,22 @@ def set_participant_teams(
     session still reads 'play', where require_gather would answer
     `roster_locked` and the client would swallow it.
 
-    One RPC: bgb_set_participant_teams (migration 050), on the same gate every
+    `play_mode` rides along rather than taking an endpoint of its own because
+    the two are one fact: a side's seats share ONE cell in the scoring grid,
+    and that merge is gated on the mode. A mirror holding the tags but not the
+    mode would draw a grid the host's own screen is not drawing. None leaves
+    the stored value alone, so a client that only knows how to send tags cannot
+    un-say it.
+
+    One RPC: bgb_set_session_teams (migration 050), on the same gate every
     other host write uses, so it answers with the host_only / not_found /
     expired vocabulary _helpers already maps.
     """
     data = (
-        sb.rpc("bgb_set_participant_teams", {
+        sb.rpc("bgb_set_session_teams", {
             "p_host": viewer_id,
             "p_code": code,
+            "p_mode": play_mode,
             "p_teams": teams,
         })
         .execute()

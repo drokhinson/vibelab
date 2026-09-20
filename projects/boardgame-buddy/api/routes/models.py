@@ -2038,6 +2038,12 @@ class SessionResponse(BaseModel):
     # the only way the labels reach a spectator: their mirror holds no local
     # draft and sizes itself from `scores` above.
     scoring_template: PlayScoringTemplate | None = None
+    # How the host is scoring this table (migration 050). None = never said,
+    # which every session written before that migration is, and which both ends
+    # read as competitive. Not cosmetic: it is the gate on whether a side's
+    # seats merge into ONE grid column, so a mirror without it would draw a
+    # team night as separate columns while the host's screen drew it as sides.
+    play_mode: PlayMode | None = None
 
 
 class SessionCreate(BaseModel):
@@ -2094,13 +2100,19 @@ class SessionReorderParticipantsBody(BaseModel):
     participant_ids: list[str] = Field(default_factory=list, max_length=64)
 
 
-class SessionParticipantTeamsBody(BaseModel):
-    """Host-only "publish the sides" body: the WHOLE {participant_id: tag} map.
+class SessionTeamsBody(BaseModel):
+    """Host-only "publish the team setup" body: how the table is being scored,
+    and the WHOLE {participant_id: tag} map.
 
-    Full replacement, not a patch. A participant the map omits has their tag
-    cleared, which is how a side the host deletes — or a whole set of tags
-    abandoned when they switch the game type back to competitive — stops
-    tinting every spectator's grid. The host's draft is the only place a tag is
+    One body rather than two endpoints because the two are one fact on the
+    client. A side's seats share a single cell in the scoring grid, and that
+    merge is gated on the mode — a mirror holding the tags but not the mode
+    would draw a grid the host's own screen is not drawing.
+
+    `teams` is a full replacement, not a patch. A participant the map omits has
+    their tag cleared, which is how a side the host deletes — or a whole set of
+    tags abandoned when they switch the game type back to competitive — stops
+    banding every spectator's grid. The host's draft is the only place a tag is
     ever typed, so the map is always complete with respect to it.
 
     Tags normalize the way PlayerEntry.team does: trimmed, and "" stored as
@@ -2109,6 +2121,7 @@ class SessionParticipantTeamsBody(BaseModel):
     without it every untagged seat would share one anonymous side.
     """
 
+    play_mode: PlayMode | None = None
     teams: dict[str, str | None] = Field(default_factory=dict)
 
     @field_validator("teams")
