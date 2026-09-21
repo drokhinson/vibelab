@@ -47,6 +47,23 @@
     return c.layout === "rulebook_link" || c.chapter_type === "rulebook";
   }
 
+  // Has anybody vouched for where this link goes? Two statuses say no —
+  // `pending`, where an admin was asked and has not answered, and `unlisted`,
+  // where nobody was asked at all (migration 053) — and to every reader but
+  // the author they are one state. The predicate is written as "not approved
+  // and not denied" rather than as a list of the two, so a fifth status added
+  // later is treated as unreviewed rather than silently rendered as vouched
+  // for; that is the same closed reading the API's
+  // services/chapter_rulebook.gate_status takes.
+  //
+  // A denied link never reaches a reader who is not its author, so the DENIED
+  // arm is about the author's own row, where the strike-through and the "an
+  // admin turned this down" note carry the state instead.
+  function isUnreviewedRulebook(c) {
+    const status = c && c.moderation_status;
+    return status !== "approved" && status !== "denied";
+  }
+
   /** Host of a URL, for the one-line "where this goes" under the button. */
   function linkHost(url) {
     try { return new URL(url).host; } catch (_) { return url || ""; }
@@ -705,13 +722,18 @@
       if (!link) {
         return `<p class="scroll-rulebook__none scroll-rulebook__none--peek">No rulebook link available.</p>`;
       }
-      const pending = link.moderation_status === "pending";
+      // Unlisted and pending read the same to a reader and say the same thing
+      // here: nobody has vouched for where this goes. The difference between
+      // them — whether an admin was ASKED to (migration 053) — is the author's
+      // business and appears on their own row below, not on a strip somebody
+      // is reading mid-game.
+      const unreviewed = isUnreviewedRulebook(link);
       return `
         <a class="scroll-rulebook__cta scroll-rulebook__cta--peek"
            href="${escapeAttr(link.link_url || "")}" target="_blank" rel="noopener">
           <i data-icon="book-open" class="w-4 h-4"></i>
           <span>Rulebook</span>
-          ${pending ? `<span class="scroll-rulebook__badge">Not reviewed yet</span>` : ""}
+          ${unreviewed ? `<span class="scroll-rulebook__badge">Not reviewed yet</span>` : ""}
           <i data-icon="external-link" class="w-3.5 h-3.5"></i>
         </a>
       `;
@@ -727,14 +749,29 @@
      */
     _renderRulebookLink(link, myId) {
       const url = link.link_url || "";
-      const pending = link.moderation_status === "pending";
+      const unreviewed = isUnreviewedRulebook(link);
       const author = link.created_by_name
         ? `Added by ${link.created_by_name}`
         : "Added by an admin";
-      const badge = pending
-        ? `<span class="scroll-rulebook__badge" title="An admin has not reviewed this link yet">
-             <i data-icon="clock" class="w-3 h-3"></i>
-             ${link.created_by === myId ? "Waiting for approval" : "Not reviewed yet"}
+      // To anyone but the author the two unreviewed states are one state, and
+      // the badge says the only thing that matters about both: nobody has
+      // checked where this goes. The AUTHOR gets the distinction, because for
+      // them it is the difference between waiting on somebody and waiting on
+      // nobody — and "Waiting for approval" on a link they never submitted is
+      // a queue item they would keep checking for.
+      const mine = link.created_by === myId;
+      const unlisted = link.moderation_status === "unlisted";
+      const badgeText = mine
+        ? (unlisted ? "Buddies only" : "Waiting for approval")
+        : "Not reviewed yet";
+      const badge = unreviewed
+        ? `<span class="scroll-rulebook__badge" title="${
+             mine && unlisted
+               ? "Only you and your buddies can see this — edit it to ask an admin to review it"
+               : "An admin has not reviewed this link yet"
+           }">
+             <i data-icon="${mine && unlisted ? "users" : "clock"}" class="w-3 h-3"></i>
+             ${badgeText}
            </span>`
         : "";
       return `
@@ -751,7 +788,7 @@
             ${badge}
           </div>
           <div class="scroll-rulebook__actions">
-            ${link.created_by === myId ? `
+            ${mine ? `
               <button class="btn btn-ghost btn-xs"
                       onclick="window.referenceGuideScroll._editChapter('${link.id}', event)">
                 <i data-icon="pencil" class="w-3.5 h-3.5"></i> Edit
@@ -765,15 +802,44 @@
       `;
     }
 
-    /** The author's own link when something else is on show, or nothing is. */
+    /**
+     * The author's own link when something else is on show, or nothing is.
+     *
+     * The one place a denial is ever visible, and — since migration 053 — the
+     * one place an author is reminded that their link is unlisted on purpose.
+     * That sentence has to say it is THEIR doing and how to undo it: an
+     * unlisted link looks identical to a pending one from the outside, and an
+     * author who cannot tell which they have is an author waiting on a queue
+     * they are not in.
+     */
     _renderMyRulebookNote(mine) {
-      const denied = mine.moderation_status === "denied";
-      const text = denied
-        ? "An admin turned your rulebook link down. Edit it to submit a different one."
-        : "Your rulebook link is waiting for approval — your buddies can see it already.";
+      const status = mine.moderation_status;
+      const denied = status === "denied";
+      const unlisted = status === "unlisted";
+      // The fourth case reaches here too, and used to fall through to
+      // "waiting for approval": an author whose own link IS approved but who
+      // has adopted somebody else's is shown this row, and telling them their
+      // published link is still in a queue is the same wrong sentence this
+      // whole change is about.
+      const approved = status === "approved";
+      let text;
+      let icon;
+      if (denied) {
+        text = "An admin turned your rulebook link down. Edit it to submit a different one.";
+        icon = "x";
+      } else if (unlisted) {
+        text = "Your rulebook link is shared with your buddies only. Edit it to ask an admin to review it.";
+        icon = "users";
+      } else if (approved) {
+        text = "Your own rulebook link is approved — it is on this game's page for everyone.";
+        icon = "check";
+      } else {
+        text = "Your rulebook link is waiting for approval — your buddies can see it already.";
+        icon = "clock";
+      }
       return `
         <p class="scroll-rulebook__mine${denied ? " scroll-rulebook__mine--denied" : ""}">
-          <i data-icon="${denied ? "x" : "clock"}" class="w-3.5 h-3.5"></i>
+          <i data-icon="${icon}" class="w-3.5 h-3.5"></i>
           <span>${text}</span>
           <button class="btn btn-ghost btn-xs"
                   onclick="window.referenceGuideScroll._editChapter('${mine.id}', event)">

@@ -175,15 +175,27 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
 21. **A rulebook link is the one chapter with a gate, and the gate is not RLS.**
    Every other chapter is text this app renders; this one sends a reader to
    somebody else's server, so `moderation_status` decides who may see it —
-   approved to everyone, pending to its author and their accepted buddies,
-   denied to its author alone. The rule lives in
+   approved to everyone, unlisted *and* pending to its author and their accepted
+   buddies, denied to its author alone. The rule lives in
    `routes/services/chapter_rulebook.py` and **every** chapter read path calls
    it, the user's own guide included: a link adopted while pending and denied
    afterwards has to stop being served to the people who adopted it. There are
    no RLS policies for it, for the reason in 11 — this API is service-role and
    nothing reads chapters browser-direct. The SQL half (the CHECK that a NULL
    would otherwise pass, the one-link-per-author index, the backfill) is covered
-   by `db/tests/052_rulebook_links.sql`.
+   by `db/tests/052_rulebook_links.sql` and `db/tests/053_rulebook_review_optional.sql`.
+22. **`unlisted` and `pending` reach identical readers — the difference is the
+   QUEUE, not visibility.** Migration 053 split "save this link" from "ask an
+   admin to publish it": the save form carries a review switch, on by default,
+   and off means `unlisted` — live for the author's buddies, in nobody's queue,
+   counted by no badge. Do not "fix" a read path that treats the two the same;
+   the only callers allowed to tell them apart are the admin queue, the
+   review-counts badge, and the author's own copy of the row.
+   Since 053 an **admin's own link is not born approved** either — every author
+   goes through the same gate and an admin approves their own from the queue.
+   An admin can *deny* an unlisted link (a malicious link spreading through a
+   buddy graph is still theirs to kill) but **cannot approve one**: nobody asked
+   them to publish it, and `POST /admin/rulebook-links/{id}/approve` answers 409.
 
 ## Secrets that must never be rotated casually
 

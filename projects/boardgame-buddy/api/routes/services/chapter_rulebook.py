@@ -1,4 +1,4 @@
-"""Rulebook-link chapter helpers (migration 052).
+"""Rulebook-link chapter helpers (migrations 052, 053).
 
 A rulebook link is a `layout='rulebook_link'` chapter whose URL lives in the
 typed `link_url` column. `content` is NOT where the URL is stored — it carries a
@@ -24,6 +24,14 @@ query filter: the answer is per-reader (an author, a buddy, an admin and a
 stranger get different answers for the same row) and PostgREST cannot express
 "or the author is one of my accepted buddies" without a round trip of its own,
 which is `buddy_ids` here.
+
+WHAT 053 CHANGED, and what it deliberately did not. Visibility is untouched:
+the same four readers get the same four answers they always did. What moved is
+how a link ENTERS the queue — asking for review is now the author's own
+decision (`initial_status`), an unreviewed link that nobody was asked about is
+`unlisted` rather than `pending`, and an admin's own link is no longer born
+approved. The two unreviewed states are one case to every reader and two cases
+to exactly one caller: the admin queue, which lists `pending` and nothing else.
 """
 
 import re
@@ -142,15 +150,37 @@ def url_to_content(url: str) -> str:
     return f"[Rulebook]({url})"
 
 
-def initial_status(is_admin: bool) -> RulebookStatus:
-    """The gate a newly-written link opens at.
+def initial_status(review_requested: bool) -> RulebookStatus:
+    """The gate a newly-written link opens at — the AUTHOR's answer, not their role.
 
-    An admin's own link is born approved: the decision this queue exists to
-    collect is theirs, and making them approve their own submission afterwards
-    would be a queue item that carries no information. Everyone else's starts
-    pending, visible to them and to their buddies while it waits.
+    Two states, and the choice between them is the save form's review toggle
+    (migration 053). Both are visible to the author and their accepted buddies
+    the moment they save; they differ in whether an admin has been asked to
+    publish the link to everyone else.
+
+    `is_admin` is deliberately NOT a parameter any more. Until 053 an admin's
+    own link was born approved, which made the same act mean two different
+    things depending on who did it and left the one person most likely to paste
+    a link in a hurry as the one person nobody reviewed. An admin approves
+    their own link from the queue now, in one tap, like anybody else's.
     """
-    return RulebookStatus.APPROVED if is_admin else RulebookStatus.PENDING
+    return RulebookStatus.PENDING if review_requested else RulebookStatus.UNLISTED
+
+
+def gate_status(row: dict[str, Any]) -> RulebookStatus:
+    """The status to JUDGE a row by, with the impossible case closed.
+
+    A rulebook link with no status at all — or with one this code has never
+    heard of — is unreachable through bgb_chapters_link_shape, and the safe
+    reading of an impossible row is the closed one: both are read as PENDING
+    rather than as APPROVED. One helper because three call sites below need the
+    same defensive read and a fourth that forgot it would quietly publish a row
+    nobody decided.
+    """
+    try:
+        return RulebookStatus(row.get("moderation_status") or RulebookStatus.PENDING)
+    except ValueError:
+        return RulebookStatus.PENDING
 
 
 def buddy_ids(sb: Client, viewer_id: Optional[str]) -> set[str]:
@@ -213,9 +243,14 @@ def is_visible_to(
 
       * approved → everyone, including anonymous readers. An admin's name is on
         it.
-      * pending  → its author and their accepted buddies. Vouching is the
-        relationship this app is built on, and holding a link back from the
-        table that just added it would make the common case useless.
+      * unlisted → its author and their accepted buddies (migration 053). The
+        author never asked for this one to be published, which is a statement
+        about the QUEUE and not about who may read it: the buddies at the table
+        that added it are exactly who it was added for.
+      * pending  → the same readers as unlisted, for the same reason. Vouching
+        is the relationship this app is built on, and holding a link back from
+        the table that just added it would make the common case useless. The
+        only difference is that somebody has been asked to decide.
       * denied   → its author (so they can see it was looked at rather than
         lost) and admins. Nobody else, buddies included — that is what "denial
         hides it" means, and it is the half of the rule that would be easy to
@@ -224,23 +259,23 @@ def is_visible_to(
     An admin sees every rulebook link whatever its status: they are the ones
     deciding, and a queue that hides its own items is not a queue.
 
-    A row with NO status at all is treated as pending rather than approved. That
-    state is unreachable through the constraint, and the safe reading of an
-    impossible row is the closed one.
+    A row with no status at all, or one this code does not recognise, is
+    treated as pending rather than approved — see `gate_status`.
     """
     if not is_rulebook_row(row):
         return True
     if is_admin:
         return True
-    status = row.get("moderation_status") or RulebookStatus.PENDING
-    if status == RulebookStatus.APPROVED:
+    status = gate_status(row)
+    if status is RulebookStatus.APPROVED:
         return True
     author = row.get("created_by")
     if author and viewer_id and author == viewer_id:
         return True
-    if status == RulebookStatus.DENIED:
+    if status is RulebookStatus.DENIED:
         # Author-only above; a denial reaches nobody else, buddy or not.
         return False
+    # Unlisted and pending, which is where the buddy edge is the whole answer.
     return bool(author) and author in viewer_buddy_ids
 
 
@@ -253,15 +288,17 @@ def filter_visible(
     """Drop the rulebook links this viewer may not see, in one pass.
 
     The buddy lookup is paid for ONLY when the list actually contains a rulebook
-    link that is neither approved nor the viewer's own — which on the vast
-    majority of guide mounts it does not, so the common path costs a `any()`
-    over rows already in memory and no round trip at all.
+    link a buddy edge could rescue — somebody else's, in a status that is
+    neither approved (everyone sees it already) nor denied (no edge helps) —
+    which on the vast majority of guide mounts it does not, so the common path
+    costs an `any()` over rows already in memory and no round trip at all.
     """
     if not rows:
         return rows
+    undecided = (RulebookStatus.UNLISTED, RulebookStatus.PENDING)
     needs_buddies = any(
         is_rulebook_row(r)
-        and (r.get("moderation_status") or RulebookStatus.PENDING) == RulebookStatus.PENDING
+        and gate_status(r) in undecided
         and r.get("created_by")
         and r.get("created_by") != viewer_id
         for r in rows

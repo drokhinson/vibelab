@@ -1287,6 +1287,19 @@ class ChapterCreate(BaseModel):
     # into a 400 naming the problem — a 422 listing a regex is not an error an
     # author can act on.
     link_url: str | None = None
+    # Whether to put this rulebook link in the admin queue (migration 053).
+    # True means pending, False means unlisted, and BOTH are visible to the
+    # author and their accepted buddies the moment they save — this field
+    # decides who is asked to publish the link to everyone else, not who can
+    # read it.
+    #
+    # Defaults to True, which is what a client that predates 053 sends by
+    # sending nothing: that client's Save button meant "submit this", and it
+    # goes on meaning that. Ignored on every other layout rather than rejected,
+    # unlike `link_url` above — a stray True on a prose chapter asks for a
+    # queue that does not exist, which is a no-op, where a stray URL would
+    # write an ungated destination into a row.
+    request_review: bool = True
 
     @model_validator(mode="after")
     def _body_matches_layout(self) -> "ChapterCreate":
@@ -1383,6 +1396,12 @@ class ChapterUpdate(BaseModel):
     # — the point of the gate is that an admin approved THIS link, not whatever
     # the author points it at next.
     link_url: str | None = None
+    # The review toggle (migration 053), and here it is TRI-STATE on purpose:
+    # None means "not supplied", so a client that predates 053 — or any caller
+    # editing something other than the gate — cannot withdraw a submission by
+    # omission. True submits, False withdraws, None leaves the gate where the
+    # URL comparison puts it.
+    request_review: bool | None = None
 
 
 class ChapterResponse(BaseModel):
@@ -1404,10 +1423,12 @@ class ChapterResponse(BaseModel):
     # (services/chapter_rulebook.filter_visible), never by the client hiding a
     # row it was sent.
     link_url: str | None = None
-    # pending | approved | denied, and None for every other layout. On the wire
-    # because the AUTHOR's own copy renders differently for each — a pending
-    # link says only buddies can see it yet, a denied one says it was turned
-    # down — and because the admin queue reads the same shape.
+    # unlisted | pending | approved | denied, and None for every other layout.
+    # On the wire because the AUTHOR's own copy renders differently for each —
+    # an unlisted link says it is theirs and their buddies', a pending one says
+    # it is waiting, a denied one says it was turned down — and because the
+    # admin queue reads the same shape. It is NOT what the client filters on:
+    # a row that arrives has already passed the gate server-side.
     moderation_status: RulebookStatus | None = None
     created_by: str | None = None
     created_by_name: str | None = None

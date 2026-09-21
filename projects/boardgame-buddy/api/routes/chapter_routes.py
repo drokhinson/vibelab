@@ -548,16 +548,20 @@ def _create_chapter_sync(
                 else None
             ),
             "link_url": link_url,
-            # An admin's own link is born approved (see
-            # services/chapter_rulebook.initial_status): the decision this queue
-            # collects is theirs, and a queue item they would only approve
-            # themselves carries no information. NULL on every other layout,
-            # which bgb_chapters_link_shape requires.
+            # The gate the author chose, not the one their role would give them
+            # (migration 053): `request_review` picks pending or unlisted, and
+            # both are live for the author's buddies either way. Nobody's link
+            # is born approved any more, an admin's included — so no row leaves
+            # here carrying a decision, and `moderated_by`/`moderated_at` stay
+            # NULL until somebody actually makes one. NULL on every other
+            # layout, which bgb_chapters_link_shape requires.
             "moderation_status": (
-                str(chapter_rulebook.initial_status(user.is_admin)) if is_link else None
+                str(chapter_rulebook.initial_status(body.request_review))
+                if is_link
+                else None
             ),
-            "moderated_by": user_id if (is_link and user.is_admin) else None,
-            "moderated_at": "now()" if (is_link and user.is_admin) else None,
+            "moderated_by": None,
+            "moderated_at": None,
             "created_by": user_id,
         })
         .execute()
@@ -689,9 +693,10 @@ def _update_chapter_sync(
     # is not three lines. An approval is a decision about a destination, not
     # about a row: without this, an author could get an innocuous PDF approved
     # and then point the same approved row anywhere, and every reader following
-    # the app's own "approved" badge would go there. So a changed URL on a
-    # non-admin's link goes back to pending — losing the badge it had, which is
-    # the intended cost — while an admin editing one is itself the decision.
+    # the app's own "approved" badge would go there. So a changed URL drops the
+    # badge it had and goes back through the gate — whoever is editing, admins
+    # included, since migration 053 (an admin approves it from the queue, which
+    # is one tap and leaves an audit trail a self-approval never did).
     #
     # Unchanged URL, unchanged status: re-submitting the same link by saving the
     # form again must not send an approved link back to the queue.
@@ -712,12 +717,41 @@ def _update_chapter_sync(
         updates["title"] = chapter_rulebook.rulebook_title(
             link_game.data[0].get("name") if link_game.data else None
         )
-        if link_url != (row.get("link_url") or "") or user.is_admin:
-            updates["moderation_status"] = str(
-                chapter_rulebook.initial_status(user.is_admin)
-            )
-            updates["moderated_by"] = user_id if user.is_admin else None
-            updates["moderated_at"] = "now()" if user.is_admin else None
+        # The review toggle (migration 053). None means the caller did not send
+        # one — a pre-053 client, or an edit that is not about the gate — and
+        # then the row's current state answers for it: still submitted if it
+        # was pending, still not if it was unlisted, and True for anything else,
+        # since a decided link that is about to be re-opened by a changed URL
+        # was one somebody had asked about.
+        current = chapter_rulebook.gate_status(row)
+        wants_review = (
+            body.request_review
+            if body.request_review is not None
+            else current is not RulebookStatus.UNLISTED
+        )
+        url_changed = link_url != (row.get("link_url") or "")
+        # A DECISION STANDS UNTIL THE DESTINATION CHANGES. The toggle moves a
+        # link that is still waiting — submit it, or withdraw it from the queue
+        # — and moves nothing once an admin has ruled on it. Flipping it on an
+        # approved link would let its author quietly un-publish an admin's
+        # decision; flipping it on a denied one would re-queue the same URL an
+        # admin just turned down, which is exactly what the create path's 409
+        # exists to prevent. Changing the URL is how both are re-opened, and
+        # that is the branch above.
+        reopen = url_changed or current in (RulebookStatus.UNLISTED, RulebookStatus.PENDING)
+        new_status = (
+            chapter_rulebook.initial_status(wants_review) if reopen else current
+        )
+        # Written only when it MOVES. A pending link saved again is still
+        # pending, and a no-op write here would be three columns of churn on
+        # every keystroke-free re-save.
+        if new_status is not current:
+            updates["moderation_status"] = str(new_status)
+            # Nobody has decided the row this save produces, so the audit
+            # columns say so rather than keeping the last decision's author on
+            # a link that no longer carries their decision.
+            updates["moderated_by"] = None
+            updates["moderated_at"] = None
 
     sb.table("boardgamebuddy_guide_chapters").update(updates).eq("id", chapter_id).execute()
 

@@ -1,6 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 052_rulebook_links.sql (boardgamebuddy_guide_chapters grows
+-- Last updated: 053_rulebook_review_optional.sql (bgb_chapters_link_shape
+--               re-issued so moderation_status admits a fourth value,
+--               'unlisted' — a rulebook link whose author has not asked for
+--               review. No new columns, no new indexes, no backfill.)
+--               Before that: 052_rulebook_links.sql (boardgamebuddy_guide_chapters grows
 --               link_url + moderation_status/_by/_at, the layout CHECK learns
 --               'rulebook_link', bgb_chapters_grid_shape gains its third branch
 --               and bgb_chapters_link_shape is new, plus the two rulebook
@@ -293,10 +297,12 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
   -- 052), NULL for every other layout. `content` carries a generated markdown
   -- mirror of it for the same three readers the grid's mirror serves.
   link_url TEXT,
-  -- pending | approved | denied, on a rulebook link only. Approved is public,
-  -- pending reaches the author and their accepted buddies, denied reaches the
-  -- author and admins. Applied by routes/services/chapter_rulebook.py on every
-  -- read path — NOT by RLS, which this service-role API bypasses.
+  -- unlisted | pending | approved | denied, on a rulebook link only. Approved
+  -- is public; unlisted and pending both reach the author and their accepted
+  -- buddies and differ only in whether the author asked for review (053);
+  -- denied reaches the author and admins. Applied by
+  -- routes/services/chapter_rulebook.py on every read path — NOT by RLS, which
+  -- this service-role API bypasses.
   moderation_status TEXT,
   moderated_by UUID,
   moderated_at TIMESTAMPTZ,
@@ -332,7 +338,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_guide_chapters (
      AND (link_url IS NOT NULL)
      AND (link_url ~* '^https?://[^[:space:]]+$'::text)
      AND (moderation_status IS NOT NULL)
-     AND (moderation_status = ANY (ARRAY['pending'::text, 'approved'::text, 'denied'::text])))
+     AND (moderation_status = ANY (ARRAY['unlisted'::text, 'pending'::text, 'approved'::text, 'denied'::text])))
     OR ((layout <> 'rulebook_link'::text) AND (link_url IS NULL) AND (moderation_status IS NULL))
   ),
   -- The mode's VALUE DOMAIN only (migration 032). Absent and JSON null both
@@ -1101,8 +1107,8 @@ COMMENT ON COLUMN public.boardgamebuddy_plays.scoring_template IS 'Denormalised 
 COMMENT ON COLUMN public.boardgamebuddy_play_sessions.scoring_template IS 'The template the host applied to this live grid, same shape as boardgamebuddy_plays.scoring_template — composed parts and all. Copied onto the play at finalize.';
 COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.grid IS 'Row definitions for a layout=''scoring_grid'' chapter: {"v":1,"mode":…,"rows":[{"label":…,"color":…,"note":…}]}. `color` is a SLUG from a fixed palette (neutral|red|pink|rust|brown|gold|yellow|green|blue|purple), never a hex — the grid lands on the cream scorepad, and only a fixed palette can be guaranteed legible there in both themes. `mode` (migration 032) is add_on|replace on a grid whose game is an EXPANSION — its rows either join the base game''s grid or stand in for it — and NULL/absent on a base game''s own grid, where the question does not arise. The API resolves it (services/chapter_grid.resolve_grid_mode); the bgb_chapters_grid_mode CHECK only pins the value domain, because a CHECK cannot look up whether the chapter''s game is an expansion. NULL for layout=''text''; see the bgb_chapters_grid_shape constraint.';
 COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.link_url IS 'The outbound rulebook URL of a layout=''rulebook_link'' chapter (migration 052). http(s) only, pinned by bgb_chapters_link_shape — this is a link the app sends readers to, so the scheme is not left to the client. NULL for every other layout. `content` carries a generated markdown mirror ("[Rulebook](url)") so the pool''s ILIKE search, the moderation preview and renderMarkdown need no branch; `link_url` is the source of truth and the mirror is derived from it.';
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'pending | approved | denied, on a layout=''rulebook_link'' chapter only (NULL everywhere else). Approved is visible to everyone; pending only to its author and their ACCEPTED buddies; denied only to its author and admins. A link authored by an admin is born approved. The rule is applied by routes/services/chapter_rulebook.py on every chapter read path, NOT by RLS — this API is service-role and bypasses RLS, and nothing reads chapters browser-direct. A denial is deliberately not a delete: the row is what stops the same author re-posting the same link past idx_bgb_chapters_rulebook_author.';
-COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderated_by IS 'The admin whose decision moderation_status records. NULL while pending, and NULL on the rows migration 052 backfilled out of boardgamebuddy_games.rulebook_url — those were approved by having been admin-only data in the first place, and naming an admin who never looked at them would be a lie the audit trail cannot tell apart from a real decision.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderation_status IS 'unlisted | pending | approved | denied, on a layout=''rulebook_link'' chapter only (NULL everywhere else). Approved is visible to everyone; unlisted and pending only to its author and their ACCEPTED buddies; denied only to its author and admins. Unlisted and pending differ in ONE respect and it is not visibility: pending is in the admin queue because its author asked for review (migration 053''s toggle), unlisted is not. A link authored by an admin is NOT born approved — as of 053 every author goes through the same gate, and an admin approves their own from the queue like anyone else''s. The rule is applied by routes/services/chapter_rulebook.py on every chapter read path, NOT by RLS — this API is service-role and bypasses RLS, and nothing reads chapters browser-direct. A denial is deliberately not a delete: the row is what stops the same author re-posting the same link past idx_bgb_chapters_rulebook_author.';
+COMMENT ON COLUMN public.boardgamebuddy_guide_chapters.moderated_by IS 'The admin whose decision moderation_status records. NULL while unlisted or pending — including on a link an admin wrote themselves, which as of migration 053 is not self-approved on the way in — and NULL on the rows migration 052 backfilled out of boardgamebuddy_games.rulebook_url, which were approved by having been admin-only data in the first place. Naming an admin who never looked at a link would be a lie the audit trail cannot tell apart from a real decision, which is also why re-opening the gate (a changed URL, a withdrawn request) clears this column rather than leaving the last decision''s author on a row nobody has decided.';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.avatar IS 'Customizable badge config: {icon, iconColor, bgColor}. icon is "initials" or an icon key from the client library. NULL = use BGB default (brown badge + gold initials).';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.needs_setup IS 'TRUE for brand-new accounts that have not yet completed the "Create your profile" modal. Cleared by the first successful POST /profile.';
 COMMENT ON COLUMN public.boardgamebuddy_profiles.app_installed_at IS 'First time this account was seen running as an installed PWA (migration 062). Drives the "Pocket Buddy" achievement; nothing else reads it.';

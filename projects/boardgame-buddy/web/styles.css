@@ -2013,8 +2013,18 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   font-size: 0.95rem;
 }
 .chapter-edit__titlefield::placeholder { color: oklch(var(--bc) / 0.4); }
+/* The review switch's row (migration 053). Sits between the URL field and the
+   sentence that explains it, and does not shrink: it is inside the same flex
+   column as the type scroller and the title row, which is the one that squeezes
+   its children (see .chapter-edit__typescroll's note below). */
+.chapter-edit__linkreview {
+  display: flex;
+  flex-shrink: 0;
+  padding: var(--s-1) 0;
+}
 /* What happens to the link after Save — see _renderLinkStep for why this
-   sentence is on screen rather than implied by a badge afterwards. */
+   sentence is on screen rather than implied by a badge afterwards, and why it
+   changes with the switch above it. */
 .chapter-edit__linknote {
   display: flex;
   align-items: flex-start;
