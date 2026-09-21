@@ -62,7 +62,13 @@ _CHAPTER_SELECT = (
     " link_url, moderation_status,"
     " created_by, updated_at, created_at,"
     " boardgamebuddy_chapter_types(label, icon, display_order),"
-    " boardgamebuddy_profiles(display_name)"
+    # Since migration 052 this table has TWO FKs into profiles — created_by and
+    # moderated_by — so an unhinted embed is PGRST201 ("more than one
+    # relationship was found") and every read path through this select 500s.
+    # !created_by names the one the author's display_name comes from; the JSON
+    # key stays `boardgamebuddy_profiles`, which is what _chapter_row_to_response
+    # reads.
+    " boardgamebuddy_profiles!created_by(display_name)"
 )
 
 

@@ -74,15 +74,21 @@ def _buddy_reach(sb: Client, author_ids: list[str]) -> dict[str, int]:
     return out
 
 
+_REVIEW_SELECT = (
+    "id, game_id, title, link_url, moderation_status, created_by,"
+    " created_at, moderated_at,"
+    " boardgamebuddy_games(name),"
+    # !created_by for the same reason chapter_routes._CHAPTER_SELECT carries it:
+    # moderated_by is a second FK into profiles, so an unhinted embed is
+    # ambiguous and the queue 500s.
+    " boardgamebuddy_profiles!created_by(display_name)"
+)
+
+
 def _list_rulebook_links_sync(sb: Client, status: str) -> list[RulebookLinkReviewItem]:
     rows = (
         sb.table("boardgamebuddy_guide_chapters")
-        .select(
-            "id, game_id, title, link_url, moderation_status, created_by,"
-            " created_at, moderated_at,"
-            " boardgamebuddy_games(name),"
-            " boardgamebuddy_profiles(display_name)"
-        )
+        .select(_REVIEW_SELECT)
         .eq("layout", str(ChapterLayout.RULEBOOK_LINK))
         .eq("moderation_status", status)
         # Oldest first: a pending link is live for its author's buddies the
