@@ -2530,6 +2530,7 @@
           ${url ? `
             <div class="cascade-photo">
               <img src="${escapeAttr(url)}" alt="Selected play photo" />
+              ${this._renderPhotoSave()}
               <button class="btn btn-ghost btn-xs cascade-photo__remove"
                       onclick="window.playFlowView._clearPhoto()">
                 <i data-icon="x" class="w-3.5 h-3.5"></i> Remove
@@ -2545,6 +2546,33 @@
           `}
         </section>
       `;
+    }
+
+    /**
+     * The "Save to Photos" plate on a pending capture.
+     *
+     * Empty everywhere but iOS, and empty there too once the photo is only a
+     * url — see ui/save-to-photos.js for why an iPhone needs this at all and
+     * why the control has to be a tap rather than something that fires as the
+     * capture lands.
+     *
+     * @returns {string}
+     */
+    _renderPhotoSave() {
+      const S = window.SaveToPhotos;
+      if (!S || !S.offered(this._ps.photoSourceFile, this._ps.photoFile)) return "";
+      return `
+        <button type="button" class="btn btn-ghost btn-xs cascade-photo__save"
+                aria-label="Save this photo to your camera roll"
+                onclick="window.playFlowView._savePhotoToRoll()">
+          <i data-icon="download" class="w-3.5 h-3.5"></i> Save to Photos
+        </button>
+      `;
+    }
+
+    _savePhotoToRoll() {
+      const S = window.SaveToPhotos;
+      if (S) S.save(this._ps.photoSourceFile, this._ps.photoFile);
     }
 
     _renderSaveCta() {
@@ -4589,6 +4617,11 @@
       }
       this._clearPhoto({ keepRender: true });
       this._ps.photoFile = v.file;
+      // The user's own file, kept beside the upload copy and never sent
+      // anywhere: it is what "Save to Photos" hands back to the camera roll, at
+      // the resolution they actually shot. prepare() downscales to 1920px, so
+      // saving v.file instead would silently swap the original for a thumbnail.
+      this._ps.photoSourceFile = file;
       this._ps.photoPreviewUrl = URL.createObjectURL(v.file);
       this.render();
     }
@@ -4598,6 +4631,7 @@
         try { URL.revokeObjectURL(this._ps.photoPreviewUrl); } catch (_) {}
       }
       this._ps.photoFile = null;
+      this._ps.photoSourceFile = null;
       this._ps.photoPreviewUrl = null;
       if (!keepRender) this.render();
     }

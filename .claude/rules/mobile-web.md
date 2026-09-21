@@ -222,6 +222,42 @@ Without it every `env(safe-area-inset-*)` resolves to 0px; turning it on shifts
 the nav, the app's bottom padding, every docked bar and every modal at once.
 Land it on its own, on a real device.
 
+## 8. A camera shot taken in the page never reaches Photos
+
+**iOS hands a photo captured through `<input type="file" accept="image/*">` to
+the page and to nowhere else.** WebKit does not write it to the Photos library,
+no attribute or `capture` mode asks it to, and an installed PWA behaves exactly
+like a Safari tab. The user frames a shot inside the app, and it exists only
+inside the app — which reads as *the app lost my photo*, because from Photos
+that is indistinguishable from never having taken it.
+
+Android is not affected: Chrome delegates the capture to the system camera app,
+which writes to the gallery on its own. So this is an iOS-shaped hole and the
+fix is iOS-gated — offering it on Android only mints duplicates.
+
+**`navigator.share({ files })` is the only route from a page to the camera
+roll.** The iOS share sheet's "Save Image" writes there; `<a download>` reaches
+Files instead, and a canvas copy reaches neither. Three things about it:
+
+- **It must be reached from a tap.** `share()` needs transient activation, and
+  the file input's `change` event does not carry it — that gesture was already
+  spent opening the camera. So the affordance is a control on the preview, not
+  something that fires as the capture lands.
+- **Hand over the user's own file.** An app that compresses for its bucket has
+  two files in hand, and saving the re-encode puts a thumbnail of a 12MP
+  original in the camera roll. Keep the untouched capture beside the upload copy
+  and share that; the prepared copy is the fallback for a source file the
+  platform refuses (`canShare` answers per file, and HEIC is the one it says no
+  to). The untouched capture still carries the EXIF the upload path strips, so
+  it stays on the device — a local save is the only thing allowed to read it.
+- **Resolution does not mean "saved".** `share()` resolves when iOS accepted the
+  file, not when the user picked Save Image over Mail. Never toast a claim the
+  platform did not make; the sheet is its own feedback, and only failures speak.
+  A dismissal rejects with `AbortError` and is a decision, not an error.
+
+Reference implementation: `projects/boardgame-buddy/web/ui/save-to-photos.js`,
+pinned by `tools/check-photo-roll.mjs`.
+
 ## Related rules
 
 - `.claude/rules/overlays.md` — sheets, which depend on §1 of this file.

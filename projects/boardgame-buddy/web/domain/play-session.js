@@ -138,6 +138,16 @@
       this.phase        = initial.phase || "gather";
       this.photoBlob    = null; // in-memory only — never persisted
       this.photoUrl     = initial.photoUrl || null;
+      // The pending capture, in three parts, all in-memory only and all
+      // deliberately absent from persist(): the compressed copy bound for the
+      // bucket, the user's own file at the resolution they shot it (what
+      // ui/save-to-photos.js hands back to the camera roll — iOS does not put
+      // an in-app capture there by itself), and the object url the preview
+      // draws. Declared here rather than springing into being on first select,
+      // because clear() and PlayFlowView._clearPhoto both tear all three down.
+      this.photoFile       = null;
+      this.photoSourceFile = null;
+      this.photoPreviewUrl = null;
       // Closed out by clear(). In-memory only, and never read from `initial`:
       // a done draft is never persisted, so a loaded one is always live.
       this._done        = false;
@@ -225,6 +235,7 @@
         try { URL.revokeObjectURL(this.photoPreviewUrl); } catch (_) {}
       }
       this.photoFile = null;
+      this.photoSourceFile = null;
       this.photoPreviewUrl = null;
       try { localStorage.removeItem(LS_KEY); } catch (_) {}
     }
