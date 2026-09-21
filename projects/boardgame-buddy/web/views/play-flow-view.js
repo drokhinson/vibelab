@@ -1974,9 +1974,6 @@
         return `<section class="cascade-card"><p class="text-sm opacity-70">Pick a game on the Gather step first.</p></section>`;
       }
       const game = this._ps.gameSnapshot || {};
-      // Without a rulebook the reference scroll below still carries
-      // user-authored chapters.
-      const rulebookRow = window.BgbCascade.rulebookRow(game.rulebook_url);
       // Scoring sits directly under the game-info strip and the reference guide
       // below it: the grid is what the host touches every round, so it stays
       // above the fold, and the guide — a reach-for-it-occasionally reference
@@ -1995,7 +1992,10 @@
         <div class="cascade-col cascade-col--aside">
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
-          ${rulebookRow}
+          <!-- The rulebook row used to sit here, fed by the session's game
+               snapshot. Migration 052 made it a chapter, so the scroll below
+               draws it — including in its peek, which is what stays on screen
+               with the scroll rolled up. -->
           <div id="play-flow-guide-mount"></div>
         </section>
         </div>
@@ -2857,7 +2857,6 @@
         // Full-size box art, carried alongside the thumbnail so the wrap-up
         // card can paint it at its ~292px photo slot without upscaling.
         image_url: game.image_url || null,
-        rulebook_url: game.rulebook_url,
         is_expansion: !!game.is_expansion,
       };
       ps.playMode = game.play_mode || ps.playMode || null;

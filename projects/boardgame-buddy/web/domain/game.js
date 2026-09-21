@@ -206,10 +206,6 @@
       return this.bgg_id ? `https://boardgamegeek.com/boardgame/${this.bgg_id}` : null;
     }
 
-    rulebookUrl() {
-      return this.rulebook_url || null;
-    }
-
     playerRangeText() {
       const lo = this.min_players, hi = this.max_players;
       if (!lo && !hi) return "";
@@ -311,12 +307,10 @@
         });
     }
 
-    /** Admin: set or clear a game's rulebook URL. Pass null/"" to clear. */
-    static adminSetRulebookUrl(gameId, url) {
-      const cleaned = (url || "").trim() || null;
-      return window.api.patch(`/games/admin/${gameId}/rulebook-url`, { rulebook_url: cleaned })
-        .then((r) => { Game.invalidateBundle(gameId); return r; });
-    }
+    // RETIRED with migration 052: adminSetRulebookUrl(gameId, url), which
+    // PATCHed /games/admin/{id}/rulebook-url. A rulebook link is a
+    // reference-guide chapter now (domain/chapter.js#rulebookLinks) and that
+    // endpoint no longer exists.
   }
 
   window.Game = Game;

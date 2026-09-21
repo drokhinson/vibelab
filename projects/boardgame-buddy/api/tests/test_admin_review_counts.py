@@ -8,6 +8,12 @@ THREE COUNTS, NOT FIVE. The description, stats and publisher queues became one
 metadata queue, and collapsing them fixed an over-count as well as three round
 trips: a game missing both its blurb and its year used to be counted twice, so
 the dot claimed more work than existed.
+
+FOUR SINCE MIGRATION 052, which added the rulebook-link queue. It is counted
+here for the same reason the others are — one round trip lights the whole gear —
+but it is the one queue where the number is not tidy-up: a pending rulebook link
+is already visible to its author's buddies, so a count sitting here is readers
+following an unreviewed outbound link.
 """
 
 import os
@@ -77,6 +83,11 @@ def counts_client(monkeypatch):
         ("boardgamebuddy_games",
          "not bgg_id is null,or(description.is.null,bgg_stats_synced_at.is.null,"
          "publishers.is.null,year_published.is.null)"): 40,
+        # Filtered on the LAYOUT as well as the status: moderation_status is
+        # NULL on every other chapter today, and a status filter alone would
+        # quietly start counting prose the day that stops being true.
+        ("boardgamebuddy_guide_chapters",
+         "layout=rulebook_link,moderation_status=pending"): 3,
     }
 
     class _SB:
@@ -104,18 +115,19 @@ def test_review_counts_reports_each_queue(counts_client):
     assert body["chapter_reports"] == 2
     assert body["missing_images"] == 5
     assert body["missing_metadata"] == 40
+    assert body["rulebook_links"] == 3
 
 
 def test_review_counts_total_is_derived_not_sent(counts_client):
     # Computed server-side so the gear's dot and the per-row badges can never
     # disagree about whether there is anything waiting.
-    assert counts_client.get(COUNTS_URL).json()["total"] == 47
+    assert counts_client.get(COUNTS_URL).json()["total"] == 50
 
 
 def test_review_counts_uses_exact_count_not_row_fetches(counts_client):
     counts_client.get(COUNTS_URL)
     selects = [row for row in counts_client.log if row[0] == "select"]
-    assert len(selects) == 3
+    assert len(selects) == 4
     # Every one asks PostgREST for the count header rather than the rows.
     assert all(row[2] == "exact" for row in selects), selects
 
@@ -130,6 +142,7 @@ def test_a_game_short_of_two_things_is_counted_once(counts_client):
     """The payoff of the collapse. Three overlapping queues counted a game
     missing both its blurb and its year twice, and the gear's dot summed them."""
     body = counts_client.get(COUNTS_URL).json()
-    assert body["missing_metadata"] == 40, (
+    assert body["missing_metadata"] == 40
+    assert body["rulebook_links"] == 3, (
         "one row per incomplete game, however many fields it is short of"
     )

@@ -49,6 +49,10 @@ from . import chapter_routes   # noqa: F401, E402
 # chapter_routes: every path here is a literal `/chapters/generate…` under a
 # game id, which no parameterised route in that module can swallow.
 from . import chapter_ai_routes  # noqa: F401, E402
+# The admin's rulebook-link queue (migration 052). No ordering constraint
+# against chapter_routes: every path here is a literal under
+# `/admin/rulebook-links`, which no parameterised route in that module reaches.
+from . import rulebook_admin_routes  # noqa: F401, E402
 from . import expansion_routes  # noqa: F401, E402
 from . import profile_routes   # noqa: F401, E402
 # No ordering constraint: every path here is a literal under /push/.

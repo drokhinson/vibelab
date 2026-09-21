@@ -15,6 +15,11 @@ Three counts now, not five: the description, stats and publisher queues became
 one metadata queue in migration 045, and collapsing them fixed an over-count as
 well as a round trip — a game missing both its blurb and its year used to be
 counted twice, so the gear's dot reported more work than existed.
+
+Four since migration 052, which added the rulebook-link queue. That one is
+worth reading differently from the other three: the catalog backfills are work
+that can wait, where a pending rulebook link is an unreviewed outbound link that
+readers can already follow.
 """
 
 import asyncio
@@ -27,6 +32,7 @@ from supabase import Client
 from db import get_supabase
 
 from . import router
+from .constants import ChapterLayout, RulebookStatus
 from .dependencies import CurrentUser, get_current_admin
 from .models import AdminReviewCounts
 
@@ -74,10 +80,27 @@ def _get_admin_review_counts_sync(sb: Client) -> AdminReviewCounts:
         .execute()
     )
 
+    # Rulebook links still waiting on a decision (migration 052). Unlike the
+    # three above, this queue is not tidy-up: a pending link is already live for
+    # its author's accepted buddies, so the number here is readers following an
+    # unreviewed outbound link. Off the partial index
+    # idx_bgb_chapters_rulebook_status, and filtered on the layout as well as
+    # the status because moderation_status is NULL on every other chapter and a
+    # status filter alone would quietly start counting prose the day that
+    # changes.
+    rulebook_links = (
+        _count_query(sb, "boardgamebuddy_guide_chapters")
+        .eq("layout", str(ChapterLayout.RULEBOOK_LINK))
+        .eq("moderation_status", str(RulebookStatus.PENDING))
+        .limit(1)
+        .execute()
+    )
+
     return AdminReviewCounts(
         chapter_reports=reports.count or 0,
         missing_images=missing_images.count or 0,
         missing_metadata=missing_metadata.count or 0,
+        rulebook_links=rulebook_links.count or 0,
     )
 
 

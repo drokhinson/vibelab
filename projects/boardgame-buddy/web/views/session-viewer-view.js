@@ -842,7 +842,9 @@
         <div class="cascade-col cascade-col--aside">
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
-          ${window.BgbCascade.rulebookRow(s && s.game && s.game.rulebook_url)}
+          <!-- Migration 052: the rulebook is a chapter and the scroll below
+               draws it, for a signed-out spectator too — the pool endpoint
+               hands an anonymous caller the approved links. -->
           <div id="session-viewer-guide-mount" class="session-viewer__guide-mount"></div>
         </section>
         </div>

@@ -23,6 +23,14 @@
   // TEMPLATES_NS: it answers "what is out there", not "what is mine", and it is
   // a single integer rather than a row list.
   const POOL_COUNT_NS = "chapter-pool-count";
+  // The rulebook links that EXIST for a game (migration 052), each already
+  // filtered server-side to what this viewer is allowed to see. Its own
+  // namespace for the same reason TEMPLATES_NS has one — it answers "what is
+  // out there", not "what is mine" — and because the answer is PER VIEWER in a
+  // way the guide's cache is not: a pending link reaches its author's buddies
+  // and nobody else, so a cache shared across accounts would leak one. bgbCache
+  // is bound per-user at auth, which is what makes that safe here.
+  const RULEBOOK_NS = "rulebook-links";
   const CH_FRESH = 10 * 60 * 1000; // instant-seed (get) window
   const CH_STALE = 30 * 60 * 1000; // outer bound retained in storage
 
@@ -131,6 +139,10 @@
         // guide's cache too — otherwise the button says "1 of 0" for up to ten
         // minutes after somebody writes the first one for a game.
         window.bgbCache.clear(POOL_COUNT_NS);
+        // Writing or editing a rulebook link changes which one the guide, the
+        // game page and the play screen resolve to, so its cache falls with the
+        // rest rather than leaving a stale link under a freshly-saved one.
+        window.bgbCache.clear(RULEBOOK_NS);
       }
       // Three tiers of "chapters in your guide" hang off this count, so every
       // chapter mutation is an achievement mutation too.
@@ -176,6 +188,81 @@
         freshTtl: CH_FRESH,
         staleTtl: CH_STALE,
       });
+    },
+
+    // ── Rulebook links (migration 052) ──────────────────────────────────────
+    //
+    // The pool again, filtered to one layout — the same trick scoringTemplates
+    // plays above, and for the same reason: every row already carries
+    // in_my_guide and the server has already dropped the links this viewer is
+    // not allowed to see, so there is nothing a second endpoint would add.
+    //
+    // What the client must NOT do is decide visibility itself. A row that
+    // arrives here is one the viewer may have; `moderation_status` rides along
+    // so the AUTHOR's own copy can say it is waiting or was turned down, never
+    // so the client can filter on it.
+
+    rulebookLinks(gameId, { expansionIds } = {}) {
+      return this.pool(gameId, {
+        chapterType: "rulebook",
+        layout: "rulebook_link",
+        expansionIds,
+      });
+    },
+    // Synchronous read. `stale: true` reads the full window rather than the
+    // fresh one — same split, and same reason, as cachedMyChapters above.
+    cachedRulebookLinks(baseGameId, expansionIds, opts) {
+      if (!window.bgbCache || !baseGameId) return null;
+      const key = chaptersKey(baseGameId, expansionIds);
+      return (opts && opts.stale)
+        ? window.bgbCache.peek(RULEBOOK_NS, key)
+        : window.bgbCache.get(RULEBOOK_NS, key);
+    },
+    cacheRulebookLinks(baseGameId, expansionIds, rows) {
+      if (!window.bgbCache || !baseGameId) return;
+      window.bgbCache.setWithTtls(RULEBOOK_NS, chaptersKey(baseGameId, expansionIds), rows || [], {
+        freshTtl: CH_FRESH,
+        staleTtl: CH_STALE,
+      });
+    },
+
+    /**
+     * THE link to show for a game, out of everything this viewer may see.
+     *
+     * A game can have several — an admin's, your buddy's, your own — and every
+     * surface that shows "the rulebook" has to pick the same one or two screens
+     * in the same app send the same person to different places. So the choice
+     * is made once, here, and the three surfaces call it (the guide's Rulebook
+     * section, the game page, the play cascade).
+     *
+     * In order:
+     *   1. one the viewer has ADOPTED. They have already chosen; nothing
+     *      outranks that, including an approved link they passed over — the
+     *      printing you own beats the printing an admin found.
+     *   2. an APPROVED one, most-adopted first. The safe public answer, and the
+     *      only kind a signed-out reader is ever handed.
+     *   3. whatever is left — a pending link of their own or a buddy's. It is
+     *      on their screen because the server decided they may see it, and the
+     *      caller draws the badge that says it is not approved yet.
+     *
+     * Rows arrive sorted by popularity then recency, so "first match wins" is
+     * the tiebreak at every step and no sort happens here.
+     *
+     * A DENIED link never wins on its own: the author is the only viewer who is
+     * sent one at all, and putting it up as their game's rulebook would read as
+     * the denial not having happened. It stays reachable in their guide, struck
+     * through, which is where the fact that it was turned down belongs.
+     *
+     * @param {Array<any>} rows a rulebookLinks() response
+     * @returns {any|null}
+     */
+    resolveRulebook(rows) {
+      const list = (rows || []).filter((r) => r && r.link_url);
+      const live = list.filter((r) => r.moderation_status !== "denied");
+      return live.find((r) => r.in_my_guide)
+        || live.find((r) => r.moderation_status === "approved")
+        || live[0]
+        || null;
     },
 
     // ── Pool size ───────────────────────────────────────────────────────────
@@ -341,6 +428,23 @@
     },
     report(chapterId, reason) {
       return window.api.post(`/chapters/${chapterId}/report`, { reason: reason || null });
+    },
+    // ── Admin: the rulebook queue (migration 052) ───────────────────────────
+    //
+    // A different queue from adminReports below and deliberately not the same
+    // screen: a report is somebody objecting to prose after the fact, a
+    // rulebook link is an outbound destination looked at on the way in.
+
+    adminRulebookLinks(status) {
+      return window.api.get("/admin/rulebook-links", { status: status || "pending" });
+    },
+    adminApproveRulebook(chapterId) {
+      return window.api.post(`/admin/rulebook-links/${chapterId}/approve`)
+        .then((r) => { Chapter.invalidateChaptersCache(); return r; });
+    },
+    adminDenyRulebook(chapterId) {
+      return window.api.post(`/admin/rulebook-links/${chapterId}/deny`)
+        .then((r) => { Chapter.invalidateChaptersCache(); return r; });
     },
     adminReports(status) {
       return window.api.get("/admin/chapter-reports", { status: status || "open" });
