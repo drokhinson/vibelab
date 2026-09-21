@@ -364,7 +364,7 @@ window.IMPORT_PHOTO_OPTS = {
 };
 
 /**
- * The third caller's budget: the photo importer (views/photo-import-view.js),
+ * The third caller's budget: the photo importer (widgets/import-photos-branch.js),
  * where a picked photo becomes the play's own photo and is kept forever.
  *
  * Same edge and quality as a play photo logged live, because that is exactly

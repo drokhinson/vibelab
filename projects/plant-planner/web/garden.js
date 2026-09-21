@@ -193,9 +193,9 @@ var USDA_ZONES = (function() {
   return out;
 })();
 
-// openZoneEditor opens the location picker (geolocation + ZIP + manual)
-// from location.js. On resolve, saves zone + label back to the garden via PUT
-// and re-renders the toolbar so the new zone shows in the conditions strip.
+// Opens the location picker from location.js. On resolve, saves zone + label
+// back to the garden via PUT and re-renders the toolbar so the new zone shows
+// in the conditions strip.
 function openZoneEditor() {
   if (!currentGarden) return;
   if (typeof openLocationPicker !== 'function') return;
@@ -215,7 +215,6 @@ async function setGardenLocation(zone, label) {
   var prevLabel = currentGarden.location_label;
   currentGarden.usda_zone     = zone;
   currentGarden.location_label = label;
-  // Re-render the toolbar/conditions strip with the new value.
   renderBuilder();
   try {
     await apiFetch("/gardens/" + currentGarden.id, {

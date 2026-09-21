@@ -98,7 +98,6 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("wm_theme", theme);
   });
 
-  // Init: check if logged in
   if (isLoggedIn()) {
     showView("dashboard");
   } else {

@@ -142,7 +142,6 @@ function initDictionaryListeners() {
       const el = document.elementFromPoint(alphaIndex.getBoundingClientRect().left + 5, clientY);
       if (!el || !el.dataset.scrollLetter) return;
       const letter = el.dataset.scrollLetter;
-      // Clear previous active
       alphaIndex.querySelectorAll('.alpha-index-letter').forEach(b => b.classList.remove('active'));
       el.classList.add('active');
       const section = document.getElementById(`dict-letter-${letter}`);
@@ -164,7 +163,6 @@ function initDictionaryListeners() {
       alphaIndex.querySelectorAll('.alpha-index-letter').forEach(b => b.classList.remove('active'));
     }
 
-    // Touch events
     alphaIndex.addEventListener('touchstart', (e) => {
       e.preventDefault();
       scrubbing = true;
@@ -239,7 +237,6 @@ function initDictionaryListeners() {
     }
   });
 
-  // Propose word modal
   document.getElementById('propose-word-btn')?.addEventListener('click', () => {
     const container = document.getElementById('propose-modal-container');
     if (container) {
@@ -250,7 +247,6 @@ function initDictionaryListeners() {
 }
 
 function initProposeModalListeners() {
-  // Close on overlay click or close button
   document.getElementById('propose-modal-close')?.addEventListener('click', closeProposeModal);
   document.getElementById('propose-modal-overlay')?.addEventListener('click', (e) => {
     if (e.target.id === 'propose-modal-overlay') closeProposeModal();
@@ -292,7 +288,6 @@ function initProposeModalListeners() {
         body: JSON.stringify({ word, part_of_speech: pos, definition: def, etymology: etym }),
       });
       if (msgEl) msgEl.innerHTML = renderSuccess(`"${escHtml(word)}" submitted! An admin will review it.`);
-      // Clear form on success
       [wordEl, posEl, defEl, etymEl].forEach(el => { if (el) el.value = ''; });
       btn.textContent = 'Submitted ✓';
     } catch (err) {

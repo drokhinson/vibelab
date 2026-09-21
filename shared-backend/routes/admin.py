@@ -24,13 +24,11 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 async def _delete_wealthmate_user(sb, user_id: str):
     """Delete a wealthmate user and cascade-remove all their data."""
-    # Look up user
     user = sb.table("wealthmate_users").select("id, username").eq("id", user_id).execute()
     if not user.data:
         raise HTTPException(status_code=404, detail="User not found")
     username = user.data[0]["username"]
 
-    # Find couple membership
     membership = (
         sb.table("wealthmate_couple_members")
         .select("couple_id")
@@ -84,13 +82,10 @@ async def _delete_wealthmate_user(sb, user_id: str):
     sb.table("wealthmate_invitations").delete().eq("from_user_id", user_id).execute()
     sb.table("wealthmate_invitations").delete().eq("to_username", username).execute()
 
-    # Delete the user
     sb.table("wealthmate_users").delete().eq("id", user_id).execute()
     return {"deleted": True, "user_id": user_id, "username": username}
 
 
-# Registry of apps that have user tables.
-# Update this dict when a new app adopts shared auth.
 async def _delete_supabase_auth_user(sb, user_id: str, profile_table: str):
     """Delete a user backed by Supabase Auth.
 
@@ -132,6 +127,7 @@ async def _delete_travelscrapbook_user(sb, user_id: str):
 # Per-app config. `kind` selects the listing + reset-code path:
 #   - "legacy_users": app keeps a custom <prefix>_users table (bcrypt + recovery_hash)
 #   - "supabase_auth": identity lives in auth.users; profile fields in <prefix>_profiles
+# Update this dict when a new app adopts shared auth.
 APPS_WITH_USERS = {
     "wealthmate": {
         "kind": "legacy_users",
@@ -293,12 +289,10 @@ async def generate_reset_code(
         )
 
     sb = get_supabase()
-    # Verify user exists
     check = sb.table(cfg["table"]).select("id").eq("id", user_id).execute()
     if not check.data:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Generate and store recovery code
     recovery_code = secrets.token_urlsafe(16)
     recovery_hash_value = hash_password(recovery_code)
     sb.table(cfg["table"]).update({

@@ -1,7 +1,7 @@
 // ui/wizard-progress.js — the step counter + segment bar every in-page wizard
 // puts above its body.
 //
-// Two consumers: the play importer (views/import-plays-view.js) and the chapter
+// Two consumers: the play importer (views/import-wizard-view.js) and the chapter
 // creation wizard (views/reference-guide-add-view.js). Both host it as an
 // ordinary block at the top of a screen, which is what makes it shareable —
 // the onboarding deck (widgets/onboarding-deck.js) draws the same shape under

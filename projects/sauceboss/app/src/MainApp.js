@@ -71,7 +71,7 @@ function TabIcon({ Icon, color, size, locked }) {
 // HomeTabs holds the three primary destinations. The initial tab depends
 // on whether the user is signed in (matches web/init.js:61). Locked tabs
 // for anonymous users prompt sign-in via the existing AuthModal flow
-// instead of switching — handled in tabPress listener (phase 9 polish).
+// instead of switching — handled in the tabPress listener.
 function HomeTabs() {
   const state = useAppState();
   const isAnon = !state.currentUser;

@@ -8,7 +8,7 @@
 //
 //   • domain/play-import.js pre-fills each parsed name with its best match, so
 //     an import lands on the right account without a tap;
-//   • views/import-plays-view.js orders the picker sheet by the same score, so
+//   • views/import-wizard-view.js orders the picker sheet by the same score, so
 //     the row the model chose is the row the user sees first — and the runners
 //     up are right underneath it rather than behind a search.
 //

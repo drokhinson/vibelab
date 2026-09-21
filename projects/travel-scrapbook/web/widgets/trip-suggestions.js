@@ -7,7 +7,6 @@
 //   • stop context       → the place joins the trip as a stop
 //   • checkpoint context → the place joins as an (undated) stay/travel checkpoint
 // A "Enter manually" / "Paste a link" fallback covers anything not suggested.
-// Replaces the old two-tab add modal.
 'use strict';
 
 const TripSuggestions = {

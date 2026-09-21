@@ -1,6 +1,6 @@
-// API client — wraps shared/api.js with the native fetch + a token getter that
-// reads from the AppContext after sign-in (Phase 2). For Phase 1 the token
-// getter returns null so all calls go out unauthenticated.
+// API client — wraps shared/api.js with the native fetch and a token getter.
+// AppContext installs the real getter via setAuthTokenGetter once Supabase auth
+// is up; until then calls go out unauthenticated.
 
 import { makeApi } from '#shared/api';
 

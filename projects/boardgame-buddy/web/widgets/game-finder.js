@@ -29,7 +29,7 @@
 // section — see widgets/import-expansions-modal.js.
 // Used by widgets/game-search-sheet.js, which mounts it inside a bottom
 // sheet — reached from views/play-flow-view.js (Gather: pick
-// the game for a session) and views/import-plays-view.js (name an imported
+// the game for a session) and views/import-wizard-view.js (name an imported
 // play's game).
 //
 // NOT used by widgets/bgg-import-sheet.js, which is the BoardGameGeek import.

@@ -223,7 +223,7 @@
       }
 
       // Feed first page — keyed 'first' to match Feed.fetchPage()'s convention
-      // once that file converts to SWR (Phase 4).
+      // once that file converts to SWR.
       if (payload.feed_first_page) {
         cache.setWithTtls(
           "feed",

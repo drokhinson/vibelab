@@ -1,6 +1,5 @@
 // state.js — WealthMate shared state
 // All data comes from the shared backend API via fetch().
-// API base URL is set in config.js as window.APP_CONFIG.apiBase
 
 const API = window.APP_CONFIG?.apiBase ?? "http://localhost:8000";
 const BASE = "/api/v1/wealthmate";

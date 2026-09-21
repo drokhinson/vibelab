@@ -1,6 +1,6 @@
-// Email + password sign-in / sign-up. Phase 2 only — Google + Apple OAuth
-// will be added in v1.1 along with the EAS build pipeline (the OAuth scheme
-// requires a custom redirect URL that Expo Go can't serve).
+// Email + password sign-in / sign-up, plus Continue-with-Google. Apple OAuth
+// is not wired up yet: its scheme needs a custom redirect URL that Expo Go
+// cannot serve, so it waits on the EAS build pipeline.
 
 import React, { useState } from 'react';
 import {

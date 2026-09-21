@@ -143,7 +143,6 @@ function _renderLibraryCard(row, idx) {
 function _statusPillHtml(row) {
   if (row.status === 'wishlist') return '<span class="library-pill library-pill-wishlist"><i data-lucide="heart" style="width:0.8em;height:0.8em"></i> Wishlist</span>';
   if (row.status === 'former')   return '<span class="library-pill library-pill-former"><i data-lucide="archive" style="width:0.8em;height:0.8em"></i> Former</span>';
-  // current
   var qty = row.quantity || 0;
   return '<span class="library-pill library-pill-current"><i data-lucide="leaf" style="width:0.8em;height:0.8em"></i> Current'
        + (qty > 0 ? ' ×' + qty : '') + '</span>';
@@ -449,7 +448,6 @@ async function _patchRow(rowId, patch) {
       method: 'PUT',
       body: patch
     });
-    // Replace the row in state.
     for (var i = 0; i < libraryState.rows.length; i++) {
       if (libraryState.rows[i].id === rowId) {
         libraryState.rows[i] = updated;

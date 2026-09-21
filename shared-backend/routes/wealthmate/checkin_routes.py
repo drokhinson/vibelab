@@ -46,7 +46,6 @@ async def get_active_checkin(user: dict = Depends(get_current_user)):
         return None
 
     checkin = result.data[0]
-    # Attach values
     values = (
         sb.table("wealthmate_checkin_values")
         .select("*")
@@ -184,7 +183,6 @@ async def save_checkin_value(
     if not account.data:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    # Upsert value
     value_data = {
         "checkin_id": checkin_id,
         "account_id": account_id,
@@ -194,7 +192,6 @@ async def save_checkin_value(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Check if value already exists
     existing = (
         sb.table("wealthmate_checkin_values")
         .select("id")

@@ -51,7 +51,6 @@ async def list_groups(
             if m["user_id"] == current_user.user_id:
                 user_groups.add(m["group_id"])
 
-        # Check for pending join requests from current user
         pending_requests = (
             sb.table("daywordplay_join_requests")
             .select("group_id")
@@ -110,7 +109,6 @@ async def join_group(body: JoinGroupBody, current_user: CurrentUser = Depends(ge
 
     group = group_result.data[0]
 
-    # Check already a member
     existing = sb.table("daywordplay_group_members").select("id").eq("group_id", group["id"]).eq("user_id", current_user.user_id).execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="Already a member of this group.")
@@ -177,12 +175,10 @@ async def get_group(group_id: str, current_user: CurrentUser = Depends(get_curre
 
     group = group_result.data[0]
 
-    # Verify current user is a member
     membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if not membership.data:
         raise HTTPException(status_code=403, detail="You are not a member of this group.")
 
-    # Get members with display names
     members_result = sb.table("daywordplay_group_members").select(
         "user_id, joined_at, daywordplay_profiles(display_name)"
     ).eq("group_id", group_id).execute()
@@ -206,17 +202,14 @@ async def get_leaderboard(group_id: str, current_user: CurrentUser = Depends(get
     """All-time vote leaderboard for a group."""
     sb = get_supabase()
 
-    # Verify membership
     membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if not membership.data:
         raise HTTPException(status_code=403, detail="You are not a member of this group.")
 
-    # Get all sentences for this group
     sentences = sb.table("daywordplay_sentences").select("id, user_id").eq("group_id", group_id).execute()
     sentence_ids = [s["id"] for s in (sentences.data or [])]
     sentence_user_map = {s["id"]: s["user_id"] for s in (sentences.data or [])}
 
-    # Count votes per sentence
     vote_counts: dict[str, int] = {}
     if sentence_ids:
         votes = sb.table("daywordplay_votes").select("sentence_id").in_("sentence_id", sentence_ids).execute()
@@ -224,14 +217,12 @@ async def get_leaderboard(group_id: str, current_user: CurrentUser = Depends(get
             sid = v["sentence_id"]
             vote_counts[sid] = vote_counts.get(sid, 0) + 1
 
-    # Aggregate by user
     user_vote_totals: dict[str, int] = {}
     user_sentence_counts: dict[str, int] = {}
     for sid, uid in sentence_user_map.items():
         user_vote_totals[uid] = user_vote_totals.get(uid, 0) + vote_counts.get(sid, 0)
         user_sentence_counts[uid] = user_sentence_counts.get(uid, 0) + 1
 
-    # Get member info
     members_result = sb.table("daywordplay_group_members").select(
         "user_id, daywordplay_profiles(display_name)"
     ).eq("group_id", group_id).execute()
@@ -307,13 +298,11 @@ async def get_bulk_leaderboards(current_user: CurrentUser = Depends(get_current_
         user_vote_totals[gid][uid] = user_vote_totals[gid].get(uid, 0) + vote_counts.get(sid, 0)
         user_sentence_counts[gid][uid] = user_sentence_counts[gid].get(uid, 0) + 1
 
-    # Build per-group member lookup
     group_members: dict[str, list] = {}
     for m in (members_result.data or []):
         gid = m["group_id"]
         group_members.setdefault(gid, []).append(m)
 
-    # Assemble leaderboards
     leaderboards: dict[str, dict] = {}
     for gid in group_ids:
         members = group_members.get(gid, [])
@@ -363,17 +352,14 @@ async def request_join(group_id: str, current_user: CurrentUser = Depends(get_cu
     """Request to join a group (requires approval from a member)."""
     sb = get_supabase()
 
-    # Check group exists
     group_result = sb.table("daywordplay_groups").select("id, name").eq("id", group_id).execute()
     if not group_result.data:
         raise HTTPException(status_code=404, detail="Group not found.")
 
-    # Check already a member
     existing = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="You are already a member of this group.")
 
-    # Check for existing pending request
     pending = (
         sb.table("daywordplay_join_requests")
         .select("id, status")
@@ -407,7 +393,6 @@ async def list_join_requests(group_id: str, current_user: CurrentUser = Depends(
     """List pending join requests for a group (must be a member)."""
     sb = get_supabase()
 
-    # Verify membership
     membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if not membership.data:
         raise HTTPException(status_code=403, detail="You are not a member of this group.")
@@ -447,12 +432,10 @@ async def review_join_request(
     if body.action not in ("approve", "deny"):
         raise HTTPException(status_code=400, detail="Action must be 'approve' or 'deny'.")
 
-    # Verify reviewer is a member
     membership = sb.table("daywordplay_group_members").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).execute()
     if not membership.data:
         raise HTTPException(status_code=403, detail="You are not a member of this group.")
 
-    # Get the request
     req_result = (
         sb.table("daywordplay_join_requests")
         .select("id, user_id, status")
@@ -474,7 +457,6 @@ async def review_join_request(
         "updated_at": "now()",
     }).eq("id", request_id).execute()
 
-    # If approved, add user to group
     if new_status == "approved":
         sb.table("daywordplay_group_members").insert({
             "group_id": group_id,

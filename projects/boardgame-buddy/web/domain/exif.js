@@ -1,7 +1,7 @@
 // @ts-check
 // domain/exif.js — when and where a photo was taken, read out of the file.
 //
-// One caller: the photo importer (views/photo-import-view.js), which turns a
+// One caller: the photo importer (widgets/import-photos-branch.js), which turns a
 // camera roll into plays. The two fields it wants are the two a phone writes
 // without being asked — the capture timestamp and, when location services were
 // on for the camera, the coordinate. Everything else in an EXIF block is

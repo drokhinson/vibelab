@@ -1,5 +1,5 @@
 // @ts-check
-// widgets/import-plays-steps.js — the play importer's six step bodies.
+// widgets/import-notes-steps.js — the notes importer's six step bodies.
 //
 // Pure functions of the draft (domain/play-import.js). Every one returns an
 // HTML string and touches nothing; the view owns state, sheets and events.

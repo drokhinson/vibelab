@@ -145,7 +145,6 @@ async function handleEditProfile(e) {
   btn.disabled = true;
 
   try {
-    // Update profile
     await apiFetch("/profile", {
       method: "PUT",
       body: {
@@ -154,7 +153,6 @@ async function handleEditProfile(e) {
       },
     });
 
-    // Update location
     const homeLabel = document.getElementById("edit-home-label").value.trim();
     const homeLat = parseFloat(document.getElementById("edit-home-lat").value) || null;
     const homeLng = parseFloat(document.getElementById("edit-home-lng").value) || null;
@@ -163,7 +161,6 @@ async function handleEditProfile(e) {
       body: { home_label: homeLabel || null, home_lat: homeLat, home_lng: homeLng },
     });
 
-    // Update discoverability
     const discoverable = document.getElementById("edit-discoverable").checked;
     await apiFetch("/profile/discoverable", {
       method: "PUT",

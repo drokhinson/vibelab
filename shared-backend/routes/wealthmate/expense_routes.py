@@ -170,7 +170,6 @@ async def list_recurring_expenses(user: dict = Depends(get_current_user)):
         mult = FREQUENCY_MONTHLY_MULTIPLIER.get(freq, 1.0)
         item["monthly_amount"] = round(float(item["amount"]) * mult, 2)
 
-    # Summary
     monthly_total = sum(item["monthly_amount"] for item in items)
     yearly_total = monthly_total * 12
 

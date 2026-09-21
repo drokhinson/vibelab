@@ -256,7 +256,6 @@ function renderSentenceSection(submitted, my_sentence, wordText) {
 }
 
 function initHomeListeners() {
-  // Sub-tab switching
   document.getElementById('sub-tab-today')?.addEventListener('click', () => {
     activeWordTab = 'today';
     renderPageContent();
@@ -274,7 +273,6 @@ function initHomeListeners() {
     }
   });
 
-  // Group switcher
   document.querySelectorAll('[data-group-switch]').forEach(btn => {
     btn.addEventListener('click', async () => {
       activeGroupId = btn.dataset.groupSwitch;
@@ -364,7 +362,6 @@ function initHomeListeners() {
     initPageListeners();
   });
 
-  // Browse search
   const browseInput = document.getElementById('browse-search-input');
   if (browseInput) {
     let browseTimer;
@@ -374,10 +371,8 @@ function initHomeListeners() {
     });
   }
 
-  // Join modal listeners (for no-group state)
   initJoinCreateModalListeners();
 
-  // Attach request-to-join listeners on browse results
   attachBrowseJoinListeners();
 
   // Live word-presence check — enable/disable submit button
@@ -395,7 +390,6 @@ function initHomeListeners() {
     });
   }
 
-  // Sentence submission
   document.getElementById('submit-sentence-btn')?.addEventListener('click', async () => {
     const input = document.getElementById('sentence-input');
     const errEl = document.getElementById('sentence-error');
@@ -415,7 +409,6 @@ function initHomeListeners() {
         body: JSON.stringify({ sentence }),
       });
       dwpCache.set('today', submittedGroupId, fresh);
-      // Only update UI if user is still on the same group
       if (activeGroupId === submittedGroupId) {
         todayData = fresh;
         cachedDailyWord = fresh.word;
@@ -448,7 +441,6 @@ function initHomeListeners() {
     });
     const snapshotActiveGroupId = activeGroupId;
 
-    // Submit + refresh all groups in parallel
     await Promise.all(groupsToSubmit.map(async g => {
       try {
         const fresh = await apiFetch(`/groups/${g.id}/sentences`, {
@@ -531,7 +523,6 @@ function attachBrowseJoinListeners() {
 }
 
 function initJoinCreateModalListeners() {
-  // Close modals
   document.getElementById('join-modal-close')?.addEventListener('click', () => {
     showJoinGroupModal = false;
     renderPageContent();
@@ -549,7 +540,6 @@ function initJoinCreateModalListeners() {
     if (e.target.id === 'create-modal-overlay') { showCreateGroupModal = false; renderPageContent(); initPageListeners(); }
   });
 
-  // Join code uppercase
   const codeInput = document.getElementById('join-code-input');
   if (codeInput) {
     codeInput.addEventListener('input', (e) => {
@@ -557,7 +547,6 @@ function initJoinCreateModalListeners() {
     });
   }
 
-  // Join submit
   document.getElementById('join-code-submit')?.addEventListener('click', async () => {
     const code = document.getElementById('join-code-input')?.value.trim().toUpperCase();
     const errEl = document.getElementById('join-error');
@@ -586,7 +575,6 @@ function initJoinCreateModalListeners() {
     }
   });
 
-  // Create submit
   document.getElementById('create-group-submit')?.addEventListener('click', async () => {
     const name = document.getElementById('create-name-input')?.value.trim();
     const errEl = document.getElementById('create-error');

@@ -5,8 +5,8 @@
 // Pure functions of the view's state: each takes a plain snapshot object and
 // returns an HTML string, touching nothing. The view
 // (views/reference-guide-add-view.js) owns the state, the fetches and the
-// events — same shell/bodies split as import-plays-view.js /
-// import-plays-steps.js, along the same seam: what a step IS versus how the
+// events — same shell/bodies split as import-wizard-view.js and its
+// import-*-steps.js bodies, along the same seam: what a step IS versus how the
 // wizard moves between them.
 //
 // Step 3 is the markdown editor and deliberately stays in the view: it is not

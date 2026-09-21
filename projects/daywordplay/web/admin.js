@@ -208,14 +208,12 @@ function attachAdminGroupListeners() {
 }
 
 function initAdminListeners() {
-  // Back button
   document.getElementById('admin-back-btn')?.addEventListener('click', () => {
     currentView = 'profile';
     renderPageContent();
     initPageListeners();
   });
 
-  // Sign out of admin
   document.getElementById('admin-logout-btn')?.addEventListener('click', () => {
     clearAdminKey();
     currentView = 'profile';
@@ -223,7 +221,6 @@ function initAdminListeners() {
     initPageListeners();
   });
 
-  // Add word submit
   document.getElementById('admin-add-word-btn')?.addEventListener('click', async () => {
     const word = document.getElementById('admin-word')?.value.trim();
     const pos = document.getElementById('admin-pos')?.value.trim();
@@ -246,7 +243,6 @@ function initAdminListeners() {
         body: JSON.stringify({ word, part_of_speech: pos, definition: def, etymology: etym }),
       });
       if (msgEl) msgEl.innerHTML = renderSuccess(`"${escHtml(word)}" added to word bank.`);
-      // Clear form
       ['admin-word', 'admin-pos', 'admin-def', 'admin-etym'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
@@ -259,13 +255,10 @@ function initAdminListeners() {
     btn.textContent = 'Add Word';
   });
 
-  // Refresh groups
   document.getElementById('admin-refresh-groups-btn')?.addEventListener('click', loadAdminGroups);
 
-  // Refresh proposals
   document.getElementById('admin-refresh-proposals-btn')?.addEventListener('click', loadAdminProposals);
 
-  // Load data on open
   loadAdminProposals();
   loadAdminGroups();
 }

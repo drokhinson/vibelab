@@ -1,10 +1,10 @@
 // @ts-check
-// widgets/photo-import-steps.js — the photo importer's three step bodies.
+// widgets/import-photos-steps.js — the photo importer's three step bodies.
 //
 // Pure functions of the draft (domain/photo-import.js). Every one returns an
-// HTML string and touches nothing; the view (views/photo-import-view.js) owns
-// state, sheets and events. Same shell/bodies split as
-// widgets/import-plays-steps.js, for the same reason.
+// HTML string and touches nothing; the branch (widgets/import-photos-branch.js)
+// owns state, sheets and events. Same shell/bodies split as the sibling
+// import-*-steps.js files, for the same reason.
 //
 // Handlers are inline `onclick="window.importPhotosBranch._foo()"` strings — the
 // project idiom, and what keeps these functions pure. Anything carrying a

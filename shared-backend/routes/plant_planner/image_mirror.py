@@ -2,7 +2,6 @@
 
 Each cache row carries up to three sizes (thumbnail / medium / regular).
 Sources:
-  - Trefle: returns a single `image_url` → mirror as `regular`.
   - Perenual: returns `default_image.{thumbnail, medium_url, regular_url}` →
     mirror each available size into the matching column.
 

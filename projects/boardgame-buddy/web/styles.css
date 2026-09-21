@@ -18320,7 +18320,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .bgb-wizsteps__seg.is-done::after { transform: scaleX(1); }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Play importer — Settings → Import plays (views/import-plays-view.js)
+   Play importer — Settings → Import plays (views/import-wizard-view.js)
    ══════════════════════════════════════════════════════════════════════════
    A .bgb-spoke-screen, and additionally named in the --polaroid-* re-point at
    the top of this file: every surface here is a UI card, not a photograph, so
@@ -19115,7 +19115,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Photo importer — Settings → Import from photos (views/photo-import-view.js)
+   Photo importer — Settings → Import from photos (widgets/import-photos-branch.js)
    ══════════════════════════════════════════════════════════════════════════
    Shares the whole .imp-* chrome above — the body padding, the docked nav, the
    step titles, the summary cards, the CTA. Only the parts that have no

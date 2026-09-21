@@ -120,7 +120,6 @@ async def update_account(account_id: str, body: UpdateAccountBody, user: dict = 
         loan_data["account_id"] = account_id
         sb.table("wealthmate_account_loan_details").upsert(loan_data).execute()
 
-    # Return updated account
     updated = sb.table("wealthmate_accounts").select("*").eq("id", account_id).execute()
     return updated.data[0] if updated.data else {}
 
@@ -161,8 +160,6 @@ async def permanently_delete_account(account_id: str, user: dict = Depends(get_c
 
     # Delete all checkin values for this account
     sb.table("wealthmate_checkin_values").delete().eq("account_id", account_id).execute()
-    # Delete loan details if any
     sb.table("wealthmate_account_loan_details").delete().eq("account_id", account_id).execute()
-    # Delete the account itself
     sb.table("wealthmate_accounts").delete().eq("id", account_id).execute()
     return {"status": "deleted", "account_id": account_id}

@@ -1,7 +1,7 @@
 // helpers.js — SpotMe shared utilities
 
 // ── Proficiency helpers ──────────────────────────────────────────────────────
-// levels: array of {value, label} from the API. Falls back gracefully.
+// levels: array of {value, label} from the API.
 
 function proficiencyLabel(p, levels) {
   if (levels) {
@@ -34,7 +34,6 @@ function proficiencyPeaks(p, levels) {
       return html;
     }
   }
-  // Legacy fallback
   const LEGACY_PEAKS = { want_to_learn: 0, beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
   const count = LEGACY_PEAKS[p] ?? 0;
   if (count === 0) return '<span class="peaks want-to-learn" title="Want to Learn">&#9734;</span>';
@@ -108,7 +107,6 @@ function showView(name) {
     return;
   }
 
-  // App views
   appShell.style.display = "block";
   loginView.style.display = "none";
   registerView.style.display = "none";
@@ -119,12 +117,10 @@ function showView(name) {
 
   currentView = name;
 
-  // Update nav
   document.querySelectorAll(".nav-item").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.view === name);
   });
 
-  // Load data for view
   if (name === "profile") loadProfile();
   if (name === "hobbies") loadHobbies();
   if (name === "settings") loadSettings();
