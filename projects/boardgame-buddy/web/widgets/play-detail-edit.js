@@ -149,6 +149,10 @@
       // edit form that doesn't offer the field should do.
       scoring_template: p.scoring_template || null,
       photoFile: null,
+      // The user's own file, held beside the compressed upload copy so
+      // "Save to Photos" can hand the camera roll the resolution they shot
+      // rather than the 1920px re-encode bound for the bucket. Never uploaded.
+      photoSourceFile: null,
       photoPreviewUrl: null,
     };
   }
@@ -158,6 +162,7 @@
       try { URL.revokeObjectURL(draft.photoPreviewUrl); } catch (_) {}
     }
     draft.photoFile = null;
+    draft.photoSourceFile = null;
     draft.photoPreviewUrl = null;
   }
 
@@ -169,6 +174,7 @@
         <section class="play-detail__edit-photo">
           ${photoUrl ? `
             <img src="${escapeAttr(photoUrl)}" alt="" />
+            ${renderPhotoSave()}
             <label class="play-detail__edit-photo-replace">
               <input type="file" accept="image/*" class="hidden play-detail-popup__photo-file"
                      onchange="window.PlayDetailPopup._onPhotoSelect(this.files)" />
@@ -876,10 +882,41 @@
     }
     clearPendingPhoto(state.draft);
     state.draft.photoFile = v.file;
+    state.draft.photoSourceFile = file;
     state.draft.photoPreviewUrl = URL.createObjectURL(v.file);
     render();
   }
 
+  /**
+   * Put the pending capture in the user's camera roll.
+   *
+   * iOS hands a photo taken through the picker to the page and to nowhere else
+   * — ui/save-to-photos.js is the whole story, including why this is a tap and
+   * not something that fires when the capture lands.
+   */
+  function savePhotoToRoll() {
+    const S = window.SaveToPhotos;
+    const d = state.draft;
+    if (S && d) S.save(d.photoSourceFile, d.photoFile);
+  }
+
+  /**
+   * The "Save to Photos" plate, for a capture that is still a local file.
+   * Empty off iOS, and empty for a photo that is already only a url.
+   * @returns {string}
+   */
+  function renderPhotoSave() {
+    const S = window.SaveToPhotos;
+    const d = state.draft;
+    if (!S || !d || !S.offered(d.photoSourceFile, d.photoFile)) return "";
+    return `
+      <button type="button" class="play-detail__edit-photo-save"
+              aria-label="Save this photo to your camera roll"
+              onclick="window.PlayDetailPopup._savePhotoToRoll()">
+        <i data-icon="download" class="w-4 h-4"></i> Save to Photos
+      </button>
+    `;
+  }
 
   async function deletePlay() {
     if (!state.play || !state.play.id) return;
@@ -1038,6 +1075,7 @@
       _toggleWinner: toggleWinner,
       _initRounds: initRounds,
       _onPhotoSelect: onPhotoSelect,
+      _savePhotoToRoll: savePhotoToRoll,
       _deletePlay: deletePlay,
       _saveEdit: saveEdit,
     },

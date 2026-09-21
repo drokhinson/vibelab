@@ -6662,6 +6662,23 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   backdrop-filter: blur(4px);
   cursor: pointer;
 }
+/* Matched pair with the Replace pill above: same plate, opposite corner. The
+   button resets are what a <label> next to it does not need. */
+.play-detail__edit-photo-save {
+  position: absolute; left: 0.5rem; bottom: 0.5rem;
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  line-height: 1;
+  color: inherit;
+  background: oklch(var(--b1) / 0.9);
+  border: 1px solid oklch(var(--b3));
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+.play-detail__edit-photo-save::before { content: ""; position: absolute; inset: -8px; }
 .play-detail__edit-photo-pick {
   display: flex; align-items: center; gap: 0.7rem;
   width: 100%;
@@ -11733,6 +11750,22 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   background: var(--photo-plate);
   color: var(--on-photo);
 }
+/* The camera-roll plate, top-left, opposite Remove. On the photograph, so it
+   takes the same pinned-light plate/ink pair as its neighbour rather than the
+   card's. Rendered on iOS only — ui/save-to-photos.js decides. */
+.cascade-photo__save {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--photo-plate);
+  color: var(--on-photo);
+}
+/* btn-xs is 24px tall, so the plate needs a grown hit area rather than a grown
+   plate. -8px is the most the frame will hold: .cascade-photo clips to its
+   rounded corners and the button sits 8px in from them, so a deeper inset would
+   only be trimmed. The two plates are at opposite corners, so the 40px boxes
+   never touch. */
+.cascade-photo__save::before { content: ""; position: absolute; inset: -8px; }
 .cascade-photo__pick {
   display: flex;
   flex-direction: column;
