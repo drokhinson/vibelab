@@ -874,12 +874,6 @@
       return;
     }
     if (!state.draft) return;
-    if (v.compressed) {
-      showToast(
-        `Photo compressed from ${(v.originalSize / 1048576).toFixed(1)} MB to ${(v.compressedSize / 1048576).toFixed(1)} MB`,
-        "info"
-      );
-    }
     clearPendingPhoto(state.draft);
     state.draft.photoFile = v.file;
     state.draft.photoSourceFile = file;
