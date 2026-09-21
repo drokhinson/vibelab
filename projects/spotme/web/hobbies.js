@@ -5,7 +5,6 @@ async function loadHobbies() {
   container.innerHTML = '<p aria-busy="true">Loading hobbies...</p>';
 
   try {
-    // Load categories and hobbies in parallel
     const [cats, hobbies, userHobbies] = await Promise.all([
       apiFetch("/hobbies/categories"),
       apiFetch("/hobbies"),
@@ -23,10 +22,8 @@ async function loadHobbies() {
 function renderHobbies() {
   const container = document.getElementById("hobbies-content");
 
-  // Build my hobbies set for quick lookup
   const myHobbyIds = new Set(myHobbies.map(uh => uh.hobby_id));
 
-  // Category filter tabs
   const filterHtml = `
     <div class="category-filters">
       <button class="filter-btn ${!selectedCategoryFilter ? 'active' : ''}" onclick="filterCategory(null)">All</button>
@@ -38,7 +35,6 @@ function renderHobbies() {
     </div>
   `;
 
-  // My hobbies section
   const myHobbiesHtml = myHobbies.length ? `
     <div class="my-hobbies-section">
       <h3>My Hobbies</h3>
@@ -68,7 +64,6 @@ function renderHobbies() {
     </div>
   ` : '';
 
-  // Browse hobbies section
   const filteredHobbies = selectedCategoryFilter
     ? allHobbies.filter(h => h.category_id === selectedCategoryFilter)
     : allHobbies;

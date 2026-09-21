@@ -23,7 +23,6 @@ async function loadDashboard() {
       renderDashboardInvites(invites);
     } catch (e) { /* ignore */ }
 
-    // Net worth card
     if (wealthHistory.length > 0) {
       const latest = wealthHistory[wealthHistory.length - 1];
       document.getElementById("nw-value").textContent = fmt(latest.net_worth);
@@ -37,7 +36,6 @@ async function loadDashboard() {
       document.getElementById("nw-date").textContent = "No check-ins yet";
     }
 
-    // Active checkin button
     const contBtn = document.getElementById("btn-continue-checkin");
     if (activeCheckin && activeCheckin.id) {
       contBtn.style.display = "block";
@@ -46,7 +44,6 @@ async function loadDashboard() {
       contBtn.style.display = "none";
     }
 
-    // Recent check-ins
     const recentList = document.getElementById("dash-recent-list");
     if (wealthHistory.length > 0) {
       recentList.innerHTML = wealthHistory.slice(-5).reverse().map((h, i) => `

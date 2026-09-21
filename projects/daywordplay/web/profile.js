@@ -80,7 +80,6 @@ function renderProfileGroupCard(g) {
 }
 
 function initProfileListeners() {
-  // Load pending join requests for all user's groups
   loadAllJoinRequests();
 
   document.getElementById('logout-btn')?.addEventListener('click', () => {
@@ -88,7 +87,6 @@ function initProfileListeners() {
     handleLogout();
   });
 
-  // Join group button
   document.getElementById('profile-join-btn')?.addEventListener('click', () => {
     showJoinGroupModal = true;
     showCreateGroupModal = false;
@@ -96,7 +94,6 @@ function initProfileListeners() {
     initProfileListeners();
   });
 
-  // Create group button
   document.getElementById('profile-create-btn')?.addEventListener('click', () => {
     showCreateGroupModal = true;
     showJoinGroupModal = false;
@@ -104,7 +101,6 @@ function initProfileListeners() {
     initProfileListeners();
   });
 
-  // Modal close buttons
   document.getElementById('join-modal-close')?.addEventListener('click', () => {
     showJoinGroupModal = false;
     renderPageContent();
@@ -122,7 +118,6 @@ function initProfileListeners() {
     if (e.target.id === 'create-modal-overlay') { showCreateGroupModal = false; renderPageContent(); initProfileListeners(); }
   });
 
-  // Join code input uppercase
   const codeInput = document.getElementById('join-code-input');
   if (codeInput) {
     codeInput.addEventListener('input', (e) => {
@@ -130,7 +125,6 @@ function initProfileListeners() {
     });
   }
 
-  // Join submit
   document.getElementById('join-code-submit')?.addEventListener('click', async () => {
     const code = document.getElementById('join-code-input')?.value.trim().toUpperCase();
     const errEl = document.getElementById('join-error');
@@ -160,7 +154,6 @@ function initProfileListeners() {
     }
   });
 
-  // Create submit
   document.getElementById('create-group-submit')?.addEventListener('click', async () => {
     const name = document.getElementById('create-name-input')?.value.trim();
     const errEl = document.getElementById('create-error');
@@ -188,7 +181,6 @@ function initProfileListeners() {
     }
   });
 
-  // Admin access
   document.getElementById('admin-access-btn')?.addEventListener('click', () => {
     const existingKey = getAdminKey();
     if (existingKey) {
@@ -225,11 +217,9 @@ function initProfileListeners() {
     function onTouchMove(e) {
       if (!isDragging) return;
       currentX = e.touches[0].clientX - startX;
-      // Clamp movement
       const clamped = Math.max(-120, Math.min(120, currentX));
       card.style.transform = `translateX(${clamped}px)`;
 
-      // Show relevant action
       wrap.querySelector('.swipe-action-left').style.opacity = currentX > 10 ? Math.min(1, (currentX - 10) / 50) : 0;
       wrap.querySelector('.swipe-action-right').style.opacity = currentX < -10 ? Math.min(1, (-currentX - 10) / 50) : 0;
     }
@@ -306,7 +296,6 @@ async function loadAllJoinRequests() {
     if (slot) slot.innerHTML = '<div class="join-req-loading"></div>';
   }
 
-  // Fetch pending requests for all groups in parallel
   const results = await Promise.all(
     myGroups.map(async (g) => {
       try {
@@ -318,7 +307,6 @@ async function loadAllJoinRequests() {
     })
   );
 
-  // Update global state
   pendingJoinRequests = results.filter(r => r.requests.length > 0);
 
   // Populate per-group inline slots

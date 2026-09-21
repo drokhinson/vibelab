@@ -1,15 +1,14 @@
-// domain/timeline.js — client-side port of the backend timeline math
-// (shared-backend/routes/travel_scrapbook/services/timeline.py). The trip
-// bundle already carries everything the timeline needs (checkpoints + each
-// stop's plan_date/plan_time), so building it locally makes the Timeline
-// tab and every schedule change instant — zero network. This port is the
-// live implementation for the web app; keep it in step with the Python
-// service (which still backs GET /trips/{id}/timeline for other clients).
+// domain/timeline.js — the trip timeline's day scaffold, computed client-side.
+//
+// The trip bundle already carries everything the timeline needs (checkpoints +
+// each stop's plan_date/plan_time), so building it locally makes the Timeline
+// tab and every schedule change instant — zero network. This is the canonical
+// implementation: there is no backend twin, and exports order their rows by the
+// timeline the client sends them (see export_routes.py).
 //
 // This produces the day SCAFFOLD only (days + markers + the unscheduled pile).
 // Route ordering, auto-placement, and drive/walk legs layer on top in
-// domain/route-plan.js — a web-only module with no backend twin. Keep THIS port
-// mirroring timeline.py; put any web-only route behaviour in route-plan.js.
+// domain/route-plan.js.
 'use strict';
 
 (function () {

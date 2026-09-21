@@ -1,13 +1,6 @@
-// gardens.js — My Gardens list view + 5-step New-Garden wizard.
+// gardens.js — My Gardens list view + the New-Garden wizard.
 //
-// Wizard flow:
-//   1. Type + size     — pick a planter type, then resize with a live mini 3D preview
-//   2. Light           — full_sun | partial | shade
-//   3. Location → zone — geolocation + ZIP fallback (skipped for indoor/greenhouse)
-//   4. Water plan      — regular | occasional | rain_only
-//   5. Review          — editable Name (auto-prefilled "<type> #<n>"), summary, Confirm
-//
-// Nothing is written to the DB until step 5's Confirm. wizardDraft holds the
+// Nothing is written to the DB until the final Confirm. wizardDraft holds the
 // in-flight values; cancel discards them.
 
 // ── My Gardens list ─────────────────────────────────────────────────────────
@@ -175,7 +168,7 @@ function startGardenWizard() {
     planting_season: prev ? (prev.planting_season || 'spring') : 'spring',
     usda_zone:      prev ? (prev.usda_zone || null)      : null,
     location_label: prev ? (prev.location_label || null) : null,
-    // Sync-or-cache choice on step 3. Default to sync to match prior behavior.
+    // Sync-or-cache choice on step 3; sync is the default.
     run_fill_sequence: true,
   };
   wizardStep = 1;
@@ -288,7 +281,7 @@ function _wizardAdvance() {
   _initIcons();
 }
 
-// ── Step 1: Planter type + size + live preview ──────────────────────────────
+// ── Step 2: Planter type + size + live preview ──────────────────────────────
 
 // Two-column type picker. Indoor types are climate-controlled (skip the
 // Location step); outdoor types use the user's local hardiness zone — even
@@ -331,7 +324,7 @@ function _gardenTypeHasHeightField(t) {
       || t === 'raised_bed' || t === 'greenhouse';
 }
 
-// Flat list helper for any code that still needs to iterate every option.
+// Flat list helper for code that iterates every option.
 function _allPlanterTypes() {
   return PLANTER_TYPE_COLUMNS.indoor.concat(PLANTER_TYPE_COLUMNS.outdoor);
 }
@@ -740,12 +733,12 @@ function renderWizardStepSyncChoice() {
 }
 
 
-// ── Step 6: Review & confirm ────────────────────────────────────────────────
+// ── Step 4: Review & confirm ────────────────────────────────────────────────
 
 function renderWizardStepReview() {
   var d = wizardDraft;
 
-  // Edit-step targets in the new layout:
+  // Edit-step targets:
   //   1 = filters (light, water, zone, season)
   //   2 = planter (type, size, name)
   //   3 = sync choice
@@ -869,7 +862,7 @@ async function submitGardenWizard() {
   }
 }
 
-// ── Open / delete (unchanged) ───────────────────────────────────────────────
+// ── Open / delete ───────────────────────────────────────────────────────────
 
 async function openGarden(id) {
   app.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-base-content/50 gap-3"><span class="loading loading-spinner loading-md text-primary"></span>Loading garden...</div>';

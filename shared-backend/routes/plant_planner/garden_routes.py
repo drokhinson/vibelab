@@ -246,7 +246,6 @@ async def save_garden_plants(garden_id: str, body: SavePlantsBody, user: Current
         ]
         sb.table("plantplanner_garden_plants").insert(rows).execute()
 
-    # Update timestamp
     sb.table("plantplanner_gardens").update({"updated_at": "now()"}).eq("id", garden_id).execute()
 
     # Promote each placed species to 'current' in My Plants. Count placements

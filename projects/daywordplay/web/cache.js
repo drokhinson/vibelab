@@ -36,7 +36,6 @@ var dwpCache = {
     this._store = {};
   },
 
-  // Merge fresh vote counts into cached yesterday data for a group.
   // Resets the TTL since data just came from the server.
   // Returns true if the entry existed, false if not.
   updateVoteCounts: function(groupId, voteCounts, hasVoted) {
@@ -60,7 +59,6 @@ var dwpCache = {
         s.i_voted = iVotedMap[s.id];
       }
     }
-    // Re-sort by vote count descending
     sentences.sort(function(a, b) { return b.vote_count - a.vote_count; });
 
     entry.data.has_voted = hasVoted;
@@ -83,7 +81,6 @@ var dwpCache = {
         break;
       }
     }
-    // Re-sort by vote count descending
     sentences.sort(function(a, b) { return b.vote_count - a.vote_count; });
 
     entry.data.has_voted = true;

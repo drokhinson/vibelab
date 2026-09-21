@@ -179,7 +179,6 @@ async def admin_approve_proposal(
         "etymology": proposal["etymology"],
     }).execute()
 
-    # Mark proposal approved
     sb.table("daywordplay_proposed_words").update({
         "status": "approved",
         "reviewed_at": datetime.now(timezone.utc).isoformat(),

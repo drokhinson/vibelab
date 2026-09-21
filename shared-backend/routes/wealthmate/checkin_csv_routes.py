@@ -85,7 +85,6 @@ async def export_checkins(user: dict = Depends(get_current_user)):
         .execute()
     )
 
-    # Group by checkin_id
     rows_by_checkin = {}
     for v in (all_values.data or []):
         cid = v["checkin_id"]
@@ -98,7 +97,6 @@ async def export_checkins(user: dict = Depends(get_current_user)):
     for ci in checkins.data:
         ci_date = ci["checkin_date"]
         values = rows_by_checkin.get(ci["id"], [])
-        # Sort by account name
         values.sort(key=lambda v: (acct_map.get(v["account_id"], {}).get("name", "")))
         for v in values:
             acct = acct_map.get(v["account_id"])
@@ -127,7 +125,6 @@ async def import_checkins(file: UploadFile = File(...), user: dict = Depends(get
     couple_id = _require_couple(user)
     sb = get_supabase()
 
-    # Read and decode
     contents = await file.read()
     if len(contents) > 1_000_000:
         raise HTTPException(status_code=400, detail="File too large (max 1 MB)")
@@ -141,7 +138,6 @@ async def import_checkins(file: UploadFile = File(...), user: dict = Depends(get
             detail=f"CSV must have headers: {', '.join(CSV_HEADERS)}",
         )
 
-    # Parse and validate rows
     rows = []
     errors = []
     for i, row in enumerate(reader, start=2):  # row 1 is header
@@ -197,7 +193,6 @@ async def import_checkins(file: UploadFile = File(...), user: dict = Depends(get
     if errors:
         raise HTTPException(status_code=400, detail={"errors": errors})
 
-    # Group rows by date
     by_date = {}
     for r in rows:
         by_date.setdefault(r["checkin_date"], []).append(r)

@@ -3,20 +3,19 @@
 // Layers on top of buildTimeline (domain/timeline.js): it takes that day
 // scaffold and places every routable stop onto a day using the same
 // nearest-neighbor/2-opt clustering the backend route optimizer uses
-// (services/route_planner.py), then computes the distance + estimated
+// (services/optimizer.py), then computes the distance + estimated
 // drive/walk time (domain/geo.js) between consecutive stops. Each day's first
 // stop also gets a leg from where the day starts (its stay/travel checkpoint, or
 // the Arrival bookend / prior day's last stop), and the trip closes with a leg
 // from the last stop to the Departure bookend (`endLeg`). The timeline IS the
 // route — there is no separate Route panel any more.
 //
-// It deliberately DIVERGES from services/route_planner.py in one way, and this
+// It deliberately DIVERGES from services/optimizer.py in one way, and this
 // divergence is the whole "anchoring" feature: auto-placement here is EPHEMERAL
 // (never persisted to plan_date) and it flows AROUND user-anchored stops,
 // counting them against each day's capacity when spreading. The backend planner
 // ignores anchored stops while spreading and writes plan_date to the DB. This
-// module has no backend twin — timeline.py stays the canonical timeline math
-// (mirrored in timeline.js); keep the anchoring behaviour HERE, web-side only.
+// module has no backend twin. Keep the anchoring behaviour HERE, web-side only.
 'use strict';
 
 (function () {

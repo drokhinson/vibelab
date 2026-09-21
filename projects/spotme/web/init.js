@@ -39,7 +39,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-delete-account").addEventListener("click", deleteAccount);
   document.getElementById("btn-generate-recovery").addEventListener("click", handleGenerateRecoveryCode);
 
-  // Init: check if logged in
   if (isLoggedIn()) {
     showView("profile");
   } else {

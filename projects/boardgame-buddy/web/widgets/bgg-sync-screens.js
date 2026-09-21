@@ -2,7 +2,7 @@
 // widgets/bgg-sync-screens.js — the four bodies of the BGG sync flow.
 //
 // Pure render functions keyed by screen, the same split
-// widgets/import-plays-steps.js uses: views/bgg-sync-view.js owns the
+// the sibling import-*-steps.js files use: views/bgg-sync-view.js owns the
 // lifecycle, the chrome and the transitions; this file owns nothing but
 // markup. Neither knows the other's internals — both read the snapshot
 // domain/bgg-sync-flow.js publishes.

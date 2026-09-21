@@ -31,7 +31,6 @@ async def health():
 @router.post("/auth/register")
 async def register(body: RegisterBody):
     sb = get_supabase()
-    # Check username uniqueness
     existing = (
         sb.table("wealthmate_users")
         .select("id")
@@ -256,7 +255,6 @@ async def delete_account(user: dict = Depends(get_current_user)):
     sb.table("wealthmate_invitations").delete().eq("from_user_id", user_id).execute()
     sb.table("wealthmate_invitations").delete().eq("to_username", user["username"]).execute()
 
-    # Delete the user
     sb.table("wealthmate_users").delete().eq("id", user_id).execute()
 
     return {"status": "deleted"}

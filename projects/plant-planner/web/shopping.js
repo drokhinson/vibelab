@@ -8,7 +8,7 @@
 // sidebar.
 //
 // All plant data is read from `plantplanner_plant_cache` via /catalog/search.
-// The route is cache-first; lazy-fills from Trefle/Perenual on misses.
+// The route is cache-first; lazy-fills from Perenual on misses.
 
 // ── Module state ────────────────────────────────────────────────────────────
 

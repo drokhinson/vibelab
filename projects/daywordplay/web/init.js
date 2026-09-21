@@ -19,7 +19,6 @@ async function loadEagerData() {
   const groupsData = await apiFetch('/groups/mine');
   myGroups = groupsData.groups || [];
 
-  // Restore or pick active group
   const stored = getStoredActiveGroup();
   activeGroupId = (stored && myGroups.find(g => g.id === stored))
     ? stored
@@ -39,7 +38,6 @@ async function loadEagerData() {
 // Re-renders only if the loaded data is relevant to the current view.
 async function _loadDeferredData() {
   await Promise.all([
-    // Other groups' today data
     ...myGroups.filter(g => g.id !== activeGroupId).map(g => _fetchAndCacheToday(g.id)),
     _bulkLoadYesterday(),
     _bulkLoadLeaderboards(),
@@ -47,7 +45,6 @@ async function _loadDeferredData() {
     loadHomeJoinRequests(),
   ]);
 
-  // Re-render if deferred data affects the current view
   if (currentView === 'home' && activeWordTab === 'vote') {
     yesterdayData = dwpCache.get('yesterday', activeGroupId) || null;
     renderPageContent();
@@ -60,7 +57,6 @@ async function _loadDeferredData() {
     loadAllJoinRequests();
   }
 
-  // Update settings badge with pending request count
   updateSettingsBadge();
 }
 

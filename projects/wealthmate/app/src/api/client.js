@@ -17,7 +17,6 @@ async function apiFetch(path, options = {}) {
   return res.json();
 }
 
-// ── Health check ──────────────────────────────────────────────────────────────
 export async function fetchHealth() {
   return apiFetch("/health");
 }

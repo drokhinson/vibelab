@@ -4,11 +4,11 @@
 // a US state tile (which maps to a representative zone) or, for international
 // users, picks a zone directly from the disclosure list.
 //
-// Used in two places:
-//   • Wizard step 4 (gardens.js → renderWizardStepLocation) — rendered
-//     INLINE via `renderInlineZonePicker(containerId, opts)`.
-//   • Builder kebab "Change zone" (garden.js → openZoneEditor) — shown in
-//     a modal via `openLocationPicker(opts)`.
+// Used from the builder kebab’s "Change zone" (garden.js → openZoneEditor),
+// shown in a modal via `openLocationPicker(opts)`.
+//
+// `renderInlineZonePicker(containerId, opts)` renders the same picker inline;
+// it has no current caller.
 //
 // Both paths resolve to `{ zone, zone_number, label, source }`. Caller
 // decides what to do with the result.

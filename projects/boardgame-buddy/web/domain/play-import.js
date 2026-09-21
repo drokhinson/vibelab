@@ -3,8 +3,8 @@
 //
 // Owns the draft: what was pasted, what the model made of it, how each name
 // and each game resolved, and the chunked write at the end. No DOM — the view
-// (views/import-plays-view.js) reads this and paints, and the step bodies
-// (widgets/import-plays-steps.js) are pure functions of it.
+// (views/import-wizard-view.js) reads this and paints, and the step bodies
+// (the per-source widgets/import-*-steps.js) are pure functions of it.
 //
 // Three things here are worth knowing before reading the view:
 //

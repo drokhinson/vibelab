@@ -89,7 +89,7 @@ export const initialState = {
   expandedIngredientIds: new Set(),   // ingredient ids whose sauces panel is open
   ingredientMerge: null,              // { keepId, mergeIds: Set, error, saving } when admin is in merge mode
 
-  // Auth (Phase 2 hooks; unused in Phase 1)
+  // Auth
   authReady: false,             // false until we've checked supabase for an existing session
   authBusy: false,              // true while a sign-in / sign-up is in flight
   authError: null,
@@ -237,7 +237,7 @@ const A = {
   INGREDIENT_MERGE_CANCEL: 'INGREDIENT_MERGE_CANCEL',
   INGREDIENT_MERGE_SET_ERROR: 'INGREDIENT_MERGE_SET_ERROR',
 
-  // Phase 2 hooks (auth). Not used in Phase 1 but reducer handles them so wiring later is trivial.
+  // Auth
   SET_REF_CUISINES: 'SET_REF_CUISINES',
   SET_REF_UNITS: 'SET_REF_UNITS',
   SET_AUTH_READY: 'SET_AUTH_READY',

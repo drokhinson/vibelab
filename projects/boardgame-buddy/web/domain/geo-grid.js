@@ -4,7 +4,7 @@
 // domain/geo.js answers "where is this device", coarsely, from the timezone,
 // and deliberately never asks for a coordinate. This file is the other
 // question: a photo's EXIF already carries the exact place it was taken, and
-// the photo importer (views/photo-import-view.js) needs to turn that into the
+// the photo importer (widgets/import-photos-branch.js) needs to turn that into the
 // one country-shaped value a play row can hold.
 //
 // NOTHING LEAVES THE DEVICE. The whole point of resolving this here rather

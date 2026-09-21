@@ -129,8 +129,8 @@ def extract_modifier(food: str, note: str | None) -> tuple[str, str | None, str 
     leftover_note = note
 
     if not _MATCH_RE or not clean:
-        # Still try note-promotion below if registry is empty? No — if registry
-        # is empty there are no modifier words to recognize.
+        # Registry empty → there are no modifier words to recognize, so skip
+        # note-promotion.
         return (clean, None, leftover_note)
 
     # ── Trailing comma fragments ────────────────────────────────────────────

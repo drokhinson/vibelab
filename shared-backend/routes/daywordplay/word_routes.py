@@ -186,7 +186,6 @@ async def submit_sentence(
             detail=f"Your sentence must include the word \"{word.get('word', '')}\".",
         )
 
-    # Check for existing submission
     existing = sb.table("daywordplay_sentences").select("id").eq("group_id", group_id).eq("user_id", current_user.user_id).eq("assigned_date", today.isoformat()).execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="You already submitted a sentence for today.")
@@ -310,7 +309,6 @@ async def get_yesterday(group_id: str, current_user: CurrentUser = Depends(get_c
     sentences = sentences_result.data or []
     sentence_ids = [s["id"] for s in sentences]
 
-    # Count votes per sentence
     vote_counts: dict[str, int] = {}
     if sentence_ids:
         votes = sb.table("daywordplay_votes").select("sentence_id").in_("sentence_id", sentence_ids).execute()
@@ -324,7 +322,6 @@ async def get_yesterday(group_id: str, current_user: CurrentUser = Depends(get_c
         my_vote_result = sb.table("daywordplay_votes").select("sentence_id").eq("voter_user_id", current_user.user_id).in_("sentence_id", sentence_ids).execute()
         my_votes = {v["sentence_id"] for v in (my_vote_result.data or [])}
 
-    # Annotate sentences
     enriched = []
     for s in sentences:
         user_info = s.get("daywordplay_profiles") or {}
@@ -338,7 +335,6 @@ async def get_yesterday(group_id: str, current_user: CurrentUser = Depends(get_c
             "is_mine": s["user_id"] == current_user.user_id,
         })
 
-    # Sort by votes desc
     enriched.sort(key=lambda x: x["vote_count"], reverse=True)
 
     # Did the current user vote for anyone yet?
@@ -405,7 +401,6 @@ async def vote_for_sentence(sentence_id: str, current_user: CurrentUser = Depend
     """Vote for a sentence. One vote per user per group per day. Cannot vote for own sentence."""
     sb = get_supabase()
 
-    # Get sentence info
     sentence_result = sb.table("daywordplay_sentences").select(
         "id, group_id, user_id, assigned_date"
     ).eq("id", sentence_id).execute()
@@ -450,7 +445,6 @@ async def get_word_history(current_user: CurrentUser = Depends(get_current_user)
     user_id = current_user.user_id
     today = date.today().isoformat()
 
-    # Get user's group IDs
     memberships = sb.table("daywordplay_group_members").select("group_id").eq("user_id", user_id).execute()
     group_ids = [m["group_id"] for m in (memberships.data or [])]
     if not group_ids:
@@ -615,11 +609,9 @@ async def get_all_words(current_user: CurrentUser = Depends(get_current_user)) -
             sid = v["sentence_id"]
             vote_counts[sid] = vote_counts.get(sid, 0) + 1
 
-    # User's bookmarks
     bookmarks_result = sb.table("daywordplay_bookmarks").select("word_id").eq("user_id", user_id).execute()
     bookmarked_ids = {b["word_id"] for b in (bookmarks_result.data or [])}
 
-    # Build result
     result = []
     for w in all_words:
         wid = w["id"]
@@ -696,7 +688,6 @@ async def get_played_words(current_user: CurrentUser = Depends(get_current_user)
             sid = v["sentence_id"]
             vote_counts[sid] = vote_counts.get(sid, 0) + 1
 
-    # User's bookmarks
     bookmarks_result = sb.table("daywordplay_bookmarks").select("word_id").eq("user_id", user_id).execute()
     bookmarked_ids = {b["word_id"] for b in (bookmarks_result.data or [])}
 
@@ -739,12 +730,10 @@ async def propose_word(
     if not word:
         raise HTTPException(status_code=400, detail="Word cannot be empty.")
 
-    # Check active dictionary
     existing = sb.table("daywordplay_words").select("id").eq("word", word).execute()
     if existing.data:
         raise HTTPException(status_code=409, detail=f'"{word}" is already in the dictionary.')
 
-    # Check pending proposals
     pending = sb.table("daywordplay_proposed_words").select("id").eq("word", word).eq("status", "pending").execute()
     if pending.data:
         raise HTTPException(status_code=409, detail=f'"{word}" already has a pending proposal awaiting review.')

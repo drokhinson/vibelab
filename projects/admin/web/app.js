@@ -1,6 +1,5 @@
 // app.js — Vibelab Admin Dashboard
 // All data comes from the shared backend API via fetch().
-// API base URL is set in config.js as window.APP_CONFIG.apiBase
 
 const API = window.APP_CONFIG?.apiBase ?? "http://localhost:8000";
 
@@ -205,12 +204,10 @@ async function loadUsers(appName) {
     html += "</tbody></table></div>";
     el.innerHTML = html;
 
-    // Attach reset button handlers
     el.querySelectorAll(".reset-btn").forEach((btn) => {
       btn.addEventListener("click", () => generateResetCode(btn.dataset.uid, btn.dataset.app, btn));
     });
 
-    // Attach delete button handlers
     el.querySelectorAll(".delete-btn").forEach((btn) => {
       btn.addEventListener("click", () => confirmDeleteUser(btn.dataset.uid, btn.dataset.app, btn.dataset.label));
     });
@@ -263,7 +260,6 @@ document.getElementById("delete-confirm-btn").addEventListener("click", async ()
       method: "DELETE",
     });
     document.getElementById("delete-dialog").close();
-    // Reload the user list
     loadUsers(pendingDelete.appName);
     pendingDelete = null;
   } catch (err) {
@@ -294,7 +290,6 @@ async function loadStorage() {
       return;
     }
 
-    // Sort by total size descending
     names.sort((a, b) => (apps[b].total_bytes || 0) - (apps[a].total_bytes || 0));
     const maxBytes = Math.max(...names.map((n) => apps[n].total_bytes || 1));
 
@@ -395,7 +390,6 @@ async function loadApiLogUsers() {
     const users = data.users || [];
     const select = document.getElementById("api-logs-user-filter");
     const current = select.value;
-    // Reset to "All users" + any users we just fetched.
     select.innerHTML = '<option value="">All users</option>';
     for (const u of users) {
       const opt = document.createElement("option");

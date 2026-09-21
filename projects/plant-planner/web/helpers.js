@@ -142,7 +142,6 @@ function showThemeSettings() {
   dialog.querySelectorAll('input[name="pp-theme"]').forEach(function(radio) {
     radio.onchange = function() { applyTheme(this.value); };
   });
-  // 3D render-style selector retired with the legacy renderer; intentionally left empty.
   var logoutBtn = document.getElementById("settings-logout");
   if (logoutBtn) logoutBtn.onclick = function() {
     dialog.close();

@@ -41,7 +41,6 @@ function isLiabilityType(t) {
   return ["car_loan", "mortgage", "loan", "other_liability"].includes(t);
 }
 
-// Map UI category + sub-type to DB account_type
 function resolveAccountType(category, form) {
   switch (category) {
     case "bank": return "savings";
@@ -55,7 +54,6 @@ function resolveAccountType(category, form) {
   }
 }
 
-// Map DB account_type back to UI category
 function typeToCategory(t) {
   if (["checking_personal", "checking_joint", "savings"].includes(t)) return "bank";
   if (["401k", "roth_ira", "retirement_other"].includes(t)) return "retirement";
@@ -127,7 +125,6 @@ function showView(name) {
     return;
   }
 
-  // App views
   appShell.style.display = "block";
   loginView.style.display = "none";
   registerView.style.display = "none";
@@ -138,12 +135,10 @@ function showView(name) {
 
   currentView = name;
 
-  // Update nav
   document.querySelectorAll(".nav-item").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.view === name);
   });
 
-  // Load data for view
   if (name === "dashboard") loadDashboard();
   if (name === "accounts") loadAccounts();
   if (name === "history") loadHistory();

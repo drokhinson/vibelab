@@ -83,7 +83,6 @@ async def send_invite(body: InviteBody, user: dict = Depends(get_current_user)):
     if body.to_username == user["username"]:
         raise HTTPException(status_code=400, detail="You cannot invite yourself")
 
-    # Check if invitee exists
     invitee = (
         sb.table("wealthmate_users")
         .select("id")
@@ -106,7 +105,6 @@ async def send_invite(body: InviteBody, user: dict = Depends(get_current_user)):
         if len(members.data or []) > 1:
             raise HTTPException(status_code=400, detail="That user is already merged with someone else")
 
-    # Check for existing pending invite
     existing = (
         sb.table("wealthmate_invitations")
         .select("id")
@@ -135,7 +133,6 @@ async def respond_to_invite(invite_id: str, body: InviteRespondBody, user: dict 
     # Pydantic validates action is a valid InviteAction enum value
 
     sb = get_supabase()
-    # Fetch invite
     invite = (
         sb.table("wealthmate_invitations")
         .select("*")

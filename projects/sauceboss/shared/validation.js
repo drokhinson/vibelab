@@ -1,5 +1,5 @@
 // Sauce builder validation. Returns { ok, errors[] }.
-// Used by Phase 3 builder. Lives here so native and web share rules.
+// Lives here so native and web share the same rules.
 // Ported from web/builder.js validateBuilder.
 
 export function validateBuilder(builder, opts = {}) {

@@ -79,7 +79,6 @@ async def wealth_by_account(user: dict = Depends(get_current_user)):
     )
     account_list = accts.data or []
 
-    # Gather all checkin IDs
     checkin_ids = [c["id"] for c in checkins.data]
     dates = [c["checkin_date"] for c in checkins.data]
 

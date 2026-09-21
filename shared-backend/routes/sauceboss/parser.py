@@ -413,7 +413,6 @@ def _list_after_heading(soup, heading_re, *, limit: int = 80) -> list[str]:
 
     for heading in soup.find_all(re.compile(r"^h[1-6]$", re.IGNORECASE)):
         if heading_re.search(heading.get_text()):
-            # Walk siblings after the heading looking for a <ul>/<ol>.
             for sib in heading.find_next_siblings():
                 if not isinstance(sib, Tag):
                     continue
@@ -472,7 +471,6 @@ def _extract_instructions_fallback(soup) -> list[str]:
                 texts = [t for t in texts if t]
                 if texts:
                     return texts
-            # Check for <p> blocks inside
             paras = el.find_all("p")
             if paras:
                 texts = [p.get_text(separator=" ", strip=True) for p in paras]

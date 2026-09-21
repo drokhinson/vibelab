@@ -1,14 +1,11 @@
 // render2d.js — top-down 2D planter renderer (SVG-based).
 //
-// Replaces render3d.js for the Phase-1 plant-first refactor: the builder no
-// longer shows a Three.js view; instead the planter is rendered as a flat,
-// scaled-to-fit SVG with one disk per placement.
+// The planter is rendered as a flat, scaled-to-fit SVG with one disk per
+// placement.
 //
-// The returned scene handle is shape-compatible with the old 3D handle so
-// companions.js, shading.js, and plant-drag.js keep working: they only need
-// `garden`, `placements`, and a `projectPlacement(placement) → {x,y}`
-// function. The handle carries `isTwoD: true` so callers can branch when
-// 3D-specific paths are needed.
+// The scene handle exposes `garden`, `placements` and
+// `projectPlacement(placement) → {x,y}`, and carries `isTwoD: true` so callers
+// can branch on it (helpers.js checks it to dispose the view).
 
 var SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -331,7 +328,7 @@ function bind2DClick(handle, onPlacementClick) {
   });
 }
 
-// Helpers used by companions.js / shading.js — same name as the 3D version so
+// Same name as the 3D version so callers do not need to branch.
 // callers don't need to branch.
 function scenePlacementWorldPosition(handle, placement) {
   if (!handle || !placement) return null;
