@@ -199,8 +199,9 @@
     //
     // What the client must NOT do is decide visibility itself. A row that
     // arrives here is one the viewer may have; `moderation_status` rides along
-    // so the AUTHOR's own copy can say it is waiting or was turned down, never
-    // so the client can filter on it.
+    // so the AUTHOR's own copy can say which of the four states it is in —
+    // unlisted (they never asked), pending (waiting), approved, turned down —
+    // never so the client can filter on it.
 
     rulebookLinks(gameId, { expansionIds } = {}) {
       return this.pool(gameId, {
@@ -241,9 +242,13 @@
      *      printing you own beats the printing an admin found.
      *   2. an APPROVED one, most-adopted first. The safe public answer, and the
      *      only kind a signed-out reader is ever handed.
-     *   3. whatever is left — a pending link of their own or a buddy's. It is
-     *      on their screen because the server decided they may see it, and the
-     *      caller draws the badge that says it is not approved yet.
+     *   3. whatever is left — an unreviewed link of their own or a buddy's,
+     *      whether it is pending or unlisted (migration 053). The two are one
+     *      case here on purpose: both are live for exactly these readers, and
+     *      whether an admin was ASKED about it says nothing about which link
+     *      this viewer should be sent to. It is on their screen because the
+     *      server decided they may see it, and the caller draws the badge that
+     *      says nobody has vouched for it yet.
      *
      * Rows arrive sorted by popularity then recency, so "first match wins" is
      * the tiebreak at every step and no sort happens here.

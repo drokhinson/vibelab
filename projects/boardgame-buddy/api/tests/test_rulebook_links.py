@@ -18,11 +18,16 @@ because every other read path in the API just calls
   * the BUDDY LOOKUP IS NOT PAID FOR unless a row actually needs it. The chapter
     pool is fetched on every guide mount, and most guides hold no rulebook link
     at all.
-  * an ADMIN'S OWN LINK IS BORN APPROVED, everyone else's pending. A queue item
-    an admin would only ever approve themselves carries no information.
+  * ASKING FOR REVIEW IS THE AUTHOR'S DECISION (migration 053), and it is the
+    only thing that separates `unlisted` from `pending` — the two reach exactly
+    the same readers, and only one of them is queue work. NOBODY'S LINK IS BORN
+    APPROVED any more, an admin's included.
   * EDITING THE URL RE-OPENS THE GATE. An approval is a decision about a
     destination, not about a row — without this, an author could get an
     innocuous PDF approved and then point the approved row anywhere.
+  * A DECISION STANDS UNTIL THE DESTINATION CHANGES. The review switch moves a
+    link that is still waiting and moves nothing once an admin has ruled, so an
+    author cannot quietly un-publish an approval or re-queue a denial.
   * the URL is validated where a person can read the complaint, and the scheme
     is http(s) only. `javascript:` is not an edge case here, it is the reason
     the CHECK constraint duplicates this test in the database.
@@ -164,6 +169,15 @@ def _edges_sb(pairs):
     # ...and nobody else, signed in or not.
     (RulebookStatus.PENDING, STRANGER, set(), False),
     (RulebookStatus.PENDING, None, set(), False),
+    # Unlisted reaches EXACTLY the same four answers (migration 053). Not
+    # sharing a link with the world is a statement about the queue, not about
+    # the buddies it was added for — and a row of its own here because the
+    # temptation when adding a "private" state is to close it further than
+    # pending, which would break the table that added the link tonight.
+    (RulebookStatus.UNLISTED, AUTHOR, set(), True),
+    (RulebookStatus.UNLISTED, BUDDY, {AUTHOR}, True),
+    (RulebookStatus.UNLISTED, STRANGER, set(), False),
+    (RulebookStatus.UNLISTED, None, set(), False),
     # Denied reaches its author, so they can see it was looked at rather than
     # lost — and NOT their buddies, who could see it a moment ago. This row is
     # the whole reason the filter is applied on the guide as well as the pool.
@@ -181,11 +195,23 @@ def test_a_status_that_cannot_exist_is_read_as_pending():
     row = _link(status=None)
     assert R.is_visible_to(row, STRANGER, set()) is False
     assert R.is_visible_to(row, AUTHOR, set()) is True
+    assert R.gate_status(row) is RulebookStatus.PENDING
+
+
+def test_a_status_this_code_has_never_heard_of_is_also_read_as_pending():
+    """A row written by a newer deploy must not be PUBLISHED by an older one.
+    `RulebookStatus('whatever')` raises, and an uncaught raise on a read path
+    every guide mount runs is a 500 on the whole scroll."""
+    row = _link()
+    row["moderation_status"] = "some-future-state"
+    assert R.gate_status(row) is RulebookStatus.PENDING
+    assert R.is_visible_to(row, STRANGER, set()) is False
+    assert R.is_visible_to(row, BUDDY, {AUTHOR}) is True
 
 
 def test_an_admin_sees_every_link_whatever_its_state():
     """A queue that hides its own items is not a queue."""
-    for status in (RulebookStatus.PENDING, RulebookStatus.DENIED):
+    for status in (RulebookStatus.UNLISTED, RulebookStatus.PENDING, RulebookStatus.DENIED):
         assert R.is_visible_to(_link(status), STRANGER, set(), is_admin=True) is True
 
 
@@ -236,9 +262,24 @@ def test_the_buddy_lookup_is_not_paid_for_when_nothing_needs_it():
     R.filter_visible(sb, [_link(RulebookStatus.PENDING, created_by=BUDDY)], BUDDY)
     assert sb.hits("boardgamebuddy_buddy_edges") == []
 
+    # Nor does somebody else's DENIED link: no buddy edge rescues one, so the
+    # lookup could only ever confirm an answer already known.
+    R.filter_visible(sb, [_link(RulebookStatus.DENIED)], BUDDY)
+    assert sb.hits("boardgamebuddy_buddy_edges") == []
+
     # Somebody else's pending link is the one case that does.
     R.filter_visible(sb, [_link(RulebookStatus.PENDING)], BUDDY)
     assert len(sb.hits("boardgamebuddy_buddy_edges")) == 1
+
+
+def test_an_unlisted_link_of_somebody_elses_pays_for_the_lookup_too():
+    """The guard is "could a buddy edge rescue this row", not a hard-coded
+    PENDING — an unlisted link reaches buddies exactly as a pending one does,
+    and a guard that forgot it would hide every buddy's unlisted link."""
+    sb = _edges_sb([(AUTHOR, BUDDY)])
+    kept = R.filter_visible(sb, [_link(RulebookStatus.UNLISTED)], BUDDY)
+    assert len(sb.hits("boardgamebuddy_buddy_edges")) == 1
+    assert [r["id"] for r in kept] == ["chapter-1"]
 
 
 def test_buddy_ids_reads_both_sides_of_the_canonical_edge():
@@ -311,9 +352,13 @@ def test_the_layout_and_the_type_must_agree_in_both_directions():
         R.validate_layout_pairing(ChapterLayout.TEXT, "rulebook")
 
 
-def test_an_admins_link_is_born_approved():
-    assert R.initial_status(True) is RulebookStatus.APPROVED
-    assert R.initial_status(False) is RulebookStatus.PENDING
+def test_the_gate_a_new_link_opens_at_is_the_authors_answer():
+    """Two states, and the author picks between them with the save form's
+    review switch. Neither is approved: as of migration 053 an admin approves
+    their own link from the queue like anybody else's, which is one tap and
+    leaves an audit trail a self-approval never did."""
+    assert R.initial_status(True) is RulebookStatus.PENDING
+    assert R.initial_status(False) is RulebookStatus.UNLISTED
 
 
 # ── The create path ──────────────────────────────────────────────────────────
@@ -350,11 +395,12 @@ def _create_sb(existing_mine=None):
     return _SB(handler)
 
 
-def _body(url="  https://example.com/rules.pdf  "):
+def _body(url="  https://example.com/rules.pdf  ", **extra):
     return ChapterCreate(
         chapter_type="rulebook",
         layout=ChapterLayout.RULEBOOK_LINK,
         link_url=url,
+        **extra,
     )
 
 
@@ -371,7 +417,7 @@ def _inserted_chapter(sb):
     )
 
 
-def test_a_players_link_is_stored_pending_with_a_derived_title_and_mirror():
+def test_a_submitted_link_is_stored_pending_with_a_derived_title_and_mirror():
     sb = _create_sb()
     C._create_chapter_sync(sb, "game-1", _body(), _user())
     row = _inserted_chapter(sb)
@@ -383,13 +429,38 @@ def test_a_players_link_is_stored_pending_with_a_derived_title_and_mirror():
     assert row["grid"] is None
 
 
-def test_an_admins_link_is_stored_approved_and_stamped():
+def test_a_link_nobody_was_asked_about_is_stored_unlisted():
+    """The switch off (migration 053): live for the author and their buddies,
+    and in nobody's queue."""
+    sb = _create_sb()
+    C._create_chapter_sync(sb, "game-1", _body(request_review=False), _user())
+    row = _inserted_chapter(sb)
+    assert row["moderation_status"] == str(RulebookStatus.UNLISTED)
+    assert row["moderated_by"] is None and row["moderated_at"] is None
+
+
+def test_a_client_that_sends_no_answer_submits():
+    """A pre-053 client's Save meant "submit this", and it goes on meaning
+    that — the field defaults to True rather than to the quieter state."""
+    body = ChapterCreate(
+        chapter_type="rulebook",
+        layout=ChapterLayout.RULEBOOK_LINK,
+        link_url="https://example.com/rules.pdf",
+    )
+    assert body.request_review is True
+
+
+def test_an_admins_own_link_goes_through_the_same_gate():
+    """Until 053 it was born approved, which made one act mean two different
+    things depending on who did it and left the person most likely to paste a
+    link in a hurry as the one person nobody reviewed."""
     sb = _create_sb()
     C._create_chapter_sync(sb, "game-1", _body(), _user(is_admin=True))
     row = _inserted_chapter(sb)
-    assert row["moderation_status"] == str(RulebookStatus.APPROVED)
-    assert row["moderated_by"] == AUTHOR
-    assert row["moderated_at"] == "now()"
+    assert row["moderation_status"] == str(RulebookStatus.PENDING)
+    # And no decision is recorded, because nobody has made one.
+    assert row["moderated_by"] is None
+    assert row["moderated_at"] is None
 
 
 def test_a_second_link_for_the_same_game_is_refused_rather_than_stacked():
@@ -493,7 +564,10 @@ def test_saving_the_same_url_again_leaves_an_approval_alone():
     assert "moderation_status" not in _updated(sb)
 
 
-def test_an_admin_editing_a_link_is_itself_the_decision():
+def test_an_admin_editing_a_link_re_opens_the_gate_like_anybody_else():
+    """053: an admin's edit is no longer its own approval. Same reasoning as
+    the create path — the queue is one tap away and a self-approval leaves an
+    audit trail that cannot be told apart from a real decision."""
     sb = _update_sb("https://example.com/old.pdf")
     C._update_chapter_sync(
         sb, "chapter-1",
@@ -501,19 +575,138 @@ def test_an_admin_editing_a_link_is_itself_the_decision():
         _user(is_admin=True),
     )
     row = _updated(sb)
-    assert row["moderation_status"] == str(RulebookStatus.APPROVED)
-    assert row["moderated_by"] == AUTHOR
+    assert row["moderation_status"] == str(RulebookStatus.PENDING)
+    assert row["moderated_by"] is None
+    assert row["moderated_at"] is None
+
+
+def test_re_opening_the_gate_clears_the_last_decisions_author():
+    """`moderated_by` names who decided THIS row. Leaving the last admin on a
+    link they have not seen is a lie the audit trail cannot tell apart from a
+    real decision — the same argument migration 052 makes for the backfilled
+    rows carrying NULL."""
+    sb = _update_sb("https://example.com/old.pdf", status=RulebookStatus.APPROVED)
+    C._update_chapter_sync(
+        sb, "chapter-1",
+        ChapterUpdate(link_url="https://elsewhere.test/new.pdf"),
+        _user(),
+    )
+    row = _updated(sb)
+    assert row["moderated_by"] is None
+    assert row["moderated_at"] is None
+
+
+# ── The review switch on the edit path (migration 053) ───────────────────────
+
+def test_withdrawing_a_submission_unlists_it_without_touching_the_url():
+    """The author turning the switch off on a link still in the queue: it
+    leaves the queue and stays exactly where it was for their buddies."""
+    sb = _update_sb("https://example.com/rules.pdf", status=RulebookStatus.PENDING)
+    C._update_chapter_sync(
+        sb, "chapter-1",
+        ChapterUpdate(link_url="https://example.com/rules.pdf", request_review=False),
+        _user(),
+    )
+    row = _updated(sb)
+    assert row["moderation_status"] == str(RulebookStatus.UNLISTED)
+    assert row["link_url"] == "https://example.com/rules.pdf"
+
+
+def test_turning_the_switch_on_submits_an_unlisted_link():
+    sb = _update_sb("https://example.com/rules.pdf", status=RulebookStatus.UNLISTED)
+    C._update_chapter_sync(
+        sb, "chapter-1",
+        ChapterUpdate(link_url="https://example.com/rules.pdf", request_review=True),
+        _user(),
+    )
+    assert _updated(sb)["moderation_status"] == str(RulebookStatus.PENDING)
+
+
+def test_a_pending_link_saved_again_unchanged_is_not_re_written():
+    """Nothing moved, so nothing is written — three columns of churn on every
+    no-op re-save would be the cost of getting this wrong."""
+    sb = _update_sb("https://example.com/rules.pdf", status=RulebookStatus.PENDING)
+    C._update_chapter_sync(
+        sb, "chapter-1",
+        ChapterUpdate(link_url="https://example.com/rules.pdf", request_review=True),
+        _user(),
+    )
+    assert "moderation_status" not in _updated(sb)
+
+
+def test_an_author_cannot_un_publish_an_approval_with_the_switch():
+    """A DECISION STANDS UNTIL THE DESTINATION CHANGES. Otherwise the switch is
+    a way to take back an admin's published link without touching what it
+    points at — and the same row could be flipped public again at will."""
+    sb = _update_sb("https://example.com/rules.pdf", status=RulebookStatus.APPROVED)
+    C._update_chapter_sync(
+        sb, "chapter-1",
+        ChapterUpdate(link_url="https://example.com/rules.pdf", request_review=False),
+        _user(),
+    )
+    assert "moderation_status" not in _updated(sb)
+
+
+def test_an_author_cannot_re_queue_a_denial_with_the_switch():
+    """The mirror of the rule above, and the one the create path's 409 already
+    enforces for a new row: the way to answer a denial is a different URL."""
+    sb = _update_sb("https://example.com/rules.pdf", status=RulebookStatus.DENIED)
+    C._update_chapter_sync(
+        sb, "chapter-1",
+        ChapterUpdate(link_url="https://example.com/rules.pdf", request_review=True),
+        _user(),
+    )
+    assert "moderation_status" not in _updated(sb)
+
+
+def test_a_changed_url_re_opens_the_gate_at_whichever_side_the_switch_is_on():
+    """The two halves compose: the destination changed, so the decision is
+    void — and where it lands is still the author's answer."""
+    sb = _update_sb("https://example.com/old.pdf", status=RulebookStatus.APPROVED)
+    C._update_chapter_sync(
+        sb, "chapter-1",
+        ChapterUpdate(link_url="https://elsewhere.test/new.pdf", request_review=False),
+        _user(),
+    )
+    assert _updated(sb)["moderation_status"] == str(RulebookStatus.UNLISTED)
+
+
+def test_a_client_that_sends_no_switch_leaves_the_gate_where_it_was():
+    """`request_review` is tri-state on the edit shape: None means "not
+    supplied", so a pre-053 client — or any caller editing something else —
+    cannot withdraw a submission by omission."""
+    sb = _update_sb("https://example.com/rules.pdf", status=RulebookStatus.UNLISTED)
+    C._update_chapter_sync(
+        sb, "chapter-1",
+        ChapterUpdate(link_url="https://example.com/rules.pdf"),
+        _user(),
+    )
+    assert "moderation_status" not in _updated(sb)
+
+    # And the same omission on a PENDING row leaves it in the queue rather than
+    # quietly unlisting it — even when the URL moves, which re-opens the gate.
+    # Nothing is WRITTEN because pending is where it lands anyway; what this
+    # pins is that it does not land on unlisted.
+    sb = _update_sb("https://example.com/old.pdf", status=RulebookStatus.PENDING)
+    C._update_chapter_sync(
+        sb, "chapter-1",
+        ChapterUpdate(link_url="https://elsewhere.test/new.pdf"),
+        _user(),
+    )
+    assert _updated(sb).get("moderation_status", str(RulebookStatus.PENDING)) == str(
+        RulebookStatus.PENDING
+    )
 
 
 # ── The admin queue ──────────────────────────────────────────────────────────
 
-def _moderate_sb(layout=str(ChapterLayout.RULEBOOK_LINK)):
+def _moderate_sb(layout=str(ChapterLayout.RULEBOOK_LINK), status=RulebookStatus.PENDING):
     def handler(q):
         if q.table_name == "boardgamebuddy_guide_chapters":
             if q.op == "update":
                 return [{"id": "chapter-1"}]
             return [{"id": "chapter-1", "layout": layout,
-                     "moderation_status": str(RulebookStatus.PENDING)}]
+                     "moderation_status": str(status)}]
         return []
     return _SB(handler)
 
@@ -535,6 +728,32 @@ def test_a_decision_does_not_touch_the_chapters_edit_clock():
     sb = _moderate_sb()
     A._moderate_rulebook_link_sync(sb, "chapter-1", RulebookStatus.APPROVED, "admin-1")
     assert "updated_at" not in _updated(sb)
+
+
+def test_an_unlisted_link_cannot_be_approved_by_an_admin_who_found_it():
+    """An approval is the answer to a question somebody asked. An unlisted link
+    is one its author deliberately did not submit (migration 053), and
+    publishing it on an admin's initiative would make the review switch a
+    suggestion rather than a choice."""
+    sb = _moderate_sb(status=RulebookStatus.UNLISTED)
+    with pytest.raises(HTTPException) as e:
+        A._moderate_rulebook_link_sync(
+            sb, "chapter-1", RulebookStatus.APPROVED, "admin-1"
+        )
+    assert e.value.status_code == 409
+    assert sb.hits("boardgamebuddy_guide_chapters", "update") == []
+
+
+def test_an_unlisted_link_can_still_be_denied():
+    """The asymmetry is the point: an admin who finds a malicious link
+    spreading through a buddy graph must be able to kill it whether or not
+    anybody asked them to look at it."""
+    sb = _moderate_sb(status=RulebookStatus.UNLISTED)
+    out = A._moderate_rulebook_link_sync(
+        sb, "chapter-1", RulebookStatus.DENIED, "admin-1"
+    )
+    assert out.moderation_status is RulebookStatus.DENIED
+    assert _updated(sb)["moderation_status"] == str(RulebookStatus.DENIED)
 
 
 def test_only_a_rulebook_link_can_be_moderated_through_this_queue():

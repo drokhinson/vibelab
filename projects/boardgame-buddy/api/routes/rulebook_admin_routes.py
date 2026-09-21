@@ -1,4 +1,4 @@
-"""The admin's rulebook-link queue (migration 052).
+"""The admin's rulebook-link queue (migrations 052, 053).
 
 A SEPARATE queue from the chapter reports in chapter_routes.py, and
 deliberately not folded into them. Reports are reactive — something is
@@ -86,6 +86,12 @@ _REVIEW_SELECT = (
 
 
 def _list_rulebook_links_sync(sb: Client, status: str) -> list[RulebookLinkReviewItem]:
+    # One equality on moderation_status, off idx_bgb_chapters_rulebook_status.
+    # `unlisted` is a legal value here and the UI never asks for it: those are
+    # links nobody submitted (migration 053), so they are not queue work, and a
+    # tab listing them would be a list of what people chose not to publish.
+    # The filter accepts it so an admin chasing a specific link by state can,
+    # and the default below stays where the work is.
     rows = (
         sb.table("boardgamebuddy_guide_chapters")
         .select(_REVIEW_SELECT)
@@ -135,15 +141,17 @@ def _list_rulebook_links_sync(sb: Client, status: str) -> list[RulebookLinkRevie
 )
 async def list_rulebook_links(
     status: RulebookStatus = Query(
-        RulebookStatus.PENDING, description="pending | approved | denied"
+        RulebookStatus.PENDING, description="unlisted | pending | approved | denied"
     ),
     _admin: CurrentUser = Depends(get_current_admin),
 ) -> list[RulebookLinkReviewItem]:
     """Admin-only: the rulebook-link queue.
 
-    `pending` is the work; `approved` and `denied` are there so a decision can
-    be found again and reversed — both endpoints below take a link in any state,
-    which is what makes a denial undoable rather than a one-way door.
+    `pending` is the work — links whose author ASKED (migration 053). `approved`
+    and `denied` are there so a decision can be found again and reversed, which
+    is what makes a denial undoable rather than a one-way door. `unlisted` is
+    reachable and is not a queue: those authors asked for nothing, and the admin
+    UI offers no tab for them.
     """
     sb = get_supabase()
     return await asyncio.to_thread(_list_rulebook_links_sync, sb, str(status))
@@ -167,6 +175,26 @@ def _moderate_rulebook_link_sync(
         # and a 400 here is what stops the two being confused by a client.
         raise HTTPException(
             status_code=400, detail="That chapter is not a rulebook link"
+        )
+    if (
+        decision is RulebookStatus.APPROVED
+        and row.get("moderation_status") == RulebookStatus.UNLISTED
+    ):
+        # AN APPROVAL IS THE ANSWER TO A QUESTION SOMEBODY ASKED. An unlisted
+        # link is one its author deliberately did not submit (migration 053) —
+        # the PDF their own table reads from, kept between them and their
+        # buddies — and publishing it to everyone on an admin's initiative
+        # would make the review toggle a suggestion rather than a choice.
+        #
+        # DENYING one is still allowed, and the asymmetry is the point: an
+        # admin who finds a malicious link spreading through a buddy graph must
+        # be able to kill it whether or not anybody asked them to look.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "That link was never submitted for review — its author is"
+                " sharing it with their buddies only."
+            ),
         )
 
     sb.table("boardgamebuddy_guide_chapters").update({
@@ -201,7 +229,10 @@ async def approve_rulebook_link(
 ) -> RulebookModerationResponse:
     """Admin-only: make a rulebook link visible to everyone.
 
-    Takes a link in any state, so this is also how a denial is undone.
+    Takes a link in any SUBMITTED or decided state, so this is also how a
+    denial is undone. Refuses an `unlisted` link with a 409: its author never
+    asked for it to be published (migration 053), and an approval is the answer
+    to a question somebody asked.
     """
     sb = get_supabase()
     return await asyncio.to_thread(
@@ -224,6 +255,11 @@ async def deny_rulebook_link(
     admin: CurrentUser = Depends(get_current_admin),
 ) -> RulebookModerationResponse:
     """Admin-only: hide a rulebook link from everyone but its author.
+
+    Takes a link in ANY state, `unlisted` included — deliberately the opposite
+    of approve above. An admin who finds a malicious link spreading through a
+    buddy graph must be able to kill it whether or not anybody asked them to
+    look at it.
 
     Not a delete, on purpose: the row is what keeps the same author from
     re-posting the same link past idx_bgb_chapters_rulebook_author, and it is

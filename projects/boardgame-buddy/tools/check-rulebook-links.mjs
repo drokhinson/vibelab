@@ -18,9 +18,14 @@
 //      a beat before a link appears is the one way to be worse than silent.
 //   3. The client never filters on moderation_status. The API decides who may
 //      see a row (services/chapter_rulebook.py); the status is on the wire so
-//      the AUTHOR's own copy can say it is waiting or was turned down. A denied
-//      link reaching a viewer at all means it is theirs, and it is shown as
-//      such rather than dropped.
+//      the AUTHOR's own copy can say which of the four states it is in. A
+//      denied link reaching a viewer at all means it is theirs, and it is shown
+//      as such rather than dropped.
+//   4. UNLISTED AND PENDING ARE ONE STATE TO A READER and two to their author
+//      (migration 053). Both reach the same people; only the author is told
+//      which, because for them it is the difference between waiting on somebody
+//      and waiting on nobody — and a link that says "Waiting for approval" when
+//      it was never submitted is a queue somebody keeps checking for.
 import fs from "node:fs";
 import vm from "node:vm";
 
@@ -104,6 +109,18 @@ ok("an approved link beats a pending one",
   ]).id === "approved");
 ok("a pending link is shown when it is all there is",
   Chapter.resolveRulebook([link({ id: "pending", moderation_status: "pending" })]).id === "pending");
+ok("an unlisted link is shown when it is all there is",
+  Chapter.resolveRulebook([link({ id: "unlisted", moderation_status: "unlisted" })]).id === "unlisted");
+ok("an approved link beats an unlisted one",
+  Chapter.resolveRulebook([
+    link({ id: "unlisted", moderation_status: "unlisted" }),
+    link({ id: "approved" }),
+  ]).id === "approved");
+ok("but an adopted unlisted link still wins — the printing you own beats the one an admin found",
+  Chapter.resolveRulebook([
+    link({ id: "approved" }),
+    link({ id: "unlisted", moderation_status: "unlisted", in_my_guide: true }),
+  ]).id === "unlisted");
 ok("a denied link never wins, even as the only one",
   Chapter.resolveRulebook([link({ id: "denied", moderation_status: "denied" })]) === null);
 ok("a denied link does not beat an approved one either",
@@ -145,6 +162,36 @@ ok("and offers Edit rather than Report", mine.includes("_editChapter") && !mine.
 ok("and no second Add button, because the API allows one per game",
   !mine.includes("Add a rulebook link"));
 
+scroll._rulebooks = [link({ moderation_status: "unlisted", created_by: "me" })];
+const mineUnlisted = scroll._renderRulebookSection();
+ok("my own unlisted link says it is buddies-only, not that it is waiting",
+  mineUnlisted.includes("Buddies only") && !mineUnlisted.includes("Waiting for approval"));
+ok("and says how to change that", mineUnlisted.includes("ask an admin to review it"));
+
+scroll._rulebooks = [link({ moderation_status: "unlisted", created_by: "someone" })];
+const theirsUnlisted = scroll._renderRulebookSection();
+ok("a buddy's unlisted link reads the same as a pending one — nobody vouched for it",
+  theirsUnlisted.includes("Not reviewed yet"));
+ok("and carries no hint about whose queue it is or is not in",
+  !theirsUnlisted.includes("Buddies only"));
+
+scroll._rulebooks = [
+  link({ id: "theirs" }),
+  link({ id: "mine-unlisted", moderation_status: "unlisted", created_by: "me" }),
+];
+const alongside = scroll._renderRulebookSection();
+ok("my unlisted link behind somebody's approved one says so in words, not a badge",
+  alongside.includes("shared with your buddies only"));
+
+scroll._rulebooks = [
+  link({ id: "adopted", in_my_guide: true }),
+  link({ id: "mine-approved", created_by: "me" }),
+];
+const bothApproved = scroll._renderRulebookSection();
+ok("my own APPROVED link behind one I adopted is not described as waiting",
+  !bothApproved.includes("waiting for approval"));
+ok("…it is described as approved", bothApproved.includes("is approved"));
+
 scroll._rulebooks = [link({ id: "mine", moderation_status: "denied", created_by: "me" })];
 const denied = scroll._renderRulebookSection();
 ok("a denial reaches its author, in words", denied.includes("turned your rulebook link down"));
@@ -162,6 +209,13 @@ console.log("the rolled-up copy");
 scroll._rulebooks = [link()];
 const peek = scroll._renderRulebookPeek();
 ok("carries the link", peek.includes(`href="https://example.com/rules.pdf"`));
+ok("an approved link carries no badge on the strip", !peek.includes("Not reviewed yet"));
+scroll._rulebooks = [link({ moderation_status: "unlisted" })];
+ok("an unreviewed one does, whichever unreviewed state it is in",
+  scroll._renderRulebookPeek().includes("Not reviewed yet"));
+scroll._rulebooks = [link({ moderation_status: "pending" })];
+ok("…including pending", scroll._renderRulebookPeek().includes("Not reviewed yet"));
+scroll._rulebooks = [link()];
 ok("and none of the section's chrome — no heading, no Add, no Report",
   !peek.includes("scroll-section__header") && !peek.includes("Add a rulebook link")
   && !peek.includes("_reportChapter"));
