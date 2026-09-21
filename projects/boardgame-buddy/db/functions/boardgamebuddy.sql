@@ -1,6 +1,25 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 050_session_participant_teams.sql (adds bgb_set_session_teams
+-- Last updated: 051_account_deletion_handover.sql (adds bgb_delete_account_rows
+--               and re-emits bgb_notifications + bgb_notifications_unread for a
+--               fourth kind, play_inherited.
+--
+--               A deleted account used to CASCADE its logged plays away and
+--               every other player's seat with them. bgb_delete_account_rows
+--               hands such a play to the account that was seated earliest
+--               instead, and does the whole deletion — photo unlink, name
+--               backfill, handover, profile DELETE — in ONE transaction,
+--               which is why it exists at all rather than staying a direct
+--               table delete in the service.
+--
+--               Both notification functions were copied from their CURRENT
+--               definition, 010, not 009. The diff in each is additive: one
+--               UNION ALL arm and one summand.
+--
+--               db/tests/051_account_deletion_handover.sql is the behavioural
+--               test for the handover — the api/ suite has no Postgres, so
+--               who-inherits-what is not testable there.)
+--               Before that: 050_session_participant_teams.sql (adds bgb_set_session_teams
 --               and re-emits bgb_session_bundle so a LIVE lobby carries the
 --               side each seat is on AND how the table is being scored. 048 gave a saved seat its
 --               `team` and said plainly what it was leaving open: a
@@ -1652,6 +1671,28 @@
 -- having asked).
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- bgb_delete_account_rows(p_user UUID)
+--   → JSONB {plays_reassigned, plays_deleted, photos_unlinked, names_backfilled}
+--   Defined in: db/migrations/boardgamebuddy/051_account_deletion_handover.sql
+--   Called by:  services/account_deletion_service.delete_account
+--               (DELETE /profile — the middle of its three steps, between the
+--                object-store purge and the Identity Platform credential)
+--   Purpose:    Everything deleting an account does to the database, in one
+--               transaction. Four acts in a fixed order: NULL the photo_url of
+--               any play pointing into this account's object prefix (the caller
+--               has already deleted those objects); give any seat of theirs
+--               that carries no display name one, BEFORE the FK's SET NULL can
+--               leave it failing bgb_play_players_identity_chk and abort the
+--               whole DELETE; hand every play they logged that another ACCOUNT
+--               was also seated at to that account — earliest linked_at wins,
+--               skipping any heir the play would collide with on (user_id,
+--               client_key / bgg_play_id / bga_table_id); then DELETE the
+--               profile and let the cascades take the rest. Idempotent: a
+--               re-run after a partial failure finds no profile and returns
+--               zeros. SECURITY DEFINER and REVOKEd from anon/authenticated,
+--               which matters more here than anywhere — its only argument is
+--               the account to destroy.
+
 -- bgb_notifications(p_viewer UUID, p_limit INT DEFAULT 20,
 --                   p_before TIMESTAMPTZ DEFAULT NULL,
 --                   p_before_key TEXT DEFAULT NULL)
@@ -1660,7 +1701,7 @@
 --            play_group, play_id, play_ids UUID[], group_count, game_count,
 --            played_from, played_to, game_id, game_name, game_thumbnail_url,
 --            import_batch_id, edge_id)
---   Defined in: db/migrations/boardgamebuddy/010_notifications_perf.sql
+--   Defined in: db/migrations/boardgamebuddy/051_account_deletion_handover.sql
 --               (introduced in 009_unified_notifications.sql; 010 rewrites the
 --                body as narrow-scan → top-N keys → aggregate-the-page, so the
 --                array_aggs, the COUNT(DISTINCT) and the catalog join run over
@@ -1670,10 +1711,14 @@
 --               (GET /notifications, and the /bootstrap gather, which prefetches
 --               page one so the bell opens without a round trip)
 --   Purpose:    The notifications screen, as one merged feed. `kind` is
---               play_link | buddy_request | buddy_accepted and says which
---               field block is populated; actor_* is the only group present on
---               all three, which is what lets one LEFT JOIN after the union
---               serve every kind. A play_link row is one ENTRY, not one play:
+--               play_link | buddy_request | buddy_accepted | play_inherited
+--               and says which field block is populated; actor_* is the only
+--               group present on all four, which is what lets one LEFT JOIN
+--               after the union serve every kind. play_inherited (051) is the
+--               one kind with NO actor_id — the actor is a deleted account —
+--               so its name rides up the union from plays.inherited_from_name
+--               and the final SELECT coalesces the join that is going to miss.
+--               That is what kept RETURNS TABLE unchanged and 051 a REPLACE. A play_link row is one ENTRY, not one play:
 --               a batch, a run of identical imported plays, or one retroactive
 --               ghost-link collapses to a single row, so a 214-play import is
 --               one line with one tick box. play_ids holds ONLY the plays the
@@ -1685,7 +1730,7 @@
 
 -- bgb_notifications_unread(p_viewer UUID)
 --   → INT
---   Defined in: db/migrations/boardgamebuddy/010_notifications_perf.sql
+--   Defined in: db/migrations/boardgamebuddy/051_account_deletion_handover.sql
 --               (introduced in 009_unified_notifications.sql; 010 moves the
 --                watermark from HAVING MAX(linked_at) > seen to a WHERE on
 --                linked_at, which is the same set of entries — "some member is
@@ -1695,8 +1740,11 @@
 --                rows instead of all of them.)
 --   Called by:  services/notification_service.unread_count
 --               (GET /notifications, and — via list_notifications — /bootstrap)
---   Purpose:    The header bell's dot: the same three sources against the same
---               watermark, summed. The play term counts ENTRIES on the key the
+--   Purpose:    The header bell's dot: the same four sources against the same
+--               watermark, summed. The play_inherited term (051) is a plain
+--               row count on plays.inherited_at — a handover is one play and
+--               never a group — and rides idx_bgb_plays_inherited, so an
+--               account that has inherited nothing scans nothing. The play term counts ENTRIES on the key the
 --               list groups by, so a badge of 214 can never sit over a list of
 --               one, and it derives unread from MAX(linked_at) per entry —
 --               the identical expression the list's is_unread uses — so the

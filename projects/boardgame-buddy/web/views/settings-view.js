@@ -1228,8 +1228,10 @@
               ${this._deleting ? "Deleting…" : "Delete account"}
             </button>
             <p class="settings-account__note">
-              Permanently removes your profile, plays, collection and buddies.
-              This can't be undone.
+              Permanently removes your profile, photos, collection and buddies,
+              and your sign-in with it. Game nights you shared with other
+              members stay in their history under your name. This can't be
+              undone.
             </p>
           </div>
         </div>
@@ -1244,8 +1246,10 @@
       if (this._deleting) return;
       const ok = await window.PolaroidPopup.confirm({
         title: "Delete your account?",
-        body: "This permanently deletes your profile, plays, collection, buddies "
-            + "and chapters. This cannot be undone.",
+        body: "This permanently deletes your profile, photos, collection, "
+            + "buddies, chapters and your sign-in. Game nights you logged with "
+            + "other members stay in their history, still under your name, and "
+            + "pass to someone who was at the table. This cannot be undone.",
         confirmLabel: "Delete forever",
         cancelLabel: "Keep my account",
         destructive: true,
@@ -1260,10 +1264,20 @@
         this._deleting = false;
         this.render();
         // An alert, not a toast: the user just asked for something permanent
-        // and has to know it did not happen, even if they navigate away.
+        // and has to know how far it got, even if they navigate away.
+        //
+        // The server's own sentence is the body, because the two failures
+        // differ in a way only it knows: a 503 means nothing was deleted, a
+        // 500 means the data went and the sign-in did not. "Try again" is
+        // true advice for both — every step of the delete is idempotent, so
+        // a retry picks up where it stopped.
+        //
+        // AND WE STAY SIGNED IN. The retry needs the token; signing out here
+        // would strand a half-deleted account with no way to finish it.
+        const detail = (e && e.message) ? String(e.message) : "Something went wrong.";
         await window.PolaroidPopup.alert({
-          title: "Couldn't delete your account",
-          body: (e && e.message) ? String(e.message) : "Please try again.",
+          title: "Your account wasn't fully deleted",
+          body: `${detail}. Try again in a moment — nothing is lost by retrying.`,
         });
         return;
       }
