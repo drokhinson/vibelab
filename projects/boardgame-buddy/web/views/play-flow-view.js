@@ -4608,12 +4608,6 @@
         if (fi) fi.value = "";
         return;
       }
-      if (v.compressed) {
-        showToast(
-          `Photo compressed from ${(v.originalSize / 1048576).toFixed(1)} MB to ${(v.compressedSize / 1048576).toFixed(1)} MB`,
-          "info"
-        );
-      }
       this._clearPhoto({ keepRender: true });
       this._ps.photoFile = v.file;
       // The user's own file, kept beside the upload copy and never sent
