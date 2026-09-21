@@ -27,7 +27,7 @@ projects/boardgame-buddy/
 │   ├── object_store.py     Cloudflare R2 uploads and deletes (see below)
 │   ├── identity_admin.py   deletes the Identity Platform credential (see below)
 │   └── tests/
-├── db/migrations/          001–049, plus _shared/ (analytics + api_logs)
+├── db/migrations/          001–051, plus _shared/ (analytics + api_logs)
 ├── db/tests/               SQL the api/ suite cannot reach — run by hand, see below
 ├── scripts/bgb-bundle.mjs  deploy-time bundler
 ├── tools/                  generators, operator scripts, and web/'s only tests —
@@ -134,7 +134,7 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    therefore not authorship.** Deleting an account used to CASCADE its plays
    away, taking every other player's seat at those tables with them — other
    people's stats, wins and "played with" edges, destroyed by somebody else's
-   deletion. Since `049` such a play is HANDED OVER to the account seated
+   deletion. Since `051` such a play is HANDED OVER to the account seated
    earliest, and `inherited_at` / `inherited_from_name` mark it. So the heir
    holds edit and delete rights over a record they did not write, and two
    logger-only achievement metrics count notes they did not type. Check
@@ -145,13 +145,13 @@ into `web/config.js` at deploy. Re-point the backend there, not in the workflow.
    leave plays owned by other people while the account they were taken from is
    still signed in. `tests/test_account_deletion.py` asserts the service never
    reaches for `.table()` here. The SQL itself is covered by
-   `db/tests/049_account_deletion_handover.sql`, which is rollback-wrapped and
+   `db/tests/051_account_deletion_handover.sql`, which is rollback-wrapped and
    run by hand — there is no Postgres in the api/ suite.
 18. **Adding a `NotificationKind` member is a DEPLOY-ORDER constraint.**
    `Notification.kind` is typed by that enum, so a row carrying a value the
    running backend does not know fails `model_validate` and 500s
    `/notifications` AND the `/bootstrap` gather. Ship the API first, then run
-   the migration that starts emitting it. `049` is the live example:
+   the migration that starts emitting it. `051` is the live example:
    `play_inherited` cannot appear until an account is deleted, but the order
    still matters.
 19. **`SupabaseUser.sub` is the app_uid; the provider's uid is

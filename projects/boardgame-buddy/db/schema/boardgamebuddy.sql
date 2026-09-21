@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_profiles (
   -- NO FK TO auth.users. 035_drop_profiles_auth_users_fk.sql dropped it at the
   -- Identity Platform cutover: accounts live in GCP now and auth.users is not
   -- written any more, so the constraint refused every new profile. This
-  -- snapshot carried the dead line until 049 replayed it into a scratch
+  -- snapshot carried the dead line until 051 replayed it into a scratch
   -- database and every INSERT failed on it.
   CONSTRAINT bgb_profiles_username_format CHECK ((username ~ '^[a-z0-9_]{3,30}$'::text)),
   CONSTRAINT boardgamebuddy_profiles_push_tier_check CHECK ((push_tier = ANY (ARRAY['none'::text, 'actionable'::text, 'all'::text])))
@@ -562,7 +562,7 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_plays (
   -- other origin (migration 043).
   bga_table_id BIGINT,
   -- When this play changed hands because its logger deleted their account, and
-  -- what that account was called (migration 049). NULL on every play whose
+  -- what that account was called (migration 051). NULL on every play whose
   -- author still owns it. Together they are the standing caveat on user_id as
   -- authorship, and what the play_inherited notification is derived from.
   inherited_at TIMESTAMPTZ,

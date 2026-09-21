@@ -3,7 +3,7 @@
 Four signals share one feed, one cursor and one read watermark: somebody
 seated you in a play they logged, somebody asked to be your buddy, somebody
 accepted the request you sent, and a play passed to you because the account
-that logged it was deleted (migration 049).
+that logged it was deleted (migration 051).
 
 The list is DERIVED, not stored. `bgb_notifications` reads plays where the
 viewer is a player and somebody else is the logger, plus the viewer's own rows

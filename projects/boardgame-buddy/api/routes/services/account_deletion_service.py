@@ -25,7 +25,7 @@ deletion was destroying data that was never only the deleter's.
    `play_players.play_id` cascades off the play, so deleting the person who
    LOGGED a night deleted the night — and the seat of every other account at
    that table with it. They lost a play, a win, a "played with" edge and
-   achievement progress, for an act they had no part in. Since migration 049
+   achievement progress, for an act they had no part in. Since migration 051
    such a play is HANDED OVER instead: it passes to the account that was
    seated earliest, and only a play nobody else was at still goes. That is
    `bgb_delete_account_rows`, and the reasoning for the heir, the collisions
@@ -152,7 +152,7 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
     They are equal only for the 23 migrated accounts; see `jwt_auth.py`.
 
     THE ORDER IS PHOTOS, ROWS, CREDENTIAL, and each boundary is a decision.
-    "Rows" is one RPC rather than one DELETE since migration 049 — the
+    "Rows" is one RPC rather than one DELETE since migration 051 — the
     handover and the profile delete have to be the same transaction — but the
     three steps and their boundaries are unchanged:
 
@@ -194,7 +194,7 @@ async def delete_account(app_uid: str, provider_uid: str) -> dict:
     supabase_count = await asyncio.to_thread(_purge_supabase_photos_sync, app_uid)
 
     sb = get_supabase()
-    # ONE RPC, ONE TRANSACTION (migration 049). This was a direct
+    # ONE RPC, ONE TRANSACTION (migration 051). This was a direct
     # `.table("boardgamebuddy_profiles").delete()` until plays started
     # surviving their logger, and it cannot be one any more: the handover
     # decides an heir, clears the photo links, backfills the names the FK is

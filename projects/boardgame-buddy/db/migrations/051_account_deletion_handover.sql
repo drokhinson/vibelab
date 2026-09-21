@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 049_account_deletion_handover.sql — one person's deletion stops rewriting
+-- 051_account_deletion_handover.sql — one person's deletion stops rewriting
 --                                     everybody else's history
 -- ─────────────────────────────────────────────────────────────────────────────
 --
@@ -128,14 +128,14 @@ ALTER TABLE public.boardgamebuddy_plays
 
 COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_at IS
   'When this play changed hands because its logger deleted their account '
-  '(migration 049). NULL on every play whose author still owns it, which is '
+  '(migration 051). NULL on every play whose author still owns it, which is '
   'almost all of them. Two jobs: it drives the play_inherited notification, '
   'and it is the standing audit trail for "the current owner did not write '
   'this" — worth knowing before trusting plays.user_id as authorship.';
 
 COMMENT ON COLUMN public.boardgamebuddy_plays.inherited_from_name IS
   'The display name of the account this play came from, captured at deletion '
-  '(migration 049). Denormalized because the profile it names is gone by the '
+  '(migration 051). Denormalized because the profile it names is gone by the '
   'time anything reads this — there is nothing left to join to. Carried into '
   'bgb_notifications as actor_display_name.';
 
@@ -341,7 +341,7 @@ BEGIN
           AND be.accepted_by <> p_viewer
           AND (be.user_a = p_viewer OR be.user_b = p_viewer)
           AND be.accepted_at > v_seen)
-      -- A play handed over by a deleted account (049). One row per play, no
+      -- A play handed over by a deleted account (051). One row per play, no
       -- grouping: a handover is not a batch and two of them are two events.
       -- Rides idx_bgb_plays_inherited, so an account that has never inherited
       -- anything — which is almost all of them — scans nothing.
@@ -550,7 +550,7 @@ BEGIN
       AND (be.user_a = p_viewer OR be.user_b = p_viewer)
   ),
   -- A play that passed to the viewer because the account that logged it was
-  -- deleted (049). The fourth kind, and the only one with no actor to join to
+  -- deleted (051). The fourth kind, and the only one with no actor to join to
   -- — the person IS the actor and their profile row is gone, which is the
   -- whole event. So the name rides up the union in act_name and the final
   -- SELECT coalesces it against the join that is going to miss. That is what

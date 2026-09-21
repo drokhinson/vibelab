@@ -393,7 +393,7 @@
 
     /**
      * A play that passed to you because the account that logged it was deleted
-     * (migration 049).
+     * (migration 051).
      *
      * NO SELECT CIRCLE, and that is a correctness matter rather than a tidiness
      * one. The circle feeds the action bar, which takes you OUT of plays — and

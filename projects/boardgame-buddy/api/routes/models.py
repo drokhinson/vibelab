@@ -1846,7 +1846,7 @@ class Notification(BaseModel):
 
     PLAY_INHERITED IS THE ONE KIND WITH NO `actor_id`, and it cannot have one:
     the actor is an account that no longer exists. `actor_display_name` is the
-    name captured at deletion (plays.inherited_from_name, migration 049) and
+    name captured at deletion (plays.inherited_from_name, migration 051) and
     `actor_id` / `actor_username` / `actor_avatar` are all None — so any reader
     that routes to a profile on `actor_id` already does nothing here, which is
     the correct behaviour rather than a lucky one. It reuses the PLAY_LINK

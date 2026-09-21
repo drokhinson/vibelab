@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 049_account_deletion_handover.sql — the behavioural half of migration 049
+-- 051_account_deletion_handover.sql — the behavioural half of migration 051
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY THIS FILE EXISTS. api/tests/ drives the deletion service against a fake
@@ -14,11 +14,11 @@
 -- earlier. It still writes WAL, so prefer a scratch database — but a
 -- misfire cannot cost you an account.
 --
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/049_account_deletion_handover.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/tests/051_account_deletion_handover.sql
 --
 -- Every check is an ASSERT inside one DO block, so the first failure raises
 -- with the name of the property that broke and nothing further runs. Silence
--- plus "ALL 049 CHECKS PASSED" is a pass.
+-- plus "ALL 051 CHECKS PASSED" is a pass.
 --
 -- Standing up a throwaway database to run it against, from this repo's own
 -- snapshot, needs four Supabase-isms the snapshot references and a local
@@ -31,7 +31,7 @@
 --   CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE
 --     AS $$ SELECT NULL::uuid $$;
 --
--- then db/schema/boardgamebuddy.sql, then db/migrations/049_*.sql.
+-- then db/schema/boardgamebuddy.sql, then db/migrations/051_*.sql.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;
@@ -192,7 +192,7 @@ BEGIN
     'play_inherited has no actor id — the profile it would name is gone';
 
   -- ── 10. THE OTHER KINDS STILL NAME THEIR ACTOR ─────────────────────────────
-  -- 049 rewrote the final SELECT's actor_display_name into
+  -- 051 rewrote the final SELECT's actor_display_name into
   -- COALESCE(pr.display_name, m.act_name) so the new arm could carry a name
   -- for an account that no longer exists. Every other kind still has a live
   -- profile behind actor_id and must still read from the join, not the
@@ -222,7 +222,7 @@ BEGIN
      AND (res->>'plays_deleted')::int = 0,
     're-running on an already-deleted account must be a no-op, not an error';
 
-  RAISE NOTICE 'ALL 049 CHECKS PASSED';
+  RAISE NOTICE 'ALL 051 CHECKS PASSED';
 END
 $test$;
 

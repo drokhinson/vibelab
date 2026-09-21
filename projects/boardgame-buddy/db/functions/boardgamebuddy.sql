@@ -1,6 +1,6 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — RPC function inventory
--- Last updated: 049_account_deletion_handover.sql (adds bgb_delete_account_rows
+-- Last updated: 051_account_deletion_handover.sql (adds bgb_delete_account_rows
 --               and re-emits bgb_notifications + bgb_notifications_unread for a
 --               fourth kind, play_inherited.
 --
@@ -16,7 +16,7 @@
 --               definition, 010, not 009. The diff in each is additive: one
 --               UNION ALL arm and one summand.
 --
---               db/tests/049_account_deletion_handover.sql is the behavioural
+--               db/tests/051_account_deletion_handover.sql is the behavioural
 --               test for the handover — the api/ suite has no Postgres, so
 --               who-inherits-what is not testable there.)
 --               Before that: 050_session_participant_teams.sql (adds bgb_set_session_teams
@@ -1673,7 +1673,7 @@
 
 -- bgb_delete_account_rows(p_user UUID)
 --   → JSONB {plays_reassigned, plays_deleted, photos_unlinked, names_backfilled}
---   Defined in: db/migrations/boardgamebuddy/049_account_deletion_handover.sql
+--   Defined in: db/migrations/boardgamebuddy/051_account_deletion_handover.sql
 --   Called by:  services/account_deletion_service.delete_account
 --               (DELETE /profile — the middle of its three steps, between the
 --                object-store purge and the Identity Platform credential)
@@ -1701,7 +1701,7 @@
 --            play_group, play_id, play_ids UUID[], group_count, game_count,
 --            played_from, played_to, game_id, game_name, game_thumbnail_url,
 --            import_batch_id, edge_id)
---   Defined in: db/migrations/boardgamebuddy/049_account_deletion_handover.sql
+--   Defined in: db/migrations/boardgamebuddy/051_account_deletion_handover.sql
 --               (introduced in 009_unified_notifications.sql; 010 rewrites the
 --                body as narrow-scan → top-N keys → aggregate-the-page, so the
 --                array_aggs, the COUNT(DISTINCT) and the catalog join run over
@@ -1714,11 +1714,11 @@
 --               play_link | buddy_request | buddy_accepted | play_inherited
 --               and says which field block is populated; actor_* is the only
 --               group present on all four, which is what lets one LEFT JOIN
---               after the union serve every kind. play_inherited (049) is the
+--               after the union serve every kind. play_inherited (051) is the
 --               one kind with NO actor_id — the actor is a deleted account —
 --               so its name rides up the union from plays.inherited_from_name
 --               and the final SELECT coalesces the join that is going to miss.
---               That is what kept RETURNS TABLE unchanged and 049 a REPLACE. A play_link row is one ENTRY, not one play:
+--               That is what kept RETURNS TABLE unchanged and 051 a REPLACE. A play_link row is one ENTRY, not one play:
 --               a batch, a run of identical imported plays, or one retroactive
 --               ghost-link collapses to a single row, so a 214-play import is
 --               one line with one tick box. play_ids holds ONLY the plays the
@@ -1730,7 +1730,7 @@
 
 -- bgb_notifications_unread(p_viewer UUID)
 --   → INT
---   Defined in: db/migrations/boardgamebuddy/049_account_deletion_handover.sql
+--   Defined in: db/migrations/boardgamebuddy/051_account_deletion_handover.sql
 --               (introduced in 009_unified_notifications.sql; 010 moves the
 --                watermark from HAVING MAX(linked_at) > seen to a WHERE on
 --                linked_at, which is the same set of entries — "some member is
@@ -1741,7 +1741,7 @@
 --   Called by:  services/notification_service.unread_count
 --               (GET /notifications, and — via list_notifications — /bootstrap)
 --   Purpose:    The header bell's dot: the same four sources against the same
---               watermark, summed. The play_inherited term (049) is a plain
+--               watermark, summed. The play_inherited term (051) is a plain
 --               row count on plays.inherited_at — a handover is one play and
 --               never a group — and rides idx_bgb_plays_inherited, so an
 --               account that has inherited nothing scans nothing. The play term counts ENTRIES on the key the

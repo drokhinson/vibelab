@@ -177,7 +177,7 @@ class NotificationKind(StrEnum):
     """What one row on the notifications feed is about.
 
     The feed is a UNION of four derived sources rather than a table — see
-    bgb_notifications, migrations 009 and 049 — and each member names both its
+    bgb_notifications, migrations 009 and 051 — and each member names both its
     source and the timestamp it is ordered by: PLAY_LINK from
     play_players.linked_at, BUDDY_REQUEST from buddy_edges.created_at,
     BUDDY_ACCEPTED from buddy_edges.accepted_at, PLAY_INHERITED from
@@ -198,7 +198,7 @@ class NotificationKind(StrEnum):
     BUDDY_REQUEST = "buddy_request"
     BUDDY_ACCEPTED = "buddy_accepted"
     # A play passed to you because the account that logged it was deleted
-    # (migration 049). The one kind with NO actor id: the actor is the deleted
+    # (migration 051). The one kind with NO actor id: the actor is the deleted
     # person, so there is no profile left to link to — `actor_display_name`
     # carries the name off plays.inherited_from_name and `actor_id`,
     # `actor_username` and `actor_avatar` are all None. It reuses the PLAY_LINK

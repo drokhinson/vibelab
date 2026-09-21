@@ -8,7 +8,7 @@ identity — and signing up again with the same address and a password answered
 `auth/email-already-in-use`. Both outcomes tell the user the deletion did not
 take, and both were right.
 
-Migration 049 then added a third failure to the list, in the other direction:
+Migration 051 then added a third failure to the list, in the other direction:
 deleting an account CASCADEd `plays.user_id`, so deleting the person who
 LOGGED a game night deleted the night and every other account's seat on it.
 Such a play is handed over now. **The handover itself is SQL and is not
@@ -16,7 +16,7 @@ exercised here** — these tests drive the service with a fake PostgREST and
 there is no Postgres in this suite — so what they pin at this layer is that
 the service calls `bgb_delete_account_rows` and never a direct table delete,
 which is what keeps the handover and the profile delete in one transaction.
-`db/tests/049_account_deletion_handover.sql` is the behavioural half.
+`db/tests/051_account_deletion_handover.sql` is the behavioural half.
 
 Four properties carry the fix, and each one is a way it could silently regress:
 
@@ -174,7 +174,7 @@ class _FakeSupabase:
         raise AssertionError(
             "account deletion must go through bgb_delete_account_rows, not a "
             f"direct table write ({name}). The handover and the profile delete "
-            "have to be one transaction — see migration 049."
+            "have to be one transaction — see migration 051."
         )
 
 
