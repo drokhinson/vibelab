@@ -9185,17 +9185,21 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 
    The glyph is asked for with :has(), because a grid either has described rows
    or it does not and that does not change while anyone is looking at it. The ×
-   is NOT, even though :has(.scoring-round-remove) would be exact: the last
-   remaining round draws no × (minRounds), so an exact rule would widen the
-   column by 22px on the first press of Next round, every game. An editable
-   grid reserves the room whether or not this particular render drew one — and
-   it can always draw one, since the host can always append a round. A
-   read-only mirror pays for neither.
+   is asked for by CLASS, and the class means "this render drew one" rather
+   than "this grid is editable" — the renderer knows, in the same terms the row
+   itself is written in (roundGridHasRemove). It used to mean the latter, on
+   the argument that an exact rule would widen the column on the first press of
+   Next round, every game; but the last remaining round draws no × (minRounds)
+   and a template's rows never do, so the Play screen — which opens on Round 1
+   and holds exactly one — was spending 22px of a phone on a control that was
+   not on it, for the whole of the first round of every game. The shift is
+   still real and now lands on the press that adds the row it is for. A
+   read-only mirror reserves neither.
 
-   Second, and doubled to (0,2,0), so an editable grid with described rows
-   takes the wider of the two rather than losing to the :has() above. */
+   Second, and doubled to (0,2,0), so a grid with both takes the wider of the
+   two rather than losing to the :has() above. */
 .rg:has(.scoring-round-note) { --rg-label-pad: 1.8rem; }
-.rg.rg--editable             { --rg-label-pad: 2.2rem; }
+.rg.rg--removable            { --rg-label-pad: 2.2rem; }
 .rg__pinzone { position: relative; }
 .rg__head {
   position: sticky;
@@ -9395,6 +9399,74 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 .scoring-head.is-named .scoring-head__bubble { display: none; }
 .scoring-head.is-named .scoring-head__name { display: inline-block; }
+/* A MERGED column's text state is the side's tag over its roster —
+
+     Red
+     Ana, Bo
+
+   — because it is replacing the badges that were the only thing saying who is
+   on the side (widgets/round-score-grid.js#columnLabelHtml). It was one line,
+   "Red: Ana, Bo", and a ~4.3rem column broke it wherever the box ran out:
+   after the tag as often as mid-list, so the same header read a different
+   shape in every column. Stacking puts the break where the meaning already is,
+   and the tag's underline is what stops the two lines reading as one list with
+   a stray first item — it is the tag doing a heading's job, which is what it
+   is.
+
+   The heights are arithmetic rather than taste: the band is held at one height
+   across both states by the 44px floor on .scoring-head__toggle, so the text
+   may grow to 44px minus that button's 8px of padding — 36px — before a tap
+   jolts the table. The tag's line is ~13px at 0.72rem and the roster's two are
+   ~22px at 0.66rem/1.05, which with the 1px under the underline lands on 36.
+   The roster is the smaller of the two on the same reasoning that gives it the
+   second line: the tag is what the column IS, the names are what it is made
+   of. Whatever the clamp cuts is still on the cell's `title`.
+
+   THE ROSTER ALWAYS RESERVES ITS SECOND LINE (min-height), even where it fits
+   on one, and that is what keeps a row of headers readable rather than merely
+   correct. Without it a side of two and a side whose names wrap produce blocks
+   of different heights, each centred in its own cell, so the tags — the thing
+   the eye runs along the row to read — land at two different heights one
+   column apart. Reserving the line makes every block the same height, so the
+   tags share a line and the rosters share a line, and the reserved space is
+   invisible where it is unused. It costs nothing in band height: 36px is the
+   budget above and the block lands inside it whether the roster uses one line
+   or two.
+
+   max-width drops to 100% of the column rather than the 5.5rem a single name
+   is allowed: a nowrap name overflowing its fixed-layout cell by a few px is
+   an ellipsis landing slightly wide, while a wrapping one would paint over the
+   column beside it. */
+.scoring-head.is-named.is-merged .scoring-head__name {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.15;
+}
+.scoring-head__team {
+  max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: from-font;
+}
+.scoring-head__roster {
+  max-width: 100%;
+  font-size: 0.66rem;
+  line-height: 1.05;
+  /* Clear of the tag's underline, which is drawn below its baseline. */
+  margin-top: 1px;
+  /* Two lines' worth, used or not — see the block above. `em` rather than the
+     `lh` unit, which iOS only understands from 16.4. */
+  min-height: 2.1em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
 /* NOT `opacity: 0.7`, which is what this carried until the round-label column
    became sticky. A faded sticky cell lets the score columns ghost straight
    through the label as they slide under it. The fade moves onto the ink, where

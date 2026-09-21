@@ -191,5 +191,94 @@ console.log("\nnothing is adopted where there is nothing to adopt:");
   ok("an untagged seat", win.PlaySession.adoptTeamScores(untagged, 0) === false);
 }
 
+console.log("\nthe header of a merged column: badges by default, tag AND roster on tap:");
+{
+  // Rendered for real, because the thing under test is what the header SAYS —
+  // the column model above cannot see it. The VM has no document and no
+  // localStorage, which is exactly the state this asserts against: no stored
+  // preference, so every grid opens on its own default.
+  const render = (roster, mode, headerNames) =>
+    win.renderRoundGrid(roster, "checkHost", { playMode: mode, editable: false, headerNames });
+  const side = [seat("Ana", "Red", [10]), seat("Bo", "Red", [10]),
+                seat("Cy", "Blue", [7]), seat("Di", "Blue", [7])];
+
+  // The live play screens pass headerNames: true — names are what you scan
+  // mid-game — and a team grid overrides it: a side's badges are the only
+  // thing on screen that says who is on it.
+  const teamHtml = render(side, "team", true);
+  ok("a team grid opens on the badges even where the surface asked for names",
+     teamHtml.indexOf("scoring-head is-named") === -1);
+  ok("...and says so, so one tap moves team headers only",
+     teamHtml.indexOf('data-rg-scope="team"') !== -1);
+  ok("the tap flips it toward names", teamHtml.indexOf("toggleAll(false, 'team')") !== -1);
+  // Drawn as two lines — the tag over the roster, the tag underlined by CSS —
+  // because a ~4.3rem column broke the one-line form wherever the box ran out.
+  ok("the text state draws the tag over the roster",
+     teamHtml.indexOf('<span class="scoring-head__team">Red</span>'
+                      + '<span class="scoring-head__roster">Ana, Bo</span>') !== -1
+     && teamHtml.indexOf('<span class="scoring-head__team">Blue</span>'
+                         + '<span class="scoring-head__roster">Cy, Di</span>') !== -1);
+  // Flat for the tooltip and the button's accessible name, where a sentence is
+  // what a hover and a screen reader want.
+  ok("...and says it in one line where it has to be one line",
+     teamHtml.indexOf('title="Red: Ana, Bo"') !== -1
+     && teamHtml.indexOf("Blue: Cy, Di — show player names") !== -1);
+  ok("...and the badges are still there under it, one per seat",
+     (teamHtml.match(/data-head-seat=/g) || []).length === 4);
+
+  // Nothing about a grid with no sides changes: same default, same scope, and
+  // a seat column still reads as one name.
+  const soloHtml = render(side, "competitive", true);
+  ok("a competitive grid still opens where its surface asked",
+     soloHtml.indexOf("scoring-head is-named") !== -1);
+  ok("...in its own scope", soloHtml.indexOf('data-rg-scope="solo"') !== -1);
+  ok("...and a seat column reads as its player alone",
+     soloHtml.indexOf("Red: Ana") === -1 && soloHtml.indexOf(">Ana<") !== -1);
+
+  // A side the grid had to SPLIT (two numbers, above) is seats again, so it
+  // takes the seat default rather than the badge one — the column is one
+  // person and its name says so.
+  const split = [seat("Ana", "Red", [10]), seat("Bo", "Red", [7])];
+  const splitHtml = render(split, "team", true);
+  ok("a split side is a solo grid", splitHtml.indexOf('data-rg-scope="solo"') !== -1);
+
+  // A side of one is a seat column too (see above), so a team play whose sides
+  // are all of one never claims the team scope.
+  const ones = [seat("Ana", "Red", [10]), seat("Bo", "Blue", [7])];
+  ok("...and so is a table of one-person sides",
+     render(ones, "team", true).indexOf('data-rg-scope="solo"') !== -1);
+}
+
+// Not a team fact, but this is the one harness that renders the real grid, and
+// the thing it pins is the same width a merged column is competing for: every
+// px the row-header column holds is a px off the score columns beside it.
+console.log("\nthe row-header column reserves what it draws and no more:");
+{
+  const roster = [seat("Ana", "A", [null]), seat("Bo", "B", [null])];
+  const grid = (rounds, opts) => win.renderRoundGrid(
+    roster.map((p) => ({ ...p, roundScores: new Array(rounds).fill(null) })),
+    "checkHost", { playMode: "team", editable: true, minRounds: 1, ...(opts || {}) });
+
+  // The Play screen's opening state: one round, which is the one it refuses to
+  // go below, so there is no remove × on the table.
+  const opening = grid(1);
+  ok("five characters, for Total", opening.indexOf("--rg-label-ch: 5") !== -1);
+  ok("...and no room reserved for an × that is not drawn",
+     opening.indexOf("rg--removable") === -1);
+
+  // Press Next round and the × appears, so now it is paid for.
+  ok("a second round brings the × and its room", grid(2).indexOf("rg--removable") !== -1);
+  // A template's rows carry no × at all, however many there are.
+  ok("a template's rows never draw one",
+     grid(2, { rowLabels: [{ label: "Prosperity" }, { label: "Events" }] })
+       .indexOf("rg--removable") === -1);
+  ok("...and size the column to the longest of them",
+     grid(2, { rowLabels: [{ label: "Prosperity" }, { label: "Events" }] })
+       .indexOf("--rg-label-ch: 10") !== -1);
+  // A read-only mirror can never remove a round.
+  ok("a read-only grid reserves nothing",
+     grid(3, { editable: false }).indexOf("rg--removable") === -1);
+}
+
 console.log(fails ? `\n${fails} check(s) failed.\n` : "\nAll checks passed.\n");
 process.exit(fails ? 1 : 0);
