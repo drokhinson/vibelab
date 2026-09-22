@@ -1,7 +1,7 @@
 {
   "name": "Boardgame Buddy",
   "short_name": "BgB",
-  "description": "Games Played, Nights Remembered. Keep score, build reference guides your table can read mid-game, and see what your buddies played.",
+  "description": "Games Played, Nights Remembered. Keep score, have your reference guide handy mid-game, and see what your buddies have been playing.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
