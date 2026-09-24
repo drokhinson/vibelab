@@ -642,15 +642,11 @@
     }
 
     /**
-     * The Rulebook section — always the FIRST section of the scroll, and the
-     * one section that renders something even when it has nothing.
+     * The Rulebook section — always the FIRST section of the scroll.
      *
-     * "No rulebook link available" is printed, not omitted. An absent section
-     * is indistinguishable from a section that has not loaded, and the question
-     * it answers — where are the actual rules — is the one somebody opens a
-     * reference guide holding. Saying nothing made every game with no link look
-     * exactly like a game whose link had failed to draw, which is the bug this
-     * section exists to fix.
+     * With no link on show it collapses to just the add affordance (plus the
+     * viewer's own pending/denied row, if any) — no heading, no "none
+     * available" line. The button itself answers "where are the rules".
      *
      * Silence is kept for exactly one state: before the fetch lands. An empty
      * `_rulebooks` then is not an answer (see _fetchRulebooks), and flashing
@@ -678,15 +674,22 @@
         : null;
       const mineIsShown = !!(mine && link && mine.id === link.id);
 
-      const body = link
-        ? this._renderRulebookLink(link, myId)
-        : `<p class="scroll-rulebook__none">No rulebook link available.</p>`;
-
       // The author's own link, when it is not the one on show: pending behind
       // somebody else's approved link, or turned down. Nobody else is ever sent
       // this row — the server does not send them the chapter — so it is safe to
       // say plainly what happened to it.
       const mineNote = (mine && !mineIsShown) ? this._renderMyRulebookNote(mine) : "";
+      const addBtn = mine || !window.session ? "" : this._renderAddRulebook(!!link);
+
+      // No link on show: no heading and no "none available" line — just the
+      // author's own row and/or the add button. Returns "" when neither applies
+      // so the host stays :empty.
+      if (!link) {
+        const bare = `${mineNote}${addBtn}`.trim();
+        return bare
+          ? `<section class="scroll-section scroll-section--rulebook" data-type="rulebook">${bare}</section>`
+          : "";
+      }
 
       return `
         <section class="scroll-section scroll-section--rulebook" data-type="rulebook">
@@ -694,9 +697,9 @@
             <i data-icon="book-open" class="w-4 h-4"></i>
             Rulebook
           </h4>
-          ${body}
+          ${this._renderRulebookLink(link, myId)}
           ${mineNote}
-          ${mine || !window.session ? "" : this._renderAddRulebook(!!link)}
+          ${addBtn}
         </section>
       `;
     }
@@ -1409,7 +1412,6 @@
           <div class="scroll-panel">
             <div class="scroll-panel__body">
               <div class="scroll-panel__empty">
-                <p>Add chapters for quick rule lookup and clarification.</p>
                 <!-- No whitespace inside any host: :empty does not match an
                      element holding a whitespace text node, and an empty host is
                      a flex item that would otherwise buy a gap with nothing in
