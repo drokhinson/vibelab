@@ -232,6 +232,11 @@
             <div class="card-body" id="auth-card-body">${cardBody}</div>
           </div>
           ${window.BgbFeatureStrip.render()}
+          <a href="https://boardgamegeek.com" target="_blank" rel="noopener"
+             class="auth-bgg-credit">
+            <img src="assets/credits/bgg-logo.svg" alt="Powered by BoardGameGeek"
+                 class="auth-bgg-credit__logo" />
+          </a>
         </div>
       `;
       this._shellPainted = true;

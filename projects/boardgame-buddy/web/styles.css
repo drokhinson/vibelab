@@ -4089,6 +4089,20 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   content: ""; flex: 1; border-top: 1px solid oklch(var(--b3));
 }
 .auth-divider span { padding: 0 12px; }
+
+/* "Powered by BGG" — required by the BGG XML API licence on every public
+   page, and this is the one every visitor sees. The lockup is navy on white
+   and is never recoloured, so it always sits on the white plate it was drawn
+   for (.claude/rules/assets.md) rather than switching per theme. */
+.auth-bgg-credit {
+  display: inline-block;
+  margin-top: 1.5rem;
+  padding: 8px 12px;
+  background: #FFFFFF;
+  border-radius: var(--r-sm);
+  line-height: 0;
+}
+.auth-bgg-credit__logo { width: 120px; height: auto; }
 .feed-cards { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
 /* A flex item's min-width defaults to `auto`, i.e. its content size — so a
    horizontal rail inside one of these columns widens the column to the full
@@ -6050,7 +6064,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   margin: 0;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--polaroid-line);
-  border-radius: var(--r-sm, 8px);
+  border-radius: var(--r-sm);
   background: var(--well, transparent);
   /* Capped and scrolled rather than unbounded: a 25-pass drain is hundreds of
      lines, and a page that grows without limit loses its own footer. The
