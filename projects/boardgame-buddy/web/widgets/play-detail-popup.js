@@ -53,6 +53,9 @@
     // added. Held whole because window.Buddy.toPlayerCandidates() takes the
     // bundle, not its parts.
     partners: { accounts: [], pending: [], ghosts: [], recent: [] },
+    // The play ids this popup can page through (widgets/play-detail-pager.js),
+    // captured from the list it was opened over. Never empty while open.
+    sequence: [],
   };
 
   // The card markup currently painted into the backdrop. render() compares
@@ -121,6 +124,50 @@
   async function show(playId) {
     if (!playId) return;
     dismiss();
+    // Read before the backdrop mounts — the list it reads is the one on screen.
+    const sequence = window.PlayDetailPager ? window.PlayDetailPager.sequenceFor(playId) : [playId];
+    mountBackdrop();
+    state.sequence = sequence;
+    await load(playId);
+  }
+
+  // Swap the open popup to another play in its sequence. The modal, its back
+  // guard and its gestures stay; only the play changes — so a page turn is not a
+  // close and a reopen.
+  function goTo(dir) {
+    const i = state.sequence.indexOf(state.playId);
+    const next = state.sequence[i + dir];
+    const root = _modal.el;
+    if (!next || !root) return;
+    window.PlayDetailPager.slide(root, dir, () => {
+      if (!_modal.el) return;
+      _lastHtml = null;
+      _buddiesFor = null;
+      load(next);
+      const scroller = root.querySelector(".play-detail-popup__scroll");
+      if (scroller) scroller.scrollTop = 0;
+      keepCardInView(next);
+    });
+  }
+
+  // The page behind is scroll-locked, but not to script: keep the polaroid for
+  // the play on screen in view behind the blur, so a pull-to-close from here
+  // still has a card to fly back into.
+  function keepCardInView(playId) {
+    const esc = window.CSS && CSS.escape ? CSS.escape(playId) : playId;
+    const card = Array.from(document.querySelectorAll(`article.play-card[data-play-id="${esc}"]`))
+      .find((el) => el.getClientRects().length > 0);
+    // inline "start": where the feed rail's mandatory snap would put it anyway.
+    if (card) card.scrollIntoView({ block: "center", inline: "start", behavior: "instant" });
+  }
+
+  function canPage(dir) {
+    if (state.editing || state.saving || hasStackedOverlay()) return false;
+    const i = state.sequence.indexOf(state.playId);
+    return i !== -1 && !!state.sequence[i + dir];
+  }
+
+  async function load(playId) {
     // Since migration 015 the feed card carries the whole play, and since 031
     // it carries the scoring template too, so a popup opened from a card the
     // feed drew has its content before it is mounted and never shows a loading
@@ -162,7 +209,6 @@
       buddies: [],
       partners: { accounts: [], pending: [], ghosts: [], recent: [] },
     });
-    mountBackdrop();
     render();
     ensureBuddies();
     try {
@@ -217,6 +263,7 @@
       draft: null,
       buddies: [],
       partners: { accounts: [], pending: [], ghosts: [], recent: [] },
+      sequence: [],
     });
   }
 
@@ -231,11 +278,14 @@
       // Pull the card down to close it (widgets/play-detail-collapse.js). Not
       // while editing: a pull would take an unsaved draft with it, and the edit
       // form is where a downward drag most often means "scroll back up".
-      onOpen: (root) => window.PlayDetailCollapse.attach(root, {
-        canDrag: () => !state.editing && !state.saving && !hasStackedOverlay(),
-        playId: () => state.playId,
-        close: dismiss,
-      }),
+      onOpen: (root) => {
+        window.PlayDetailCollapse.attach(root, {
+          canDrag: () => !state.editing && !state.saving && !hasStackedOverlay(),
+          playId: () => state.playId,
+          close: dismiss,
+        });
+        window.PlayDetailPager.attach(root, { canSwipe: canPage, step: goTo });
+      },
     });
   }
 
@@ -346,7 +396,9 @@
       <div class="play-detail-popup__card" role="dialog" aria-modal="true" aria-label="Play details">
         <div class="play-detail-popup__topbar">
           <span class="play-detail-popup__grip" aria-hidden="true"></span>
-          <span></span>
+          ${state.editing
+            ? `<span></span>`
+            : window.PlayDetailPager.renderNav(state.sequence.indexOf(state.playId), state.sequence.length)}
           <button class="play-detail-popup__close" type="button" aria-label="Close">
             <i data-icon="x" class="w-4 h-4"></i>
           </button>
@@ -873,6 +925,7 @@
     dismiss,
     // Handlers exposed for inline onclick wiring inside the rendered HTML.
     _openAlias: openAlias,
+    _page: (dir) => { if (canPage(dir)) goTo(dir); },
     _leavePlay: leavePlay,
   }, window.PlayDetailEdit.handlers);
 })();

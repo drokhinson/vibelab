@@ -152,12 +152,50 @@
   function findLanding(playId) {
     if (!playId) return null;
     const sel = `article.play-card[data-play-id="${window.CSS && CSS.escape ? CSS.escape(playId) : playId}"] .play-card__photo`;
-    const vh = window.innerHeight;
     for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(sel))) {
-      const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < vh) return el;
+      const v = visibleRect(el);
+      if (v.width > 0 && v.height > 0) return el;
     }
     return null;
+  }
+
+  /**
+   * The part of an element actually on screen: its box cut down by every
+   * ancestor that clips (a feed day's sideways rail, above all) and by the
+   * viewport. The flyer is fixed at the top of the page, so nothing clips it the
+   * way the rail clips the card — this is what it has to be clipped to instead.
+   * @param {Element} el
+   */
+  function visibleRect(el) {
+    const r = el.getBoundingClientRect();
+    let left = r.left, top = r.top, right = r.right, bottom = r.bottom;
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const cs = getComputedStyle(a);
+      if (cs.overflowX === "visible" && cs.overflowY === "visible") continue;
+      const q = a.getBoundingClientRect();
+      left = Math.max(left, q.left); top = Math.max(top, q.top);
+      right = Math.min(right, q.right); bottom = Math.min(bottom, q.bottom);
+    }
+    left = Math.max(left, 0); top = Math.max(top, 0);
+    right = Math.min(right, window.innerWidth); bottom = Math.min(bottom, window.innerHeight);
+    return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+  }
+
+  /**
+   * Bring a half-hidden polaroid fully into view before the photo flies at it,
+   * so it lands on a whole card rather than on a sliver at the screen's edge.
+   * `inline: "start"` because that is where the rail's mandatory scroll-snap
+   * would put it anyway — any other stop gets re-snapped after we have
+   * measured. The page is scroll-locked, but not to script, and the popup's
+   * backdrop is still covering it.
+   * @param {HTMLElement} frame
+   */
+  function reveal(frame) {
+    const r = frame.getBoundingClientRect();
+    const v = visibleRect(frame);
+    if (v.width >= r.width - 1 && v.height >= r.height - 1) return;
+    const card = frame.closest("article.play-card") || frame;
+    card.scrollIntoView({ block: "nearest", inline: "start", behavior: "instant" });
   }
 
   /**
@@ -190,6 +228,7 @@
       card.querySelector(".play-detail-popup__photo") ||
       card.querySelector(".play-detail__game-thumb")));
     const frame = findLanding(playId);
+    if (frame && !reducedMotion()) reveal(frame);
 
     root.classList.add("is-pulled", "is-collapsing");
     root.style.setProperty("--pdp-drag", Math.round(window.innerHeight * 0.6) + "px");
@@ -208,6 +247,20 @@
     const a = photo.getBoundingClientRect();
     const b = landingRect(frame);
     if (!a.width || !a.height) return;
+    // Whatever of the landing box is still hidden after reveal() — a card too
+    // wide for its rail, a rail at the end of its travel — is hidden on the
+    // flyer too, as insets from its landed box, so it slides in under the
+    // rail's edge exactly as the card does.
+    const v = visibleRect(frame);
+    const insets = [
+      Math.max(0, v.top - b.top), Math.max(0, b.left + b.width - v.right),
+      Math.max(0, b.top + b.height - v.bottom), Math.max(0, v.left - b.left),
+    ];
+    // Only when something IS hidden: a clip-path also cuts the drop shadow, so
+    // the unclipped start is a negative inset wide enough for the lift's shadow.
+    const clipped = insets.some((n) => n > 0.5);
+    const clipFrom = clipped ? { clipPath: "inset(-60px -60px -60px -60px)" } : {};
+    const clipTo = clipped ? { clipPath: `inset(${insets.map((n) => n.toFixed(1) + "px").join(" ")})` } : {};
 
     // A wrapper rather than a bare <img>, so the flyer can carry the shade the
     // polaroid paints over its photo (.play-card__photo::after). Both it and
@@ -240,11 +293,11 @@
     const timing = { duration: FLIGHT_MS, easing: "cubic-bezier(.3,.8,.35,1)", fill: /** @type {FillMode} */ ("forwards") };
     const anim = flyer.animate([
       { ...box(a), transform: "scale(1) rotate(0deg)", borderRadius: "8px",
-        boxShadow: "0 4px 10px -2px rgba(0, 0, 0, 0.35)", offset: 0 },
+        boxShadow: "0 4px 10px -2px rgba(0, 0, 0, 0.35)", ...clipFrom, offset: 0 },
       { ...lift, transform: "scale(1.05) rotate(-2.5deg)", borderRadius: "8px",
         boxShadow: "0 22px 40px -12px rgba(0, 0, 0, 0.6)", offset: 0.2, easing: "cubic-bezier(.45,0,.2,1)" },
       { ...box(b), transform: "scale(1) rotate(0deg)", borderRadius: "3px",
-        boxShadow: "0 0 0 0 rgba(0, 0, 0, 0)", offset: 1 },
+        boxShadow: "0 0 0 0 rgba(0, 0, 0, 0)", ...clipTo, offset: 1 },
     ], timing);
     shade.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: 1 }], timing);
 
