@@ -194,7 +194,7 @@ Components are global functions / classes attached to `window`. There is no modu
   - Tap on `.plays-list__row` in `views/plays-view.js`
   - Various edit / share flows internal to the widget itself
 - **Visual style:** Full play detail in a modal overlay. Owns its own `.play-detail__*` CSS family (`styles.css:3659+`). Hosts a `renderRoundGrid` for the scoreboard.
-- **How accessed:** Tap the maximize button on a play card; tap any row in the chronological plays view.
+- **How accessed:** Tap a play card; tap any row in the chronological plays view.
 - **Inconsistency:** Calls `PolaroidPopup.confirm` (`widgets/play-detail-popup.js:646`) for delete-play confirmation but otherwise uses its own modal styling — i.e. the popup is **not** a `PolaroidPopup`, it is a separate modal system. Worth noting for future refactor.
 
 ### 3.15 Global header (brand + utilities) — `index.html`
@@ -222,7 +222,7 @@ Components are global functions / classes attached to `window`. There is no modu
 | Game tile — profile preview | `.preview-card`, `.preview-card__*` | `styles.css:6611–6700+` | `--font-display` for title, `--font-sans` for body | None |
 | Game tile — game detail hero | `.game-detail__polaroid*` | Inside `game-detail__*` block | `--font-display` for name | None |
 | Plays list row | `.plays-list__row`, `.plays-list__thumb`, `.plays-list__top`, `.plays-list__sub`, `.plays-list__status` | Inside plays-view section | `--font-sans`, `--font-display` for day divider | None |
-| Play cards | `.play-card`, `.play-card--single`, `.play-card--strip`, `.play-card__front`, `.play-card__photo`, `.play-card__caption*`, `.play-card__status-overlay`, `.play-card__game-overlay`, `.play-card__maximize` | `styles.css:2680+` cluster | `--font-polaroid` for caption | None |
+| Play cards | `.play-card`, `.play-card--single`, `.play-card--strip`, `.play-card__front`, `.play-card__photo`, `.play-card__caption*`, `.play-card__status-overlay`, `.play-card__game-overlay` | `styles.css:2680+` cluster | `--font-polaroid` for caption | None |
 | Reference guide | `.scroll-panel*`, `.scroll-panel--rolled`, `.scroll-chapter*`, `.scroll-section*`, `.guide-controls`, `.guide-search`, `.guide-pill*`, `.guide-text` | `styles.css:1150–1350+` block | `--font-display` for chapter titles, `--font-polaroid` for guide-text body | None |
 | Chapter editor | `.chapter-edit__*`, `.chapter-add__*` | `styles.css:610–940` block | `--font-display` for titles, mono for chapter-edit toolbar icons | None |
 | Status badges | `.status-tag`, `.status-badge`, `.status-badge--owned`, `.status-badge--wishlist`, `.status-badge--played`, `.expansion-count-badge`, `.expansion-dot` | `styles.css:4100+` cluster | `--font-sans`, `--accent`, `--exp-color` (inline) | None |
@@ -1251,3 +1251,20 @@ path in `ui/play-card.js`; the 3D flip rules and the whole `.play-card__back-*`
 family in `styles.css`. `window.playCardFlip` became `window.playCardTap`, and
 `data-no-flip` became `data-no-open`. The maximize button stays as the visible
 hint that the card opens.
+
+## Cleanup log — Pass 15 (the card's expand button retires), 2026-09-26
+
+**Deleted:** the expand (maximize) button in the top-right corner of every play
+card's photo — its markup and the `detailNav` handler in `ui/play-card.js`
+`renderFront`, and the whole `.play-card__maximize` / `--front` family in
+`styles.css`. Pass 14 kept it only as the visible hint that the card opens;
+since then the card opens from a tap anywhere, with the photo flying into the
+popup, swipe between a session's plays, and pull to close, so the card reads as
+the thing you open without a control saying so.
+
+**Nothing loses access.** The `<article>` itself is the button —
+`role="button" tabindex="0"`, `aria-label="Open play details: {game}"`, and
+Enter/Space through `playCardTap.handleKey` — so keyboard and screen-reader
+users reach the popup exactly as before. The game-name link and the open
+button still carry `data-no-open` and route to the game page. The
+`maximize-2` glyph stays in the vendored icon set; only its one use went.

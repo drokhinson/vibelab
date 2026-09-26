@@ -991,7 +991,7 @@ Most navigation between screens is **drill-into-an-object**. The graph below sho
                        │      feed       │ ◀───────────── Bottom-nav "Feed"
                        └────────┬────────┘
               tap play card     │     tap game name on play card
-              maximize          │     ↓
+                                │     ↓
               ↓                 │   ┌─────────────────┐
         ┌─────────────────┐     │   │   game-detail   │ ◀── Tap any game tile, anywhere
         │  PlayDetailPopup│     │   └────────┬────────┘
@@ -1040,7 +1040,7 @@ Bottom-nav "Profile"
 The two key observations:
 
 1. **`game-detail`, `profile-self/other`, and `play-flow` are the "destination" screens.** Everything else either lists them or details them. `add-games` is the one screen that deliberately isn't a drill-in: it is a *catalog*, and its rows mutate the viewer's relationship to a Game rather than navigating to one — though the tile inside each row still drills into `game-detail`, because deciding whether you want a game is what the game page is for.
-2. **The chronological `feed` is the main loop.** A user opens the app, sees recent plays from their buddies (Play objects), maybe taps a player avatar (→ User), maybe taps a game name (→ Game), maybe maximizes a play card (→ Play detail). All four flows are object-drilling.
+2. **The chronological `feed` is the main loop.** A user opens the app, sees recent plays from their buddies (Play objects), maybe taps a player avatar (→ User), maybe taps a game name (→ Game), maybe taps a play card (→ Play detail). All four flows are object-drilling.
 
 ### 5.4 The Play cascade
 
@@ -1137,9 +1137,9 @@ A Game in the feed's "hot games" rail, a Game in the collection grid, and a Game
 
 ### Rule 2 — Same action, same affordance
 
-If two surfaces let the user open the same destination, they should use the same affordance. If maximizing a play card opens the `PlayDetailPopup`, then tapping a row in the chronological plays view should open the same popup the same way — either by the same icon button or by the same full-card tap.
+If two surfaces let the user open the same destination, they should use the same affordance. If tapping a play card opens the `PlayDetailPopup`, then tapping a row in the chronological plays view should open the same popup the same way — either by the same icon button or by the same full-card tap.
 
-> Today's state: maximize button on the play card vs full-row tap on `.plays-list__row` (same destination, different affordance). See UI_AUDIT.md §5b.
+> Resolved: a tap anywhere on the play card and a full-row tap on `.plays-list__row` both open the popup (UI_AUDIT.md Passes 14–15). The card's separate expand button retired once the whole card was the button.
 
 > The second corollary for *mutations*: **restructure only on an interaction that has already broken continuity** — a mount, a page turn, a search, a confirm dialog — and **patch in place on one that hasn't**, i.e. a single tap on a list control. `.claude/rules/web-frontend.md` exempts membership changes from the surgical-repaint rule, but that exemption is about a repaint's *scope* and says nothing about its *timing*. The Buddies screen repainted the whole container in the tap's own frame, which slid the suggestion rail sideways and sent the next tap — already on its way down — to the wrong person. The affordance corollary is the visible half: a control that has been acted on shows a **verb** for what happened (Sent, Accepted, Declined), never a state like "Buddies" that its own section heading contradicts, because the row has deliberately not moved yet. See the rule block above `_personFor` in `views/buddies-view.js`, and `ui/buddy-suggestion-rail.js`'s `state` opt, which is what keeps the Feed rail, the Buddies rail and the onboarding grid agreeing on what a Sent tile looks like. The one action that *does* take a tile out of the rail is the ×, "stop suggesting this person" — and that follows the rule rather than excepting it: removal is the whole request there rather than a side effect of a send, and `removeBuddySuggestionTile` collapses the tile over ~220ms instead of repainting in the tap's own frame, so nothing slides under a finger already on its way down.
 
