@@ -209,11 +209,20 @@
     const b = landingRect(frame);
     if (!a.width || !a.height) return;
 
-    const flyer = document.createElement("img");
+    // A wrapper rather than a bare <img>, so the flyer can carry the shade the
+    // polaroid paints over its photo (.play-card__photo::after). Both it and
+    // the drop shadow are animated INTO their landed values over the flight —
+    // left as fixed styles, the shadow vanished and the shade appeared in the
+    // single frame the flyer was swapped for the card, and read as a blink.
+    const flyer = document.createElement("div");
     flyer.className = "pdp-flyer";
-    flyer.src = photo.currentSrc || photo.src;
-    flyer.alt = "";
     flyer.setAttribute("aria-hidden", "true");
+    const img = document.createElement("img");
+    img.src = photo.currentSrc || photo.src;
+    img.alt = "";
+    const shade = document.createElement("span");
+    shade.className = "pdp-flyer__shade";
+    flyer.append(img, shade);
     Object.assign(flyer.style, {
       left: a.left + "px", top: a.top + "px", width: a.width + "px", height: a.height + "px",
     });
@@ -224,22 +233,31 @@
 
     const box = (r) => ({ left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
     // The snap: lift a little and swell as it comes off the card, then fall
-    // into the polaroid, shrinking and straightening out as it lands.
+    // into the polaroid, shrinking and straightening out as it lands. The
+    // shadow follows the height: it grows with the lift and settles to nothing
+    // as the photo lies flat in the frame, which casts none of its own.
     const lift = { left: a.left + "px", top: (a.top - 14) + "px", width: a.width + "px", height: a.height + "px" };
+    const timing = { duration: FLIGHT_MS, easing: "cubic-bezier(.3,.8,.35,1)", fill: /** @type {FillMode} */ ("forwards") };
     const anim = flyer.animate([
-      { ...box(a), transform: "scale(1) rotate(0deg)", borderRadius: "8px", offset: 0 },
-      { ...lift, transform: "scale(1.05) rotate(-2.5deg)", borderRadius: "8px", offset: 0.2, easing: "cubic-bezier(.45,0,.2,1)" },
-      { ...box(b), transform: "scale(1) rotate(0deg)", borderRadius: "3px", offset: 1 },
-    ], { duration: FLIGHT_MS, easing: "cubic-bezier(.3,.8,.35,1)", fill: "forwards" });
+      { ...box(a), transform: "scale(1) rotate(0deg)", borderRadius: "8px",
+        boxShadow: "0 4px 10px -2px rgba(0, 0, 0, 0.35)", offset: 0 },
+      { ...lift, transform: "scale(1.05) rotate(-2.5deg)", borderRadius: "8px",
+        boxShadow: "0 22px 40px -12px rgba(0, 0, 0, 0.6)", offset: 0.2, easing: "cubic-bezier(.45,0,.2,1)" },
+      { ...box(b), transform: "scale(1) rotate(0deg)", borderRadius: "3px",
+        boxShadow: "0 0 0 0 rgba(0, 0, 0, 0)", offset: 1 },
+    ], timing);
+    shade.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: 1 }], timing);
 
+    // The flyer now looks exactly like the photo underneath it, so it can go
+    // in one frame — a cross-fade here would show the card's thump through a
+    // copy that isn't doing it.
     const land = () => {
+      flyer.remove();
       frame.classList.remove("is-receiving");
       // Reflow so a second landing on the same card replays the thump.
       void frame.offsetWidth;
       frame.classList.add("is-receiving");
       setTimeout(() => frame.classList.remove("is-receiving"), 360);
-      const fade = flyer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, fill: "forwards" });
-      fade.onfinish = () => flyer.remove();
     };
     anim.onfinish = land;
     anim.oncancel = () => flyer.remove();
