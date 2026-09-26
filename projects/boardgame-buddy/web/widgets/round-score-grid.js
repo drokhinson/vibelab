@@ -914,9 +914,10 @@
   //    position across an innerHTML swap. What the page cannot do by itself is
   //    the "Add round" case — the new row lands below the fold and the button
   //    reads as doing nothing — so when the round count grew we scroll the new
-  //    last row into view. `block: "nearest"` so a grid already on screen does
-  //    not jump, and the row's own scroll-margin (styles.css) is what keeps it
-  //    clear of the band pinned above it and the docked CTA below it.
+  //    last row to the middle of the screen, where the next scores go in with
+  //    the rows above it still in sight. The row's own scroll-margin
+  //    (styles.css) keeps it clear of the band pinned above it and the docked
+  //    CTA below it on a grid too short to centre.
   //
   // The restore runs in a rAF because the renderer hands back a STRING: the
   // host injects it synchronously in the same task, so the next frame is the
@@ -955,7 +956,7 @@
         const rows = rg.querySelectorAll(".scoring-table--body tbody tr");
         const last = rows[rows.length - 1];
         if (last && typeof last.scrollIntoView === "function") {
-          last.scrollIntoView({ block: "nearest" });
+          last.scrollIntoView({ block: "center" });
         }
       });
     },

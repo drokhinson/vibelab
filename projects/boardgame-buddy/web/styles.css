@@ -9166,6 +9166,21 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 :is([data-view="play-flow"], [data-view="session-viewer"]) .rg {
   --rg-pin-top: calc(var(--bgb-header-height) + var(--bgb-cascade-head-height));
 }
+/* With a keyboard up, iOS (and Android's resizes-visual default) keep the
+   LAYOUT viewport full height and slide the visible box down inside it, so a
+   sticky pinned against the layout viewport sits above what the user can see —
+   the band vanished the moment a score cell took focus. --bgb-vv-top
+   (ui/viewport-lock.js) is how far down that visible box starts, so pinning at
+   no less than it keeps the band on the first visible line. max() rather than a
+   replacement: while the global header is still in view the usual offset is the
+   lower of the two. Not the play-detail popup — its scroller is already laid
+   out inside the visual viewport. */
+:root.bgb-kb-open :is([data-view="play-flow"], [data-view="session-viewer"]) .rg {
+  --rg-pin-top: max(
+    calc(var(--bgb-header-height) + var(--bgb-cascade-head-height)),
+    var(--bgb-vv-top, 0px)
+  );
+}
 /* What else shares the label cell, and therefore what the character count
    cannot cover: the info glyph on a described template row (0.75rem plus
    .scoring-round-label's 0.25rem gap), and the remove × on a plain editable
