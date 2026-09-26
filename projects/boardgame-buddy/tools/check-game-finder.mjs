@@ -19,7 +19,8 @@
 //      query is re-answered from it and the pending request never fires.
 //   4. A PICK FROM AN INDEX ROW is hydrated before it is handed on: from a
 //      warmed bundle when the game is owned (no request), from GET /games/{id}
-//      otherwise (one request), and as the partial row when that fails.
+//      otherwise (one request), and as the partial row when that fails —
+//      or, with `instantPick`, handed on in the tap frame with no request.
 //   5. MEMORY-ONLY CACHE ENTRIES (`persist: false`, and a predicate that says
 //      no) never reach localStorage — the per-keystroke stringify + setItem
 //      the old search memo paid is gone, and a catalog past its size cap
@@ -295,6 +296,22 @@ console.log("\n4. A pick from an index row is hydrated before onPick");
   await finder._pickById("g-scat", "library", null);
   ok("a failed hydrate still picks the partial row", picked && picked.id === "g-scat" && picked._partial === true);
   finder.unmount();
+
+  // instantPick (Gather): the partial row goes out in the tap frame, no
+  // request — a slow detail fetch must not hold the selection. The device
+  // copy still wins when there is one.
+  const calls3 = fakeApi({ "/games/g-catan": async () => { await sleep(500); return full; } });
+  picked = null;
+  const m3 = mountFinder({ instantPick: true, onPick: (g) => { picked = g; } });
+  m3.finder._onInput("catan");
+  m3.finder._pickById("g-catan", "library", null);
+  ok("instantPick hands the partial row on synchronously", picked && picked.id === "g-catan" && picked._partial === true);
+  ok("and asks nothing", calls3.filter((c) => c.path.startsWith("/games/g-")).length === 0);
+  picked = null;
+  m3.finder._onInput("wildcat");
+  m3.finder._pickById("g-wildcat", "library", null);
+  ok("instantPick still uses a warmed bundle", picked === bundleGame);
+  m3.finder.unmount();
 }
 
 // ── 5. Memory-only entries never reach localStorage ─────────────────────────

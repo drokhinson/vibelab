@@ -29,6 +29,7 @@
    * @property {string} [placeholder]
    * @property {(err: Error) => void} [onError]
    * @property {Element|null} [returnFocus]
+   * @property {boolean} [instantPick]  Passed through to GameFinder.
    */
 
   class GameSearchSheet {
@@ -63,6 +64,7 @@
             placeholder: opts.placeholder || "Search for a game…",
             includeRecentlyPlayed: true,
             onError: opts.onError,
+            instantPick: !!opts.instantPick,
             onPick: async (game, ctx) => {
               const res = await opts.onPick(game, ctx);
               // The refusal contract is the finder's: hand it straight back so
