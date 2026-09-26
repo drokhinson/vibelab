@@ -248,6 +248,18 @@ CSS read them:
   set `overflow-anchor: none` on the scroller and reserve image boxes, so
   nothing the reader didn't do can move what they're reading.
 
+- **Widgets that remember scroll state must key it by the record, not the
+  surface.** Every card in a pager is the same surface. Boardgame-buddy's rounds
+  grid remembered "last round count" per host string, so opening a play with
+  more rounds than the previous one read as "Add round". It then called
+  `scrollIntoView` on the last row, and that scrolls every ancestor, which threw
+  the whole detail view to the bottom, a frame after the pin had run.
+  - Key such memory by the item's id.
+  - Turn "scroll to the new thing" off in read-only views.
+  - Neighbour copies render the widget without touching its state at all.
+  - Re-pin one frame after every repaint as well, to catch any widget's
+    deferred layout work.
+
 ## 8. The card itself on touch
 
 - **Hover transforms go under `@media (hover: hover)`.** On touch, a tap leaves
