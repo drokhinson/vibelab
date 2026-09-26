@@ -4366,15 +4366,14 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
      .play-card--wide   280px — a landscape image, blur above and below
      .play-card--tall   208px — a portrait image, blur to either side
    Nothing is ever cropped; see .play-card__photo below for the mechanism.
-   The flip mechanic, hydration on first flip, click routing, and the
-   scroll-position-preserving rerender are unchanged — see ui/play-card.js. */
+   A tap anywhere that isn't a link or button opens the play-detail popup —
+   see ui/play-card.js. */
 .play-card {
   background: var(--polaroid-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--r-md);
   padding: 12px 12px 16px;
   box-shadow: var(--sh-3);
-  perspective: 1500px;
   position: relative;
   cursor: pointer;
   color: var(--polaroid-ink);
@@ -4385,44 +4384,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card__inner {
   position: relative;
   width: 100%;
-  transform-style: preserve-3d;
-  transition: transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.play-card.is-flipped .play-card__inner { transform: rotateY(180deg); }
-
-.play-card__front,
-.play-card__back {
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-/* Backface culling alone is not enough. iOS Safari keeps painting the
-   rotated-away face when it holds a positioned, z-indexed, shadowed
-   descendant — .play-card__game-overlay is all three — so the box art
-   ghosted through onto the back of every flipped card (the status pill
-   with it). `visibility` is not subject to that bug, and unlike
-   `display: none` it keeps the front in flow, which is what gives the
-   absolutely-positioned back its height.
-   No transition-delay on purpose: a flip goes through rerenderCard(), which
-   replaces the whole <article> (ui/play-card.js), and a freshly inserted
-   element doesn't run transitions — so the swap is already instantaneous and
-   a mid-flip delay would only strand the wrong face on screen. */
-.play-card:not(.is-flipped) .play-card__back { visibility: hidden; }
-.play-card.is-flipped .play-card__front { visibility: hidden; }
 .play-card__front {
   position: relative;
   display: flex;
   flex-direction: column;
-}
-.play-card__back {
-  position: absolute;
-  inset: 0;
-  transform: rotateY(180deg);
-  background: var(--polaroid-bg);
-  border-radius: 6px;
-  padding: 18px 16px 14px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 
 /* ── No tilts ─────────────────────────────────────────────────────────────
@@ -4547,8 +4513,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   box-shadow: 0 2px 8px rgba(0,0,0,0.22);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
-  /* Same face and italic as the back's .play-card__back-notes, a step smaller
-     because this one is a preview and the back carries the whole thing. */
+  /* A preview; the play-detail popup carries the whole note. */
   font-family: var(--font-polaroid);
   font-style: italic;
   font-size: 11px;
@@ -4725,178 +4690,16 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card--tall { flex: 0 0 208px; width: 208px; }
 .play-card { transition: transform 200ms var(--ease), box-shadow 200ms var(--ease); }
 .play-card:hover { transform: translateY(-3px); }
+/* The whole card is the tap target for the play-detail popup, so it needs its
+   own press state — touch has no hover. */
+.play-card:active { transform: scale(0.985); }
 
-/* ── Back face ────────────────────────────────────────────────────────── */
-.play-card__back-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding-right: 2rem;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-  border-bottom: 1px dashed var(--polaroid-line);
-}
-.play-card__back-title {
-  flex: 1; min-width: 0;
-  font-family: var(--font-polaroid);
-  font-weight: 700;
-  font-size: 20px;
-  color: var(--polaroid-ink);
-  letter-spacing: -0.01em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* The scoreboard is the back's only growable child, and it scrolls. It used to
-   have all the room it needed because a solo play rendered full-width and grew
-   to whatever its photo demanded; now every card is a fixed 230px photo plus a
-   caption, so a big table would clip against `overflow: hidden` above with no
-   way to reach the last rows. min-height:0 is load-bearing — a flex item's
-   min-height defaults to its content size, so without it the list refuses to
-   shrink and pushes the footer out of the card instead of scrolling. */
-.play-card__back-players {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 6px;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-}
-.play-card__back-head { flex: none; }
-.play-card__back-player {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  /* All rows share the same padding + transparent border so the gold pill
-     on the winner row doesn't shift its name column rightward relative
-     to the losers. The score sits at the far right via margin-left:auto on
-     the score element below so the avatar + name column stays anchored. */
-  padding: 6px 10px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  font-size: 14px;
-  color: var(--polaroid-ink);
-  font-weight: 500;
-}
 
-/* Badge at the start of each play-card player row. Sized to fit
-   comfortably inside the gold winner pill without enlarging the row
-   height noticeably. Uses the shared .user-badge component for the icon
-   + colors; this rule overrides the default 28px size and lets the
-   wrapper handle clicks. */
-.user-badge.play-card__back-player-avatar {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-}
-.user-badge.play-card__back-player-avatar .user-badge__initials { font-size: 10px; }
-.play-card__back-player.is-winner {
-  font-weight: 700;
-  background: linear-gradient(90deg, rgba(229,192,74,0.28), rgba(229,192,74,0.08));
-  border-color: rgba(229,192,74,0.5);
-}
-.play-card__back-player-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--polaroid-ink);
-}
-.play-card__back-player.is-winner .play-card__back-player-name {
-  color: var(--polaroid-ink);
-  /* Names stay left-aligned across winner and loser rows — the gold pill
-     background is the winner indicator, so no leading crown that would
-     shove the winner's name a glyph-width to the right. */
-}
-.play-card__back-player-score {
-  font-family: var(--font-score);
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--polaroid-ink);
-  letter-spacing: -0.02em;
-  flex-shrink: 0;
-}
-.play-card__back-player.is-winner .play-card__back-player-score {
-  color: var(--polaroid-accent);
-}
-/* A row for a registered player opens that player's profile. The whole row
-   is the target — the click used to live on the 24px avatar alone, which is
-   a hard tap on a touch-first surface and invisible as an affordance — and
-   the chevron is what advertises it. Ghost (free-text) players have no
-   account and so no profile, leaving their rows inert and un-chevroned; in
-   a table that mixes the two the ghost rows reserve the chevron's width so
-   every score stays in one column instead of one row's number hanging out
-   past the rest. .has-links gates that spacer: an all-ghost scoreboard has
-   no chevrons at all and so needs no reserved column. */
-.play-card__back-player.is-link { cursor: pointer; }
-/* The chevron is sized here rather than by a w-3/h-3 utility, and the ghost
-   spacer reads the same custom property, so the two can't drift: the sizing
-   utilities come from the Tailwind CDN, and when that doesn't load the
-   :where([data-icon-name]) floor near the top of this file falls the glyph
-   back to 1em (14px here) — which would leave the reserved column 2px short
-   and knock the ghost rows' scores out of the column after all. */
-.play-card__back-players { --row-chev: 0.75rem; }
-.play-card__back-players.has-links .play-card__back-player:not(.is-link)::after {
-  content: "";
-  flex: none;
-  width: var(--row-chev);
-}
-.play-card__back-player-go {
-  flex: none;
-  width: var(--row-chev);
-  height: var(--row-chev);
-  color: var(--polaroid-ink-soft);
-  opacity: 0.5;
-  transition: opacity 120ms var(--ease);
-}
-/* The winner row's gold border yields to the accent on hover — the hover
-   tint means "this goes somewhere", and the gold pill background still
-   carries the win. */
-.play-card__back-player.is-link:hover,
-.play-card__back-player.is-link:focus-visible { border-color: var(--polaroid-accent); }
-.play-card__back-player.is-link:hover .play-card__back-player-go { opacity: 0.9; }
-.play-card__back-player.is-link:active { transform: scale(0.99); filter: brightness(0.97); }
-/* Inset, not outset: the scoreboard is a scroll container now (a fixed card
-   height can't grow to fit a big table), and per .claude/rules/overlays.md a
-   scroller clips an outset ring — the first and last rows would lose theirs. */
-.play-card__back-player.is-link:focus-visible {
-  outline: 2px solid var(--polaroid-accent);
-  outline-offset: -2px;
-}
-.play-card__back-empty {
-  font-size: 0.85rem;
-  color: var(--polaroid-muted);
-  text-align: center;
-  padding: 0.4rem 0;
-}
-.play-card__back-notes {
-  font-family: var(--font-polaroid);
-  font-style: italic;
-  font-size: 13px;
-  color: var(--polaroid-ink-soft);
-  line-height: 1.4;
-  padding-top: 12px;
-  margin-top: 12px;
-  border-top: 1px dashed var(--polaroid-line);
-}
-.play-card__back-loading,
-.play-card__back-error {
-  display: grid; place-items: center;
-  flex: 1;
-  font-size: 0.85rem;
-  color: var(--polaroid-muted);
-  text-align: center;
-}
-.play-card__back-error { color: var(--polaroid-accent); }
-
-/* Maximize button — top-right of either face; tap opens the in-place
-   play-detail popup (data-no-flip, so it never flips the card). On the back
-   it sits on paper; on the front it floats over the photo, where a paper
-   plate keeps the glyph legible against whatever the snapshot happens to be
-   (see .play-card__maximize--front below). */
+/* Maximize button — top-right of the photo; opens the in-place play-detail
+   popup, the same thing a tap on the card does. It stays as the visible hint
+   that the card opens. It floats over the photo, where a paper plate keeps the
+   glyph legible against whatever the snapshot happens to be (see
+   .play-card__maximize--front below). */
 .play-card__maximize {
   position: absolute;
   top: 10px;
@@ -4928,8 +4731,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 /* Touch has no hover, and this is a touch-first surface — without a press
    state the tap reads as not having registered. */
 .play-card__maximize:active { transform: scale(0.92); }
-/* Front face: the button lands on the photo, so it can't borrow the paper
-   ground the back-face version sits on. Give it its own translucent plate
+/* The button lands on the photo, so it can't borrow the paper ground. Give it its own translucent plate
    instead of tinting the photo through it — the same trick the box-art
    badge's bottom scrim uses — so the glyph reads on a bright sky and on a
    dark table alike, in either theme. */
@@ -10581,7 +10383,6 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    link — same size, same press feedback — because it is the same kind of tap;
    only the trailing mark differs, since it goes somewhere else
    (ui-object-design.md §3b). */
-.play-card__back-player--claim .play-card__back-player-go,
 .play-detail__player--claim .play-detail__player-go {
   color: var(--accent-ink);
   opacity: 0.85;
@@ -19447,21 +19248,17 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    THE EDGES, AND WHY THE FIRST VERSION CROSSED ITSELF. They were
    `inset: 6px -5px -5px 6px; z-index: -1` — which insets the top and left
    edges INWARD, so those two borders drew across the face of the card, and the
-   z-index could not push them back because .play-card__inner is
-   `transform-style: preserve-3d` and so makes its own stacking context. The
-   result was crossing lines, not a stack.
+   z-index could not push them back because .play-card__inner was then
+   `transform-style: preserve-3d` (for the since-removed flip) and so made its
+   own stacking context. The result was crossing lines, not a stack.
 
    They are now identical-size copies of the card translated down-right, so the
    only part of each that is ever visible is the sliver past the card's own
-   corner — which is exactly what a stack of paper looks like. A run card does
-   not flip, so `transform-style: flat` below costs nothing and is what lets
-   ordinary z-ordering work again.
+   corner — which is exactly what a stack of paper looks like.
    ────────────────────────────────────────────────────────────────────────── */
 .play-card--stack { position: relative; }
-/* No flip on a run card, so no 3D context — this is the line that makes the
-   edges sit behind the face instead of through it. */
+/* Lifts the face above the edges so they sit behind it, not through it. */
 .play-card--stack .play-card__inner {
-  transform-style: flat;
   position: relative;
   z-index: 1;
 }

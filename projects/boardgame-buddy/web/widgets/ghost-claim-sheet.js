@@ -66,10 +66,9 @@
       this._sheet.open({
         html: this._panel(),
         label: "Is this you?",
-        // Deliberately null, NOT the row that was tapped. playCardFlip
-        // .rerenderCard replaces the whole <article> via replaceWith, so on a
-        // polaroid back the <li> that opened this sheet is already detached by
-        // the time it closes. The shell's isConnected guard makes passing it
+        // Deliberately null, NOT the row that was tapped. A claim repaints the
+        // roster that opened this sheet, so the <li> is usually detached by the
+        // time it closes. The shell's isConnected guard makes passing it
         // harmless, but it would still be a lie about where focus should go.
         returnFocus: null,
         onClick: (e) => this._onClick(e),

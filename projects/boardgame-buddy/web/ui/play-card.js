@@ -1,6 +1,6 @@
 // ui/play-card.js — Polaroid play card rendered in the Feed and Profile.
 //
-// Two-faced flip card styled like an instant photo: cream surface, soft drop
+// A single-faced card styled like an instant photo: cream surface, soft drop
 // shadow, photo at the top.
 //
 // ONE HEIGHT, TWO WIDTHS. The photo frame is a fixed height (--pc-photo-h) in
@@ -10,59 +10,36 @@
 // whatever it does not cover is filled by a blurred, dimmed copy of itself
 // (.play-card__photo-bg), so a landscape shot gets blur above and below and a
 // portrait shot gets blur down each side.
-//   Front  → maximize button (top-right, over the photo) into the in-place
-//            play-detail popup, a date stamp facing it at top-left (painted
-//            only in the game-detail reel — the feed dates its groups with a
-//            .day-divider instead), the photo, then a two-row caption:
-//              title row — game name + an explicit open button
-//              meta row  — the winner, on its own above a hairline
-//            When the user uploaded their own snapshot the game's box art
-//            rides along as a small bottom-right badge at its natural aspect;
-//            with no snapshot the box art IS the photo.
-//            A play with a note also gets a two-line preview of it on a paper
-//            plate across the bottom of the photo. It sits INSIDE the fixed
-//            photo frame, so it costs the card no height; the badge lifts
-//            above it (.has-note) on the one card that carries both.
-//   Back   → game title, ranked scoreboard with the winner row tinted — a
-//            registered player's row opens their profile — optional notes,
-//            and the same maximize button (top-right).
 //
-// Clicking the game-name text, the open button, either maximize button, or a
-// scoreboard row for a registered player acts on its own (data-no-flip).
-// Clicking anywhere else on the card — the photo and the box-art badge
-// included — flips it. State lives in a module-level Map keyed by play_id so
-// flipping re-renders only the affected <article> via outerHTML replacement —
-// the feed scroll position is preserved.
+// The card shows a maximize button (top-right, over the photo), a date stamp
+// facing it at top-left (painted only in the game-detail reel — the feed dates
+// its groups with a .day-divider instead), the photo, then a two-row caption:
+//   title row — game name + an explicit open button
+//   meta row  — the winner, on its own above a hairline
+// When the user uploaded their own snapshot the game's box art rides along as a
+// small bottom-right badge at its natural aspect; with no snapshot the box art
+// IS the photo. A play with a note also gets a two-line preview of it on a
+// paper plate across the bottom of the photo. It sits INSIDE the fixed photo
+// frame, so it costs the card no height; the badge lifts above it (.has-note)
+// on the one card that carries both.
+//
+// Clicking the game-name text or the open button goes to the game page
+// (data-no-open). Clicking anywhere else on the card — the photo, the note and
+// the maximize button included — opens the in-place play-detail popup. A run of
+// identical plays opens the run sheet instead.
 
 (function () {
-  // Per-play state lives outside the render so re-renders are cheap and
-  // scoped: { flipped, hydrated (full PlayResponse), hydrating, error }.
-  const cardState = new Map();
-
   // Orientation cache, keyed by image URL. Populated by onPhotoLoad after the
   // image decodes; survives rerenderCard so a card that already settled into
   // the tall width keeps that classification on subsequent renders.
   const aspectCache = new Map();
 
   // Registry of the latest card payload seen by `renderPlayCard`, keyed by
-  // play_id. `rerenderCard` (called after a flip) looks the card up here so
-  // any surface that renders via the shared component — feed, game-detail,
-  // future hosts — flips correctly regardless of which store it sits in.
+  // play_id. `rerenderCard` (called after an edit) and the tap controller look
+  // the card up here, so any surface that renders via the shared component —
+  // feed, game-detail, future hosts — works regardless of which store it sits
+  // in.
   const cardRegistry = new Map();
-
-  function getState(playId) {
-    let s = cardState.get(playId);
-    if (!s) {
-      s = {
-        flipped: false,
-        hydrated: null,
-        hydrating: false,
-        error: null,
-      };
-      cardState.set(playId, s);
-    }
-    return s;
-  }
 
   function orientFor(ratio) {
     // Square (1:1) treated as landscape so a square photo takes the wider tile.
@@ -103,17 +80,15 @@
   // ── Render ──────────────────────────────────────────────────────────────────
 
   function renderPlayCard(card) {
-    const s = getState(card.play_id);
-    // Cache the card payload so rerenderCard (post-flip) can find it
-    // regardless of which view rendered it. Without this, surfaces that
-    // don't write to window.store.feed (e.g. game-detail's recent_plays
-    // reel) silently fail to flip — state toggles but the DOM never paints.
+    // Cache the card payload so rerenderCard and the tap controller can find
+    // it regardless of which view rendered it — game-detail's recent_plays
+    // reel, for one, never writes to window.store.feed.
     if (card && card.play_id) cardRegistry.set(card.play_id, card);
     // Migration 015: the card carries the whole play, so hand it to the domain
     // layer. This is the one place every card on every surface passes through,
-    // which is why the seeding lives here rather than in each view — and it is
-    // a no-op against an RPC that predates the roster, so the fetch-on-flip
-    // path below stays correct on an unmigrated database.
+    // which is why the seeding lives here rather than in each view — the
+    // play-detail popup reads the seed, and it is a no-op against an RPC that
+    // predates the roster.
     if (window.Play && window.Play.seedFromFeedCard) window.Play.seedFromFeedCard(card);
     const accent = (card.game && card.game.theme_color) || "var(--polaroid-accent)";
 
@@ -129,9 +104,7 @@
     const orient = cached ? cached.orient : (card.photo_url ? "landscape" : "portrait");
 
     const variantClass = orient === "portrait" ? "play-card--tall" : "play-card--wide";
-    const flippedAttr = s.flipped ? " is-flipped" : "";
-    // State class in the .has-links mould (see renderBack's scoreboard). It
-    // exists so the box-art badge can lift clear of the note band: the badge
+    // State class. It exists so the box-art badge can lift clear of the note band: the badge
     // and the band both want the bottom of the photo, and the badge only
     // renders at all when the user uploaded their own snapshot, so this is the
     // one case where they actually collide.
@@ -140,20 +113,14 @@
     // A run of identical imported plays (migration 005) is ONE card standing
     // for many. It is a variant of this component rather than a component of
     // its own (.claude/rules/ui-object-design.md §2): still a Play, still in
-    // the session rail beside the ordinary cards. Two things differ.
+    // the session rail beside the ordinary cards.
     //
-    // IT DOES NOT FLIP, and so has no back face at all. Tapping opens the run
-    // sheet instead, which is the run's back face as well as the one place a
-    // run can be acted on: it carries the delete, the note every play in the
-    // run shares, and their shared scoreline where there is one. A flip would
-    // promise a scorecard belonging to ONE play, and a run has no single play
-    // to show one for — its whole claim is that its plays are interchangeable.
-    //
-    // Losing the flip also fixes the stack art. The edges behind the card
-    // could not sit behind it while .play-card__inner was `preserve-3d`,
-    // because that makes its own stacking context and z-index below it does
-    // nothing — so the edges drew ACROSS the face as crossing borders. With no
-    // flip there is no 3D, and they stack the ordinary way.
+    // A tap opens the run sheet rather than the play-detail popup. The sheet
+    // is the one place a run can be acted on: it carries the delete, the note
+    // every play in the run shares, and their shared scoreline where there is
+    // one. The popup would promise a scorecard belonging to ONE play, and a run
+    // has no single play to show one for — its whole claim is that its plays
+    // are interchangeable.
     const stack = (card.group_count || 1) > 1;
 
     if (stack) {
@@ -163,8 +130,8 @@
                  style="--game-accent:${escapeAttr(accent)}"
                  role="button" tabindex="0"
                  aria-label="${escapeAttr(`${card.group_count} identical plays`)}"
-                 onclick="window.playCardFlip.handleClick(event, '${escapeAttr(card.play_id)}')"
-                 onkeydown="window.playCardFlip.handleKey(event, '${escapeAttr(card.play_id)}')">
+                 onclick="window.playCardTap.handleClick(event, '${escapeAttr(card.play_id)}')"
+                 onkeydown="window.playCardTap.handleKey(event, '${escapeAttr(card.play_id)}')">
           <span class="play-card__stack-edge play-card__stack-edge--2" aria-hidden="true"></span>
           <span class="play-card__stack-edge" aria-hidden="true"></span>
           <div class="play-card__inner">
@@ -175,16 +142,15 @@
     }
 
     return `
-      <article class="play-card ${variantClass}${flippedAttr}${notedAttr}"
+      <article class="play-card ${variantClass}${notedAttr}"
                data-play-id="${escapeAttr(card.play_id)}"
                style="--game-accent:${escapeAttr(accent)}"
                role="button" tabindex="0"
-               aria-expanded="${s.flipped ? "true" : "false"}"
-               onclick="window.playCardFlip.handleClick(event, '${escapeAttr(card.play_id)}')"
-               onkeydown="window.playCardFlip.handleKey(event, '${escapeAttr(card.play_id)}')">
+               aria-label="${escapeAttr(`Open play details: ${g.name || "Unknown game"}`)}"
+               onclick="window.playCardTap.handleClick(event, '${escapeAttr(card.play_id)}')"
+               onkeydown="window.playCardTap.handleKey(event, '${escapeAttr(card.play_id)}')">
         <div class="play-card__inner">
           <div class="play-card__front">${renderFront(card, { photoSrc })}</div>
-          <div class="play-card__back">${renderBack(card, s)}</div>
         </div>
       </article>
     `;
@@ -214,8 +180,8 @@
       </div>
       <div class="play-card__caption">
         <div class="play-card__title-row">
-          <a class="play-card__caption-name" data-no-flip onclick="${gameNav}">${gameName}</a>
-          <button class="play-card__open" type="button" data-no-flip
+          <a class="play-card__caption-name" data-no-open onclick="${gameNav}">${gameName}</a>
+          <button class="play-card__open" type="button" data-no-open
                   aria-label="Open ${gameName}" title="Open ${gameName}"
                   onclick="${gameNav}">
             <i data-icon="arrow-up-right" class="w-4 h-4"></i>
@@ -261,9 +227,8 @@
     const me = window.store && window.store.get && window.store.get("user");
     const gameName = escapeHtml(g.name || "Unknown game");
     const gameNav = escapeAttr(gameDetailJs(g.id, g.name, { stop: true }));
-    // Same expand affordance the back face carries, mirrored onto the front
-    // so the play details are one tap away instead of flip-then-tap. The
-    // popup fetches the full play itself, so the front needs no hydration.
+    // The maximize button is the visible hint that the card opens; a tap
+    // anywhere else on the card does the same through the tap controller.
     const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
 
     // Caption "winner" block. See buildWinnerBlock for the buckets; a play
@@ -282,8 +247,8 @@
     // Box-art badge: only when the user uploaded their own session photo
     // (otherwise the box art IS the photo slot). Fixed height, auto width, so
     // a tall cover stays narrow and a wide one stays short instead of being
-    // square-cropped. Deliberately inert — no onclick, no data-no-flip — so
-    // the whole photo area flips the card and the ONE way into the game page
+    // square-cropped. Deliberately inert — no onclick, no data-no-open — so
+    // the whole photo area opens the play and the ONE way into the game page
     // is the open button in the title row below.
     const badgeHtml = (hasUserPhoto && gameThumb)
       ? `<div class="play-card__game-overlay" aria-hidden="true">
@@ -317,7 +282,7 @@
                 src="${escapeAttr(photoSrc)}"
                 alt="${escapeAttr(g.name || "")}"
                 loading="lazy"
-                onload="window.playCardFlip.onPhotoLoad(event, '${escapeAttr(card.play_id)}')" />
+                onload="window.playCardTap.onPhotoLoad(event, '${escapeAttr(card.play_id)}')" />
            ${badgeHtml}
            ${noteHtml}
          </div>`
@@ -329,24 +294,24 @@
     // styles.css), rather than being switched on by a flag on the card. A flag
     // would have to ride the card payload, and rerenderCard() renders one HTML
     // string from the registry and applies it to every mounted copy of the
-    // play — so a card flipped in the reel would have handed its stamp to the
-    // feed's hidden copy of the same play. The feed prints the day once as a
+    // play — so a card repainted in the reel would have handed its stamp to
+    // the feed's hidden copy of the same play. The feed prints the day once as a
     // .day-divider above each group; the reel has no such grouping, so the play
     // has nowhere else to say when it happened.
     const dateHtml = card.played_at
       ? `<div class="play-card__date">${escapeHtml(formatRelativeDay(card.played_at, formatDateCompact))}</div>`
       : "";
 
-    // The band carries no data-no-flip and is not a button or a link, so
-    // handleClick lets the tap through and the card flips — tapping a truncated
-    // preview to read the rest of it is exactly what it should do, and the
-    // back's .play-card__back-notes carries the note unclamped.
+    // The band carries no data-no-open and is not a button or a link, so
+    // handleClick lets the tap through and the play opens — tapping a
+    // truncated preview to read the rest of it is exactly what it should do,
+    // and the popup carries the note unclamped.
     //
     // The winner used to share a row with the title and needed a post-paint
     // re-measure to decide whether it fit; it has its own row now, so the
     // layout is static and the title simply ellipsises.
     return `
-      <button class="play-card__maximize play-card__maximize--front" type="button" data-no-flip
+      <button class="play-card__maximize play-card__maximize--front" type="button" data-no-open
               aria-label="Open play details"
               title="Open play details"
               onclick="${detailNav}">
@@ -356,8 +321,8 @@
       ${photoHtml}
       <div class="play-card__caption">
         <div class="play-card__title-row">
-          <a class="play-card__caption-name" data-no-flip onclick="${gameNav}">${gameName}</a>
-          <button class="play-card__open" type="button" data-no-flip
+          <a class="play-card__caption-name" data-no-open onclick="${gameNav}">${gameName}</a>
+          <button class="play-card__open" type="button" data-no-open
                   aria-label="Open ${gameName}" title="Open ${gameName}"
                   onclick="${gameNav}">
             <i data-icon="arrow-up-right" class="w-4 h-4"></i>
@@ -456,12 +421,10 @@
     if (Array.isArray(players) && players.length) {
       return players
         .filter((p) => p && p.is_winner)
-        // Under the viewer's private alias, exactly like the back-side
-        // scoreboard three functions down. Before this, renaming someone left
-        // the two halves of the SAME card calling them different things — the
-        // scoreboard said "Dickaloo", the caption over it still said the name
-        // their account carries. Paint-only: `p.name` is untouched and is
-        // still what any edit path would persist.
+        // Under the viewer's private alias, exactly like the play-detail
+        // popup's scoreboard, so the caption and the popup call a player the
+        // same thing. Paint-only: `p.name` is untouched and is still what any
+        // edit path would persist.
         .map((p) => { const n = shownName(p); return String(n == null ? "" : n).trim(); })
         .filter(Boolean);
     }
@@ -551,126 +514,13 @@
     return (winner.score != null && winner.score !== "") ? winner.score : null;
   }
 
-  function renderBack(card, s) {
-    // The seed comes first, and it is why there is usually nothing to load.
-    // Since migration 015 the feed card carries the full roster with scores
-    // and round_scores, so Play.seeded() answers synchronously for any card the
-    // feed drew — the back paints in the same frame as the flip. A fetched
-    // copy, once it lands, outranks the seed: it is the newer of the two.
-    const p = s.hydrated || (window.Play && window.Play.seeded && window.Play.seeded(card.play_id));
-    if (!p) {
-      // No seed: either an RPC that predates 015, or a surface whose card was
-      // built without a roster. Fall back to the fetch and say so.
-      if (s.hydrating) return `<div class="play-card__back-loading">Loading play…</div>`;
-      if (s.error) return `<div class="play-card__back-error">${escapeHtml(s.error)}</div>`;
-      // Rendered while flipped=false and never fetched. A shell, so the back
-      // has something behind the front during the rotation.
-      return `<div class="play-card__back-loading">…</div>`;
-    }
-    // A seed that is being refreshed shows the seed, not a spinner — the
-    // scoreboard is already on screen and replacing it with "Loading play…"
-    // would be a step backwards. An error over a seed is likewise swallowed:
-    // there is nothing to tell the user, because they can see the play.
-    const players = p.players || [];
-    const me = window.store && window.store.get && window.store.get("user");
-    // Maximize opens the play-detail popup in-place — the popup is the
-    // sole "open a play" surface now (the standalone /play-detail page was
-    // retired). Staying on the current view preserves scroll position and
-    // keeps the game-tab layout intact.
-    const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
-
-    // Rank by score descending, through the shared helper. This used to be its
-    // own copy of the sort, which made the card back and the detail popup — the
-    // same roster, drawn twice — disagree about the order of tied players.
-    const ranked = window.Play.rankPlayers(players);
-
-    const notesBlock = p.notes
-      ? `<p class="play-card__back-notes">${escapeHtml(p.notes)}</p>`
-      : "";
-
-    return `
-      <button class="play-card__maximize" data-no-flip
-              aria-label="Open play details"
-              title="Open play details"
-              onclick="${detailNav}">
-        <i data-icon="maximize-2" class="w-3.5 h-3.5"></i>
-      </button>
-      <header class="play-card__back-head">
-        <span class="play-card__back-title">${escapeHtml(p.game_name || (card.game && card.game.name) || "")}</span>
-      </header>
-
-      <ul class="play-card__back-players${ranked.some((pl) => playerAction(pl, p, me)) ? " has-links" : ""}">
-        ${ranked.length === 0
-          ? `<li class="play-card__back-empty">No players recorded.</li>`
-          : ranked.map((pl) => {
-              // A registered player's whole row opens their profile; a ghost's
-              // opens the claim sheet, with a different trailing icon because
-              // it is a different destination. A ghost the viewer cannot
-              // possibly be (their own roster, or a play they already sit on)
-              // stays inert and un-styled as a link — see BgbPlayerRowAction.
-              const act = playerAction(pl, p, me);
-              const nav = act ? act.handler : "";
-              return `
-              <li class="play-card__back-player ${pl.is_winner ? "is-winner" : ""}${act ? " is-link" : ""}${act && act.kind === "claim" ? " play-card__back-player--claim" : ""}"
-                  ${act ? `role="button" tabindex="0" data-no-flip
-                  aria-label="${escapeAttr(act.ariaLabel)}"
-                  onclick="${escapeAttr(nav)}"
-                  onkeydown="${escapeAttr(`if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}`)}"` : ""}>
-                ${renderPlayerRow(pl, me)}
-                <span class="play-card__back-player-score">${pl.score != null ? escapeHtml(String(pl.score)) : ""}</span>
-                ${act ? `<i data-icon="${escapeAttr(act.icon)}" class="play-card__back-player-go"></i>` : ""}
-              </li>`;
-            }).join("")}
-      </ul>
-
-      ${notesBlock}
-    `;
-  }
-
-  // What a scoreboard row does when tapped — a real player's profile, or the
-  // claim sheet for a ghost that might be the viewer. The decision lives in
-  // ui/player-row-action.js because widgets/play-detail-popup.js draws the
-  // same list and used to answer the same question in its own copy of this
-  // function (ui-object-design.md §4: extract at instance #2).
-  //
-  // stopPropagation, inside the returned handler, keeps the click off the
-  // article, which would otherwise flip the card out from under the
-  // navigation; the row also carries data-no-flip so the flip controller
-  // skips it even if a future change lets the event through.
-  function playerAction(pl, play, me) {
-    return window.BgbPlayerRowAction
-      ? window.BgbPlayerRowAction.for(pl, play, me)
-      : null;
-  }
-
-  // Render the leading half of a back-side player row: badge, then name.
-  // Both are purely visual — the navigation lives on the <li> so the whole
-  // row is one target (the 24px badge alone was a hard tap on a touch-first
-  // surface) and keyboard / aria flow stays on a single element.
-  function renderPlayerRow(pl, me) {
-    // Under the viewer's private alias when they set one. Read-only: nothing on
-    // a card writes a name, so this is purely what the row SAYS — pl.name is
-    // untouched and is still what any edit path would persist.
-    const shown = shownName(pl);
-    const nameHtml = `<span class="play-card__back-player-name">${escapeHtml(shown)}</span>`;
-    const badge = window.BgbBadge.render({
-      avatar: pl.user_id ? (pl.avatar || null) : null,
-      displayName: shown,
-      size: "sm",
-      isMe: !!(me && pl.user_id && me.id === pl.user_id),
-      isGhost: !pl.user_id,
-      extraClass: "play-card__back-player-avatar",
-    });
-    return `${badge}${nameHtml}`;
-  }
-
   // ── Aspect ratio detection ──────────────────────────────────────────────────
   //
   // Detect the photo's orientation after decode and swap the article between
   // the wide and tall widths in place — no rerender, no scroll-position jump.
   // The frame's HEIGHT never changes, so this can only ever reflow the card
-  // sideways. Cache the verdict by URL so subsequent renders (e.g. after a
-  // flip) paint the right width immediately.
+  // sideways. Cache the verdict by URL so subsequent renders (e.g. after an
+  // edit) paint the right width immediately.
   function onPhotoLoad(event, playId) {
     const img = event && event.target;
     if (!img || !img.naturalWidth || !img.naturalHeight) return;
@@ -690,10 +540,8 @@
   // — it never removes old views from the DOM. So the same play_id can appear
   // simultaneously in the feed's hidden `<main>` and the visible game-detail
   // reel. `document.querySelector` would resolve to the feed's hidden card
-  // (it comes first in index.html) and the flip would silently paint on an
-  // off-screen node. Update every match so duplicates stay in sync — flip
-  // state is keyed by play_id, so a card flipped on game-detail also reads as
-  // flipped when the user navigates back to feed.
+  // (it comes first in index.html) and the repaint would silently land on an
+  // off-screen node. Update every match so duplicates stay in sync.
   function rerenderCard(playId) {
     const articles = document.querySelectorAll(
       `article.play-card[data-play-id="${cssEscape(playId)}"]`
@@ -708,7 +556,7 @@
       const fresh = tmp.firstElementChild;
       article.replaceWith(fresh);
       // Scope the icon pass to the card just patched — a document-wide
-      // walk here would re-scan every mounted (hidden) view per flip.
+      // walk here would re-scan every mounted (hidden) view per repaint.
       window.BgbIcons.render(fresh);
     });
   }
@@ -725,19 +573,19 @@
     return page.cards.find((c) => c.kind === "play" && c.play_id === playId) || null;
   }
 
-  // ── Flip controller (called from inline onclick handlers) ───────────────────
+  // ── Tap controller (called from inline onclick handlers) ────────────────────
 
   const controller = {
     handleClick(event, playId) {
       const t = event.target;
       if (!t) return;
-      // Anything in a no-flip subtree handles its own navigation (game-name
-      // link, maximize button, back-side player badges).
-      if (t.closest && t.closest("[data-no-flip]")) return;
-      // Buttons / form controls / links never flip the card.
+      // Anything in a no-open subtree handles its own navigation (game-name
+      // link, open button, maximize button).
+      if (t.closest && t.closest("[data-no-open]")) return;
+      // Buttons / form controls / links never open the play.
       if (t.closest && t.closest("input, textarea, button, label, select")) return;
       if (t.closest && t.closest("a")) return;
-      this.toggle(playId);
+      this.open(playId);
     },
 
     handleKey(event, playId) {
@@ -745,42 +593,18 @@
       // Only handle when the article itself is focused, not a nested control.
       if (event.target !== event.currentTarget) return;
       event.preventDefault();
-      this.toggle(playId);
+      this.open(playId);
     },
 
-    async toggle(playId) {
-      // A run card has no back face — it opens its sheet instead. That is also
-      // the only place a run can be acted on, since the plays inside it are by
+    open(playId) {
+      // A run card opens its sheet instead — the plays inside it are by
       // definition interchangeable and there is no single one to open.
       const known = cardRegistry.get(playId);
       if (known && (known.group_count || 1) > 1) {
         if (window.PlayRunSheet) window.PlayRunSheet.open(known);
         return;
       }
-      const s = getState(playId);
-      const next = !s.flipped;
-      s.flipped = next;
-      // A seeded play needs no fetch at all: the feed already sent the roster,
-      // the scores and the rounds (migration 015), so the flip is pure paint.
-      // This is the round trip the "Loading play…" panel used to cover, and
-      // the second, duplicate one that fired when a user flipped a card and
-      // then opened its details.
-      const seeded = window.Play && window.Play.seeded && window.Play.seeded(playId);
-      if (next && !s.hydrated && !s.hydrating && !seeded) {
-        s.hydrating = true;
-        s.error = null;
-        rerenderCard(playId);
-        try {
-          s.hydrated = await window.Play.get(playId);
-        } catch (e) {
-          s.error = (e && e.message) || "Failed to load play details";
-        } finally {
-          s.hydrating = false;
-          rerenderCard(playId);
-        }
-        return;
-      }
-      rerenderCard(playId);
+      if (window.PlayDetailPopup) window.PlayDetailPopup.show(playId);
     },
 
     onPhotoLoad,
@@ -796,15 +620,11 @@
   }
 
   /**
-   * Fold an accepted play edit into this module's two caches and repaint.
+   * Fold an accepted play edit into the card registry and repaint.
    *
-   * Both Maps live for the life of the tab and had no invalidation at all, each
-   * with its own consequence:
-   *   - `cardState.hydrated` is the full play fetched on flip, and renderBack
-   *     prefers it over the seed. Flip, edit, save, flip again and the back
-   *     face showed the pre-edit roster and scores, permanently.
-   *   - `cardRegistry` is what findCardById prefers over the feed store, so a
-   *     stale entry here shadows a corrected page underneath it.
+   * `cardRegistry` lives for the life of the tab and is what findCardById
+   * prefers over the feed store, so a stale entry here would shadow a corrected
+   * page underneath it.
    *
    * rerenderCard then repaints EVERY mounted copy of the card — the router only
    * hides views, so the same play can be on screen in the feed and in a game's
@@ -817,15 +637,11 @@
     if (!play || !play.id) return;
     const card = cardRegistry.get(play.id);
     if (card) window.Play.mergeIntoCard(card, play);
-    const s = cardState.get(play.id);
-    // Only when it was already hydrated: writing it otherwise would arm the
-    // back face for a card nobody has flipped, and the seed covers that path.
-    if (s && s.hydrated) s.hydrated = play;
     rerenderCard(play.id);
   }
 
   window.renderPlayCard = renderPlayCard;
-  window.playCardFlip = controller;
+  window.playCardTap = controller;
   // buildWinnerBlock and stackOutcome are exported for tools/check-play-outcome.mjs
   // ONLY — nothing in the app calls them from outside this module. The caption
   // is the one thing on the card that can be confidently, silently wrong (it
