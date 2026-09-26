@@ -11,9 +11,9 @@
 // (.play-card__photo-bg), so a landscape shot gets blur above and below and a
 // portrait shot gets blur down each side.
 //
-// The card shows a maximize button (top-right, over the photo), a date stamp
-// facing it at top-left (painted only in the game-detail reel — the feed dates
-// its groups with a .day-divider instead), the photo, then a two-row caption:
+// The card shows a date stamp at the photo's top-left (painted only in the
+// game-detail reel — the feed dates its groups with a .day-divider instead),
+// the photo, then a two-row caption:
 //   title row — game name + an explicit open button
 //   meta row  — the winner, on its own above a hairline
 // When the user uploaded their own snapshot the game's box art rides along as a
@@ -24,8 +24,8 @@
 // on the one card that carries both.
 //
 // Clicking the game-name text or the open button goes to the game page
-// (data-no-open). Clicking anywhere else on the card — the photo, the note and
-// the maximize button included — opens the in-place play-detail popup. A run of
+// (data-no-open). Clicking anywhere else on the card — the photo and the note
+// included — opens the in-place play-detail popup. A run of
 // identical plays opens the run sheet instead.
 
 (function () {
@@ -227,9 +227,9 @@
     const me = window.store && window.store.get && window.store.get("user");
     const gameName = escapeHtml(g.name || "Unknown game");
     const gameNav = escapeAttr(gameDetailJs(g.id, g.name, { stop: true }));
-    // The maximize button is the visible hint that the card opens; a tap
-    // anywhere else on the card does the same through the tap controller.
-    const detailNav = `event.stopPropagation(); window.PlayDetailPopup.show('${escapeAttr(card.play_id)}')`;
+    // A tap anywhere on the card that isn't the game link opens the play, through
+    // the tap controller — the card itself is the button (role, label and keys
+    // are on the <article>), so it needs no separate control to say so.
 
     // Caption "winner" block. See buildWinnerBlock for the buckets; a play
     // that recorded no result at all renders an empty string here, and
@@ -288,8 +288,7 @@
          </div>`
       : `<div class="play-card__photo">${noteHtml}</div>`;
 
-    // Date stamp — top-left of the photo, mirroring the maximize button on the
-    // right. It is rendered on EVERY front but only painted inside the
+    // Date stamp — top-left of the photo. It is rendered on EVERY front but only painted inside the
     // game-detail reel (a `display: none` the reel's own scope overrides in
     // styles.css), rather than being switched on by a flag on the card. A flag
     // would have to ride the card payload, and rerenderCard() renders one HTML
@@ -311,12 +310,6 @@
     // re-measure to decide whether it fit; it has its own row now, so the
     // layout is static and the title simply ellipsises.
     return `
-      <button class="play-card__maximize play-card__maximize--front" type="button" data-no-open
-              aria-label="Open play details"
-              title="Open play details"
-              onclick="${detailNav}">
-        <i data-icon="maximize-2" class="w-3.5 h-3.5"></i>
-      </button>
       ${dateHtml}
       ${photoHtml}
       <div class="play-card__caption">
@@ -580,7 +573,7 @@
       const t = event.target;
       if (!t) return;
       // Anything in a no-open subtree handles its own navigation (game-name
-      // link, open button, maximize button).
+      // link, open button).
       if (t.closest && t.closest("[data-no-open]")) return;
       // Buttons / form controls / links never open the play.
       if (t.closest && t.closest("input, textarea, button, label, select")) return;

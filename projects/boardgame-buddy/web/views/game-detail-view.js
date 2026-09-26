@@ -356,8 +356,8 @@
 
     _renderRecentPlays() {
       // Mirror the Feed's polaroid reel — same `.play-session__scroll`
-      // wrapper + `window.renderPlayCard` so tap-to-flip and the nested
-      // navigation (game-link, game-thumb, maximize button) all work
+      // wrapper + `window.renderPlayCard` so tap-to-open and the nested
+      // navigation (game-link, open button) all work
       // identically. The bundle's recent_plays shape differs from the feed
       // card shape, so _toFeedPlayCard adapts each row.
       if (!this._plays || this._plays.length === 0) return "";
