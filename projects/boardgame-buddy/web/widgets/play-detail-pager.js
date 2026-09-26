@@ -5,7 +5,7 @@
 // the next thing a person reading one play usually wants is the one beside it.
 // Closing and re-tapping costs two taps and an animation per play; paging costs a
 // swipe. So the popup captures the list it was opened from, and a horizontal drag
-// on the card carries it off the side and brings the neighbour in.
+// on the card carries it off the side while the neighbour follows it in.
 //
 // THE SEQUENCE IS THE SET THE TAPPED CARD SITS IN — the cards of its own
 // .play-session__scroll row, in DOM order: one table's evening in the feed ("You,
@@ -24,10 +24,12 @@
 // API:
 //   PlayDetailPager.sequenceFor(playId)          → string[] (always includes playId)
 //   PlayDetailPager.renderNav(index, total)      → topbar markup, "" for one play
-//   PlayDetailPager.attach(root, { canSwipe, step })
-//     canSwipe — (dir: 1|-1) => boolean; false at an end, while editing, …
-//     step     — (dir: 1|-1) => void; show the neighbour (the popup's goTo)
-//   PlayDetailPager.slide(root, dir, swap)       — the animated page turn
+//   PlayDetailPager.preload(urls)                — warm the set's images on open
+//   PlayDetailPager.attach(root, { canSwipe, neighbour, peekHtml, swap }) → { turn, clear }
+//     canSwipe  — (dir: 1|-1) => boolean; false at an end, while editing, …
+//     neighbour — (dir: 1|-1) => the play id on that side, or null
+//     peekHtml  — (id) => that play's card markup, exactly as the popup paints it
+//     swap      — (id) => load that play into the real card, synchronously
 
 // @ts-check
 
@@ -38,9 +40,11 @@
   const COMMIT_PX = 72;
   const FLICK_V = 0.5;
   const FLICK_MIN_PX = 28;
-  // Must match .is-paging-out / .is-settling in styles.css.
-  const OUT_MS = 170;
-  const IN_MS = 240;
+  // Must match .is-turning in styles.css.
+  const TURN_MS = 220;
+  const TURN_EASE = "cubic-bezier(.22, .61, .36, 1)";
+  // Between the card and a neighbour waiting beside it.
+  const GAP_PX = 16;
 
   const CARD_SEL = ".play-detail-popup__card";
 
@@ -111,41 +115,137 @@
     return false;
   }
 
-  /** @param {HTMLElement} root @param {number} px */
-  function paint(root, px) {
-    root.style.setProperty("--pdp-dx", px.toFixed(1) + "px");
-  }
-
   /**
-   * The page turn: the card leaves on the side the finger was going, the next
-   * play is swapped in off-screen on the other side, and it slides to centre.
-   * @param {HTMLElement} root
-   * @param {1|-1} dir  1 = next (the card leaves to the left)
-   * @param {() => void} swap
+   * Warm the image cache for every play in the set the moment the popup opens.
+   * The feed's polaroids are loading="lazy", so the cards of a set scrolled off
+   * the side of its rail have never been fetched — and a page turn, which slides
+   * the neighbour in while the finger is still down, has no time to wait for
+   * one. decode() as well as fetch, so the first paint of a photo is not also
+   * its first decode.
+   * @param {string[]} urls
    */
-  function slide(root, dir, swap) {
-    root.classList.add("is-pulled");
-    root.classList.remove("is-settling");
-    if (reducedMotion()) { swap(); paint(root, 0); return; }
-    const w = window.innerWidth;
-    root.classList.add("is-paging-out");
-    paint(root, -dir * w);
-    setTimeout(() => {
-      root.classList.remove("is-paging-out");
-      swap();
-      paint(root, dir * w);
-      void root.offsetWidth;   // commit the off-screen start before transitioning
-      root.classList.add("is-settling");
-      paint(root, 0);
-      setTimeout(() => root.classList.remove("is-settling"), IN_MS);
-    }, OUT_MS);
+  function preload(urls) {
+    const seen = new Set();
+    for (const u of urls) {
+      if (!u || seen.has(u)) continue;
+      seen.add(u);
+      const img = new Image();
+      img.decoding = "async";
+      img.src = u;
+      if (img.decode) img.decode().catch(() => {});
+    }
   }
 
   /**
+   * Wire the gesture, the arrows and the keys to one page turn.
+   *
+   * THE NEIGHBOURS ARE ON SCREEN WHILE THE FINGER MOVES. The moment a sideways
+   * drag starts, a copy of each neighbouring play's card is laid beside the real
+   * one — the same markup the popup would paint for it — and travels with it, so
+   * the next play slides in under the thumb instead of appearing after the old
+   * one has gone. On commit the real card and the incoming copy finish the
+   * slide together; then, in one frame, the popup loads the neighbour into the
+   * real card at centre and the copies are removed. Same markup, same place,
+   * photo already decoded: the swap is invisible.
+   *
+   * The copies are body-level, not inside the backdrop: the backdrop is the
+   * morph root of the popup's render(), and a revalidation landing mid-drag
+   * would delete a child it did not paint.
+   *
    * @param {HTMLElement} root
-   * @param {{ canSwipe: (dir: 1|-1) => boolean, step: (dir: 1|-1) => void }} opts
+   * @param {{
+   *   canSwipe: (dir: 1|-1) => boolean,
+   *   neighbour: (dir: 1|-1) => (string|null),
+   *   peekHtml: (id: string) => string,
+   *   swap: (id: string) => void,
+   * }} opts
    */
   function attach(root, opts) {
+    /** @type {Record<string, HTMLElement>} */
+    let ghosts = {};
+    let offset = 0;       // card width + gap: where a neighbour waits
+    let busy = false;     // a turn or a spring-back is animating
+    let timer = /** @type {any} */ (0);
+
+    const card = () => /** @type {HTMLElement|null} */ (root.querySelector(CARD_SEL));
+
+    function clear() {
+      clearTimeout(timer);
+      for (const k in ghosts) ghosts[k].remove();
+      ghosts = {};
+      busy = false;
+      root.classList.remove("is-turning");
+    }
+
+    function makeGhosts() {
+      clear();
+      const c = card();
+      if (!c) return;
+      // Measured with the card at rest (paint(0) precedes every call), so the
+      // rect is where the incoming card will sit once it has arrived.
+      const r = c.getBoundingClientRect();
+      offset = r.width + GAP_PX;
+      for (const dir of /** @type {Array<1|-1>} */ ([-1, 1])) {
+        const id = opts.neighbour(dir);
+        if (!id) continue;
+        const tmp = document.createElement("div");
+        tmp.innerHTML = opts.peekHtml(id);
+        const g = /** @type {HTMLElement|null} */ (tmp.firstElementChild);
+        if (!g) continue;
+        g.classList.add("play-detail-popup__card--peek");
+        g.removeAttribute("role");
+        g.removeAttribute("aria-modal");
+        g.setAttribute("aria-hidden", "true");
+        g.inert = true;
+        Object.assign(g.style, {
+          left: r.left + "px", top: r.top + "px", width: r.width + "px",
+          transform: `translateX(${dir * offset}px)`,
+        });
+        document.body.appendChild(g);
+        if (window.BgbIcons) window.BgbIcons.render(g);
+        ghosts[dir] = g;
+      }
+    }
+
+    /** @param {number} dx */
+    function paint(dx) {
+      root.style.setProperty("--pdp-dx", dx.toFixed(1) + "px");
+      for (const k in ghosts) {
+        ghosts[k].style.transform = `translateX(${(dx + Number(k) * offset).toFixed(1)}px)`;
+      }
+    }
+
+    /** Animate everything to `dx`, then run `after`. */
+    function animateTo(dx, after) {
+      busy = true;
+      root.classList.add("is-pulled", "is-turning");
+      for (const k in ghosts) ghosts[k].style.transition = `transform ${TURN_MS}ms ${TURN_EASE}`;
+      paint(dx);
+      timer = setTimeout(() => {
+        root.classList.remove("is-turning");
+        for (const k in ghosts) ghosts[k].style.transition = "";
+        after();
+      }, TURN_MS);
+    }
+
+    /** @param {1|-1} dir  1 = next (the card leaves to the left) */
+    function turn(dir) {
+      if (busy || !opts.canSwipe(dir)) return;
+      const id = opts.neighbour(dir);
+      if (!id) return;
+      if (reducedMotion()) { clear(); opts.swap(id); return; }
+      if (!ghosts[dir]) { paint(0); makeGhosts(); void root.offsetWidth; }
+      animateTo(-dir * offset, () => {
+        opts.swap(id);   // renders the neighbour into the real card, synchronously
+        paint(0);        // …which is now back at centre with no transition
+        clear();
+      });
+    }
+
+    function springBack() {
+      animateTo(0, clear);
+    }
+
     // Arrow keys everywhere; the drag only where there is a finger.
     root.addEventListener("keydown", (e) => {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -154,17 +254,19 @@
       const dir = e.key === "ArrowRight" ? 1 : -1;
       if (!opts.canSwipe(dir)) return;
       e.preventDefault();
-      opts.step(dir);
+      turn(dir);
     });
 
-    if (!("ontouchstart" in window)) return;
+    const ctl = { turn, clear };
+    if (!("ontouchstart" in window)) return ctl;
+
     let tracking = false, drawing = false;
     let x0 = 0, y0 = 0, dx = 0, lastX = 0, lastT = 0, vel = 0;
 
     root.addEventListener("touchstart", (e) => {
       tracking = false;
-      if (e.touches.length !== 1) return;
-      if (root.classList.contains("is-collapsing") || root.classList.contains("is-paging-out")) return;
+      if (e.touches.length !== 1 || busy) return;
+      if (root.classList.contains("is-collapsing")) return;
       const t = /** @type {Element} */ (e.target);
       if (!t.closest || !t.closest(CARD_SEL) || t.closest("input, textarea, select")) return;
       if (!opts.canSwipe(1) && !opts.canSwipe(-1)) return;
@@ -187,8 +289,9 @@
         // Vertical is the card's scroll, or the pull-to-close — not ours.
         if (Math.abs(ddy) >= Math.abs(ddx)) { tracking = false; return; }
         drawing = true;
-        root.classList.remove("is-settling");
         root.classList.add("is-pulled");
+        paint(0);
+        makeGhosts();
         x0 = t.clientX;
       }
       e.preventDefault();
@@ -200,7 +303,7 @@
       // Past either end the card still moves, but reluctantly — it says "that's
       // the last one" rather than ignoring the finger.
       const dir = dx < 0 ? 1 : -1;
-      paint(root, opts.canSwipe(dir) ? dx : dx * 0.25);
+      paint(opts.canSwipe(dir) ? dx : dx * 0.25);
     }, { passive: false });
 
     const end = () => {
@@ -211,17 +314,14 @@
       const dir = dx < 0 ? 1 : -1;
       const far = Math.abs(dx) >= COMMIT_PX;
       const flick = Math.abs(vel) >= FLICK_V && Math.abs(dx) >= FLICK_MIN_PX && Math.sign(vel) === Math.sign(dx);
-      if ((far || flick) && opts.canSwipe(dir)) {
-        opts.step(dir);
-        return;
-      }
-      root.classList.add("is-settling");
-      paint(root, 0);
-      setTimeout(() => root.classList.remove("is-settling"), IN_MS);
+      if ((far || flick) && opts.canSwipe(dir)) turn(dir);
+      else springBack();
     };
     root.addEventListener("touchend", end, { passive: true });
     root.addEventListener("touchcancel", end, { passive: true });
+
+    return ctl;
   }
 
-  window.PlayDetailPager = { sequenceFor, renderNav, attach, slide };
+  window.PlayDetailPager = { sequenceFor, renderNav, attach, preload };
 })();

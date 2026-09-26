@@ -4702,7 +4702,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
 .play-card--wide { flex: 0 0 280px; width: 280px; }
 .play-card--tall { flex: 0 0 208px; width: 208px; }
 .play-card { transition: transform 200ms var(--ease), box-shadow 200ms var(--ease); }
-.play-card:hover { transform: translateY(-3px); }
+/* Lift on hover only where there IS hover. On touch, a tap leaves the card
+   "hovered" until the next tap elsewhere, so it stayed raised after opening. */
+@media (hover: hover) {
+  .play-card:hover { transform: translateY(-3px); }
+}
 /* The whole card is the tap target for the play-detail popup, so it needs its
    own press state — touch has no hover. */
 .play-card:active { transform: scale(0.985); }
@@ -5179,9 +5183,11 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   overflow: hidden;
   box-shadow: var(--sh-1);
 }
-.game-polaroid.game-polaroid--rail:hover {
-  transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--polaroid-ink) 25%, var(--polaroid-line));
+@media (hover: hover) {
+  .game-polaroid.game-polaroid--rail:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--polaroid-ink) 25%, var(--polaroid-line));
+  }
 }
 .game-polaroid.game-polaroid--rail .game-polaroid__photo { border-radius: 0; }
 .game-polaroid.game-polaroid--rail .game-polaroid__photo-img,
@@ -13571,6 +13577,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .polaroid-popup__backdrop.play-detail-popup__backdrop.is-pulled {
   background: rgba(15, 12, 10, calc(0.55 - 0.35 * var(--pdp-pull, 0)));
 }
+/* Opened from a polaroid: the photo flies out of the card
+   (widgets/play-detail-flight.js), so the card only fades in — its usual rise
+   would move the photo's landing spot under the flight. Before .is-pulled, which
+   has to win. */
+.play-detail-popup__backdrop.is-flying-open .play-detail-popup__card {
+  animation-name: fadeIn;
+}
 /* `animation: none` because polaroidPopupIn's `both` fill would otherwise
    outrank the drag transform. Stays off once pulled — see the JS. */
 .play-detail-popup__backdrop.is-pulled .play-detail-popup__card {
@@ -13584,9 +13597,21 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 .play-detail-popup__backdrop.is-settling .play-detail-popup__card {
   transition: transform 240ms cubic-bezier(.22, .61, .36, 1);
 }
-/* 170ms: OUT_MS in widgets/play-detail-pager.js. */
-.play-detail-popup__backdrop.is-paging-out .play-detail-popup__card {
-  transition: transform 170ms cubic-bezier(.55, 0, .8, .45);
+/* A page turn or its spring-back. 220ms: TURN_MS in widgets/play-detail-pager.js,
+   which also runs the neighbours' copies on the same curve. */
+.play-detail-popup__backdrop.is-turning .play-detail-popup__card {
+  transition: transform 220ms cubic-bezier(.22, .61, .36, 1);
+}
+/* A neighbouring play's card waiting beside this one during a page turn. Body
+   level (the backdrop is the popup's morph root), fixed at the card's own rect
+   plus a sideways offset the pager sets inline. z-index level with the backdrop
+   and later in the DOM, so it paints over the dim like the card does. */
+.play-detail-popup__card.play-detail-popup__card--peek {
+  position: fixed;
+  z-index: 100;
+  margin: 0;
+  animation: none;
+  pointer-events: none;
 }
 .play-detail-popup__pager {
   display: flex;
@@ -13658,7 +13683,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .play-detail-popup__backdrop.is-settling .play-detail-popup__card,
-  .play-detail-popup__backdrop.is-paging-out .play-detail-popup__card,
+  .play-detail-popup__backdrop.is-turning .play-detail-popup__card,
   .play-detail-popup__backdrop.is-collapsing .play-detail-popup__card { transition: none; }
   .play-card__photo.is-receiving { animation: none; }
 }

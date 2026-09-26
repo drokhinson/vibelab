@@ -172,6 +172,8 @@ Use it for taste on `landing/`. Use these rules for the apps.
 
 - `.claude/rules/theming.md` — light/dark, the token vocabulary, surface kinds.
 - `.claude/rules/overlays.md` — bottom sheets, modals, and the retired dropdown.
+- `.claude/rules/card-gestures.md` — cards that expand into a detail view: the
+  open/close flight, swipe between neighbours, pull to close.
 - `.claude/rules/mobile-web.md` — visible viewport, zoom locks, tap targets, iOS icons.
 - `.claude/rules/ui-object-design.md` — one object, one canonical component.
 - `.claude/rules/assets.md` — asset layout, naming, and both-theme legibility.
