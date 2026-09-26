@@ -58,9 +58,58 @@
     sequence: [],
   };
 
-  // The page-turn controller for the open backdrop ({ turn, clear }), from
-  // widgets/play-detail-pager.js. Re-made with the backdrop.
+  // The page-turn controller for the open backdrop ({ turn, clear, sync }),
+  // from widgets/play-detail-pager.js. Re-made with the backdrop.
   let _pager = null;
+
+  // True from the moment a play is shown until the user scrolls it themselves.
+  // While it holds, the card is kept at its top whatever else moves: a
+  // revalidation repaint, the photo arriving above the fold, a browser's
+  // scroll-anchoring adjustment, a flick's leftover momentum on iOS. Every play
+  // opens at its top and stays there until the reader moves it.
+  let _pinTop = false;
+
+  function scroller() {
+    return _modal.el && /** @type {HTMLElement|null} */ (_modal.el.querySelector(".play-detail-popup__scroll"));
+  }
+
+  function pinToTop() {
+    // Never in edit mode: focusing a field scrolls the form to it, and a repaint
+    // while typing must not pull the form back up from under the caret.
+    if (state.editing) return;
+    const sc = _pinTop && scroller();
+    if (sc && sc.scrollTop !== 0) sc.scrollTop = 0;
+  }
+
+  // Show a play at its top and hold it there (see _pinTop), including one frame
+  // later — after the layout the paint just caused has settled.
+  function openAtTop() {
+    _pinTop = true;
+    pinToTop();
+    requestAnimationFrame(pinToTop);
+  }
+
+  // What counts as the reader scrolling: a vertical drag, the wheel, or a key
+  // that scrolls — inside the card's scroller. Delegated on the backdrop, which
+  // outlives every repaint of the card. Also re-pins as the photo (or any image)
+  // finishes loading, since that is exactly when a late layout shift lands;
+  // `load` does not bubble, so it is caught on the way down.
+  const SCROLL_KEYS = new Set(["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "]);
+  function bindPin(root) {
+    const inScroller = (t) => !!(t && t.closest && t.closest(".play-detail-popup__scroll"));
+    let y0 = 0;
+    root.addEventListener("touchstart", (e) => { y0 = e.touches[0] ? e.touches[0].clientY : 0; }, { passive: true });
+    root.addEventListener("touchmove", (e) => {
+      const t = e.touches[0];
+      if (t && inScroller(e.target) && Math.abs(t.clientY - y0) > 8) _pinTop = false;
+    }, { passive: true });
+    root.addEventListener("wheel", (e) => { if (inScroller(e.target)) _pinTop = false; }, { passive: true });
+    root.addEventListener("keydown", (e) => { if (SCROLL_KEYS.has(e.key) && inScroller(e.target)) _pinTop = false; });
+    // Focus moving into the card (a keyboard user tabbing down) is the reader
+    // too — the browser scrolls to the focused element, and that stands.
+    root.addEventListener("focusin", (e) => { if (inScroller(e.target)) _pinTop = false; });
+    root.addEventListener("load", pinToTop, true);
+  }
 
   // The card markup currently painted into the backdrop. render() compares
   // against it and returns without touching the DOM when the new markup is
@@ -149,6 +198,7 @@
     // load() paints from the seed synchronously, before its first await — so
     // the popup photo exists by the time the flight looks for it.
     const loading = load(playId);
+    openAtTop();
     if (frame) flyOpen(frame);
     await loading;
   }
@@ -173,7 +223,7 @@
           new Promise((r) => setTimeout(() => r(false), 150)),
         ]);
     ready.then((ok) => {
-      if (ok && _modal.el === root && photo.isConnected) window.PlayDetailFlight.flyOut(photo, frame);
+      if (ok && _modal.el === root && photo.isConnected) window.PlayDetailFlight.flyOut(photo, frame, root);
     });
   }
 
@@ -186,8 +236,7 @@
     if (!root) return;
     _buddiesFor = null;
     load(id);
-    const scroller = root.querySelector(".play-detail-popup__scroll");
-    if (scroller) scroller.scrollTop = 0;
+    openAtTop();
     keepCardInView(id);
   }
 
@@ -333,6 +382,7 @@
       // while editing: a pull would take an unsaved draft with it, and the edit
       // form is where a downward drag most often means "scroll back up".
       onOpen: (root) => {
+        bindPin(root);
         window.PlayDetailCollapse.attach(root, {
           canDrag: () => !state.editing && !state.saving && !hasStackedOverlay(),
           playId: () => state.playId,
@@ -417,6 +467,11 @@
     // The neighbours beside the card follow what it shows: a new play, edit
     // mode (none), back out of it (back again).
     if (_pager) _pager.sync();
+    // Hold the photo's box before its pixels arrive (its ratio is known once
+    // any copy of it has loaded), so a late image does not grow the card under
+    // the reader; and keep an untouched card at its top through the repaint.
+    window.PlayDetailPager.reserveImages(root);
+    pinToTop();
     // The × needs no listener of its own: the shell's delegated click owns it
     // via closeSelector, and its onClose is this popup's reset.
 

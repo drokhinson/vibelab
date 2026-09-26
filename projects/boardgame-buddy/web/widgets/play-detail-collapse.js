@@ -160,7 +160,7 @@
     root.style.setProperty("--pdp-drag", Math.round(window.innerHeight * 0.6) + "px");
 
     if (photo && frame && photo.complete && photo.naturalWidth && !F.reducedMotion()) {
-      F.flyBack(photo, frame);
+      F.flyBack(photo, frame, root);
     }
     close();
   }

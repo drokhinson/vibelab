@@ -169,6 +169,40 @@
   }
 
   /**
+   * Ease a card's scroller back to its top over one page turn, so the play being
+   * left lands in the side slot showing what its copy there will show — its top
+   * — and nothing snaps when the copy takes its place. Every play is shown from
+   * the top; a copy never carries a scroll offset, or a play read to the bottom
+   * comes back in scrolled there and jumps when it arrives.
+   *
+   * `overflow: hidden` first: iOS ignores a scrollTop written while momentum
+   * from a flick is still running, and hiding the overflow is what stops it.
+   * @param {HTMLElement|null} el
+   * @returns {{ done: () => void }}
+   */
+  function scrollHome(el) {
+    if (!el || el.scrollTop <= 0) return { done() {} };
+    const from = el.scrollTop;
+    el.style.overflowY = "hidden";
+    el.scrollTop = from;
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / TURN_MS);
+      el.scrollTop = from * Math.pow(1 - t, 3);   // ease-out cubic to 0
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return {
+      done() {
+        cancelAnimationFrame(raf);
+        el.scrollTop = 0;
+        el.style.overflowY = "";
+      },
+    };
+  }
+
+  /**
    * Wire the gesture, the arrows, the keys and a tap on a peek to one page turn.
    *
    * THE NEIGHBOURS ARE ALWAYS THERE. A copy of each neighbouring play's card —
@@ -363,6 +397,16 @@
      */
     function animateTo(dx, after) {
       busy = true;
+      // The first turn after opening: the card is still on its entrance
+      // animation, with no transform of its own. Switching that off, giving it
+      // the drag transform and asking it to transition, all in one style
+      // change, starts no transition at all — the card jumped and the turn only
+      // finished on the backstop timer. Commit the start state first.
+      if (!root.classList.contains("is-pulled")) {
+        root.classList.add("is-pulled", "is-swiping");
+        paint(0);
+        void root.offsetWidth;
+      }
       root.classList.add("is-pulled", "is-swiping", "is-turning");
       const tr = `transform ${TURN_MS}ms ${TURN_EASE}, opacity ${TURN_MS}ms ${TURN_EASE}`;
       for (const k in peeks) peeks[k].el.style.transition = tr;
@@ -400,20 +444,19 @@
       }
       if (!geo) geo = measure();
       if (!geo) return;
+      const scroller = /** @type {HTMLElement|null} */ (card() && card().querySelector(".play-detail-popup__scroll"));
+      const home = scrollHome(scroller);
       animateTo(-dir * geo.offset, () => {
-        const scroller = card() && card().querySelector(".play-detail-popup__scroll");
-        const scrollTop = scroller ? scroller.scrollTop : 0;
+        home.done();
         const old = peeks;
         peeks = {};
         // busy is still set, so the render() inside swap() does not sync.
         opts.swap(id);
         // The play just left, where the real card has just shrunk to…
+        // At the top, like the real card it replaces (scrollHome) and like every
+        // play is shown when it comes back to centre.
         const back = makePeek(leaving, /** @type {1|-1} */ (-dir), false);
-        if (back) {
-          peeks[-dir] = back;
-          const s = back.el.querySelector(".play-detail-popup__scroll");
-          if (s) s.scrollTop = scrollTop;
-        }
+        if (back) peeks[-dir] = back;
         // …and the next one along, arriving in the far slot.
         const further = opts.canSwipe(dir) ? opts.neighbour(dir) : null;
         if (further) {
@@ -514,5 +557,5 @@
     return ctl;
   }
 
-  window.PlayDetailPager = { sequenceFor, renderNav, attach, preload };
+  window.PlayDetailPager = { sequenceFor, renderNav, attach, preload, reserveImages, learn };
 })();
