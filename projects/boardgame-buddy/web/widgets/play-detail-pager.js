@@ -25,9 +25,11 @@
 //   PlayDetailPager.sequenceFor(playId)          → string[] (always includes playId)
 //   PlayDetailPager.renderNav(index, total)      → topbar markup, "" for one play
 //   PlayDetailPager.preload(urls)                — warm the set's images on open
-//   PlayDetailPager.attach(root, { canSwipe, neighbour, peekHtml, swap }) → { turn, clear }
+//   PlayDetailPager.attach(root, { canSwipe, neighbour, current, peekHtml, swap })
+//     → { turn, clear, sync }
 //     canSwipe  — (dir: 1|-1) => boolean; false at an end, while editing, …
 //     neighbour — (dir: 1|-1) => the play id on that side, or null
+//     current   — () => the play id on screen
 //     peekHtml  — (id) => that play's card markup, exactly as the popup paints it
 //     swap      — (id) => load that play into the real card, synchronously
 
@@ -45,6 +47,12 @@
   const TURN_EASE = "cubic-bezier(.22, .61, .36, 1)";
   // Between the card and a neighbour waiting beside it.
   const GAP_PX = 16;
+  // A neighbour at rest: smaller and dimmer, so the centre card leads.
+  const PEEK_SCALE = 0.85;
+  const PEEK_OPACITY = 0.65;
+  // The card's own entrance length, and the modal's exit (CLOSE_MS).
+  const FADE_IN_MS = 280;
+  const FADE_OUT_MS = 200;
 
   const CARD_SEL = ".play-detail-popup__card";
 
@@ -132,118 +140,294 @@
       const img = new Image();
       img.decoding = "async";
       img.src = u;
-      if (img.decode) img.decode().catch(() => {});
+      if (img.decode) img.decode().then(() => learn(img), () => {});
+    }
+  }
+
+  // Natural sizes of every image seen, by absolute URL. A copy's <img> is a new
+  // element, and a new element is not "complete" in the frame it is inserted
+  // even for a cached, decoded image — it lays out 0px tall until it loads, so
+  // a copy of a card built at the moment of a turn came out a photo shorter
+  // than the card it was replacing. Stamping the known ratio as aspect-ratio
+  // reserves the box before the pixels. Not width/height attributes: those
+  // pin the natural width, where the popup's photo takes the card's width by
+  // stretching, and the copy came out as much too tall as it had been too short.
+  /** @type {Map<string, [number, number]>} */
+  const sizes = new Map();
+
+  /** @param {HTMLImageElement} img */
+  function learn(img) {
+    if (img.complete && img.naturalWidth) sizes.set(img.currentSrc || img.src, [img.naturalWidth, img.naturalHeight]);
+  }
+
+  /** @param {Element} el */
+  function reserveImages(el) {
+    for (const img of /** @type {NodeListOf<HTMLImageElement>} */ (el.querySelectorAll("img"))) {
+      const wh = sizes.get(img.src);
+      if (wh && !img.style.aspectRatio) img.style.aspectRatio = `${wh[0]} / ${wh[1]}`;
     }
   }
 
   /**
-   * Wire the gesture, the arrows and the keys to one page turn.
+   * Wire the gesture, the arrows, the keys and a tap on a peek to one page turn.
    *
-   * THE NEIGHBOURS ARE ON SCREEN WHILE THE FINGER MOVES. The moment a sideways
-   * drag starts, a copy of each neighbouring play's card is laid beside the real
-   * one — the same markup the popup would paint for it — and travels with it, so
-   * the next play slides in under the thumb instead of appearing after the old
-   * one has gone. On commit the real card and the incoming copy finish the
-   * slide together; then, in one frame, the popup loads the neighbour into the
-   * real card at centre and the copies are removed. Same markup, same place,
-   * photo already decoded: the swap is invisible.
+   * THE NEIGHBOURS ARE ALWAYS THERE. A copy of each neighbouring play's card —
+   * the exact markup the popup paints for it — sits beside the real one for as
+   * long as the popup is open, smaller and dimmer the further it is from centre,
+   * so the set reads as a carousel. On a phone the copies wait just off-screen;
+   * on a tablet they show as half cards at the edges. They are never created or
+   * destroyed where they can be seen: they fade in when the popup opens (or when
+   * editing ends), fade out when it closes, and a turn rebuilds them only at
+   * positions where identical content is already sitting. Building them on drag
+   * start and dropping them after each turn — the first version — made them
+   * blink in and out on an iPad, where "off to the side" is on screen.
+   *
+   * A turn: the real card and every copy move one slot together, the incoming
+   * copy growing to full size at centre and the real card shrinking into the
+   * slot it vacated. Then, in one frame, the popup loads the neighbour into the
+   * real card at centre, a copy of the play just left takes the real card's
+   * place in the side slot (its scroll offset carried over), the next play along
+   * fades into the far slot, and the old copies go.
    *
    * The copies are body-level, not inside the backdrop: the backdrop is the
-   * morph root of the popup's render(), and a revalidation landing mid-drag
-   * would delete a child it did not paint.
+   * morph root of the popup's render(), and a revalidation would delete a child
+   * it did not paint.
    *
    * @param {HTMLElement} root
    * @param {{
    *   canSwipe: (dir: 1|-1) => boolean,
    *   neighbour: (dir: 1|-1) => (string|null),
+   *   current: () => (string|null),
    *   peekHtml: (id: string) => string,
    *   swap: (id: string) => void,
    * }} opts
    */
   function attach(root, opts) {
-    /** @type {Record<string, HTMLElement>} */
-    let ghosts = {};
-    let offset = 0;       // card width + gap: where a neighbour waits
-    let busy = false;     // a turn or a spring-back is animating
+    /** @type {Record<string, { el: HTMLElement, id: string }>} */
+    let peeks = {};
+    // Where the real card sits at rest, and where a neighbour waits.
+    let geo = null;
+    let busy = false;      // a turn or a spring-back is animating
+    let drawing = false;   // a finger is dragging the carousel
     let timer = /** @type {any} */ (0);
 
     const card = () => /** @type {HTMLElement|null} */ (root.querySelector(CARD_SEL));
 
-    function clear() {
-      clearTimeout(timer);
-      for (const k in ghosts) ghosts[k].remove();
-      ghosts = {};
-      busy = false;
-      root.classList.remove("is-turning");
+    /**
+     * The real card's layout box, from offsets rather than
+     * getBoundingClientRect: the card may be mid-entrance (a 20px rise) or mid
+     * drag, and a transform must not become where the neighbours live.
+     */
+    function measure() {
+      const c = card();
+      if (!c) return null;
+      const rr = root.getBoundingClientRect();
+      const width = c.offsetWidth;
+      return {
+        left: rr.left + c.offsetLeft,
+        top: rr.top + c.offsetTop,
+        width,
+        height: c.offsetHeight,
+        // Centred cards (tablet and up, styles.css) share one centre line
+        // whatever their height; top-aligned ones (phones) share a top edge.
+        centred: getComputedStyle(root).alignItems === "center",
+        // At least clear of the card at peek scale; on a wide screen, centred
+        // on the screen's edge so half of it shows.
+        offset: Math.max(width / 2 + (PEEK_SCALE * width) / 2 + GAP_PX, window.innerWidth / 2),
+      };
     }
 
-    function makeGhosts() {
-      clear();
-      const c = card();
-      if (!c) return;
-      // Measured with the card at rest (paint(0) precedes every call), so the
-      // rect is where the incoming card will sit once it has arrived.
-      const r = c.getBoundingClientRect();
-      offset = r.width + GAP_PX;
-      for (const dir of /** @type {Array<1|-1>} */ ([-1, 1])) {
-        const id = opts.neighbour(dir);
-        if (!id) continue;
-        const tmp = document.createElement("div");
-        tmp.innerHTML = opts.peekHtml(id);
-        const g = /** @type {HTMLElement|null} */ (tmp.firstElementChild);
-        if (!g) continue;
-        g.classList.add("play-detail-popup__card--peek");
-        g.removeAttribute("role");
-        g.removeAttribute("aria-modal");
-        g.setAttribute("aria-hidden", "true");
-        g.inert = true;
-        Object.assign(g.style, {
-          left: r.left + "px", top: r.top + "px", width: r.width + "px",
-          transform: `translateX(${dir * offset}px)`,
-        });
-        document.body.appendChild(g);
-        if (window.BgbIcons) window.BgbIcons.render(g);
-        ghosts[dir] = g;
+    /** Scale and opacity for a card `x` px from centre. */
+    function look(x) {
+      const t = geo ? Math.min(1, Math.abs(x) / geo.offset) : 0;
+      return { scale: 1 - (1 - PEEK_SCALE) * t, opacity: 1 - (1 - PEEK_OPACITY) * t };
+    }
+
+    /**
+     * Pin a copy to the real card's column and to its line: its top edge on a
+     * phone, its centre line on a tablet. The centre is held by a -50% translate
+     * (paint), not by a top computed from the copy's height — that height is
+     * not final until the copy's photo has laid out, and a copy placed from its
+     * first measurement drifted off the centre line as its image arrived.
+     * @param {HTMLElement} el
+     */
+    function place(el) {
+      if (!geo) return;
+      el.style.left = geo.left + "px";
+      el.style.width = geo.width + "px";
+      el.style.top = (geo.centred ? geo.top + geo.height / 2 : geo.top) + "px";
+    }
+
+    /**
+     * @param {string} id
+     * @param {1|-1} dir
+     * @param {boolean} fadeIn
+     */
+    function makePeek(id, dir, fadeIn) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = opts.peekHtml(id);
+      const el = /** @type {HTMLElement|null} */ (tmp.firstElementChild);
+      if (!el) return null;
+      el.classList.add("play-detail-popup__card--peek");
+      el.removeAttribute("role");
+      el.removeAttribute("aria-modal");
+      el.setAttribute("aria-hidden", "true");
+      el.dataset.peekId = id;
+      // Its contents are a picture of a card, not a card: nothing in it can be
+      // focused or pressed. `inert` on the children rather than the copy, so
+      // the copy itself still takes the tap that turns to it.
+      for (const child of Array.from(el.children)) /** @type {HTMLElement} */ (child).inert = true;
+      reserveImages(el);
+      el.addEventListener("click", () => turn(dir));
+      document.body.appendChild(el);
+      if (window.BgbIcons) window.BgbIcons.render(el);
+      place(el);
+      if (fadeIn && !reducedMotion()) {
+        const x = dir * (geo ? geo.offset : 0);
+        el.animate([{ opacity: 0 }, { opacity: look(x).opacity }], { duration: FADE_IN_MS, easing: "ease-out" });
       }
+      return { el, id };
+    }
+
+    /** @param {HTMLElement} el */
+    function fadeOut(el) {
+      if (reducedMotion()) { el.remove(); return; }
+      const a = el.animate([{ opacity: getComputedStyle(el).opacity }, { opacity: 0 }],
+        { duration: FADE_OUT_MS, easing: "ease-in", fill: "forwards" });
+      a.onfinish = () => el.remove();
     }
 
     /** @param {number} dx */
     function paint(dx) {
+      const me = look(dx);
       root.style.setProperty("--pdp-dx", dx.toFixed(1) + "px");
-      for (const k in ghosts) {
-        ghosts[k].style.transform = `translateX(${(dx + Number(k) * offset).toFixed(1)}px)`;
+      root.style.setProperty("--pdp-scale", me.scale.toFixed(4));
+      root.style.setProperty("--pdp-fade", me.opacity.toFixed(3));
+      if (!geo) return;
+      for (const k in peeks) {
+        const x = dx + Number(k) * geo.offset;
+        const l = look(x);
+        peeks[k].el.style.transform =
+          `translate(${x.toFixed(1)}px, ${geo.centred ? "-50%" : "0px"}) scale(${l.scale.toFixed(4)})`;
+        peeks[k].el.style.opacity = l.opacity.toFixed(3);
       }
     }
 
-    /** Animate everything to `dx`, then run `after`. */
+    /**
+     * Make the copies match what the popup is showing: one per neighbour it
+     * can turn to, none while it cannot (editing, saving, covered). Idempotent
+     * — render() calls it after every repaint — and a no-op mid-gesture, whose
+     * own ending re-runs it.
+     * @param {{ force?: boolean }} [o]  re-measure (a resize, a rotation)
+     */
+    function sync(o) {
+      if (busy || drawing || !root.isConnected) return;
+      root.querySelectorAll("img").forEach((img) => learn(/** @type {HTMLImageElement} */ (img)));
+      if (!geo || (o && o.force)) {
+        geo = measure();
+        if (!geo) return;
+        for (const k in peeks) place(peeks[k].el);
+      }
+      for (const dir of /** @type {Array<1|-1>} */ ([-1, 1])) {
+        const want = opts.canSwipe(dir) ? opts.neighbour(dir) : null;
+        const have = peeks[dir];
+        if (have && have.id === want) continue;
+        if (have) { fadeOut(have.el); delete peeks[dir]; }
+        if (want) {
+          const made = makePeek(want, dir, true);
+          if (made) peeks[dir] = made;
+        }
+      }
+      paint(0);
+    }
+
+    /** @param {{ fade?: boolean }} [o] */
+    function clear(o) {
+      clearTimeout(timer);
+      for (const k in peeks) {
+        if (o && o.fade) fadeOut(peeks[k].el);
+        else peeks[k].el.remove();
+      }
+      peeks = {};
+      busy = false;
+      drawing = false;
+      root.classList.remove("is-turning", "is-swiping");
+    }
+
+    /**
+     * Animate everything to `dx`, then run `after`. Finishes on the card's own
+     * transitionend — a timer set to the duration can fire a frame before the
+     * last one is painted, and the swap then snaps a copy the final few px.
+     * The timer is only the backstop for a transition that never runs (nothing
+     * to move, a hidden tab).
+     */
     function animateTo(dx, after) {
       busy = true;
-      root.classList.add("is-pulled", "is-turning");
-      for (const k in ghosts) ghosts[k].style.transition = `transform ${TURN_MS}ms ${TURN_EASE}`;
-      paint(dx);
-      timer = setTimeout(() => {
+      root.classList.add("is-pulled", "is-swiping", "is-turning");
+      const tr = `transform ${TURN_MS}ms ${TURN_EASE}, opacity ${TURN_MS}ms ${TURN_EASE}`;
+      for (const k in peeks) peeks[k].el.style.transition = tr;
+      const c = card();
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        if (c) c.removeEventListener("transitionend", onEnd);
         root.classList.remove("is-turning");
-        for (const k in ghosts) ghosts[k].style.transition = "";
+        for (const k in peeks) peeks[k].el.style.transition = "";
         after();
-      }, TURN_MS);
+        busy = false;
+      };
+      const onEnd = (/** @type {TransitionEvent} */ e) => {
+        if (e.target === c && e.propertyName === "transform") finish();
+      };
+      if (c) c.addEventListener("transitionend", onEnd);
+      paint(dx);
+      timer = setTimeout(finish, TURN_MS + 120);
     }
 
     /** @param {1|-1} dir  1 = next (the card leaves to the left) */
     function turn(dir) {
       if (busy || !opts.canSwipe(dir)) return;
       const id = opts.neighbour(dir);
-      if (!id) return;
-      if (reducedMotion()) { clear(); opts.swap(id); return; }
-      if (!ghosts[dir]) { paint(0); makeGhosts(); void root.offsetWidth; }
-      animateTo(-dir * offset, () => {
-        opts.swap(id);   // renders the neighbour into the real card, synchronously
-        paint(0);        // …which is now back at centre with no transition
+      const leaving = opts.current();
+      if (!id || !leaving) return;
+      if (reducedMotion()) {
         clear();
+        busy = true; opts.swap(id); busy = false;
+        sync();
+        return;
+      }
+      if (!geo) geo = measure();
+      if (!geo) return;
+      animateTo(-dir * geo.offset, () => {
+        const scroller = card() && card().querySelector(".play-detail-popup__scroll");
+        const scrollTop = scroller ? scroller.scrollTop : 0;
+        const old = peeks;
+        peeks = {};
+        // busy is still set, so the render() inside swap() does not sync.
+        opts.swap(id);
+        // The play just left, where the real card has just shrunk to…
+        const back = makePeek(leaving, /** @type {1|-1} */ (-dir), false);
+        if (back) {
+          peeks[-dir] = back;
+          const s = back.el.querySelector(".play-detail-popup__scroll");
+          if (s) s.scrollTop = scrollTop;
+        }
+        // …and the next one along, arriving in the far slot.
+        const further = opts.canSwipe(dir) ? opts.neighbour(dir) : null;
+        if (further) {
+          const f = makePeek(further, dir, true);
+          if (f) peeks[dir] = f;
+        }
+        paint(0);
+        for (const k in old) old[k].el.remove();
+        root.classList.remove("is-swiping");
       });
     }
 
     function springBack() {
-      animateTo(0, clear);
+      animateTo(0, () => root.classList.remove("is-swiping"));
     }
 
     // Arrow keys everywhere; the drag only where there is a finger.
@@ -257,10 +441,18 @@
       turn(dir);
     });
 
-    const ctl = { turn, clear };
+    // A rotation or a window resize moves the card, and may change the layout
+    // tier that decides whether cards are centred.
+    const onResize = () => {
+      if (!root.isConnected) { window.removeEventListener("resize", onResize); return; }
+      sync({ force: true });
+    };
+    window.addEventListener("resize", onResize);
+
+    const ctl = { turn, clear, sync };
     if (!("ontouchstart" in window)) return ctl;
 
-    let tracking = false, drawing = false;
+    let tracking = false;
     let x0 = 0, y0 = 0, dx = 0, lastX = 0, lastT = 0, vel = 0;
 
     root.addEventListener("touchstart", (e) => {
@@ -288,10 +480,9 @@
         if (Math.abs(ddx) < SLOP_PX && Math.abs(ddy) < SLOP_PX) return;
         // Vertical is the card's scroll, or the pull-to-close — not ours.
         if (Math.abs(ddy) >= Math.abs(ddx)) { tracking = false; return; }
+        sync();   // normally a no-op: the peeks are already in place
         drawing = true;
-        root.classList.add("is-pulled");
-        paint(0);
-        makeGhosts();
+        root.classList.add("is-pulled", "is-swiping");
         x0 = t.clientX;
       }
       e.preventDefault();

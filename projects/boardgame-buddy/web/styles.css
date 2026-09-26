@@ -13592,6 +13592,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
      --pdp-drag the pull-to-close; one transform so neither undoes the other. */
   transform: translate(var(--pdp-dx, 0px), var(--pdp-drag, 0px)) scale(var(--pdp-scale, 1));
   transform-origin: 50% 0;
+  /* Dims as it slides off centre in a page turn; .is-collapsing's 0 wins. */
+  opacity: var(--pdp-fade, 1);
+}
+/* Mid page turn the card shrinks into a neighbour's slot about its CENTRE, the
+   way the neighbours themselves are scaled; the pull-to-close keeps the top. */
+.play-detail-popup__backdrop.is-swiping .play-detail-popup__card {
+  transform-origin: 50% 50%;
 }
 /* 240ms: SETTLE_MS in widgets/play-detail-collapse.js, IN_MS in the pager. */
 .play-detail-popup__backdrop.is-settling .play-detail-popup__card {
@@ -13600,18 +13607,31 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* A page turn or its spring-back. 220ms: TURN_MS in widgets/play-detail-pager.js,
    which also runs the neighbours' copies on the same curve. */
 .play-detail-popup__backdrop.is-turning .play-detail-popup__card {
-  transition: transform 220ms cubic-bezier(.22, .61, .36, 1);
+  transition: transform 220ms cubic-bezier(.22, .61, .36, 1),
+              opacity 220ms cubic-bezier(.22, .61, .36, 1);
 }
-/* A neighbouring play's card waiting beside this one during a page turn. Body
-   level (the backdrop is the popup's morph root), fixed at the card's own rect
-   plus a sideways offset the pager sets inline. z-index level with the backdrop
-   and later in the DOM, so it paints over the dim like the card does. */
+/* A neighbouring play's card, beside this one for as long as the popup is open
+   (widgets/play-detail-pager.js) — off-screen on a phone, a half card at each
+   edge on a tablet. Body level (the backdrop is the popup's morph root), fixed
+   at the card's own box plus a sideways offset, scale and opacity the pager
+   sets inline. z-index level with the backdrop and later in the DOM, so it
+   paints over the dim like the card does. A tap on it turns to it; nothing
+   inside it is pressable (its children are inert). */
 .play-detail-popup__card.play-detail-popup__card--peek {
   position: fixed;
   z-index: 100;
   margin: 0;
   animation: none;
-  pointer-events: none;
+  transform-origin: 50% 50%;
+  cursor: pointer;
+}
+/* Tablet and up: every card in the carousel shares one centre line, so a
+   neighbour sits level with the card whatever either one's height, and a turn
+   never has to move anything vertically. Phones (and a phone on its side,
+   `land`) keep the top alignment — the card is the whole screen there. Doubled
+   on .polaroid-popup__backdrop to beat the flex-start above (overlays.md §3). */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"]) .polaroid-popup__backdrop.play-detail-popup__backdrop {
+  align-items: center;
 }
 .play-detail-popup__pager {
   display: flex;
