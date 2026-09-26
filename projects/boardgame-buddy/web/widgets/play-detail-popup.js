@@ -224,7 +224,19 @@
   // shell routes them all through onClose.
   function mountBackdrop() {
     _lastHtml = null;
-    _modal.open({ html: "", onClose: resetState, onEscape: hasStackedOverlay });
+    _modal.open({
+      html: "",
+      onClose: resetState,
+      onEscape: hasStackedOverlay,
+      // Pull the card down to close it (widgets/play-detail-collapse.js). Not
+      // while editing: a pull would take an unsaved draft with it, and the edit
+      // form is where a downward drag most often means "scroll back up".
+      onOpen: (root) => window.PlayDetailCollapse.attach(root, {
+        canDrag: () => !state.editing && !state.saving && !hasStackedOverlay(),
+        playId: () => state.playId,
+        close: dismiss,
+      }),
+    });
   }
 
   // PolaroidPopup.confirm() takes the screen for its own card, which closes
@@ -333,6 +345,7 @@
     return `
       <div class="play-detail-popup__card" role="dialog" aria-modal="true" aria-label="Play details">
         <div class="play-detail-popup__topbar">
+          <span class="play-detail-popup__grip" aria-hidden="true"></span>
           <span></span>
           <button class="play-detail-popup__close" type="button" aria-label="Close">
             <i data-icon="x" class="w-4 h-4"></i>
