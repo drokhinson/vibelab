@@ -81,9 +81,14 @@
       // the app already had, until a tab switch remounted the view and read
       // the now-warm cache. Adopt it instead; _load splices its own answer in
       // when it finally arrives.
+      //
+      // On a warm cache it lands AFTER the cached paint, carrying what the
+      // database says now. Splice it over page one: repainting the cached copy
+      // here threw the fresh rows away and rebuilt every card for nothing.
       this.listen("feed", (page) => {
-        if (!this._page && page && Array.isArray(page.cards)) this._adoptPage(page);
-        else this.render();
+        if (!page || !Array.isArray(page.cards) || page === this._page) this.render();
+        else if (!this._page) this._adoptPage(page);
+        else this._spliceFirstPage(page);
       });
       // A tier change (rotation, a resized window, the Settings pin) moves the
       // rail cards between the stream and the sidebar — see render().
@@ -300,12 +305,11 @@
         ...page.cards,
         ...tail.filter((c) => !(c.kind === "play" && c.play_id && freshIds.has(c.play_id))),
       ];
-      // Nothing visibly moved: a refresh can land right after a mount that
-      // already fetched the same page, and a needless repaint would cost the
-      // user their scroll position for no new content. This is also what makes
-      // a pull that finds nothing new a no-op rather than a jump to the top.
-      // (cardsSig is a join of ids and counts — cheap even on a long feed.)
-      if (cardsSig(nextCards) === cardsSig(this._page.cards)) return;
+      // Nothing changed: a refresh can land right after a mount that already
+      // fetched the same page. Compared on the whole payload, not just which
+      // cards exist, so a fresher reaction count or edited score still goes
+      // through — render() morphs, so that costs only the nodes that differ.
+      if (JSON.stringify(nextCards) === JSON.stringify(this._page.cards)) return;
 
       this._page = {
         ...this._page,
@@ -392,10 +396,20 @@
       this._loading = true;
       this._error = null;
       if (initial) {
-        this._page = null;
-        // Cleared with the page it describes: any adoption on record belongs
-        // to the page this load just dropped.
-        this._adopted = false;
+        // Paint the cached first page on this very frame rather than flashing
+        // the skeleton for the microtask swr() takes to hand the same page
+        // back. Held as adopted, so the answer below splices over it.
+        const warm = window.bgbCache && window.bgbCache.peek("feed", "first");
+        if (warm && Array.isArray(warm.cards)) {
+          this._page = warm;
+          this._firstPageLen = warm.cards.length;
+          this._adopted = true;
+        } else {
+          this._page = null;
+          // Cleared with the page it describes: any adoption on record
+          // belongs to the page this load just dropped.
+          this._adopted = false;
+        }
       }
       this.render();
       try {
@@ -437,6 +451,7 @@
     render() {
       if (!this._page && this._loading) {
         this.container.innerHTML = this._renderSkeleton();
+        this._lastHtml = null;
         return;
       }
       // Nothing loaded AND the load failed. Handled before the normal path
@@ -446,6 +461,7 @@
       // ask again short of relaunching the app.
       if (!this._page && this._error) {
         this.container.innerHTML = this._renderLoadError();
+        this._lastHtml = null;
         this.refreshIcons();
         return;
       }
@@ -485,9 +501,12 @@
         let heading = "";
         if (c.kind === "play_session" && c.played_at && !seenDays.has(c.played_at)) {
           seenDays.add(c.played_at);
-          heading = `<h3 class="day-divider">${escapeHtml(formatRelativeDay(c.played_at, formatDateShort))}</h3>`;
+          heading = withMorphKey(
+            `<h3 class="day-divider">${escapeHtml(formatRelativeDay(c.played_at, formatDateShort))}</h3>`,
+            `day:${c.played_at}`,
+          );
         }
-        return heading + this._renderCard(c);
+        return heading + withMorphKey(this._renderCard(c), cardMorphKey(c));
       }).join("");
       // Search pill + avatar moved into the global app header — feed now
       // jumps straight to the resume chip and the card timeline.
@@ -496,20 +515,35 @@
           ${this._error ? `<div class="alert alert-error mb-3">${escapeHtml(this._error)}</div>` : ""}
           <div class="feed-stream">
             <div class="feed-cards">
-              ${stream.length === 0 && !this._loading ? this._renderEmpty() : ""}
+              ${stream.length === 0 && !this._loading ? withMorphKey(this._renderEmpty(), "empty") : ""}
               ${body}
             </div>
             ${this._renderLoadMore()}
           </div>
           ${rails.length
             ? `<aside class="feed-aside" aria-label="Around your table">
-                 ${rails.map((c) => this._renderCard(c)).join("")}
+                 ${rails.map((c) => withMorphKey(this._renderCard(c), cardMorphKey(c))).join("")}
                </aside>`
             : ""}
         </div>
       `;
-      this.container.innerHTML = html;
-      this.refreshIcons();
+      // Patch, never rebuild, once the feed is on screen. The cached paint is
+      // followed a moment later by the database's answer, and an innerHTML
+      // swap there re-decoded every photo and replayed every card's entrance —
+      // the whole feed blinked to show, at most, one changed number. morph()
+      // touches only the nodes that differ; cards are keyed by play / session
+      // so a new play at the top slots in without sliding every card below it
+      // into its neighbour's images. Identical markup (a collection-map
+      // repaint, _load's closing render) skips the walk entirely.
+      const painted = !!this.container.querySelector(".feed-shell");
+      if (painted && html === this._lastHtml) return;
+      if (painted && window.BgbDomPatch) {
+        window.BgbDomPatch.morph(this.container, html);
+      } else {
+        this.container.innerHTML = html;
+        this.refreshIcons();
+      }
+      this._lastHtml = html;
       // Rail titles that don't fit their 112px tile sweep instead of
       // truncating, and only a post-paint measurement can tell which those
       // are. Infinite scroll re-renders the whole list through here, so
@@ -642,7 +676,9 @@
       // Every play is a tile of one of two widths now, so the rail needs no
       // size hint. `isSingle` survives only to centre a lone tile.
       const isSingle = card.plays.length === 1;
-      const cards = railOrder(card.plays).map((p) => window.renderPlayCard(p)).join("");
+      const cards = railOrder(card.plays)
+        .map((p) => withMorphKey(window.renderPlayCard(p), cardMorphKey(p)))
+        .join("");
       return `
         <section class="play-session${isSingle ? " play-session--single" : ""}"
                  data-session-key="${escapeAttr(sessionKey(firstPlay))}">
@@ -1136,13 +1172,17 @@
   // Identity signature of a card list — what would visibly change if painted.
   // Plays are identified by id; rails by kind alone, since their contents are
   // server-chosen and a reshuffle isn't worth a repaint mid-scroll.
-  function cardsSig(cards) {
-    // group_count rides in the signature: a play edited out of an imported run
-    // changes the card's count without changing its id, and a signature blind
-    // to that would skip the repaint that corrects the number.
-    return cards.map((c) => (
-      c.kind === "play" ? `p:${c.play_id}:${c.group_count || 1}` : c.kind
-    )).join("|");
+  // Stable identity for BgbDomPatch's keyed matching (see render()).
+  function cardMorphKey(card) {
+    if (card.kind === "play") return `play:${card.play_id}`;
+    if (card.kind === "play_session") return `session:${sessionKey(card.plays[0])}`;
+    return card.kind;
+  }
+
+  // Stamp data-morph-key on a fragment's root element. Every render fn here
+  // returns one root, so the first opening tag is it.
+  function withMorphKey(html, key) {
+    return html.replace(/^(\s*<[a-zA-Z][\w-]*)/, `$1 data-morph-key="${escapeAttr(key)}"`);
   }
 
   function sessionKey(card) {
