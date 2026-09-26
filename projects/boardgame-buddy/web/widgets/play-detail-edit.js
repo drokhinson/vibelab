@@ -211,6 +211,9 @@
               // CHAPTER edit, and this play's copy is its own record of how it
               // was scored.
               rowLabels: templateRows(d.scoring_template),
+              // Same host as the view-mode grid, same play: "Add round" here
+              // still centres the new row, and entering edit is not growth.
+              scrollKey: p.id,
             })}
           </section>
         ` : ""}

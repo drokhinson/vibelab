@@ -165,7 +165,14 @@
     const roundCount = roundGridRoundCount(safePlayers, o.roundCount);
     // The body keeps its column across the host's re-renders, and drops to the
     // new last round when this render added one. See RoundGridScroll.
-    RoundGridScroll.schedule(host, roundCount);
+    // `trackScroll: false` renders without touching that state at all (the
+    // play-detail pager's neighbour copies); `scrollKey` says WHICH record the
+    // grid shows, so a different play on the same surface is a new grid rather
+    // than this one growing; `centreNewRound: false` for a read-only grid,
+    // where nothing is ever added and a scroll is never the grid's to make.
+    if (o.trackScroll !== false) {
+      RoundGridScroll.schedule(host, roundCount, o.scrollKey, o.centreNewRound !== false);
+    }
 
     // What this grid actually draws. One column per seat everywhere except a
     // team play, where a side is ONE column — see roundGridColumns.
@@ -933,17 +940,29 @@
     sync(host, el) {
       if (!el) return;
       const prev = _paneScroll[host];
-      _paneScroll[host] = { left: el.scrollLeft, rounds: prev ? prev.rounds : 0 };
+      _paneScroll[host] = { key: prev ? prev.key : undefined, left: el.scrollLeft, rounds: prev ? prev.rounds : 0 };
       const rg = el.closest(".rg");
       if (!rg) return;
       const mirrors = rg.querySelectorAll("[data-rg-sync]");
       for (let i = 0; i < mirrors.length; i++) mirrors[i].scrollLeft = el.scrollLeft;
     },
-    /** @param {string} host @param {number} roundCount */
-    schedule(host, roundCount) {
+    /**
+     * `key` is the record the grid shows. The memory is per host, and one host
+     * can show many records in turn — every card of the play-detail popup is
+     * "PlayDetailPopup" — so a render for a different record is a different
+     * grid: it starts at column 1 and has not "grown". Without this, opening a
+     * play with more rounds than the last one read as "Add round" and
+     * scrolled the whole popup down to the grid. Hosts that pass no key (the
+     * live play screens, one play each) compare undefined to undefined and
+     * behave as they always have.
+     * @param {string} host @param {number} roundCount
+     * @param {string} [key] @param {boolean} [centre]
+     */
+    schedule(host, roundCount, key, centre) {
       const prev = _paneScroll[host];
-      const grew = !!prev && roundCount > prev.rounds;
-      _paneScroll[host] = { left: prev ? prev.left : 0, rounds: roundCount };
+      const same = !!prev && prev.key === key;
+      const grew = same && centre !== false && roundCount > prev.rounds;
+      _paneScroll[host] = { key, left: same ? prev.left : 0, rounds: roundCount };
       if (typeof requestAnimationFrame !== "function") return;
       requestAnimationFrame(() => {
         const rg = document.querySelector(`.rg[data-round-grid="${host}"]`);
