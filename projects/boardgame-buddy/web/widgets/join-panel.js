@@ -182,13 +182,15 @@
               <i data-icon="refresh-cw" class="w-4 h-4 ${this._loading ? "cascade-join__refresh-spin" : ""}"></i>
             </button>
           </div>
-          ${this._loading && sessions.length === 0
-            ? `<div class="cascade-join__empty cascade-join__loading">${window.buddyLoader({ size: 56, padded: false })}</div>`
-            : sessions.length === 0
-              ? this._renderEmpty()
-              : `<ul class="cascade-join__list">
-                   ${sessions.map((s) => this._renderSessionRow(s)).join("")}
-                 </ul>`}
+          <div class="cascade-join__box">
+            ${this._loading
+              ? window.buddyLoader({ size: 56, padded: false })
+              : sessions.length === 0
+                ? this._renderEmpty()
+                : `<ul class="cascade-join__list">
+                     ${sessions.map((s) => this._renderSessionRow(s)).join("")}
+                   </ul>`}
+          </div>
         </section>
       `;
       window.BgbIcons.render(el);
