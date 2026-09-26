@@ -12133,7 +12133,9 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-align: center;
   font-size: 13px;
 }
-.cascade-join__loading { text-align: center; padding: 20px 0; }
+/* The loader sits inside the same box the empty state/list lands in, so the
+   box is there from the first paint instead of popping in when the load ends. */
+.cascade-join__loading { display: flex; justify-content: center; padding: 16px; }
 
 /* ── Polaroid popup ──────────────────────────────────────────────────────── */
 /* Sized to the *visible* viewport rather than `inset: 0`, so a card centred in
