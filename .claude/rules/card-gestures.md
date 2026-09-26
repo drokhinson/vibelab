@@ -139,6 +139,41 @@ CSS read them:
   - The copies must be the detail view's **exact markup** for that item, from
     the same pure `renderCardFor(item)` the real render uses. That's what makes
     the swap invisible.
+- **The neighbours are persistent: never create or destroy a card where it can
+  be seen.** Building the copies on drag start and dropping them after each
+  turn looked fine on a phone, where "beside the card" is off-screen, and
+  blinked on an iPad, where it isn't.
+  - Keep one copy per neighbour for as long as the view is open, reconciled by
+    an idempotent `sync()` after every repaint. There are none while editing,
+    saving or covered.
+  - Copies fade in when they appear and fade out on exit.
+  - A turn rebuilds them only at positions where identical content already
+    sits (a copy of the item just left, in the slot the real card just shrank
+    into, with its scroll offset carried over).
+  - Verify with a per-frame check: any card that leaves the screen must be
+    replaced in the same frame by one at the same rect.
+- **On wide screens it's a carousel.**
+  - The offset is `max(cardW/2 + peekScale·cardW/2 + gap, viewportW/2)`, so a
+    tablet shows half a card at each edge while a phone keeps them off-screen.
+  - Scale and opacity are functions of distance from centre (about 0.85 and
+    0.65 at rest), applied to the real card too, so a card grows as it slides
+    in.
+  - Every card shares ONE vertical centre line: centre the detail view on
+    tablet tiers and pin each copy with `top: centreLine` +
+    `translateY(-50%)`, scaling about its centre. A top computed from the
+    copy's height drifts, because the height isn't final until its image has
+    laid out.
+  - Tapping a peek turns to it. Put `inert` on the copy's children, not the
+    copy, so the copy still takes the tap.
+- **Reserve a copy's image box before it loads.** A freshly inserted `<img>` is
+  not complete in its first frame, even when cached and decoded, so it lays
+  out 0px tall. Remember natural sizes (from the preload and from images already
+  on screen) and stamp `aspect-ratio` on the copy's images. Don't use
+  `width`/`height` attributes, which pin the natural width where the real image
+  stretches.
+- **End a turn on `transitionend`,** with a timer only as the backstop. A timer
+  set to the duration can fire before the last frame, and the swap then snaps
+  the final few px.
 - **Preload the whole set when the detail view opens:** fetch *and*
   `decode()` every image a page turn can reach. Feed images are usually
   `loading="lazy"`, so cards off the side of a rail have never been fetched,
