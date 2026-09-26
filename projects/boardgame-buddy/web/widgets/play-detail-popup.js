@@ -249,8 +249,15 @@
   // what makes the swap at the end of a turn invisible.
   function peekHtml(id) {
     const seed = window.Play.seeded ? window.Play.seeded(id) : null;
-    return seed ? renderCardFor(seed, id) : "";
+    if (!seed) return "";
+    // A copy is a picture: its widgets must not touch state the real card's
+    // own widgets keep (the rounds grid's scroll memory — see renderView).
+    _peeking = true;
+    try { return renderCardFor(seed, id); } finally { _peeking = false; }
   }
+
+  // True while peekHtml() is painting a neighbour's copy.
+  let _peeking = false;
 
   // The page behind is scroll-locked, but not to script: keep the polaroid for
   // the play on screen in view behind the blur, so a pull-to-close from here
@@ -472,6 +479,10 @@
     // the reader; and keep an untouched card at its top through the repaint.
     window.PlayDetailPager.reserveImages(root);
     pinToTop();
+    // And once more after the frame: widgets in the card do layout work in a
+    // rAF of their own (the rounds grid restores its column there), and a
+    // deferred scroll from any of them must not move an unread card.
+    requestAnimationFrame(pinToTop);
     // The × needs no listener of its own: the shell's delegated click owns it
     // via closeSelector, and its onClose is this popup's reset.
 
@@ -825,6 +836,13 @@
                 editable: false,
                 playMode: p.play_mode || "competitive",
                 rowLabels: templateRows(p.scoring_template),
+                // Every card of this popup is the same grid host, so the grid's
+                // scroll memory is keyed by the play; read-only, so it never
+                // scrolls the card to a "new" round; and a neighbour's copy
+                // leaves that memory alone.
+                scrollKey: p.id,
+                centreNewRound: false,
+                trackScroll: !_peeking,
               }
             )}
           </section>` : ""}
