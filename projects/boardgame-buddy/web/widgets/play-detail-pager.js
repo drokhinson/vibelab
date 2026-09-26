@@ -7,12 +7,15 @@
 // swipe. So the popup captures the list it was opened from, and a horizontal drag
 // on the card carries it off the side and brings the neighbour in.
 //
-// THE SEQUENCE IS THE CARDS ON SCREEN, IN DOM ORDER, in the same view as the card
-// that was tapped. That is exactly the order the person was reading, whatever the
-// view sorts by, and it needs no knowledge of which store a view keeps its plays
-// in. Run cards (play-card--stack) are left out: they open a sheet, not this
-// popup. An open from somewhere with no polaroid for the play — a notification,
-// the plays log — gets a sequence of one, and nothing here draws or listens.
+// THE SEQUENCE IS THE SET THE TAPPED CARD SITS IN — the cards of its own
+// .play-session__scroll row, in DOM order: one table's evening in the feed ("You,
+// JasBot and 2 others played 2 games"), or a game's plays reel. Paging walks that
+// row and stops at its ends; it never crosses into the next session, because a
+// play logged on its own is a separate thing to open, not the next page of this
+// one. A single play is a set of one. Run cards (play-card--stack) are left out:
+// they open a sheet, not this popup. An open from somewhere with no polaroid for
+// the play — a notification, the plays log — is a set of one too, and nothing
+// here draws or listens.
 //
 // The drag offset is a custom property on the backdrop, like the pull-to-close
 // one in widgets/play-detail-collapse.js and for the same reason: the card itself
@@ -49,7 +52,7 @@
   const visible = (el) => el.getClientRects().length > 0;
 
   /**
-   * The ids of the polaroids beside this one, in reading order.
+   * The ids of the polaroids in this one's set, in reading order.
    * @param {string} playId
    * @returns {string[]}
    */
@@ -60,7 +63,8 @@
     const own = Array.from(document.querySelectorAll(`article.play-card[data-play-id="${esc}"]`))
       .find(visible);
     if (!own) return [playId];
-    const scope = own.closest("[data-view]") || own.parentElement || document;
+    const scope = own.closest(".play-session__scroll");
+    if (!scope) return [playId];
     const ids = [];
     for (const el of scope.querySelectorAll("article.play-card[data-play-id]:not(.play-card--stack)")) {
       const id = el.getAttribute("data-play-id");
