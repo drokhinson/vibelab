@@ -89,8 +89,8 @@ Components are global functions / classes attached to `window`. There is no modu
 
 ### 3.3 `renderPlayCard` — `ui/play-card.js:63`
 - **Returns:** HTML string (an `<article class="play-card">`).
-- **Reuse count: 2 external call sites.** `views/feed-view.js:181` (single-card session), `views/feed-view.js:223` (multi-card strip session), `views/game-detail-view.js:182` (game-detail recent-plays reel). The function is also called by its own internal `rerenderCard` (`ui/play-card.js:396`) for in-place flip updates.
-- **Visual style:** Two-faced flip card (`.play-card` + `.play-card__front` + `.play-card__back`), polaroid-style cream surface, photo at top, caption row with game name + winner. Strip vs single variant chosen by the `__sessionPlayCount` hint (`ui/play-card.js:74–78`); 1-card sessions use `strip` so a solo play renders at the same size as a multi-play rail. Per-card state (flipped, hydrated payload) lives in a module-level `Map` keyed by `play_id` (`ui/play-card.js:22`).
+- **Reuse count: 2 external call sites.** `views/feed-view.js:181` (single-card session), `views/feed-view.js:223` (multi-card strip session), `views/game-detail-view.js:182` (game-detail recent-plays reel). The function is also called by its own internal `rerenderCard` (`ui/play-card.js:396`) for in-place repaints after an edit.
+- **Visual style:** Single-faced card (`.play-card` + `.play-card__front`; the flip and its `.play-card__back` were removed — a tap opens `PlayDetailPopup`), polaroid-style cream surface, photo at top, caption row with game name + winner. Strip vs single variant chosen by the `__sessionPlayCount` hint (`ui/play-card.js:74–78`); 1-card sessions use `strip` so a solo play renders at the same size as a multi-play rail.
 - **How accessed:** Scroll the feed; visit game-detail and look at "Recent plays".
 - **Outlier check:** Earlier audit notes flagged `findCardById` (`ui/play-card.js:405`) as dead — **NOT dead**, it is the registry lookup used by `rerenderCard` at `ui/play-card.js:394`. The `plays` view, `play-flow` Settle screen, and `session-viewer` do **not** render `renderPlayCard` — they each have their own play presentation. See §5b for the consequences.
 
@@ -222,7 +222,7 @@ Components are global functions / classes attached to `window`. There is no modu
 | Game tile — profile preview | `.preview-card`, `.preview-card__*` | `styles.css:6611–6700+` | `--font-display` for title, `--font-sans` for body | None |
 | Game tile — game detail hero | `.game-detail__polaroid*` | Inside `game-detail__*` block | `--font-display` for name | None |
 | Plays list row | `.plays-list__row`, `.plays-list__thumb`, `.plays-list__top`, `.plays-list__sub`, `.plays-list__status` | Inside plays-view section | `--font-sans`, `--font-display` for day divider | None |
-| Play cards | `.play-card`, `.play-card--single`, `.play-card--strip`, `.play-card__front`, `.play-card__back`, `.play-card__photo`, `.play-card__caption*`, `.play-card__status-overlay`, `.play-card__game-overlay`, `.play-card__maximize`, `.play-card__back-*` | `styles.css:2680+` cluster | `--font-polaroid` for caption, `--font-display` for back title, `--font-score` for scores | None |
+| Play cards | `.play-card`, `.play-card--single`, `.play-card--strip`, `.play-card__front`, `.play-card__photo`, `.play-card__caption*`, `.play-card__status-overlay`, `.play-card__game-overlay`, `.play-card__maximize` | `styles.css:2680+` cluster | `--font-polaroid` for caption | None |
 | Reference guide | `.scroll-panel*`, `.scroll-panel--rolled`, `.scroll-chapter*`, `.scroll-section*`, `.guide-controls`, `.guide-search`, `.guide-pill*`, `.guide-text` | `styles.css:1150–1350+` block | `--font-display` for chapter titles, `--font-polaroid` for guide-text body | None |
 | Chapter editor | `.chapter-edit__*`, `.chapter-add__*` | `styles.css:610–940` block | `--font-display` for titles, mono for chapter-edit toolbar icons | None |
 | Status badges | `.status-tag`, `.status-badge`, `.status-badge--owned`, `.status-badge--wishlist`, `.status-badge--played`, `.expansion-count-badge`, `.expansion-dot` | `styles.css:4100+` cluster | `--font-sans`, `--accent`, `--exp-color` (inline) | None |
@@ -351,8 +351,8 @@ A list of every place where ad-hoc markup duplicates an available (or intended-t
 | --- | --- | --- | --- | --- |
 | Body / chrome | `--font-sans` | Geist | Default `body` | Buttons, list rows, meta text, profile body |
 | Display / headings | `--font-display` → `var(--font-polaroid)` | Fraunces | `.font-display` | Profile names, game-detail name, chapter titles, day dividers, stat values, sheet titles |
-| Polaroid surfaces | `--font-polaroid` | Fraunces | `.game-polaroid__name`, `.play-card__caption-name`, `.play-card__back-title`, `.guide-text` body | The polaroid family of cards |
-| Scoring | `--font-score` | JetBrains Mono | `.scoring-table`, `.scoring-cell`, `.play-card__back-player-score`, `.play-detail__player-score` | Every numeric score and session code (tabular numerals) |
+| Polaroid surfaces | `--font-polaroid` | Fraunces | `.game-polaroid__name`, `.play-card__caption-name`, `.guide-text` body | The polaroid family of cards |
+| Scoring | `--font-score` | JetBrains Mono | `.scoring-table`, `.scoring-cell`, `.play-detail__player-score` | Every numeric score and session code (tabular numerals) |
 | Step indicator | inherits `--font-score` | JetBrains Mono | `.cascade-screen__step` | Cascade screen step counter |
 
 **Findings:**
@@ -1235,3 +1235,19 @@ code. The ones that earn their place: a collapsed group must render **none** of
 its rows (not `display: none` on all of them — that is what keeps a
 hundred-item board cheap), and a topic the lookup table has forgotten must
 still get a header from the row's own denormalised label.
+
+## Cleanup log — Pass 14 (the play card stops flipping), 2026-09-26
+
+**Tap opens, flip retired.** A tap on a play card (feed and the game-detail
+recent-plays reel) used to flip it to a back face with the scoreboard, while the
+maximize button opened `PlayDetailPopup` — two destinations for one card. A tap
+anywhere that isn't the game link or the open button now opens the popup, the
+same affordance `views/plays-view.js` already used for a full-row tap
+(`ui-object-design.md` §3b). Run cards still open `PlayRunSheet`.
+
+**Deleted:** `renderBack`, `playerAction`, `renderPlayerRow`, the per-card
+`cardState` Map (flipped / hydrated / hydrating / error) and the fetch-on-flip
+path in `ui/play-card.js`; the 3D flip rules and the whole `.play-card__back-*`
+family in `styles.css`. `window.playCardFlip` became `window.playCardTap`, and
+`data-no-flip` became `data-no-open`. The maximize button stays as the visible
+hint that the card opens.

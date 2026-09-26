@@ -880,7 +880,7 @@ The pinned chrome is a system, documented in `.claude/rules/web-frontend.md` (§
 
 ### 4.5 Motion
 
-Two motion patterns are codified in `.claude/rules/web-frontend.md` ("Motion" section) and applied via the `.animate-fadeUp` class with `animation-delay: calc(var(--i) * 40ms)` for staggered entrance. `--ease` is the project's shared curve. The play card adds a flip animation managed inside `ui/play-card.js` (state Map keyed by `play_id`); sheets animate in and out on `sheetIn` / `sheetOut`, whose duration must stay in step with `CLOSE_MS` in `ui/bottom-sheet.js`. Press feedback is `:active` — the polaroid tilt animation was removed.
+Two motion patterns are codified in `.claude/rules/web-frontend.md` ("Motion" section) and applied via the `.animate-fadeUp` class with `animation-delay: calc(var(--i) * 40ms)` for staggered entrance. `--ease` is the project's shared curve. The play card no longer flips — a tap opens `PlayDetailPopup`; sheets animate in and out on `sheetIn` / `sheetOut`, whose duration must stay in step with `CLOSE_MS` in `ui/bottom-sheet.js`. Press feedback is `:active` — the polaroid tilt animation was removed.
 
 ### 4.6 Layout tiers
 
