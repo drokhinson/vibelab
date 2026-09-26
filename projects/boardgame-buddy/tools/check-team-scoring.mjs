@@ -75,7 +75,8 @@ console.log("\na side of one keeps its own column:");
   eq("two sides of one are two columns",
      shape(columns(roster, "team", 1)), ["Ana:0", "Bo:1"]);
   // ...and still carries the side's colour, which is the whole of migration 048.
-  eq("both keep their tint", columns(roster, "team", 1).map((c) => c.slot), [1, 2]);
+  // Red and Blue are palette circles, so each wears its own token (5 and 1).
+  eq("both keep their tint", columns(roster, "team", 1).map((c) => c.slot), [5, 1]);
 }
 
 console.log("\na side takes the position of its first seat:");
@@ -105,7 +106,7 @@ console.log("\nthe split: a side that holds two numbers keeps two columns:");
   eq("two different numbers, two columns",
      shape(columns(roster, "team", 1)), ["Ana:0", "Bo:1"]);
   eq("and both keep the side's colour",
-     columns(roster, "team", 1).map((c) => c.slot), [1, 1]);
+     columns(roster, "team", 1).map((c) => c.slot), [5, 5]);
 }
 
 console.log("\n...but a blank is not a disagreement:");
@@ -211,13 +212,22 @@ console.log("\nthe header of a merged column: badges by default, tag AND roster 
   ok("...and says so, so one tap moves team headers only",
      teamHtml.indexOf('data-rg-scope="team"') !== -1);
   ok("the tap flips it toward names", teamHtml.indexOf("toggleAll(false, 'team')") !== -1);
-  // Drawn as two lines — the tag over the roster, the tag underlined by CSS —
-  // because a ~4.3rem column broke the one-line form wherever the box ran out.
-  ok("the text state draws the tag over the roster",
-     teamHtml.indexOf('<span class="scoring-head__team">Red</span>'
-                      + '<span class="scoring-head__roster">Ana, Bo</span>') !== -1
-     && teamHtml.indexOf('<span class="scoring-head__team">Blue</span>'
-                         + '<span class="scoring-head__roster">Cy, Di</span>') !== -1);
+  // A side picked from the colour circles IS its tint, so its text state is
+  // the roster alone — "Red" over a red column says it twice.
+  ok("a colour side's text state is the roster, no tag",
+     teamHtml.indexOf('<span class="scoring-head__roster">Ana, Bo</span>') !== -1
+     && teamHtml.indexOf('<span class="scoring-head__team">Red</span>') === -1
+     && teamHtml.indexOf('<span class="scoring-head__team">Blue</span>') === -1);
+  // A custom name carries what the tint cannot, so it is drawn as two lines —
+  // the tag over the roster, the tag underlined by CSS — because a ~4.3rem
+  // column broke the one-line form wherever the box ran out.
+  const customHtml = render([seat("Ana", "Owls", [10]), seat("Bo", "Owls", [10]),
+                             seat("Cy", "Cats", [7]), seat("Di", "Cats", [7])], "team", true);
+  ok("a custom side's text state draws the tag over the roster",
+     customHtml.indexOf('<span class="scoring-head__team">Owls</span>'
+                        + '<span class="scoring-head__roster">Ana, Bo</span>') !== -1
+     && customHtml.indexOf('<span class="scoring-head__team">Cats</span>'
+                           + '<span class="scoring-head__roster">Cy, Di</span>') !== -1);
   // Flat for the tooltip and the button's accessible name, where a sentence is
   // what a hover and a screen reader want.
   ok("...and says it in one line where it has to be one line",
