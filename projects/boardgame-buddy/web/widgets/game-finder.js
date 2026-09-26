@@ -22,7 +22,10 @@
 // An index row carries what a result row PAINTS and no more (see the module
 // header in catalog-index.js), so a pick from it hydrates the full game
 // before handing it on — from the device when the game is one of the user's
-// own, from GET /games/{id} otherwise. See _pickById.
+// own, from GET /games/{id} otherwise — unless the caller passed
+// `instantPick`, in which case the partial row goes out in the tap frame and
+// the caller widens it (Gather does, so a slow detail fetch never holds the
+// pick). See _pickById.
 //
 // Expansions never appear here: /search excludes them from every source
 // (library, DB, BGG). They're added through a base game's expansion
@@ -89,6 +92,10 @@
    * @property {(err: Error) => void} [onError]
    * @property {string} [placeholder]
    * @property {boolean} [includeRecentlyPlayed]  Default true.
+   * @property {boolean} [instantPick]  Hand a catalog-index row on in the tap
+   *   frame instead of waiting on GET /games/{id} to widen it. The device copy
+   *   (warmed bundle / recents) is still used when there is one; otherwise the
+   *   caller gets the `_partial` row and owns filling in the rest.
    */
 
   /** @typedef {{ source: "library"|"bgg"|"recent", isExpansion: boolean, dropdownItemEl: Element|null }} PickCtx */
@@ -885,9 +892,14 @@
         game = this._recentGames.find((g) => g.id === gameId);
       }
       if (game && game._partial) {
-        game = await this._hydratePartial(game, rowEl);
-        // Unmounted while the row was loading — the sheet is gone.
-        if (!document.getElementById(this.inputId)) return;
+        const local = this._hydrateLocal(game);
+        if (local) {
+          game = local;
+        } else if (!this._opts.instantPick) {
+          game = await this._hydratePartial(game, rowEl);
+          // Unmounted while the row was loading — the sheet is gone.
+          if (!document.getElementById(this.inputId)) return;
+        }
       }
       if (!game) {
         try {
@@ -917,15 +929,8 @@
      * @returns {Promise<Object>}
      */
     async _hydratePartial(game, rowEl) {
-      const cache = window.bgbCache;
-      if (cache) {
-        const bundle = cache.peek("game.bundle", game.id);
-        if (bundle && bundle.game && bundle.game.id === game.id) return bundle.game;
-      }
-      if (Array.isArray(this._recentGames)) {
-        const recent = this._recentGames.find((g) => g && g.id === game.id);
-        if (recent) return recent;
-      }
+      const local = this._hydrateLocal(game);
+      if (local) return local;
       const body = rowEl ? rowEl.querySelector(".game-finder-dropdown-item__body") : null;
       const before = body ? body.innerHTML : null;
       if (body) {
@@ -942,6 +947,24 @@
       }
       if (body && before != null && body.isConnected) body.innerHTML = before;
       return game;
+    }
+
+    /**
+     * The device's full copy of an index row, if it has one — no request.
+     * @param {Object} game the `_partial` row
+     * @returns {Object|null}
+     */
+    _hydrateLocal(game) {
+      const cache = window.bgbCache;
+      if (cache) {
+        const bundle = cache.peek("game.bundle", game.id);
+        if (bundle && bundle.game && bundle.game.id === game.id) return bundle.game;
+      }
+      if (Array.isArray(this._recentGames)) {
+        const recent = this._recentGames.find((g) => g && g.id === game.id);
+        if (recent) return recent;
+      }
+      return null;
     }
 
     async _handlePick(game, ctx) {

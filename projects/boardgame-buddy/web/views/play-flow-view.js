@@ -1625,6 +1625,8 @@
       window.GameSearchSheet.open({
         title: "Pick a game",
         returnFocus: (event && event.currentTarget) || null,
+        // Select in the tap frame; _applyGamePick widens a catalog row itself.
+        instantPick: true,
         onPick: (game, ctx) => this._onFinderPick(game, ctx),
       });
     }
@@ -2994,6 +2996,39 @@
         this.render();
         if (this._guideWidget) this._guideWidget.refresh();
       });
+      if (game._partial) this._hydrateGamePick(game.id, ps.playMode);
+    }
+
+    /**
+     * Fill in what a catalog-index pick lacks (box art, play mode) after the
+     * pick has already landed — the search sheet hands the row on in the tap
+     * frame rather than holding the selection behind GET /games/{id}. Dropped
+     * if the host has moved on to another game by the time it answers.
+     * @param {string} gameId
+     * @param {string|null} modeAtPick  ps.playMode as the pick left it, so a
+     *   mode the host chose in the meantime is not overwritten.
+     */
+    async _hydrateGamePick(gameId, modeAtPick) {
+      let full;
+      try {
+        full = await window.api.get(`/games/${gameId}`);
+      } catch (_) {
+        return;
+      }
+      const ps = this._ps;
+      if (!full || full.id !== gameId || !ps || ps.gameId !== gameId) return;
+      ps.gameSnapshot = {
+        ...(ps.gameSnapshot || {}),
+        name: full.name || (ps.gameSnapshot || {}).name,
+        thumbnail_url: full.thumbnail_url || (ps.gameSnapshot || {}).thumbnail_url || null,
+        image_url: full.image_url || null,
+        is_expansion: !!full.is_expansion,
+      };
+      if (full.play_mode && ps.playMode === modeAtPick) ps.playMode = full.play_mode;
+      ps.persist();
+      window.store.set("activePlay", ps);
+      this.render();
+      if (this._guideWidget) this._guideWidget.refresh();
     }
 
     _setDate(value) {
