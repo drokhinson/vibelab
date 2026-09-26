@@ -13575,12 +13575,50 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    outrank the drag transform. Stays off once pulled — see the JS. */
 .play-detail-popup__backdrop.is-pulled .play-detail-popup__card {
   animation: none;
-  transform: translateY(var(--pdp-drag, 0px)) scale(var(--pdp-scale, 1));
+  /* --pdp-dx is the sideways page turn (widgets/play-detail-pager.js),
+     --pdp-drag the pull-to-close; one transform so neither undoes the other. */
+  transform: translate(var(--pdp-dx, 0px), var(--pdp-drag, 0px)) scale(var(--pdp-scale, 1));
   transform-origin: 50% 0;
 }
-/* 240ms: SETTLE_MS in widgets/play-detail-collapse.js. */
+/* 240ms: SETTLE_MS in widgets/play-detail-collapse.js, IN_MS in the pager. */
 .play-detail-popup__backdrop.is-settling .play-detail-popup__card {
   transition: transform 240ms cubic-bezier(.22, .61, .36, 1);
+}
+/* 170ms: OUT_MS in widgets/play-detail-pager.js. */
+.play-detail-popup__backdrop.is-paging-out .play-detail-popup__card {
+  transition: transform 170ms cubic-bezier(.55, 0, .8, .45);
+}
+.play-detail-popup__pager {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.play-detail-popup__page {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--polaroid-ink);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.play-detail-popup__page:active:not(:disabled) { background: rgba(0, 0, 0, 0.08); }
+@media (hover: hover) {
+  .play-detail-popup__page:hover:not(:disabled) { background: rgba(0, 0, 0, 0.08); }
+}
+.play-detail-popup__page:disabled { opacity: 0.3; cursor: default; }
+.play-detail-popup__page-count {
+  min-width: 4.5em;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--polaroid-muted);
 }
 .play-detail-popup__backdrop.is-collapsing .play-detail-popup__card {
   transition: transform 240ms cubic-bezier(.55, 0, .8, .45), opacity 200ms ease-in;
@@ -13620,6 +13658,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .play-detail-popup__backdrop.is-settling .play-detail-popup__card,
+  .play-detail-popup__backdrop.is-paging-out .play-detail-popup__card,
   .play-detail-popup__backdrop.is-collapsing .play-detail-popup__card { transition: none; }
   .play-card__photo.is-receiving { animation: none; }
 }
