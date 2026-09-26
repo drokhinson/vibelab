@@ -330,9 +330,26 @@ async function cacheFirst(req, revalidate) {
     }
     return cached;
   }
-  const res = await fetchWithDeadline(req, RUNTIME_TIMEOUT_MS);
-  if (isCacheable(res)) cache.put(req, res.clone()).catch(() => {});
+  let res = await fetchWithDeadline(req, RUNTIME_TIMEOUT_MS);
+  // index.html under a stylesheet/script/image URL is the _redirects catch-all
+  // answering for a file this edge doesn't have (yet) — see precacheOne. The
+  // page's own HTTP cache may be holding that same answer as immutable
+  // (_headers pins /bgb-* for a year), so ask once more past it before giving up.
+  if (servedHtmlFor(req, res)) {
+    res = await fetchWithDeadline(req, RUNTIME_TIMEOUT_MS, { cache: "reload" });
+  }
+  if (isCacheable(res) && !servedHtmlFor(req, res)) cache.put(req, res.clone()).catch(() => {});
   return res;
+}
+
+/**
+ * True when a subresource request came back as an HTML page. Caching that is
+ * what took the whole stylesheet out on a device: a pinned /bgb-*.css hit is
+ * never revalidated, so the page stayed unstyled until the next deploy.
+ */
+function servedHtmlFor(req, res) {
+  if (!res || !req.destination || req.destination === "document") return false;
+  return (res.headers.get("content-type") || "").includes("text/html");
 }
 
 /**

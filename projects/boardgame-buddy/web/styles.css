@@ -12,6 +12,8 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 :root {
+  /* Read by ui/stylesheet-heal.js: present means this file applied. */
+  --bgb-sheet: 1;
   /* Layout */
   --bgb-nav-height: 64px;
   /* .bgb-global-header's resolved height: 0.5rem padding x2 + a 36px control
