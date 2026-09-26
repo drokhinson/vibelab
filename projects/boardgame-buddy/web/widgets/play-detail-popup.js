@@ -58,6 +58,10 @@
     sequence: [],
   };
 
+  // The page-turn controller for the open backdrop ({ turn, clear }), from
+  // widgets/play-detail-pager.js. Re-made with the backdrop.
+  let _pager = null;
+
   // The card markup currently painted into the backdrop. render() compares
   // against it and returns without touching the DOM when the new markup is
   // byte-identical, which is the common case for a background revalidation:
@@ -124,30 +128,79 @@
   async function show(playId) {
     if (!playId) return;
     dismiss();
+    const Pager = window.PlayDetailPager;
+    const Flight = window.PlayDetailFlight;
     // Read before the backdrop mounts — the list it reads is the one on screen.
-    const sequence = window.PlayDetailPager ? window.PlayDetailPager.sequenceFor(playId) : [playId];
+    const sequence = Pager.sequenceFor(playId);
+    // Every image the set can page to, fetched and decoded now, so a page turn
+    // never slides in a card whose photo is still on its way.
+    Pager.preload(sequence.flatMap((id) => {
+      const seed = window.Play.seeded ? window.Play.seeded(id) : null;
+      return seed ? [seed.photo_url, seed.game_thumbnail] : [];
+    }));
+    // The polaroid this opened from, if it is on screen: the photo grows out of
+    // it (widgets/play-detail-flight.js).
+    const frame = Flight.reducedMotion() ? null : Flight.findLanding(playId);
     mountBackdrop();
+    // The card fades in rather than rising: the flight measures where the
+    // photo will END, and the entrance's translate would move it mid-flight.
+    if (frame && _modal.el) _modal.el.classList.add("is-flying-open");
     state.sequence = sequence;
-    await load(playId);
+    // load() paints from the seed synchronously, before its first await — so
+    // the popup photo exists by the time the flight looks for it.
+    const loading = load(playId);
+    if (frame) flyOpen(frame);
+    await loading;
   }
 
-  // Swap the open popup to another play in its sequence. The modal, its back
-  // guard and its gestures stay; only the play changes — so a page turn is not a
-  // close and a reopen.
-  function goTo(dir) {
-    const i = state.sequence.indexOf(state.playId);
-    const next = state.sequence[i + dir];
+  /**
+   * Grow the popup's photo out of the polaroid it was opened from. Waits a
+   * moment for the photo to be decodable (it usually already is — it is the
+   * same URL the card is showing, and preload() asked for it), and skips the
+   * flight rather than hold the open back for a slow one.
+   * @param {HTMLElement} frame
+   */
+  function flyOpen(frame) {
     const root = _modal.el;
-    if (!next || !root) return;
-    window.PlayDetailPager.slide(root, dir, () => {
-      if (!_modal.el) return;
-      _lastHtml = null;
-      _buddiesFor = null;
-      load(next);
-      const scroller = root.querySelector(".play-detail-popup__scroll");
-      if (scroller) scroller.scrollTop = 0;
-      keepCardInView(next);
+    if (!root) return;
+    const photo = /** @type {HTMLImageElement|null} */ (
+      root.querySelector(".play-detail-popup__photo") || root.querySelector(".play-detail__game-thumb"));
+    if (!photo) return;
+    const ready = photo.complete && photo.naturalWidth
+      ? Promise.resolve(true)
+      : Promise.race([
+          photo.decode ? photo.decode().then(() => true, () => false) : Promise.resolve(false),
+          new Promise((r) => setTimeout(() => r(false), 150)),
+        ]);
+    ready.then((ok) => {
+      if (ok && _modal.el === root && photo.isConnected) window.PlayDetailFlight.flyOut(photo, frame);
     });
+  }
+
+  // Show the neighbouring play in the open popup, called by the pager at the
+  // end of a page turn — the neighbour's copy is already sitting at centre, so
+  // this has to paint the same thing in the same frame. The modal, its back
+  // guard and its gestures stay; only the play changes.
+  function swapTo(id) {
+    const root = _modal.el;
+    if (!root) return;
+    _buddiesFor = null;
+    load(id);
+    const scroller = root.querySelector(".play-detail-popup__scroll");
+    if (scroller) scroller.scrollTop = 0;
+    keepCardInView(id);
+  }
+
+  function neighbour(dir) {
+    const i = state.sequence.indexOf(state.playId);
+    return (i !== -1 && state.sequence[i + dir]) || null;
+  }
+
+  // A neighbour's card exactly as render() would paint it once it is loaded —
+  // what makes the swap at the end of a turn invisible.
+  function peekHtml(id) {
+    const seed = window.Play.seeded ? window.Play.seeded(id) : null;
+    return seed ? renderCardFor(seed, id) : "";
   }
 
   // The page behind is scroll-locked, but not to script: keep the polaroid for
@@ -163,8 +216,7 @@
 
   function canPage(dir) {
     if (state.editing || state.saving || hasStackedOverlay()) return false;
-    const i = state.sequence.indexOf(state.playId);
-    return i !== -1 && !!state.sequence[i + dir];
+    return !!neighbour(dir);
   }
 
   async function load(playId) {
@@ -250,6 +302,7 @@
   }
 
   function resetState() {
+    if (_pager) _pager.clear();
     _lastHtml = null;
     _buddiesFor = null;
     window.PlayDetailEdit.discardDraft();
@@ -284,7 +337,9 @@
           playId: () => state.playId,
           close: dismiss,
         });
-        window.PlayDetailPager.attach(root, { canSwipe: canPage, step: goTo });
+        _pager = window.PlayDetailPager.attach(root, {
+          canSwipe: canPage, neighbour, peekHtml, swap: swapTo,
+        });
       },
     });
   }
@@ -391,14 +446,24 @@
         </div>
       `;
     }
-    const p = state.play;
+    return renderCardFor(state.play, state.playId);
+  }
+
+  /**
+   * The loaded card for a play. A function of the play (plus the edit flag and
+   * the sequence), not of which play is loaded, so the pager can paint a
+   * neighbour's card beside this one with exactly the markup it will get.
+   * @param {any} p
+   * @param {string} id
+   */
+  function renderCardFor(p, id) {
     return `
       <div class="play-detail-popup__card" role="dialog" aria-modal="true" aria-label="Play details">
         <div class="play-detail-popup__topbar">
           <span class="play-detail-popup__grip" aria-hidden="true"></span>
           ${state.editing
             ? `<span></span>`
-            : window.PlayDetailPager.renderNav(state.sequence.indexOf(state.playId), state.sequence.length)}
+            : window.PlayDetailPager.renderNav(state.sequence.indexOf(id), state.sequence.length)}
           <button class="play-detail-popup__close" type="button" aria-label="Close">
             <i data-icon="x" class="w-4 h-4"></i>
           </button>
@@ -634,6 +699,10 @@
 
     return `
       <article class="play-detail">
+        <!-- Photo first, then the game — the polaroid's own order (photo,
+             then caption) and the edit form's. -->
+        ${photoSlot}
+
         ${renderGameBubble(p, { editing: false })}
 
         ${(p.expansions || []).length > 0 ? `
@@ -652,8 +721,6 @@
               `).join("")}
             </ul>
           </section>` : ""}
-
-        ${photoSlot}
 
         ${p.notes ? `
           <section data-morph-key="notes" class="play-detail__section">
@@ -925,7 +992,7 @@
     dismiss,
     // Handlers exposed for inline onclick wiring inside the rendered HTML.
     _openAlias: openAlias,
-    _page: (dir) => { if (canPage(dir)) goTo(dir); },
+    _page: (dir) => { if (_pager && canPage(dir)) _pager.turn(dir); },
     _leavePlay: leavePlay,
   }, window.PlayDetailEdit.handlers);
 })();
