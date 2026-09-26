@@ -302,7 +302,8 @@
   }
 
   function resetState() {
-    if (_pager) _pager.clear();
+    // Every exit: the neighbours fade with the backdrop rather than vanish.
+    if (_pager) _pager.clear({ fade: true });
     _lastHtml = null;
     _buddiesFor = null;
     window.PlayDetailEdit.discardDraft();
@@ -339,6 +340,7 @@
         });
         _pager = window.PlayDetailPager.attach(root, {
           canSwipe: canPage, neighbour, peekHtml, swap: swapTo,
+          current: () => state.playId,
         });
       },
     });
@@ -412,6 +414,9 @@
       window.BgbDomPatch.morph(root, html);
     }
     _lastHtml = html;
+    // The neighbours beside the card follow what it shows: a new play, edit
+    // mode (none), back out of it (back again).
+    if (_pager) _pager.sync();
     // The × needs no listener of its own: the shell's delegated click owns it
     // via closeSelector, and its onClose is this popup's reset.
 
