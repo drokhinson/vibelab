@@ -13571,7 +13571,13 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 @media (hover: none) and (pointer: coarse) {
   .play-detail-popup__grip { display: block; }
 }
-.play-detail-popup__scroll { overscroll-behavior: contain; }
+.play-detail-popup__scroll {
+  overscroll-behavior: contain;
+  /* No browser scroll anchoring: content above the view changing size (the
+     photo arriving, a revalidated row) must not move the card. The popup keeps
+     an untouched card at its top itself (_pinTop in play-detail-popup.js). */
+  overflow-anchor: none;
+}
 /* Doubled up on .polaroid-popup__backdrop so it beats the base backdrop colour
    (overlays.md §3). The dim lifts as the card is pulled away. */
 .polaroid-popup__backdrop.play-detail-popup__backdrop.is-pulled {
@@ -13685,6 +13691,15 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+/* The box art flying between the popup's game thumb and the framed badge the
+   polaroid lays over a user's photo (.play-card__game-overlay). Above the photo
+   flyer; the plate's border and shadow are keyframed on (flight.js BADGE). */
+.pdp-flyer.pdp-flyer--badge {
+  z-index: 102;
+  box-sizing: border-box;
+  border: 0 solid var(--polaroid-bg);
+  background: var(--polaroid-bg);
 }
 /* Must match .play-card__photo::after — the flyer lands wearing it. */
 .pdp-flyer__shade {
