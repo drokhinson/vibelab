@@ -13,6 +13,14 @@
 // already collapsed the two into one screen with a status param
 // (app/src/screens/CollectionScreen.js); this is the web catching up.
 //
+// Typing in the search box widens it to every flat shelf at once — Owned,
+// Wishlist and Played — because "do I have this?" is asked without knowing
+// which shelf the answer is on. The picker stays in its slot but goes inert and
+// reads "All shelves", so the field being typed into never moves; the results
+// come back sectioned by shelf; clearing the box returns to the shelf that was
+// picked, which a search never changes. Expansions is left out and keeps its
+// own tree-scoped search (see below) — a different object, drawn differently.
+//
 // The "+ Add" button in the header opens the Add Games page
 // (views/add-games-view.js) — the whole BgB catalog as one scroll, one tap per
 // row — targeting whichever shelf is on screen.
@@ -69,6 +77,8 @@
   const MODE_WISHLIST = "wishlist";
   const MODE_PLAYED = "played";
   const MODE_EXPANSIONS = "expansions";
+  /** The ShelfController modes, and so the shelves a cross-shelf search spans. */
+  const FLAT_MODES = [MODE_OWNED, MODE_WISHLIST, MODE_PLAYED];
 
   // One table drives the shelf picker, the header count and the count noun, so
   // adding a shelf can't leave a row wired to nothing. An earlier hand-written
@@ -107,7 +117,7 @@
     constructor() {
       super("collection");
       this.ctl = new window.ShelfController({
-        modes: [MODE_OWNED, MODE_WISHLIST, MODE_PLAYED],
+        modes: FLAT_MODES,
         batchSize: batchSize(),
         target: () => this._shelfTarget(),
         otherUserId: () => (this._isOther() ? this._targetUserId : null),
@@ -168,6 +178,33 @@
     _availableModes() {
       const other = this._isOther();
       return MODES.filter((m) => !(m.selfOnly && other));
+    }
+
+    /**
+     * A search on a flat shelf spans all of them. Keyed off the query alone, so
+     * clearing the box is the whole way back to the picked shelf.
+     */
+    _isGlobalSearch() {
+      return !!this.ctl.query && this._mode !== MODE_EXPANSIONS;
+    }
+
+    /** The flat shelves this viewer may search — no wishlist on someone else's. */
+    _searchModes() {
+      return this._availableModes().map((m) => m.id).filter((id) => FLAT_MODES.includes(id));
+    }
+
+    /** What a search or filter change applies to, in the controller's terms. */
+    _activeModes() {
+      return this._isGlobalSearch() ? this._searchModes() : this._mode;
+    }
+
+    /**
+     * The one shelf a cross-shelf search is still revealing: the first with a
+     * batch left behind it. Sections unroll in order, so the next shelf only
+     * appears once this one is spent and no row lands above the reader.
+     */
+    _searchFrontier() {
+      return this._searchModes().find((m) => this.ctl.hasMore(m)) || null;
     }
 
     _modeDef(mode) {
@@ -438,13 +475,17 @@
         this._isOther() ? "other" : "self",
         (this._targetProfile && this._targetProfile.display_name) || "",
         this._mode === MODE_EXPANSIONS ? treeState : (this.ctl.isColdLoad(this._mode) ? "cold" : "warm"),
+        // Starting or clearing a search swaps the picker for its inert
+        // "All shelves" twin — same slot, so the field under the thumb holds.
+        this._isGlobalSearch() ? "all" : "",
       ].join("|");
     }
 
     render() {
       // "expansions" is not one of the controller's modes — deriving it would
       // write junk items/total/page keys onto it under that name.
-      if (this._mode !== MODE_EXPANSIONS) this.ctl.derive(this._mode);
+      if (this._isGlobalSearch()) this._searchModes().forEach((m) => this.ctl.derive(m));
+      else if (this._mode !== MODE_EXPANSIONS) this.ctl.derive(this._mode);
       const sig = this._structuralSig();
       if (sig !== this._lastSig || !this.container.querySelector("#collection-grid-host")) {
         this._renderShell();
@@ -565,6 +606,16 @@
      * what the shelf is worth.
      */
     _countLabel(mode, { rows = false } = {}) {
+      if (this._isGlobalSearch() && mode === this._mode) {
+        // A result count, not a shelf's worth: every matching tile counts,
+        // prev-owned ones included, so the header is the sum of the section
+        // counts under it.
+        let n = 0;
+        for (const m of this._searchModes()) {
+          n += rows ? (this.ctl.items[m] || []).length : (this.ctl.total[m] || 0);
+        }
+        return `${n} game${n === 1 ? "" : "s"}`;
+      }
       const entry = MODES.find((m) => m.id === mode);
       const noun = (entry && entry.noun) || "game";
       const parted = mode === MODE_EXPANSIONS ? 0 : (this.ctl.parted[mode] || 0);
@@ -679,18 +730,14 @@
 
     /** Names the shelf being searched, so the field can't read as global. */
     _searchPlaceholder() {
+      if (this._mode === MODE_EXPANSIONS) return "Search expansions by name";
       if (this._isOther()) {
         const who = this._targetProfile && this._targetProfile.display_name;
         // The name arrives on a later frame than the first paint, so the
         // possessive has to have a form that reads without it.
-        return who ? `Search ${who}'s shelf by name` : "Search this shelf by name";
+        return who ? `Search ${who}'s shelves by name` : "Search these shelves by name";
       }
-      switch (this._mode) {
-        case MODE_WISHLIST:   return "Search your wishlist by name";
-        case MODE_PLAYED:     return "Search played games by name";
-        case MODE_EXPANSIONS: return "Search expansions by name";
-        default:              return "Search your collection by name";
-      }
+      return "Search all shelves by name";
     }
 
     /**
@@ -700,6 +747,19 @@
      * next to the shelves they belong to.
      */
     _renderShelfPicker() {
+      if (this._isGlobalSearch()) {
+        // Nothing to choose while the search spans every shelf, so it is
+        // disabled — but still a <button>: a <div> in the slot picks up the
+        // body's font metrics, stands 18px taller and shoves the field being
+        // typed into down the screen. The picked shelf comes back on clear.
+        return `
+          <button type="button" class="shelf-picker is-all" id="collection-shelf-picker" disabled
+                  aria-label="Searching all shelves">
+            <i data-icon="library-big" class="w-5 h-5 shelf-picker__icon"></i>
+            <span class="shelf-picker__label font-display">All shelves</span>
+          </button>
+        `;
+      }
       const def = this._modeDef(this._mode);
       return `
         <button type="button" class="shelf-picker" id="collection-shelf-picker"
@@ -777,6 +837,7 @@
     _renderBody() {
       const mode = this._mode;
       if (mode === MODE_EXPANSIONS) return this._renderTreeBody();
+      if (this._isGlobalSearch()) return this._renderSearchBody();
       if (this.ctl.error[mode]) {
         return `<div class="alert alert-error text-sm">${escapeHtml(this.ctl.error[mode])}</div>`;
       }
@@ -807,6 +868,50 @@
           ${items.map((it) => this._renderTile(it)).join("")}
         </div>
       `;
+    }
+
+    /**
+     * A cross-shelf search: one section per shelf with matches, in picker
+     * order, revealed up to the frontier (see _searchFrontier).
+     */
+    _renderSearchBody() {
+      const sections = [];
+      let pending = false;
+      for (const m of this._searchModes()) {
+        const items = this.ctl.items[m] || [];
+        const err = this.ctl.error[m];
+        if (this.ctl.isPending(m) && !items.length) pending = true;
+        if (items.length || err) {
+          const def = this._modeDef(m);
+          const count = this.ctl.total[m] || items.length; // matches, as the header counts them
+          const reloading = this.ctl.loading[m] ? " is-reloading" : "";
+          sections.push(`
+            <section class="collection-search__group">
+              <h3 class="collection-search__sec font-display">
+                <i data-icon="${escapeAttr(def.icon)}" class="w-4 h-4"></i>
+                <span>${escapeHtml(def.label)}</span>
+                ${items.length ? `<span class="collection-search__count">${count}</span>` : ""}
+              </h3>
+              ${err
+                ? `<p class="collection-search__err">${escapeHtml(err)}</p>`
+                : `<div class="profile-collection-grid${reloading}">${items.map((it) => this._renderTile(it)).join("")}</div>`}
+            </section>
+          `);
+        }
+        if (this.ctl.hasMore(m)) break;
+      }
+      if (sections.length) {
+        // A shelf still loading below the matches found so far says so, rather
+        // than the list reading as complete and then growing a section.
+        const tail = pending && !this._searchFrontier()
+          ? `<div class="profile-loading">${window.buddyLoader({ size: 56, label: "Checking the other shelves…" })}</div>`
+          : "";
+        return sections.join("") + tail;
+      }
+      if (pending) {
+        return `<div class="profile-loading">${window.buddyLoader({ size: 88, label: "Searching your shelves…" })}</div>`;
+      }
+      return `<div class="profile-empty">No matches on any shelf.</div>`;
     }
 
     _renderTile(item) {
@@ -1298,13 +1403,18 @@
       // The tree renders every group it has, so it has no window to grow and
       // must not carry a sentinel — the controller doesn't track "expansions"
       // as a mode, and asking it for one writes junk keys under that name.
-      const mode = this._mode;
-      if (mode === MODE_EXPANSIONS) return "";
-      if (this.ctl.error[mode]) return "";
-      const shown = (this.ctl.items[mode] || []).length;
+      if (this._mode === MODE_EXPANSIONS) return "";
+      const global = this._isGlobalSearch();
+      // Mid-search the strip belongs to the shelf still unrolling; with none
+      // left it is the end-of-list line for the whole result set.
+      const mode = global ? (this._searchFrontier() || this._mode) : this._mode;
+      if (!global && this.ctl.error[mode]) return "";
+      const shown = global
+        ? this._searchModes().reduce((n, m) => n + (this.ctl.items[m] || []).length, 0)
+        : (this.ctl.items[mode] || []).length;
       return window.InfiniteScroll.renderFooter({
         id: "collection-scroll-sentinel",
-        hasMore: this.ctl.hasMore(mode),
+        hasMore: global ? !!this._searchFrontier() : this.ctl.hasMore(mode),
         loading: this.ctl.loadingMore[mode],
         error: this.ctl.moreError[mode],
         onRetry: "window.collectionView._retryMore()",
@@ -1364,10 +1474,19 @@
       if (this._targetUserId) params.userId = this._targetUserId;
       window.router.replaceUrl("collection", params);
     }
-    _onSearchInput(value) { this.ctl.onSearchInput(value, this._mode); }
-    _setFilter(key, value) { this.ctl.setFilter(key, value, this._mode); }
-    _clearFilters() { this.ctl.clearFilters(this._mode); }
-    _setPlaytimeBucket(id) { this.ctl.setPlaytimeBucket(id, this._mode); }
+    _onSearchInput(value) {
+      this.ctl.onSearchInput(value, this._activeModes());
+      // Wishlist and Played are lazy, so a search can be the first thing to
+      // need them. The in-flight shelves show as a loader under the matches.
+      if (this._isGlobalSearch()) {
+        for (const m of this._searchModes()) {
+          if (!this.ctl.shelf[m] && !this.ctl.loading[m]) this.ctl.load(m);
+        }
+      }
+    }
+    _setFilter(key, value) { this.ctl.setFilter(key, value, this._activeModes()); }
+    _clearFilters() { this.ctl.clearFilters(this._activeModes()); }
+    _setPlaytimeBucket(id) { this.ctl.setPlaytimeBucket(id, this._activeModes()); }
     _toggleFilters() {
       this._filtersOpen = !this._filtersOpen;
       this._paintFilters();
@@ -1376,13 +1495,15 @@
       // Zero network on the local path: widen the window, then rewrite just
       // the grid and the strip under it. The server fallback returns false and
       // repaints through the controller's onChange when its batch lands.
-      if (this.ctl.loadMore(this._mode)) this._paintList();
+      const mode = this._isGlobalSearch() ? this._searchFrontier() : this._mode;
+      if (mode && this.ctl.loadMore(mode)) this._paintList();
     }
 
     _retryMore() {
       // Repaint either way: a local retry has already widened the window, and
       // a server retry needs the strip to swap the error out for the spinner.
-      this.ctl.retryMore(this._mode);
+      const mode = this._isGlobalSearch() ? this._searchFrontier() : this._mode;
+      if (mode) this.ctl.retryMore(mode);
       this._paintList();
     }
   }
