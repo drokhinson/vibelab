@@ -501,8 +501,8 @@
     return roster ? `${col.label}: ${roster}` : col.label;
   }
 
-  // The same thing, drawn: the side's tag on its own line, underlined, with
-  // the roster under it —
+  // The same thing, drawn: a custom side's tag on its own line, underlined,
+  // with the roster under it —
   //
   //     Red
   //     Ana, Bo
@@ -521,6 +521,13 @@
     if (!col.merged) return escapeHtml(shownName(col.players[0]));
     const roster = col.players.map(shownName).filter(Boolean).join(TEAM_NAME_DELIM);
     if (!roster) return escapeHtml(col.label);
+    // A side picked from the colour circles IS its tint — printing "Blue" over
+    // a blue column says the same thing twice and costs the roster a line. Only
+    // a custom name carries information the tint cannot. columnLabel keeps the
+    // word, so the tooltip and the accessible name still say "Blue: Ana, Bo".
+    if (window.BgbTeams && window.BgbTeams.colorOf(col.label)) {
+      return `<span class="scoring-head__roster">${escapeHtml(roster)}</span>`;
+    }
     return `<span class="scoring-head__team">${escapeHtml(col.label)}</span>`
          + `<span class="scoring-head__roster">${escapeHtml(roster)}</span>`;
   }

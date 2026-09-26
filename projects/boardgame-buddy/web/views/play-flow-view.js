@@ -163,6 +163,10 @@
       this._teamsTimer = null;
       this._teamsPromise = null;
       this._teamsDirty = false;
+      // Which seat's team picker is open on Gather, and whether it is in its
+      // custom-name state. Seat objects, not indexes — see _toggleTeamPicker.
+      this._teamPickerSeat = null;
+      this._teamCustomSeat = null;
       // Monotonic token for phase-change PATCHes. After a call's PATCH
       // resolves it only reconciles state if it is still the latest — a
       // stale earlier PATCH resolving after a newer navigation must not yank
@@ -509,6 +513,8 @@
       if (this._teamsTimer) { clearTimeout(this._teamsTimer); this._teamsTimer = null; }
       this._teamsPromise = null;
       this._teamsDirty = false;
+      this._teamPickerSeat = null;
+      this._teamCustomSeat = null;
       this._saving = false;
       this._error = null;
     }
@@ -1919,19 +1925,128 @@
                  placeholder="${escapeAttr(computeInitials(shown))}"
                  value="${escapeAttr(initials)}"
                  oninput="window.playFlowView._setInitials(${i}, this.value)" />
-          ${isTeamGame ? `
-            <input class="cascade-player__team" type="text" maxlength="6"
-                   aria-label="Team"
-                   placeholder="Team"
-                   value="${escapeAttr(p.team || "")}"
-                   oninput="window.playFlowView._setTeam(${i}, this.value)" />
-          ` : ""}
+          ${isTeamGame ? this._renderTeamChip(p, i, shown) : ""}
           <button class="btn btn-ghost btn-xs" title="Remove player"
                   onclick="window.playFlowView._removePlayer(${i})">
             <i data-icon="x" class="w-3.5 h-3.5"></i>
           </button>
+          ${isTeamGame && this._teamPickerSeat === p ? this._renderTeamStrip(p, i, shown) : ""}
         </li>
       `;
+    }
+
+    /**
+     * The seat's team, collapsed: a filled disc for a colour side, a dashed
+     * ring for no side, a small name pill for a custom side. Same disc drawing
+     * as the scoring-template row colour chip, so the two pickers read as one
+     * control. The colour comes from BgbTeams.indexMap over the whole roster —
+     * a custom side's tint depends on which colours the OTHER sides took.
+     */
+    _renderTeamChip(p, i, shown) {
+      return `
+        <button type="button" id="team-chip-${i}"
+                class="team-chip${this._teamPickerSeat === p ? " team-chip--open" : ""}"
+                aria-expanded="${this._teamPickerSeat === p ? "true" : "false"}"
+                aria-controls="team-strip-${i}"
+                onclick="window.playFlowView._toggleTeamPicker(${i})">${this._teamChipFace(p, shown)}</button>
+      `;
+    }
+
+    _teamChipFace(p, shown) {
+      const T = window.BgbTeams;
+      const key = T.keyOf(p.team);
+      const label = `${shown}'s team: ${key ? String(p.team).trim() : "none"}. Change team`;
+      const a11y = `<span class="bgb-vis-hidden">${escapeHtml(label)}</span>`;
+      if (!key) return `<span class="team-chip__disc team-chip__disc--none" aria-hidden="true"></span>${a11y}`;
+      const slot = (T.indexMap(this._ps.players) || new Map()).get(key) || 1;
+      if (T.colorOf(p.team)) {
+        return `<span class="team-chip__disc" style="--sw: var(--team-${slot})" aria-hidden="true"></span>${a11y}`;
+      }
+      return `<span class="team-chip__pill" style="--sw: var(--team-${slot})" aria-hidden="true">`
+           + `<span class="team-chip__dot"></span>${escapeHtml(String(p.team).trim())}</span>${a11y}`;
+    }
+
+    /**
+     * The open picker under a seat: No team, the six colour circles, and Aa
+     * for a custom name. A radiogroup of plain buttons rather than a sheet,
+     * because it is the same inline disclosure the scoring-template editor
+     * uses for its row colours and the user asked for the two to match.
+     * Picking a circle stores its WORD ("Blue") through _setTeam, so the win
+     * flags, score adoption and lobby push all run exactly as a typed tag did.
+     */
+    _renderTeamStrip(p, i, shown) {
+      const T = window.BgbTeams;
+      const key = T.keyOf(p.team);
+      const color = T.colorOf(p.team);
+      const custom = this._teamCustomSeat === p || (key && !color);
+      const sw = (on, cls, style, label, handler) => `
+        <button type="button" role="radio" aria-checked="${on ? "true" : "false"}"
+                class="team-sw${cls}${on ? " team-sw--on" : ""}" ${style}
+                aria-label="${escapeAttr(label)}" title="${escapeAttr(label)}"
+                onclick="${handler}"></button>`;
+      return `
+        <div class="team-strip" id="team-strip-${i}" role="radiogroup"
+             aria-label="${escapeAttr(shown + "'s team")}">
+          ${sw(!key && !custom, " team-sw--none", "", "No team",
+               `window.playFlowView._pickTeam(${i}, '')`)}
+          ${T.TEAM_COLORS.map((c) => sw(!!(color && color.id === c.id), "",
+               `style="--sw: var(--team-${c.slot})"`, c.label,
+               `window.playFlowView._pickTeam(${i}, '${c.label}')`)).join("")}
+          ${sw(custom, " team-sw--aa", "", "Custom name",
+               `window.playFlowView._startCustomTeam(${i})`)}
+          ${custom ? `
+            <input class="team-strip__custom" id="team-custom-${i}" type="text"
+                   maxlength="6" placeholder="Team name" autocomplete="off"
+                   aria-label="${escapeAttr(shown + "'s team name")}"
+                   value="${escapeAttr(color ? "" : (p.team || ""))}"
+                   oninput="window.playFlowView._typeTeam(${i}, this.value)" />
+          ` : ""}
+        </div>
+      `;
+    }
+
+    // The open picker is keyed by the SEAT OBJECT, not its index: a drag or a
+    // remove moves indexes under it, and the picker has to stay on the person
+    // it was opened for (or vanish with them).
+    _toggleTeamPicker(i) {
+      const p = this._ps.players[i];
+      if (!p) return;
+      this._teamPickerSeat = this._teamPickerSeat === p ? null : p;
+      this._teamCustomSeat = null;
+      this._refreshPlayersList();
+    }
+
+    _pickTeam(i, label) {
+      if (!this._ps.players[i]) return;
+      this._teamPickerSeat = null;
+      this._teamCustomSeat = null;
+      this._setTeam(i, label);
+      this._refreshPlayersList();
+      const chip = this.container.querySelector(`#team-chip-${i}`);
+      if (chip) chip.focus();
+    }
+
+    // Aa was tapped: that IS the opt-in to typing, so the field takes focus.
+    // A seat on a colour side leaves it — the custom name replaces the colour.
+    _startCustomTeam(i) {
+      const p = this._ps.players[i];
+      if (!p) return;
+      this._teamCustomSeat = p;
+      if (window.BgbTeams.colorOf(p.team)) this._setTeam(i, "");
+      this._refreshPlayersList();
+      const field = this.container.querySelector(`#team-custom-${i}`);
+      if (field) field.focus();
+    }
+
+    // Typing a custom name patches only the chip beside it. Repainting the
+    // row would take the field out from under the keystroke.
+    _typeTeam(i, value) {
+      this._setTeam(i, value);
+      const p = this._ps.players[i];
+      const chip = this.container.querySelector(`#team-chip-${i}`);
+      if (p && chip) {
+        chip.innerHTML = this._teamChipFace(p, window.Buddy.nameFor(p.user_id, p.name));
+      }
     }
 
     // ── Play screen ─────────────────────────────────────────────────────────

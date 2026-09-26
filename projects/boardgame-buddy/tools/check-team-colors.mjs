@@ -66,7 +66,7 @@ console.log("\nthe tag folds exactly the way applyTeamTag folds it:");
     seat("Bo", { team: " red " }),
     seat("Cy", { team: "RED" }),
   ];
-  eq("three spellings, one slot", [...T.indexMap(players).values()], [1]);
+  eq("three spellings, one slot", [...T.indexMap(players).values()], [5]);
   // applyTeamTag's own comparison, on the same input: tagging Bo into Ana's
   // side must find Ana, which is the behaviour keyOf has to mirror.
   const draft = [
@@ -77,10 +77,33 @@ console.log("\nthe tag folds exactly the way applyTeamTag folds it:");
      win.PlaySession.applyTeamTag(draft, 1, " RED ") === true && draft[1].is_winner);
 }
 
-console.log("\nthe winning side is slot 1:");
+console.log("\na colour tag always paints its own colour:");
 {
-  // bands() takes an already-RANKED roster and never sorts, so "order of first
-  // appearance" is "sides ordered by their best seat" for free.
+  const slotOf = (tag) => T.indexMap([seat("Ana", { team: tag })]).get(T.keyOf(tag));
+  eq("each circle maps to its token", T.TEAM_COLORS.map((c) => slotOf(c.label)),
+     [5, 2, 3, 1, 4, 6]);
+  eq("old spellings land on the colour they name",
+     ["grey", "Violet", "crimson", "slate"].map(slotOf), [6, 4, 5, 6]);
+  ok("a custom name is not a colour", T.colorOf("Owls") === null);
+  eq("colorOf folds like keyOf", T.colorOf(" BLUE ").label, "Blue");
+}
+
+console.log("\na custom side takes the lowest slot no colour is using:");
+{
+  const map = T.indexMap([
+    seat("Ana", { team: "Owls" }),     // first, but Blue owns slot 1
+    seat("Bo", { team: "Blue" }),
+    seat("Cy", { team: "Orange" }),
+    seat("Di", { team: "Cats" }),
+  ]);
+  eq("pinned colours first, customs fill the gaps",
+     [...map.entries()], [["owls", 3], ["blue", 1], ["orange", 2], ["cats", 4]]);
+}
+
+console.log("\nthe winning side leads the bands, whatever its colour:");
+{
+  // bands() takes an already-RANKED roster and keeps first appearance, so the
+  // bands read best side first even though Red's slot is 5 and Blue's is 1.
   const ranked = win.Play.rankPlayers([
     seat("Cy", { team: "Blue", score: 300 }),
     seat("Ana", { team: "Red", score: 640, is_winner: true }),
@@ -88,8 +111,8 @@ console.log("\nthe winning side is slot 1:");
     seat("Bo", { team: "Red", score: 640, is_winner: true }),
   ]);
   const bands = T.bands(ranked);
-  eq("two sides, winners first", bands.map((b) => [b.label, b.index]),
-     [["Red", 1], ["Blue", 2]]);
+  eq("two sides, winners first", bands.map((b) => [b.label, b.index, b.isColor]),
+     [["Red", 5, true], ["Blue", 1, true]]);
   eq("seats keep their ranked order inside a band",
      bands[0].players.map((p) => p.name), ["Ana", "Bo"]);
 }
@@ -113,7 +136,7 @@ console.log("\nuntagged seats trail, bare:");
   ok("...and carries no label to print", bands[1].label === "");
 }
 
-console.log("\na seventh side wraps rather than losing its colour:");
+console.log("\na seventh custom side wraps rather than losing its colour:");
 {
   const players = "abcdefg".split("").map((t, i) => seat(`P${i}`, { team: t }));
   const slots = [...T.indexMap(players).values()];

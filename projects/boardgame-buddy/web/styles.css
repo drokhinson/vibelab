@@ -9970,13 +9970,16 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
    on opposite edges (--row-* on the left, teams on the bottom). Nobody is ever
    asked whether a column matches a row, so separating the palettes further
    would cost real hue distance inside each set to buy nothing. */
+/* The Gather picker shows these six as circles and stores their NAME on the
+   seat; ui/team-colors.js (TEAM_COLORS) maps each name to its slot, so the
+   comment after each value is also the word a user picked. */
 :root {
-  --team-1: #2F6FA8;   /* blue    */
-  --team-2: #C2562A;   /* orange  */
-  --team-3: #2E7D5B;   /* green   */
-  --team-4: #8A4A9C;   /* violet  */
-  --team-5: #9E2B3F;   /* crimson */
-  --team-6: #5A6370;   /* slate   */
+  --team-1: #2F6FA8;   /* Blue   */
+  --team-2: #C2562A;   /* Orange */
+  --team-3: #2E7D5B;   /* Green  */
+  --team-4: #8A4A9C;   /* Purple */
+  --team-5: #9E2B3F;   /* Red    */
+  --team-6: #5A6370;   /* Gray   */
 }
 /* The slug arrives from a database column, so the set is open and an unknown
    name has to render as something rather than as nothing (web-frontend.md, the
@@ -11552,8 +11555,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   border: 1px solid var(--polaroid-line);
   border-radius: 8px;
 }
-/* Team mode adds a team field — sixth column. */
-.cascade-player:has(.cascade-player__team) { grid-template-columns: auto auto 1fr 56px 64px auto; }
+/* Team mode adds a team chip — sixth column. */
+.cascade-player:has(.team-chip) { grid-template-columns: auto auto 1fr 56px 64px auto; }
 .cascade-player--read {
   display: flex;
   align-items: center;
@@ -11578,8 +11581,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cascade-player__init,
-.cascade-player__team {
+.cascade-player__init {
   background: var(--polaroid-bg);
   border: 1px solid var(--polaroid-line);
   border-radius: 5px;
@@ -11589,7 +11591,148 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-align: center;
   color: var(--polaroid-ink);
 }
-.cascade-player__team { width: 64px; }
+
+/* ── Team picker on a Gather row ──────────────────────────────────────────
+   The collapsed chip and the open strip of circles. Drawn like the scoring-
+   template row colour picker (.tmpl-row__chip / .tmpl-sw) so the two read as
+   one control, but in the ROW's surface tokens (--polaroid-*) rather than the
+   ground's oklch(--bc): the Gather card is re-pointed chrome, and these sit
+   beside .cascade-player__init, which reads the same family.
+
+   The discs are --team-N, the same tokens the scoring grid tints with, so the
+   circle a host taps is the colour the column comes out. */
+.team-chip {
+  position: relative;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  max-width: 64px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--polaroid-ink);
+  cursor: pointer;
+}
+/* 44px hit area on a 30px control (mobile-web.md §5). */
+.team-chip::before { content: ""; position: absolute; inset: -7px -2px; }
+.team-chip__disc {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--sw, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--polaroid-ink) 22%, transparent);
+}
+.team-chip__disc--none {
+  background: transparent;
+  box-shadow: none;
+  border: 1.5px dashed color-mix(in srgb, var(--polaroid-ink) 45%, transparent);
+}
+/* A custom side: its name, on a wash of the tint it was handed. Ink is the
+   row's own, which clears 11.9:1 over a 16% --team-* wash on either paper
+   (see the --team-* token block). */
+.team-chip__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 64px;
+  padding: 3px 7px 3px 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sw) 16%, var(--polaroid-bg));
+  box-shadow: inset 0 0 0 1.5px var(--sw);
+  font-family: var(--font-score);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.team-chip__dot { flex: none; width: 9px; height: 9px; border-radius: 999px; background: var(--sw); }
+/* Open reads as pressed, so the strip below is visibly this chip's. */
+.team-chip--open .team-chip__disc,
+.team-chip--open .team-chip__pill {
+  outline: 2px solid color-mix(in srgb, var(--polaroid-ink) 75%, transparent);
+  outline-offset: 2px;
+}
+.team-chip:active .team-chip__disc,
+.team-chip:active .team-chip__pill { transform: scale(0.92); }
+.team-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 999px; }
+
+/* Eight circles do not fit one line of a 390px row at 44px each with the 8px
+   clear space mobile-web.md §5 asks for, so the strip is 4x2 on a phone —
+   the same call the template picker made with its 5x2 — and one line on
+   every wider tier. The CELL is the target, as in .tmpl-sw. */
+.team-strip {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px 8px;
+  justify-items: center;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--polaroid-line);
+}
+/* Every tier past the phone column fits the full line (a landscape phone is
+   wide too), keyed on the layout lever rather than a bare media query. */
+:root[data-bgb-layout]:not([data-bgb-layout="phone"]) .team-strip {
+  grid-template-columns: repeat(8, 1fr);
+}
+.team-sw {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--polaroid-ink);
+  cursor: pointer;
+}
+.team-sw::before {
+  content: "";
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--sw, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--polaroid-ink) 22%, transparent);
+}
+.team-sw--none::before {
+  background: transparent;
+  box-shadow: none;
+  border: 1.5px dashed color-mix(in srgb, var(--polaroid-ink) 45%, transparent);
+  box-sizing: border-box;
+}
+.team-sw--aa::before {
+  content: "Aa";
+  display: grid;
+  place-items: center;
+  background: var(--polaroid-bg);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--polaroid-ink) 38%, transparent);
+  font-size: 11px;
+  font-weight: 700;
+}
+/* Picked: a 2px gap in the row's own colour, then an ink ring. */
+.team-sw--on::before {
+  outline: 2px solid color-mix(in srgb, var(--polaroid-ink) 75%, transparent);
+  outline-offset: 2px;
+}
+.team-sw:active::before { transform: scale(0.92); }
+.team-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 12px; }
+.team-strip__custom {
+  grid-column: 1 / -1;
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  background: var(--polaroid-bg);
+  border: 1px solid var(--polaroid-line);
+  border-radius: 6px;
+  color: var(--polaroid-ink);
+  font-family: var(--font-score);
+  /* 16px: iOS zooms the page on focus into anything smaller (mobile-web.md §2). */
+  font-size: 16px;
+}
+.team-strip__custom:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* Drag handle on the host's Gather rows — see widgets/player-reorder.js.
    touch-action: none is load-bearing: without it the browser claims the
