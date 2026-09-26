@@ -2991,8 +2991,12 @@
       // and brings the chooser back. The search sheet unmounts its finder on
       // close, and unmount() invalidates any in-flight search, so a late
       // response can't sneak in behind a pick.
+      // Start the fetch before the paint: the loader marks the request in
+      // flight synchronously, which is what puts the header spinner on this
+      // first frame rather than leaving the card looking settled.
+      const expansionsPromise = this._loadExpansionsIfNeeded();
       this.render();
-      this._loadExpansionsIfNeeded().then(() => {
+      expansionsPromise.then(() => {
         this.render();
         if (this._guideWidget) this._guideWidget.refresh();
       });
@@ -4474,7 +4478,8 @@
       // real matches, but not yet the final word. Same treatment the game
       // finder's dropdown uses for the same situation.
       // snap is non-null past the disabled branch above, so gameId is too.
-      const refreshing = list.length > 0 && this._expansionsInflightFor === this._ps.gameId;
+      const loading = this._expansionsInflightFor === this._ps.gameId;
+      const refreshing = list.length > 0 && loading;
       return `
         <section class="cascade-card cascade-card--expansions">
           <button class="collapsible-header" aria-expanded="${open}"
@@ -4483,6 +4488,7 @@
             <span class="collapsible-header__title">
               <i data-icon="puzzle" class="w-4 h-4"></i>
               <span class="cascade-exp-title">${this._expansionsHeaderLabel()}</span>
+              ${loading ? `<span class="game-finder-spinner" role="status" aria-label="Loading expansions"></span>` : ""}
             </span>
             <i data-icon="${chevron}" class="w-4 h-4 collapsible-header__chev"></i>
           </button>
