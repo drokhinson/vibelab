@@ -643,6 +643,17 @@ body {
   background: oklch(var(--b1));
 }
 
+/* The overlay scroll lock, made to actually lock. Every overlay in the app
+   (ui/modal-shell.js, ui/bottom-sheet.js, ui/polaroid-popup.js, the install and
+   push prompts, onboarding) locks the page by setting `overflow: hidden` on
+   <body>. That only reaches the viewport when <html>'s own overflow is
+   `visible` — and <html> above sets overflow-x: hidden, so <body>'s value stays
+   on <body>, which never scrolls, and the feed kept scrolling behind every open
+   card. Keyed off the same inline style the shells already write, so every one
+   of them — and each one's save/restore of the previous value — is fixed in
+   one place without touching them. */
+html:has(> body[style*="overflow: hidden"]) { overflow: hidden; }
+
 /* ── The hiding contract ──────────────────────────────────────────────────────
    Tailwind's `.hidden` is specificity 0,1,0, and this file is the LAST
    stylesheet in the document (index.html:44, after the DaisyUI/Tailwind pair at
@@ -13532,6 +13543,71 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   overflow-y: auto;
   padding: 0 14px 16px;
   -webkit-overflow-scrolling: touch;
+}
+/* Pull down to close (widgets/play-detail-collapse.js). The drag offset lives
+   on the backdrop as custom properties because the card itself is rewritten by
+   BgbDomPatch on every repaint; see that file's header. */
+.play-detail-popup__topbar { position: relative; }
+.play-detail-popup__grip {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 40px;
+  height: 4px;
+  margin-left: -20px;
+  border-radius: 4px;
+  background: var(--polaroid-line);
+  display: none;
+}
+/* Only where the gesture exists — a grip nothing drags is a lie on desktop. */
+@media (hover: none) and (pointer: coarse) {
+  .play-detail-popup__grip { display: block; }
+}
+.play-detail-popup__scroll { overscroll-behavior: contain; }
+/* Doubled up on .polaroid-popup__backdrop so it beats the base backdrop colour
+   (overlays.md §3). The dim lifts as the card is pulled away. */
+.polaroid-popup__backdrop.play-detail-popup__backdrop.is-pulled {
+  background: rgba(15, 12, 10, calc(0.55 - 0.35 * var(--pdp-pull, 0)));
+}
+/* `animation: none` because polaroidPopupIn's `both` fill would otherwise
+   outrank the drag transform. Stays off once pulled — see the JS. */
+.play-detail-popup__backdrop.is-pulled .play-detail-popup__card {
+  animation: none;
+  transform: translateY(var(--pdp-drag, 0px)) scale(var(--pdp-scale, 1));
+  transform-origin: 50% 0;
+}
+/* 240ms: SETTLE_MS in widgets/play-detail-collapse.js. */
+.play-detail-popup__backdrop.is-settling .play-detail-popup__card {
+  transition: transform 240ms cubic-bezier(.22, .61, .36, 1);
+}
+.play-detail-popup__backdrop.is-collapsing .play-detail-popup__card {
+  transition: transform 240ms cubic-bezier(.55, 0, .8, .45), opacity 200ms ease-in;
+  opacity: 0;
+}
+/* The photo in flight from the popup back to its polaroid. Above the backdrop
+   (z-index 100), which is fading out underneath it. */
+.pdp-flyer {
+  position: fixed;
+  z-index: 101;
+  margin: 0;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  will-change: left, top, width, height, transform;
+}
+/* The polaroid catching it. On the frame, not the article, which carries its
+   own tilt transform. */
+.play-card__photo.is-receiving { animation: pdpReceive 340ms cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes pdpReceive {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .play-detail-popup__backdrop.is-settling .play-detail-popup__card,
+  .play-detail-popup__backdrop.is-collapsing .play-detail-popup__card { transition: none; }
+  .play-card__photo.is-receiving { animation: none; }
 }
 .play-detail-popup__scroll .play-detail {
   /* The shared .play-detail layout assumes a full-page container with
