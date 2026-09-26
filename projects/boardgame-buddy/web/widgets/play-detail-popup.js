@@ -157,7 +157,8 @@
     const esc = window.CSS && CSS.escape ? CSS.escape(playId) : playId;
     const card = Array.from(document.querySelectorAll(`article.play-card[data-play-id="${esc}"]`))
       .find((el) => el.getClientRects().length > 0);
-    if (card) card.scrollIntoView({ block: "center", behavior: "instant" });
+    // inline "start": where the feed rail's mandatory snap would put it anyway.
+    if (card) card.scrollIntoView({ block: "center", inline: "start", behavior: "instant" });
   }
 
   function canPage(dir) {
