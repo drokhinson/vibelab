@@ -14524,6 +14524,35 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   text-overflow: ellipsis;
 }
 .shelf-picker__chev { color: var(--accent-ink); flex: none; display: grid; place-items: center; }
+/* A search spans every shelf, so the picker keeps its slot (the field below it
+   must not move under the thumb) but has nothing to offer: no press, no hover,
+   no chevron — it is a label until the box is cleared. */
+.shelf-picker.is-all { cursor: default; }
+.shelf-picker.is-all:active { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+@media (hover: hover) {
+  .shelf-picker.is-all:hover { border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+}
+
+/* Cross-shelf search results: one group per shelf, headed by its name and
+   match count. Chrome-surface tokens, like the rest of the spoke. */
+.collection-search__group + .collection-search__group { margin-top: 1rem; }
+.collection-search__sec {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--sheet-ink);
+}
+.collection-search__sec svg { color: var(--accent-ink); }
+.collection-search__count {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--sheet-ink-muted);
+}
+.collection-search__err { font-size: 0.85rem; color: var(--rust); margin: 0 0 0.5rem; }
 
 /* ── Add Games: collection ↔ wishlist target toggle ─────────────────────── */
 .spoke-toggle {

@@ -389,14 +389,20 @@
       }
     }
 
-    /** Search/filter change: back to the first batch on every shelf, then re-derive. */
-    applyQueryChange(activeMode) {
+    /**
+     * Search/filter change: back to the first batch on every shelf, then
+     * re-derive. `active` is the shelf on screen, or every shelf a cross-shelf
+     * search is drawing from — each truncated one among them needs its own
+     * server page, since derive() stands down on those.
+     * @param {string|string[]} active
+     */
+    applyQueryChange(active) {
       for (const m of this.modes) this.resetWindow(m);
-      if (this.serverFallback(activeMode)) {
-        this.loadGridPage(activeMode);
-        this._onNarrow();
-        return;
-      }
+      const fallback = [].concat(active).filter((m) => this.serverFallback(m));
+      for (const m of fallback) this.loadGridPage(m);
+      // Skips the fallback shelves (derive() stands down on them), and still
+      // has to run with them in flight: a cross-shelf search can hold a local
+      // shelf beside a truncated one, and that one must not paint stale.
       this.deriveAll();
       this._onChange();
       // After the repaint, not before: the view measures the grid it has just
@@ -406,31 +412,34 @@
       this._onNarrow();
     }
 
-    /** Debounced only to coalesce keystrokes into one paint — no I/O behind it. */
-    onSearchInput(value, activeMode) {
+    /**
+     * Debounced only to coalesce keystrokes into one paint — no I/O behind it.
+     * @param {string} value @param {string|string[]} active
+     */
+    onSearchInput(value, active) {
       this.query = value;
       clearTimeout(this._searchTimer);
-      this._searchTimer = setTimeout(() => this.applyQueryChange(activeMode), 60);
+      this._searchTimer = setTimeout(() => this.applyQueryChange(active), 60);
     }
 
-    setFilter(key, value, activeMode) {
+    setFilter(key, value, active) {
       this.filters[key] = value;
-      this.applyQueryChange(activeMode);
+      this.applyQueryChange(active);
     }
 
-    clearFilters(activeMode) {
+    clearFilters(active) {
       this.filters = { players: null, playtimeMin: null, playtimeMax: null, playMode: null };
-      this.applyQueryChange(activeMode);
+      this.applyQueryChange(active);
     }
 
-    setPlaytimeBucket(id, activeMode) {
+    setPlaytimeBucket(id, active) {
       const f = this.filters;
       const B = window.ShelfFilter.PLAYTIME_BUCKETS;
       const cur = B.find((b) => window.ShelfFilter.isActiveBucket(b, f));
       const next = (cur && cur.id === id) ? null : B.find((b) => b.id === id);
       f.playtimeMin = next ? next.min : null;
       f.playtimeMax = next ? next.max : null;
-      this.applyQueryChange(activeMode);
+      this.applyQueryChange(active);
     }
 
     /**
