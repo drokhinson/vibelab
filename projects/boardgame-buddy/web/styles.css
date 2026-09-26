@@ -12124,16 +12124,26 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   color: var(--on-accent);
   border-color: var(--accent-fill);
 }
-.cascade-join__empty {
+/* One box holds the list's whole lifecycle: the buddy loader while a load is
+   in flight, then the empty message or the session rows in its place. The
+   min-height keeps the box from resizing when the loader swaps out. */
+.cascade-join__box {
   background: var(--polaroid-bg);
-  color: var(--polaroid-muted);
   border: 1px dashed var(--polaroid-line);
   border-radius: 14px;
-  padding: 24px 16px;
+  padding: 12px;
+  min-height: 104px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.cascade-join__box > .buddy-loader { align-self: center; }
+.cascade-join__empty {
+  color: var(--polaroid-muted);
+  padding: 8px 4px;
   text-align: center;
   font-size: 13px;
 }
-.cascade-join__loading { text-align: center; padding: 20px 0; }
 
 /* ── Polaroid popup ──────────────────────────────────────────────────────── */
 /* Sized to the *visible* viewport rather than `inset: 0`, so a card centred in
