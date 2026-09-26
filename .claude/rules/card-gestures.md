@@ -70,6 +70,14 @@ each fixed a visible bug:
   (`inline: "start"` for `scroll-snap-align: start`). Any other stop gets
   re-snapped after you've measured, and the flyer lands where the card used to
   be.
+- **Every image the card and the detail view share flies, each as its own
+  flyer.** The photo, and anything laid ON it: a box-art badge on a polaroid's
+  photo is covered by the photo flyer, and appears the moment that flyer is
+  removed. Fly it too, one layer above, from its plate on the card to its twin
+  in the detail view (the plate's border and shadow keyframed in and out). Hide
+  the covered element for the flight and reveal it in the frame its flyer
+  lands. Clip BOTH ends to what's visible: the detail end can be half scrolled
+  out of its own scroller.
 - **A card with no visible area is not a landing target.** Skip the flight and
   just close.
 - **Measure the detail end where it will FINISH.** The detail card's usual
@@ -171,6 +179,16 @@ CSS read them:
   on screen) and stamp `aspect-ratio` on the copy's images. Don't use
   `width`/`height` attributes, which pin the natural width where the real image
   stretches.
+- **Copies never carry a scroll offset.** A play read to the bottom otherwise
+  comes back in scrolled there and snaps when it arrives. Instead the leaving
+  card eases to its top during the slide, so it lands in the side slot matching
+  its copy. Kill iOS momentum first with `overflow: hidden`: Safari ignores a
+  `scrollTop` written mid-flick.
+- **Commit a start state before the first turn's transition.** Taking the
+  card off its entrance animation, giving it the gesture transform and asking
+  it to transition, all in one style change, starts no transition. The card
+  jumps. Add the gesture class, paint the rest position and force a reflow
+  first.
 - **End a turn on `transitionend`,** with a timer only as the backstop. A timer
   set to the duration can fire before the last frame, and the swap then snaps
   the final few px.
@@ -220,6 +238,15 @@ CSS read them:
 - **`overscroll-behavior: contain`** on the detail view's scroller.
 - **Script can still scroll a locked page.** That's how §2's reveal and §5's
   keep-in-view work, so don't reach for a lock that blocks it.
+
+- **The detail view opens at its top and stays there until the reader
+  scrolls.** Keep a "pinned" flag from open (and from each page turn) until
+  the first real scroll intent inside the scroller: a vertical drag, the
+  wheel, a scrolling key, or focus moving in. Until then, re-pin to 0 after
+  every repaint, when any image in it loads, and one frame after showing.
+  Never pin in edit mode, because focusing a field scrolls the form to it. Also
+  set `overflow-anchor: none` on the scroller and reserve image boxes, so
+  nothing the reader didn't do can move what they're reading.
 
 ## 8. The card itself on touch
 
