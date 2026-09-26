@@ -470,6 +470,8 @@ skips this is the bug again.
 ## Related rules
 
 - `.claude/rules/mobile-web.md` — the visible-viewport contract a sheet sits on.
+- `.claude/rules/card-gestures.md` — cards that expand into a detail view: the
+  open/close flight, swipe between neighbours, pull to close.
 - `.claude/rules/theming.md` §8 — why a body-level sheet needs naming in the
   re-point list.
 - `.claude/rules/ui-object-design.md` — extract at instance #2; one affordance
