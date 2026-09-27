@@ -11221,7 +11221,8 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* ── Play step pages (phone) ────────────────────────────────────────────────
    On a phone the Play step is three pages side by side — players, the scoring
    grid, the reference guide — turned by a swipe or the dots under them
-   (widgets/play-step-pager.js, views/play-flow-view.js#_renderPlay). Past the
+   (widgets/play-step-pager.js, views/play-flow-view.js#_renderPlay, and the
+   spectator's mirror in views/session-viewer-view.js#_renderPlay). Past the
    phone tier .play-pager is display:contents and the players page and dots are
    not shown, so the two-pane layout above is exactly what it was.
 
@@ -11243,6 +11244,12 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   min-height: 0;
   padding-bottom: var(--cascade-cta-bar);
   box-sizing: border-box;
+}
+/* The spectator's mirror (session-viewer-view.js) draws the same pages but no
+   docked bar — it follows the host rather than driving the game — so its pages
+   run down to the nav with ordinary breathing room instead of the bar's 92px. */
+:root[data-bgb-layout="phone"] main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager) {
+  padding-bottom: 16px;
 }
 /* A score cell raised the keyboard: the grid takes the whole visible screen.
 

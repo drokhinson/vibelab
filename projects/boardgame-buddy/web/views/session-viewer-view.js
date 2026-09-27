@@ -24,6 +24,11 @@
   // Gather. During play/settle the poll drops to a Realtime fallback — see
   // the gating at the top of _poll().
   const POLL_MS = 2000;
+  // The Play step's pages on a phone — the host's order (play-flow-view.js), so
+  // the two screens swipe the same way: players, the grid, the guide.
+  const PLAY_PAGE_PLAYERS = 0;
+  const PLAY_PAGE_SCORES = 1;
+  const PLAY_PAGE_GUIDE = 2;
 
   class SessionViewerView extends window.View {
     constructor() {
@@ -51,11 +56,18 @@
       // reported broken will never deliver, so polling stops being a fallback
       // and becomes the mechanism — which is a different cadence.
       this._realtimeDead = false;
+      // The Play step's page turner (phone tier), attached once to the
+      // container, which outlives every repaint — the 2s poll replaces the
+      // whole Play screen, and the pager keeps its position on the container.
+      this._pager = null;
+      // The phase the last render() drew, so arriving on Play lands on the grid.
+      this._renderedPhase = null;
     }
 
     async onMount() {
       this._code = this._extractCode(this.params);
       this._resetSession();
+      this._attachPlayPager();
       if (!this._code) {
         this._error = "No session code provided";
         this.render();
@@ -126,6 +138,7 @@
       this._pollTick = 0;
       this._realtimeDead = false;
       this._renderedRounds = 0;
+      this._renderedPhase = null;
     }
 
     _extractCode(params) {
@@ -381,6 +394,7 @@
           ${this._renderPlay(s)}
         `;
         this._mountReferenceGuide(s);
+        if (this._pager) this._pager.sync();
       }
 
       this.refreshIcons();
@@ -456,6 +470,7 @@
         this._patchScoringCells();
         this._refreshTotalsCells();
       }
+      this._refreshStandings();
     }
 
     // Re-render just the scoring card (cheaper than a full cascade render and
@@ -611,6 +626,11 @@
       const lockGather = phase !== "gather";
       const lockPlay = phase !== "play";
       const lockSettle = phase !== "settle" && phase !== "finalized";
+      // Arriving on Play opens on the grid, wherever the last game was left.
+      if (phase === "play" && this._renderedPhase !== "play" && this._pager) {
+        this._pager.reset(PLAY_PAGE_SCORES);
+      }
+      this._renderedPhase = phase;
 
       this.container.innerHTML = `
         <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
@@ -628,6 +648,7 @@
       `;
       this.refreshIcons();
       if (phase === "play" || phase === "settle") this._mountReferenceGuide(s);
+      if (this._pager) this._pager.sync();
       // NOTE: do NOT call _scrollToCurrentPhase() here. At a 2s poll cadence
       // a render-time scroll yanks the user back to the top of the section
       // on every tick. Scroll is now invoked explicitly from onMount,
@@ -827,19 +848,35 @@
       if (!s.game_id) {
         return `<section class="cascade-card"><p class="text-sm opacity-70">Waiting on the host…</p></section>`;
       }
-      // Scoring above the reference guide, mirroring the host's Play step
-      // (play-flow-view.js _renderPlay) — a spectator is here to watch the
-      // grid move, so it comes first and the guide is what they scroll to.
-      // Same pane wrappers as the host's Play step: grid left, guide right on
-      // the tablet and wide tiers; display:contents on a phone.
+      // The host's Play step, seen from another phone — the same markup and
+      // the same pager (play-flow-view.js _renderPlay). On a phone the three
+      // blocks below are PAGES side by side: the players (standings), the grid
+      // and the reference guide, opening on the grid and turned by a swipe or
+      // the dots (widgets/play-step-pager.js). The grid page is height-locked,
+      // so its round rows scroll inside it and the names and totals never leave
+      // the screen. On the tablet and wide tiers .play-pager is
+      // display:contents and the players page and dots are not drawn: grid
+      // left, guide right, as before.
+      //
+      // Scoring first: it sizes the grid (_renderedRounds) the standings total.
+      const scoring = this._renderViewerScoring(s);
+      const paged = this._playPaged();
+      const page = this._pager ? this._pager.index : PLAY_PAGE_SCORES;
+      const off = (i) => (paged && i !== page ? ` inert aria-hidden="true"` : "");
       return `
         ${this._renderGameInfoBar(s)}
-
-        <div class="cascade-cols">
-        <div class="cascade-col">
-        ${this._renderViewerScoring(s)}
+        <div class="play-pager">
+        <div class="play-pager__page play-pager__page--players" data-pp-page="${PLAY_PAGE_PLAYERS}"
+             role="group" aria-label="Players"${off(PLAY_PAGE_PLAYERS)}>
+          <div id="session-viewer-standings-mount">${this._renderStandings(s)}</div>
         </div>
-        <div class="cascade-col cascade-col--aside">
+        <div class="cascade-cols">
+        <div class="cascade-col play-pager__page play-pager__page--scores" data-pp-page="${PLAY_PAGE_SCORES}"
+             role="group" aria-label="Scores"${off(PLAY_PAGE_SCORES)}>
+        ${scoring}
+        </div>
+        <div class="cascade-col cascade-col--aside play-pager__page play-pager__page--guide" data-pp-page="${PLAY_PAGE_GUIDE}"
+             role="group" aria-label="Reference guide"${off(PLAY_PAGE_GUIDE)}>
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
           <!-- Migration 052: the rulebook is a chapter and the scroll below
@@ -849,7 +886,89 @@
         </section>
         </div>
         </div>
+        </div>
+        ${this._renderPlayDots(page)}
       `;
+    }
+
+    /** The phone tier, where the Play step is three pages rather than panes. */
+    _playPaged() {
+      return document.documentElement.getAttribute("data-bgb-layout") === "phone";
+    }
+
+    _attachPlayPager() {
+      if (this._pager || !window.BgbPlayStepPager || !this.container) return;
+      this._pager = window.BgbPlayStepPager.attach(this.container, {
+        count: 3,
+        start: PLAY_PAGE_SCORES,
+        active: () => this._playPaged() && !!this._session && this._session.phase === "play"
+          && !!this.container.querySelector("#screen-play .play-pager"),
+        // Standings follow every live score, but only slide rows while they
+        // are on screen; arriving on the page shows them where they now rank.
+        onTurn: (i) => { if (i === PLAY_PAGE_PLAYERS) this._refreshStandings(); },
+      });
+    }
+
+    /** Dot tap: the same turn a swipe makes. */
+    _turnPlayPage(i) {
+      if (this._pager) this._pager.turnTo(i);
+    }
+
+    /** @param {number} page */
+    _renderPlayDots(page) {
+      const dot = (i, label) => `
+        <button class="play-pager__dot" type="button" role="tab" data-pp-dot="${i}"
+                aria-label="${label}" aria-selected="${i === page ? "true" : "false"}"
+                onclick="window.sessionViewerView._turnPlayPage(${i})"><span></span></button>`;
+      return `
+        <div class="play-pager__dots" role="tablist" aria-label="Play step pages">
+          ${dot(PLAY_PAGE_PLAYERS, "Players")}
+          ${dot(PLAY_PAGE_SCORES, "Scores")}
+          ${dot(PLAY_PAGE_GUIDE, "Reference guide")}
+        </div>`;
+    }
+
+    /**
+     * The players page: the grid's columns, highest total first
+     * (widgets/play-standings.js) — the host's standings, read from the
+     * live-scores overlay rather than local round arrays. No team chips: the
+     * spectator watches the sides, it does not pick them.
+     * @param {any} [s]
+     * @returns {string}
+     */
+    _renderStandings(s) {
+      const session = s || this._session;
+      if (!session || !(session.participants || []).length || !window.renderPlayStandings) return "";
+      const n = this._renderedRounds;
+      const get = (p, r) => this._cellValue(p, r);
+      const me = window.store && window.store.get && window.store.get("user");
+      const players = this._gridPlayers(session);
+      return window.renderPlayStandings(this._gridColumns(session), {
+        total: (col) => window.roundGridColumnTotal(col, n, get),
+        anyScore: players.some((p) => window.roundGridHasAnyScore(p, n, get)),
+        rounds: n,
+        name: (p) => (window.Buddy ? window.Buddy.nameFor(p.user_id, p.name) : p.name),
+        badge: (p, shown) => window.BgbBadge.render({
+          avatar: p.avatar,
+          displayName: shown,
+          size: "sm",
+          isGhost: !p.user_id,
+          isMe: !!(me && p.user_id === me.id),
+        }),
+        seatKey: (p, i) => p.participant_id || p.user_id || `seat-${i}`,
+        chip: null,
+        strip: null,
+      });
+    }
+
+    /** Repaint the players page alone, after any number on the grid moves. */
+    _refreshStandings() {
+      const host = this.container && this.container.querySelector("#session-viewer-standings-mount");
+      if (!host || !window.patchPlayStandings) return;
+      const onScreen = !this._playPaged() || (this._pager && this._pager.index === PLAY_PAGE_PLAYERS);
+      const calm = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      window.patchPlayStandings(host, this._renderStandings(), !!onScreen && !calm);
+      this.refreshIcons(host);
     }
 
     // Render the scoreboard through the SAME shared widget the host uses

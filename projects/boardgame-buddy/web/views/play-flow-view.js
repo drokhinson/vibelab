@@ -2134,8 +2134,8 @@
       // On the tablet and wide tiers .play-pager is display:contents and the
       // players page and dots are not drawn: the guide stands beside the grid
       // in a sticky pane of its own (styles.css, "Cascade panes"), as before.
-      // The spectator's mirror (session-viewer-view.js) keeps the stacked
-      // layout on every tier.
+      // The spectator's mirror (session-viewer-view.js) renders the same
+      // pages with the same pager, so the two phones swipe alike.
       return `
         ${this._renderGameInfoBar()}
         <div class="play-pager">
