@@ -2503,6 +2503,11 @@
           const v = this._resolvedScore(p, r);
           p.roundScores[r] = v == null ? null : String(v);
         }
+      }
+      // A merged side's blank seats take the number their column shows, or
+      // they would save less than the side's Total. See roundGridSettleMerged.
+      window.roundGridSettleMerged(this._ps.players, this._resolvePlayMode(), n);
+      for (const p of this._ps.players) {
         // NULL, not 0, when the grid was left blank — see rollupScore in
         // domain/play-session.js. The two have to agree: this one writes the
         // draft, that one writes the payload.

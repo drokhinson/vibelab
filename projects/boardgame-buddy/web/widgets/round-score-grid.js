@@ -458,6 +458,37 @@
     return total;
   }
 
+  // Make every merged column's seats HOLD what the column shows. A merged
+  // cell reads the first number any of its seats has, and an empty seat is
+  // not a disagreement — so a side can be drawn as one column while one of
+  // its seats is still blank in a round the column prints a number for (two
+  // partly-scored seats tagged together, or a split side whose cells come to
+  // agree). The column's Total counts that number; the blank seat's own
+  // total, which is what it SAVES, did not. This fills exactly those blanks
+  // and nothing else — a seat's own number is never overwritten, and a side
+  // that disagrees anywhere is split and untouched. Reads and writes the raw
+  // roundScores, so a host with a live overlay materializes it first.
+  // Returns whether any cell moved.
+  function roundGridSettleMerged(players, mode, roundCount) {
+    const n = Math.max(0, Number(roundCount) || 0);
+    let moved = false;
+    for (const col of roundGridColumns(players, mode, n, defaultCellValue)) {
+      if (!col.merged) continue;
+      for (let r = 0; r < n; r++) {
+        const src = col.players.find((p) => parseRoundScore(defaultCellValue(p, r)) != null);
+        if (!src) continue;
+        const v = src.roundScores[r];
+        for (const p of col.players) {
+          if (parseRoundScore(defaultCellValue(p, r)) != null) continue;
+          if (!Array.isArray(p.roundScores)) p.roundScores = [];
+          p.roundScores[r] = v;
+          moved = true;
+        }
+      }
+    }
+    return moved;
+  }
+
   // Which seats does the cell on seat `i` write to?
   //
   // The answer an editable host needs and must not compute for itself: a
@@ -1115,6 +1146,7 @@
   window.roundGridColumnValue = roundGridColumnValue;
   window.roundGridColumnTotal = roundGridColumnTotal;
   window.roundGridSeatsFor = roundGridSeatsFor;
+  window.roundGridSettleMerged = roundGridSettleMerged;
   window.roundGridRoundCount = roundGridRoundCount;
   window.roundGridTotal = roundGridTotal;
   window.roundGridHasAnyScore = roundGridHasAnyScore;
