@@ -12,6 +12,14 @@
 // software keyboard is up — a laptop has its own minus key, and Enter and
 // Shift+Enter move the same way — and sits on it through --bgb-kb-inset.
 //
+// iOS 26 changed what "on the keyboard" means. Its form-assistant bar
+// (⌃ ⌄ ✓) became a floating glass pill that is NOT part of the keyboard: the
+// visual viewport ends at the keyboard's top edge and the pill floats over the
+// bottom of it — exactly where this bar docks, so the pill covered it. Earlier
+// iOS attached that bar to the keyboard, outside the viewport, so docking at
+// --bgb-kb-inset was right there and still is. The bar lifts on iOS 26+ only;
+// see liftsOverAssistant() for how that is told apart.
+//
 // The buttons must not take focus from the cell, or the keyboard drops and
 // comes back on every tap. pointerdown is cancelled for mouse and Android;
 // iOS decides focus in the tap itself, so a touch acts on touchend and cancels
@@ -71,6 +79,17 @@
   }
 
   // ── The bar ──────────────────────────────────────────────────────────
+  // iPhone on iOS 26 or later. The user agent can't say: Safari 26 freezes the
+  // OS version in it at 18_x, and a home-screen app carries no Safari version
+  // at all. CSS anchor positioning shipped in the same WebKit (Safari 26), and
+  // every iOS browser is that WebKit, so it marks the version on any of them.
+  // iPad is left out: its keyboard keeps the shortcuts bar inside itself.
+  function liftsOverAssistant() {
+    const ua = navigator.userAgent || "";
+    if (!/iPhone|iPod/.test(ua)) return false;
+    return !!(window.CSS && CSS.supports && CSS.supports("anchor-name: --a"));
+  }
+
   /** @type {HTMLElement|null} */
   let bar = null;
   /** @type {HTMLInputElement|null} */
@@ -79,7 +98,7 @@
 
   function buildBar() {
     const el = document.createElement("div");
-    el.className = "score-keypad";
+    el.className = liftsOverAssistant() ? "score-keypad score-keypad--lifted" : "score-keypad";
     el.setAttribute("role", "toolbar");
     el.setAttribute("aria-label", "Score keys");
     el.hidden = true;

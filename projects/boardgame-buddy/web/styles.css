@@ -9515,6 +9515,21 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   font-family: var(--font-sans);
 }
 :root.bgb-kb-open .score-keypad:not([hidden]) { display: flex; }
+/* iOS 26+ (widgets/score-keypad.js#liftsOverAssistant): Safari's ⌃ ⌄ ✓ bar
+   floats as a glass pill over the bottom of the visible viewport instead of
+   riding on the keyboard, so a bar docked at the keyboard's edge sits under
+   it. Lift clear of the pill and float like it does — inset from the edges,
+   rounded, on a shadow rather than a top rule. 78px is measured off an iPhone
+   screenshot: the pill's top sits ~74pt above the viewport's bottom edge, plus
+   a small gap. */
+.score-keypad.score-keypad--lifted {
+  bottom: calc(var(--bgb-kb-inset, 0px) + 78px);
+  left: 8px;
+  right: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
 .score-keypad__key,
 .score-keypad__nav {
   height: 44px;
