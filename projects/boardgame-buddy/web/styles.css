@@ -9485,10 +9485,11 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 .scoring-cell:focus { outline: none; border-color: var(--accent-ink); }
 
 /* The bar widgets/score-keypad.js docks on the number pad while a score cell
-   has focus: (−) to flip its sign, Next to move on.
+   has focus: (−) to flip its sign, Prev and Next to move between cells.
    Body-level and edge to edge like the keyboard it sits on, and shown only
    while ui/viewport-lock.js reports a software keyboard up — a hardware
-   keyboard has its own minus key and Enter does what Next does.
+   keyboard has its own minus key, and Enter / Shift+Enter do what Next / Prev
+   do.
 
    z-index 105: above the modal/sheet rung (100–102), because the play-detail
    popup's edit grid is a cell inside a modal; below the import toasts (111)
@@ -9515,7 +9516,7 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 :root.bgb-kb-open .score-keypad:not([hidden]) { display: flex; }
 .score-keypad__key,
-.score-keypad__next {
+.score-keypad__nav {
   height: 44px;
   min-width: 56px;
   padding: 0 14px;
@@ -9533,13 +9534,24 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   box-shadow: 0 1px 0 var(--shadow-c);
 }
 .score-keypad__key:active { background: var(--bg-0); }
-.score-keypad__next {
-  margin-left: auto;
-  min-width: 84px;
-  background: var(--accent-fill);
-  color: var(--on-accent);
+.score-keypad__nav {
+  min-width: 76px;
   font-size: 17px;
   font-weight: 600;
+}
+/* Prev is the secondary move, so it takes the key's plain face; Next keeps the
+   solid accent as the move a scorer makes forty times a night. */
+.score-keypad__prev {
+  margin-left: auto;
+  background: var(--bg-1);
+  color: var(--ink);
+  box-shadow: 0 1px 0 var(--shadow-c);
+}
+.score-keypad__prev:active { background: var(--bg-0); }
+.score-keypad__prev:disabled { color: var(--ink-faint); box-shadow: none; cursor: default; }
+.score-keypad__next {
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 .score-keypad__next:active { filter: brightness(0.92); }
 

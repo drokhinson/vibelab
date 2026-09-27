@@ -1,6 +1,6 @@
 // widgets/score-keypad.js — the bar that rides on top of the number pad while
-// a scoring-grid cell has focus: (−) to flip the cell's sign, and Next to move
-// on.
+// a scoring-grid cell has focus: (−) to flip the cell's sign, and Prev / Next
+// to move between cells.
 //
 // The cell asks for `inputmode="numeric"`, the iOS 10-key pad — big keys,
 // digits only, no sign and no return key. The two keys that pad is missing
@@ -9,8 +9,8 @@
 // The bar is one element on <body>, created on first use, so it is never
 // inside a transformed sheet where `position: fixed` would stop meaning the
 // screen. It shows only while :root.bgb-kb-open (ui/viewport-lock.js) says a
-// software keyboard is up — a laptop has its own minus key and Enter moves on
-// just the same — and sits on it through --bgb-kb-inset.
+// software keyboard is up — a laptop has its own minus key, and Enter and
+// Shift+Enter move the same way — and sits on it through --bgb-kb-inset.
 //
 // The buttons must not take focus from the cell, or the keyboard drops and
 // comes back on every tap. pointerdown is cancelled for mouse and Android;
@@ -57,14 +57,12 @@
     return Array.from(grid.querySelectorAll(CELL));
   }
 
-  function isLast(el) {
+  // Next past the last cell closes the keyboard; Prev before the first one
+  // does nothing (its button is disabled there).
+  function move(el, step) {
     const cells = cellsOf(el);
-    return cells[cells.length - 1] === el;
-  }
-
-  function next(el) {
-    const cells = cellsOf(el);
-    const to = cells[cells.indexOf(el) + 1];
+    const to = cells[cells.indexOf(el) + step];
+    if (!to && step < 0) return;
     settle(el);
     if (!to) { el.blur(); return; }
     to.focus();
@@ -87,7 +85,8 @@
     el.hidden = true;
     el.innerHTML = `
       <button type="button" tabindex="-1" class="score-keypad__key" data-key="sign" aria-label="Make negative or positive">(&minus;)</button>
-      <button type="button" tabindex="-1" class="score-keypad__next" data-key="next">Next</button>`;
+      <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__prev" data-key="prev">Prev</button>
+      <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__next" data-key="next">Next</button>`;
     el.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "touch" && e.target instanceof Element && e.target.closest("button")) e.preventDefault();
     });
@@ -115,15 +114,19 @@
     const el = active;
     if (!el || !el.isConnected) return;
     const key = b.getAttribute("data-key");
-    if (key === "next") next(el);
+    if (key === "next") move(el, 1);
+    else if (key === "prev") move(el, -1);
     else if (key === "sign") toggleSign(el);
   }
 
   function show(el) {
     if (!bar) bar = buildBar();
     active = el;
+    const cells = cellsOf(el);
     const nextBtn = bar.querySelector(".score-keypad__next");
-    if (nextBtn) nextBtn.textContent = isLast(el) ? "Done" : "Next";
+    const prevBtn = /** @type {HTMLButtonElement|null} */ (bar.querySelector(".score-keypad__prev"));
+    if (nextBtn) nextBtn.textContent = cells[cells.length - 1] === el ? "Done" : "Next";
+    if (prevBtn) prevBtn.disabled = cells[0] === el;
     bar.hidden = false;
     // iOS scrolls a focused field clear of the keyboard, but it does not know
     // about this bar — once the keyboard has settled, bring the cell out from
@@ -159,10 +162,10 @@
       const t = e.target;
       if (e.key !== "Enter" || !(t instanceof HTMLInputElement) || !t.matches(CELL)) return;
       e.preventDefault();
-      next(t);
+      move(t, e.shiftKey ? -1 : 1);
     });
   }
 
-  window.ScoreKeypad = { flipSign, toggleSign, next };
+  window.ScoreKeypad = { flipSign, toggleSign, move };
   if (typeof document !== "undefined" && document.addEventListener) start();
 })();
