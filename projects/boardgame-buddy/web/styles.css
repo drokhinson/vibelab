@@ -11244,12 +11244,57 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   padding-bottom: var(--cascade-cta-bar);
   box-sizing: border-box;
 }
-/* A score cell raised the keyboard: the docked bar now rides on top of it
-   (.bgb-kb-open .cascade-cta-wrap), so the pages end above the bar there and
-   the grid shrinks to what is still visible rather than sliding under it. */
-:root.bgb-kb-open[data-bgb-layout="phone"] #screen-play:not(.is-locked):has(> .play-pager) {
-  padding-bottom: max(var(--cascade-cta-bar),
-    calc(var(--bgb-kb-inset, 0px) + 76px - var(--bgb-nav-height) - env(safe-area-inset-bottom)));
+/* A score cell raised the keyboard: the grid takes the whole visible screen.
+
+   Shrinking the pages to fit was not enough. With the keyboard up a phone has
+   maybe 400px left, and the global header, the pinned step band and the game
+   strip kept ~190px of it — the scorepad got what remained, which is its names
+   band and its Total row, with the round being typed into crushed out of view
+   between them. So while a keyboard is up on the Play step those three fold
+   away (they come back the moment it goes down), and their height tokens go to
+   0px with them so every offset derived from them agrees.
+
+   The screen is then pinned to the VISUAL viewport — --bgb-vv-top/--bgb-vv-h
+   from ui/viewport-lock.js — rather than given a recomputed height in the
+   document. With a keyboard up the browser may have scrolled the page to keep
+   the focused cell in sight, so where the screen sits in the document is not
+   something CSS can know; where the visible box is, it can. The docked bar
+   rides on the keyboard off the same numbers (.bgb-kb-open .cascade-cta-wrap:
+   bottom = --bgb-kb-inset, 12px + 52px button + 12px = 76px tall), so the
+   screen's 76px bottom padding ends the pages exactly where the bar begins.
+   No transform here: the bar is a fixed descendant, and a transform on the
+   screen would make it position against the screen instead of the viewport.
+
+   The height-locked pager below is untouched: given the taller box, the
+   scorepad grows to its rows and then holds, with only the round rows
+   scrolling inside .rg__body, as it does with no keyboard at all. Phone tier
+   and the live Play screen only — the spectator's mirror has nothing to type
+   into, and Gather and Settle are not matched. */
+:root.bgb-kb-open[data-bgb-layout="phone"]:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) {
+  --bgb-header-height: 0px;
+  --bgb-cascade-head-height: 0px;
+}
+:root.bgb-kb-open[data-bgb-layout="phone"]:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) :is(
+  .bgb-global-header,
+  #screen-play > .cascade-screen__header,
+  #screen-play .cascade-gamebar
+) {
+  display: none;
+}
+:root.bgb-kb-open[data-bgb-layout="phone"]:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) #screen-play {
+  position: fixed;
+  top: var(--bgb-vv-top, 0px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  max-width: var(--bgb-col-max);
+  height: var(--bgb-vv-h, 100dvh);
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 12px 16px 76px;
+  /* Over the view's other content, under the docked bar (35). */
+  z-index: 25;
+  background: var(--bg-0);
 }
 :root[data-bgb-layout="phone"] .play-pager {
   display: block;
