@@ -66,6 +66,12 @@
   // gather→play advance doesn't wait for the timer; it flushes.
   const TEAM_PUSH_DEBOUNCE_MS = 700;
 
+  // The Play step's pages on a phone, left to right (widgets/play-step-pager.js).
+  // It opens on the scores, and Next round always comes back to them.
+  const PLAY_PAGE_PLAYERS = 0;
+  const PLAY_PAGE_SCORES = 1;
+  const PLAY_PAGE_GUIDE = 2;
+
   class PlayFlowView extends window.View {
     constructor() {
       super("play-flow");
@@ -199,6 +205,12 @@
       // A promise the next _ensureLobbyOpen must wait behind. Set by
       // _startAnotherRound AFTER _resetRunState, which nulls it.
       this._lobbyGate = null;
+      // The Play step's page turner (phone tier). Attached on first mount to
+      // the container, which outlives every repaint; see _attachPlayPager.
+      this._pager = null;
+      // The phase the last render() drew, so arriving on Play can land on
+      // the scores page rather than wherever the last game was left.
+      this._renderedPhase = null;
     }
 
     async onMount() {
@@ -209,6 +221,8 @@
       // second render() once it lands.
       const existing = window.PlaySession.load();
       this._ps = existing || new window.PlaySession();
+      this._attachPlayPager();
+      this._renderedPhase = null;
       // Template state belongs to the game it was loaded for, and this view is
       // a singleton: without this, a draft for a different game paints its
       // first frame with the LAST game's scoring bar — a pill row offering a
@@ -1205,6 +1219,8 @@
       ul.innerHTML = this._ps.players.map((p, i) => this._renderPlayerRow(p, i)).join("");
       this.refreshIcons();
       this._bindPlayerReorder();
+      // The team picker opens from the players page too, on Play.
+      this._refreshStandings();
     }
 
     /**
@@ -1535,6 +1551,10 @@
       const lockGather = phase !== "gather";
       const lockPlay   = phase !== "play";
       const lockSettle = phase !== "settle";
+      if (phase === "play" && this._renderedPhase !== "play" && this._pager) {
+        this._pager.reset(PLAY_PAGE_SCORES);
+      }
+      this._renderedPhase = phase;
 
       this.container.innerHTML = `
         <section class="cascade-screen ${lockGather ? "is-locked" : ""}" id="screen-gather">
@@ -1568,6 +1588,7 @@
       this.refreshIcons();
       this._mountReferenceGuide();
       this._bindPlayerReorder();
+      if (this._pager) this._pager.sync();
       // NOTE: do NOT call _scrollToCurrentPhase() here. render() runs every
       // 2s via the lobby poll and on every player edit — yanking the scroll
       // to the top of the active section made long Gather screens feel
@@ -1944,12 +1965,12 @@
      * control. The colour comes from BgbTeams.indexMap over the whole roster —
      * a custom side's tint depends on which colours the OTHER sides took.
      */
-    _renderTeamChip(p, i, shown) {
+    _renderTeamChip(p, i, shown, prefix = "team") {
       return `
-        <button type="button" id="team-chip-${i}"
+        <button type="button" id="${prefix}-chip-${i}"
                 class="team-chip${this._teamPickerSeat === p ? " team-chip--open" : ""}"
                 aria-expanded="${this._teamPickerSeat === p ? "true" : "false"}"
-                aria-controls="team-strip-${i}"
+                aria-controls="${prefix}-strip-${i}"
                 onclick="window.playFlowView._toggleTeamPicker(${i})">${this._teamChipFace(p, shown)}</button>
       `;
     }
@@ -1976,7 +1997,7 @@
      * Picking a circle stores its WORD ("Blue") through _setTeam, so the win
      * flags, score adoption and lobby push all run exactly as a typed tag did.
      */
-    _renderTeamStrip(p, i, shown) {
+    _renderTeamStrip(p, i, shown, prefix = "team") {
       const T = window.BgbTeams;
       const key = T.keyOf(p.team);
       const color = T.colorOf(p.team);
@@ -1987,7 +2008,7 @@
                 aria-label="${escapeAttr(label)}" title="${escapeAttr(label)}"
                 onclick="${handler}"></button>`;
       return `
-        <div class="team-strip" id="team-strip-${i}" role="radiogroup"
+        <div class="team-strip" id="${prefix}-strip-${i}" role="radiogroup"
              aria-label="${escapeAttr(shown + "'s team")}">
           ${sw(!key && !custom, " team-sw--none", "", "No team",
                `window.playFlowView._pickTeam(${i}, '')`)}
@@ -1997,7 +2018,7 @@
           ${sw(custom, " team-sw--aa", "", "Custom name",
                `window.playFlowView._startCustomTeam(${i})`)}
           ${custom ? `
-            <input class="team-strip__custom" id="team-custom-${i}" type="text"
+            <input class="team-strip__custom" id="${prefix}-custom-${i}" type="text"
                    maxlength="6" placeholder="Team name" autocomplete="off"
                    aria-label="${escapeAttr(shown + "'s team name")}"
                    value="${escapeAttr(color ? "" : (p.team || ""))}"
@@ -2024,7 +2045,7 @@
       this._teamCustomSeat = null;
       this._setTeam(i, label);
       this._refreshPlayersList();
-      const chip = this.container.querySelector(`#team-chip-${i}`);
+      const chip = this.container.querySelector(`#${this._teamIdPrefix()}-chip-${i}`);
       if (chip) chip.focus();
     }
 
@@ -2036,7 +2057,7 @@
       this._teamCustomSeat = p;
       if (window.BgbTeams.colorOf(p.team)) this._setTeam(i, "");
       this._refreshPlayersList();
-      const field = this.container.querySelector(`#team-custom-${i}`);
+      const field = this.container.querySelector(`#${this._teamIdPrefix()}-custom-${i}`);
       if (field) field.focus();
     }
 
@@ -2045,7 +2066,7 @@
     _typeTeam(i, value) {
       this._setTeam(i, value);
       const p = this._ps.players[i];
-      const chip = this.container.querySelector(`#team-chip-${i}`);
+      const chip = this.container.querySelector(`#${this._teamIdPrefix()}-chip-${i}`);
       if (p && chip) {
         chip.innerHTML = this._teamChipFace(p, window.Buddy.nameFor(p.user_id, p.name));
       }
@@ -2090,34 +2111,142 @@
       if (!this._ps.gameId) {
         return `<section class="cascade-card"><p class="text-sm opacity-70">Pick a game on the Gather step first.</p></section>`;
       }
-      const game = this._ps.gameSnapshot || {};
-      // Scoring sits directly under the game-info strip and the reference guide
-      // below it: the grid is what the host touches every round, so it stays
-      // above the fold, and the guide — a reach-for-it-occasionally reference
-      // whose scroll can run long — is what you scroll down to. Same order in
-      // the spectator mirror (session-viewer-view.js) and in native
-      // (app/src/screens/PlayFlowScreen.js).
-      // On the tablet and wide tiers the guide stands beside the grid in a
-      // sticky pane of its own (styles.css, "Cascade panes"); on a phone the
-      // wrappers are display:contents and the order above is the layout.
+      // Scoring first: it normalises the round arrays the standings total up.
+      const scoring = this._renderScoringSection();
+      const paged = this._playPaged();
+      const page = this._pager ? this._pager.index : PLAY_PAGE_SCORES;
+      const off = (i) => (paged && i !== page ? ` inert aria-hidden="true"` : "");
+      // ON A PHONE the three blocks below are PAGES, side by side: players,
+      // the scoring grid, the reference guide. The step opens on the grid —
+      // the thing the host touches every round — and the dots under the pages
+      // (and a sideways swipe, widgets/play-step-pager.js) reach the other
+      // two. The grid page is height-locked to the space between the game
+      // strip and the docked bar, so its round rows scroll inside it and the
+      // names and totals never leave the screen.
+      //
+      // On the tablet and wide tiers .play-pager is display:contents and the
+      // players page and dots are not drawn: the guide stands beside the grid
+      // in a sticky pane of its own (styles.css, "Cascade panes"), as before.
+      // The spectator's mirror (session-viewer-view.js) keeps the stacked
+      // layout on every tier.
       return `
         ${this._renderGameInfoBar()}
-        <div class="cascade-cols">
-        <div class="cascade-col">
-        ${this._renderScoringSection()}
+        <div class="play-pager">
+        <div class="play-pager__page play-pager__page--players" data-pp-page="${PLAY_PAGE_PLAYERS}"
+             role="group" aria-label="Players"${off(PLAY_PAGE_PLAYERS)}>
+          <div id="play-standings-mount">${this._renderStandings()}</div>
         </div>
-        <div class="cascade-col cascade-col--aside">
+        <div class="cascade-cols">
+        <div class="cascade-col play-pager__page play-pager__page--scores" data-pp-page="${PLAY_PAGE_SCORES}"
+             role="group" aria-label="Scores"${off(PLAY_PAGE_SCORES)}>
+        ${scoring}
+        </div>
+        <div class="cascade-col cascade-col--aside play-pager__page play-pager__page--guide" data-pp-page="${PLAY_PAGE_GUIDE}"
+             role="group" aria-label="Reference guide"${off(PLAY_PAGE_GUIDE)}>
         <section class="cascade-card cascade-card--guide">
           <label class="cascade-card__label">Reference guide</label>
           <!-- The rulebook row used to sit here, fed by the session's game
                snapshot. Migration 052 made it a chapter, so the scroll below
-               draws it — including in its peek, which is what stays on screen
-               with the scroll rolled up. -->
+               draws it. -->
           <div id="play-flow-guide-mount"></div>
         </section>
         </div>
         </div>
+        </div>
+        ${this._renderPlayDots(page)}
       `;
+    }
+
+    /** The phone tier, where the Play step is three pages rather than panes. */
+    _playPaged() {
+      return document.documentElement.getAttribute("data-bgb-layout") === "phone";
+    }
+
+    _attachPlayPager() {
+      if (this._pager || !window.BgbPlayStepPager || !this.container) return;
+      this._pager = window.BgbPlayStepPager.attach(this.container, {
+        count: 3,
+        start: PLAY_PAGE_SCORES,
+        active: () => this._playPaged() && !!this._ps && this._ps.phase === "play"
+          && !!this.container.querySelector("#screen-play .play-pager"),
+        // Standings repaint on every score, but only slide rows while they
+        // are on screen; arriving on the page shows them where they now rank.
+        onTurn: (i) => { if (i === PLAY_PAGE_PLAYERS) this._refreshStandings(); },
+      });
+    }
+
+    /** Dot tap: the same turn a swipe makes. */
+    _turnPlayPage(i) {
+      if (this._pager) this._pager.turnTo(i);
+    }
+
+    /**
+     * Which page is showing, and a tap target to each. Drawn on every tier and
+     * hidden past the phone by CSS, like the players page itself.
+     * @param {number} page
+     */
+    _renderPlayDots(page) {
+      const dot = (i, label) => `
+        <button class="play-pager__dot" type="button" role="tab" data-pp-dot="${i}"
+                aria-label="${label}" aria-selected="${i === page ? "true" : "false"}"
+                onclick="window.playFlowView._turnPlayPage(${i})"><span></span></button>`;
+      return `
+        <div class="play-pager__dots" role="tablist" aria-label="Play step pages">
+          ${dot(PLAY_PAGE_PLAYERS, "Players")}
+          ${dot(PLAY_PAGE_SCORES, "Scores")}
+          ${dot(PLAY_PAGE_GUIDE, "Reference guide")}
+        </div>`;
+    }
+
+    /**
+     * The players page: the grid's columns, highest total first
+     * (widgets/play-standings.js). In a team play each seat carries the
+     * Gather team chip, so a side can still be picked or changed mid-game.
+     * @returns {string}
+     */
+    _renderStandings() {
+      const ps = this._ps;
+      if (!ps || !ps.players.length) return "";
+      const n = this._maxRoundCount();
+      const get = (p, r) => this._cellValue(p, r);
+      const team = this._isTeamGame();
+      const me = window.store.get("user");
+      return window.renderPlayStandings(this._gridColumns(), {
+        total: (col) => window.roundGridColumnTotal(col, n, get),
+        anyScore: ps.players.some((p) => window.roundGridHasAnyScore(p, n, get)),
+        rounds: n,
+        name: (p) => window.Buddy.nameFor(p.user_id, p.name),
+        badge: (p, shown) => window.BgbBadge.render({
+          avatar: p.avatar,
+          displayName: shown,
+          size: "sm",
+          isGhost: !p.user_id,
+          isMe: !!(me && p.user_id === me.id),
+        }),
+        seatKey: (p, i) => p.participant_id || p.user_id || `seat-${i}`,
+        chip: team ? (p, i, shown) => this._renderTeamChip(p, i, shown, "play-team") : null,
+        strip: team
+          ? (p, i, shown) => (this._teamPickerSeat === p ? this._renderTeamStrip(p, i, shown, "play-team") : "")
+          : null,
+      });
+    }
+
+    /** Repaint the players page alone, after any number on the grid moves. */
+    _refreshStandings() {
+      const host = this.container && this.container.querySelector("#play-standings-mount");
+      if (!host) return;
+      // Never out from under a field the host is typing in (a custom team name).
+      const focused = document.activeElement;
+      if (focused && host.contains(focused) && focused.matches("input, textarea")) return;
+      const onScreen = !this._playPaged() || (this._pager && this._pager.index === PLAY_PAGE_PLAYERS);
+      const calm = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      window.patchPlayStandings(host, this._renderStandings(), !!onScreen && !calm);
+      this.refreshIcons(host);
+    }
+
+    /** Where a seat's team chip is: the players page on Play, Gather otherwise. */
+    _teamIdPrefix() {
+      return this._ps && this._ps.phase === "play" ? "play-team" : "team";
     }
 
     _renderScoringSection() {
@@ -2423,6 +2552,7 @@
       if (!sec) { this.render(); return; }
       sec.outerHTML = this._renderScoringSection();
       this.refreshIcons();
+      this._refreshStandings();
       if (focusCell) {
         const el = this.container.querySelector(`input[data-score-cell="${focusCell}"]`);
         if (el) {
@@ -4053,6 +4183,9 @@
     }
 
     _addRound() {
+      // From the players or the guide page, the new row is what the host wants
+      // to see: slide back to the grid in the same frame as the tap.
+      if (this._pager) this._pager.turnTo(PLAY_PAGE_SCORES);
       this._normalizeRoundArrays();
       for (const p of this._ps.players) p.roundScores.push(null);
       this._ps.persist();
@@ -4230,6 +4363,7 @@
           .map((col) => this._renderTotalsCell(col, mode))
           .join("");
       this.refreshIcons();
+      this._refreshStandings();
     }
 
     // Re-derive the crown from the totals the grid is showing. Called from

@@ -11217,6 +11217,228 @@ main[data-view="session-viewer"].hidden {
    (it auto-scrolls forward as the host advances the phase), so it has no
    bar to clear — just ordinary trailing breathing room above the nav. */
 main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
+
+/* ── Play step pages (phone) ────────────────────────────────────────────────
+   On a phone the Play step is three pages side by side — players, the scoring
+   grid, the reference guide — turned by a swipe or the dots under them
+   (widgets/play-step-pager.js, views/play-flow-view.js#_renderPlay). Past the
+   phone tier .play-pager is display:contents and the players page and dots are
+   not shown, so the two-pane layout above is exactly what it was.
+
+   The screen is sized to the space between the global header and the nav, so
+   the page never scrolls: each page scrolls inside itself. The pager bleeds to
+   the column edges (the -16px), so a card's shadow is not cut at the gutter,
+   and it clips sideways only — a neighbour page waits just past the edge.
+
+   The pager writes each page's offset, scale and opacity as custom properties
+   on the view's container (--pp-x0…2 and friends), which survives every
+   repaint; the fallbacks are the rest positions for the first frame. The
+   transition length must match TURN_MS in widgets/play-detail-pager.js. */
+.play-pager { display: contents; }
+.play-pager__page--players,
+.play-pager__dots { display: none; }
+
+:root[data-bgb-layout="phone"] #screen-play:not(.is-locked):has(> .play-pager) {
+  height: calc(100dvh - var(--bgb-header-height) - var(--bgb-nav-height) - env(safe-area-inset-bottom));
+  min-height: 0;
+  padding-bottom: var(--cascade-cta-bar);
+  box-sizing: border-box;
+}
+/* A score cell raised the keyboard: the docked bar now rides on top of it
+   (.bgb-kb-open .cascade-cta-wrap), so the pages end above the bar there and
+   the grid shrinks to what is still visible rather than sliding under it. */
+:root.bgb-kb-open[data-bgb-layout="phone"] #screen-play:not(.is-locked):has(> .play-pager) {
+  padding-bottom: max(var(--cascade-cta-bar),
+    calc(var(--bgb-kb-inset, 0px) + 76px - var(--bgb-nav-height) - env(safe-area-inset-bottom)));
+}
+:root[data-bgb-layout="phone"] .play-pager {
+  display: block;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-inline: -16px;
+  overflow-x: clip;
+}
+:root[data-bgb-layout="phone"] .play-pager__page {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 16px;
+  box-sizing: border-box;
+  transform-origin: 50% 0;   /* pages share a top edge, like the popup's on a phone */
+  will-change: transform, opacity;
+}
+:root[data-bgb-layout="phone"] .play-pager__page[data-pp-page="0"] {
+  transform: translateX(var(--pp-x0, -110%)) scale(var(--pp-s0, 0.85));
+  opacity: var(--pp-o0, 0.65);
+}
+:root[data-bgb-layout="phone"] .play-pager__page[data-pp-page="1"] {
+  transform: translateX(var(--pp-x1, 0px)) scale(var(--pp-s1, 1));
+  opacity: var(--pp-o1, 1);
+}
+:root[data-bgb-layout="phone"] .play-pager__page[data-pp-page="2"] {
+  transform: translateX(var(--pp-x2, 110%)) scale(var(--pp-s2, 0.85));
+  opacity: var(--pp-o2, 0.65);
+}
+:root[data-bgb-layout="phone"] .is-pp-turning .play-pager__page {
+  transition: transform 220ms cubic-bezier(.22, .61, .36, 1),
+              opacity 220ms cubic-bezier(.22, .61, .36, 1);
+}
+/* The players and guide pages are lists that run long; each scrolls on its
+   own. The grid page does not — its round rows do, below. */
+:root[data-bgb-layout="phone"] :is(.play-pager__page--players, .play-pager__page--guide) {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px;
+}
+
+/* The grid page is height-locked. The scorepad grows with each round until it
+   meets the dots, then holds: the names band and the Total row stay put and
+   only the round rows scroll, inside .rg__body. The band is no longer sticky
+   against the page — it sits above the scroller instead of over it. */
+:root[data-bgb-layout="phone"] .play-pager__page--scores .cascade-card--scoring {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+}
+:root[data-bgb-layout="phone"] .play-pager__page--scores .cascade-card--scoring > * { flex: none; }
+:root[data-bgb-layout="phone"] .play-pager__page--scores .cascade-card--scoring .rg {
+  --rg-pin-top: 0px;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+:root[data-bgb-layout="phone"] .play-pager__page--scores .rg__pinzone {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+:root[data-bgb-layout="phone"] .play-pager__page--scores .rg__head {
+  position: static;
+  flex: none;
+}
+:root[data-bgb-layout="phone"] .play-pager__page--scores .rg__body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:root[data-bgb-layout="phone"] .play-pager__page--scores .rg__foot { flex: none; }
+:root[data-bgb-layout="phone"] .play-pager__page--scores .scoring-table--body tr {
+  scroll-margin: 8px 0;
+}
+
+/* Which page is showing. A row of three between the pages and the docked bar,
+   never scrolled away. Each is a 36×40 target around a 7px mark; the active
+   one stretches into a bar in the accent. */
+:root[data-bgb-layout="phone"] .play-pager__dots {
+  display: flex;
+  justify-content: center;
+  flex: none;
+  height: 20px;
+  margin-top: -6px;
+}
+.play-pager__dot {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 40px;
+  margin-block: -10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.play-pager__dot span {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ink-faint);
+  transition: width 220ms var(--ease), background-color 220ms var(--ease);
+}
+.play-pager__dot[aria-selected="true"] span { width: 20px; background: var(--accent); }
+.play-pager__dot:active span { transform: scale(0.85); }
+.play-pager__dot:focus-visible { outline: 2px solid var(--accent); outline-offset: -8px; border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .play-pager__dot span { transition: none; }
+}
+
+/* ── Players page: standings (widgets/play-standings.js) ──────────────────
+   Highest total first. A side the grid scores as one column is one blob in
+   its team colour — the side's name and total once, its members inside. */
+.standings__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.standings__head .cascade-card__label { margin-bottom: 0; }
+.standings__sub { font-size: 12px; color: var(--polaroid-muted); font-variant-numeric: tabular-nums; }
+.standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.standing {
+  padding: 0 10px;
+  background: var(--well, var(--polaroid-bg-soft));
+  border: 1px solid var(--polaroid-line);
+  border-radius: 12px;
+}
+.standing__row { display: flex; align-items: center; gap: 10px; min-height: 56px; }
+.standing__rank {
+  flex: none;
+  width: 1.25rem;
+  text-align: center;
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--polaroid-muted);
+}
+.standing__who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.standing__name,
+.standing__side-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--polaroid-ink);
+}
+.standing__name { font-weight: 600; font-size: 15px; }
+.standing__side-name { font-family: var(--font-polaroid); font-weight: 700; font-size: 16px; }
+.standing__gap { font-size: 12px; color: var(--polaroid-muted); font-variant-numeric: tabular-nums; }
+.standing__score {
+  flex: none;
+  min-width: 2.5rem;
+  text-align: right;
+  font-family: var(--font-score);
+  font-weight: 700;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  color: var(--polaroid-ink);
+}
+.standing.is-lead .standing__rank,
+.standing.is-lead .standing__score { color: var(--accent-ink); }
+.standing--side {
+  padding-bottom: 6px;
+  background: color-mix(in srgb, var(--sw) 12%, var(--polaroid-bg));
+  border: 1.5px solid color-mix(in srgb, var(--sw) 55%, transparent);
+}
+.standing__members {
+  display: flex;
+  flex-direction: column;
+  padding-left: calc(1.25rem + 10px);
+}
+.standing__member { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.standing__member .standing__name { flex: 1; font-weight: 500; font-size: 14px; }
+.standing .team-strip { margin-bottom: 8px; }
 .cascade-cta {
   width: 100%;
   height: 52px;
