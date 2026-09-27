@@ -1,4 +1,4 @@
-// widgets/play-step-pager.js — the Play step's three pages on a phone.
+// widgets/play-step-pager.js — the Play step's three pages on a phone or tablet.
 //
 // Players, scores and the reference guide sit side by side, one page wide
 // each, and a sideways drag turns between them with the same slide as the
@@ -7,10 +7,10 @@
 // opacity, a 72px drag or a flick commits, and either end rubber-bands. The
 // dots under the pages are the same turn for a tap, and ←/→ for a keyboard.
 //
-// Phone tier only. On tablet and up the host view lays the grid and the guide
-// out as two panes (styles.css, "Cascade panes") and every page rule here is
-// scoped to [data-bgb-layout="phone"], so the custom properties this writes
-// are inert there — `active()` is what stops the gesture listening.
+// Phone and tablet tiers. On the rail tiers (wide, land) the host view lays the
+// three blocks out side by side (styles.css, "Play step pages") and every page
+// rule is scoped to the phone and tablet tiers, so the custom properties this
+// writes are inert there — `active()` is what stops the gesture listening.
 //
 // THE STATE LIVES ON THE VIEW'S CONTAINER, NOT ON THE PAGES. The host
 // repaints by replacing its container's innerHTML (play-flow-view#render), so

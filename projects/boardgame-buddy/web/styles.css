@@ -9557,7 +9557,6 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 /* Prev is the secondary move, so it takes the key's plain face; Next keeps the
    solid accent as the move a scorer makes forty times a night. */
 .score-keypad__prev {
-  margin-left: auto;
   background: var(--bg-1);
   color: var(--ink);
   box-shadow: 0 1px 0 var(--shadow-c);
@@ -9569,6 +9568,29 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   color: var(--on-accent);
 }
 .score-keypad__next:active { filter: brightness(0.92); }
+/* Which cell the digits are going into ("Cat — R7"), between (−) and the
+   moves. It is the flexible slot, so it is also what pushes Prev and Next to
+   the right edge; on a narrow phone it gives its room up first and truncates. */
+.score-keypad__where {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+/* + Round: the Play step's "Next round", which the docked bar would offer if the
+   keypad were not sitting where it goes. Outlined in the accent rather than
+   filled, so Next stays the one solid key. */
+.score-keypad__round {
+  background: transparent;
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.score-keypad__round:active { background: var(--accent-quiet); }
+.score-keypad__round[hidden] { display: none; }
 
 /* The strip above the grid: which scorepad the table is built on, and which
    expansions are appending rows to it (migrations 018 / 032). Absent entirely
@@ -11310,15 +11332,20 @@ main[data-view="session-viewer"].hidden {
    bar to clear — just ordinary trailing breathing room above the nav. */
 main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 
-/* ── Play step pages (phone) ────────────────────────────────────────────────
-   On a phone the Play step is three pages side by side — players, the scoring
-   grid, the reference guide — turned by a swipe or the dots under them
-   (widgets/play-step-pager.js, views/play-flow-view.js#_renderPlay, and the
-   spectator's mirror in views/session-viewer-view.js#_renderPlay). Past the
-   phone tier .play-pager is display:contents and the players page and dots are
-   not shown, so the two-pane layout above is exactly what it was.
+/* ── Play step pages ────────────────────────────────────────────────────────
+   On a phone and a tablet the Play step is three pages side by side — players,
+   the scoring grid, the reference guide — turned by a swipe or the dots under
+   them (widgets/play-step-pager.js, views/play-flow-view.js#_renderPlay, and
+   the spectator's mirror in views/session-viewer-view.js#_renderPlay). A
+   tablet draws the dots as labelled tabs, and each page is the full width.
 
-   The screen is sized to the space between the global header and the nav, so
+   On the rail tiers (wide, land) nothing pages. The same three blocks are laid
+   out as a grid: the scores fill the left, and the standings stack above the
+   guide in a column on the right that folds to a 48px strip
+   (widgets/play-side.js). The "Cascade panes" two-pane rules above are for
+   Gather and Settle; the Play step overrides them here.
+
+   On every tier the screen is sized to the space between the global header and the nav, so
    the page never scrolls: each page scrolls inside itself. The pager bleeds to
    the column edges (the -16px), so a card's shadow is not cut at the gutter,
    and it clips sideways only — a neighbour page waits just past the edge.
@@ -11329,9 +11356,10 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    transition length must match TURN_MS in widgets/play-detail-pager.js. */
 .play-pager { display: contents; }
 .play-pager__page--players,
-.play-pager__dots { display: none; }
+.play-pager__dots,
+.play-side-bar { display: none; }
 
-:root[data-bgb-layout="phone"] #screen-play:not(.is-locked):has(> .play-pager) {
+#screen-play:not(.is-locked):has(> .play-pager) {
   height: calc(100dvh - var(--bgb-header-height) - var(--bgb-nav-height) - env(safe-area-inset-bottom));
   min-height: 0;
   padding-bottom: var(--cascade-cta-bar);
@@ -11340,7 +11368,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
 /* The spectator's mirror (session-viewer-view.js) draws the same pages but no
    docked bar — it follows the host rather than driving the game — so its pages
    run down to the nav with ordinary breathing room instead of the bar's 92px. */
-:root[data-bgb-layout="phone"] main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager) {
+main[data-view="session-viewer"] #screen-play:not(.is-locked):has(> .play-pager) {
   padding-bottom: 16px;
 }
 /* A score cell raised the keyboard: the grid takes the whole visible screen.
@@ -11369,21 +11397,21 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    scrolling inside .rg__body, as it does with no keyboard at all. Phone tier
    and the live Play screen only — the spectator's mirror has nothing to type
    into, and Gather and Settle are not matched. */
-:root.bgb-kb-open[data-bgb-layout="phone"]:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) {
+:root.bgb-kb-open:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) {
   --bgb-header-height: 0px;
   --bgb-cascade-head-height: 0px;
 }
-:root.bgb-kb-open[data-bgb-layout="phone"]:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) :is(
+:root.bgb-kb-open:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) :is(
   .bgb-global-header,
   #screen-play > .cascade-screen__header,
   #screen-play .cascade-gamebar
 ) {
   display: none;
 }
-:root.bgb-kb-open[data-bgb-layout="phone"]:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) #screen-play {
+:root.bgb-kb-open:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) #screen-play {
   position: fixed;
   top: var(--bgb-vv-top, 0px);
-  left: 0;
+  left: var(--bgb-rail-width);
   right: 0;
   margin-inline: auto;
   max-width: var(--bgb-col-max);
@@ -11395,7 +11423,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   z-index: 25;
   background: var(--bg-0);
 }
-:root[data-bgb-layout="phone"] .play-pager {
+:root:is([data-bgb-layout="phone"], [data-bgb-layout="tablet"]) .play-pager {
   display: block;
   position: relative;
   flex: 1 1 auto;
@@ -11403,7 +11431,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   margin-inline: -16px;
   overflow-x: clip;
 }
-:root[data-bgb-layout="phone"] .play-pager__page {
+:root:is([data-bgb-layout="phone"], [data-bgb-layout="tablet"]) .play-pager__page {
   position: absolute;
   inset: 0;
   display: flex;
@@ -11415,25 +11443,25 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   transform-origin: 50% 0;   /* pages share a top edge, like the popup's on a phone */
   will-change: transform, opacity;
 }
-:root[data-bgb-layout="phone"] .play-pager__page[data-pp-page="0"] {
+:root:is([data-bgb-layout="phone"], [data-bgb-layout="tablet"]) .play-pager__page[data-pp-page="0"] {
   transform: translateX(var(--pp-x0, -110%)) scale(var(--pp-s0, 0.85));
   opacity: var(--pp-o0, 0.65);
 }
-:root[data-bgb-layout="phone"] .play-pager__page[data-pp-page="1"] {
+:root:is([data-bgb-layout="phone"], [data-bgb-layout="tablet"]) .play-pager__page[data-pp-page="1"] {
   transform: translateX(var(--pp-x1, 0px)) scale(var(--pp-s1, 1));
   opacity: var(--pp-o1, 1);
 }
-:root[data-bgb-layout="phone"] .play-pager__page[data-pp-page="2"] {
+:root:is([data-bgb-layout="phone"], [data-bgb-layout="tablet"]) .play-pager__page[data-pp-page="2"] {
   transform: translateX(var(--pp-x2, 110%)) scale(var(--pp-s2, 0.85));
   opacity: var(--pp-o2, 0.65);
 }
-:root[data-bgb-layout="phone"] .is-pp-turning .play-pager__page {
+:root:is([data-bgb-layout="phone"], [data-bgb-layout="tablet"]) .is-pp-turning .play-pager__page {
   transition: transform 220ms cubic-bezier(.22, .61, .36, 1),
               opacity 220ms cubic-bezier(.22, .61, .36, 1);
 }
 /* The players and guide pages are lists that run long; each scrolls on its
    own. The grid page does not — its round rows do, below. */
-:root[data-bgb-layout="phone"] :is(.play-pager__page--players, .play-pager__page--guide) {
+:root:is([data-bgb-layout="phone"], [data-bgb-layout="tablet"]) :is(.play-pager__page--players, .play-pager__page--guide) {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -11444,7 +11472,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
    meets the dots, then holds: the names band and the Total row stay put and
    only the round rows scroll, inside .rg__body. The band is no longer sticky
    against the page — it sits above the scroller instead of over it. */
-:root[data-bgb-layout="phone"] .play-pager__page--scores .cascade-card--scoring {
+:root #screen-play .play-pager__page--scores .cascade-card--scoring {
   display: flex;
   flex-direction: column;
   flex: 0 1 auto;
@@ -11452,39 +11480,39 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   max-height: 100%;
   box-sizing: border-box;
 }
-:root[data-bgb-layout="phone"] .play-pager__page--scores .cascade-card--scoring > * { flex: none; }
-:root[data-bgb-layout="phone"] .play-pager__page--scores .cascade-card--scoring .rg {
+:root #screen-play .play-pager__page--scores .cascade-card--scoring > * { flex: none; }
+:root #screen-play .play-pager__page--scores .cascade-card--scoring .rg {
   --rg-pin-top: 0px;
   display: flex;
   flex-direction: column;
   flex: 0 1 auto;
   min-height: 0;
 }
-:root[data-bgb-layout="phone"] .play-pager__page--scores .rg__pinzone {
+:root #screen-play .play-pager__page--scores .rg__pinzone {
   display: flex;
   flex-direction: column;
   flex: 0 1 auto;
   min-height: 0;
 }
-:root[data-bgb-layout="phone"] .play-pager__page--scores .rg__head {
+:root #screen-play .play-pager__page--scores .rg__head {
   position: static;
   flex: none;
 }
-:root[data-bgb-layout="phone"] .play-pager__page--scores .rg__body {
+:root #screen-play .play-pager__page--scores .rg__body {
   flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-:root[data-bgb-layout="phone"] .play-pager__page--scores .rg__foot { flex: none; }
-:root[data-bgb-layout="phone"] .play-pager__page--scores .scoring-table--body tr {
+:root #screen-play .play-pager__page--scores .rg__foot { flex: none; }
+:root #screen-play .play-pager__page--scores .scoring-table--body tr {
   scroll-margin: 8px 0;
 }
 
 /* Which page is showing. A row of three between the pages and the docked bar,
    never scrolled away. Each is a 36×40 target around a 7px mark; the active
    one stretches into a bar in the accent. */
-:root[data-bgb-layout="phone"] .play-pager__dots {
+:root:is([data-bgb-layout="phone"], [data-bgb-layout="tablet"]) .play-pager__dots {
   display: flex;
   justify-content: center;
   flex: none;
@@ -11502,7 +11530,7 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   background: none;
   cursor: pointer;
 }
-.play-pager__dot span {
+.play-pager__dot-mark {
   display: block;
   width: 7px;
   height: 7px;
@@ -11510,11 +11538,153 @@ main[data-view="session-viewer"] .cascade-screen { --cascade-bottom-pad: 24px; }
   background: var(--ink-faint);
   transition: width 220ms var(--ease), background-color 220ms var(--ease);
 }
-.play-pager__dot[aria-selected="true"] span { width: 20px; background: var(--accent); }
-.play-pager__dot:active span { transform: scale(0.85); }
+.play-pager__dot[aria-selected="true"] .play-pager__dot-mark { width: 20px; background: var(--accent); }
+.play-pager__dot:active .play-pager__dot-mark { transform: scale(0.85); }
+.play-pager__dot-label { display: none; }
 .play-pager__dot:focus-visible { outline: 2px solid var(--accent); outline-offset: -8px; border-radius: 12px; }
 @media (prefers-reduced-motion: reduce) {
-  .play-pager__dot span { transition: none; }
+  .play-pager__dot-mark { transition: none; }
+}
+
+/* The Play step is never the two-pane "Cascade panes" layout: on a tablet it
+   pages, on the rail tiers it has a grid of its own (below). Undo the pane
+   rules that would otherwise reach its blocks — .cascade-cols as a grid, the
+   aside's sticky offset and height cap, the CTA's two tracks. */
+#screen-play .play-pager .cascade-cols { display: contents; }
+#screen-play .play-pager .cascade-col--aside { max-height: none; }
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) #screen-play .play-pager .cascade-col--aside { position: static; }
+:root[data-bgb-layout="tablet"] #screen-play:has(> .play-pager) .cascade-cta-wrap { display: block; }
+
+/* While Play is the live step, the column stops capping the width: the grid
+   is the screen the host works in all evening, and every px across is another
+   player's column read without a sideways scroll. A real length rather than
+   `none` for the reason the land tier gives at the top of this file; 1600px
+   only binds on a monitor wide enough that a wider scorepad stops helping. */
+:root:is([data-bgb-layout="tablet"], [data-bgb-layout="wide"], [data-bgb-layout="land"]):has(main:is([data-view="play-flow"], [data-view="session-viewer"]):not(.hidden) #screen-play:not(.is-locked) > .play-pager) {
+  --bgb-col-max: 1600px;
+}
+
+/* Tablet: the dots are labelled tabs — a pill segmented control under the
+   pages, where a thumb already is. Same buttons, same pager; the label is
+   shown and the mark is not. */
+:root[data-bgb-layout="tablet"] .play-pager__dots {
+  height: auto;
+  margin-top: 0;
+  align-self: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+}
+:root[data-bgb-layout="tablet"] .play-pager__dot {
+  width: auto;
+  height: 36px;
+  margin-block: 0;
+  padding: 0 18px;
+  border-radius: var(--r-pill);
+  color: var(--ink-muted);
+  font: 600 14px/1 var(--font-sans);
+}
+:root[data-bgb-layout="tablet"] .play-pager__dot-mark { display: none; }
+:root[data-bgb-layout="tablet"] .play-pager__dot-label { display: inline; }
+:root[data-bgb-layout="tablet"] .play-pager__dot[aria-selected="true"] {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+:root[data-bgb-layout="tablet"] .play-pager__dot:focus-visible { outline-offset: 2px; border-radius: var(--r-pill); }
+
+/* Rail tiers (wide, land): grid left; standings over guide on the right.
+   --play-side-w is set on the screen, not the pager, because the docked CTA
+   (a sibling of the pager) reads it too, to stay under the grid. */
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) #screen-play:has(> .play-pager) {
+  --play-side-w: clamp(260px, 26vw, 340px);
+}
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) #screen-play:has(> .play-pager.is-side-min) {
+  --play-side-w: 48px;
+}
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .play-pager {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) var(--play-side-w);
+  grid-template-rows: auto fit-content(45%) minmax(0, 1fr);
+  grid-template-areas:
+    "scores bar"
+    "scores players"
+    "scores guide";
+  column-gap: 16px;
+  row-gap: 8px;
+}
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .play-pager__page--scores {
+  grid-area: scores;
+  min-height: 0;
+}
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .play-pager__page--players {
+  grid-area: players;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) #screen-play .play-pager .play-pager__page--guide {
+  grid-area: guide;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .play-side-bar {
+  grid-area: bar;
+  display: flex;
+  justify-content: flex-end;
+}
+.play-side-bar__btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-1);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.play-side-bar__btn:hover { color: var(--ink); }
+.play-side-bar__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.play-side-bar__unfold { display: none; }
+/* Folded: the column is a 48px strip holding one button that unfolds it. */
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .play-pager.is-side-min :is(.play-pager__page--players, .play-pager__page--guide) {
+  display: none;
+}
+.play-pager.is-side-min .play-side-bar__fold { display: none; }
+.play-pager.is-side-min .play-side-bar__unfold { display: grid; }
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) .play-pager.is-side-min .play-side-bar { justify-content: center; }
+/* The docked CTA keeps to the grid's track, folded or not. */
+:root:is([data-bgb-layout="wide"], [data-bgb-layout="land"]) #screen-play:has(> .play-pager) .cascade-cta-wrap {
+  grid-template-columns: minmax(0, 1fr) var(--play-side-w);
+}
+
+/* Keyboard up on a rail tier: the grid is all that is left. The column goes
+   entirely (not to its strip) — nothing in it is typed into, and the host is
+   mid-round; it is back the moment the keyboard goes down. */
+:root.bgb-kb-open:is([data-bgb-layout="wide"], [data-bgb-layout="land"]):has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) .play-pager {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "scores";
+  grid-template-rows: minmax(0, 1fr);
+}
+:root.bgb-kb-open:is([data-bgb-layout="wide"], [data-bgb-layout="land"]):has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager) #screen-play .play-pager :is(.play-pager__page--players, .play-pager__page--guide, .play-side-bar) {
+  display: none;
+}
+/* A score cell has the keyboard: the keypad bar (widgets/score-keypad.js) sits
+   on it with + Round, exactly where the docked CTA would, so the CTA goes and
+   the screen ends at the keypad's 57px instead of the CTA's 76px. */
+:root.bgb-kb-open:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager):has(#screen-play input.scoring-cell:focus) #screen-play .cascade-cta-wrap {
+  display: none;
+}
+:root.bgb-kb-open:has(main[data-view="play-flow"]:not(.hidden) #screen-play:not(.is-locked) > .play-pager):has(#screen-play input.scoring-cell:focus) #screen-play {
+  padding-bottom: 57px;
 }
 
 /* ── Players page: standings (widgets/play-standings.js) ──────────────────
