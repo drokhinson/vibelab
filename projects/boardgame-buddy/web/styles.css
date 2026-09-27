@@ -221,6 +221,9 @@
   --emboss-opacity: 0.16;
 
   --nav-bg:   #241809;
+  /* Unselected tab ink. --ink-faint sinks into the espresso bar, so the nav
+     gets a step brighter; hover still lifts to --ink-muted. */
+  --nav-ink:  #A69884;
   --auth-bg:  #2D1A0A;
 
   /* Podium medals (Stats spoke). Silver and bronze are warm-shifted into the
@@ -301,6 +304,7 @@
   --emboss-opacity: 0.07;
 
   --nav-bg:  #FFFBF2;
+  --nav-ink: var(--ink-faint);
   --auth-bg: #F2E7D2;
 
   /* Light needs its own three: the dark values are tuned to sit ON espresso,
@@ -3688,7 +3692,7 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   justify-content: center;
   gap: 4px;
   position: relative;
-  color: var(--ink-faint);
+  color: var(--nav-ink);
   cursor: pointer;
   padding: 0;
   border-radius: 0;
@@ -3761,24 +3765,6 @@ main[data-view="reference-guide-add"].chapter-edit-locked:not(.hidden) {
   box-sizing: content-box;
 }
 .bgb-global-header__dot[hidden] { display: none; }
-
-/* Play stays the primary action — a gold-filled icon chip rather than a
-   raised disc, so it reads as the CTA without breaking the bar's edge. */
-.bgb-nav__tab--play .bgb-nav__ico {
-  width: 40px;
-  height: 26px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #E8C868 0%, #CDA23F 100%);
-  color: #2A1B0E;
-  transition: filter 0.18s ease;
-}
-.bgb-nav__tab--play .bgb-nav__ico svg,
-.bgb-nav__tab--play .bgb-nav__ico i { color: #2A1B0E; }
-.bgb-nav__tab--play:hover .bgb-nav__ico { filter: brightness(1.08); }
-.bgb-nav__tab--play:active .bgb-nav__ico { filter: brightness(0.94); }
-.bgb-nav__tab--play.active .bgb-nav__ico {
-  box-shadow: 0 0 0 2px rgba(245, 220, 142, 0.35);
-}
 
 /* ── Left rail (wide tier) ──────────────────────────────────────────────────
    Same element, stood on its end. On a screen wide enough (≥ 1024px, or
