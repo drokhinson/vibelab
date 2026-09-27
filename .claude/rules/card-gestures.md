@@ -167,10 +167,15 @@ CSS read them:
     0.65 at rest), applied to the real card too, so a card grows as it slides
     in.
   - Every card shares ONE vertical centre line: centre the detail view on
-    tablet tiers and pin each copy with `top: centreLine` +
-    `translateY(-50%)`, scaling about its centre. A top computed from the
-    copy's height drifts, because the height isn't final until its image has
-    laid out.
+    every layout tier, phones included, and pin each copy with
+    `top: centreLine` + `translateY(-50%)`, scaling about its centre. A top
+    computed from the copy's height drifts, because the height isn't final
+    until its image has laid out.
+  - Every card in the set is as tall as the tallest one, so a turn never
+    resizes the card. Paint each item's copy off-screen at the card's width,
+    take the max, and apply it as a `min-height` custom property capped by the
+    card's `max-height` (min-height beats max-height). Re-measure when the
+    width, the set or a learned image size changes.
   - Tapping a peek turns to it. Put `inert` on the copy's children, not the
     copy, so the copy still takes the tap.
 - **Reserve a copy's image box before it loads.** A freshly inserted `<img>` is

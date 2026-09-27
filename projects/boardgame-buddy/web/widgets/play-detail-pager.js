@@ -25,11 +25,12 @@
 //   PlayDetailPager.sequenceFor(playId)          → string[] (always includes playId)
 //   PlayDetailPager.renderNav(index, total)      → topbar markup, "" for one play
 //   PlayDetailPager.preload(urls)                — warm the set's images on open
-//   PlayDetailPager.attach(root, { canSwipe, neighbour, current, peekHtml, swap })
+//   PlayDetailPager.attach(root, { canSwipe, neighbour, current, sequence, peekHtml, swap })
 //     → { turn, clear, sync }
 //     canSwipe  — (dir: 1|-1) => boolean; false at an end, while editing, …
 //     neighbour — (dir: 1|-1) => the play id on that side, or null
 //     current   — () => the play id on screen
+//     sequence  — () => every play id in the set, to size all cards to the tallest
 //     peekHtml  — (id) => that play's card markup, exactly as the popup paints it
 //     swap      — (id) => load that play into the real card, synchronously
 
@@ -155,9 +156,18 @@
   /** @type {Map<string, [number, number]>} */
   const sizes = new Map();
 
+  // Told when a new size is learned: an open popup re-fits its cards' shared
+  // height, which a photo whose box was unknown had measured too short.
+  /** @type {Set<() => void>} */
+  const onLearn = new Set();
+
   /** @param {HTMLImageElement} img */
   function learn(img) {
-    if (img.complete && img.naturalWidth) sizes.set(img.currentSrc || img.src, [img.naturalWidth, img.naturalHeight]);
+    if (!img.complete || !img.naturalWidth) return;
+    const key = img.currentSrc || img.src;
+    if (sizes.has(key)) return;
+    sizes.set(key, [img.naturalWidth, img.naturalHeight]);
+    onLearn.forEach((fn) => fn());
   }
 
   /** @param {Element} el */
@@ -232,6 +242,7 @@
    *   canSwipe: (dir: 1|-1) => boolean,
    *   neighbour: (dir: 1|-1) => (string|null),
    *   current: () => (string|null),
+   *   sequence?: () => string[],
    *   peekHtml: (id: string) => string,
    *   swap: (id: string) => void,
    * }} opts
@@ -244,6 +255,9 @@
     let busy = false;      // a turn or a spring-back is animating
     let drawing = false;   // a finger is dragging the carousel
     let timer = /** @type {any} */ (0);
+    // What the shared height was last measured for (fitHeight).
+    let fitKey = "";
+    let tallest = 0;
 
     const card = () => /** @type {HTMLElement|null} */ (root.querySelector(CARD_SEL));
 
@@ -262,9 +276,6 @@
         top: rr.top + c.offsetTop,
         width,
         height: c.offsetHeight,
-        // Centred cards (tablet and up, styles.css) share one centre line
-        // whatever their height; top-aligned ones (phones) share a top edge.
-        centred: getComputedStyle(root).alignItems === "center",
         // At least clear of the card at peek scale; on a wide screen, centred
         // on the screen's edge so half of it shows.
         offset: Math.max(width / 2 + (PEEK_SCALE * width) / 2 + GAP_PX, window.innerWidth / 2),
@@ -278,8 +289,8 @@
     }
 
     /**
-     * Pin a copy to the real card's column and to its line: its top edge on a
-     * phone, its centre line on a tablet. The centre is held by a -50% translate
+     * Pin a copy to the real card's column and its centre line (every card is
+     * centred on screen, styles.css). The centre is held by a -50% translate
      * (paint), not by a top computed from the copy's height — that height is
      * not final until the copy's photo has laid out, and a copy placed from its
      * first measurement drifted off the centre line as its image arrived.
@@ -289,7 +300,49 @@
       if (!geo) return;
       el.style.left = geo.left + "px";
       el.style.width = geo.width + "px";
-      el.style.top = (geo.centred ? geo.top + geo.height / 2 : geo.top) + "px";
+      el.style.top = geo.top + geo.height / 2 + "px";
+    }
+
+    /**
+     * Make every card in the set as tall as the tallest one, so a page turn
+     * never resizes the card and the neighbours line up edge to edge. Each play
+     * is painted off-screen at the card's width and measured; the result is a
+     * min-height (--pdp-min-h) on the backdrop for the real card and on each
+     * copy for itself. Re-measured only when the width, the set or a known
+     * image size changes — render() calls sync() on every repaint.
+     */
+    function fitHeight() {
+      if (!geo || !opts.sequence) return;
+      const ids = opts.sequence();
+      const key = `${geo.width}|${sizes.size}|${ids.join(",")}`;
+      if (key === fitKey) return;
+      fitKey = key;
+      tallest = 0;
+      if (ids.length > 1) {
+        const box = document.createElement("div");
+        box.setAttribute("aria-hidden", "true");
+        box.style.cssText = "position:fixed;left:-10000px;top:0;visibility:hidden;pointer-events:none;";
+        for (const id of ids) box.insertAdjacentHTML("beforeend", opts.peekHtml(id));
+        for (const c of Array.from(box.children)) {
+          const el = /** @type {HTMLElement} */ (c);
+          el.style.animation = "none";
+          el.style.width = geo.width + "px";
+        }
+        reserveImages(box);
+        document.body.appendChild(box);
+        if (window.BgbIcons) window.BgbIcons.render(box);
+        for (const c of Array.from(box.children)) tallest = Math.max(tallest, /** @type {HTMLElement} */ (c).offsetHeight);
+        box.remove();
+      }
+      const v = tallest ? tallest + "px" : "";
+      root.style.setProperty("--pdp-min-h", v);
+      for (const k in peeks) peeks[k].el.style.setProperty("--pdp-min-h", v);
+      // The real card may have grown, which moves the centre line.
+      const c = card();
+      if (c && c.offsetHeight !== geo.height) {
+        geo = measure();
+        for (const k in peeks) place(peeks[k].el);
+      }
     }
 
     /**
@@ -312,6 +365,7 @@
       // the copy itself still takes the tap that turns to it.
       for (const child of Array.from(el.children)) /** @type {HTMLElement} */ (child).inert = true;
       reserveImages(el);
+      if (tallest) el.style.setProperty("--pdp-min-h", tallest + "px");
       el.addEventListener("click", () => turn(dir));
       document.body.appendChild(el);
       if (window.BgbIcons) window.BgbIcons.render(el);
@@ -342,7 +396,7 @@
         const x = dx + Number(k) * geo.offset;
         const l = look(x);
         peeks[k].el.style.transform =
-          `translate(${x.toFixed(1)}px, ${geo.centred ? "-50%" : "0px"}) scale(${l.scale.toFixed(4)})`;
+          `translate(${x.toFixed(1)}px, -50%) scale(${l.scale.toFixed(4)})`;
         peeks[k].el.style.opacity = l.opacity.toFixed(3);
       }
     }
@@ -362,6 +416,7 @@
         if (!geo) return;
         for (const k in peeks) place(peeks[k].el);
       }
+      fitHeight();
       for (const dir of /** @type {Array<1|-1>} */ ([-1, 1])) {
         const want = opts.canSwipe(dir) ? opts.neighbour(dir) : null;
         const have = peeks[dir];
@@ -485,12 +540,20 @@
     });
 
     // A rotation or a window resize moves the card, and may change the layout
-    // tier that decides whether cards are centred.
+    // width the cards are measured at.
     const onResize = () => {
       if (!root.isConnected) { window.removeEventListener("resize", onResize); return; }
       sync({ force: true });
     };
     window.addEventListener("resize", onResize);
+
+    let refit = 0;
+    const onImage = () => {
+      if (!root.isConnected) { onLearn.delete(onImage); return; }
+      cancelAnimationFrame(refit);
+      refit = requestAnimationFrame(() => sync());
+    };
+    onLearn.add(onImage);
 
     const ctl = { turn, clear, sync };
     if (!("ontouchstart" in window)) return ctl;
