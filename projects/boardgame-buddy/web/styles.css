@@ -9483,14 +9483,77 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
   font-size: 0.8rem;
 }
 .scoring-cell:focus { outline: none; border-color: var(--accent-ink); }
-/* The cell is `type=number` so that iOS raises a keyboard with a minus key on
-   it (widgets/round-score-grid.js#renderEditableCell). The spinner that comes
-   with the type is not wanted anywhere: the column is ~69px wide and the
-   stepper would eat a third of it, and a pointer near a cell is there to type
-   in it or to scroll the grid sideways, never to nudge a score by one. */
-.scoring-cell::-webkit-outer-spin-button,
-.scoring-cell::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.scoring-cell { -moz-appearance: textfield; appearance: textfield; }
+
+/* The bar widgets/score-keypad.js docks on the number pad while a score cell
+   has focus: (−) to flip its sign, Prev and Next to move between cells.
+   Body-level and edge to edge like the keyboard it sits on, and shown only
+   while ui/viewport-lock.js reports a software keyboard up — a hardware
+   keyboard has its own minus key, and Enter / Shift+Enter do what Next / Prev
+   do.
+
+   z-index 105: above the modal/sheet rung (100–102), because the play-detail
+   popup's edit grid is a cell inside a modal; below the import toasts (111)
+   and the error toast (120). It only exists while a cell is focused, and it
+   sits on the keyboard, so it never contends with a sheet's own controls.
+
+   Ground tokens rather than the --polaroid-* aliases: it floats over whatever
+   surface the grid is on (paper scorepad, chrome popup), and reads as part of
+   the keyboard, which is chrome in both themes. */
+.score-keypad {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--bgb-kb-inset, 0px);
+  z-index: 105;
+  box-sizing: border-box;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-2);
+  border-top: 1px solid var(--line-strong);
+  font-family: var(--font-sans);
+}
+:root.bgb-kb-open .score-keypad:not([hidden]) { display: flex; }
+.score-keypad__key,
+.score-keypad__nav {
+  height: 44px;
+  min-width: 56px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-sm);
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: pointer;
+}
+.score-keypad__key {
+  background: var(--bg-1);
+  color: var(--ink);
+  font: 500 20px/1 var(--font-score);
+  box-shadow: 0 1px 0 var(--shadow-c);
+}
+.score-keypad__key:active { background: var(--bg-0); }
+.score-keypad__nav {
+  min-width: 76px;
+  font-size: 17px;
+  font-weight: 600;
+}
+/* Prev is the secondary move, so it takes the key's plain face; Next keeps the
+   solid accent as the move a scorer makes forty times a night. */
+.score-keypad__prev {
+  margin-left: auto;
+  background: var(--bg-1);
+  color: var(--ink);
+  box-shadow: 0 1px 0 var(--shadow-c);
+}
+.score-keypad__prev:active { background: var(--bg-0); }
+.score-keypad__prev:disabled { color: var(--ink-faint); box-shadow: none; cursor: default; }
+.score-keypad__next {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.score-keypad__next:active { filter: brightness(0.92); }
 
 /* The strip above the grid: which scorepad the table is built on, and which
    expansions are appending rows to it (migrations 018 / 032). Absent entirely
@@ -9878,9 +9941,9 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 /* The cell and the one thing wrapping it still does: carry `is-neg` so a
    negative score reads in rust. It used to hold a +/− sign button beside the
-   input as well — the input is a `type=number` now and the software keyboard
-   carries the sign, so the button and the preference that turned it on are
-   gone (widgets/round-score-grid.js#renderEditableCell).
+   input as well; the sign now lives on the keypad bar that docks on the number
+   pad (widgets/score-keypad.js), so the button and the preference that turned
+   it on are gone.
 
    --rust-ink, not --rust: this ink only ever lands on paper, which is light in
    every theme, and the chrome block lifts --rust to #E87B63 for the espresso

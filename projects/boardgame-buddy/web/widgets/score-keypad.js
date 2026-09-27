@@ -1,0 +1,171 @@
+// widgets/score-keypad.js — the bar that rides on top of the number pad while
+// a scoring-grid cell has focus: (−) to flip the cell's sign, and Prev / Next
+// to move between cells.
+//
+// The cell asks for `inputmode="numeric"`, the iOS 10-key pad — big keys,
+// digits only, no sign and no return key. The two keys that pad is missing
+// live here instead.
+//
+// The bar is one element on <body>, created on first use, so it is never
+// inside a transformed sheet where `position: fixed` would stop meaning the
+// screen. It shows only while :root.bgb-kb-open (ui/viewport-lock.js) says a
+// software keyboard is up — a laptop has its own minus key, and Enter and
+// Shift+Enter move the same way — and sits on it through --bgb-kb-inset.
+//
+// The buttons must not take focus from the cell, or the keyboard drops and
+// comes back on every tap. pointerdown is cancelled for mouse and Android;
+// iOS decides focus in the tap itself, so a touch acts on touchend and cancels
+// that, which also swallows the click it would have become.
+
+(function () {
+  const CELL = "input.scoring-cell";
+
+  /**
+   * The cell's text with its sign flipped: "" → "-" (a sign waiting for
+   * digits, the half-typed state sanitizeRoundScore keeps), "-" → "", and
+   * "12" ↔ "-12".
+   * @param {string} text
+   * @returns {string}
+   */
+  function flipSign(text) {
+    const v = String(text == null ? "" : text);
+    return v.charAt(0) === "-" ? v.slice(1) : "-" + v;
+  }
+
+  /** Write text into a cell the way typing would, so the host hears it. */
+  function write(el, text) {
+    el.value = text;
+    try { el.setSelectionRange(text.length, text.length); } catch (_) {}
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function toggleSign(el) {
+    write(el, flipSign(el.value));
+  }
+
+  // A lone "-" left behind is cleared on the way out, so a cell never sits
+  // there showing a sign its column is totalling as nothing.
+  function settle(el) {
+    if (el.value === "-") write(el, "");
+  }
+
+  // The cells of the grid this one belongs to, in reading order — across a
+  // round, then down to the next one — which is document order, because each
+  // round is one <tr>.
+  function cellsOf(el) {
+    const grid = el.closest(".rg") || document;
+    return Array.from(grid.querySelectorAll(CELL));
+  }
+
+  // Next past the last cell closes the keyboard; Prev before the first one
+  // does nothing (its button is disabled there).
+  function move(el, step) {
+    const cells = cellsOf(el);
+    const to = cells[cells.indexOf(el) + step];
+    if (!to && step < 0) return;
+    settle(el);
+    if (!to) { el.blur(); return; }
+    to.focus();
+    const n = to.value.length;
+    try { to.setSelectionRange(n, n); } catch (_) {}
+  }
+
+  // ── The bar ──────────────────────────────────────────────────────────
+  /** @type {HTMLElement|null} */
+  let bar = null;
+  /** @type {HTMLInputElement|null} */
+  let active = null;
+  let touched = false;
+
+  function buildBar() {
+    const el = document.createElement("div");
+    el.className = "score-keypad";
+    el.setAttribute("role", "toolbar");
+    el.setAttribute("aria-label", "Score keys");
+    el.hidden = true;
+    el.innerHTML = `
+      <button type="button" tabindex="-1" class="score-keypad__key" data-key="sign" aria-label="Make negative or positive">(&minus;)</button>
+      <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__prev" data-key="prev">Prev</button>
+      <button type="button" tabindex="-1" class="score-keypad__nav score-keypad__next" data-key="next">Next</button>`;
+    el.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "touch" && e.target instanceof Element && e.target.closest("button")) e.preventDefault();
+    });
+    el.addEventListener("touchend", (e) => {
+      const b = e.target instanceof Element ? e.target.closest("button") : null;
+      if (!b) return;
+      e.preventDefault();
+      // The cancelled touch never becomes a click; the flag only guards
+      // browsers that send one anyway.
+      touched = true;
+      setTimeout(() => { touched = false; }, 400);
+      press(b);
+    });
+    el.addEventListener("click", (e) => {
+      if (touched) return;
+      const b = e.target instanceof Element ? e.target.closest("button") : null;
+      if (b) press(b);
+    });
+    document.body.appendChild(el);
+    return el;
+  }
+
+  /** @param {Element} b */
+  function press(b) {
+    const el = active;
+    if (!el || !el.isConnected) return;
+    const key = b.getAttribute("data-key");
+    if (key === "next") move(el, 1);
+    else if (key === "prev") move(el, -1);
+    else if (key === "sign") toggleSign(el);
+  }
+
+  function show(el) {
+    if (!bar) bar = buildBar();
+    active = el;
+    const cells = cellsOf(el);
+    const nextBtn = bar.querySelector(".score-keypad__next");
+    const prevBtn = /** @type {HTMLButtonElement|null} */ (bar.querySelector(".score-keypad__prev"));
+    if (nextBtn) nextBtn.textContent = cells[cells.length - 1] === el ? "Done" : "Next";
+    if (prevBtn) prevBtn.disabled = cells[0] === el;
+    bar.hidden = false;
+    // iOS scrolls a focused field clear of the keyboard, but it does not know
+    // about this bar — once the keyboard has settled, bring the cell out from
+    // under it too.
+    setTimeout(() => {
+      if (active !== el || !bar || bar.hidden) return;
+      const barTop = bar.getBoundingClientRect().top;
+      if (el.getBoundingClientRect().bottom > barTop) el.scrollIntoView({ block: "center", inline: "nearest" });
+    }, 350);
+  }
+
+  function hide() {
+    active = null;
+    if (bar) bar.hidden = true;
+  }
+
+  function start() {
+    document.addEventListener("focusin", (e) => {
+      const t = e.target;
+      if (t instanceof HTMLInputElement && t.matches(CELL)) show(t);
+    });
+    document.addEventListener("focusout", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement) || !t.matches(CELL)) return;
+      settle(t);
+      // Focus lands on the next cell after this event; only hide if it didn't.
+      setTimeout(() => {
+        const now = document.activeElement;
+        if (!(now instanceof HTMLInputElement && now.matches(CELL))) hide();
+      }, 0);
+    });
+    document.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (e.key !== "Enter" || !(t instanceof HTMLInputElement) || !t.matches(CELL)) return;
+      e.preventDefault();
+      move(t, e.shiftKey ? -1 : 1);
+    });
+  }
+
+  window.ScoreKeypad = { flipSign, toggleSign, move };
+  if (typeof document !== "undefined" && document.addEventListener) start();
+})();
