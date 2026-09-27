@@ -358,6 +358,11 @@
         }
       }
 
+      // Start the mint BEFORE the first paint. The invite card reads "no code
+      // and nothing in flight" as a failed mint, so painting first showed the
+      // wifi-off "No session code" card until the code arrived.
+      const lobbyStarted = this._lobbyReady();
+
       this.render();
 
       // Preload buddies (accounts), ghosts, and recently-played-with in one
@@ -403,7 +408,7 @@
       // it gets its own repaint rather than riding the slowest of the three
       // preloads — a slow buddy fetch used to leave the invite card showing
       // "— — — — —" long after the code had arrived.
-      const lobbyPromise = this._lobbyReady().then(() => {
+      const lobbyPromise = lobbyStarted.then(() => {
         this.render();
         this._startLobbyPoll();
       });
@@ -1802,9 +1807,11 @@
       return `
         <section class="cascade-card cascade-card--invite">
           <span class="cascade-invite__icon">
-            <i data-icon="qr-code" class="w-4 h-4"></i>
+            ${code
+              ? `<i data-icon="qr-code" class="w-4 h-4"></i>`
+              : `<span class="game-finder-spinner" aria-hidden="true"></span>`}
           </span>
-          <div class="cascade-invite__body">
+          <div class="cascade-invite__body" ${code ? "" : `role="status"`}>
             <span class="cascade-invite__title">Session code</span>
             <span class="cascade-invite__code ${code ? "" : "is-pending"}">${escapeHtml(code || "— — — — —")}</span>
             ${code ? "" : `<span class="cascade-invite__hint">Getting your code…</span>`}
@@ -5533,14 +5540,17 @@
       ps.persist();
       window.store.set("activePlay", ps);
 
-      // Paint the prefilled Gather screen before any network work.
+      // _ps.code is null, so this takes the create branch: POST /sessions
+      // with the game already attached, then replaces the URL with the new
+      // /play/{code}. Started before the paint below so the invite card sees
+      // the mint in flight and shows it loading, not failed.
+      const lobbyStarted = this._lobbyReady();
+
+      // Paint the prefilled Gather screen before any network work lands.
       this.render();
       this._scrollToCurrentPhase();
 
-      // _ps.code is null, so this takes the create branch: POST /sessions
-      // with the game already attached, then replaces the URL with the new
-      // /play/{code}.
-      await this._lobbyReady();
+      await lobbyStarted;
       // Repaint and arm the poll the moment the code exists. The roster sync
       // below is deliberately NOT awaited: it is one POST per carried-over
       // player, and making the invite card wait on all of them held the screen
