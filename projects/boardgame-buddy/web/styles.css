@@ -8937,8 +8937,10 @@ button.bgg-import-row__btn:focus-visible { outline: 2px solid var(--accent-ink);
 }
 /* The icon centres on 50% of its positioned ancestor, which inline is the
    whole column rather than the field — pin it to the middle of the 3rem
-   input instead, or it floats in the results. */
-.game-finder--inline .game-finder__icon { top: 1.5rem; }
+   input instead, or it floats in the results. The shared × has the same
+   problem, and drops below the field as soon as a query shows results. */
+.game-finder--inline .game-finder__icon,
+.game-finder--inline .field-clear-btn { top: 1.5rem; }
 .game-finder--inline .game-finder__input {
   flex: none;
   border-radius: 12px;
