@@ -1735,6 +1735,8 @@
         <div class="cascade-cta-wrap">
           <div class="cascade-cta-row">
             <button class="btn btn-primary cascade-cta cascade-cta--wide" type="button"
+                    onpointerdown="window.playFlowView._keepCellFocus(event)"
+                    onmousedown="window.playFlowView._keepCellFocus(event)"
                     onclick="window.playFlowView._addRound()">
               <i data-icon="plus" class="w-4 h-4"></i>
               Next round
@@ -4189,7 +4191,30 @@
       return true;
     }
 
+    /**
+     * Next round must not put the keyboard away. A press on a button moves
+     * focus to it, and the score cell losing focus is what drops the keyboard
+     * — so while a cell is focused, the press keeps focus where it is (the
+     * click still fires). pointerdown for touch and pen, mousedown for the
+     * compat event a browser without pointer events sends. With no cell
+     * focused the button behaves like any other.
+     * @param {Event} e
+     */
+    _keepCellFocus(e) {
+      const a = document.activeElement;
+      if (a && a.matches && a.matches("input.scoring-cell") && this.container.contains(a)) {
+        e.preventDefault();
+      }
+    }
+
     _addRound() {
+      // Typing when Next round was pressed? Then the keyboard stays up and the
+      // caret moves to the new round's first cell — the next number the host
+      // enters. Asked BEFORE the repaint below, which replaces every cell; the
+      // refocus happens inside the same tap, which is what lets a phone keep
+      // its keyboard open rather than read it as a programmatic focus.
+      const a = document.activeElement;
+      const typing = !!(a && a.matches && a.matches("input.scoring-cell") && this.container.contains(a));
       // From the players or the guide page, the new row is what the host wants
       // to see: slide back to the grid in the same frame as the tap.
       if (this._pager) this._pager.turnTo(PLAY_PAGE_SCORES);
@@ -4211,7 +4236,7 @@
             .catch(() => {});
         }
       }
-      this._refreshScoringSection();
+      this._refreshScoringSection(typing ? `0-${this._maxRoundCount() - 1}` : undefined);
     }
 
     // Highest roundScores length across players — the authoritative round
