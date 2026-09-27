@@ -1,6 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BoardgameBuddy — current schema snapshot
--- Last updated: 053_rulebook_review_optional.sql (bgb_chapters_link_shape
+-- Last updated: 054_bgg_image_links.sql (boardgamebuddy_games grows
+--               bgg_image_url / bgg_thumbnail_url / bgg_images_synced_at plus
+--               idx_bgb_games_images_synced — BGG's own image URLs kept next
+--               to the re-hosted ones — and the new
+--               boardgamebuddy_bgg_thumb_cache table; hand-added below.)
+--               Before that: 053_rulebook_review_optional.sql (bgb_chapters_link_shape
 --               re-issued so moderation_status admits a fourth value,
 --               'unlisted' — a rulebook link whose author has not asked for
 --               review. No new columns, no new indexes, no backfill.)
@@ -107,6 +112,13 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_games (
   -- year, so the queue drains; the panel keeps listing it off the field
   -- predicate, so nothing incomplete disappears.
   bgg_meta_synced_at TIMESTAMPTZ,
+  -- BoardGameGeek's own image URLs, recorded next to the re-hosted
+  -- image_url / thumbnail_url (migration 054). Nothing renders them yet.
+  -- bgg_images_synced_at NULL with a non-null bgg_id IS the image-links
+  -- backfill queue; stamped even when BGG has no art.
+  bgg_image_url TEXT,
+  bgg_thumbnail_url TEXT,
+  bgg_images_synced_at TIMESTAMPTZ,
   CONSTRAINT boardgamebuddy_games_pkey PRIMARY KEY (id),
   CONSTRAINT boardgamebuddy_games_bgg_id_key UNIQUE (bgg_id),
   CONSTRAINT boardgamebuddy_games_play_mode_check CHECK ((play_mode = ANY (ARRAY['competitive'::text, 'coop'::text, 'team'::text])))
@@ -119,6 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_bgb_games_name_trgm ON public.boardgamebuddy_game
 CREATE INDEX IF NOT EXISTS idx_bgb_games_year_rank ON public.boardgamebuddy_games USING btree (year_published DESC, bgg_rank ASC NULLS LAST) WHERE (is_expansion = false);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_stats_synced ON public.boardgamebuddy_games USING btree (bgg_stats_synced_at ASC NULLS FIRST) WHERE (bgg_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_meta_synced ON public.boardgamebuddy_games USING btree (bgg_meta_synced_at ASC NULLS FIRST) WHERE (bgg_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_bgb_games_images_synced ON public.boardgamebuddy_games USING btree (bgg_images_synced_at ASC NULLS FIRST) WHERE (bgg_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bgb_games_mechanics_gin ON public.boardgamebuddy_games USING gin (mechanics) WHERE (is_expansion = false);
 GRANT SELECT ON public.boardgamebuddy_games TO boardgamebuddy_role;
 
@@ -139,6 +152,17 @@ CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_hot_snapshots (
 ALTER TABLE public.boardgamebuddy_bgg_hot_snapshots ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_bgb_hot_snapshots_bgg_captured ON public.boardgamebuddy_bgg_hot_snapshots USING btree (bgg_id, captured_at DESC);
 GRANT SELECT ON public.boardgamebuddy_bgg_hot_snapshots TO boardgamebuddy_role;
+
+-- BGG thumbnail per bgg_id, for BGG search rows (migration 054). NULL
+-- thumbnail_url = BGG has none. Not a catalog. Service-role only: RLS on, no
+-- grants.
+CREATE TABLE IF NOT EXISTS public.boardgamebuddy_bgg_thumb_cache (
+  bgg_id INTEGER NOT NULL,
+  thumbnail_url TEXT,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT boardgamebuddy_bgg_thumb_cache_pkey PRIMARY KEY (bgg_id)
+);
+ALTER TABLE public.boardgamebuddy_bgg_thumb_cache ENABLE ROW LEVEL SECURITY;
 
 
 -- ── Profiles ──────────────────────────────────────────────────────────────────

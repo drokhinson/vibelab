@@ -8200,7 +8200,9 @@ html.bgb-ptr-armed body {
 }
 .bgg-import-row__mark {
   flex: none;
-  width: 34px; height: 34px;
+  /* 44px, the size of the cover it becomes once a thumbnail lands — so the
+     name column does not jump sideways as the art arrives. */
+  width: 44px; height: 44px;
   display: grid; place-items: center;
   border-radius: 10px;
   background: var(--polaroid-bg-soft);
@@ -8214,6 +8216,30 @@ html.bgb-ptr-armed body {
   background: color-mix(in srgb, var(--rust) 16%, transparent);
   color: var(--rust);
 }
+/* Box art in the mark once it is known (BGG search thumbnails, migration 054).
+   The soft ground stays behind it, so a letterboxed cover or a broken image
+   (the <img> removes itself) still reads as the same square. */
+.bgg-import-row__mark--art { position: relative; }
+.bgg-import-row__mark--art img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+/* The row's state glyph, riding the cover's corner. Tinted the way the bare
+   mark is for the same state, on the page's own ground so it reads over any
+   artwork. */
+.bgg-import-row__badge {
+  position: absolute;
+  right: -5px; bottom: -5px;
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 999px;
+  background: var(--polaroid-bg-soft);
+  box-shadow: 0 0 0 2px var(--polaroid-bg);
+}
+.bgg-import-row__badge svg { width: 12px; height: 12px; }
+.bgg-import-row[data-state="library"] .bgg-import-row__badge { color: var(--ok); }
+.bgg-import-row[data-state="failed"] .bgg-import-row__badge { color: var(--rust); }
 .bgg-import-row__body { flex: 1 1 auto; min-width: 0; }
 /* The NAME WRAPS, unlike every other row name in the app. A BGG search returns
    the whole family of a title — "The Good, the Bad, and the Munchkin" three

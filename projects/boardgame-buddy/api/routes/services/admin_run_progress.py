@@ -76,7 +76,7 @@ _TTL_SECONDS = 600.0
 # long drain runs past it.
 _MAX_EVENTS = 200
 
-# Three tools, so the cap only ever evicts entries that have already expired.
+# Four tools, so the cap only ever evicts entries that have already expired.
 cache.configure(_NS, max_entries=16)
 
 # Which phase vocabulary each tool walks. The two backfills are the same job
@@ -86,6 +86,7 @@ _PHASES: dict[AdminRunTool, type] = {
     AdminRunTool.TRENDING: AdminTrendingPhase,
     AdminRunTool.BGG_IMAGES: AdminBackfillPhase,
     AdminRunTool.BGG_METADATA: AdminBackfillPhase,
+    AdminRunTool.BGG_IMAGE_LINKS: AdminBackfillPhase,
 }
 
 # What a snapshot carries that a compact summary does not. `GET /admin/runs`

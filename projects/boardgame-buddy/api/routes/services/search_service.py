@@ -17,7 +17,8 @@ from ..models import (
     UnifiedSearchHit,
     UnifiedSearchResponse,
 )
-from ..bgg_client import fetch_bgg, parse_bgg_xml, thing_item_basics
+from ..bgg_client import fetch_bgg, parse_bgg_xml, thing_item_basics, thing_item_image_urls
+from . import bgg_thumbnails
 from ._helpers import chunked, game_summary_from_row, game_select_clause
 
 logger = logging.getLogger(__name__)
@@ -149,6 +150,8 @@ async def _bgg_thing_row(bgg_id: int, *, include_expansions: bool) -> dict[str, 
         "name": basics["name"],
         "year_published": basics["year_published"],
         "is_expansion": is_expansion,
+        # The /thing answer already carries it — no second lookup for this row.
+        "thumbnail_url": thing_item_image_urls(item)[1],
     }
 
 
@@ -378,18 +381,31 @@ def _as_results(sb: Client, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
         return []
     ids = [r["bgg_id"] for r in raw]
     have: set[int] = set()
+    thumbs: dict[int, str | None] = {}
     # Chunked: PostgREST carries the id set in the query string, and the whole
-    # list can now be hundreds long.
+    # list can now be hundreds long. The thumbnail rides the same read, so a
+    # game already in the library arrives with its art for free.
     for chunk in chunked(ids, _EXISTS_CHUNK):
         existing = (
             sb.table("boardgamebuddy_games")
-            .select("bgg_id")
+            .select("bgg_id, thumbnail_url")
             .in_("bgg_id", chunk)
             .execute()
             .data
             or []
         )
-        have.update(row["bgg_id"] for row in existing)
+        for row in existing:
+            have.add(row["bgg_id"])
+            if row.get("thumbnail_url"):
+                thumbs[row["bgg_id"]] = row["thumbnail_url"]
+    # Then whatever BGG has already told us (migration 054) — never BGG itself.
+    # The sheet asks /search/bgg-thumbnails for the rows still without one.
+    unseen = [r["bgg_id"] for r in raw if r["bgg_id"] not in thumbs and not r.get("thumbnail_url")]
+    if unseen:
+        try:
+            thumbs.update(bgg_thumbnails.cached_thumbnails(sb, unseen))
+        except Exception:  # noqa: BLE001 — art, never the search
+            logger.warning("BGG thumbnail cache read failed", exc_info=True)
     return [
         BggSearchResult(
             bgg_id=r["bgg_id"],
@@ -397,6 +413,7 @@ def _as_results(sb: Client, raw: list[dict[str, Any]]) -> list[BggSearchResult]:
             year_published=r["year_published"],
             is_expansion=r["is_expansion"],
             already_in_db=r["bgg_id"] in have,
+            thumbnail_url=thumbs.get(r["bgg_id"]) or r.get("thumbnail_url"),
         )
         for r in raw
     ]

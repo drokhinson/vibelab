@@ -22,9 +22,9 @@ from .bgg_client import (
     bgg_description_text,
     fetch_bgg,
     invalidate_bgg_thing_cache,
-    normalize_image_url,
     parse_bgg_xml,
     thing_item_basics,
+    thing_item_image_urls,
     thing_item_publishers,
     thing_item_stats,
 )
@@ -200,6 +200,21 @@ async def _upload_to_storage(sb: Client, bgg_id: int, url: str | None, kind: str
     except Exception as exc:
         logger.warning("Storage upload failed %s: %s", path, exc)
         return url
+
+
+def bgg_image_fields(raw_img: str | None, raw_thumb: str | None) -> dict:
+    """BGG's own image URLs plus the stamp, for any write that just read /thing.
+
+    Recorded next to the re-hosted image_url / thumbnail_url (migration 054) so
+    the app can later serve BGG's CDN directly without re-crawling. Every path
+    that reads /thing writes these, so the backfill queue only ever holds games
+    imported before 054.
+    """
+    return {
+        "bgg_image_url": raw_img,
+        "bgg_thumbnail_url": raw_thumb,
+        "bgg_images_synced_at": _now_iso(),
+    }
 
 
 def _extract_expansion_meta(item: ET.Element) -> tuple[bool, int | None]:
@@ -586,8 +601,7 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
     min_el = item.find("minplayers")
     max_el = item.find("maxplayers")
     time_el = item.find("playingtime")
-    img_el = item.find("image")
-    thumb_el = item.find("thumbnail")
+    raw_img, raw_thumb = thing_item_image_urls(item)
 
     categories = [
         link.get("value", "")
@@ -608,12 +622,10 @@ async def import_game_from_bgg(sb: Client, bgg_id: int) -> dict:
         "min_players": int(min_el.get("value", "0")) if min_el is not None else None,
         "max_players": int(max_el.get("value", "0")) if max_el is not None else None,
         "playing_time": int(time_el.get("value", "0")) if time_el is not None else None,
-        "image_url": await _upload_to_storage(
-            sb, bgg_id, normalize_image_url(img_el.text if img_el is not None else None), "image"
-        ),
-        "thumbnail_url": await _upload_to_storage(
-            sb, bgg_id, normalize_image_url(thumb_el.text if thumb_el is not None else None), "thumb"
-        ),
+        "image_url": await _upload_to_storage(sb, bgg_id, raw_img, "image"),
+        "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
+        # Same /thing response, so BGG's URLs cost nothing extra (migration 054).
+        **bgg_image_fields(raw_img, raw_thumb),
         "description": bgg_description_text(item),
         "categories": categories,
         "mechanics": mechanics,
@@ -757,13 +769,11 @@ async def refresh_game_images(
                         level=AdminRunLevel.WARN,
                     )
                     continue
-                img_el = item.find("image")
-                thumb_el = item.find("thumbnail")
-                raw_img = normalize_image_url(img_el.text if img_el is not None else None)
-                raw_thumb = normalize_image_url(thumb_el.text if thumb_el is not None else None)
+                raw_img, raw_thumb = thing_item_image_urls(item)
                 sb.table("boardgamebuddy_games").update({
                     "image_url": await _upload_to_storage(sb, game["bgg_id"], raw_img, "image"),
                     "thumbnail_url": await _upload_to_storage(sb, game["bgg_id"], raw_thumb, "thumb"),
+                    **bgg_image_fields(raw_img, raw_thumb),
                 }).eq("id", game["id"]).execute()
                 _sync_denormalized_game_fields(sb, game["id"])
                 updated += 1
@@ -875,14 +885,12 @@ async def _hydrate_images_from_bgg(sb: Client, game_id: str, bgg_id: int) -> Non
     if item is None:
         raise HTTPException(status_code=404, detail="Game not found on BGG")
 
-    img_el = item.find("image")
-    thumb_el = item.find("thumbnail")
-    raw_img = normalize_image_url(img_el.text if img_el is not None else None)
-    raw_thumb = normalize_image_url(thumb_el.text if thumb_el is not None else None)
+    raw_img, raw_thumb = thing_item_image_urls(item)
 
     sb.table("boardgamebuddy_games").update({
         "image_url": await _upload_to_storage(sb, bgg_id, raw_img, "image"),
         "thumbnail_url": await _upload_to_storage(sb, bgg_id, raw_thumb, "thumb"),
+        **bgg_image_fields(raw_img, raw_thumb),
     }).eq("id", game_id).execute()
     _sync_denormalized_game_fields(sb, game_id)
     _invalidate_game_caches()

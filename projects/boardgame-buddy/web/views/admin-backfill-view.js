@@ -151,6 +151,19 @@
         list: () => window.Game.adminMissingMetadata(),
         refreshOne: (id) => window.Game.adminRefreshOneMetadata(id),
       },
+      {
+        // Migration 054. Here the list IS the queue: a recorded row has
+        // nothing left to do, so this one does drain to empty.
+        key: "image-links",
+        runTool: "bgg-image-links",
+        title: "Games without BGG image links",
+        icon: "link",
+        emptyText: "Every catalog game has its BoardGameGeek image links recorded.",
+        oneOkToast: "Image links recorded",
+        rowStatus: () => "BoardGameGeek image URLs not recorded",
+        list: () => window.Game.adminMissingImageLinks(),
+        refreshOne: (id) => window.Game.adminRecordOneImageLinks(id),
+      },
     ],
   });
 

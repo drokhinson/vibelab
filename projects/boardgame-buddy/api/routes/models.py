@@ -831,11 +831,21 @@ class BggSearchResult(BaseModel):
     year_published: int | None = None
     is_expansion: bool = False
     already_in_db: bool = False
+    # Ours when the game is in the library, else BGG's from the thumb cache
+    # (migration 054). None = not known yet — GET /search/bgg-thumbnails.
+    thumbnail_url: str | None = None
 
     @computed_field  # type: ignore[misc]
     @property
     def bgg_url(self) -> str:
         return f"https://boardgamegeek.com/boardgame/{self.bgg_id}"
+
+
+class BggThumbnailsResponse(BaseModel):
+    """GET /search/bgg-thumbnails. Keyed by bgg_id (as a string — JSON object
+    keys); a null value means BGG has no thumbnail or could not say."""
+
+    thumbnails: dict[str, str | None]
 
 
 class BggExpansionCandidate(BaseModel):

@@ -1036,6 +1036,19 @@ def normalize_image_url(url: str | None) -> str | None:
     return url
 
 
+def thing_item_image_urls(item: ET.Element) -> tuple[str | None, str | None]:
+    """(image, thumbnail) off one /thing <item>, absolute, BGG's own URLs.
+
+    Text nodes, not value= attributes — unlike /hot's <thumbnail value=…>.
+    """
+    img_el = item.find("image")
+    thumb_el = item.find("thumbnail")
+    return (
+        normalize_image_url(img_el.text if img_el is not None else None),
+        normalize_image_url(thumb_el.text if thumb_el is not None else None),
+    )
+
+
 # ── Description normalization ────────────────────────────────────────────────
 # BGG's <description> is a text node (like <image>/<thumbnail>, not a value=
 # attribute) and it is DOUBLE-encoded: the wire bytes carry `&amp;#10;` and

@@ -531,13 +531,13 @@
           // is live (or most recently was). Tapping a row with a live run goes
           // to that run's log rather than the panel list — when something is
           // happening, the log IS what you came to see.
-          runTools: ["bgg-images", "bgg-metadata"],
+          runTools: ["bgg-images", "bgg-metadata", "bgg-image-links"],
           tool: "bggData",
           // Not `image-off`, which the images spoke carried: it names one of
           // the two queues and would read as the row's whole subject.
           icon: "layers",
           title: "Missing BGG data",
-          sub: "Backfill missing photos, descriptions, stats, publishers and years from BGG.",
+          sub: "Backfill missing photos, descriptions, stats, publishers, years and image links from BGG.",
         },
         // The one admin tool that AUTHORS rather than moderates — the other
         // two work a queue somebody else filled. So it carries no count and

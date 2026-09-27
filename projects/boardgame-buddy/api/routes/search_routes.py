@@ -10,14 +10,14 @@ resolved through /thing as well as (or instead of) the name search, so a game
 can be reached by the number on its shelf label. See search_service._bgg_hits.
 """
 
-from fastapi import Depends, Query
+from fastapi import Depends, HTTPException, Query
 
 from db import get_supabase
 
 from . import router
 from .dependencies import CurrentUser, get_current_user
-from .models import CatalogIndexResponse, UnifiedSearchResponse
-from .services import search_service
+from .models import BggThumbnailsResponse, CatalogIndexResponse, UnifiedSearchResponse
+from .services import bgg_thumbnails, search_service
 
 
 @router.get(
@@ -78,3 +78,27 @@ async def search_index(
     like everything else the catalog exposes.
     """
     return await search_service.catalog_index(get_supabase())
+
+
+@router.get(
+    "/search/bgg-thumbnails",
+    response_model=BggThumbnailsResponse,
+    status_code=200,
+    summary="Thumbnails for up to 20 BGG search rows (at most one BGG call)",
+)
+async def search_bgg_thumbnails(
+    ids: str = Query(..., description="Comma-separated BGG ids, at most 20"),
+    user: CurrentUser = Depends(get_current_user),
+) -> BggThumbnailsResponse:
+    """BGG's /search carries no images, so the import sheet asks for the rows it
+    shows. Catalog and thumb cache first; BGG only for ids nobody has seen."""
+    try:
+        wanted = [int(p) for p in ids.split(",") if p.strip()]
+    except ValueError:
+        raise HTTPException(status_code=422, detail="ids must be comma-separated integers")
+    if len(wanted) > bgg_thumbnails.MAX_IDS:
+        raise HTTPException(
+            status_code=422, detail=f"At most {bgg_thumbnails.MAX_IDS} ids per request"
+        )
+    found = await bgg_thumbnails.bgg_thumbnails(get_supabase(), wanted)
+    return BggThumbnailsResponse(thumbnails={str(k): v for k, v in found.items()})

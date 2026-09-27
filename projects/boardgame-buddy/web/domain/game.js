@@ -34,6 +34,13 @@
     return o.timeoutMs ? { timeoutMs: o.timeoutMs } : undefined;
   }
 
+  // bggId → thumbnail URL, or null when BoardGameGeek has none. Session-long:
+  // BGG art does not move, and the server keeps the durable copy (migration
+  // 054). `has()` is the "already asked" test — null is an answer.
+  const _bggThumbs = new Map();
+  // /search/bgg-thumbnails takes at most this many ids — one BGG call.
+  const BGG_THUMB_BATCH = 20;
+
   class Game {
     constructor(raw) {
       Object.assign(this, raw || {});
@@ -222,6 +229,43 @@
       return r ? `${h}h${r}m` : `${h}h`;
     }
 
+    // ── BGG search thumbnails ────────────────────────────────────────────────
+    // BoardGameGeek's /search carries no art. The /search response fills what
+    // the server already knows; these ask for the rest, a window at a time.
+
+    /** The known thumbnail for a BGG row: a URL, null (BGG has none), or
+     *  undefined (not asked yet). */
+    static bggThumb(bggId) {
+      return _bggThumbs.get(Number(bggId));
+    }
+
+    /** Resolve thumbnails for BGG search rows — rows that arrived with one are
+     *  recorded, the rest are asked for in batches of 20. Never rejects: art
+     *  is decoration, and a failed batch just leaves those rows unasked.
+     *  @param {{bgg_id:number, thumbnail_url?:string|null}[]} hits
+     *  @returns {Promise<boolean>} whether anything new became known */
+    static async loadBggThumbs(hits) {
+      const ask = [];
+      for (const h of hits || []) {
+        const id = Number(h.bgg_id);
+        if (h.thumbnail_url) _bggThumbs.set(id, h.thumbnail_url);
+        else if (!_bggThumbs.has(id)) ask.push(id);
+      }
+      const batches = [];
+      for (let i = 0; i < ask.length; i += BGG_THUMB_BATCH) {
+        batches.push(ask.slice(i, i + BGG_THUMB_BATCH));
+      }
+      const results = await Promise.all(batches.map((ids) =>
+        window.api.get("/search/bgg-thumbnails", { ids: ids.join(",") })
+          .then((r) => {
+            const got = (r && r.thumbnails) || {};
+            for (const id of ids) _bggThumbs.set(id, got[String(id)] || null);
+            return true;
+          })
+          .catch(() => false)));
+      return results.some(Boolean);
+    }
+
     // ── Admin: image rehydration ─────────────────────────────────────────────
 
     /** List catalog games whose image_url or thumbnail_url is missing. */
@@ -247,6 +291,28 @@
     static adminRefreshAllImages(opts) {
       return window.api.post(`/games/refresh-images${_adminRunQuery(opts)}`, null, _adminRunOpts(opts))
         .then((r) => { Game.invalidateBundle(); return r; });
+    }
+
+    // ── Admin: BGG image links (migration 054) ───────────────────────────────
+    // Records BoardGameGeek's own image URLs next to the re-hosted ones, for
+    // games imported before import started keeping them. Nothing the app
+    // renders reads them yet, so no cache is dropped.
+
+    /** Games whose BGG image URLs have never been recorded. */
+    static adminMissingImageLinks() {
+      return window.api.get("/games/admin/missing-image-links");
+    }
+
+    /** Record one game's BGG image URLs — one BGG call, no downloads. */
+    static adminRecordOneImageLinks(gameId) {
+      return window.api.post(`/games/admin/${gameId}/image-links`);
+    }
+
+    /** One bounded pass, 20 games per BGG call; `remaining` drives the drain. */
+    static adminBackfillImageLinks(opts) {
+      return window.api.post(
+        `/games/admin/backfill-image-links${_adminRunQuery(opts)}`, null, _adminRunOpts(opts),
+      );
     }
 
     // ── Admin: the catalog metadata sweep (migration 045) ────────────────────
